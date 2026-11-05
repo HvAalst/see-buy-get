@@ -1226,3 +1226,29 @@ describe('NotificationDispatcher — a driver’s notice opens where the driver 
     expect(notifications.inboxFor('did:fleet:1').find((n) => n.kind === 'shift_hours')?.link).toBe('/?go=sessions');
   });
 });
+
+/* 2026-11-05 — PRE-DROP-OFF: a shop with no place left is asked to make room (the owner: "notify the shop to consider opening
+   more shelf space in their app") — once in twelve hours however many bookings were turned away, opened on its shelf. */
+describe('NotificationDispatcher — a shop with no place left is asked to make room', () => {
+  it('tells the shop once, on its shelf, however many bookings went elsewhere', async () => {
+    const { events, notifications } = harness({ signups: { 'did:agent:full': { shopName: 'Full Kiosk' } } as never });
+    await events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid: 'did:agent:full', reason: 'shelf' });
+    await events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid: 'did:agent:full', reason: 'shelf' });
+    const inbox = notifications.inboxFor('did:agent:full');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'shelf_full', link: '/?go=shelf', title: 'Bookings are going to other shops: your shelf is full' });
+    expect(inbox[0].body).toMatch(/Set up shelves/);
+  });
+
+  it('a new shop at its parcel limit is told that instead — more shelf would not help it', async () => {
+    const { events, notifications } = harness({ signups: { 'did:agent:new': { shopName: 'New Kiosk' } } as never });
+    await events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid: 'did:agent:new', reason: 'cap' });
+    expect(notifications.inboxFor('did:agent:new')[0].title).toBe('Bookings are going to other shops: you are at your parcel limit');
+  });
+
+  it('says nothing to a place that is not a shop', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid: 'mdp-1', reason: 'shelf' });
+    expect(notifications.inboxFor('mdp-1')).toHaveLength(0);
+  });
+});

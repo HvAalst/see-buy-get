@@ -88,6 +88,7 @@ import { DamageReportService } from './damage-report.service';
 import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
 import { HubArrivalService } from './hub-arrival.service';
 import { HubContactService } from './hub-contact.service';
+import { DropOffHoldService } from './drop-off-hold.service';
 import { MorningPayoutRun } from './morning-payout.run';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
@@ -347,7 +348,49 @@ export class SbgController {
     @Optional() private readonly morningRun?: MorningPayoutRun,
     // 2026-11-02 — a fingerprint or face in place of a shop's, a hub's or a store's password, on its own phones.
     @Optional() private readonly passkeys?: PasskeyService,
+    // 2026-11-05 — the places held at a shop for parcels booked to be handed in there (pre-drop-off).
+    @Optional() private readonly dropOffHolds?: DropOffHoldService,
   ) {}
+
+  /**
+   * 2026-11-05 — WHAT IS BOOKED TO BE HANDED IN AT THIS COUNTER, each holding a place on its shelf for 24 hours (pre-drop-off).
+   * A store is named; a person is not — the counter meets them when they come. Where it goes next, so the shop can plan its
+   * bags. A place that ran out is still listed while the booking stands.
+   */
+  private expectedAt(did: string): Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string }> {
+    if (!this.dropOffHolds) return [];
+    const now = Date.now();
+    const out: Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string }> = [];
+    for (const h of this.dropOffHolds.forShop(did)) {
+      let parcel;
+      try {
+        parcel = this.parcels.get(h.parcelId);
+      } catch {
+        continue;
+      }
+      if (parcel.status !== 'Created') continue;
+      const sameShop = this.parcels.isSameShop(parcel);
+      let nextStop: string | undefined;
+      if (!sameShop) {
+        try {
+          nextStop = this.bagPlans.nextStop(parcel);
+        } catch {
+          nextStop = undefined;
+        }
+      }
+      out.push({
+        parcelId: parcel.parcelId,
+        from: parcel.vendorId ? 'store' : 'sender',
+        ...(parcel.vendorId && this.vendors.has(parcel.vendorId) ? { name: this.vendors.get(parcel.vendorId).name } : {}),
+        size: parcel.size,
+        heldUntil: h.until,
+        state: this.dropOffHolds.isHeld(h, now) ? 'held' : 'lapsed',
+        ...(sameShop ? { sameShop: true } : {}),
+        ...(nextStop ? { nextStop } : {}),
+      });
+    }
+    return out;
+  }
 
   /**
    * PLAN VERSUS ACTUAL, lane by lane: every parcel ready to collect in the last `days` (30 unless said) against the plan
@@ -3024,7 +3067,8 @@ export class SbgController {
   @AtTheCounter()
   getShelf(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
-    return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did) };
+    // 2026-11-05 — PRE-DROP-OFF: the places held for bookings, and the bookings themselves — what is coming to be handed in.
+    return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did), held: this.shelf.held(did), expected: this.expectedAt(did) };
   }
 
   // `currency` travels with every balance that leaves the system: a bare number is ambiguous the moment

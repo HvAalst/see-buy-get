@@ -1586,6 +1586,7 @@ export const words: Record<string, string> = {
   "business.parcels.viewerNoSend": "Unaweza kuona vifurushi lakini huwezi kutuma kimoja. Muulize mmiliki ukihitaji.",
   "business.parcels.f.from": "Kinakabidhiwa katika",
   "business.parcels.f.to": "Mahali pa kuchukuliwa",
+  "business.parcels.f.shopFull": "Limejaa sasa — hakuna nafasi kwa kifurushi kipya",
   "business.parcels.f.pickShop": "Chagua duka",
   "business.parcels.f.receiver": "Nani anakichukua (simu)",
   "business.parcels.f.receiverHint": "Duka humkabidhi mtu huyu, kwa nambari ya siri unayompa.",

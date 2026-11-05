@@ -309,7 +309,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
 
       <div class="rows" role="list">
         {points.map((p) => (
-          <PointRow key={p.did} point={p} picked={picked === p.did} away={pointDistance(p, near)} onPick={() => pick(p.did)} />
+          <PointRow key={p.did} point={p} picked={picked === p.did} away={pointDistance(p, near)} full={from && p.freeSlots === 0} onPick={() => pick(p.did)} />
         ))}
       </div>
 
@@ -335,7 +335,8 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         location={preview?.location ?? null}
         onChoose={preview ? () => { const did = preview.did; setOpenShop(null); pick(did); } : undefined}
         chooseLabel={t('send.point.choose')}
-        chooseDisabled={preview?.openState === 'closed'}
+        // 2026-11-05 — a drop-off shop with no place left to hold for a new booking is not chosen (pre-drop-off).
+        chooseDisabled={preview?.openState === 'closed' || (from && preview?.freeSlots === 0)}
         onClose={() => setOpenShop(null)}
       />
     </div>
@@ -356,22 +357,22 @@ function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): strin
   ];
 }
 
-function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {
+function PointRow({ point, picked, away, full, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; full?: boolean; onPick: () => void }) {
   const t = useT();
   const closed = point.openState === 'closed';
   return (
-    <button type="button" class="row" disabled={closed} aria-pressed={picked} onClick={onPick}>
+    <button type="button" class="row" disabled={closed || full} aria-pressed={picked} onClick={onPick}>
       <span class="row__ic">
         <Icon name={picked ? 'check' : 'home'} size={24} />
       </span>
       <span class="row__body">
         <span class="row__t">{point.shopName}</span>
-        <span class="row__s">{closed ? t('send.point.closedNow') : `${away ? `${away} · ` : ''}${pointLine(point, t)}`}</span>
+        <span class="row__s">{closed ? t('send.point.closedNow') : full ? t('send.point.fullNow') : `${away ? `${away} · ` : ''}${pointLine(point, t)}`}</span>
       </span>
       <span class="row__end">
-        {closed ? (
+        {closed || full ? (
           <Pill tone="idle" dot>
-            {t('send.point.closed')}
+            {closed ? t('send.point.closed') : t('send.point.full')}
           </Pill>
         ) : (
           <Icon name="chevronRight" size={22} />

@@ -570,6 +570,8 @@ export const enVendor = {
   'vendor.mint.dimW': 'Width cm',
   'vendor.mint.dimH': 'Height cm',
   'vendor.mint.dimKg': 'Weight',
+  'vendor.mint.originFull': 'Full now',
+  'vendor.mint.originFullSub': 'No place left for a new parcel right now',
   'vendor.mint.originHere': 'The buyer’s own shop: handed in and collected here, no bus',
   'vendor.mint.sizeTier': 'Size tier {size}',
   'vendor.mint.fillAll': 'Fill all four and the tier appears.',

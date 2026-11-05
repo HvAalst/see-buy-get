@@ -410,6 +410,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // counter, no prepay). Both carry originAgentDid; an unpaid vendor order is silent until it settles.
     this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelPaid, (e) => this.onMinted(e.payload));
     this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelMinted, (e) => this.onMinted(e.payload));
+    // 2026-11-05 — PRE-DROP-OFF: a booking went to another shop because this one had no place left — ask it to make room.
+    this.events.subscribe<{ agentDid: string; reason: 'shelf' | 'cap' }>(GlosEvent.Pudo.BookingTurnedAway, (e) => this.onBookingTurnedAway(e.payload));
     // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
     // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint; raisedTo?: number; currency?: string }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
@@ -2433,6 +2435,34 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * peer-send (read from the parcel), but neither the fare nor any secret rides the lock screen — the
    * agent sees the cash due + details in-app when they scan it in.
    */
+  /**
+   * 2026-11-05 — A SHOP WITH NO PLACE LEFT IS ASKED TO MAKE ROOM (the owner: "notify the shop to consider opening more shelf
+   * space in their app"). Bookings for it are refused and sent to shops near it with room; the shop is told once in twelve
+   * hours however many were turned away, and the notice opens its shelf. A new shop at its parcel limit is told that instead:
+   * its limit grows as it hands parcels on, and more shelf would not help it.
+   */
+  private async onBookingTurnedAway(payload: { agentDid: string; reason: 'shelf' | 'cap' }): Promise<void> {
+    try {
+      if (!this.agents.find(payload.agentDid)) return;
+      const since = Date.now() - 12 * 3_600_000;
+      const told = this.notifications.inboxFor(payload.agentDid).some((n) => n.kind === 'shelf_full' && Date.parse(n.createdAt) > since);
+      if (told) return;
+      const cap = payload.reason === 'cap';
+      await this.notifications.notify(payload.agentDid, {
+        kind: 'shelf_full',
+        title: cap ? 'Bookings are going to other shops: you are at your parcel limit' : 'Bookings are going to other shops: your shelf is full',
+        body: cap
+          ? 'A new shop holds a few parcels at a time to start with, and more as it hands them on. Hand on the parcels that are waiting, and new bookings come to you again.'
+          : 'Every place on your shelf is taken or held for a parcel booked to come in. Add a row or a column under Set up shelves, or hand on the parcels that are waiting.',
+        link: '/?go=shelf',
+        tag: `shelf-full:${payload.agentDid}`,
+        data: { agentDid: payload.agentDid, reason: payload.reason },
+      });
+    } catch (err) {
+      this.logger.warn(`shelf-full notice failed for ${payload.agentDid}: ${(err as Error).message}`);
+    }
+  }
+
   private async onMinted(payload: { parcelId: string; originAgentDid?: string }): Promise<void> {
     const originDid = payload.originAgentDid;
     if (!originDid) return;

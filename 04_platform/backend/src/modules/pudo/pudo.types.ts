@@ -1144,6 +1144,14 @@ export class Parcel {
    * its company's release pay adds beyond that. Which shop, so another counter that releases it is paid its own way.
    */
   floorPaidAhead?: { did: string; amount: number };
+  /**
+   * 2026-11-05 — PRE-DROP-OFF: the shelf slot a parcel waits on at the shop that took it in, until it is bagged or handed on
+   * (the owner: "the open bag for its next stop, or a shelf slot"). Not its collection slot (binSlot), which is the
+   * destination's. Freed the moment it leaves the shop's hands.
+   */
+  originSlot?: string;
+  /** 2026-11-05 — the bag already filling for where it goes next, named to the counter as it was taken in. */
+  goesInBag?: { code: string; label: string };
   /** 2026-11-05 — what the shelving paid, kept so an undo of a parcel shelved at take-in (same-shop) can take it back. */
   shelvingLabour?: number;
   /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant

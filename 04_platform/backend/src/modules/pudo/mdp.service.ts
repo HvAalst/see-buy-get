@@ -876,6 +876,8 @@ export class MdpService {
     // Bagged when it was bagged (round 23): never before the parcel's own last step — it was not here to bag before then.
     const tote = this.totes.add(code, parcelId, parcel.size, this.parcels.stepOf(parcelId, observedAt));
     this.parcels.get(parcelId).toteId = tote.toteId; // connect parcel ↔ bag (still where it was)
+    // 2026-11-05 — in a bag now, off the shelf slot it waited on at its shop: the slot is free for the next one.
+    this.parcels.leftShelf(parcelId);
     return { tote, fillPct: this.totes.fillPct(tote) };
   }
 

@@ -139,6 +139,8 @@ export interface NetworkShop {
   country?: string;
   openState?: string;
   takesNew?: boolean;
+  /** Free places on its shelf, less the places held for parcels booked to be handed in there (2026-11-05, pre-drop-off). */
+  freeSlots?: number;
 }
 
 /** What a journey costs, as the public quote says it: the flexible route holds the most, the locked one the cheapest. */

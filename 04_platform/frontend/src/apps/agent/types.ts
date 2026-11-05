@@ -134,7 +134,28 @@ export interface ShelfSlotView {
 export interface ShelfGrid {
   grid: ShelfSlotView[];
   capacity: number;
+  /** Free slots, less the places held for bookings (2026-11-05). */
   available: number;
+  /** 2026-11-05 — PRE-DROP-OFF: places held for parcels booked to be handed in here. */
+  held?: number;
+  /** The bookings this counter is expecting, oldest first. */
+  expected?: ExpectedDropOff[];
+}
+
+/** 2026-11-05 — a parcel booked to be handed in at this counter, holding a place on its shelf until heldUntil. */
+export interface ExpectedDropOff {
+  parcelId: string;
+  from: 'store' | 'sender';
+  /** The store's name; a sender is never named to the counter before they come. */
+  name?: string;
+  size: string;
+  heldUntil: string;
+  state: 'held' | 'lapsed';
+  sameShop?: boolean;
+  /** Where it goes next from here: the hub, or the shop it is collected at. */
+  nextStop?: string;
+  /** The driver who took on the parcels for that stop ahead (pre-drop-off, the driver side). */
+  takenBy?: string;
 }
 
 /** GET /agents/{did}/can-transact — the 'no money, no scan' gate as readable state. */

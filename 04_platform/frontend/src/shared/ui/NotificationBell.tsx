@@ -43,6 +43,9 @@ const KIND_ICON: Record<string, IconName> = {
   bag_ready_to_close: 'bag',
   // 2026-11-02 — a bag held for room at its hub, or let go on; a hub's day of sorting full.
   hub_space: 'bag',
+  // 2026-11-05 — pre-drop-off: the time left on a booking's place at its shop; a shop asked to make room.
+  drop_off_hold: 'clock',
+  shelf_full: 'box',
   message: 'send',
   test: 'bell',
   // FP4 — papers and their dates. Without these a licence about to stop somebody working arrived under the

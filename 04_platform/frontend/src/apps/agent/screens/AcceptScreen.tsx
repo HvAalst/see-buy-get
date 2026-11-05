@@ -7,7 +7,7 @@ import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling } from '../logic';
 import { FreightBooking } from './FreightBooking';
 import type { NetworkPoint, TakeInTerms } from '../types';
-import type { AgentActions, AgentState } from '../useAgentApp';
+import type { AgentActions, AgentState, TakenInPlace } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 import { TakenInLabel } from './TakenInLabel';
 
@@ -331,6 +331,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
                 : t('agent.accept.donePrepaid')}
             </p>
             {state.intakeDone.destShopName ? <p class="hint">{t('agent.accept.doneTravels', { shop: state.intakeDone.destShopName })}</p> : null}
+            {/* 2026-11-05 — where it goes now: the open bag for its next stop, or a shelf slot until it is bagged. */}
+            <PlaceNote place={state.intakeDone.place} />
             <Button onClick={actions.dismissIntakeDone}>{t('agent.accept.doneAnother')}</Button>
           </>
         ) : null}
@@ -356,6 +358,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
                 }
               />
             ) : null}
+            <PlaceNote place={state.acceptedLabel.place} />
             <TakenInLabel label={state.acceptedLabel} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               {t('agent.accept.doneAnother')}
@@ -520,6 +523,17 @@ function OtherShops({ state, actions }: { state: AgentState; actions: AgentActio
       {f.destShopName ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
     </>
   );
+}
+
+/** 2026-11-05 — PRE-DROP-OFF: where a parcel just taken in goes (the owner: "the open bag for its next stop, or a shelf slot"). */
+export function PlaceNote({ place }: { place?: TakenInPlace }) {
+  const t = useT();
+  if (!place) return null;
+  return place.bag ? (
+    <Note tone="info" icon="bag" title={t('agent.accept.placeBag', { code: place.bag.code })} detail={t('agent.accept.placeBagDetail', { place: place.bag.label })} />
+  ) : place.slot ? (
+    <Note tone="info" icon="box" title={t('agent.accept.placeSlot', { slot: place.slot })} detail={t('agent.accept.placeSlotDetail')} />
+  ) : null;
 }
 
 /** P3 — whose promise these goods are under, in the words the server's answer supplies. */

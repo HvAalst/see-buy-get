@@ -251,6 +251,7 @@ export const enAgent = {
   'agent.home.comingLede': '{count, plural, =0 {Each booking holds a place on your shelf for 24 hours.} one {# place on your shelf is held for these, each for 24 hours from booking.} other {# places on your shelf are held for these, each for 24 hours from booking.}}',
   'agent.home.comingFromStore': 'An order from {store}',
   'agent.home.comingFromSender': 'A parcel booked by a sender',
+  'agent.home.comingTakenBy': '{name} takes these on',
   'agent.home.comingHere': 'collected here',
   'agent.home.comingTo': 'goes to {place}',
   'agent.home.comingLeft': '{hours, plural, one {# hour left} other {# hours left}}',
@@ -398,6 +399,10 @@ export const enAgent = {
   'agent.accept.goingTo': 'Going to',
   // 2026-11-05 — collected here, at this shop (same-shop collection).
   'agent.accept.here': 'Collected here, at this shop',
+  'agent.accept.placeBag': 'Put it in bag {code}',
+  'agent.accept.placeBagDetail': 'The bag already open for {place}, where it goes next. Scan it into the bag.',
+  'agent.accept.placeSlot': 'Put it on the shelf at {slot}',
+  'agent.accept.placeSlotDetail': 'It waits there until it is bagged or handed to a driver; then the slot is free again.',
   'agent.accept.hereOther': 'Send it to another shop instead',
   'agent.accept.hereSub': 'It goes on your shelf now — no bus. Its receiver collects it here with the code, and you photograph the hand-over.',
   'agent.accept.hereShelved': 'On your shelf now: slot {slot}',

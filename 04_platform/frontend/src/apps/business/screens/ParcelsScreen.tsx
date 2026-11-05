@@ -546,7 +546,8 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   // Delivered to one of its own places, by a driver from the shop nearest it — or collected at a shop.
   const toOptions = [...places.map((p) => ({ value: `${TO_PLACE}${p.siteId}`, label: t('business.parcels.f.toPlace', { place: p.name }), sub: t('business.parcels.f.toPlaceSub') })), ...options];
   const toPlace = form.destDid.startsWith(TO_PLACE);
-  const fromOptions = [...(collection ? [{ value: OWN_PLACE, label: t('business.parcels.f.ownPlace', { place: collection.label }), sub: t('business.parcels.f.ownPlaceSub') }] : []), ...options];
+  // 2026-11-05 — PRE-DROP-OFF: a booking holds a place at the shop it is handed in at; a shop with none left is shown full, not offered.
+  const fromOptions = [...(collection ? [{ value: OWN_PLACE, label: t('business.parcels.f.ownPlace', { place: collection.label }), sub: t('business.parcels.f.ownPlaceSub') }] : []), ...shops.map((s) => (s.freeSlots === 0 ? { value: s.did, label: s.shopName, sub: t('business.parcels.f.shopFull'), disabled: true } : { value: s.did, label: s.shopName, sub: s.zone }))];
 
   // Priced as soon as both shops and the four measurements are in, the way the mint will price it.
   useEffect(() => {

@@ -16,6 +16,7 @@ import type { Weekday, WeeklyHours } from '../types';
 import { useConnectivity } from '../../../shared/connectivity';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient } from '../../../lib/sbg';
+import { ComingInCard } from './ComingInCard';
 
 export interface HomeScreenProps {
   state: AgentState;
@@ -148,7 +149,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           <div class="occbar" role="img" aria-label={t('agent.home.occupancyAria', { pct: usedPct })}>
             <span class={`occbar__fill occbar__fill--${occTone}`} style={`width:${usedPct}%`} />
           </div>
-          <span class="health__sub">{shelf ? t('agent.home.occupancyLabel', { free: shelf.available, total: shelf.capacity }) : state.shelfState === 'error' ? t('agent.home.occupancyUnavailable') : t('agent.records.loadingShort')}</span>
+          <span class="health__sub">{shelf ? `${t('agent.home.occupancyLabel', { free: shelf.available, total: shelf.capacity })}${shelf.held ? ` · ${t('agent.home.occupancyHeld', { count: shelf.held })}` : ''}` : state.shelfState === 'error' ? t('agent.home.occupancyUnavailable') : t('agent.records.loadingShort')}</span>
         </div>
         <div class="health">
           <span class="health__label">{t('agent.home.ratingLabel')}</span>
@@ -196,6 +197,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : gate.tone === 'info' ? 'clock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
       {/* 2026-11-04 — not open in this shop's country: the way to ask SeeBuyGet to open there. */}
       {!staff && state.gate?.code === 'COUNTRY_NOT_OPEN' ? <AskToOpen country={agent?.country} kind="shop" config={agentConfig()} /> : null}
+
+      {/* 2026-11-05 — PRE-DROP-OFF: what is booked to be handed in here, each holding a place on the shelf. */}
+      <ComingInCard expected={shelf?.expected} held={shelf?.held} />
 
       {/* Quick actions — the counter jobs, under their own heading as the settings below them have theirs. */}
       <Card title={t('agent.home.jobsTitle')}>

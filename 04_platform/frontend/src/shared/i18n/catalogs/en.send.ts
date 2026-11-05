@@ -282,6 +282,8 @@ export const enSend = {
   'send.point.factZone': 'In zone {zone}',
   'send.point.openNow': 'Open now',
   'send.point.closedNow': 'Closed right now',
+  'send.point.full': 'Full now',
+  'send.point.fullNow': 'No place left to hand in a new parcel right now',
   'send.point.slotOne': '{count} space free',
   'send.point.slotMany': '{count} spaces free',
   'send.point.closed': 'Closed',

@@ -324,7 +324,7 @@ export interface AgentState {
   previewNonce: number;
   intakePhotoRef: string;
   /** The last completed intake — drives the "taken in, cash collected" sheet. */
-  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string } | null;
+  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string; place?: TakenInPlace } | null;
   /** P3 — whose promise a walk-up taken in here is under. Re-asked every time the take-in screen opens,
    *  because a country can move down the ladder while the shop stands open. */
   takeInTerms: TakeInTerms | null;
@@ -438,6 +438,22 @@ export interface TakenIn {
   releaseCode?: string;
   /** 2026-11-05 — collected here: on this shop's shelf already, and the cash it is taken in for. */
   here?: { binSlot?: string; cashDue?: number; currency?: string };
+  /** 2026-11-05 — pre-drop-off: where it goes now — a shelf slot until it is bagged, or the open bag for its next stop. */
+  place?: TakenInPlace;
+}
+
+/** 2026-11-05 — where a parcel just taken in goes, as the server placed it. */
+export interface TakenInPlace {
+  slot?: string;
+  bag?: { code: string; label: string };
+}
+
+/** The place the server gave a parcel it took in: none for a same-shop parcel (its own slot is said apart) or a full shelf. */
+export function placeOf(p: { originSlot?: string; goesInBag?: { code: string; label: string } } | null | undefined): TakenInPlace | undefined {
+  if (!p) return undefined;
+  if (p.goesInBag) return { bag: p.goesInBag };
+  if (p.originSlot) return { slot: p.originSlot };
+  return undefined;
 }
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -1730,10 +1746,10 @@ export function useAgentApp() {
       }
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
-      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string }>(r.data);
+      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string; originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data);
       // Collected here (2026-11-05): on the shelf already, and taken in for its route's price, in cash.
       const here = p && p.destAgentDid && p.originAgentDid === p.destAgentDid ? { binSlot: p.binSlot, cashDue: p.shipmentCost, currency: p.currency } : undefined;
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}) } : null }));
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}) } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
@@ -2088,7 +2104,7 @@ export function useAgentApp() {
         preMint: null,
         preMintState: 'idle',
         preMintError: null,
-        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, currency: pm.currency, destShopName: pm.destShopName },
+        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, currency: pm.currency, destShopName: pm.destShopName, ...(placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) ? { place: placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) } : {}) },
       }));
       pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.parcelTakenIn'), detail: pm.kind === 'peer_send' ? t('agent.toast.takenInCash', { amount: money(pm.cashDue, pm.currency) }) : t('agent.toast.takenInPrepaid') });
       await refresh();

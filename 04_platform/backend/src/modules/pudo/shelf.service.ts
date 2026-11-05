@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
+import { DropOffHoldService } from './drop-off-hold.service';
 import { CONSOLIDATION_MAX_ITEMS, MIN_SLOTS, SHELF_COLORS } from './pudo.config';
 import { Agent, ParcelSize, ShelfConfig, ShelfSlot } from './pudo.types';
 
@@ -29,7 +30,10 @@ export class ShelfService {
    */
   private readonly occupancy = new PersistentMap<string, Record<string, string[]>>('pudo-shelf-occupancy');
 
-  constructor(private readonly agents: AgentService) {}
+  constructor(
+    private readonly agents: AgentService,
+    @Optional() private readonly holds?: DropOffHoldService,
+  ) {}
 
   private occ(agentDid: string): Record<string, string[]> {
     return this.occupancy.get(agentDid) ?? {};
@@ -83,9 +87,18 @@ export class ShelfService {
     return rows * cols;
   }
 
-  /** Slots that can still take at least one more parcel (a free normal slot, or a bundle slot with room). */
-  available(agentDid: string): number {
-    return this.grid(agentDid).filter((s) => this.hasRoom(s)).length;
+  /**
+   * Slots that can still take at least one more parcel (a free normal slot, or a bundle slot with room), less the places
+   * held for parcels booked to be handed in here (2026-11-05, pre-drop-off). What a shop is OFFERED with — the public map,
+   * routing, the shipping API, the pickers. A parcel physically at the counter is placed by `assign`, which a hold never stops.
+   */
+  available(agentDid: string, now: number = Date.now()): number {
+    return Math.max(0, this.grid(agentDid).filter((s) => this.hasRoom(s)).length - this.held(agentDid, now));
+  }
+
+  /** Places held for bookings that have not come in yet. */
+  held(agentDid: string, now: number = Date.now()): number {
+    return this.holds?.heldAt(agentDid, now) ?? 0;
   }
 
   hasSpace(agentDid: string): boolean {

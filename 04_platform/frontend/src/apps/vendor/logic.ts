@@ -227,6 +227,11 @@ export interface OriginRow {
   currency?: string;
   /** 2026-11-05 — the buyer's own shop: handed in and collected there, one stop. */
   here?: boolean;
+  /**
+   * 2026-11-05 — PRE-DROP-OFF: no place left to hold for a new booking (its shelf is full with parcels waiting and parcels
+   * booked). Shown, so the store sees why, last, and not to be picked.
+   */
+  full?: boolean;
 }
 
 /**
@@ -241,9 +246,11 @@ export function originRows(points: NetworkPoint[] | null, destDid: string, optio
     .filter((p) => p.openState === 'open' && p.takesNew !== false)
     .map((point) => {
       const quote = quotes.get(point.did);
-      return { point, total: quote?.locked.total ?? null, ...(quote?.currency ? { currency: quote.currency } : {}), ...(point.did === destDid ? { here: true } : {}) };
+      return { point, total: quote?.locked.total ?? null, ...(quote?.currency ? { currency: quote.currency } : {}), ...(point.did === destDid ? { here: true } : {}), ...(point.freeSlots === 0 ? { full: true } : {}) };
     })
     .sort((a, b) => {
+      // A full shop last, whatever it would cost: it cannot be picked.
+      if (!!a.full !== !!b.full) return a.full ? 1 : -1;
       if (a.total === null && b.total === null) return a.point.shopName.localeCompare(b.point.shopName);
       if (a.total === null) return 1;
       if (b.total === null) return -1;

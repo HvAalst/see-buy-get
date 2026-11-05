@@ -135,6 +135,8 @@ export const ERROR_CODES = {
   // 2026-11-02 — the hub a bag goes to has no room on its floor: the bag waits where it is and goes on by itself.
   BAG_WAITS_FOR_ROOM: { status: 409, title: 'The bag waits for room at its hub' },
   SHELF_FULL: { status: 400, title: 'The shelf is full' },
+  /** 2026-11-05 — pre-drop-off: no place left at that shop to hold for a new booking; the problem names shops with room. */
+  SHOP_FULL: { status: 409, title: 'That shop has no place left for a new parcel' },
   NO_CAPACITY_AVAILABLE: { status: 400, title: 'No pick-up point with free capacity' },
 
   // --- 400 Bad Request: OTP + PIN --------------------------------------------------------------

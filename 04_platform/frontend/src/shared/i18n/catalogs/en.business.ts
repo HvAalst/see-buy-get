@@ -1645,6 +1645,7 @@ export const enBusiness = {
   'business.parcels.viewerNoSend': 'You can see the parcels but not send one. Ask an owner if you need to.',
   'business.parcels.f.from': 'Handed in at',
   'business.parcels.f.to': 'Collected at',
+  'business.parcels.f.shopFull': 'Full now — no place left for a new parcel',
   'business.parcels.f.pickShop': 'Choose a shop',
   'business.parcels.f.receiver': 'Who collects it (phone)',
   'business.parcels.f.receiverHint': 'The shop hands it to this person, with the code you pass on.',

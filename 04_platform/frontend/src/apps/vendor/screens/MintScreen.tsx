@@ -429,10 +429,10 @@ function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): strin
   ];
 }
 
-function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: () => void; price?: string | null; sub?: string }) {
+function PointRow({ point, onPick, price, sub, full }: { point: NetworkPoint; onPick: () => void; price?: string | null; sub?: string; full?: boolean }) {
   const t = useT();
   return (
-    <button type="button" class="row" onClick={onPick}>
+    <button type="button" class="row" onClick={onPick} disabled={full}>
       <span class="row__ic">
         <Icon name="home" size={24} />
       </span>
@@ -441,8 +441,8 @@ function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: 
         <span class="row__s">{`${sub ? `${sub} · ` : ''}${t('vendor.zone', { zone: point.zone })}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
       </span>
       <span class="row__end">
-        {price !== undefined ? price === null ? <Pill tone="idle">{t('vendor.mint.noRoute')}</Pill> : <b class="mono-t">{price}</b> : null}
-        <Icon name="chevronRight" size={22} />
+        {full ? <Pill tone="idle">{t('vendor.mint.originFull')}</Pill> : price !== undefined ? price === null ? <Pill tone="idle">{t('vendor.mint.noRoute')}</Pill> : <b class="mono-t">{price}</b> : null}
+        {full ? null : <Icon name="chevronRight" size={22} />}
       </span>
     </button>
   );
@@ -508,7 +508,8 @@ function OriginStep({ state, actions }: MintScreenProps) {
             key={r.point.did}
             point={r.point}
             price={r.total === null ? null : money(r.total, r.currency)}
-            sub={r.here ? t('vendor.mint.originHere') : state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
+            sub={r.full ? t('vendor.mint.originFullSub') : r.here ? t('vendor.mint.originHere') : state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
+            full={r.full}
             onPick={() => void actions.pickOrigin(r.point.did)}
           />
         ))}

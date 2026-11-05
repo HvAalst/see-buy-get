@@ -236,6 +236,8 @@ export const words: Record<string, string> = {
   "send.point.factAway": "{dist} kutoka mahali ulipo",
   "send.point.factZone": "Katika eneo {zone}",
   "send.point.openNow": "Liko wazi sasa",
+  "send.point.full": "Limejaa sasa",
+  "send.point.fullNow": "Hakuna nafasi ya kukabidhi kifurushi kipya sasa hivi",
   "send.point.closedNow": "Limefungwa kwa sasa",
   "send.point.slotOne": "Nafasi {count} iko wazi",
   "send.point.slotMany": "Nafasi {count} ziko wazi",

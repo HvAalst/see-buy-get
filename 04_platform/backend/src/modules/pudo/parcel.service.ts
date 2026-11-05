@@ -38,6 +38,8 @@ import { handedAt, type Step } from './observed-at';
 import { FINDING_WORDS, type UnitHold } from './tamper.types';
 import { parcelLabelZpl } from './parcel-label';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
+import { DropOffHoldService } from './drop-off-hold.service';
+import { haversineKm } from './geo';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -749,6 +751,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly risk?: RiskRegisterService,
     // A holding fee is in the holding shop's money, its ceiling the journey's price converted at today's rate (2026-10-25).
     @Optional() private readonly fx?: FxService,
+    // 2026-11-05 — the places held at drop-off shops for bookings (pre-drop-off). Optional for the specs.
+    @Optional() private readonly holds?: DropOffHoldService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1525,6 +1529,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // A same-shop parcel goes on this shop's shelf now: the slot FIRST, before the parcel is kept — a full shelf refuses
     // the take-in with nothing written, rather than keeping a parcel that is ready to collect and on no shelf.
     if (sameShop) parcel.binSlot = this.shelf.assign(input.agentDid, parcel.parcelId, parcel.size);
+    // 2026-11-05 — any other walk-up is told where it goes, as a booking is: the open bag for its next stop, or a shelf slot.
+    else this.placeTakenIn(parcel, input.agentDid);
     parcel.label = this.label(parcel);
     this.parcels.set(parcel.parcelId, parcel);
     // The account each number is certainly for today, so the parcel stays theirs when the number does not.
@@ -2036,6 +2042,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // A store's parcel called off before it has left the shop it was handed in at — or before it was handed in at all: the
     // store's money back in full (the user, 2026-10-26: "Refund and take back"). Once a hub or a driver has it, what was
     // carried is not given back.
+    // 2026-11-05 — called off before it was handed in: the place held for it at its shop is given back.
+    if (parcel.status === 'Created') this.holds?.end(parcelId);
     if (parcel.status === 'Created' || parcel.status === 'At_PUDO') this.refundStore(parcel, parcel.status === 'Created' ? 'called off before it was handed in: given back in full' : 'called off at the counter: given back in full');
     parcel.status = 'Voided';
     this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
@@ -2085,6 +2093,9 @@ export class ParcelService implements OnApplicationBootstrap {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
     }
+    // 2026-11-05 — PRE-DROP-OFF: a booking holds a place at the shop it is handed in at, so a shop with none left is refused
+    // here, before anything is written, naming shops near it with room. A parcel bringing goods back is not a booking.
+    if (origin && !input.handInMdpId && !input.returnOf) this.assertRoomToBook(origin.did);
     const now = new Date().toISOString();
     const quote = input.quote;
     // THE CROSSING IS A STEP, and this is its precondition — checked before an id, a DID or a ledger anchor
@@ -2238,6 +2249,8 @@ export class ParcelService implements OnApplicationBootstrap {
       parcel.label = label; // label issues only once paid (printing is no longer blocked)
       void this.events.publish(GlosEvent.Pudo.InboundCreated, { parcelId, vendorId: input.vendorId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
       void this.events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId, vendorId: input.vendorId, originAgentDid: input.originAgentDid, amount: shipmentCost, externalOrderId: input.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+      // Paid, it may be handed in: its place is held from now (an unpaid order cannot be, and holds nothing).
+      if (origin && !input.handInMdpId && !input.returnOf) this.holds?.hold({ parcelId, agentDid: origin.did, bookedBy: { vendorId: input.vendorId } });
     }
     this.persist(parcel); // paidStatus/label were mutated after the initial set()
     return { parcel, label: bill.paid ? label : null, paid: bill.paid };
@@ -2274,6 +2287,8 @@ export class ParcelService implements OnApplicationBootstrap {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
     }
+    // 2026-11-05 — PRE-DROP-OFF: the shop it is dropped off at holds a place for it; one with none left is refused first.
+    this.assertRoomToBook(origin.did);
     const parcelId = `PUD-${randomBytes(5).toString('hex').toUpperCase()}`;
     const trackingKey = `T-${randomBytes(5).toString('hex').toUpperCase()}`;
     const now = new Date().toISOString();
@@ -2361,6 +2376,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.parcels.set(parcelId, parcel);
     // Made BY the sender's account, not addressed to a number: theirs whatever number they are on, or go back to.
     this.keep(parcelId, { sender: input.senderPersonDid, receiver: this.accountAt(parcel.receiverPhoneHash) });
+    this.holds?.hold({ parcelId, agentDid: origin.did, bookedBy: { personDid: input.senderPersonDid } });
     void this.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
     return { parcel, label: parcel.label };
   }
@@ -2381,6 +2397,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // Round 29 — its SSCC is given once it is paid: refused BEFORE the bill when the store's prefix has no code left for
     // it (the digit used up since the order was made), never billed and then left unpaid by a code that could not be given.
     this.codes?.assertCanIssue(vendorCoder(parcel.vendorId), 1);
+    // 2026-11-05 — paid now, it holds a place where it is handed in: asked before the bill, as at the booking.
+    const holdsPlace = Boolean(parcel.originAgentDid && this.agents.find(parcel.originAgentDid) && !parcel.handInMdpId && !parcel.returnOf);
+    if (holdsPlace) this.assertRoomToBook(parcel.originAgentDid!);
     // The buffer travels on the parcel, so a shipment billed later — after a top-up — splits exactly as
     // one billed at mint would. The rate it was struck at is not re-derived; it is the one it was quoted at.
     const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer, parcel.shipmentTax, parcel.shipmentProvision);
@@ -2390,6 +2409,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
     this.persist(parcel);
     void this.events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId, vendorId: parcel.vendorId, originAgentDid: parcel.originAgentDid, amount: parcel.shipmentCost, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+    if (holdsPlace) this.holds?.hold({ parcelId, agentDid: parcel.originAgentDid!, bookedBy: { vendorId: parcel.vendorId } });
     return { parcel, label: parcel.label ?? null, paid: true };
   }
 
@@ -2451,6 +2471,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
+    this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
     if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
@@ -2458,6 +2479,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const here = this.isSameShop(parcel);
     if (here) parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size);
     const step = this.stepAt(parcel, observedAt);
+    if (!here) this.placeTakenIn(parcel, agentDid);
+    this.holds?.use(parcelId);
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = step.at;
     parcel.dropoffPhotoRef = dropoffPhotoRef;
@@ -2493,11 +2516,14 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-05 — a store's order handed in at the shop its buyer collects from: its shelf slot before anything is
     // written, and on the shelf at once below. Such orders were already made (nothing refused them) and sat At_PUDO for
     // ever: no bus goes from a shop to itself.
+    this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
     const here = this.isSameShop(parcel);
     if (here) parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size);
     const step = this.stepAt(parcel, observedAt);
     if (parcel.customs) parcel.papersSeen = { at: step.at, by: agentDid };
     this.admitBooked(parcel, agentDid);
+    if (!here) this.placeTakenIn(parcel, agentDid);
+    this.holds?.use(parcelId);
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = step.at;
     this.handTo(parcel, 'shop', agentDid, 'handed in at the counter', step);
@@ -3760,6 +3786,94 @@ export class ParcelService implements OnApplicationBootstrap {
     this.declarations.assertShopMayTakeIn(agentDid, this.agents.get(agentDid).shopName);
   }
 
+  /**
+   * 2026-11-05 — PRE-DROP-OFF (the owner: "A place in its space"; full: "offer to shops with room but also notify the shop to
+   * consider opening more shelf space in their app"). A booking holds one place on its drop-off shop's shelf, so it is
+   * refused — before anything is written — where the shelf has no place left once the places held for other bookings are
+   * counted, or where a new shop's parcel limit would be passed by what it holds and what is booked to it. The refusal
+   * names the nearest shops with room in the same country, and the shop is told in its bell to make room.
+   */
+  assertRoomToBook(agentDid: string, now: number = Date.now()): void {
+    if (!this.holds) return;
+    const shop = this.agents.find(agentDid);
+    if (!shop) return;
+    const shelfFull = this.shelf.available(agentDid, now) <= 0;
+    const s = this.shopStanding(agentDid);
+    const capFull = !!s && s.holds + this.holds.heldAt(agentDid, now) + 1 > s.cap;
+    if (!shelfFull && !capFull) return;
+    const near = this.shopsWithRoom(shop, now);
+    void this.events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid, reason: shelfFull ? 'shelf' : 'cap' }, { source: 'pudo' }).catch(() => undefined);
+    const others = near.length ? ` Shops near it with room: ${near.map((n) => `${n.shopName} (${n.km} km)`).join(', ')}.` : ' No shop near it has room either right now — try again later.';
+    throw new GlosError('SHOP_FULL', `${shop.shopName} has no place left for a new parcel right now.${others}`, { agentDid, alternatives: near });
+  }
+
+  /** The nearest shops in the same country that could hold a place for a booking now, nearest first. */
+  shopsWithRoom(shop: { did: string; location?: { lat: number; lng: number } }, now: number = Date.now(), max = 3): Array<{ did: string; shopName: string; zone: string; km: number }> {
+    const country = this.agents.countryOf(this.agents.get(shop.did));
+    return this.agents
+      .list()
+      .filter((a) => a.did !== shop.did && this.agents.takesNew(a) && a.openState === 'open' && !this.agents.isResting(a.did) && !this.agents.notOpenYet(a) && this.agents.countryOf(a) === country)
+      .filter((a) => this.shelf.available(a.did, now) > 0)
+      .filter((a) => {
+        const s = this.shopStanding(a.did);
+        return !s || s.holds + (this.holds?.heldAt(a.did, now) ?? 0) + 1 <= s.cap;
+      })
+      .map((a) => ({ did: a.did, shopName: a.shopName, zone: a.zone, km: shop.location && a.location ? Math.round(haversineKm(shop.location, a.location) * 10) / 10 : 0 }))
+      .sort((x, y) => x.km - y.km || x.shopName.localeCompare(y.shopName))
+      .slice(0, max);
+  }
+
+  /**
+   * 2026-11-05 — A BOOKING WHOSE PLACE RAN OUT is taken in only where there is room for it now: an open bag for where it
+   * goes next, or a free shelf place once the places held for other bookings are counted. Asked before anything is
+   * written. A booking still holding its place — or one made before places were held — is never asked. The clock never
+   * cancels it (the owner: "when 24H run out, it can still be handed in if there is room. package has to go anyway"), so
+   * the counter is told to make room, not to send it away.
+   */
+  private assertRoomAtDropOff(parcel: Parcel, agentDid: string, now: number = Date.now()): void {
+    const hold = this.holds?.of(parcel.parcelId);
+    if (!hold || this.holds!.isHeld(hold, now) || hold.state === 'used' || hold.state === 'ended') return;
+    if (this.shelf.available(agentDid, now) > 0) return;
+    if (!this.isSameShop(parcel) && this.shopBagFor?.(agentDid, parcel)) return;
+    const shop = this.agents.get(agentDid);
+    throw new GlosError('SHOP_FULL', `The place held here for this parcel has ended, and ${shop.shopName} has no room for it now. It still goes: make room — put the parcels waiting for their next stop in their bag, or hand them to a driver — then take it in.`, { agentDid, heldUntil: hold.until });
+  }
+
+  /** 2026-11-05 — the bag at a shop already filling for where this parcel goes next (BagPlanService registers it). */
+  private shopBagFor?: (agentDid: string, parcel: Parcel) => { code: string; label: string } | undefined;
+
+  registerShopBag(fn: (agentDid: string, parcel: Parcel) => { code: string; label: string } | undefined): void {
+    this.shopBagFor = fn;
+  }
+
+  /**
+   * 2026-11-05 — WHERE A PARCEL JUST TAKEN IN GOES (the owner: "the open bag for its next stop, or a shelf slot"): the bag
+   * already filling for its next stop is named; else it takes a shelf slot until it is bagged or handed on. A full shelf
+   * never refuses it — it waits by the counter, as before.
+   */
+  private placeTakenIn(parcel: Parcel, agentDid: string): void {
+    const bag = this.shopBagFor?.(agentDid, parcel);
+    if (bag) {
+      parcel.goesInBag = bag;
+      return;
+    }
+    try {
+      parcel.originSlot = this.shelf.assign(agentDid, parcel.parcelId, parcel.size);
+    } catch {
+      // No free slot: kept by the counter, never refused for it.
+    }
+  }
+
+  /** 2026-11-05 — off the shelf at the shop that took it in: bagged, or out of its hands. Its slot is free again. */
+  leftShelf(parcelOrId: Parcel | string): void {
+    const parcel = typeof parcelOrId === 'string' ? this.parcels.get(parcelOrId) : parcelOrId;
+    if (!parcel?.originSlot) return;
+    if (parcel.originAgentDid) this.shelf.release(parcel.originAgentDid, parcel.parcelId);
+    delete parcel.originSlot;
+    delete parcel.goesInBag;
+    this.persist(parcel);
+  }
+
   /** Refused when taking `adding` more would put this shop over its cap: asked before anything is written. */
   assertShopWithinCap(agentDid: string, adding = 1): void {
     const s = this.shopStanding(agentDid);
@@ -3773,6 +3887,10 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   private scan(parcel: Parcel, status: Parcel['status'], by: string, note: string, step: Step = stepNow()): void {
+    // 2026-11-05 — out of the shop's hands (on a bus, voided, lost, returned…): the slot it waited on is free again. Every
+    // change of status is recorded here, so no way out of the shop can keep the slot.
+    if (parcel.originSlot && status !== 'At_PUDO') this.leftShelf(parcel);
+    if (status !== 'At_PUDO' && parcel.goesInBag) delete parcel.goesInBag;
     const { at } = step;
     const received = step.receivedAt ? { receivedAt: step.receivedAt } : {};
     const anchorTxId = this.ledger.anchor({ p: parcel.parcelId, st: status, by, at, ...received }).txId;

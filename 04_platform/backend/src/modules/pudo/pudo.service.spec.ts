@@ -44,6 +44,7 @@ import { GraduationService } from './graduation.service';
 import { VendorService } from './vendor.service';
 import { VendorCallbackService } from './vendor-callback.service';
 import { ShelfService } from './shelf.service';
+import { DropOffHoldService } from './drop-off-hold.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -166,6 +167,7 @@ describe('PUDO Light', () => {
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
+  let dropHolds: DropOffHoldService;
   let presence: PresenceService;
   let borders: BorderRuleService;
 
@@ -201,7 +203,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
@@ -264,6 +266,7 @@ describe('PUDO Light', () => {
     vault = moduleRef.get(IdentityVault);
     core = moduleRef.get(OperationalStore);
     events = moduleRef.get(EventBus);
+    dropHolds = moduleRef.get(DropOffHoldService);
   });
 
   let agentSeq = 0;
@@ -1474,6 +1477,149 @@ describe('PUDO Light', () => {
    * 2026-11-05 — SAME-SHOP COLLECTION (the owner: compendium gap #7, same-shop first; "the shop's fee once"; "code + photo of
    * the collector"). A parcel collected at the shop taking it in — it was refused.
    */
+  /*
+   * 2026-11-05 — PRE-DROP-OFF (compendium gap #6; the owner: "A place in its space"; a full shop: "offer to shops with room but
+   * also notify the shop to consider opening more shelf space"; "24 hour and the store or sender is told at 12, 6, and 3
+   * hours"). A booking holds a place at the shop it is handed in at; at drop-off it goes in the open bag for its next stop or
+   * on a shelf slot, freed when it leaves.
+   */
+  describe('pre-drop-off: a booking holds a place at its drop-off shop', () => {
+    const HOUR = 3_600_000;
+    const asShop = (did: string) => ({ role: 'agent', did }) as never;
+    let seq = 0;
+    const setUp = (name: string) => {
+      seq += 1;
+      const shop = onboardAgent(`${name}`, 'NorthTown', 500);
+      const dest = onboardAgent(`${name} Dest`, 'SouthTown', 50);
+      corridors.addCorridor({ name: `pdo-${seq}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: `${name} Store`, callbackUrl: 'https://pdo.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 500);
+      let n = 0;
+      const order = () =>
+        parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `${name}-${(n += 1)}`, originAgentDid: shop.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, dest.did, 'S') }).parcel;
+      return { shop, dest, vendor, order };
+    };
+
+    it('holds one place from the booking: the shop is offered with one place fewer, and sees what is coming', () => {
+      const { shop, vendor, order } = setUp('PDO1');
+      const free = shelfSvc.available(shop.did);
+      const booked = order();
+      expect(shelfSvc.available(shop.did)).toBe(free - 1);
+      expect(shelfSvc.held(shop.did)).toBe(1);
+      expect(dropHolds.of(booked.parcelId)?.bookedBy).toEqual({ vendorId: vendor.vendorId });
+      const shelf: any = controller.getShelf(shop.did, asShop(shop.did));
+      expect(shelf.held).toBe(1);
+      expect(shelf.expected).toEqual([expect.objectContaining({ parcelId: booked.parcelId, from: 'store', name: 'PDO1 Store', state: 'held', size: 'S' })]);
+      // Held for 24 hours from the booking.
+      const h = dropHolds.of(booked.parcelId)!;
+      expect(Date.parse(h.until) - Date.parse(h.heldAt)).toBe(24 * HOUR);
+    });
+
+    it('at drop-off it takes its place — a shelf slot until it is bagged or handed on, or straight into the open bag for its next stop', () => {
+      const { shop, order } = setUp('PDO2');
+      const free = shelfSvc.available(shop.did);
+      const first = order();
+      parcels.intakeInbound(first.parcelId, shop.did);
+      const onShelf = parcels.get(first.parcelId);
+      expect(onShelf.originSlot).toBeTruthy();
+      expect(onShelf.goesInBag).toBeUndefined();
+      expect(shelfSvc.held(shop.did)).toBe(0);
+      expect(shelfSvc.available(shop.did)).toBe(free - 1);
+      // A bag opened for where it goes next: the next one goes straight in, and takes no slot.
+      const bag = mdps.openShopBag(shop.did, onShelf.destZone);
+      const second = order();
+      parcels.intakeInbound(second.parcelId, shop.did);
+      expect(parcels.get(second.parcelId).goesInBag?.code).toBe(bag.code);
+      expect(parcels.get(second.parcelId).originSlot).toBeUndefined();
+      expect(shelfSvc.available(shop.did)).toBe(free - 1);
+      // The one on the shelf put in the bag: its slot is free again.
+      mdps.fillShopBag(bag.code, shop.did, first.parcelId);
+      expect(parcels.get(first.parcelId).originSlot).toBeUndefined();
+      expect(shelfSvc.available(shop.did)).toBe(free);
+    });
+
+    it('a slot is freed whichever way the parcel leaves the shop — here, called off at the counter', () => {
+      const { shop, order } = setUp('PDO3');
+      const free = shelfSvc.available(shop.did);
+      const booked = order();
+      parcels.intakeInbound(booked.parcelId, shop.did);
+      expect(shelfSvc.available(shop.did)).toBe(free - 1);
+      parcels.cancel(booked.parcelId, 'ops', 'test');
+      expect(parcels.get(booked.parcelId).originSlot).toBeUndefined();
+      expect(shelfSvc.available(shop.did)).toBe(free);
+    });
+
+    it('a full shop refuses the booking before anything is written, names shops near it with room, and is asked to make room', async () => {
+      const { shop, vendor, order } = setUp('PDO4');
+      shelfSvc.reconfigure(shop.did, { rows: 2, cols: 3 });
+      const turned: Array<{ agentDid: string; reason: string }> = [];
+      events.subscribe<{ agentDid: string; reason: string }>(GlosEvent.Pudo.BookingTurnedAway, (e) => void turned.push(e.payload));
+      for (let i = 0; i < 12 && shelfSvc.available(shop.did) > 0; i += 1) order(); // bounded: a count that never falls fails, never hangs
+      expect(shelfSvc.available(shop.did)).toBe(0);
+      const balance = vendors.get(vendor.vendorId).balance;
+      const before = parcels.list({}).length;
+      let refusal: any;
+      try {
+        order();
+      } catch (err) {
+        refusal = err;
+      }
+      expect(refusal?.code).toBe('SHOP_FULL');
+      expect(refusal.message).toMatch(/PDO4 has no place left for a new parcel right now/);
+      expect(refusal.params.alternatives.length).toBeGreaterThan(0);
+      expect(refusal.params.alternatives.map((a: { did: string }) => a.did)).not.toContain(shop.did);
+      // Nothing written, nothing billed.
+      expect(parcels.list({}).length).toBe(before);
+      expect(vendors.get(vendor.vendorId).balance).toBe(balance);
+      await new Promise((r) => setImmediate(r));
+      expect(turned).toEqual([{ agentDid: shop.did, reason: 'shelf' }]);
+    });
+
+    it('a Send-app booking holds a place too, and a booking called off gives it back', () => {
+      const shop = onboardAgent('PDO5', 'NorthTown', 500);
+      const dest = onboardAgent('PDO5 Dest', 'NorthTown', 50);
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:pdo5', senderPhoneHash: 'h-pdo5', receiverMobile: '+254700556', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+      expect(shelfSvc.held(shop.did)).toBe(1);
+      expect(dropHolds.of(sent.parcelId)?.bookedBy).toEqual({ personDid: 'did:person:pdo5' });
+      parcels.cancel(sent.parcelId, 'ops', 'test');
+      expect(shelfSvc.held(shop.did)).toBe(0);
+      expect(dropHolds.of(sent.parcelId)?.state).toBe('ended');
+    });
+
+    it('a booking whose place ran out is taken in only where there is room for it now', () => {
+      const { shop, order } = setUp('PDO6');
+      shelfSvc.reconfigure(shop.did, { rows: 2, cols: 3 });
+      const late = order();
+      // Its 24 hours pass: the place frees, the booking stands.
+      dropHolds.due(Date.now() + 25 * HOUR);
+      expect(dropHolds.of(late.parcelId)?.state).toBe('lapsed');
+      expect(parcels.get(late.parcelId).status).toBe('Created');
+      const others = [];
+      for (let i = 0; i < 12 && shelfSvc.available(shop.did) > 0; i += 1) others.push(order()); // bounded, as above
+      expect(shelfSvc.available(shop.did)).toBe(0);
+      // It still goes (the owner: "package has to go anyway"): the counter is told to make room, not to send it away.
+      expect(() => parcels.intakeInbound(late.parcelId, shop.did)).toThrow(/has ended, and PDO6 has no room for it now. It still goes: make room/);
+      expect(parcels.get(late.parcelId).status).toBe('Created');
+      // One called off, a place is free: it is taken in.
+      parcels.cancel(others[0].parcelId, 'ops', 'test');
+      parcels.intakeInbound(late.parcelId, shop.did);
+      expect(parcels.get(late.parcelId).status).toBe('At_PUDO');
+      // A booking still holding its place is taken in whatever else is booked.
+      parcels.intakeInbound(others[1].parcelId, shop.did);
+      expect(parcels.get(others[1].parcelId).status).toBe('At_PUDO');
+    });
+
+    it('a parcel at the counter is never refused for a place held for somebody else', () => {
+      const { shop, order } = setUp('PDO7');
+      shelfSvc.reconfigure(shop.did, { rows: 2, cols: 3 });
+      for (let i = 0; i < 12 && shelfSvc.available(shop.did) > 0; i += 1) order(); // bounded: a count that never falls fails, never hangs
+      expect(shelfSvc.available(shop.did)).toBe(0);
+      // Every place held, a walk-up is still taken in — on a slot that is physically free.
+      const walkUp = parcels.accept({ agentDid: shop.did, parcelId: 'QR-PDO7', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: 'SouthTown', senderMobile: '+254700600001', receiverMobile: '+254700600002', dropoffPhotoRef: photoBy(shop.did) } as never);
+      expect(parcels.get((walkUp as { parcelId: string }).parcelId).status).toBe('At_PUDO');
+    });
+  });
+
   describe('same-shop collection', () => {
     const counter = (id: string, shop: { did: string; zone: string }) =>
       ({ parcelId: id, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: shop.zone, destPudoDid: shop.did, senderMobile: '+254700600001', receiverMobile: '+254700600002', dropoffPhotoRef: photoBy(shop.did) }) as never;
@@ -1525,7 +1671,8 @@ describe('PUDO Light', () => {
       const shop = onboardAgent('AD7', 'NorthTown', 50);
       const before = gate.canTransact(shop.did).balance;
       let n = 0;
-      while (shelfSvc.available(shop.did) > 0) controller.accept(counter(`QR-AD7-${(n += 1)}`, shop), asShop(shop.did));
+      for (let i = 0; i < 20 && shelfSvc.available(shop.did) > 0; i += 1) controller.accept(counter(`QR-AD7-${(n += 1)}`, shop), asShop(shop.did)); // bounded
+      expect(shelfSvc.available(shop.did)).toBe(0);
       const funds = gate.canTransact(shop.did).balance;
       expect(() => controller.accept(counter('QR-AD7-FULL', shop), asShop(shop.did))).toThrow();
       expect(() => parcels.get('QR-AD7-FULL')).toThrow();

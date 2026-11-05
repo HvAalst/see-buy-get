@@ -128,6 +128,8 @@ export const GlosEvent = {
     ParcelLost: 'pudo.parcel_lost',
     /** A lost parcel turned up, and carries on from where it was lost. */
     ParcelFound: 'pudo.parcel_found',
+    /** 2026-11-05 — a booking was refused at a shop with no place left to hold for it: the shop is asked to make room. */
+    BookingTurnedAway: 'pudo.booking_turned_away',
     BagLoaded: 'pudo.bag_loaded', // a tote (with its parcels) scanned onto a bus
     BagArrivedAtMdp: 'pudo.bag_arrived_at_mdp', // bus drops a bag; MDP empties it
     BagDelivered: 'pudo.bag_delivered', // a tote unloaded at the destination PUDO (parcels shelved/arrived)

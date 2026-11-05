@@ -57613,6 +57613,23 @@
               }
             }
           },
+          "originSlot": {
+            "type": "string",
+            "description": "2026-11-05 — PRE-DROP-OFF: the shelf slot a parcel waits on at the shop that took it in, until it is bagged or handed on\n(the owner: \"the open bag for its next stop, or a shelf slot\"). Not its collection slot (binSlot), which is the\ndestination's. Freed the moment it leaves the shop's hands."
+          },
+          "goesInBag": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "required": true,
+                "type": "string"
+              },
+              "label": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "shelvingLabour": {
             "type": "number",
             "description": "2026-11-05 — what the shelving paid, kept so an undo of a parcel shelved at take-in (same-shop) can take it back."
@@ -57935,6 +57952,7 @@
           "status",
           "rateStack",
           "floorPaidAhead",
+          "goesInBag",
           "papersSeen",
           "acceptedAt",
           "returnOf",

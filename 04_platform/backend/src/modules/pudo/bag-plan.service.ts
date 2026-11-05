@@ -35,6 +35,20 @@ export class BagPlanService {
     // compared with each parcel's zone, so it took none of the parcels the plan had put in its group. Registered rather
     // than asked for, for the cycle above.
     mdps.registerNextHop((parcel) => this.nextHopFor(parcel).key);
+    // 2026-11-05 — PRE-DROP-OFF: a parcel taken in is told the bag already filling for its next stop, else a shelf slot.
+    parcels.registerShopBag((agentDid, parcel) => this.openBagFor(agentDid, parcel));
+  }
+
+  /** The bag already filling at this shop for where this parcel goes next, if there is one. */
+  private openBagFor(agentDid: string, parcel: Parcel): { code: string; label: string } | undefined {
+    const hop = this.nextHopFor(parcel);
+    const bag = this.totes.atLocation(agentDid).find((t) => t.status === 'filling' && t.destinationNodeId === hop.key);
+    return bag ? { code: bag.code, label: bag.destinationLabel ?? hop.label } : undefined;
+  }
+
+  /** Where a parcel goes next from its shop, by name: a hub, or the place it is collected. */
+  nextStop(parcel: Parcel): string {
+    return this.nextHopFor(parcel).label;
   }
 
   /**

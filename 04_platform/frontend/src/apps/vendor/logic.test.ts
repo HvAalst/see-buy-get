@@ -176,6 +176,11 @@ describe('originRows', () => {
     expect(rows[3].total).toBeNull();
   });
 
+  it('shows a shop with no place left as full, last, whatever it would cost (2026-11-05, pre-drop-off)', () => {
+    const rows = originRows([point({ did: 'full', shopName: 'Full', freeSlots: 0 }), point({ did: 'room', shopName: 'Room', freeSlots: 3 })], 'dest', [{ did: 'full', quote: quote(1) }, { did: 'room', quote: quote(9) }]);
+    expect(rows.map((r) => [r.point.did, !!r.full])).toEqual([['room', false], ['full', true]]);
+  });
+
   it('carries the money each price is in — the quote’s — and none where there is no price', () => {
     const rows = originRows([point({ did: 'a', shopName: 'A' }), point({ did: 'b', shopName: 'B' })], 'dest', [{ did: 'a', quote: { ...quote(3), currency: 'ETB' } }, { did: 'b', error: 'no route' }]);
     expect(rows.map((r) => [r.point.did, r.currency])).toEqual([['a', 'ETB'], ['b', undefined]]);

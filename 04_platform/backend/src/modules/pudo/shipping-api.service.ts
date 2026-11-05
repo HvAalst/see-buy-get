@@ -730,11 +730,12 @@ export class ShippingApiService {
       .filter((a) => this.agents.takesNew(a) && this.agents.countryOf(a) === country && a.zone.toLowerCase() === area.toLowerCase());
     if (!candidates.length) throw new GlosError('NOT_FOUND', `We have no collection point in ${area}, ${country} yet`);
     // The one with the most room, then by name so the same ask gives the same answer twice. Nothing is
-    // reserved by choosing it — this is where they WOULD collect, not a slot held for them.
+    // reserved by choosing it — this is where they WOULD hand in or collect. A BOOKING holds a place at the shop it is
+    // handed in at (2026-11-05, pre-drop-off), so the hand-in side is chosen by room too: a full shop is not offered.
     const best = candidates
-      .map((a) => ({ a, free: side === 'to' ? this.shelf.available(a.did) : 0 }))
+      .map((a) => ({ a, free: this.shelf.available(a.did) }))
       .sort((x, y) => y.free - x.free || x.a.shopName.localeCompare(y.a.shopName))[0];
-    if (side === 'to' && best.free <= 0) throw new GlosError('NO_CAPACITY_AVAILABLE', `Every collection point in ${area} is full right now`);
+    if (best.free <= 0) throw new GlosError('NO_CAPACITY_AVAILABLE', side === 'to' ? `Every collection point in ${area} is full right now` : `Every drop-off point in ${area} is full right now`);
     return { agent: best.a };
   }
 
@@ -761,7 +762,8 @@ export class ShippingApiService {
     const candidates = this.agents
       .list()
       .filter((a) => this.agents.takesNew(a) && (!wanted || this.agents.countryOf(a) === wanted))
-      .filter((a) => side !== 'to' || this.shelf.available(a.did) > 0)
+      // Room on both sides: a booking holds a place where it is handed in (2026-11-05).
+      .filter((a) => this.shelf.available(a.did) > 0)
       .map((a) => ({ a, km: this.router.roadKm(placed.location, a.location) }))
       .sort((x, y) => x.km - y.km || x.a.shopName.localeCompare(y.a.shopName));
     if (!candidates.length) {
