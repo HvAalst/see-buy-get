@@ -57613,6 +57613,10 @@
               }
             }
           },
+          "shelvingLabour": {
+            "type": "number",
+            "description": "2026-11-05 — what the shelving paid, kept so an undo of a parcel shelved at take-in (same-shop) can take it back."
+          },
           "transportFactor": {
             "type": "number",
             "description": "The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant\n today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,\n so an unstamped factor would re-price parcels already sold. Absent on records written before this\n field existed; read it through ParcelService.transportFactorOf, which falls back to the constant."
@@ -59899,6 +59903,11 @@
           },
           "collectionCode": {
             "type": "string"
+          },
+          "deliveredPhotoRef": {
+            "type": "string",
+            "description": "2026-11-05 — the hand-over photo: required where the parcel was taken in at this same shop.",
+            "maxLength": 200
           }
         },
         "required": [

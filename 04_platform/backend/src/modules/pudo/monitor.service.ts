@@ -251,6 +251,8 @@ export class MonitorService {
       dropoffPhotoRef: p.dropoffPhotoRef,
       deliveredPhotoRef: p.deliveredPhotoRef,
       releaseLockedAt: p.otpLockedAt,
+      // 2026-11-05 — taken in and collected at the one shop: its counter photographs the hand-over before releasing it.
+      ...(p.destAgentDid && p.originAgentDid === p.destAgentDid ? { sameShop: true } : {}),
       // A parcel held at a border: did the shop that took it in see its papers in the pouch, and when.
       ...(p.customs ? { crossesBorder: true, papersSeen: p.papersSeen } : {}),
       // What the counter takes in cash as it is handed over (2026-10-27): the way back of a person's goods turned round at a

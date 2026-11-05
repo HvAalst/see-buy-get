@@ -237,7 +237,8 @@ export class ShippingApiService {
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
     const from = this.resolve(input.from, 'from');
     const to = this.resolve(input.to, 'to');
-    if (from.agent.did === to.agent.did) throw new GlosError('INVALID_INPUT', 'Collect from and send to are the same point — a shipment needs two ends');
+    // 2026-11-05 — the same shop at both ends is a same-shop parcel (it was refused): handed in and collected there, one stop,
+    // the shop's fee once. A buyer near the store's own shop is the cheapest shipment there is, not an error.
 
     // Derived from the measurements when they are given, exactly as every mint in the system does it, so a
     // quote and the shipment it becomes cannot disagree about what size the parcel was.

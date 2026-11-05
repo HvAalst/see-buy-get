@@ -585,7 +585,8 @@ export class RoutingService {
     });
 
     const crossings = crossingsOn(route);
-    const arrivalDate = new Date(legs[legs.length - 1].arriveAt);
+    // A one-stop journey (same-shop collection) has no leg: it is ready the moment it is taken in, when the shop is open.
+    const arrivalDate = legs.length ? new Date(legs[legs.length - 1].arriveAt) : new Date(input.startAt ?? Date.now());
     // ETA-vs-opening-hours: the customer can only collect when the destination PUDO is open.
     const pickupReadyAt = nextOpenAt(dest.openingHours, arrivalDate);
     const arrivesWhileOpen = isOpenAt(dest.openingHours, arrivalDate);
@@ -617,6 +618,11 @@ export class RoutingService {
     // having to be declared. A hub's country is the hub's own — not the zone's — because a hub can serve
     // zones across a border and it is the HUB the goods are driven to.
     const route: RouteHop[] = [{ type: origin.type, id: origin.id, label: origin.label, zone: origin.zone, country: origin.country, location: origin.location }];
+    // 2026-11-05 — SAME-SHOP COLLECTION (the owner chose it as the first of "unifying how movements are modelled"): handed
+    // in and collected at the one shop is ONE stop — no road, no hub. It was built as [X, hub, X], a round trip through
+    // the zone's hub priced as two journeys and the shop's fee twice; or [X, X], its fee twice for one stay on one shelf.
+    // The owner: the shop's fee once, no transport.
+    if (origin.type === 'pudo' && origin.id === dest.did) return route;
     // A journey handed in at a hub starts AT its first hub: that hub is the origin, not the zone's.
     const originMdp = origin.type === 'mdp' ? this.mdps.require(origin.id) : this.mdps.mdpForZone(origin.zone);
     const destMdp = this.mdps.mdpForZone(dest.zone);

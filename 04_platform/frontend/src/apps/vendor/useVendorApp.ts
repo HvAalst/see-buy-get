@@ -898,7 +898,8 @@ export function useVendorApp() {
       setState((s) => ({ ...s, form: { ...s.form, destDid, originDid: '' }, mintStep: 'origin', originState: 'loading', originOptions: null, hubOptions: null }));
       const f = stateRef.current.form;
       const size = f.derivedSize ?? 'M';
-      const origins = stateRef.current.points.filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false).map((p) => p.did);
+      // The buyer's own shop among them (2026-11-05): handed in and collected there, one stop.
+      const origins = stateRef.current.points.filter((p) => p.openState === 'open' && p.takesNew !== false).map((p) => p.did);
       // Reading B — and the hubs that take parcels in bulk, priced from the hub, asked at the same time.
       const [r, hubs] = await Promise.all([client.api.quoteOrigins(destDid, origins, size, measureOf(f), f.fragile), creds ? client.hubs.options(creds.vendorId, destDid, size, measureOf(f), f.fragile) : Promise.resolve(null)]);
       if (r.error) {

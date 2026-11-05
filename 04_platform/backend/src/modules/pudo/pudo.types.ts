@@ -922,6 +922,7 @@ export interface ConsumerParcelView {
   items?: LineItem[];
   trackingKey?: string; // the same shareable public key; handy for a quick-look link
   vendorOrder: boolean; // a vendor/e-commerce order vs a walk-up peer send
+  sameShop?: boolean; // 2026-11-05 — handed in and collected at the one shop
   createdAt: string;
   updatedAt: string; // last movement (for newest-first ordering)
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
@@ -1137,6 +1138,8 @@ export class Parcel {
    * its company's release pay adds beyond that. Which shop, so another counter that releases it is paid its own way.
    */
   floorPaidAhead?: { did: string; amount: number };
+  /** 2026-11-05 — what the shelving paid, kept so an undo of a parcel shelved at take-in (same-shop) can take it back. */
+  shelvingLabour?: number;
   /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant
    *  today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,
    *  so an unstamped factor would re-price parcels already sold. Absent on records written before this

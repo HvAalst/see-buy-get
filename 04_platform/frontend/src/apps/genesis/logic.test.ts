@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   LADDER,
+  ladderFor,
   carriersLine,
   carriersOf,
   cleanPhone,
@@ -600,5 +601,26 @@ describe('a reported problem that nobody of ours decides: the report, said to wh
       expect(`${said.title} ${said.lines.join(' ')}`).not.toMatch(/upheld|owed|paid to|40|No company of the network/);
       expect(said.lines).toHaveLength(1);
     }
+  });
+});
+
+/* 2026-11-05 — SAME-SHOP COLLECTION: a parcel handed in and collected at the one shop never rides a bus or passes a hub. */
+describe('the ladder of a same-shop parcel', () => {
+  it('has no rungs for a bus or a hub, rather than drawing them ticked for a journey it never made', () => {
+    expect(ladderFor(true)).toEqual(['Created', 'Ready_For_Pickup', 'Delivered']);
+    expect(ladderFor(false)).toEqual(LADDER);
+    expect(ladderFor(undefined)).toEqual(LADDER);
+  });
+
+  it('places every status a same-shop parcel can be in on its own ladder', () => {
+    const l = ladderFor(true);
+    expect(ladderIndex('Created', l)).toBe(0);
+    expect(ladderIndex('At_PUDO', l)).toBe(0);
+    expect(ladderIndex('Ready_For_Pickup', l)).toBe(1);
+    expect(ladderIndex('Unclaimed', l)).toBe(1);
+    expect(ladderIndex('Delivered', l)).toBe(2);
+    expect(ladderIndex('Voided', l)).toBe(-1);
+    // The whole journey's ladder reads as it did.
+    expect(ladderIndex('On_Bus')).toBe(LADDER.indexOf('On_Bus'));
   });
 });

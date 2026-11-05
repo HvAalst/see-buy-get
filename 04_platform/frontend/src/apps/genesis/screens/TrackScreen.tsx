@@ -1,7 +1,7 @@
 import { Button, Card, ErrorNote, Icon, Note, PlaceView, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { frontDoorUrl } from '../../../shared/frontDoor';
-import { LADDER, freightTrackSummary, ladderIndex, lateLine, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
+import { freightTrackSummary, ladderFor, ladderIndex, lateLine, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import { isFreightTrack } from '../types';
 import { FreightTrack } from './FreightTrack';
 import type { SendActions, SendState } from '../useSendApp';
@@ -22,8 +22,10 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
   const raw = state.result;
   const freight = raw && isFreightTrack(raw) ? raw : null;
   const res = raw && !isFreightTrack(raw) ? raw : null;
-  const offLadder = res && ladderIndex(res.status) === -1;
-  const at = res ? ladderIndex(res.status) : -1;
+  // A same-shop parcel climbs its own short ladder (2026-11-05): no bus, no hub.
+  const ladder = ladderFor(res?.sameShop);
+  const offLadder = res && ladderIndex(res.status, ladder) === -1;
+  const at = res ? ladderIndex(res.status, ladder) : -1;
 
   return (
     <div class="scr">
@@ -134,7 +136,7 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
 
           <Card label={t('send.track.journeySoFar')}>
             <ol class="ladder">
-              {LADDER.map((s, i) => {
+              {ladder.map((s, i) => {
                 const p = statusPresentation(s, t);
                 const done = i < at;
                 const now = i === at;

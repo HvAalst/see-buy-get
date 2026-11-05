@@ -186,8 +186,11 @@ describe('a business’s parcels, paid from its own balance', () => {
     expect((await send(biz.token, base(await photo(other.token))).expect(400)).body.code).toBe('PHOTO_REQUIRED');
     // Nobody to hand it to.
     expect((await send(biz.token, base(await photo(biz.token), { receiverMobile: '12' })).expect(400)).body).toMatchObject({ code: 'FIELD_REQUIRED', detail: expect.stringMatching(/^Give the number of the person who collects it/) });
-    // Handed in and collected at one shop.
-    expect((await send(biz.token, base(await photo(biz.token), { destPudoDid: nairobi })).expect(400)).body.detail).toMatch(/same shop/);
+    // Handed in and collected at one shop (2026-11-05): no longer refused — priced as one stop, the shop's fee once.
+    const here = (await http().get('/v1/sbg/business/me/parcels/price').set(biz.token).query({ origin: nairobi, dest: nairobi, l: 30, w: 20, h: 10, kg: 2 }).expect(200)).body;
+    // No road, so nothing between the cheapest and the dearest carrier: the two prices are one.
+    expect(here.locked).toBeGreaterThan(0);
+    expect(here.flexible).toBe(here.locked);
     // A pallet goes as a load.
     expect((await send(biz.token, base(await photo(biz.token), { dimensionsCm: { l: 120, w: 100, h: 150 }, weightKg: 600 })).expect(400)).body).toMatchObject({ code: 'CARGO_REQUIRES_DEDICATED', detail: expect.stringMatching(/post it as a load, under Domestic$/) });
     expect((await http().get('/v1/sbg/business/me/parcels/account').set(biz.token).expect(200)).body.sent).toBe(0);

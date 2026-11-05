@@ -338,7 +338,7 @@ export interface AgentState {
    */
   handover: { badge: string; selected: string[]; missed: string[]; list: BusList | null; listState: 'idle' | 'loading' | 'ready'; scan: string; lastScanned: string | null };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
-  collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
+  collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string; handPhotoRef: string };
   /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
   receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string; bag?: { closedWith?: BagClosedWith; held?: UnitHold } | null; mismatch?: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
@@ -351,7 +351,7 @@ export interface AgentState {
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[], list: null as BusList | null, listState: 'idle' as 'idle' | 'loading' | 'ready', scan: '', lastScanned: null as string | null };
 const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', stars: 0, photoRef: '' };
-const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '' };
+const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '', handPhotoRef: '' };
 
 const INITIAL: AgentState = {
   phase: 'boot',
@@ -436,6 +436,8 @@ export interface TakenIn {
   trackingKey?: string;
   svg?: string;
   releaseCode?: string;
+  /** 2026-11-05 — collected here: on this shop's shelf already, and the cash it is taken in for. */
+  here?: { binSlot?: string; cashDue?: number; currency?: string };
 }
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -1728,8 +1730,10 @@ export function useAgentApp() {
       }
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
-      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(r.data);
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp } : null }));
+      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string }>(r.data);
+      // Collected here (2026-11-05): on the shelf already, and taken in for its route's price, in cash.
+      const here = p && p.destAgentDid && p.originAgentDid === p.destAgentDid ? { binSlot: p.binSlot, cashDue: p.shipmentCost, currency: p.currency } : undefined;
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}) } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
@@ -2481,7 +2485,7 @@ export function useAgentApp() {
     const f = stateRef.current.collect;
     if (!f.found) return;
     await run('collect-confirm', async () => {
-      const r = await client.api.collectConfirm(f.found!.parcel.parcelId, did, f.code.trim());
+      const r = await client.api.collectConfirm(f.found!.parcel.parcelId, did, f.code.trim(), f.handPhotoRef || undefined);
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, collect: { ...EMPTY_COLLECT }, screen: 'home' }));

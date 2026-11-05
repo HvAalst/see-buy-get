@@ -11,7 +11,7 @@ import { frontDoorUrl } from '../../../shared/frontDoor';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
-import { LADDER, disputeOutcomeWords, isOffLadder, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
+import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -165,7 +165,8 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
   const pres = statusPresentation(parcel.status, t);
   // On its way to their own door, paid first (2026-10-27): said as that, not as a parcel going back to a shop.
   const toDoor = Boolean(parcel.door && (parcel.door.state === 'posted' || parcel.door.state === 'taken'));
-  const at = ladderIndex(parcel.status);
+  const ladder = ladderFor(parcel.sameShop);
+  const at = ladderIndex(parcel.status, ladder);
   const off = isOffLadder(parcel.status);
   const stepFor = (s: ParcelStatus) => parcel.timeline.find((x) => x.status === s || (s === 'Created' && x.status === 'CREATED'));
 
@@ -513,7 +514,7 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       {off ? null : (
         <Card label={t('send.track.journeySoFar')}>
           <ol class="ladder">
-            {LADDER.map((s, i) => {
+            {ladder.map((s, i) => {
               const p = statusPresentation(s, t);
               const done = i < at;
               const now = i === at;

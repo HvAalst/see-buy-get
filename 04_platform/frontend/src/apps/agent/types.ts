@@ -199,6 +199,10 @@ export interface ParcelView {
   status: ParcelStatus;
   destZone: string;
   destAgentDid?: string;
+  /** The shop it was taken in at (a store order's lookup carries it). */
+  originAgentDid?: string;
+  /** 2026-11-05 — taken in and collected at this one shop: handed over with a photo as well as the code. */
+  sameShop?: boolean;
   senderMobile?: string;
   receiverMobile?: string;
   binSlot?: string;

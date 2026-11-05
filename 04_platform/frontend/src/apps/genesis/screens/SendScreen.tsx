@@ -170,7 +170,9 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
   // rows still commit directly; the map is the "look before you leap" surface.
   const [openShop, setOpenShop] = useState<string | null>(null);
   const near = here;
-  const points = selectablePoints(state.points, from ? undefined : (state.fromDid ?? undefined), near);
+  // 2026-11-05 — the drop-off shop is offered for the collection too: collected where it is dropped off, one stop (it was
+  // left out of the list).
+  const points = selectablePoints(state.points, undefined, near);
   const mark = (point: GeoPoint, words: string) => {
     setHere(point);
     setSaid(words);
@@ -517,6 +519,8 @@ function BookStep({ state, actions }: SendScreenProps) {
           <span>{t('send.book.to')}</span>
           <b>{to?.shopName ?? '—'}</b>
         </div>
+        {/* The one shop at both ends (2026-11-05): no bus, the shop's fee once — said, so the low price is not a surprise. */}
+        {from && to && from.did === to.did ? <p class="card__note">{t('send.book.sameShop')}</p> : null}
         {state.derived ? (
           <div class="kv">
             <span>{t('send.book.size')}</span>

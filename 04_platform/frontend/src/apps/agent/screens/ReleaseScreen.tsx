@@ -129,17 +129,20 @@ export function ReleaseScreen({ state, actions, sbg = null }: ReleaseScreenProps
             <span class="field__label">{t('agent.release.enterCode')}</span>
             <CodeBoxes id="otp" label={t('agent.release.codeBoxLabel')} value={f.otp} onInput={(otp) => actions.setRelease({ otp })} />
           </div>
+          {/* Taken in here and collected here (2026-11-05): the counter that saw the code at take-in releases it, so the
+              hand-over is photographed — the receiver's evidence, if a collection is ever disputed. */}
+          {p.sameShop || (p.originAgentDid && p.originAgentDid === p.destAgentDid) ? <Note tone="info" icon="camera" title={t('agent.release.hereTitle')} detail={t('agent.release.hereDetail')} /> : null}
           <div style="margin-top:12px">
             <PhotoField
               id="handover-photo"
               value={f.photoRef}
-              label={t('agent.release.handoverPhoto')}
+              label={t(p.sameShop || (p.originAgentDid && p.originAgentDid === p.destAgentDid) ? 'agent.release.handoverPhotoNeeded' : 'agent.release.handoverPhoto')}
               upload={(file) => actions.uploadPhoto('pod', file)}
               onCapture={(ref) => actions.setRelease({ photoRef: ref })}
             />
           </div>
           <div style="margin-top:12px">
-            <Button chevron onClick={() => void actions.submitPickup()} disabled={!otpValid(f.otp)} busy={state.busy === 'pickup'}>
+            <Button chevron onClick={() => void actions.submitPickup()} disabled={!otpValid(f.otp) || (Boolean(p.sameShop || (p.originAgentDid && p.originAgentDid === p.destAgentDid)) && !f.photoRef)} busy={state.busy === 'pickup'}>
               {t('agent.release.confirmHandover')}
             </Button>
           </div>

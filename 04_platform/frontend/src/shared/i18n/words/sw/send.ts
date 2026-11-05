@@ -267,6 +267,7 @@ export const words: Record<string, string> = {
   "send.book.yourSend": "Utumaji wako",
   "send.book.from": "Kutoka",
   "send.book.to": "Kwenda",
+  "send.book.sameShop": "Kinaachwa na kuchukuliwa dukani palepale: hakuna basi, kwa hiyo kiko tayari kuchukuliwa mara kinapokabidhiwa.",
   "send.book.size": "Ukubwa",
   "send.book.makeLabel": "Tengeneza lebo yangu",
   "send.book.enterNumber": "Weka nambari ya mpokeaji kwanza.",

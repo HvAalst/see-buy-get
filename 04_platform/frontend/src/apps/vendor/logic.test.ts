@@ -152,7 +152,7 @@ describe('mint wizard', () => {
 });
 
 describe('originRows', () => {
-  it('prices open shops cheapest-first; unroutable sink, closed and the destination vanish', () => {
+  it('prices open shops cheapest-first; unroutable sink, closed vanish — and the buyer’s own shop stays, marked here (2026-11-05)', () => {
     const pts = [
       point({ did: 'cheap', shopName: 'Cheap' }),
       point({ did: 'dear', shopName: 'Dear' }),
@@ -164,13 +164,16 @@ describe('originRows', () => {
       { did: 'dear', quote: quote(7) },
       { did: 'cheap', quote: quote(3) },
       { did: 'nowhere', error: 'no route' },
+      { did: 'dest', quote: quote(1) },
     ];
     const rows = originRows(pts, 'dest', options);
-    expect(rows.map((r) => r.point.did)).toEqual(['cheap', 'dear', 'nowhere']);
-    expect(rows[0].total).toBe(3);
+    // Handed in at the buyer's own shop and collected there: one stop, the cheapest, and the only row marked here.
+    expect(rows.map((r) => r.point.did)).toEqual(['dest', 'cheap', 'dear', 'nowhere']);
+    expect(rows.filter((r) => r.here).map((r) => r.point.did)).toEqual(['dest']);
+    expect(rows[1].total).toBe(3);
     // A shop that takes no new parcels is not somewhere to hand one in, whatever it would have cost.
-    expect(originRows([...pts, point({ did: 'held', shopName: 'Held', takesNew: false })], 'dest', [...options, { did: 'held', quote: quote(1) }]).map((r) => r.point.did)).toEqual(['cheap', 'dear', 'nowhere']);
-    expect(rows[2].total).toBeNull();
+    expect(originRows([...pts, point({ did: 'held', shopName: 'Held', takesNew: false })], 'dest', [...options, { did: 'held', quote: quote(0.5) }]).map((r) => r.point.did)).toEqual(['dest', 'cheap', 'dear', 'nowhere']);
+    expect(rows[3].total).toBeNull();
   });
 
   it('carries the money each price is in — the quote’s — and none where there is no price', () => {

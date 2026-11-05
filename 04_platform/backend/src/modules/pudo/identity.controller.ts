@@ -347,7 +347,7 @@ export class IdentityController {
   createParcel(@Body() dto: ConsumerSendDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     if (!isPlausiblePhone(dto.receiverMobile)) throw new GlosError('PHONE_INVALID', 'Enter a valid receiver phone number — it is how they get their parcel');
-    if (dto.originPudoDid === dto.destPudoDid) throw new GlosError('INVALID_INPUT', 'Pick two different shops');
+    // 2026-11-05 — the one shop for drop-off and collection is a same-shop parcel (it was refused): one stop, priced below.
     const dims: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
     const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm: dims });
     if (this.cargo.dedicatedRequired(cargoClass)) {

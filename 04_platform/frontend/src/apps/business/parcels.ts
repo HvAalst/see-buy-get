@@ -266,7 +266,7 @@ export function parcelPriceGaps(f: ParcelForm, t: Translate): string[] {
   const gaps: string[] = [];
   if (!f.originDid) gaps.push(t('business.parcels.gap.from'));
   if (!f.destDid) gaps.push(t('business.parcels.gap.to'));
-  if (f.originDid && f.originDid !== OWN_PLACE && f.originDid === f.destDid) gaps.push(t('business.parcels.gap.sameShop'));
+  // The one shop at both ends is a same-shop parcel now (2026-11-05), not a gap.
   if (!parcelSize(f)) gaps.push(t('business.parcels.gap.size'));
   return gaps;
 }

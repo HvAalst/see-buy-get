@@ -740,10 +740,10 @@ describe('PUDO Light', () => {
     const otp = releaseCodeOf('QR-LOCK');
     const wrong = otp === '0000' ? '1111' : '0000';
 
-    for (let i = 0; i < 4; i++) expect(() => parcels.pickup('QR-LOCK', origin.did, wrong)).toThrow('Incorrect OTP');
-    expect(() => parcels.pickup('QR-LOCK', origin.did, wrong)).toThrow('Too many wrong codes');
+    for (let i = 0; i < 4; i++) expect(() => parcels.pickup('QR-LOCK', origin.did, wrong, photoBy(origin.did))).toThrow('Incorrect OTP');
+    expect(() => parcels.pickup('QR-LOCK', origin.did, wrong, photoBy(origin.did))).toThrow('Too many wrong codes');
     // Locked: even the correct code is refused until an operator reissues.
-    expect(() => parcels.pickup('QR-LOCK', origin.did, otp)).toThrow('Too many wrong codes');
+    expect(() => parcels.pickup('QR-LOCK', origin.did, otp, photoBy(origin.did))).toThrow('Too many wrong codes');
     expect(parcels.get('QR-LOCK').status).toBe('Ready_For_Pickup');
   });
 
@@ -804,7 +804,7 @@ describe('PUDO Light', () => {
     parcels.accept({ agentDid: origin.did, parcelId: 'QR-R', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-R'] });
     const arr = parcels.arrive('QR-R', origin.did);
-    parcels.pickup('QR-R', origin.did, releaseCodeOf('QR-R'));
+    parcels.pickup('QR-R', origin.did, releaseCodeOf('QR-R'), photoBy(origin.did));
 
     const r = rating.rate({ parcelId: 'QR-R', stars: 5, raterMobile: '+2' });
     expect(r.agentComposite).toBe(5);
@@ -820,7 +820,7 @@ describe('PUDO Light', () => {
       parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] } as never);
       const arr = parcels.arrive(parcelId, origin.did);
-      parcels.pickup(parcelId, origin.did, releaseCodeOf(parcelId));
+      parcels.pickup(parcelId, origin.did, releaseCodeOf(parcelId), photoBy(origin.did));
     };
 
     // Rename fix: the aggregate is `average` (what the frontend reads) — the mis-named `stars` is gone.
@@ -1470,9 +1470,112 @@ describe('PUDO Light', () => {
     expect(p.size).toBe('L'); // 60×50×40 → L, derived from dims alone
   });
 
-  it('intake redesign: a parcel cannot be sent to the shop taking it in (origin ≠ destination)', () => {
-    const origin = onboardAgent('AD4', 'NorthTown', 50);
-    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD4', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: origin.zone, destPudoDid: origin.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never)).toThrow(/shop taking it in/);
+  /*
+   * 2026-11-05 — SAME-SHOP COLLECTION (the owner: compendium gap #7, same-shop first; "the shop's fee once"; "code + photo of
+   * the collector"). A parcel collected at the shop taking it in — it was refused.
+   */
+  describe('same-shop collection', () => {
+    const counter = (id: string, shop: { did: string; zone: string }) =>
+      ({ parcelId: id, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: shop.zone, destPudoDid: shop.did, senderMobile: '+254700600001', receiverMobile: '+254700600002', dropoffPhotoRef: photoBy(shop.did) }) as never;
+    const asShop = (did: string) => ({ role: 'agent', did }) as never;
+
+    it('is shelved at the counter the moment it is taken in, priced as one stop: the shop’s fee once, no transport', () => {
+      const shop = onboardAgent('AD4', 'NorthTown', 50);
+      // The service alone has no price for it: the counter's route works it out.
+      expect(() => parcels.accept({ ...(counter('QR-AD4X', shop) as object), agentDid: shop.did } as never)).toThrow(/priced from its route/);
+      controller.accept(counter('QR-AD4', shop), asShop(shop.did));
+      const p = parcels.get('QR-AD4');
+      expect(p.status).toBe('Ready_For_Pickup');
+      expect(p.binSlot).toBeTruthy();
+      expect(p.readyAt).toBeTruthy();
+      expect(p.destAgentDid).toBe(shop.did);
+      // One stop: its fee once, nothing for a road it never takes.
+      expect(p.transportCost).toBe(0);
+      expect(p.stopFees).toHaveLength(1);
+      expect(p.nodeFees).toBe(agents.get(shop.did).pricePerParcel);
+      // Its own fee met at take-in; the shelving pays the company's shelving pay and nothing ahead of the release.
+      expect(p.floorPaidAhead).toBeUndefined();
+      // One custodian from start to end: the shop.
+      expect(p.custody?.map((c) => c.holderKind)).toEqual(['shop']);
+    });
+
+    it('is released with its code AND a photo of the hand-over — never the code alone', () => {
+      const shop = onboardAgent('AD5', 'NorthTown', 50);
+      controller.accept(counter('QR-AD5', shop), asShop(shop.did));
+      expect(() => parcels.pickup('QR-AD5', shop.did, releaseCodeOf('QR-AD5'))).toThrow(/photograph the hand-over/);
+      expect(parcels.get('QR-AD5').status).toBe('Ready_For_Pickup');
+      parcels.pickup('QR-AD5', shop.did, releaseCodeOf('QR-AD5'), photoBy(shop.did));
+      expect(parcels.get('QR-AD5').status).toBe('Delivered');
+      expect(parcels.get('QR-AD5').deliveredPhotoRef).toBeTruthy();
+    });
+
+    it('is undone from its shelf in the same five minutes, its slot free and every coin back', () => {
+      const shop = onboardAgent('AD6', 'NorthTown', 50);
+      const before = gate.canTransact(shop.did).balance;
+      const free = shelfSvc.available(shop.did);
+      controller.accept(counter('QR-AD6', shop), asShop(shop.did));
+      expect(shelfSvc.available(shop.did)).toBe(free - 1);
+      parcels.void('QR-AD6', shop.did, photoBy(shop.did));
+      expect(parcels.get('QR-AD6').status).toBe('Voided');
+      expect(shelfSvc.available(shop.did)).toBe(free);
+      expect(gate.canTransact(shop.did).balance).toBeCloseTo(before, 2);
+    });
+
+    it('refuses the take-in on a full shelf with nothing written', () => {
+      const shop = onboardAgent('AD7', 'NorthTown', 50);
+      const before = gate.canTransact(shop.did).balance;
+      let n = 0;
+      while (shelfSvc.available(shop.did) > 0) controller.accept(counter(`QR-AD7-${(n += 1)}`, shop), asShop(shop.did));
+      const funds = gate.canTransact(shop.did).balance;
+      expect(() => controller.accept(counter('QR-AD7-FULL', shop), asShop(shop.did))).toThrow();
+      expect(() => parcels.get('QR-AD7-FULL')).toThrow();
+      expect(gate.canTransact(shop.did).balance).toBe(funds);
+      void before;
+    });
+
+    it('counts once in the shop’s custody: held while on its shelf, completed once when collected', () => {
+      const shop = onboardAgent('AD8', 'NorthTown', 50);
+      const start = parcels.shopStanding(shop.did);
+      controller.accept(counter('QR-AD8', shop), asShop(shop.did));
+      const held = parcels.shopStanding(shop.did);
+      if (start && held) {
+        expect(held.holds).toBe(start.holds + 1);
+        expect(held.completed).toBe(start.completed);
+        parcels.pickup('QR-AD8', shop.did, releaseCodeOf('QR-AD8'), photoBy(shop.did));
+        const done = parcels.shopStanding(shop.did)!;
+        expect(done.holds).toBe(start.holds);
+        expect(done.completed).toBe(start.completed + 1);
+      }
+    });
+
+    it('a store’s order for the shop it is handed in at is shelved at take-in, and its collection needs the photo too', () => {
+      const shop = onboardAgent('AD9', 'NorthTown', 50);
+      const vendor = vendors.register({ name: 'Here Store', callbackUrl: 'https://here.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 50);
+      const order = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'HERE-1', originAgentDid: shop.did, destAgentDid: shop.did, buyerMobile: '+254700600003', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, shop.did, 'S') }).parcel;
+      expect(order.transportCost).toBe(0);
+      parcels.intakeInbound(order.parcelId, shop.did);
+      const shelved = parcels.get(order.parcelId);
+      expect(shelved.status).toBe('Ready_For_Pickup');
+      expect(shelved.binSlot).toBeTruthy();
+      // The buyer's collection code, at the counter that took it in: not without the photo.
+      const code = shelved.collectionCode!;
+      expect(() => parcels.collectConfirm(order.parcelId, shop.did, code)).toThrow(/photograph the hand-over/);
+      expect(parcels.get(order.parcelId).otpAttempts ?? 0).toBe(0);
+      expect(parcels.collectConfirm(order.parcelId, shop.did, code, photoBy(shop.did)).status).toBe('Delivered');
+      expect(parcels.get(order.parcelId).deliveredPhotoRef).toBeTruthy();
+    });
+
+    it('a parcel booked in the Send app to the shop it is dropped off at is shelved at the drop-off', () => {
+      const shop = onboardAgent('AD10', 'NorthTown', 50);
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:here', senderPhoneHash: 'h-here', receiverMobile: '+254700600004', originAgentDid: shop.did, destAgentDid: shop.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, shop.did) }).parcel;
+      expect(sent.transportCost).toBe(0);
+      parcels.intakeConsumerSend(sent.parcelId, shop.did, photoBy(shop.did));
+      const shelved = parcels.get(sent.parcelId);
+      expect(shelved.status).toBe('Ready_For_Pickup');
+      expect(shelved.binSlot).toBeTruthy();
+      expect(shelved.destAgentDid).toBe(shop.did);
+    });
   });
 
   it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', async () => {
@@ -1835,15 +1938,18 @@ describe('PUDO Light', () => {
     expect(after.intakeReady).toBe(true);
   });
 
-  it('PG1: same-shop sends and implausible receiver numbers are refused before anything is created', () => {
+  it('PG1: a same-shop send is one stop (2026-11-05: it was refused), and an implausible receiver number is refused before anything is created', () => {
     const origin = onboardAgent('PG1S', 'NorthTown', 50);
     const dest = onboardAgent('PG1S D', 'NorthTown', 50);
     const sender = enrollPerson('+254700500007');
-    expect(() => identity.createParcel({ receiverMobile: '+254700500008', originPudoDid: origin.did, destPudoDid: origin.did, dimensionsCm: { l: 10, w: 10, h: 5 }, weightKg: 0.5 } as never, asConsumer(sender.personDid))).toThrow(/different shops/);
+    const here: any = identity.createParcel({ receiverMobile: '+254700500008', originPudoDid: origin.did, destPudoDid: origin.did, dimensionsCm: { l: 10, w: 10, h: 5 }, weightKg: 0.5 } as never, asConsumer(sender.personDid));
+    expect(here.parcel.sameShop).toBe(true);
+    expect(here.price.transport).toBe(0);
+    expect(here.journey.hops).toEqual([origin.shopName]);
     // A typo'd receiver number would orphan the parcel from every home — the phone join IS the delivery contract.
     expect(() => identity.createParcel({ receiverMobile: 'abc', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 5 }, weightKg: 0.5 } as never, asConsumer(sender.personDid))).toThrow(/valid receiver phone/);
     const home: any = identity.myParcels(asConsumer(sender.personDid));
-    expect(home.sent).toHaveLength(0);
+    expect(home.sent.map((x: { parcelId: string }) => x.parcelId)).toEqual([here.parcel.parcelId]);
   });
 
   it('runs the inbound e-commerce flow: webhook → intake → bus → shelve → collect, with vendor callbacks', async () => {
@@ -7694,7 +7800,7 @@ describe('PUDO Light', () => {
       expect(parcels.get('QR-WHO').destAgentDid).toBeUndefined();
       expect(() => controller.rate('QR-WHO', stars as never, as('agent'))).toThrow('A rating is recorded by a shop that handled this parcel');
       parcels.arrive('QR-WHO', shop.did);
-      parcels.pickup('QR-WHO', shop.did, releaseCodeOf('QR-WHO'));
+      parcels.pickup('QR-WHO', shop.did, releaseCodeOf('QR-WHO'), photoBy(shop.did));
       // Another shop, a shop's role with no shop behind it, and the driver who carried it.
       for (const who of [as('agent', elsewhere.did), as('agent'), as('driver', 'did:glos:who-bus')]) {
         expect(() => controller.rate('QR-WHO', stars as never, who)).toThrow('A rating is recorded by a shop that handled this parcel');

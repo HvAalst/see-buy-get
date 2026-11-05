@@ -221,12 +221,23 @@ export function normalizeKey(input: string): string {
 /** The consumer ladder. Disputed/Voided fall off it and render as a note instead. */
 export const LADDER: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered'];
 
-export function ladderIndex(status: ParcelStatus): number {
+/**
+ * 2026-11-05 — a parcel handed in and collected at the one shop never rides a bus or passes a hub: its ladder has no rungs
+ * for them, rather than drawing them ticked, with no time, for a journey it never made.
+ */
+export const SAME_SHOP_LADDER: ParcelStatus[] = ['Created', 'Ready_For_Pickup', 'Delivered'];
+
+/** The ladder a parcel climbs: the whole journey, or the one stop of a same-shop parcel. */
+export const ladderFor = (sameShop?: boolean): ParcelStatus[] => (sameShop ? SAME_SHOP_LADDER : LADDER);
+
+export function ladderIndex(status: ParcelStatus, ladder: ParcelStatus[] = LADDER): number {
   // Unclaimed sits ON the ready rung: the parcel arrived and is still there. Giving it a rung of its own
   // would draw a journey with an extra leg nobody travelled, and leaving it off would file it with the
   // cancelled and the disputed — where a parcel a person can still walk in and collect does not belong.
-  if (status === 'Unclaimed') return LADDER.indexOf('Ready_For_Pickup');
-  return LADDER.indexOf(status);
+  if (status === 'Unclaimed') return ladder.indexOf('Ready_For_Pickup');
+  // On a same-shop ladder, taken in at the counter is the first rung (it is on the shelf the same moment).
+  if (status === 'At_PUDO' && !ladder.includes('At_PUDO')) return ladder.indexOf('Created');
+  return ladder.indexOf(status);
 }
 
 export interface StatusPresentation {

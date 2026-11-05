@@ -316,6 +316,7 @@ export const enSend = {
   'send.book.yourSend': 'Your send',
   'send.book.from': 'From',
   'send.book.to': 'To',
+  'send.book.sameShop': 'Dropped off and collected at the same shop: no bus, so it is ready to collect as soon as it is handed in.',
   'send.book.size': 'Size',
   'send.book.makeLabel': 'Make my label',
   'send.book.enterNumber': 'Enter the receiver’s number first.',

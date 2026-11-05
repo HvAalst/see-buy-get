@@ -295,9 +295,12 @@ describe('the public shipping quote', () => {
     expect(() => shipping.quote({ from: { pointId: 'did:glos:nope' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' })).toThrow(/No collection point/);
   });
 
-  it('refuses to quote a shipment from a place to itself', () => {
+  it('quotes the one shop at both ends as one stop — collected where it is handed in (2026-11-05: it was refused)', () => {
     const { from } = domesticPair();
-    expect(() => shipping.quote({ from: { pointId: from.did }, to: { pointId: from.did }, size: 'M' })).toThrow(/two ends/);
+    const q: any = shipping.quote({ from: { pointId: from.did }, to: { pointId: from.did }, size: 'M' });
+    expect(q.route.hops).toHaveLength(1);
+    expect(q.route.km).toBe(0);
+    expect(q.price.amount).toBeGreaterThan(0);
   });
 
   it('prices across a border, names the crossing, and says the declaration will be needed', () => {

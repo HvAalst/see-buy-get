@@ -3263,11 +3263,22 @@ export class SbgController {
   @AtTheCounter()
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
-    const taken = this.parcels.accept({ ...dto, agentDid });
+    // 2026-11-05 — collected at this same shop: priced by its route, one stop (the shop's fee once, no transport), as a
+    // Send parcel is — the counter collects that price in cash.
+    const sameShopQuote = dto.destPudoDid && dto.destPudoDid === agentDid ? this.sameShopQuote(agentDid, dto) : undefined;
+    const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}) });
     // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it. Counted in
     // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
     this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
     return taken;
+  }
+
+  /** A parcel's price where it is handed in and collected at the one shop: its size as the counter measured it, one stop. */
+  private sameShopQuote(agentDid: string, dto: AcceptParcelDto) {
+    const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
+    const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
+    const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg }) : undefined;
+    return this.routing.quoteShipment(agentDid, agentDid, size, measured, { kg, fragile: dto.fragile });
   }
 
   /** F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable
@@ -4739,7 +4750,7 @@ export class SbgController {
   @Post('parcels/:id/collect-confirm')
   @AtTheCounter()
   collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode);
+    return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode, dto.deliveredPhotoRef);
   }
 
   /**

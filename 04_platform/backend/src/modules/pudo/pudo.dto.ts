@@ -1387,6 +1387,8 @@ export class ShelveDto {
 export class CollectDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() collectionCode!: string;
+  /** 2026-11-05 — the hand-over photo: required where the parcel was taken in at this same shop. */
+  @IsOptional() @IsString() @MaxLength(200) deliveredPhotoRef?: string;
 }
 
 /** Open a bag at a shop. With a destZone it is addressed at the same time; without, it is a bare tote. */

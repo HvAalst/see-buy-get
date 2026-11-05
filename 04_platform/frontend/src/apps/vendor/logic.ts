@@ -225,6 +225,8 @@ export interface OriginRow {
   total: number | null;
   /** The money the total is in: the quote’s. */
   currency?: string;
+  /** 2026-11-05 — the buyer's own shop: handed in and collected there, one stop. */
+  here?: boolean;
 }
 
 /**
@@ -235,10 +237,11 @@ export interface OriginRow {
 export function originRows(points: NetworkPoint[] | null, destDid: string, options: OriginOption[] | null): OriginRow[] {
   const quotes = new Map((options ?? []).map((o) => [o.did, o.quote]));
   return (points ?? [])
-    .filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false)
+    // The buyer's own shop is offered too (2026-11-05): handed in there and collected there, one stop — the cheapest row.
+    .filter((p) => p.openState === 'open' && p.takesNew !== false)
     .map((point) => {
       const quote = quotes.get(point.did);
-      return { point, total: quote?.locked.total ?? null, ...(quote?.currency ? { currency: quote.currency } : {}) };
+      return { point, total: quote?.locked.total ?? null, ...(quote?.currency ? { currency: quote.currency } : {}), ...(point.did === destDid ? { here: true } : {}) };
     })
     .sort((a, b) => {
       if (a.total === null && b.total === null) return a.point.shopName.localeCompare(b.point.shopName);

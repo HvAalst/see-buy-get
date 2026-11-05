@@ -66,8 +66,15 @@ export function CollectBody({ state, actions }: CollectScreenProps) {
             )}
           </Card>
 
+          {/* Taken in here and collected here (2026-11-05): photographed as it is handed over, as well as its code. */}
+          {found.parcel.originAgentDid && found.parcel.originAgentDid === found.parcel.destAgentDid ? (
+            <>
+              <Note tone="info" icon="camera" title={t('agent.release.hereTitle')} detail={t('agent.release.hereDetail')} />
+              <PhotoField id="collect-hand-photo" value={f.handPhotoRef} label={t('agent.release.handoverPhotoNeeded')} upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => actions.setCollect({ handPhotoRef: ref })} />
+            </>
+          ) : null}
           <div class="scr__cta">
-            <Button onClick={() => void actions.confirmCollect()} busy={state.busy === 'collect-confirm'}>
+            <Button onClick={() => void actions.confirmCollect()} busy={state.busy === 'collect-confirm'} disabled={Boolean(found.parcel.originAgentDid && found.parcel.originAgentDid === found.parcel.destAgentDid) && !f.handPhotoRef}>
               {t('agent.collect.handOverGood')}
             </Button>
           </div>

@@ -396,7 +396,8 @@ export function useSendApp() {
   }, []);
 
   const pickFrom = useCallback((did: string) => {
-    setState((s) => ({ ...s, fromDid: did, step: 'to', toDid: s.toDid === did ? null : s.toDid }));
+    // The same shop at both ends is a choice now (same-shop collection, 2026-11-05), so a collection shop is kept.
+    setState((s) => ({ ...s, fromDid: did, step: 'to' }));
   }, []);
 
   /**

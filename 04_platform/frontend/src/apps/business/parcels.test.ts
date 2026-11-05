@@ -11,12 +11,13 @@ const t = ((key: string) => key) as never;
 describe('a business’s parcels', () => {
   const full: ParcelForm = { ...EMPTY_PARCEL, originDid: 'did:a', destDid: 'did:b', receiver: '0712 345 678', l: '30', w: '20', h: '15', kg: '2,5', photoRef: 'med_1' };
 
-  it('prices once both shops and the measurements are in — a comma is a decimal point — and never one shop at both ends', () => {
+  it('prices once both shops and the measurements are in — a comma is a decimal point — and one shop at both ends too (2026-11-05)', () => {
     expect(parcelSize(full)).toEqual({ l: 30, w: 20, h: 15, kg: 2.5 });
     expect(parcelPriceGaps(full, t)).toEqual([]);
     expect(parcelPriceGaps({ ...full, kg: '' }, t)).toEqual(['business.parcels.gap.size']);
     expect(parcelPriceGaps({ ...full, h: '0' }, t)).toEqual(['business.parcels.gap.size']);
-    expect(parcelPriceGaps({ ...full, destDid: 'did:a' }, t)).toEqual(['business.parcels.gap.sameShop']);
+    // Handed in and collected at one shop: a same-shop parcel, priced as one stop — not a gap.
+    expect(parcelPriceGaps({ ...full, destDid: 'did:a' }, t)).toEqual([]);
     expect(parcelPriceGaps(EMPTY_PARCEL, t)).toEqual(['business.parcels.gap.from', 'business.parcels.gap.to', 'business.parcels.gap.size']);
   });
 

@@ -508,7 +508,7 @@ function OriginStep({ state, actions }: MintScreenProps) {
             key={r.point.did}
             point={r.point}
             price={r.total === null ? null : money(r.total, r.currency)}
-            sub={state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
+            sub={r.here ? t('vendor.mint.originHere') : state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
             onPick={() => void actions.pickOrigin(r.point.did)}
           />
         ))}

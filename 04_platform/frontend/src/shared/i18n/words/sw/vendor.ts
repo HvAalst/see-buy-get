@@ -495,6 +495,7 @@ export const words: Record<string, string> = {
   "vendor.mint.dimW": "Upana cm",
   "vendor.mint.dimH": "Kimo cm",
   "vendor.mint.dimKg": "Uzito",
+  "vendor.mint.originHere": "Duka la mnunuzi lenyewe: linakabidhiwa na kuchukuliwa hapa, hakuna basi",
   "vendor.mint.sizeTier": "Daraja la ukubwa {size}",
   "vendor.mint.fillAll": "Jaza vyote vinne na daraja litaonekana.",
   "vendor.mint.tooBigTitle": "Kikubwa mno kwa mtandao wa vifurushi",

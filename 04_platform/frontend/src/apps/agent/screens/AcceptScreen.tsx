@@ -343,6 +343,19 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <p class="t-body">{t(state.acceptedLabel.queued ? 'agent.accept.queuedBody' : 'agent.accept.labelBody', { parcel: state.acceptedLabel.parcelId })}</p>
             {/* The label, the tracking key and the pickup code for the SENDER standing here — or, taken in without a
                 signal, nothing yet: they are made when it reaches SeeBuyGet, and shown then. */}
+            {/* Collected here: on this shop's shelf already, and the cash to take for it (2026-11-05). */}
+            {state.acceptedLabel.here ? (
+              <Note
+                tone="info"
+                icon="home"
+                title={state.acceptedLabel.here.binSlot ? t('agent.accept.hereShelved', { slot: state.acceptedLabel.here.binSlot }) : t('agent.accept.hereShelvedNoSlot')}
+                detail={
+                  state.acceptedLabel.here.cashDue
+                    ? t('agent.accept.hereCash', { amount: money(state.acceptedLabel.here.cashDue, state.acceptedLabel.here.currency) })
+                    : t('agent.accept.herePhoto')
+                }
+              />
+            ) : null}
             <TakenInLabel label={state.acceptedLabel} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               {t('agent.accept.doneAnother')}
@@ -404,13 +417,30 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
   const t = useT();
   const f = state.accept;
   const near = f.destMode === 'address' ? state.acceptNear : null;
-  // Exclude the accepting shop — a parcel can't be sent to the shop taking it in.
+  // The accepting shop is not in the list of OTHER shops: it is the row of its own above (collected here).
   const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, state.agent?.country);
   const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
   const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
 
+  // 2026-11-05 — collected here, at this shop: one stop, on the shelf at once, no bus (it was refused).
+  const me = state.agent;
+  const here = Boolean(me && f.destPudoDid === me.did);
+
   return (
     <Card label={t('agent.accept.whereGo')}>
+      {me ? (
+        <div class="rows" role="group" aria-label={t('agent.accept.whereGo')}>
+          <button type="button" class="row" aria-pressed={here} onClick={() => actions.pickDest({ did: me.did, zone: me.zone, shopName: me.shopName })}>
+            <span class="row__ic">
+              <Icon name={here ? 'check' : 'home'} size={24} />
+            </span>
+            <span class="row__body">
+              <span class="row__t">{t('agent.accept.here')}</span>
+              <span class="row__s">{t('agent.accept.hereSub')}</span>
+            </span>
+          </button>
+        </div>
+      ) : null}
       {/* Names the picking METHOD, not the surface — so it doesn't collide with PlaceMap's own Map/Simple toggle. */}
       <div class="seg" role="group" aria-label={t('agent.accept.pickMethodAria')}>
         <button type="button" class={`seg__btn${f.destMode === 'map' ? ' seg__btn--on' : ''}`} aria-pressed={f.destMode === 'map'} onClick={() => actions.setDestMode('map')}>
@@ -468,7 +498,7 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
         <p class="hint" style="margin-top:10px">{t('agent.accept.noShops')}</p>
       ) : null}
 
-      {f.destShopName ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
+      {f.destShopName && !here ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
     </Card>
   );
 }

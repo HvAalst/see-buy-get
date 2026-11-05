@@ -526,7 +526,8 @@ export function agentParcelRowOf(p: Parcel, agentDid: string): AgentParcelRow {
 export function filterAgentParcels(rows: Parcel[], agentDid: string, q: AgentParcelsQuery): Parcel[] {
   let out = rows;
   if (q.status) out = out.filter((p) => p.status === q.status);
-  if (q.role) out = out.filter((p) => agentParcelRole(p, agentDid) === q.role);
+  // A same-shop parcel (2026-11-05) is both this shop's to take in and its to hand over: it answers either filter.
+  if (q.role) out = out.filter((p) => agentParcelRole(p, agentDid) === q.role || (p.originAgentDid === agentDid && p.destAgentDid === agentDid));
   if (q.from || q.to) out = out.filter((p) => withinDates(p.acceptedAt, q.from, q.to));
   if (q.q) out = out.filter((p) => textMatch([p.parcelId, p.did, p.trackingKey, p.originZone, p.destZone], q.q));
   return [...out].sort(q.sort === 'oldest' ? (a, b) => a.acceptedAt.localeCompare(b.acceptedAt) : (a, b) => b.acceptedAt.localeCompare(a.acceptedAt));
@@ -632,6 +633,8 @@ interface AcceptInput {
   fragile?: boolean;
   natureCode?: CargoNature; // S30: primary cargo nature (default GEN)
   destPudoDid?: string; // optional: nominate the destination PUDO up front (enables MDP pre-sort routing)
+  /** 2026-11-05 — a parcel collected at the shop taking it in: its price, from the route (one stop, the shop's fee once). */
+  sameShopQuote?: ShipmentQuote;
   observedAt?: string; // round 23: when the counter took it in, by its phone's clock (a take-in kept with no signal)
 }
 
@@ -975,9 +978,12 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private payShelving(agentDid: string, parcel: Parcel): void {
     const list = this.amountsAt(agentDid, parcel.sellerEntityId).shelvingFee;
-    const pay = Math.max(list, this.shopFloorOf(agentDid, parcel) ?? 0);
+    // A SAME-SHOP parcel (2026-11-05): the shop's own fee was met at take-in, on its one stay — the owner: "the shop's fee
+    // once". Its shelving pays the company's shelving pay, and nothing more is paid ahead of its release.
+    const pay = parcel.originAgentDid === agentDid && this.isSameShop(parcel) ? list : Math.max(list, this.shopFloorOf(agentDid, parcel) ?? 0);
     if (pay > list) parcel.floorPaidAhead = { did: agentDid, amount: Math.round((pay - list) * 100) / 100 };
     else delete parcel.floorPaidAhead;
+    parcel.shelvingLabour = pay;
     this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
   }
 
@@ -1231,6 +1237,7 @@ export class ParcelService implements OnApplicationBootstrap {
       items: p.items,
       trackingKey: p.trackingKey,
       vendorOrder: Boolean(p.vendorId),
+      ...(this.isSameShop(p) ? { sameShop: true } : {}),
       createdAt: p.acceptedAt,
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
@@ -1380,9 +1387,10 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
     // Round 31 — the shop's own photo, of this parcel and nothing else: refused before anything is written.
     this.media.requireHeld(input.dropoffPhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'dropoffPhotoRef');
-    // A parcel can't be sent to the shop taking it in (origin == destination is unroutable — destZone would
-    // equal originZone and never match a corridor). Mirrors createConsumerSend's same-shop refusal.
-    if (input.destPudoDid && input.destPudoDid === input.agentDid) throw new GlosError('INVALID_INPUT', 'A parcel cannot be sent to the shop taking it in — pick a different destination.');
+    // 2026-11-05 — SAME-SHOP COLLECTION: a parcel collected at the shop taking it in (it was refused). It needs its price,
+    // which the route works out — one stop, the shop's fee once, no transport — and is handed in by the controller.
+    const sameShop = Boolean(input.destPudoDid) && input.destPudoDid === input.agentDid;
+    if (sameShop && !input.sameShopQuote) throw new GlosError('INVALID_STATE', 'A parcel collected where it is handed in is priced from its route — none was given');
     const agent = this.agents.get(input.agentDid);
     // A counter take-in declares a size and a photo, never a contents list and a value, so a parcel handed
     // over this counter cannot be papered for a border. Compared shop-to-shop rather than through a quote,
@@ -1513,6 +1521,10 @@ export class ParcelService implements OnApplicationBootstrap {
     };
     // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
     // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
+    if (sameShop && input.sameShopQuote) Object.assign(parcel, this.pricedFrom(input.sameShopQuote));
+    // A same-shop parcel goes on this shop's shelf now: the slot FIRST, before the parcel is kept — a full shelf refuses
+    // the take-in with nothing written, rather than keeping a parcel that is ready to collect and on no shelf.
+    if (sameShop) parcel.binSlot = this.shelf.assign(input.agentDid, parcel.parcelId, parcel.size);
     parcel.label = this.label(parcel);
     this.parcels.set(parcel.parcelId, parcel);
     // The account each number is certainly for today, so the parcel stays theirs when the number does not.
@@ -1527,7 +1539,15 @@ export class ParcelService implements OnApplicationBootstrap {
      * to a float we do not hold, no labour accrued by a company that does not operate there. What the
      * network still does is the thing it went there to do — hold the custody chain, and prove it.
      */
-    if (promise === 'ours') {
+    if (promise === 'ours' && sameShop && mode === 'cash') {
+      // Collected in cash against the price its route gave — the shop's fee once, our fee, the tax — and remitted, tax and
+      // all, as a Send parcel's is; then the shop is paid its take-in, which meets its own fee (takeInPayOf).
+      const due = parcel.shipmentCost ?? 0;
+      if (due > 0) this.gate.chargeShipping(input.agentDid, due, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
+      const pay = this.takeInPayOf(input.agentDid, parcel);
+      parcel.intakeLabour = pay;
+      this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    } else if (promise === 'ours') {
       if (mode === 'cash') {
         const rule = this.wholesaleTax(input.agentDid);
         // What a parcel costs at this shop's company today — kept on the parcel, like the tax rate beside it.
@@ -1550,6 +1570,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
 
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId: parcel.parcelId, agentDid: input.agentDid, destZone: input.destZone, mode }, { source: 'pudo' }).catch(() => undefined);
+    if (sameShop) this.shelveHere(parcel, input.agentDid, { at: now, ...received }, `taken in to be collected here · shelf ${parcel.binSlot}`);
     return parcel;
   }
 
@@ -1771,6 +1792,56 @@ export class ParcelService implements OnApplicationBootstrap {
     return { parcelId, status: parcel.status, binSlot: parcel.binSlot };
   }
 
+  /** 2026-11-05 — handed in and collected at the one shop: no road, no hub, no driver. */
+  isSameShop(parcel: Pick<Parcel, 'originAgentDid' | 'destAgentDid'>): boolean {
+    return Boolean(parcel.destAgentDid) && parcel.originAgentDid === parcel.destAgentDid;
+  }
+
+  /** The price a parcel keeps, from the quote it was sold at: the locked leg, its tax, its cover, what it was made of. */
+  private pricedFrom(quote: ShipmentQuote): Partial<Parcel> {
+    const chosen = quote.locked;
+    return {
+      routeMode: 'locked',
+      routeKm: quote.totalKm,
+      lockedPerKm: quote.perKm.min,
+      nodeFees: quote.nodeFees,
+      stopFees: stopFeesOf(quote),
+      transportCost: chosen.transport,
+      platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
+      platformFeePct: quote.platformFeePct,
+      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
+      transportFactor: quote.transportFactor,
+      taxPct: quote.tax.ratePct,
+      taxLabel: quote.tax.label,
+      shipmentTax: chosen.tax,
+      shipmentProvision: chosen.provision,
+      currency: quote.currency,
+      fx: quote.fx,
+      sellerEntityId: quote.sellerEntityId,
+      shipmentCost: chosen.gross,
+    };
+  }
+
+  /**
+   * 2026-11-05 — SAME-SHOP COLLECTION: ON THE SHELF THE MOMENT IT IS HANDED IN. What arrive() and shelve() do when a parcel
+   * comes off the bus, done at the take-in for a parcel that never leaves: ready to collect, its wait begun, the shop's
+   * shelving paid, its receiver told. The SLOT is the caller's to take first, before anything is written. Custody stays
+   * the one shop leg (handTo would add nothing: the holder does not change).
+   */
+  private shelveHere(parcel: Parcel, agentDid: string, step: Step, note: string): void {
+    parcel.status = 'Ready_For_Pickup';
+    parcel.destAgentDid = agentDid;
+    if (!parcel.otp && !parcel.collectionCode) parcel.otp = releaseOtp();
+    parcel.otpAttempts = 0;
+    parcel.otpLockedAt = undefined;
+    parcel.readyAt = step.at;
+    this.payShelving(agentDid, parcel);
+    this.scan(parcel, 'Ready_For_Pickup', agentDid, note, step);
+    void this.events
+      .publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId: parcel.parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' })
+      .catch(() => undefined);
+  }
+
   /** Would this shop's shelf take ALL of these as it stands? Asked before a bag is opened — see MdpService.deliverBag. */
   shelfTakes(agentDid: string, parcelIds: string[]): boolean {
     return this.shelf.fits(agentDid, parcelIds.map((id) => this.require(id).size));
@@ -1789,6 +1860,10 @@ export class ParcelService implements OnApplicationBootstrap {
     // counter until staff reissue. (A collected order always asked this: see collect().)
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'This parcel is on another shop’s shelf');
     if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    // 2026-11-05 — SAME-SHOP COLLECTION IS HANDED OVER WITH A PHOTO (the owner: "code + photo of the collector"). In a
+    // two-shop parcel the shop that saw the code at take-in never holds the parcel at collection; here it is the same
+    // counter, so a collection it records must carry evidence the receiver can dispute. Refused before a code is counted.
+    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'Taken in here and collected here: photograph the hand-over before you release it');
     // Round 31 — a hand-over photo, when there is one, is the shop's own: refused before a code is counted.
     if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
     // A PERSON'S GOODS TURNED ROUND AT A HUB (2026-10-27): the way back is paid here, in cash, as they are collected — charged
@@ -1846,7 +1921,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Only the accepting PUDO can void');
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'At_PUDO') throw new GlosError('INVALID_STATE', 'Only an At_PUDO parcel can be voided');
+    // 2026-11-05 — a same-shop parcel goes on its shelf at take-in, so it is undone from there, in the same five minutes.
+    const shelvedHere = this.isSameShop(parcel) && parcel.status === 'Ready_For_Pickup';
+    if (parcel.status !== 'At_PUDO' && !shelvedHere) throw new GlosError('INVALID_STATE', 'Only an At_PUDO parcel can be voided');
     if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw new GlosError('WINDOW_EXPIRED', 'Void window has expired');
     if (!voidedPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the voided label is required');
     this.media.requireHeld(voidedPhotoRef, agentDid, { type: 'parcel', id: parcel.parcelId }, 'voidedPhotoRef'); // round 31
@@ -1858,6 +1935,11 @@ export class ParcelService implements OnApplicationBootstrap {
     this.endCustody(parcel); // undone at the counter: the network is not holding it any more
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
     this.reverseIntakeCharge(parcel, agentDid);
+    if (shelvedHere) {
+      // Off its shelf, and its shelving taken back with the take-in: an undone parcel earned neither.
+      this.shelf.release(agentDid, parcel.parcelId);
+      if (parcel.shelvingLabour) this.gate.clawbackLabour(agentDid, parcel.shelvingLabour, parcel.parcelId, parcel.sellerEntityId);
+    }
     this.refundStore(parcel, 'voided at the counter: given back in full');
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -1878,7 +1960,9 @@ export class ParcelService implements OnApplicationBootstrap {
       if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId, parcel.sellerEntityId);
       return;
     }
-    if (parcel.senderMobile === 'app') {
+    // A same-shop walk-up (2026-11-05) was charged as a Send parcel is — its route's price, then its take-in paid — and is
+    // reversed as one.
+    if (parcel.senderMobile === 'app' || (this.isSameShop(parcel) && parcel.shipmentCost != null)) {
       // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
       // sale un-owes its tax as surely as it un-earns its revenue.
       this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
@@ -2168,7 +2252,8 @@ export class ParcelService implements OnApplicationBootstrap {
   createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
-    if (input.originAgentDid === input.destAgentDid) throw new GlosError('INVALID_INPUT', 'Drop-off and collection shop must be two different shops');
+    // 2026-11-05 — drop-off and collection at the one shop is a same-shop parcel (it was refused): priced as one stop by
+    // its route, and shelved the moment it is handed in (intakeConsumerSend).
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     // A person sending from a counter declares nothing — the flow asks for a size and a photo, not a
     // contents list and a value — so a crossing cannot be papered. Refusing is the honest answer: the
@@ -2317,6 +2402,8 @@ export class ParcelService implements OnApplicationBootstrap {
     destinationLandmark?: string;
     destinationLocation?: { lat: number; lng: number };
     runningLate?: RunningLate;
+    /** 2026-11-05 — handed in and collected at the one shop: no bus, no hub on its way. */
+    sameShop?: boolean;
   } {
     const parcel = [...this.parcels.values()].find((p) => p.trackingKey === trackingKey);
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel for that tracking key');
@@ -2340,6 +2427,7 @@ export class ParcelService implements OnApplicationBootstrap {
       // Running late, by the same rule the notice uses: a page that says "on its way" for a parcel a day behind its
       // promise is the page telling somebody nothing.
       ...(runningLate(parcel) ? { runningLate: runningLate(parcel) } : {}),
+      ...(this.isSameShop(parcel) ? { sameShop: true } : {}),
     };
   }
 
@@ -2363,6 +2451,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
     if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    // A same-shop parcel takes its shelf slot before anything is written (2026-11-05).
+    const here = this.isSameShop(parcel);
+    if (here) parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size);
     const step = this.stepAt(parcel, observedAt);
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = step.at;
@@ -2378,6 +2469,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
+    if (here) this.shelveHere(parcel, agentDid, step, `dropped off to be collected here · shelf ${parcel.binSlot}`);
     return parcel;
   }
 
@@ -2395,6 +2487,11 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.customs && !papersInPouch) {
       throw new GlosError('FIELD_REQUIRED', 'This parcel crosses a border: look for its commercial invoice — three copies in the pouch on the outside — before you take it in. No papers, ask the store to print them.', { field: 'papersInPouch' });
     }
+    // 2026-11-05 — a store's order handed in at the shop its buyer collects from: its shelf slot before anything is
+    // written, and on the shelf at once below. Such orders were already made (nothing refused them) and sat At_PUDO for
+    // ever: no bus goes from a shop to itself.
+    const here = this.isSameShop(parcel);
+    if (here) parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size);
     const step = this.stepAt(parcel, observedAt);
     if (parcel.customs) parcel.papersSeen = { at: step.at, by: agentDid };
     this.admitBooked(parcel, agentDid);
@@ -2406,6 +2503,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
+    if (here) this.shelveHere(parcel, agentDid, step, `handed in to be collected here · shelf ${parcel.binSlot}`);
     return parcel;
   }
 
@@ -2620,13 +2718,18 @@ export class ParcelService implements OnApplicationBootstrap {
    * this, a wrong code could be retried forever; the code is no longer printed on the parcel, so
    * getting it wrong repeatedly is someone guessing.
    */
-  collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
+  collectConfirm(parcelId: string, agentDid: string, collectionCode: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    // 2026-11-05 — SAME-SHOP COLLECTION IS HANDED OVER WITH A PHOTO (the owner: "code + photo of the collector"). In a
+    // two-shop parcel the shop that saw the code at take-in never holds the parcel at collection; here it is the same
+    // counter, so a collection it records must carry evidence the receiver can dispute. Refused before a code is counted.
+    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'Taken in here and collected here: photograph the hand-over before you release it');
+    if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
     const supplied = (collectionCode || '').trim();
     // EITHER code opens it: the receiver's own, or the one held by somebody they named. Nominating a
     // neighbour to collect does not stop you collecting it yourself, and the shop still learns neither.
@@ -2649,6 +2752,10 @@ export class ParcelService implements OnApplicationBootstrap {
 
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
+    if (deliveredPhotoRef) {
+      parcel.deliveredPhotoRef = deliveredPhotoRef;
+      this.media.adopt(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'pod');
+    }
     this.media.anchorParcelTerminal(parcelId); // S26: shipment-proof retention starts at collection
     this.shelf.release(agentDid, parcelId); // free the shelf slot
     // WHO took it, recorded. The point of a nomination over a code read down the phone is that afterwards
@@ -3595,7 +3702,9 @@ export class ParcelService implements OnApplicationBootstrap {
     for (const p of this.parcels.values()) {
       if (p.originAgentDid === agentDid && p.status === 'At_PUDO') holds += 1;
       else if (p.destAgentDid === agentDid && isCollectable(p.status)) holds += 1;
-      if (p.originAgentDid === agentDid && HANDED_ON_FROM_ORIGIN.includes(p.status)) completed += 1;
+      // Handed on from here — not a same-shop parcel (2026-11-05), which is still held when it is ready and is completed once,
+      // when it is collected (the line below): it counted as held and handed on at once, and twice when collected.
+      if (p.originAgentDid === agentDid && HANDED_ON_FROM_ORIGIN.includes(p.status) && !this.isSameShop(p)) completed += 1;
       if (p.destAgentDid === agentDid && p.status === 'Delivered') completed += 1;
     }
     return standingOf('shop', rule, holds, completed);

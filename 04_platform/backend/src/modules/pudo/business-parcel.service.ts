@@ -291,7 +291,9 @@ export class BusinessParcelService {
     if (!own && !origin) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is handed in at', { field: 'originPudoDid' });
     if (own && !v.collection) throw new GlosError('INVALID_STATE', 'Choose the place of yours drivers collect from first', { field: 'fromOwnPlace' });
     if (!dest) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is collected from', { field: 'destPudoDid' });
-    if (origin && origin === dest) throw new GlosError('INVALID_INPUT', 'It is handed in and collected at the same shop: choose another shop for one of them', { field: 'destPudoDid' });
+    // 2026-11-05 — handed in and collected at the one shop is a same-shop parcel (it was refused): one stop, the shop's fee
+    // once. Not yet where the shop then takes it on to the business's own place: that leg is its own, and not checked for it.
+    if (origin && origin === dest && door) throw new GlosError('INVALID_INPUT', 'It is handed in at the shop that takes it on to your place: hand it in at another shop, or have it collected there', { field: 'originPudoDid' });
     if (origin) this.agents.assertNamedAtMint(origin);
     this.agents.assertNamedAtMint(dest);
     const dial = catalogueEntry(who.entity.jurisdiction ?? '')?.dialCode;

@@ -175,6 +175,8 @@ export interface TrackView {
   runningLate?: RunningLate;
   /** 2026-11-05 — the store it came from, with its id for the store's public record. A peer send has none. */
   store?: { vendorId: string; name: string };
+  /** 2026-11-05 — handed in and collected at the one shop: no bus, no hub. */
+  sameShop?: boolean;
 }
 
 /** A parcel running late — the server's one rule, behind the notice, this page and the list alike. */
@@ -279,6 +281,8 @@ export interface ConsumerParcelView {
   items?: Array<{ name: string; qty: number }>;
   trackingKey?: string;
   vendorOrder: boolean;
+  /** 2026-11-05 — handed in and collected at the one shop: no bus, no hub. */
+  sameShop?: boolean;
   /** 2026-11-05 — a store's order, to its receiver: the store, and whether this order was rated already. */
   store?: { vendorId: string; name: string; rated: boolean };
   createdAt: string;
