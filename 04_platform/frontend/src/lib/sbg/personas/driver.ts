@@ -220,6 +220,14 @@ export function createDriverApi(sbg: SbgClient) {
     suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-work', { params: { path: { did } }, body })),
 
+    /** 2026-11-05 — PRE-DROP-OFF: take on ahead what a shop has coming for one next stop; the room is held on the vehicle. */
+    takeOnAhead: (did: string, agentDid: string, hopKey: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/ahead', { params: { path: { did } }, body: { agentDid, hopKey } })),
+
+    /** Let go what was taken on ahead: the room is free, the parcels anybody's again. */
+    letGoAhead: (did: string, promiseId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/ahead/{promiseId}/let-go', { params: { path: { did, promiseId } } })),
+
     /** Find work AROUND me — the bike/bajaj half of the marketplace, matched by distance, not by detour. */
     suggestNearby: (did: string, body: { at: { lat: number; lng: number }; radiusKm: number; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-nearby', { params: { path: { did } }, body })),

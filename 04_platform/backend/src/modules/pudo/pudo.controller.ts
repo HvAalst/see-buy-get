@@ -89,6 +89,7 @@ import { RoutingService, publicQuote, type QuoteCarriers } from './routing.servi
 import { HubArrivalService } from './hub-arrival.service';
 import { HubContactService } from './hub-contact.service';
 import { DropOffHoldService } from './drop-off-hold.service';
+import { PickupAheadService } from './pickup-ahead.service';
 import { MorningPayoutRun } from './morning-payout.run';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
@@ -163,7 +164,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -350,6 +351,8 @@ export class SbgController {
     @Optional() private readonly passkeys?: PasskeyService,
     // 2026-11-05 — the places held at a shop for parcels booked to be handed in there (pre-drop-off).
     @Optional() private readonly dropOffHolds?: DropOffHoldService,
+    // 2026-11-05 — parcels a driver takes on ahead (pre-drop-off, the driver side).
+    @Optional() private readonly pickupAhead?: PickupAheadService,
   ) {}
 
   /**
@@ -357,10 +360,10 @@ export class SbgController {
    * A store is named; a person is not — the counter meets them when they come. Where it goes next, so the shop can plan its
    * bags. A place that ran out is still listed while the booking stands.
    */
-  private expectedAt(did: string): Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string }> {
+  private expectedAt(did: string): Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string; takenBy?: string }> {
     if (!this.dropOffHolds) return [];
     const now = Date.now();
-    const out: Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string }> = [];
+    const out: Array<{ parcelId: string; from: 'store' | 'sender'; name?: string; size: string; heldUntil: string; state: 'held' | 'lapsed'; sameShop?: boolean; nextStop?: string; takenBy?: string }> = [];
     for (const h of this.dropOffHolds.forShop(did)) {
       let parcel;
       try {
@@ -371,9 +374,12 @@ export class SbgController {
       if (parcel.status !== 'Created') continue;
       const sameShop = this.parcels.isSameShop(parcel);
       let nextStop: string | undefined;
+      let takenBy: string | undefined;
       if (!sameShop) {
         try {
-          nextStop = this.bagPlans.nextStop(parcel);
+          const hop = this.bagPlans.hopOf(parcel);
+          nextStop = hop.label;
+          takenBy = this.pickupAhead?.takenFor(did, hop.key, now);
         } catch {
           nextStop = undefined;
         }
@@ -387,6 +393,7 @@ export class SbgController {
         state: this.dropOffHolds.isHeld(h, now) ? 'held' : 'lapsed',
         ...(sameShop ? { sameShop: true } : {}),
         ...(nextStop ? { nextStop } : {}),
+        ...(takenBy ? { takenBy } : {}),
       });
     }
     return out;
@@ -6927,8 +6934,28 @@ export class SbgController {
       remainingTotes: this.dispatch.remainingTotes(did),
       offers,
       expected: [], // a consolidation lot is a truckload — never a patch rider's work
+      // 2026-11-05 — parcels coming in at the shops around here, to take on ahead: a patch rider's work, exactly.
+      ahead: this.pickupAhead?.nearPoint(did, dto.at, dto.radiusKm) ?? [],
       freightPaused: belowFloor(this.ratings.driverRating(did)),
     };
+  }
+
+  /** 2026-11-05 — PRE-DROP-OFF: take on ahead what a shop has coming for one next stop — the room is held on the vehicle now. */
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/ahead')
+  takeOnAhead(@Param('did') did: string, @Body() dto: TakeOnAheadDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor); // their vehicle's room, nobody else's
+    if (!this.pickupAhead) throw new GlosError('NOT_FOUND', 'Taking parcels on ahead is not available here');
+    return this.pickupAhead.takeOn(did, dto.agentDid, dto.hopKey);
+  }
+
+  /** Let go what was taken on ahead: the room on the vehicle is free, and the parcels are anybody's again. */
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/ahead/:promiseId/let-go')
+  letGoAhead(@Param('did') did: string, @Param('promiseId') promiseId: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
+    if (!this.pickupAhead) throw new GlosError('NOT_FOUND', 'Taking parcels on ahead is not available here');
+    return this.pickupAhead.letGo(did, promiseId);
   }
 
   /** Driver closes the shift → decouples driver + vehicle. */
@@ -7836,7 +7863,9 @@ export class SbgController {
     // REP4 — return the LIVE freight-bar verdict alongside the offers, so the app's "freight is paused" note
     // comes from the SAME read as the loads it sits next to (never stale: missing when a pause just began, or
     // contradicting freight cards after it lifted).
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), offers, expected, freightPaused: belowFloor(this.ratings.driverRating(did)) };
+    // 2026-11-05 — PRE-DROP-OFF: parcels coming in at the shops on this road, to take on ahead.
+    const ahead = this.pickupAhead?.nearRoute(did, dto) ?? [];
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), offers, expected, ahead, freightPaused: belowFloor(this.ratings.driverRating(did)) };
   }
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */

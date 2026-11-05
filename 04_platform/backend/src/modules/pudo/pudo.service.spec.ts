@@ -45,6 +45,7 @@ import { VendorService } from './vendor.service';
 import { VendorCallbackService } from './vendor-callback.service';
 import { ShelfService } from './shelf.service';
 import { DropOffHoldService } from './drop-off-hold.service';
+import { PickupAheadService } from './pickup-ahead.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -168,6 +169,7 @@ describe('PUDO Light', () => {
   let core: OperationalStore;
   let events: EventBus;
   let dropHolds: DropOffHoldService;
+  let ahead: PickupAheadService;
   let presence: PresenceService;
   let borders: BorderRuleService;
 
@@ -203,7 +205,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
@@ -267,6 +269,7 @@ describe('PUDO Light', () => {
     core = moduleRef.get(OperationalStore);
     events = moduleRef.get(EventBus);
     dropHolds = moduleRef.get(DropOffHoldService);
+    ahead = moduleRef.get(PickupAheadService);
   });
 
   let agentSeq = 0;
@@ -1617,6 +1620,110 @@ describe('PUDO Light', () => {
       // Every place held, a walk-up is still taken in — on a slot that is physically free.
       const walkUp = parcels.accept({ agentDid: shop.did, parcelId: 'QR-PDO7', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: 'SouthTown', senderMobile: '+254700600001', receiverMobile: '+254700600002', dropoffPhotoRef: photoBy(shop.did) } as never);
       expect(parcels.get((walkUp as { parcelId: string }).parcelId).status).toBe('At_PUDO');
+    });
+  });
+
+  /*
+   * 2026-11-05 — PRE-DROP-OFF, THE DRIVER'S SIDE (the owner: "Seen ahead, taken on ahead"): a driver on the road sees what a shop
+   * has coming for its next stop, takes it on — the room held on their vehicle — and is given the bag for that stop when the
+   * shop closes it.
+   */
+  describe('pre-drop-off, the driver side: seen ahead, taken on ahead', () => {
+    const HOUR = 3_600_000;
+    let seq = 0;
+    const setUp = (name: string) => {
+      seq += 1;
+      const shop = onboardAgent(name, 'NorthTown', 500);
+      const dest = onboardAgent(`${name} Dest`, 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: `pah-${seq}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: `${name} Store`, callbackUrl: 'https://pah.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 500);
+      let n = 0;
+      const order = () =>
+        parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `${name}-${(n += 1)}`, originAgentDid: shop.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, dest.did, 'S') }).parcel;
+      const walkUp = (id: string, size: 'S' | 'M' | 'L' = 'S') => parcels.accept({ agentDid: shop.did, parcelId: id, size, destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const rider = (tag: string) => {
+        const d = drivers.register({ displayName: `${name} ${tag}`, fullName: `${name} ${tag} Rider`, nationalId: `DRV-PAH-${seq}-${tag}`, mobile: `+25490${seq}${tag.charCodeAt(0)}`, licenceClasses: ['bike'] });
+        const bike = vehicles.register({ plate: `PAH-${seq}-${tag}`, vehicleClass: 'bike', ownerName: `${name} ${tag} Rider` });
+        fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+        return d;
+      };
+      const road = { from: shop.location, to: { lat: shop.location.lat - 0.01, lng: shop.location.lng } };
+      return { shop, dest, order, walkUp, rider, road };
+    };
+
+    it('sees what a shop has coming for its next stop — booked and waiting — and takes it on: the room is held on the vehicle', () => {
+      const { shop, order, walkUp, rider, road } = setUp('PAH1');
+      order();
+      walkUp('PAH1-W');
+      const group = ahead.comingAt(shop.did).find((g) => g.hopKey === 'SouthTown')!;
+      expect(group).toMatchObject({ parcels: 2, booked: 1, hopLabel: 'SouthTown' });
+      const amos = rider('A');
+      const seen = ahead.nearRoute(amos.did, road as never).filter((g) => g.agentDid === shop.did);
+      expect(seen.map((g) => g.hopKey)).toEqual(['SouthTown']);
+      const room = dispatch.remainingCapacity(amos.did);
+      const bags = dispatch.remainingTotes(amos.did);
+      const p = ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      expect(p).toMatchObject({ state: 'promised', parcels: 2, kg: group.kg });
+      expect(dispatch.remainingCapacity(amos.did)).toBe(Math.round((room - group.kg) * 100) / 100);
+      expect(dispatch.remainingTotes(amos.did)).toBe(bags - 1);
+      // One driver a stop: the next is told who has them.
+      const kilima = rider('K');
+      expect(() => ahead.takeOn(kilima.did, shop.did, 'SouthTown')).toThrow(/PAH1 A has taken these on already/);
+      expect(ahead.nearRoute(kilima.did, road as never).find((g) => g.agentDid === shop.did)?.takenBy?.name).toBe('PAH1 A');
+      // The shop sees who takes them.
+      const shelf: any = controller.getShelf(shop.did, ({ role: 'agent', did: shop.did }) as never);
+      expect(shelf.expected[0].takenBy).toBe('PAH1 A');
+    });
+
+    it('is given the shop\'s bag for that stop when it is closed — claimed for them, the promise counted once', () => {
+      const { shop, walkUp, rider } = setUp('PAH2');
+      // 16 kg on a 20 kg bike: the room the promise held is the room the bag uses — counted once, or it would not fit.
+      walkUp('PAH2-W1');
+      walkUp('PAH2-W2', 'L');
+      const amos = rider('A');
+      ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      const bag = mdps.openShopBag(shop.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, shop.did, 'PAH2-W1');
+      mdps.fillShopBag(bag.code, shop.did, 'PAH2-W2');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      expect(totes.requireByCode(bag.code)).toMatchObject({ status: 'claimed', claimedBy: amos.did });
+      expect(ahead.mine(amos.did)[0]).toMatchObject({ state: 'given', toteCode: bag.code });
+      // The bag's kilos are aboard-to-be once; the promise no longer holds room beside it.
+      expect(ahead.heldOn(amos.did)).toEqual({ kg: 0, bags: 0 });
+    });
+
+    it('let go, the room is free and the parcels anybody\'s; a driver who can no longer carry it is passed over, and told', () => {
+      const { shop, walkUp, rider } = setUp('PAH3');
+      walkUp('PAH3-W1');
+      const amos = rider('A');
+      const room = dispatch.remainingCapacity(amos.did);
+      const p = ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      ahead.letGo(amos.did, p.promiseId);
+      expect(dispatch.remainingCapacity(amos.did)).toBe(room);
+      // Taken on again for a 1 kg parcel. Then a 15 kg one comes in for the same stop, and the bike takes 5 kg at another
+      // counter: the bag of 16 kg no longer fits what it has left plus what it held (14 + 1).
+      ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      walkUp('PAH3-W2', 'L');
+      const other = onboardAgent('PAH3 Other', 'NorthTown', 50);
+      parcels.accept({ agentDid: other.did, parcelId: 'PAH3-MID', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(other.did) } as never);
+      expect(parcels.handover({ agentDid: other.did, driverBadgeId: drivers.get(amos.did).badgeId!, parcelIds: ['PAH3-MID'] }).handed).toEqual(['PAH3-MID']);
+      const bag = mdps.openShopBag(shop.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, shop.did, 'PAH3-W1');
+      mdps.fillShopBag(bag.code, shop.did, 'PAH3-W2');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      // Not claimed for them: offered to every driver, as before.
+      expect(totes.requireByCode(bag.code).claimedBy).toBeUndefined();
+      expect(ahead.mine(amos.did)).toEqual([]);
+    });
+
+    it('a promise ends by itself after 24 hours, and holds no room after it', () => {
+      const { shop, walkUp, rider } = setUp('PAH4');
+      walkUp('PAH4-W1');
+      const amos = rider('A');
+      ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      expect(ahead.heldOn(amos.did).bags).toBe(1);
+      expect(ahead.heldOn(amos.did, Date.now() + 25 * HOUR)).toEqual({ kg: 0, bags: 0 });
     });
   });
 

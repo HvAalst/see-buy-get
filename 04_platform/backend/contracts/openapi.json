@@ -21869,6 +21869,82 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/ahead": {
+      "post": {
+        "operationId": "Sbg.takeOnAhead",
+        "summary": "",
+        "description": "2026-11-05 — PRE-DROP-OFF: take on ahead what a shop has coming for one next stop — the room is held on the vehicle now.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeOnAheadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/ahead/{promiseId}/let-go": {
+      "post": {
+        "operationId": "Sbg.letGoAhead",
+        "summary": "",
+        "description": "Let go what was taken on ahead: the room on the vehicle is free, and the parcels are anybody's again.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "promiseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/end-session": {
       "post": {
         "operationId": "Sbg.endSession",
@@ -65707,6 +65783,24 @@
         "required": [
           "at",
           "radiusKm"
+        ]
+      },
+      "TakeOnAheadDto": {
+        "type": "object",
+        "properties": {
+          "agentDid": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "hopKey": {
+            "type": "string",
+            "description": "The next stop, as the shop's bag for it is addressed: a hub's id, or a zone.",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "agentDid",
+          "hopKey"
         ]
       },
       "EndSessionDto": {

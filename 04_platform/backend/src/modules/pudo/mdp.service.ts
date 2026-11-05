@@ -101,6 +101,16 @@ export class MdpService {
     this.coldOf = fn;
   }
 
+  /**
+   * 2026-11-05 — PRE-DROP-OFF: a closed bag is given first to the driver who took its parcels on ahead (PickupAheadService
+   * registers it; it sits above this service). True when it was given — then it is offered to nobody else.
+   */
+  private promisedFor?: (tote: Tote, now: number) => boolean;
+
+  registerPromised(fn: (tote: Tote, now: number) => boolean): void {
+    this.promisedFor = fn;
+  }
+
   /** 2026-11-05 — where a parcel waiting at its shop goes NEXT (BagPlanService.nextHopFor): a hub's id, or its own zone. */
   private nextHopOf?: (parcel: Parcel) => string;
 
@@ -561,6 +571,8 @@ export class MdpService {
       return false;
     }
     if (placed) this.keepPlace(tote, placed.hub, placed.zoneBag);
+    // Taken on ahead by a driver: theirs, and offered to nobody else (2026-11-05). Read again — keepPlace may have readdressed it.
+    if (this.promisedFor?.(this.totes.requireByCode(code), now)) return true;
     void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code, reason, weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
     return true;
   }
@@ -584,6 +596,11 @@ export class MdpService {
       this.totes.markWaiting(tote.code, undefined);
       if (placed) this.keepPlace(tote, placed.hub, placed.zoneBag);
       if (placed) this.tellHolder(tote, 'goes', placed.hub, [], since);
+      // Taken on ahead by a driver: theirs now (2026-11-05).
+      if (this.promisedFor?.(this.totes.requireByCode(tote.code), now)) {
+        gone.push(tote.code);
+        continue;
+      }
       void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'room', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
       gone.push(tote.code);
     }

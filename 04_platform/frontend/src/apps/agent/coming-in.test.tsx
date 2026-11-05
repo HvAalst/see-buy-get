@@ -48,6 +48,10 @@ describe('booked to be handed in here', () => {
     expect(card([booked({ sameShop: true, nextStop: undefined })], 1)).toContain(t('agent.home.comingHere'));
   });
 
+  it('names the driver who took on the parcels for that stop ahead (2026-11-05, the driver side)', () => {
+    expect(card([booked({ takenBy: 'Amos' })], 1)).toContain(t('agent.home.comingTakenBy', { name: 'Amos' }));
+  });
+
   it('shows the first few and counts the rest', () => {
     const many = Array.from({ length: COMING_IN_SHOWN + 3 }, () => booked());
     expect(card(many, many.length)).toContain(t('agent.home.comingMore', { count: 3 }));

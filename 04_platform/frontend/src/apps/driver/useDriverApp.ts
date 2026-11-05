@@ -28,6 +28,7 @@ import type {
   RecentVehicleView,
   RideAloneTerms,
   ExpectedLoadView,
+  AheadView,
   OfferView,
   RatesView,
   RoadConstraint,
@@ -106,6 +107,8 @@ export interface DriverState {
   offers: OfferView[];
   /** F3 — lots still filling along the declared route. Advisory: nothing here can be claimed. */
   expected: ExpectedLoadView[];
+  /** 2026-11-05 — parcels coming in at shops on this road, to take on ahead (pre-drop-off). */
+  ahead: AheadView[];
   offerIndex: number;
   route: SavedRoute | null;
   /** The roads this driver has declared before, newest first — offered instead of naming two places daily. */
@@ -229,6 +232,7 @@ const INITIAL: DriverState = {
   nodesState: 'idle',
   offers: [],
   expected: [],
+  ahead: [],
   offerIndex: 0,
   route: null,
   legs: [],
@@ -557,6 +561,7 @@ export function useDriverApp() {
         screen: !session.active && s.screen !== 'home' && s.screen !== 'earnings' && s.screen !== 'board' ? 'home' : s.screen,
         offers: session.active ? s.offers : [],
         expected: session.active ? s.expected : [],
+        ahead: session.active ? s.ahead : [],
       }));
 
       void client.api.ping(did);
@@ -1579,6 +1584,7 @@ export function useDriverApp() {
           remainingTotes: v?.remainingTotes ?? s.remainingTotes,
           offers: v?.offers ?? [],
           expected: v?.expected ?? [],
+          ahead: v?.ahead ?? [],
           offerIndex: 0,
           screen: 'offers',
         }));
@@ -1669,6 +1675,7 @@ export function useDriverApp() {
         remainingTotes: v?.remainingTotes ?? s.remainingTotes,
         offers: v?.offers ?? [],
         expected: v?.expected ?? [],
+        ahead: v?.ahead ?? [],
         offerIndex: 0,
         screen: 'offers',
       }));
@@ -1688,6 +1695,49 @@ export function useDriverApp() {
       const offers = s.offers.filter((o) => o.offerId !== offerId);
       return { ...s, offers, offerIndex: Math.max(0, Math.min(s.offerIndex, offers.length - 1)) };
     });
+
+  /**
+   * 2026-11-05 — PRE-DROP-OFF: take on what a shop has coming for one stop, or let it go. Said on the row at once — the room
+   * is held (or freed) on the vehicle — and the kilos left follow from the server's own count.
+   */
+  const takeOnAhead = useCallback(
+    async (a: AheadView) => {
+      if (!client || !did) return;
+      await run(`ahead-${a.agentDid}:${a.hopKey}`, async () => {
+        const r = await client.api.takeOnAhead(did, a.agentDid, a.hopKey);
+        if (r.error) return fail(r.error);
+        const promise = narrow<{ promiseId: string; state: string; kg: number }>(r.data);
+        buzz();
+        setState((s) => ({
+          ...s,
+          remaining: Math.round((s.remaining - (promise?.kg ?? a.kg)) * 100) / 100,
+          ahead: s.ahead.map((x) => (x.agentDid === a.agentDid && x.hopKey === a.hopKey ? { ...x, mine: { promiseId: promise?.promiseId ?? '', state: promise?.state ?? 'promised' } } : x)),
+        }));
+        pushToast({ tone: 'ok', icon: 'box', title: t('driver.ahead.takenToast'), detail: t('driver.ahead.takenToastDetail', { stop: a.hopLabel, shop: a.shopName }) });
+      });
+    },
+    [client, did, run, fail, pushToast],
+  );
+
+  const letGoAhead = useCallback(
+    async (promiseId: string) => {
+      if (!client || !did) return;
+      await run(`ahead-${promiseId}`, async () => {
+        const r = await client.api.letGoAhead(did, promiseId);
+        if (r.error) return fail(r.error);
+        setState((s) => {
+          const was = s.ahead.find((x) => x.mine?.promiseId === promiseId);
+          return {
+            ...s,
+            remaining: was ? Math.round((s.remaining + was.kg) * 100) / 100 : s.remaining,
+            ahead: s.ahead.map((x) => (x.mine?.promiseId === promiseId ? { ...x, mine: undefined } : x)),
+          };
+        });
+        pushToast({ tone: 'info', icon: 'box', title: t('driver.ahead.letGoToast') });
+      });
+    },
+    [client, did, run, fail, pushToast],
+  );
 
   const answerOffer = useCallback(
     async (offer: OfferView, take: boolean) => {
@@ -2239,6 +2289,8 @@ export function useDriverApp() {
       repeatRoute,
       setOfferIndex,
       answerOffer,
+      takeOnAhead,
+      letGoAhead,
       loadBag,
       takeBag,
       reportBagTamper,

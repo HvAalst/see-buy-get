@@ -467,6 +467,24 @@ export interface ExpectedLoadView {
   readyBy: string;
 }
 
+/** 2026-11-05 — parcels coming in at a shop on this road, for one next stop (pre-drop-off): to take on ahead. */
+export interface AheadView {
+  agentDid: string;
+  shopName: string;
+  hopKey: string;
+  hopLabel: string;
+  parcels: number;
+  kg: number;
+  /** Booked to be handed in, not at the counter yet. */
+  booked: number;
+  detourKm: number;
+  minutesAway: number;
+  /** Another driver took these on. */
+  takenBy?: { driverDid: string; name: string };
+  /** This driver took them on: promised (room held), or the bag given to them. */
+  mine?: { promiseId: string; state: string };
+}
+
 export interface SuggestView {
   remainingCapacityKg: number;
   /** Bag spaces left in the hold, alongside the kilos. */
@@ -474,6 +492,8 @@ export interface SuggestView {
   offers: OfferView[];
   /** F3 — lots filling along this route: nothing to claim, everything to plan around. */
   expected?: ExpectedLoadView[];
+  /** 2026-11-05 — parcels coming in at shops along this road, to take on ahead. */
+  ahead?: AheadView[];
   /** REP4 — the live freight-bar verdict for this driver, so the pause note stays in sync with the offers. */
   freightPaused?: boolean;
 }

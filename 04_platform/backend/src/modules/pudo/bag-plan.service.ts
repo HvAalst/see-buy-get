@@ -51,6 +51,12 @@ export class BagPlanService {
     return this.nextHopFor(parcel).label;
   }
 
+  /** The key a shop's bag for this parcel's next stop is addressed by, and its name (2026-11-05, taken on ahead). */
+  hopOf(parcel: Parcel): { key: string; label: string } {
+    const h = this.nextHopFor(parcel);
+    return { key: h.key, label: h.label };
+  }
+
   /**
    * Group the shop's waiting parcels by their NEXT HOP — not their final destination, which is the
    * distinction the network actually runs on.

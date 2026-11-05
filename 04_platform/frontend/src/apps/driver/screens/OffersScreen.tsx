@@ -5,6 +5,7 @@ import { formatDate, useT } from '../../../shared/i18n';
 import { cash, countdownLabel, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
 import type { ExpectedLoadView, OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
+import { ParcelsComing } from './ParcelsComing';
 
 export interface OffersScreenProps {
   state: DriverState;
@@ -57,6 +58,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
           />
         </Card>
 
+        <ParcelsComing ahead={state.ahead} busy={state.busy} onTake={(x) => void actions.takeOnAhead(x)} onLetGo={(id) => void actions.letGoAhead(id)} />
         <ComingSoon expected={state.expected} />
 
         <div class="scr__cta">
@@ -112,6 +114,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         {t('driver.offers.notThis')}
       </Button>
 
+      <ParcelsComing ahead={state.ahead} busy={state.busy} onTake={(x) => void actions.takeOnAhead(x)} onLetGo={(id) => void actions.letGoAhead(id)} />
       <ComingSoon expected={state.expected} />
 
       <div class="scr__foot">

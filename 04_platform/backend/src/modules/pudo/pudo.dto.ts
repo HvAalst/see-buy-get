@@ -2647,6 +2647,13 @@ export class DeclareAreaDto {
 }
 
 /** Find work around a point: where I am, how far I will go, and my own earning floor. */
+/** 2026-11-05 — PRE-DROP-OFF: what a shop has coming for one next stop, taken on ahead by a driver. */
+export class TakeOnAheadDto {
+  @IsString() @MaxLength(200) agentDid!: string;
+  /** The next stop, as the shop's bag for it is addressed: a hub's id, or a zone. */
+  @IsString() @MaxLength(200) hopKey!: string;
+}
+
 export class SuggestNearbyDto {
   @ValidateNested() @Type(() => GeoDto) at!: GeoDto;
   @IsNumber() @Min(1) radiusKm!: number;

@@ -2979,7 +2979,46 @@ export class DispatchService {
     if (!vehicle) return 0;
     const toteKg = this.bagsHeldBy(driverDid).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
-    return Math.round((vehicle.capacityKg - toteKg - freightKg - this.looseKgOn(driverDid)) * 100) / 100;
+    // 2026-11-05 — and the room a driver promised by taking parcels on ahead (pre-drop-off): promised once, not twice.
+    const ahead = this.aheadOf?.(driverDid).kg ?? 0;
+    return Math.round((vehicle.capacityKg - toteKg - freightKg - this.looseKgOn(driverDid) - ahead) * 100) / 100;
+  }
+
+  /** 2026-11-05 — the room held by parcels a driver took on ahead (PickupAheadService registers it; it sits above dispatch). */
+  private aheadOf?: (driverDid: string) => { kg: number; bags: number };
+
+  registerAhead(fn: (driverDid: string) => { kg: number; bags: number }): void {
+    this.aheadOf = fn;
+  }
+
+  /**
+   * 2026-11-05 — A BAG GIVEN TO THE DRIVER WHO TOOK ITS PARCELS ON AHEAD (pre-drop-off; the owner: "the one the bag is
+   * offered to once sealed"). Claimed for them with the checks a claim makes — a vehicle, room for its kilos and a bag
+   * place, what the bag asks of the vehicle, the cold, the border, the declaration. The caller marks the promise given
+   * first, so the room it held is not counted beside the bag. Returns why it could not be, or nothing when it was claimed.
+   */
+  claimBagFor(code: string, driverDid: string, now: number = Date.now()): string | undefined {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) return 'They are no longer on a vehicle';
+    const tote = this.totes.requireByCode(code);
+    if (tote.status !== 'available') return `The bag is ${tote.status}`;
+    if (tote.weightKg > this.remainingCapacity(driverDid)) return `It weighs ${tote.weightKg} kg, more than their vehicle has left`;
+    if (this.remainingTotes(driverDid) < 1) return 'Their vehicle has no bag place left';
+    const need = this.loadRequirements('tote', code);
+    if (need.capabilities.some((cap) => !vehicle[cap]) || !DispatchService.hasEquipmentFor(vehicle, need.equipment) || (need.bulk && !vehicle.carriesBulk) || (need.fragile && !vehicle.allowsFragile)) {
+      return 'Their vehicle cannot carry what is in it';
+    }
+    const cold = this.coldRefusal(driverDid, 'tote', code);
+    if (cold) return cold;
+    try {
+      this.requireBorderAllows(vehicle, driverDid, 'tote', code);
+      this.declarations?.assertMayCarry(driverDid, now);
+    } catch (err) {
+      return (err as Error).message;
+    }
+    this.totes.markClaimed(code, driverDid);
+    this.lockToteHaul(code, vehicle);
+    return undefined;
   }
 
   /**
@@ -3093,7 +3132,8 @@ export class DispatchService {
   remainingTotes(driverDid: string): number {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return 0;
-    const held = this.bagsHeldBy(driverDid).length;
+    // 2026-11-05 — a bag place promised by taking parcels on ahead is taken too.
+    const held = this.bagsHeldBy(driverDid).length + (this.aheadOf?.(driverDid).bags ?? 0);
     return Math.max(0, this.toteCapacityOf(vehicle) - held);
   }
 
