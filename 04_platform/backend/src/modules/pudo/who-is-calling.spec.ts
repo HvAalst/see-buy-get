@@ -273,6 +273,9 @@ describe('who the door lets in', () => {
         'POST sbg/fleet/drivers/:did/min-earn',
         'POST sbg/fleet/drivers/:did/suggest-work',
         'POST sbg/fleet/drivers/:did/locate',
+        // 2026-11-05 — parcels taken on ahead, and let go (pre-drop-off).
+        'POST sbg/fleet/drivers/:did/ahead',
+        'POST sbg/fleet/drivers/:did/ahead/:promiseId/let-go',
       ],
     ],
     [
@@ -370,9 +373,9 @@ describe('who the door lets in', () => {
     expect(door(route)).toMatchObject({ open: false, ...label });
   });
 
-  it('…and that is 122 of them, none listed twice', () => {
+  it('…and that is 124 of them, none listed twice', () => {
     const listed = OWN.flatMap(([, , routes]) => routes);
-    expect(listed).toHaveLength(122);
+    expect(listed).toHaveLength(124);
     expect(new Set(listed).size).toBe(listed.length);
   });
 

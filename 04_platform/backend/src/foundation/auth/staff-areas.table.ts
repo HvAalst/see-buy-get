@@ -749,6 +749,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/flag-cases/:caseId/let-go': 'support',
   'POST sbg/flag-cases/:caseId/note': 'support',
   'POST sbg/flag-cases/:caseId/take': 'support',
+  // 2026-11-05 — parcels taken on ahead (pre-drop-off): the driver's, or support standing in, as claiming an offer is.
+  'POST sbg/fleet/drivers/:did/ahead': 'support',
+  'POST sbg/fleet/drivers/:did/ahead/:promiseId/let-go': 'support',
   'POST sbg/fleet/drivers/:did/area': 'support',
   'POST sbg/fleet/drivers/:did/assign-corridor': 'support',
   'POST sbg/fleet/drivers/:did/breakdown': 'none',
