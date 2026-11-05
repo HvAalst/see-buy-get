@@ -62,11 +62,24 @@ for (const app of apps) {
   }
   const carried = new Set();
   const named = new Map();
+  let localeFiles = 0;
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.js'))) {
     const js = readFileSync(join(dir, f), 'utf8');
+    // ANOTHER LANGUAGE'S WORDS ARE NOT CARRIED IN ENGLISH (2026-11-05). Every app ships every language's word files, to
+    // fetch one when it is chosen; a key in the Kiswahili console words is no English word the app shows. Counting them
+    // let the Business app show 'tower.imports.noneCompany' on its Imports screen: the English was the console's alone.
+    if (/export\s*\{\s*\w+\s+as\s+words\s*\}\s*;?\s*$/.test(js.trimEnd())) {
+      localeFiles += 1;
+      continue;
+    }
     for (const m of js.matchAll(QUOTED)) {
       if (!namespaces.has(m[2].split('.')[0])) continue;
-      if (m[3]) carried.add(m[2]);
+      // AN ENTRY STANDS IN AN OBJECT: after "{" or ",". A minified choice between two words — t(c?"a.b":"a.c") — has a
+      // colon after its first word too, and reading it as an entry let a word be "carried" by the very line that names it.
+      let before = m.index - 1;
+      while (before >= 0 && /\s/.test(js[before])) before -= 1;
+      const entry = m[3] && (js[before] === '{' || js[before] === ',');
+      if (entry) carried.add(m[2]);
       else if (!named.has(m[2])) named.set(m[2], f);
     }
   }

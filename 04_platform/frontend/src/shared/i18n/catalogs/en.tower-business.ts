@@ -1006,4 +1006,16 @@ export const enTowerBusiness = {
   'tower.rail.p.statement': 'The line saying it is carried under the CIM',
   'tower.rail.p.consignorSigned': 'The consignor’s signature',
   'tower.rail.p.carrierSigned': 'The railway’s signature or stamp',
+  // 2026-11-05 — words the Business app shows on the console's screens it hosts (imports, a picker, a site), moved
+  // here from the console's own list: the Business app carries this one and never that, and showed their keys.
+  'tower.choose.searchOrType': 'Search, or type a code',
+  'tower.imports.need.port': 'Say where it is cleared.',
+  'tower.imports.need.date': 'An arrival must be written YYYY-MM-DD.',
+  'tower.imports.need.dest': 'Where is it going? A two-letter country code.',
+  'tower.imports.need.origin': 'Where is it coming from? A two-letter country code.',
+  'tower.imports.need.unique': 'That paper is on the list twice.',
+  'tower.imports.needCurrency': 'A currency is its three letters — ETB, KES, USD.',
+  'tower.pick.noMatch': 'Nobody of that name.',
+  'tower.sites.namePortPh': 'Mombasa — gate 4',
+  'tower.imports.noneCompany': 'Nothing here yet. Record an import the moment it is on its way — not when it arrives.',
 };
