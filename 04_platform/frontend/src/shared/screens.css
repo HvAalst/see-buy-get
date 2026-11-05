@@ -767,6 +767,15 @@
   text-underline-offset: 0.15em;
 }
 
+/* Text-link buttons one under another, each a thumb tall and only as wide as its words (a vehicle's three actions on the
+   driver's home). Without it they flowed side by side wherever two happened to fit — which on a wider phone put
+   "End my shift" on the same line as "The vehicle has broken down". */
+.linkcol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 /* ==========================================================================
    THE SECTIONS LOOK — the field apps, one app per round (2026-11-04; round 1: the Shop).
 
@@ -882,4 +891,15 @@
    own space inline keeps it; margins between blocks collapse, so a part already spaced is not spaced twice. */
 .app--sections .card > * + * {
   margin-top: 12px;
+}
+
+/* A big figure's bar on the grey: its track was the panel grey, which is all but the ground itself once the card around
+   it is gone (the space left on a driver's bike read as no bar at all). */
+.app--sections .glance__bar {
+  background: var(--bd-soft);
+}
+
+/* The quiet pill ("Not checked", "Closed") on the grey: the same panel grey as the ground once no card stands under it. */
+.app--sections .pill--idle {
+  background: var(--bd-soft);
 }

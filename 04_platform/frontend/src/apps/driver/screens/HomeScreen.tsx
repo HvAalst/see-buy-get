@@ -858,6 +858,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
           {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
           {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
         </p>
+        <div class="linkcol">
         <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
           {t('driver.defect.open')}
         </Button>
@@ -868,6 +869,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
           {t('driver.home.endMyShift')}
         </Button>
+        </div>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>
@@ -899,6 +901,8 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Button>
       ) : null}
 
+      {/* My loads and the badge: one list, drawn as one panel. */}
+      <div class="rows">
       <button type="button" class="row" onClick={() => actions.go('loads')}>
         <span class="row__ic">
           <Icon name="box" size={24} />
@@ -937,6 +941,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
           </span>
         </button>
       ) : null}
+      </div>
 
       <div class="scr__foot">
         <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length, t)} />

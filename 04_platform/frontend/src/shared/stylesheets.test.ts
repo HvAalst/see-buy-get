@@ -198,7 +198,7 @@ describe('no table cell is given a class that stops it being a cell', () => {
  */
 describe('the sections look stays on the apps that wear it', () => {
   // The apps whose round is done, in the order they were done. Add the next one with its round.
-  const WEARING = ['agent', 'mdp'];
+  const WEARING = ['agent', 'mdp', 'driver'];
   const MARK = 'THE SECTIONS LOOK';
   const shared = SHEETS['src/shared/screens.css'] ?? '';
   // From the comment that opens the block, not from inside it: a sentence read as CSS takes its apostrophes for quotes.

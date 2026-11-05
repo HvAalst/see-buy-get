@@ -819,3 +819,10 @@
 .chip--tap.chip--on {
   color: var(--blue);
 }
+
+/* -------------------------------------------- the sections look (2026-11-05) --
+   The plate and what it is are one fact read together ("KLM 002B" / "bike · carries up to 20 kg"), not two parts of a
+   section: they keep the 2px between them, not the section's step. */
+.app--sections .card > .plate + .veh__class {
+  margin-top: 2px;
+}
