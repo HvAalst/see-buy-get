@@ -313,6 +313,58 @@ describe('what a store earns by shipping', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------
+  // 2026-11-05 — the owner: "the store should get a standing reply but we should both limit the input and the reply to
+  // avoid lengthy comments. short and snappy. a few standard replies to choose … and an optional other".
+  describe('the store’s one answer', () => {
+    it('answers with a standard reply, shown on its record and dated — one answer, the last replacing the first', () => {
+      const s = store('Answering Threads');
+      const id = s.vendor.vendorId;
+      merchants.reply(id, { kind: 'CONTACT_US' }, new Date('2026-11-05T10:00:00Z'));
+      expect(merchants.scorecard(id).reply).toEqual({ kind: 'CONTACT_US', at: '2026-11-05T10:00:00.000Z' });
+      merchants.reply(id, { kind: 'PACKING_IMPROVED' });
+      expect(merchants.scorecard(id).reply?.kind).toBe('PACKING_IMPROVED');
+      // A standard reply carries no words of the store's: it is said in the reader's own language.
+      expect(merchants.reply(id, { kind: 'THANK_YOU', text: 'ignored' }).text).toBeUndefined();
+    });
+
+    it('takes the store’s own words on one line, at most 100 characters', () => {
+      const id = store('Own Words Threads').vendor.vendorId;
+      expect(merchants.reply(id, { kind: 'OTHER', text: '  We now pack\nevery order   twice.  ' }).text).toBe('We now pack every order twice.');
+      expect(() => merchants.reply(id, { kind: 'OTHER', text: 'x'.repeat(101) })).toThrow(/At most 100 characters/);
+      expect(merchants.reply(id, { kind: 'OTHER', text: 'x'.repeat(100) }).text).toHaveLength(100);
+      expect(() => merchants.reply(id, { kind: 'OTHER', text: '   ' })).toThrow(/Write your answer/);
+    });
+
+    it('takes no link, no email address and no phone number — a reply answers, it does not take a buyer elsewhere', () => {
+      const id = store('No Way Out Threads').vendor.vendorId;
+      for (const text of ['See https://cheap.example', 'Visit www.ourstore.co.ke', 'Go to ourstore.com', 'Write to help@ourstore.ke', 'Call 0712 345 678', 'WhatsApp +254712345678']) {
+        expect(() => merchants.reply(id, { kind: 'OTHER', text })).toThrow(/link, an email address or a phone number/);
+      }
+      // Numbers that are not a phone number are words like any other.
+      expect(merchants.reply(id, { kind: 'OTHER', text: 'Open 7 days, since 2019.' }).text).toBe('Open 7 days, since 2019.');
+    });
+
+    it('refuses an answer it does not know, and a store that is not there — and writes nothing either time', () => {
+      const id = store('Careful Threads').vendor.vendorId;
+      expect(() => merchants.reply(id, { kind: 'SHOUTING' })).toThrow(/Choose one of the answers/);
+      expect(merchants.scorecard(id).reply).toBeUndefined();
+      expect(() => merchants.reply('ven_nobody', { kind: 'THANK_YOU' })).toThrow();
+    });
+
+    it('is taken back at will, and nothing else on the record moves', () => {
+      const s = store('Taken Back Threads');
+      shipment(s, { handoverH: 4 });
+      const id = s.vendor.vendorId;
+      merchants.reply(id, { kind: 'FASTER_NOW' });
+      const before = merchants.scorecard(id);
+      merchants.clearReply(id);
+      const after = merchants.scorecard(id);
+      expect(after.reply).toBeUndefined();
+      expect({ ...after, reply: undefined }).toEqual({ ...before, reply: undefined });
+    });
+  });
+
   describe('the honesty rules', () => {
     it('shows no headline average until there is enough to average', () => {
       // REP1, inherited unchanged. Telling a shopper a new business is "rated 3.0" on its third order is

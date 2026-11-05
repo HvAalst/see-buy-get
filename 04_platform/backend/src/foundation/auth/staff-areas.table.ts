@@ -82,6 +82,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'DELETE sbg/vendors/:id/api-keys/:keyId': 'none',
   'DELETE sbg/vendors/:id/collection-point': 'none',
   'DELETE sbg/vendors/:id/gs1': 'none',
+  'DELETE sbg/vendors/:id/reply': 'none',
   'GET control-tower/actions': 'admin',
   'GET control-tower/actions/:id': 'admin',
   'GET control-tower/carbon/:id': 'admin',
@@ -1067,4 +1068,5 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PUT sbg/fleet/managers/:did/system/positions': 'none',
   'PUT sbg/help/:topic/:key/image': 'admin',
   'PUT sbg/vendors/:id/gs1': 'none',
+  'PUT sbg/vendors/:id/reply': 'none',
 };

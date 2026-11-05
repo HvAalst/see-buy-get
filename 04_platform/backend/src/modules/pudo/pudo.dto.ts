@@ -16,7 +16,7 @@ import { Type } from 'class-transformer';
 import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
-import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
+import { MERCHANT_TAGS, MerchantTag, STORE_REPLIES, STORE_REPLY_MAX } from './merchant-rating.service';
 import { TRUCK_SUBTYPES, VEHICLE_ENERGIES, type VehicleEnergy } from './fleet.config';
 import { CARRIER_PAPER_KINDS } from './papers';
 import { SITE_KINDS, type SiteKind } from './site.service';
@@ -946,6 +946,15 @@ export class RateMerchantDto {
   // from @IsArray + @IsIn alone, which is the exact trap the driver-issue tags fell into and the
   // generated client then refuses an array against. Same fix, same reason.
   @IsOptional() @IsArray() @IsIn([...MERCHANT_TAGS], { each: true }) @ApiPropertyOptional({ enum: MERCHANT_TAGS, isArray: true }) tags?: MerchantTag[];
+}
+
+/**
+ * 2026-11-05 — the store's one answer to what receivers said: a standard one, or its own words (OTHER). The length is
+ * checked again once a run of spaces is made one, which is why this box allows a little more than is kept.
+ */
+export class StoreReplyDto {
+  @IsIn([...STORE_REPLIES]) @ApiProperty({ enum: STORE_REPLIES }) kind!: string;
+  @IsOptional() @IsString() @MaxLength(STORE_REPLY_MAX * 2) text?: string;
 }
 
 export class RateDriverDto {

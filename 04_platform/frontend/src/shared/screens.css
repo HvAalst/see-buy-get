@@ -837,6 +837,12 @@
   bottom: 4px;
 }
 
+/* A hint that warns: over a limit, or something the box will not take (a store's answer, 2026-11-05). */
+.hint--danger {
+  color: var(--dang);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    THE SECTIONS LOOK — the field apps, one app per round (2026-11-04; round 1: the Shop).
 
@@ -851,8 +857,9 @@
      - a tinted note (soft card, Note, the push ask) stays tinted: it is the one block on the screen that is
        meant to stand out, and a box is how it does.
 
-   Scoped to `.app--sections` while the round goes app by app, so each app is approved before the next changes.
-   When the seventh is done, the scope folds away and these become the rules.
+   Scoped to `.app--sections`: the field apps' own look, every one of them approved from before-and-after pictures
+   (2026-11-04/05). The scope stays — the front page and the console load these sheets too and have looks of their
+   own, approved as they are (stylesheets.test.ts holds every field app to wearing it, and the front page to not).
    ========================================================================== */
 
 /* A card is a section: no box. */

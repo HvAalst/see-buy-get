@@ -379,6 +379,11 @@ export const en = {
   'common.chat.dispute.done': 'Report shared with SeeBuyGet.',
   'common.chat.dispute.sharedLine': 'Shared a report with SeeBuyGet (messages chosen: {n}).',
   'common.retry': 'Try again',
+  // 2026-11-05 — a store's standard answers to what its receivers said (shared/storeReply.ts): short, in the reader's language.
+  'common.storeReply.CONTACT_US': 'Something not right? Contact our customer service and we will put it right.',
+  'common.storeReply.PACKING_IMPROVED': 'We have changed how we pack since then.',
+  'common.storeReply.FASTER_NOW': 'We now hand orders in the same day.',
+  'common.storeReply.THANK_YOU': 'Thank you for telling us — it helps us do better.',
   // 2026-11-05 — a parcel's weight in kilograms or grams (WeightInput).
   'common.weight.unit': 'Weigh in',
   'common.weight.kg': 'kg',

@@ -17,6 +17,7 @@ import {
   type VendorApi,
 } from '../../lib/sbg';
 import type { NetworkPoint, PlaceFound, VendorLoginView } from './types';
+import type { StoreReply } from '../../shared/storeReply';
 import { secretBody } from '../../shared/account/unlock';
 import { createHubsApi, type HubsApi } from './hubs';
 
@@ -73,6 +74,8 @@ export interface StoreRecordView {
   shipsNextDayRate?: number;
   nextDayCount?: number;
   rating: { average: number; count: number; isNew: boolean };
+  /** 2026-11-05 — the store's one answer to what was said, when it gave one. */
+  reply?: StoreReply;
 }
 
 export function fetchStoreRecord(vendorId: string): Promise<Result<StoreRecordView>> {

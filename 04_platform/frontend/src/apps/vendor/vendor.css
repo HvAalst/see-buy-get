@@ -240,3 +240,21 @@
   align-items: center;
   gap: 8px;
 }
+
+/* 2026-11-05 — the store's one answer, inside "How buyers see you". */
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.reply__t {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}

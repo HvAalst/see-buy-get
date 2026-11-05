@@ -17645,11 +17645,61 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/reply": {
+      "put": {
+        "operationId": "Sbg.setStoreReply",
+        "summary": "",
+        "description": "Control tower: the parcels whose owners gave up their claim and that nobody is paying to recover.\n\nA QUEUE rather than a status, because what happens to them is decided by the law of the sister's\njurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse\nthan showing an operator the list and letting them apply the one they do.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.clearStoreReply",
+        "summary": "",
+        "description": "The store takes its answer back.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/stores/{vendorId}/reputation": {
       "get": {
         "operationId": "Sbg.storeReputation",
-        "summary": "",
-        "description": "Control tower: the parcels whose owners gave up their claim and that nobody is paying to recover.\n\nA QUEUE rather than a status, because what happens to them is decided by the law of the sister's\njurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse\nthan showing an operator the list and letting them apply the one they do.",
         "parameters": [
           {
             "name": "vendorId",
@@ -59862,6 +59912,28 @@
             "type": "string"
           }
         }
+      },
+      "StoreReplyDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CONTACT_US",
+              "PACKING_IMPROVED",
+              "FASTER_NOW",
+              "THANK_YOU",
+              "OTHER"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind"
+        ]
       },
       "WriteOffParcelDto": {
         "type": "object",

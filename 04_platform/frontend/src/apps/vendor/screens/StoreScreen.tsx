@@ -44,7 +44,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       </Card>
 
       {/* 2026-11-05 — what a buyer sees of this store, and the setting that shows it at the checkout. */}
-      <StoreRecordCard vendorId={v?.vendorId} />
+      <StoreRecordCard vendorId={v?.vendorId} reply={actions.storeReply} />
 
       <PinCard state={state} actions={actions} />
 

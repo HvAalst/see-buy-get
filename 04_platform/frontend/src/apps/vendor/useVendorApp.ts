@@ -16,6 +16,7 @@ import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import type { Uploaded } from '../../shared/upload';
 import type { Gs1DisputeView } from '../../shared/gs1';
 import type { StoreGs1Api } from './gs1';
+import type { StoreReplyKind } from '../../shared/storeReply';
 import type { IconName } from '../../shared/ui/Icon';
 import { refusalSentence } from '../../shared/ui/ErrorNote';
 import type { RefusalBody } from '../../shared/RefusalCard';
@@ -1595,6 +1596,19 @@ export function useVendorApp() {
     };
   }, [client, creds, refresh, storePhoto]);
 
+  /**
+   * 2026-11-05 — the store's one answer to what its receivers said, bound to the store signed in. The card reads its record
+   * again after each, from the public door a buyer's page reads, so it shows what a buyer now sees.
+   */
+  const storeReply = useMemo(() => {
+    if (!client || !creds) return null;
+    const id = creds.vendorId;
+    return {
+      set: async (kind: StoreReplyKind, text?: string) => (await client.api.setStoreReply(id, kind, text)).error,
+      clear: async () => (await client.api.clearStoreReply(id)).error,
+    };
+  }, [client, creds]);
+
   /** Round 40 — the store's own phones and browsers, in Settings: read and forgotten as a shop's are. */
   /** 2026-11-03 — "Your SeeBuyGet apps" in the picture menu: the shop or the hub this email signs in to, opened here. */
   const myApps = useMemo(() => (client ? myAppsApi((path) => client.client.sbg.request((raw) => raw.GET(path as never) as never), (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'store') : undefined), [client]);
@@ -1620,6 +1634,7 @@ export function useVendorApp() {
       /** Reading B — the hubs it may hand its parcels in at, and its arrivals there. */
       hubs: client?.hubs ?? null,
       gs1,
+      storeReply,
       uploadContentPhoto,
       loadMedia,
       issueApiKey,

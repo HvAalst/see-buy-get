@@ -1,5 +1,5 @@
 import { Card, ErrorNote, Note, Pill, ReadAloud } from '../../../shared/ui';
-import { useT, type Translate } from '../../../shared/i18n';
+import { formatDate, useT, type Translate } from '../../../shared/i18n';
 import type { StoreReputation } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -133,10 +133,19 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
             </Card>
           ) : null}
 
+          {/* 2026-11-05 — the store's one answer, beside what was said about it (both sides heard; we judge neither). A
+              standard one in the reader's own language; the store's own words as written, and said to be theirs. */}
+          {r.reply ? (
+            <Card title={t('home.store.replyTitle')}>
+              <p class="t-body">{r.reply.kind === 'OTHER' ? `“${r.reply.text ?? ''}”` : t(`common.storeReply.${r.reply.kind}` as 'common.storeReply.CONTACT_US')}</p>
+              <p class="card__note">{t(r.reply.kind === 'OTHER' ? 'home.store.replyOwn' : 'home.store.replySince', { date: formatDate(r.reply.at) })}</p>
+            </Card>
+          ) : null}
+
           <Card title={t('home.store.starsTitle')}>
             {r.rating.isNew ? (
               /* REP1, inherited unchanged: no headline average until there is enough to average. */
-              <Note tone="info" icon="info" title={t('home.store.tooFewTitle')} detail={t('home.store.tooFewDetail', { n: String(r.rating.count) })} />
+              <Note tone="info" icon="info" title={t('home.store.tooFewTitle')} detail={t('home.store.tooFewDetail', { n: r.rating.count })} />
             ) : (
               <p class="t-body">
                 <Pill tone="ok">{r.rating.average.toFixed(1)}</Pill> {t('home.store.outOfFive', { n: String(r.rating.count) })}

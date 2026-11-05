@@ -190,14 +190,19 @@ describe('no table cell is given a class that stops it being a cell', () => {
 });
 
 /**
- * THE SECTIONS LOOK GOES ONE APP AT A TIME (2026-11-04). Cards become sections with a line between them, lists of rows
- * become one panel — and the owner approves each app from before-and-after pictures before the next one changes. So
- * every rule of the look is scoped to `.app--sections`, and only the apps already approved wear that class. A rule
- * written without the scope would restyle all seven apps at once, the Hub and the Driver included, with nobody having
- * looked at them; an app given the class early would change before its round.
+ * THE SECTIONS LOOK IS THE FIELD APPS' OWN (2026-11-04/05). Cards became sections with a line between them, lists of
+ * rows one panel — one app per round, each approved by the owner from before-and-after pictures (the Business app, built
+ * on the console's design, already had it). Every round is approved now ("the business look is right", 2026-11-05).
+ *
+ * The look stays scoped to `.app--sections`, and that is now what the class is FOR rather than a stage of the work: the
+ * same shared sheets are loaded by the front page and the console, which were restyled on their own (22 October, the
+ * September rounds) and were approved as they are. A rule of the look written without the scope would restyle those
+ * two unseen; a field app that dropped the class would lose the look it was approved in. So: every field app wears it,
+ * on every root it draws, and the front page does not.
  */
 describe('the sections look stays on the apps that wear it', () => {
-  // The apps whose round is done, in the order they were done. Add the next one with its round.
+  // The field apps, in the order their rounds were approved. The front page (home) has its own look; the console and
+  // Business draw no `.app` root of their own.
   const WEARING = ['agent', 'mdp', 'driver', 'vendor', 'fleet', 'genesis'];
   const MARK = 'THE SECTIONS LOOK';
   const shared = SHEETS['src/shared/screens.css'] ?? '';
@@ -223,13 +228,13 @@ describe('the sections look stays on the apps that wear it', () => {
     expect(loose).toEqual([]);
   });
 
-  it('is worn by the approved apps, on every root they draw, and by no other', () => {
+  it('is worn by every field app, on every root it draws, and not by the front page', () => {
     const SOURCES = readAll('.tsx');
     const roots = Object.entries(SOURCES)
       .filter(([f]) => /^src\/apps\/[^/]+\/app\.tsx$/.test(f))
       .flatMap(([f, tsx]) => [...tsx.matchAll(/<div class="(app(?: [^"]*)?)">/g)].map((m) => ({ app: f.split('/')[2], wears: m[1].split(' ').includes('app--sections') })));
     expect(roots.length).toBeGreaterThan(8);
-    const wrong = roots.filter((r) => r.wears !== WEARING.includes(r.app)).map((r) => `${r.app} ${r.wears ? 'wears it before its round' : 'has a root without it'}`);
+    const wrong = roots.filter((r) => r.wears !== WEARING.includes(r.app)).map((r) => `${r.app} ${r.wears ? 'wears the field apps’ look' : 'has a root without the look'}`);
     expect(wrong).toEqual([]);
   });
 });

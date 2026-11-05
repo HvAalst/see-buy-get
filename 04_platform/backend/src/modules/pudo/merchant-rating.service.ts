@@ -32,6 +32,31 @@ export type MerchantTag = (typeof MERCHANT_TAGS)[number];
 /** Which way a tag points, so a screen can group them and a scorecard can count them apart. */
 export const POSITIVE_TAGS: ReadonlySet<MerchantTag> = new Set<MerchantTag>(['WELL_PACKED', 'AS_DESCRIBED', 'SHIPPED_FAST']);
 
+/**
+ * 2026-11-05 — THE STORE'S ONE ANSWER (the owner: "the store should get a standing reply but we should both limit the input
+ * and the reply to avoid lengthy comments. short and snappy. a few standard replies to choose like 'contact our customer
+ * service' and an optional other that opens a text input field").
+ *
+ * Both sides heard: what receivers tapped about a store gets ONE answer from it, shown beside — and we judge neither. A
+ * standard reply is a catalogue key, so it is said in every reader's language and needs nothing moderated. The store's
+ * own words ('OTHER') are said as written: one line, at most STORE_REPLY_MAX characters, and never a link, an email
+ * address or a phone number — a reply answers what was said, it is not a way to take a buyer somewhere nobody can check,
+ * and the record carries no contact of anybody's. Replaced whenever the store likes, dated, and taken back at will.
+ */
+export const STORE_REPLIES = ['CONTACT_US', 'PACKING_IMPROVED', 'FASTER_NOW', 'THANK_YOU', 'OTHER'] as const;
+export type StoreReplyKind = (typeof STORE_REPLIES)[number];
+export const STORE_REPLY_MAX = 100;
+
+/** The store's answer as it is published: a standard one by its key, or its own words. */
+export interface StoreReply {
+  kind: StoreReplyKind;
+  text?: string;
+  at: string;
+}
+
+/** A link, an email address or a run of digits a phone number is made of — what a reply may not carry. */
+const WAY_OUT = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|co|ke|tz|ug|rw|et|org|net|io|shop|store|africa)\b|@|\d(?:[\s.-]?\d){6,}/i;
+
 /** One receiver's verdict on one parcel. By PARCEL, never by phone — see rate(). */
 export interface MerchantRatingRecord {
   id: string;
@@ -75,6 +100,8 @@ export interface MerchantScorecard {
   /** What receivers tapped, most-common first. Counts, never percentages — a percentage of four is noise. */
   tags: Array<{ tag: MerchantTag; count: number; positive: boolean }>;
   rating: { average: number; count: number; isNew: boolean };
+  /** 2026-11-05 — the store's one answer to what was said, when it gave one. */
+  reply?: StoreReply;
 }
 
 /** Under a day, because that is the promise a shopper actually reads into "ships fast". */
@@ -101,6 +128,8 @@ const NEXT_DAY_H = 24;
 @Injectable()
 export class MerchantRatingService {
   private readonly ratings = new PersistentMap<string, MerchantRatingRecord>('pudo-merchant-ratings');
+  /** One answer per store, by its vendorId (2026-11-05). */
+  private readonly replies = new PersistentMap<string, StoreReply>('pudo-store-replies');
 
   constructor(
     private readonly parcels: ParcelService,
@@ -158,6 +187,33 @@ export class MerchantRatingService {
     }
   }
 
+  /**
+   * The store answers what was said about it — one answer, replacing the last. Its own sign-in only (the route checks
+   * it): staff do not speak in a store's name. Refused before anything is written.
+   */
+  reply(vendorId: string, input: { kind: string; text?: string }, now = new Date()): StoreReply {
+    this.vendors.get(vendorId); // a store that is not there is a 404, not a reply kept for nobody
+    if (!(STORE_REPLIES as readonly string[]).includes(input.kind)) throw new GlosError('VALIDATION_FAILED', 'Choose one of the answers');
+    const kind = input.kind as StoreReplyKind;
+    let text: string | undefined;
+    if (kind === 'OTHER') {
+      // One line: a line break, a tab or a run of spaces is one space.
+      text = (input.text ?? '').replace(/\s+/g, ' ').trim();
+      if (!text) throw new GlosError('FIELD_REQUIRED', 'Write your answer, or choose one of the others');
+      if (text.length > STORE_REPLY_MAX) throw new GlosError('VALIDATION_FAILED', `At most ${STORE_REPLY_MAX} characters — short and to the point`);
+      if (WAY_OUT.test(text)) throw new GlosError('VALIDATION_FAILED', 'A link, an email address or a phone number is not taken here: buyers reach you where they bought from you');
+    }
+    const answer: StoreReply = { kind, ...(text ? { text } : {}), at: now.toISOString() };
+    this.replies.set(vendorId, answer);
+    return answer;
+  }
+
+  /** The store takes its answer back. Nothing else changes: what was measured and what was said stay as they are. */
+  clearReply(vendorId: string): void {
+    this.vendors.get(vendorId);
+    this.replies.delete(vendorId);
+  }
+
   /** Has this parcel already been rated? One verdict per shipment, so nobody can stack a merchant. */
   forParcel(parcelId: string): MerchantRatingRecord | undefined {
     return [...this.ratings.values()].find((r) => r.parcelId === parcelId);
@@ -210,6 +266,7 @@ export class MerchantRatingService {
         count: mine.length,
         isNew: mine.length < MIN_PUBLIC_RATINGS,
       },
+      ...(this.replies.get(vendorId) ? { reply: this.replies.get(vendorId) } : {}),
     };
   }
 

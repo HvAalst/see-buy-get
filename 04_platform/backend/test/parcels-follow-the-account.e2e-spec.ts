@@ -271,6 +271,14 @@ describe('a parcel is kept by the account, over the wire', () => {
     await http().post(`/v1/sbg/identity/parcels/${first}/rate-store`).set(bearer(early)).send({ stars: 4, tags: ['WELL_PACKED'] }).expect(201);
     expect((await http().get(`/v1/sbg/identity/parcels/${first}`).set(bearer(early)).expect(200)).body.store.rated).toBe(true);
     held.status = before;
+    // 2026-11-05 — THE STORE ANSWERS, at its own sign-in: one short answer on its public record, beside what was said.
+    // Staff do not answer in a store's name; and the store takes it back when it likes.
+    await http().put(`/v1/sbg/vendors/${store}/reply`).set(asStore).send({ kind: 'OTHER', text: 'We pack every order twice now.' }).expect(200);
+    expect((await http().get(`/v1/sbg/stores/${store}/reputation`).expect(200)).body.reply).toMatchObject({ kind: 'OTHER', text: 'We pack every order twice now.' });
+    expect((await http().put(`/v1/sbg/vendors/${store}/reply`).set(operator).send({ kind: 'THANK_YOU' }).expect(403)).body.code).toBe('FORBIDDEN');
+    expect((await http().put(`/v1/sbg/vendors/${store}/reply`).set(asStore).send({ kind: 'OTHER', text: 'Call 0712 345 678' }).expect(400)).body.code).toBe('VALIDATION_FAILED');
+    await http().delete(`/v1/sbg/vendors/${store}/reply`).set(asStore).expect(200);
+    expect((await http().get(`/v1/sbg/stores/${store}/reputation`).expect(200)).body.reply).toBeUndefined();
 
     // THE PARCEL FIRST: a buyer who signs up only after the store sent it finds it waiting.
     const LATE = `+2547${digits()}5`;

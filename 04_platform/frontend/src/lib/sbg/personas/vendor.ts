@@ -1,3 +1,4 @@
+import type { StoreReplyKind } from '../../../shared/storeReply';
 import type { SbgClient } from '../client';
 import { createFiscalApi } from './fiscal';
 import { createMediaApi } from './media';
@@ -118,6 +119,14 @@ export function createVendorApi(sbg: SbgClient) {
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),
+
+    /* --- 2026-11-05: the store's one answer to what its receivers said, on its public record --- */
+
+    /** A standard answer by its key, or the store's own words (OTHER, one line, at most 100 characters). */
+    setStoreReply: (vendorId: string, kind: StoreReplyKind, text?: string) =>
+      sbg.request((c) => c.PUT('/v1/sbg/vendors/{id}/reply', { params: { path: { id: vendorId } }, body: { kind, ...(text ? { text } : {}) } })),
+    /** The answer taken back. */
+    clearStoreReply: (vendorId: string) => sbg.request((c) => c.DELETE('/v1/sbg/vendors/{id}/reply', { params: { path: { id: vendorId } } })),
 
     /* --- round 29: the store's GS1 company prefix, held to a business's rules, and the disputes it is in --- */
 

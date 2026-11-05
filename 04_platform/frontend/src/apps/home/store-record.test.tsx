@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
-import { t } from '../../shared/i18n';
+import { readFileSync } from 'node:fs';
+import { formatDate, t } from '../../shared/i18n';
+import { STORE_REPLIES, STORE_REPLY_MAX, WAY_OUT, replyLine } from '../../shared/storeReply';
 import { StoreScreen } from './screens/StoreScreen';
 import type { StoreReputation } from './api';
 import type { HomeActions, HomeState } from './useHomeApp';
@@ -82,5 +84,47 @@ describe('the store’s own card', () => {
 
   it('draws nothing before the store is known', () => {
     expect(renderToString(<StoreRecordCard />)).toBe('');
+  });
+});
+
+/*
+ * 2026-11-05 — THE STORE'S ONE ANSWER (the owner: "a standing reply … short and snappy. a few standard replies to choose
+ * like 'contact our customer service' and an optional other that opens a text input field").
+ */
+describe('the store’s answer', () => {
+  it('stands under what was said: a standard one in the reader’s language, the store’s own words quoted and said to be theirs', () => {
+    const standard = page(record({ reply: { kind: 'CONTACT_US', at: '2026-11-05T10:00:00.000Z' } }));
+    expect(standard).toContain(t('home.store.replyTitle'));
+    expect(standard).toContain(t('common.storeReply.CONTACT_US'));
+    const own = page(record({ reply: { kind: 'OTHER', text: 'We pack every order twice now.', at: '2026-11-05T10:00:00.000Z' } }));
+    expect(own).toContain('“We pack every order twice now.”');
+    expect(own).toContain(t('home.store.replyOwn', { date: formatDate('2026-11-05T10:00:00.000Z') }));
+    expect(page(record())).not.toContain(t('home.store.replyTitle'));
+  });
+
+  it('is the store’s to give from its own card', () => {
+    const html = renderToString(<StoreRecordCard vendorId="ven_abc" reply={{ set: async () => null, clear: async () => null }} />);
+    // Nothing to answer from until the record is read; the sheet is there, closed.
+    expect(html).toContain(t('vendor.record.title'));
+    expect(renderToString(<StoreRecordCard vendorId="ven_abc" />)).not.toContain(t('vendor.reply.title'));
+  });
+
+  it('is the same list and limit the server keeps, and says first what the server would refuse', () => {
+    const server = readFileSync('../backend/src/modules/pudo/merchant-rating.service.ts', 'utf8');
+    const list = /export const STORE_REPLIES = \[([^\]]+)\] as const/.exec(server)?.[1].split(',').map((x) => x.trim().replace(/'/g, ''));
+    expect(list).toEqual([...STORE_REPLIES]);
+    expect(server).toContain(`export const STORE_REPLY_MAX = ${STORE_REPLY_MAX};`);
+    expect(server).toContain(`const WAY_OUT = ${WAY_OUT.toString()};`);
+    expect(replyLine('  We pack\nevery order   twice. ')).toBe('We pack every order twice.');
+    for (const k of STORE_REPLIES.filter((k) => k !== 'OTHER')) expect(t(`common.storeReply.${k}` as 'common.storeReply.CONTACT_US')).not.toContain('common.');
+  });
+});
+
+describe('a store nobody has rated yet', () => {
+  it('says nobody, not "only 0 buyers"', () => {
+    const html = page(record({ rating: { average: 0, count: 0, isNew: true } }));
+    expect(html).toContain('Nobody has rated this store yet.');
+    expect(html).not.toContain('Only 0');
+    expect(page(record({ rating: { average: 4, count: 1, isNew: true } }))).toContain('Only 1 buyer has rated this store.');
   });
 });

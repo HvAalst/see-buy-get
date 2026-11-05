@@ -13,6 +13,10 @@ export const enHome = {
   'home.store.measuredTitle': 'What we measured',
   'home.store.measuredNote': 'We carried these parcels, so these are not claims — they are what happened.',
   'home.store.nextDay': 'of orders reach a counter within a day of being sold',
+  // 2026-11-05 — the store's one answer, under what its receivers said.
+  'home.store.replyTitle': 'The store’s answer',
+  'home.store.replyOwn': 'In the store’s own words, since {date}.',
+  'home.store.replySince': 'Since {date}.',
   'home.store.nextDayCount': 'orders reached a counter within a day of being sold',
   'home.store.countOf': '{n} of {m}',
   'home.store.fewNote': 'A store this new is counted, not turned into percentages: those start from its third shipment.',
@@ -134,7 +138,8 @@ export const enHome = {
   'home.store.starsTitle': 'Rating',
   'home.store.outOfFive': 'out of 5, from {n, plural, one {# buyer} other {# buyers}}',
   'home.store.tooFewTitle': 'Too new to score',
-  'home.store.tooFewDetail': 'Only {n, plural, one {# buyer has} other {# buyers have}} rated this store. We do not publish an average from that few — it would say more about the sample than the store.',
+  // 2026-11-05 — nobody yet is said as nobody, not as "Only 0 buyers".
+  'home.store.tooFewDetail': '{n, plural, =0 {Nobody has rated this store yet.} one {Only # buyer has rated this store.} other {Only # buyers have rated this store.}} We do not publish an average from that few — it would say more about the sample than the store.',
   'home.store.newTitle': 'Nothing to show yet',
   'home.store.newDetail': 'This store has not shipped through us yet, so there is nothing we have measured. That is not a bad sign — it is a new one.',
   // The no-suppression rule, on the page it governs: a buyer has no reason to trust a score the store

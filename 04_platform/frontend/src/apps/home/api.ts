@@ -1,3 +1,4 @@
+import type { StoreReply } from '../../shared/storeReply';
 import { takeCarry as takeCarryShared, type Carried } from '../../shared/account/carry';
 import type { AddressFormat } from '../../shared/account/address';
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
@@ -388,6 +389,8 @@ export interface StoreReputation {
   upheldCount?: number;
   tags: Array<{ tag: string; count: number; positive: boolean }>;
   rating: { average: number; count: number; isNew: boolean };
+  /** 2026-11-05 — the store's one answer to what was said, when it gave one. */
+  reply?: StoreReply;
 }
 
 export function fetchStoreReputation(vendorId: string): Promise<Result<StoreReputation>> {
