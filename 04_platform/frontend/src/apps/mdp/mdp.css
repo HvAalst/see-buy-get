@@ -418,3 +418,32 @@
   padding-left: 8px;
   padding-right: 8px;
 }
+
+/* -------------------------------------------- the sections look (2026-11-05) --
+   The four figures at the top of the hub's home: four columns with a line between them, not four more cards. The one
+   that means work (parcels to sort) keeps its tint — the one cell meant to stand out — and a line closes the row off
+   from the sections under it. */
+.app--sections .tiles {
+  gap: 0;
+}
+.app--sections .tile {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 10px 6px;
+}
+.app--sections .tile + .tile {
+  border-left: 1px solid var(--bd);
+}
+.app--sections .tile--alert {
+  background: var(--blue-soft);
+  border-radius: var(--r-ctl);
+}
+.app--sections .tile--alert + .tile {
+  border-left-color: transparent;
+}
+.app--sections .tiles + :is(.card:not(.card--soft):not(.card--flat), .glance) {
+  border-top: 1px solid var(--bd);
+  padding-top: 20px;
+}
