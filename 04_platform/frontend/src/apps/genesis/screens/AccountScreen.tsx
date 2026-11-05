@@ -112,7 +112,8 @@ export function AccountScreen({ state, actions, account, guideAsked = 0, onGuide
       {/* S27 media library: all the person's photos in one place, grouped by how long each is kept —
           so the retention is visible and nothing feels hoarded. Always shown (empty/loading/error states
           too) so the feature is discoverable even before you have any photos. Evidence is view-only. */}
-      <section aria-label={t('send.account.yourPhotos')}>
+      {/* A section of the screen like the cards around it (sect): a line above it and under it, as theirs. */}
+      <section class="sect" aria-label={t('send.account.yourPhotos')}>
         <h2 class="scr__section">{t('send.account.yourPhotos')}</h2>
         {state.mediaState === 'error' ? (
           <Card>

@@ -939,3 +939,14 @@
 .app--sections .rows:not(:has(> :not(.orow))) > .orow--on {
   background: var(--blue-soft);
 }
+
+/* A section's own heading at its top sits on the section's line, not 18px under it. */
+.app--sections .sect > .scr__section:first-child {
+  margin-top: 0;
+}
+
+/* …and in the same weight as a card's title beside it (700, not 800): two headings of one rank in one screen. */
+.app--sections .sect > .scr__section {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}

@@ -60,7 +60,7 @@ export function App() {
   ];
 
   return (
-    <div class="app">
+    <div class="app app--sections">
       <TopBar
         title={t('send.appTitle')}
         subtitle={sendWorkLine(state.parcels, t)}
