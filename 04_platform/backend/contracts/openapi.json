@@ -58924,6 +58924,10 @@
             "type": "string",
             "description": "2026-11-02 — THE HUB A BAG ADDRESSED TO A ZONE IS DRIVEN TO (a shop's or a dock's bag names its zone, not a hub): chosen\nwhen it is offered to drivers, one with room on its floor (the owner: \"new bags go to another approved hub that serves\nthe same zones\"), and kept from then, so the offer, the pay and the driver's next stop name the same hub. Absent on a\nbag addressed to a hub or a shop, and on one offered before this."
           },
+          "packedFor": {
+            "type": "string",
+            "description": "2026-11-05 — THE HUB A BAG WAS PACKED FOR, where room has since sent it on to another (MdpService.offerBag): its first\naddress. A shop's check of what belongs in its bag reads this as well as where it goes now, so a parcel planned for the\nfirst hub is still the bag's to answer for. Absent on a bag never sent on."
+          },
           "waitsForRoom": {
             "description": "2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait).",
             "allOf": [

@@ -497,6 +497,8 @@ export class DispatchService {
     this.mdps.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
     // …and a bag of chilled parcels against the cold loads aboard (2026-11-03): one body keeps one temperature.
     this.mdps.registerCold((did, bagCode) => this.coldRefusal(did, 'tote', bagCode));
+    // …and a counter weighs its parcels against what is aboard the same way (2026-11-05), not against an empty vehicle.
+    this.parcels?.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
     // Round 38 — what a rider carries and has delivered, for the custody cap: each load counts as one.
     this.parcels?.registerRiderLoads((did) => {
       let carrying = 0;
@@ -2977,7 +2979,23 @@ export class DispatchService {
     if (!vehicle) return 0;
     const toteKg = this.bagsHeldBy(driverDid).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
-    return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
+    return Math.round((vehicle.capacityKg - toteKg - freightKg - this.looseKgOn(driverDid)) * 100) / 100;
+  }
+
+  /**
+   * 2026-11-05 — the kilos counters handed a driver loose (ParcelService.onBusWith), which were counted nowhere: a bike given
+   * 15 kg at one counter had all 20 left at the next, and a bag loaded after them was weighed against bags alone. Unknown
+   * driver → nothing, as the other reads of the registry here fail open.
+   */
+  private looseKgOn(driverDid: string): number {
+    if (!this.parcels) return 0;
+    let badgeId: string | undefined;
+    try {
+      badgeId = this.drivers.get(driverDid).badgeId;
+    } catch {
+      return 0;
+    }
+    return this.parcels.onBusWith(badgeId).reduce((s, p) => s + p.weightKg, 0);
   }
 
   /**

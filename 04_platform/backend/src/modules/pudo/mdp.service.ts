@@ -101,6 +101,27 @@ export class MdpService {
     this.coldOf = fn;
   }
 
+  /** 2026-11-05 — where a parcel waiting at its shop goes NEXT (BagPlanService.nextHopFor): a hub's id, or its own zone. */
+  private nextHopOf?: (parcel: Parcel) => string;
+
+  /** Registered as the room is: the bag plan reads routing, and routing reads the hub. Without it a shop's bag is matched by zone alone. */
+  registerNextHop(fn: (parcel: Parcel) => string): void {
+    this.nextHopOf = fn;
+  }
+
+  /**
+   * 2026-11-05 — WHETHER A PARCEL WAITING AT A SHOP BELONGS IN THIS SHOP'S BAG: the bag goes where the parcel goes next —
+   * its zone, as always, or the hub its route runs through (the bag plan's group). A hub's bag was compared with the zone
+   * and took nothing. A bag room sent on to another hub still answers for the hub it was packed for (Tote.packedFor).
+   */
+  private belongsInShopBag(parcel: Parcel, bag: Tote): boolean {
+    const to = [bag.destinationNodeId, bag.packedFor].filter((id): id is string => Boolean(id));
+    if (to.includes(parcel.destZone)) return true;
+    const hubs = to.filter((id) => this.mdps.has(id));
+    if (!hubs.length || !this.nextHopOf) return false;
+    return hubs.includes(this.nextHopOf(parcel));
+  }
+
   /** The country this hub stands in — declared at registration, this deployment's home for older records. */
   countryOf(mdp: Mdp): string {
     return countryOfSite(mdp);
@@ -634,11 +655,16 @@ export class MdpService {
    * a dozen. Bag genesis used to be MDP-only, which left the busiest hand-over in the network — a
    * shopkeeper and a waiting driver at a counter — working parcel by parcel.
    *
-   * The bag is homed at the shop and addressed to the zone; the corridor decides the rest.
+   * The bag is homed at the shop and addressed to the next hop the bag plan names: a zone, where the corridor decides the
+   * rest, or the hub the route runs through.
    */
   openShopBag(agentDid: string, destZone: string): Tote {
     this.agents.get(agentDid); // 404 for an unknown shop
     if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
+    // 2026-11-05 — a route through a hub: the bag plan's next hop is the hub's id. Addressed to it as a hub's bag is
+    // (assignTote: an approved hub only), and called by its name — its id was the label a driver and a tracking page read.
+    const hub = this.mdps.get(destZone.trim());
+    if (hub && !this.isApproved(hub)) throw this.notApproved(hub);
     // A bag is a physical object standing on a floor, and floors run out. The shelf has always been sized by
     // the shop; this is the same declaration for the other pile in the room. Counted as what is STANDING
     // there — filling, sealed and waiting, or claimed by a driver who has not arrived — because all three
@@ -647,7 +673,7 @@ export class MdpService {
     const tote = this.totes.register(agentDid);
     // sealRequired: this bag leaves the shop when the SHOPKEEPER says it is closed, never when a sweep
     // decides it looks full. A bag on a counter is open until a human shuts it.
-    return this.totes.assign(tote.code, destZone.trim(), destZone.trim(), { sealRequired: true });
+    return this.totes.assign(tote.code, destZone.trim(), hub ? hub.name : destZone.trim(), { sealRequired: true });
   }
 
   /** The bags physically taking up room at this shop right now (see openShopBag for why these three). */
@@ -705,7 +731,7 @@ export class MdpService {
     if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
       throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
     }
-    if (parcel.destZone !== bag.destinationNodeId) {
+    if (!this.belongsInShopBag(parcel, bag)) {
       throw new GlosError(
         'WRONG_DESTINATION',
         `${parcelId} is going to ${parcel.destZone}, but this bag goes to ${bag.destinationLabel}`,
@@ -758,7 +784,8 @@ export class MdpService {
     const inBag = new Set(bag.parcels);
     const expected = this.parcels
       .list({ status: 'At_PUDO', agentDid })
-      .filter((p) => p.originAgentDid === agentDid && p.destZone === bag.destinationNodeId && !p.held) // round 35 — a held parcel is not missed
+      // round 35 — a held parcel is not missed. 2026-11-05 — matched by where it goes next, as it is filled (belongsInShopBag).
+      .filter((p) => p.originAgentDid === agentDid && !p.held && this.belongsInShopBag(p, bag))
       .map((p) => p.parcelId);
     const missed = expected.filter((id) => !inBag.has(id));
 

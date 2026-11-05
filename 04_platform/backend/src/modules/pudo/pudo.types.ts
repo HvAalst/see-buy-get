@@ -561,6 +561,12 @@ export class Tote {
    * bag addressed to a hub or a shop, and on one offered before this.
    */
   toHubId?: string;
+  /**
+   * 2026-11-05 — THE HUB A BAG WAS PACKED FOR, where room has since sent it on to another (MdpService.offerBag): its first
+   * address. A shop's check of what belongs in its bag reads this as well as where it goes now, so a parcel planned for the
+   * first hub is still the bag's to answer for. Absent on a bag never sent on.
+   */
+  packedFor?: string;
   /** 2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait). */
   waitsForRoom?: ToteWait;
   parcels: string[]; // parcelIds currently in the bag

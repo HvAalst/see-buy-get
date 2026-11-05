@@ -413,14 +413,9 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
  * shops re-rank nearest-first around it (place/area geocoding, flagged when only approximate). Either way
  * the pick is a specific dest PUDO, not a coarse zone.
  */
-function DestinationCard({ state, actions }: { state: AgentState; actions: AgentActions }) {
+export function DestinationCard({ state, actions }: { state: AgentState; actions: AgentActions }) {
   const t = useT();
   const f = state.accept;
-  const near = f.destMode === 'address' ? state.acceptNear : null;
-  // The accepting shop is not in the list of OTHER shops: it is the row of its own above (collected here).
-  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, state.agent?.country);
-  const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
-  const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
 
   // 2026-11-05 — collected here, at this shop: one stop, on the shelf at once, no bus (it was refused).
   const me = state.agent;
@@ -441,6 +436,30 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
           </button>
         </div>
       ) : null}
+      {/* Ticked, the map and the other shops fold away (the owner, 2026-11-05): one link brings them back. */}
+      {here ? (
+        <button type="button" class="linkbtn" style="margin-top:12px" onClick={() => actions.pickDest({ did: '', zone: '', shopName: '' })}>
+          {t('agent.accept.hereOther')}
+        </button>
+      ) : (
+        <OtherShops state={state} actions={actions} />
+      )}
+    </Card>
+  );
+}
+
+/** The other shops, by map or by area: shown until the counter ticks "Collected here, at this shop". */
+function OtherShops({ state, actions }: { state: AgentState; actions: AgentActions }) {
+  const t = useT();
+  const f = state.accept;
+  const near = f.destMode === 'address' ? state.acceptNear : null;
+  // The accepting shop is not in the list of OTHER shops: it is the row of its own above (collected here).
+  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, state.agent?.country);
+  const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
+  const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
+
+  return (
+    <>
       {/* Names the picking METHOD, not the surface — so it doesn't collide with PlaceMap's own Map/Simple toggle. */}
       <div class="seg" role="group" aria-label={t('agent.accept.pickMethodAria')}>
         <button type="button" class={`seg__btn${f.destMode === 'map' ? ' seg__btn--on' : ''}`} aria-pressed={f.destMode === 'map'} onClick={() => actions.setDestMode('map')}>
@@ -498,8 +517,8 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
         <p class="hint" style="margin-top:10px">{t('agent.accept.noShops')}</p>
       ) : null}
 
-      {f.destShopName && !here ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
-    </Card>
+      {f.destShopName ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
+    </>
   );
 }
 

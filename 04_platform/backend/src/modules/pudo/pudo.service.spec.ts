@@ -2062,6 +2062,77 @@ describe('PUDO Light', () => {
       expect(bagPlans.forShop(shop.did).bags.map((b) => b.code).sort()).toEqual([bag.code, bag2.code].sort());
     });
 
+    it('a bag for a route THROUGH A HUB: planned under the hub, called by its name, filled, and checked at closing (2026-11-05)', async () => {
+      // The other half of the Hawassa case: no road straight there, so these go to the hub that serves the far end.
+      // The bag was opened for the hub's id and then compared with each parcel's ZONE, so not one of them went in.
+      const shop = onboardAgent('Via Hub Shop', 'ViaNorth', 50);
+      const far = onboardAgent('Via Hub Far', 'ViaSouth', 50);
+      const hub = mdps.register({ name: 'Via South Sort', zones: ['ViaSouth'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      for (const id of ['VIA-1', 'VIA-2', 'VIA-3']) {
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'ViaSouth', destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+      }
+      // …and one going straight to a town down the road, which the hub's bag must not take.
+      onboardAgent('Via Hub Near', 'ViaEast', 50);
+      corridors.addCorridor({ name: 'Via N-E', originZone: 'ViaNorth', destZone: 'ViaEast' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'VIA-EAST', size: 'S', destZone: 'ViaEast', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+
+      const group = bagPlans.forShop(shop.did).groups.find((g) => g.via === 'hub')!;
+      expect(group).toMatchObject({ key: hub.mdpId, label: 'Via South Sort' });
+      expect([...group.parcelIds].sort()).toEqual(['VIA-1', 'VIA-2', 'VIA-3']);
+
+      // The Shop app opens the bag with the group's key: addressed to the hub, and called by its name — not by its id.
+      const bag = mdps.openShopBag(shop.did, group.key);
+      expect(bag).toMatchObject({ destinationNodeId: hub.mdpId, destinationLabel: 'Via South Sort', sealRequired: true });
+
+      // Its parcels go in; the one going straight east does not.
+      mdps.fillShopBag(bag.code, shop.did, 'VIA-1');
+      mdps.fillShopBag(bag.code, shop.did, 'VIA-2');
+      expect(() => mdps.fillShopBag(bag.code, shop.did, 'VIA-EAST')).toThrow(/going to ViaEast, but this bag goes to Via South Sort/);
+      expect(bagPlans.forShop(shop.did).groups.find((g) => g.key === hub.mdpId)?.openBagCode).toBe(bag.code);
+
+      // Closing it sees the third one still on the shelf for the same hub — and not the one going east.
+      expect(() => mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) })).toThrow(/1 parcel\(s\) for Via South Sort are still on the shelf/);
+      const sealed = mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did), acknowledgeShortShip: true, shortShipReason: 'next bag' });
+      expect(sealed.missed).toEqual(['VIA-3']);
+      expect(parcels.get('VIA-EAST').shortShippedAt).toBeUndefined();
+
+      // …and it is offered to drivers for the hub, by the hub's name.
+      await Promise.resolve();
+      const offered = events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteAvailable && (e.payload as { code?: string }).code === bag.code);
+      expect(offered).toHaveLength(1);
+      expect(offered[0].payload).toMatchObject({ reason: 'sealed', destination: 'Via South Sort' });
+      expect(totes.requireByCode(bag.code)).toMatchObject({ status: 'available', destinationNodeId: hub.mdpId });
+    });
+
+    it('a hub’s bag sent on to another hub for room is still checked against the hub it was packed for (2026-11-05)', () => {
+      // The shop's own hub serves its zone; the far end has its own. A bag published before it was closed (the way a
+      // hand-built bag is) and sent on, the first hub being full, to the far hub: the parcel left behind for the first hub
+      // is still the bag's to answer for.
+      const shop = onboardAgent('Packed Shop', 'PackNorth', 50);
+      const far = onboardAgent('Packed Far', 'PackSouth', 50);
+      const near = mdps.register({ name: 'Pack North Sort', zones: ['PackNorth'], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      const away = mdps.register({ name: 'Pack South Sort', zones: ['PackSouth'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      for (const id of ['PK-1', 'PK-2']) {
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'PackSouth', destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+      }
+      expect(bagPlans.forShop(shop.did).groups[0]).toMatchObject({ key: near.mdpId, via: 'hub' });
+
+      const bag = totes.register(shop.did);
+      mdps.assignTote(bag.code, near.mdpId, near.name);
+      mdps.fillShopBag(bag.code, shop.did, 'PK-1');
+      // The near hub's floor is full: one place, and a bag standing on it.
+      mdps.setSpace(near.mdpId, { bagPlaces: 1, sortPerDay: 50 });
+      const standing = mdps.registerTote(near.mdpId);
+      mdps.assignTote(standing.code, 'Elsewhere', 'Elsewhere');
+      dispatch.release(bag.code);
+      expect(totes.requireByCode(bag.code)).toMatchObject({ status: 'available', destinationNodeId: away.mdpId, destinationLabel: 'Pack South Sort', packedFor: near.mdpId });
+
+      // PK-2 still goes to the near hub next; the bag was packed for it, so leaving it behind is said, and recorded.
+      expect(() => mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) })).toThrow(/still on the shelf/);
+      const sealed = mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did), acknowledgeShortShip: true, shortShipReason: 'next bag' });
+      expect(sealed.missed).toEqual(['PK-2']);
+    });
+
     it('refuses a parcel that is going somewhere else — a bag cannot carry the wrong city', () => {
       const { origin } = shopWithTwoWaiting();
       onboardAgent('Far Dest', 'EastTown', 50);
@@ -5100,6 +5171,31 @@ describe('PUDO Light', () => {
     expect(r.rejected.find((x) => x.parcelId === 'F-FRAGILE')?.reason).toMatch(/fragile/);
     expect(r.rejected.find((x) => x.parcelId === 'F-HEAVY')?.reason).toMatch(/over_20kg|vehicle_full/);
     expect(r.vehicle).toBe('bus'); // a bike maps onto the bus corridor-vehicle
+  });
+
+  it('a counter weighs each parcel against what the vehicle carries already, not an empty one (2026-11-05)', () => {
+    // A 20 kg bike handed 15 kg at one counter comes to the next with 15 kg aboard: only what still fits goes on.
+    const first = onboardAgent('Aboard First', 'NorthTown', 50);
+    const second = onboardAgent('Aboard Second', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'aboard-feeder', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Aboard', fullName: 'Aboard Rider', nationalId: 'DRV-ABOARD-1', mobile: '+254900081', licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: 'AB-1', vehicleClass: 'bike', ownerName: 'Aboard Rider' });
+    fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+    const takeIn = (shopDid: string, parcelId: string, size: 'S' | 'M' | 'L') =>
+      parcels.accept({ agentDid: shopDid, parcelId, size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shopDid) });
+
+    takeIn(first.did, 'ABD-L', 'L'); // 15 kg
+    expect(parcels.handover({ agentDid: first.did, driverBadgeId: d.badgeId!, parcelIds: ['ABD-L'] }).handed).toEqual(['ABD-L']);
+    // What a counter handed the rider is aboard, wherever it was handed: the room left says so.
+    expect(dispatch.remainingCapacity(d.did)).toBe(5);
+
+    takeIn(second.did, 'ABD-M', 'M'); // 5 kg: fits exactly
+    takeIn(second.did, 'ABD-S', 'S'); // 1 kg: one too many
+    const r = parcels.handover({ agentDid: second.did, driverBadgeId: d.badgeId!, parcelIds: ['ABD-M', 'ABD-S'] });
+    expect(r.handed).toEqual(['ABD-M']);
+    expect(r.rejected).toEqual([{ parcelId: 'ABD-S', reason: 'vehicle_full' }]);
+    expect(parcels.get('ABD-S')).toMatchObject({ status: 'At_PUDO', shortShipReason: 'vehicle_full' });
+    expect(dispatch.remainingCapacity(d.did)).toBe(0);
   });
 
   it('a new independent rider carries no more than the custody cap: the rest stay at the counter, said why (round 38)', () => {

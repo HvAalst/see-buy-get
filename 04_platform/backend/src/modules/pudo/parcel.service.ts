@@ -1617,7 +1617,10 @@ export class ParcelService implements OnApplicationBootstrap {
     const handed: string[] = [];
     const rejected: Array<{ parcelId: string; reason: string }> = [];
     const manifestId = `man_${randomBytes(6).toString('hex')}`;
-    let loadKg = 0;
+    // 2026-11-05 — weighed from what the vehicle carries already: its bags, its loads and what other counters handed it. It
+    // started at an empty vehicle, so a bike filled at one counter was filled again at the next.
+    const room = fleet ? this.roomOf?.(fleet.driverDid) : undefined;
+    let loadKg = fleet && room !== undefined ? fleet.capacityKg - room : 0;
     // S30: the natures already ON this vehicle, so each new parcel can be checked against the whole manifest
     // (the platform's first pairwise cargo awareness — before this, a manifest accumulated blind).
     const loadedNatures: CargoNature[] = [];
@@ -3680,6 +3683,16 @@ export class ParcelService implements OnApplicationBootstrap {
   private riderLoads?: (driverDid: string) => { carrying: number; delivered: number };
   registerRiderLoads(fn: (driverDid: string) => { carrying: number; delivered: number }): void {
     this.riderLoads = fn;
+  }
+
+  /**
+   * 2026-11-05 — the kilos left on a driver's vehicle, everything aboard counted (DispatchService.remainingCapacity), as the
+   * hub's bag is weighed (MdpService.registerRoom). Registered by dispatch, for the same reason. Without it a counter weighs
+   * a parcel against an empty vehicle, as it did.
+   */
+  private roomOf?: (driverDid: string) => number | undefined;
+  registerRoom(fn: (driverDid: string) => number | undefined): void {
+    this.roomOf = fn;
   }
 
   /**

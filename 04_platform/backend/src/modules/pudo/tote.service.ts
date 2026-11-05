@@ -176,6 +176,8 @@ export class ToteService {
   pointTo(code: string, to: { destinationNodeId?: string; destinationLabel?: string; toHubId?: string }): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'filling' && tote.status !== 'available') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}: where it goes is fixed`);
+    // 2026-11-05 — sent on to another hub: the first address is kept, for the shop's check of what belongs in it (Tote.packedFor).
+    if (to.destinationNodeId && tote.destinationNodeId && to.destinationNodeId !== tote.destinationNodeId && !tote.packedFor) tote.packedFor = tote.destinationNodeId;
     if (to.destinationNodeId) tote.destinationNodeId = to.destinationNodeId;
     if (to.destinationLabel) tote.destinationLabel = to.destinationLabel;
     if (to.toHubId) tote.toHubId = to.toHubId;
@@ -265,6 +267,7 @@ export class ToteService {
     tote.destinationLabel = undefined;
     // 2026-11-02 — arrived: the hub it was sent to, and any wait for room there, are over with the journey.
     tote.toHubId = undefined;
+    tote.packedFor = undefined;
     tote.waitsForRoom = undefined;
     tote.filledAt = undefined;
     tote.filledReceivedAt = undefined;

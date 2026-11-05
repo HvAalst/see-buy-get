@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AgentService } from './agent.service';
+import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import { RoutingService } from './routing.service';
 import { ToteService } from './tote.service';
@@ -28,7 +29,13 @@ export class BagPlanService {
     private readonly parcels: ParcelService,
     private readonly totes: ToteService,
     private readonly routing: RoutingService,
-  ) {}
+    mdps: MdpService,
+  ) {
+    // 2026-11-05 — the shop's bag is filled and checked against the same next hop it is planned by: a bag for a hub was
+    // compared with each parcel's zone, so it took none of the parcels the plan had put in its group. Registered rather
+    // than asked for, for the cycle above.
+    mdps.registerNextHop((parcel) => this.nextHopFor(parcel).key);
+  }
 
   /**
    * Group the shop's waiting parcels by their NEXT HOP — not their final destination, which is the
