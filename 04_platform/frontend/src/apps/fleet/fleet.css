@@ -672,3 +672,52 @@
   hyphens: none;
   user-select: all;
 }
+
+/* -------------------------------------------- the sections look (2026-11-05) --
+   The five figures at the top of the fleet's home: columns with a line between them, as the hub's four are — three on
+   the first line of a phone and two on the next, with a line between the lines too. */
+.app--sections .tiles {
+  gap: 0;
+}
+.app--sections .tile {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 10px 6px;
+  border-left: 1px solid var(--bd);
+}
+.app--sections .tile:first-child {
+  border-left: 0;
+}
+@media (max-width: 420px) {
+  .app--sections .tiles--5 .tile:nth-child(3n + 1) {
+    border-left: 0;
+  }
+  /* The line between the two lines of figures runs under the whole first line, not only over the two below it. */
+  .app--sections .tiles--5 .tile:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--bd);
+  }
+}
+.app--sections .tiles + :is(.card:not(.card--soft):not(.card--flat), .glance) {
+  border-top: 1px solid var(--bd);
+  padding-top: 20px;
+}
+
+/* A shift on duty is the driver's row AND the corridor it runs on: one panel holds the pairs, the picker inside the
+   pair it belongs to rather than flush under a card of its own. */
+.app--sections .rows:not(:has(> :not(.sess))) {
+  gap: 0;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.app--sections .rows:not(:has(> :not(.sess))) > .sess > .row {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.app--sections .rows:not(:has(> :not(.sess))) > .sess > .sess__cor {
+  padding: 0 16px 14px;
+}

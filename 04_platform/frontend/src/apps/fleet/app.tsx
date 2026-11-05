@@ -67,7 +67,7 @@ export function App() {
 
   if (state.phase === 'signin') {
     return (
-      <div class="app">
+      <div class="app app--sections">
         <TopBar title={t('fleet.appTitle')} subtitle={t('fleet.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
@@ -102,7 +102,7 @@ export function App() {
   ];
 
   return (
-    <div class="app">
+    <div class="app app--sections">
       <TopBar
         title={t('fleet.appTitle')}
         subtitle={fleetWorkLine(state.dashboard, t)}
