@@ -56,12 +56,22 @@ export interface MerchantScorecard {
   shipments: number;
   /** Handed to a shop within a day of being sold, as a rate. Undefined until there is anything to say. */
   shipsNextDayRate?: number;
+  /**
+   * 2026-11-05 — the same, as a COUNT: how many of `shipments` were handed over within a day. Below a real sample a
+   * percentage is a headline made of one or two parcels ("0%" for a new store's first, slow, order); a screen says
+   * "1 of 2" instead, which is the fact without the verdict — the cold-start rule the stars already keep.
+   */
+  nextDayCount?: number;
   /** Median hours from sale to counter — the number behind the rate, so nobody has to trust the rate alone. */
   medianHoursToHandover?: number;
   /** Sold, billed, and never handed in at all. The merchant's own failure, and invisible before this. */
   neverDroppedRate?: number;
   /** Claims that were upheld or partly upheld, over shipments. */
   upheldDisputeRate?: number;
+  /** 2026-11-05 — the counts behind the two rates above, and what they are out of, for the same reason as nextDayCount. */
+  sold?: number;
+  neverDroppedCount?: number;
+  upheldCount?: number;
   /** What receivers tapped, most-common first. Counts, never percentages — a percentage of four is noise. */
   tags: Array<{ tag: MerchantTag; count: number; positive: boolean }>;
   rating: { average: number; count: number; isNew: boolean };
@@ -134,6 +144,20 @@ export class MerchantRatingService {
     return { rating, scorecard: this.scorecard(parcel.vendorId) };
   }
 
+  /**
+   * The store a parcel came from, as anybody holding the parcel may read it: its id, for its public page, and its name.
+   * A business's name is not a person's detail, and its record is public by design (storeReputation). A peer send has
+   * no store; a store that cannot be read is left out rather than named wrongly.
+   */
+  storeOf(parcel: Parcel): { vendorId: string; name: string } | undefined {
+    if (!parcel.vendorId) return undefined;
+    try {
+      return { vendorId: parcel.vendorId, name: this.vendors.get(parcel.vendorId).name };
+    } catch {
+      return undefined;
+    }
+  }
+
   /** Has this parcel already been rated? One verdict per shipment, so nobody can stack a merchant. */
   forParcel(parcelId: string): MerchantRatingRecord | undefined {
     return [...this.ratings.values()].find((r) => r.parcelId === parcelId);
@@ -171,11 +195,13 @@ export class MerchantRatingService {
       ...(handed.length
         ? {
             shipsNextDayRate: round2(hours.filter((h) => h <= NEXT_DAY_H).length / handed.length),
+            nextDayCount: hours.filter((h) => h <= NEXT_DAY_H).length,
             medianHoursToHandover: round2(median(hours)),
             upheldDisputeRate: round2(upheld / handed.length),
+            upheldCount: upheld,
           }
         : {}),
-      ...(sold ? { neverDroppedRate: round2(neverDropped / sold) } : {}),
+      ...(sold ? { neverDroppedRate: round2(neverDropped / sold), sold, neverDroppedCount: neverDropped } : {}),
       tags: [...counts.entries()]
         .map(([tag, count]) => ({ tag, count, positive: POSITIVE_TAGS.has(tag) }))
         .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)),

@@ -258,6 +258,19 @@ describe('a parcel is kept by the account, over the wire', () => {
     expect((await myParcels(early)).received.map((p) => p.parcelId)).toEqual([first]);
     const opened = (await http().get(`/v1/sbg/identity/parcels/${first}`).set(bearer(early)).expect(200)).body;
     expect(opened).toMatchObject({ parcelId: first, relation: 'received' });
+    // 2026-11-05 — THE STORE IT CAME FROM, on the receiver's parcel and on its public tracking: its name, and its id for the
+    // store's public record (reached from a tracking key, not only from a widget the store may choose not to install);
+    // and, to its receiver, whether this order was rated already — the app forgot that on a reload and asked again.
+    expect(opened.store).toEqual({ vendorId: store, name: expect.stringMatching(/^Follow Store /), rated: false });
+    const tracked = (await http().get(`/v1/sbg/track/${encodeURIComponent(opened.trackingKey)}`).expect(200)).body;
+    expect(tracked.store).toEqual({ vendorId: store, name: opened.store.name });
+    expect(JSON.stringify(tracked)).not.toContain(EARLY.slice(-6));
+    const held = app.get(ParcelService).get(first);
+    const before = held.status;
+    held.status = 'Delivered';
+    await http().post(`/v1/sbg/identity/parcels/${first}/rate-store`).set(bearer(early)).send({ stars: 4, tags: ['WELL_PACKED'] }).expect(201);
+    expect((await http().get(`/v1/sbg/identity/parcels/${first}`).set(bearer(early)).expect(200)).body.store.rated).toBe(true);
+    held.status = before;
 
     // THE PARCEL FIRST: a buyer who signs up only after the store sent it finds it waiting.
     const LATE = `+2547${digits()}5`;

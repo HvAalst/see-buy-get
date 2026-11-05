@@ -44,6 +44,8 @@ interface HarnessOpts {
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
   activeOffers?: () => unknown[];
+  /** 2026-11-05 — the store an order came from, and which orders were rated already. */
+  merchants?: { storeOf: (p: { vendorId?: string }) => { vendorId: string; name: string } | undefined; forParcel: (id: string) => unknown };
 }
 
 /** Build a dispatcher over a real EventBus + NotificationService, with fake domain lookups. */
@@ -124,10 +126,69 @@ function harness(opts: HarnessOpts) {
     },
   } as unknown as VendorService;
 
-  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch, unclaimed, vendors);
+  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch, unclaimed, vendors, undefined, undefined, opts.merchants as never);
   dispatcher.onModuleInit();
   return { events, notifications, outbox, dispatcher };
 }
+
+/*
+ * 2026-11-05 — A STORE'S ORDER COLLECTED: its receiver is asked, once, on the bell, how it was. The rating had been in
+ * the Send app since October, and nobody was asked to give one.
+ */
+describe('NotificationDispatcher — a store order collected: its receiver is asked how it was', () => {
+  const rated = new Set<string>();
+  const merchants = {
+    storeOf: (p: { vendorId?: string }) => (p.vendorId ? { vendorId: p.vendorId, name: 'Nairobi Threads' } : undefined),
+    forParcel: (id: string) => (rated.has(id) ? { id: 'mrt_1' } : undefined),
+  };
+  const order = (over: Record<string, unknown> = {}) =>
+    harness({
+      parcel: { parcelId: 'PUD-9', status: 'Delivered', vendorId: 'ven_1', receiverPhoneHash: 'hash-rx', ...over } as never,
+      personByHash: { 'hash-rx': { personDid: 'did:person:rx' } },
+      merchants,
+    });
+
+  it('asks the receiver, naming the store, one tap from the stars', async () => {
+    const { events, notifications } = order();
+    await events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    const inbox = notifications.inboxFor('did:person:rx');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'store_rate', title: 'How was your order from Nairobi Threads?', link: '/?parcel=PUD-9' });
+  });
+
+  it('asks once: the same order delivered twice is one notice', async () => {
+    const { events, notifications } = order();
+    await events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    await events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    expect(notifications.inboxFor('did:person:rx').filter((n) => n.kind === 'store_rate')).toHaveLength(1);
+  });
+
+  it('asks nothing of a peer send, an order already rated, one gone to a business door, or a receiver with no account', async () => {
+    const peer = order({ vendorId: undefined });
+    await peer.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    expect(peer.notifications.inboxFor('did:person:rx')).toHaveLength(0);
+
+    rated.add('PUD-9');
+    const done = order();
+    await done.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    expect(done.notifications.inboxFor('did:person:rx')).toHaveLength(0);
+    rated.delete('PUD-9');
+
+    const door = order();
+    await door.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9', toDoor: 'BDR-1' });
+    expect(door.notifications.inboxFor('did:person:rx')).toHaveLength(0);
+
+    const stranger = order({ receiverPhoneHash: 'hash-nobody' });
+    await stranger.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    expect(stranger.notifications.inboxFor('did:person:rx')).toHaveLength(0);
+  });
+
+  it('asks nothing before the order is delivered', async () => {
+    const early = order({ status: 'Ready' });
+    await early.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId: 'PUD-9' });
+    expect(early.notifications.inboxFor('did:person:rx')).toHaveLength(0);
+  });
+});
 
 describe('NotificationDispatcher — rule 1: buyer "parcel arrived" (N2)', () => {
   it('notifies the receiver with the shop name when the parcel is ready', async () => {

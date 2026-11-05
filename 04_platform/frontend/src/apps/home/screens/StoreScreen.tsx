@@ -12,6 +12,14 @@ export interface StoreScreenProps {
 const pct = (n?: number): string => (n == null ? '—' : `${Math.round(n * 100)}%`);
 
 /**
+ * 2026-11-05 — BELOW THREE SHIPMENTS, COUNTS AND NOT PERCENTAGES. "0% reach a counter within a day" on a new store's
+ * first, slow, order is a verdict made of one parcel — the cold-start rule the stars already keep (REP1, the server's
+ * MIN_PUBLIC_RATINGS of 3), kept for the measured half too. "1 of 2" is the same fact without the headline, and the
+ * typical time, a middle of one or two, is left out until there is a middle to speak of.
+ */
+const FEW = 3;
+
+/**
  * How long "quickly" is, in words a shopper reads rather than a number they convert.
  *
  * Hours under a day, then days. "38 hours" is arithmetic somebody has to do; "about 2 days" is the fact
@@ -55,6 +63,10 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
   if (!r) return <div class="scr"><p class="scr__lede">{t('home.store.loading')}</p></div>;
 
   const nothingYet = r.shipments === 0;
+  const few = r.shipments > 0 && r.shipments < FEW;
+  /** A rate as the screen says it: "1 of 2" for a new store, "50%" once there is a real sample. */
+  const said = (rate: number | undefined, count: number | undefined, of: number | undefined): string =>
+    few && count != null && of != null ? t('home.store.countOf', { n: String(count), m: String(of) }) : pct(rate);
 
   return (
     <div class="scr">
@@ -73,22 +85,24 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
             <div class="rows" role="list">
               <div class="row row--static" role="listitem">
                 <span class="row__body">
-                  <span class="row__t">{pct(r.shipsNextDayRate)}</span>
-                  <span class="row__s">{t('home.store.nextDay')}</span>
+                  <span class="row__t">{said(r.shipsNextDayRate, r.nextDayCount, r.shipments)}</span>
+                  <span class="row__s">{t(few ? 'home.store.nextDayCount' : 'home.store.nextDay')}</span>
                 </span>
               </div>
-              <div class="row row--static" role="listitem">
-                <span class="row__body">
-                  <span class="row__t">{handoverWords(r.medianHoursToHandover, t)}</span>
-                  <span class="row__s">{t('home.store.typical')}</span>
-                </span>
-              </div>
+              {few ? null : (
+                <div class="row row--static" role="listitem">
+                  <span class="row__body">
+                    <span class="row__t">{handoverWords(r.medianHoursToHandover, t)}</span>
+                    <span class="row__s">{t('home.store.typical')}</span>
+                  </span>
+                </div>
+              )}
               {/* Shown only when there is something to show. A 0% "never arrived" on every well-behaved
                   store is a line that trains people to skip the section. */}
               {r.neverDroppedRate ? (
                 <div class="row row--static" role="listitem">
                   <span class="row__body">
-                    <span class="row__t">{pct(r.neverDroppedRate)}</span>
+                    <span class="row__t">{said(r.neverDroppedRate, r.neverDroppedCount, r.sold)}</span>
                     <span class="row__s">{t('home.store.neverArrived')}</span>
                   </span>
                 </div>
@@ -96,13 +110,14 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
               {r.upheldDisputeRate ? (
                 <div class="row row--static" role="listitem">
                   <span class="row__body">
-                    <span class="row__t">{pct(r.upheldDisputeRate)}</span>
+                    <span class="row__t">{said(r.upheldDisputeRate, r.upheldCount, r.shipments)}</span>
                     <span class="row__s">{t('home.store.upheld')}</span>
                   </span>
                 </div>
               ) : null}
             </div>
             <p class="card__note">{t('home.store.basedOn', { n: String(r.shipments) })}</p>
+            {few ? <p class="card__note">{t('home.store.fewNote')}</p> : null}
           </Card>
 
           {r.tags.length ? (

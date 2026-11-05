@@ -4438,7 +4438,11 @@ export class SbgController {
         plannedRoute = undefined;
       }
     }
-    return { ...t, did: parcel.did, plannedRoute };
+    // 2026-11-05 — the store it came from, with a way to its public record: the merchant-reputation design always said the
+    // record is reached from a tracking key too, and not only from a widget a store may choose not to install.
+    const store = this.merchants.storeOf(parcel);
+    // Left out of the answer when there is none (undefined is not sent), as plannedRoute is.
+    return { ...t, did: parcel.did, plannedRoute, store };
   }
 
   /**

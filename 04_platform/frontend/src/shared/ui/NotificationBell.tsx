@@ -26,6 +26,8 @@ export interface NotificationBellProps {
 /** Icon per notification kind (typed set — never an emoji). Unknown kinds fall back to the bell. */
 const KIND_ICON: Record<string, IconName> = {
   parcel_ready: 'box',
+  // 2026-11-05 — a store's order collected: how was it? (the two-tap rating)
+  store_rate: 'star',
   load_nearby: 'truck',
   load_cancelled: 'truck',
   freight_problem: 'truck',

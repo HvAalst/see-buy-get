@@ -280,6 +280,19 @@ export const enVendor = {
 
   // Store screen.
   'vendor.store.yourStore': 'Your store',
+  // 2026-11-05 — how buyers see you: the store's own public record, in its own app.
+  'vendor.record.title': 'How buyers see you',
+  'vendor.record.lede': 'What we measured about your shipping, and what your buyers said — the same page any buyer can open. Neither you nor we can change it.',
+  'vendor.record.loading': 'Reading your page…',
+  'vendor.record.error': 'Your page could not be read just now.',
+  'vendor.record.none': 'Nothing measured yet: your page fills in from your first order handed in at a shop.',
+  'vendor.record.nextDay': '{pct} of your orders reach a counter within a day of being sold.',
+  'vendor.record.nextDayFew': '{n} of {m} of your orders reached a counter within a day of being sold.',
+  'vendor.record.rating': 'Rated {avg} out of 5 by {count, plural, one {# buyer} other {# buyers}}.',
+  'vendor.record.ratingNew': '{count, plural, =0 {No buyer has rated you yet.} one {# buyer has rated you: the score shows from the third.} other {# buyers have rated you: the score shows from the third.}}',
+  'vendor.record.open': 'Open your public page',
+  'vendor.record.widgetLead': 'At your checkout, add this to your price widget:',
+  'vendor.record.widgetAfter': 'Buyers then see a link to this page beside your shipping price.',
   'vendor.store.buyerPaysTitle': 'What the buyer pays',
   'vendor.store.change': 'Change',
   'vendor.store.whereTitle': 'Where your store is',

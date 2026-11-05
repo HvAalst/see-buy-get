@@ -178,6 +178,29 @@ describe('what a store earns by shipping', () => {
       expect(card.medianHoursToHandover).toBeCloseTo(20, 1);
     });
 
+    it('says it as a count too, so a screen need not make a headline of one or two parcels (2026-11-05)', () => {
+      // A new store's first two orders, one of them slow: "50%" is a verdict on two parcels; "1 of 2" is the fact.
+      const s = store('Two Order Threads');
+      shipment(s, { handoverH: 5 });
+      shipment(s, { handoverH: 40 });
+      const card = merchants.scorecard(s.vendor.vendorId);
+      expect(card.shipments).toBe(2);
+      expect(card.nextDayCount).toBe(1);
+      // And the counts behind the other rates, with what they are out of.
+      expect(card).toMatchObject({ upheldCount: 0, sold: 2, neverDroppedCount: 0 });
+      // And nothing at all before anything was handed over — never a zero that reads as "never on time".
+      expect(merchants.scorecard(store('Nothing Yet Threads').vendor.vendorId).nextDayCount).toBeUndefined();
+    });
+
+    it('names the store a parcel came from — its id and name only — and nothing for a peer send (2026-11-05)', () => {
+      const s = store('Named Threads');
+      const p = shipment(s, { handoverH: 2 });
+      expect(merchants.storeOf(p)).toEqual({ vendorId: s.vendor.vendorId, name: 'Named Threads' });
+      expect(merchants.storeOf({ ...p, vendorId: undefined })).toBeUndefined();
+      // A store that cannot be read is left out, never named wrongly.
+      expect(merchants.storeOf({ ...p, vendorId: 'ven_gone' })).toBeUndefined();
+    });
+
     it('measures from the SALE, not from the field intake overwrites', () => {
       // acceptedAt holds the sale time until intake replaces it with the counter's clock. A scorecard
       // reading that field would report every merchant as shipping instantly — the most flattering

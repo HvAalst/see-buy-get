@@ -381,6 +381,11 @@ export interface StoreReputation {
   medianHoursToHandover?: number;
   neverDroppedRate?: number;
   upheldDisputeRate?: number;
+  /** 2026-11-05 — the counts behind the rates, and what they are out of: a new store is counted, not made a percentage. */
+  nextDayCount?: number;
+  sold?: number;
+  neverDroppedCount?: number;
+  upheldCount?: number;
   tags: Array<{ tag: string; count: number; positive: boolean }>;
   rating: { average: number; count: number; isNew: boolean };
 }

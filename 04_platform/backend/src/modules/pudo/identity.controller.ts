@@ -409,7 +409,12 @@ export class IdentityController {
     const view = this.parcels.consumerParcel(id, person);
     // Their own door, paid first (2026-10-27): where it stands, beside the parcel it brings.
     const door = this.doors?.viewFor(person.personDid, id);
-    return door ? { ...view, door } : view;
+    // 2026-11-05 — the store an order came from, to its receiver: named on the rating card, linked to its public record,
+    // and whether this order was rated already — the app forgot that on a reload and offered the form again.
+    const shop = view.vendorOrder && view.relation === 'received' ? this.merchants.storeOf(this.parcels.get(id)) : undefined;
+    const store = shop ? { ...shop, rated: Boolean(this.merchants.forParcel(id)) } : undefined;
+    // Each left out of the answer when there is none (undefined is not sent).
+    return { ...view, door, store };
   }
 
   /**

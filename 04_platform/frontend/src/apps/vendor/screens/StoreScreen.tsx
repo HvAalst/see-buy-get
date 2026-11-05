@@ -9,6 +9,7 @@ import { callbackLine, insurerLine, ledgerTypeWord, money, policyLine } from '..
 import type { VendorActions, VendorState } from '../useVendorApp';
 import { CallbacksInfo, callbacksAloud } from './CallbacksInfo';
 import { Gs1Card } from './Gs1Card';
+import { StoreRecordCard } from './StoreRecordCard';
 
 export interface StoreScreenProps {
   state: VendorState;
@@ -41,6 +42,9 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
         {/* The insurer, on the same policy: where every damage claim report on this store's orders is emailed. */}
         <p class="card__note">{v ? insurerLine(v.shippingPolicy, t) : ''}</p>
       </Card>
+
+      {/* 2026-11-05 — what a buyer sees of this store, and the setting that shows it at the checkout. */}
+      <StoreRecordCard vendorId={v?.vendorId} />
 
       <PinCard state={state} actions={actions} />
 

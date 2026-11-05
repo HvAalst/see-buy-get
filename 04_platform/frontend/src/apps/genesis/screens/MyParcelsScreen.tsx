@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { createFiscalApi } from '../../../lib/sbg/personas/fiscal';
 import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
+import { frontDoorUrl } from '../../../shared/frontDoor';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
@@ -450,8 +451,9 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           details in public strings across five locales; a tag is a catalogue key with nothing in it to
           moderate. Positives come FIRST, because a list that opens with accusations invites one. */}
       {canAct && parcel.vendorOrder ? (
-        <Card title={t('send.rate.title')}>
-          {state.ratedParcels.includes(parcel.parcelId) ? (
+        <Card title={parcel.store ? t('send.rate.titleNamed', { store: parcel.store.name }) : t('send.rate.title')}>
+          {/* Rated already: said by the server too (2026-11-05), so a reload does not offer the form a second time. */}
+          {state.ratedParcels.includes(parcel.parcelId) || parcel.store?.rated ? (
             <Note tone="ok" icon="check" title={t('send.rate.thanksTitle')} detail={t('send.rate.thanksDetail')} />
           ) : (
             <>
@@ -493,6 +495,12 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
               <p class="card__note">{t('send.rate.publicNote')}</p>
             </>
           )}
+          {/* Its public record, beside the card that adds to it: what we measured, and what its receivers said. */}
+          {parcel.store ? (
+            <a class="btn btn--link" href={`${frontDoorUrl()}?store=${encodeURIComponent(parcel.store.vendorId)}`}>
+              {t('send.rate.record', { store: parcel.store.name })}
+            </a>
+          ) : null}
         </Card>
       ) : null}
 

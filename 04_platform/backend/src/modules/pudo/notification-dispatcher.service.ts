@@ -183,6 +183,7 @@ interface LicenceSent { did: string; displayName: string; expiresAt: string; man
 interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld' | 'rejected' | 'report_only'; award: number; currency?: string; note: string; origin: 'counter' | 'buyer'; raisedBy: string }
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
+import { MerchantRatingService } from './merchant-rating.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
 import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
 import { licenceDay } from './shop-licence';
@@ -280,6 +281,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     @Optional() private readonly mail?: MailService,
     // A business's parcels going on to its own door (2026-10-29).
     @Optional() private readonly doors?: BusinessDoorService,
+    // The store an order came from, and whether its receiver has said anything about it yet (2026-11-05).
+    @Optional() private readonly merchants?: MerchantRatingService,
   ) {}
 
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
@@ -375,6 +378,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReadyForPickup, (e) =>
       this.onParcelReadyForPickup(e.payload.parcelId),
     );
+    this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
     // Rule 1b (buyer) — the release secret was burned and an operator rotated it. The buyer is very
     // likely standing at the counter right now, so this is urgent and must NOT collapse onto the
     // parcel-ready notification (a fresh tag), or the one message telling them their code changed
@@ -1681,6 +1685,39 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`order-on-its-way mail failed for ${parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 2026-11-05 — A STORE'S ORDER COLLECTED: ITS RECEIVER IS ASKED, ONCE, HOW IT WAS. The rating had been there since
+   * October, and nobody was asked to give one: it waited at the foot of a parcel's page for somebody to find it. A
+   * store's public record is worth what its receivers say on it, so the one person who may rate the order — its
+   * receiver, verified because we carried it — is asked on the bell, where the parcel's other news came. Never by text
+   * (a receiver is not texted about a parcel). Not for one that went on to a business's own door: that receiver is a
+   * business, not the buyer. Not once it is rated, and one notice per order — a re-published event collapses onto it.
+   */
+  private async onStoreOrderCollected(e: { parcelId: string; toDoor?: string }): Promise<void> {
+    try {
+      if (e.toDoor || !this.merchants) return;
+      const parcel = this.parcels.get(e.parcelId);
+      if (!parcel.vendorId || parcel.status !== 'Delivered' || this.merchants.forParcel(parcel.parcelId)) return;
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
+      if (!person) return; // a receiver with no account is asked nothing: there is nowhere to ask them
+      // Asked once. The tag below folds a repeat on the phone; the bell keeps every notice, so it is looked for there.
+      const asked = this.notifications.inboxFor(person.personDid).some((n) => n.kind === 'store_rate' && (n.data as { parcelId?: string } | undefined)?.parcelId === parcel.parcelId);
+      if (asked) return;
+      const store = this.merchants.storeOf(parcel)?.name ?? 'the store';
+      await this.notifications.notify(person.personDid, {
+        kind: 'store_rate',
+        title: `How was your order from ${store}?`,
+        body: 'Two taps: what was right, and what was not. It goes on the store’s public record, beside what we measured.',
+        // The parcel, where the rating is — one tap from the notice to the stars.
+        link: `/?parcel=${parcel.parcelId}`,
+        tag: `store-rate:${parcel.parcelId}`,
+        data: { parcelId: parcel.parcelId, vendorId: parcel.vendorId },
+      });
+    } catch (err) {
+      this.logger.warn(`store-rate notify failed for ${e.parcelId}: ${(err as Error).message}`);
     }
   }
 

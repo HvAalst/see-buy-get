@@ -52,6 +52,8 @@ export const enSend = {
   // Rating the STORE. Asks about the goods and the packing — never about the delivery, which is the
   // shop's rating and a different question the app asks separately.
   'send.rate.title': 'How was this order?',
+  'send.rate.titleNamed': 'How was your order from {store}?',
+  'send.rate.record': 'See how {store} ships',
   'send.rate.lede': 'About the store and what was in the box — not about the shop that handed it to you.',
   'send.rate.starsAria': 'Rate the store out of five',
   'send.rate.starAria': '{n} of 5',
@@ -363,6 +365,8 @@ export const enSend = {
   'send.track.signUpBody': 'Sign in with the phone number you gave the sender or the store, and this parcel is already there: you are told when it arrives, your collection code is kept safe in the app, and you can message the shop.',
   'send.track.signUp': 'Sign in with your phone',
   'send.track.journeySoFar': 'The journey so far',
+  'send.track.fromStore': 'From {store}',
+  'send.track.storeRecord': 'How this store ships, as we measured it',
   'send.track.recentTitle': 'Parcels you looked up before',
   'send.track.aloudPrompt': 'Type the tracking code from your message, then tap find my parcel.',
   // FP6 — a LOAD behind a tracking key: the consignment note's QR and the shipper's shared link land here.

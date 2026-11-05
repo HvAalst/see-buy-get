@@ -38,6 +38,8 @@ export const NOTIFICATION_KINDS = [
   'note_expiring',
   'test',
   'parcel_ready',
+  /** 2026-11-05 — a store's order collected: its receiver is asked, once, what was right and what was not (two taps). */
+  'store_rate',
   'load_nearby',
   'load_assigned',
   'load_instructions',

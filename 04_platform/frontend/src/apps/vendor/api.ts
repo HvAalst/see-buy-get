@@ -65,6 +65,20 @@ export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(vendorConfig(), '/v1/sbg/network/points');
 }
 
+/** 2026-11-05 — a store's public record, read through the same public door a buyer's page reads it from. */
+export interface StoreRecordView {
+  vendorId: string;
+  name: string;
+  shipments: number;
+  shipsNextDayRate?: number;
+  nextDayCount?: number;
+  rating: { average: number; count: number; isNew: boolean };
+}
+
+export function fetchStoreRecord(vendorId: string): Promise<Result<StoreRecordView>> {
+  return publicRequest<StoreRecordView>(vendorConfig(), `/v1/sbg/stores/${encodeURIComponent(vendorId)}/reputation`);
+}
+
 /** One country the network operates in — a real company there, and the money it settles in. */
 export interface OperatingCountry {
   country: string;

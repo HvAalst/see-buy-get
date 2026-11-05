@@ -1,5 +1,6 @@
 import { Button, Card, ErrorNote, Icon, Note, PlaceView, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { frontDoorUrl } from '../../../shared/frontDoor';
 import { LADDER, freightTrackSummary, ladderIndex, lateLine, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import { isFreightTrack } from '../types';
 import { FreightTrack } from './FreightTrack';
@@ -152,6 +153,23 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
               })}
             </ol>
           </Card>
+
+          {/* 2026-11-05 — the store it came from, a tap from its public record: how it ships, as we measured it. The record
+              was always to be reached from a tracking key too, not only from a widget the store may choose not to show. */}
+          {res.store ? (
+            <a class="row" href={`${frontDoorUrl()}?store=${encodeURIComponent(res.store.vendorId)}`}>
+              <span class="row__ic">
+                <Icon name="star" size={24} />
+              </span>
+              <span class="row__body">
+                <span class="row__t">{t('send.track.fromStore', { store: res.store.name })}</span>
+                <span class="row__s">{t('send.track.storeRecord')}</span>
+              </span>
+              <span class="row__end">
+                <Icon name="chevronRight" size={22} />
+              </span>
+            </a>
+          ) : null}
         </>
       ) : null}
 
