@@ -4662,6 +4662,13 @@ export class DispatchService {
     return [...totes, ...freight];
   }
 
+  /** 2026-11-06 — a bag going to a shop that is closed, in its driver's claims (ShopChoiceService registers it: above this). */
+  private shopChoiceView?: (code: string, holder?: string) => Pick<Claimable, 'destShop' | 'shopChoice'> | undefined;
+
+  registerShopChoiceView(fn: (code: string, holder?: string) => Pick<Claimable, 'destShop' | 'shopChoice'> | undefined): void {
+    this.shopChoiceView = fn;
+  }
+
   private wrapTote(code: string, holder?: string): Claimable | null {
     const t = this.totes.byCodeMaybe(code);
     if (!t) return null;
@@ -4701,6 +4708,7 @@ export class DispatchService {
       bulk: false,
       status: t.status,
       requiredCapabilities: this.mdps.toteRequiredCapabilities(t),
+      ...(this.shopChoiceView?.(t.code, holder) ?? {}),
     };
   }
 

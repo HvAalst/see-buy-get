@@ -2210,6 +2210,7 @@ export const enTowerQueues = {
   'tower.plan.why.networkChanged': 'a hub on its way no longer used',
   'tower.plan.why.pricedOtherWay': 'priced on another way',
   'tower.plan.why.doneOffline': 'done without a signal, nobody could be asked',
+  'tower.plan.why.shopClosed': 'its pickup shop closed, its buyers choosing another',
   'tower.way.title': 'Its way',
   'tower.way.lede': 'The stops its plan names — the way it was priced and promised — where it is now, and every step it took off them, with why.',
   'tower.way.kept': 'Kept to its plan',
@@ -2361,6 +2362,7 @@ export const enTowerNetwork = {
   'tower.network.flag.Not_Seen': 'Not seen for a week',
   'tower.network.flag.Bags_Waiting': 'Closed bags waiting for a driver',
   'tower.network.flag.Cargo_After_Shift': 'A driver’s day ended with cargo aboard',
+  'tower.network.flag.Shop_Found_Shut': 'A shop found shut by a driver',
   'tower.network.flag.Pilot_Off_Target': 'Pilot number off target',
 
   'tower.network.shopsTitle': 'The shops',
@@ -3120,6 +3122,7 @@ export const enTowerBusinesses = {
   'tower.cases.kind.Not_Seen': 'A parcel not seen for a week',
   'tower.cases.kind.Bags_Waiting': 'Closed bags waiting long for a driver',
   'tower.cases.kind.Cargo_After_Shift': 'A driver’s day ended with bags or parcels aboard',
+  'tower.cases.kind.Shop_Found_Shut': 'A shop a driver found shut, though it had not said it was closed',
   'tower.bags.title': 'Its bags',
   'tower.bags.lede': 'The closed bags waiting here for a driver. Offer one to a driver who could take it now: they are told, and the notice opens their offer. “Not now”, or no answer in 20 minutes, passes it to the next nearest driver by itself. With nobody left, it is offered again every hour; after a day, the people of its parcels are told it is held up, and told again when it is on the road.',
   'tower.bags.none': 'No closed bag is waiting here now.',

@@ -164,7 +164,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -192,6 +192,7 @@ import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import { PilotService } from './pilot.service';
 import { CustodyCapView, HandoverManifest } from './pudo.types';
 import { offPlanSaid } from './route-plan.types';
+import { ShopChoiceService } from './shop-choice.service';
 
 interface ModuleInfo {
   module: string;
@@ -361,6 +362,8 @@ export class SbgController {
     @Optional() private readonly dropOffHolds?: DropOffHoldService,
     // 2026-11-05 — parcels a driver takes on ahead (pre-drop-off, the driver side).
     @Optional() private readonly pickupAhead?: PickupAheadService,
+    // 2026-11-06 — a bag for a shop that is closed: the driver's pick, its buyers choosing (point 6).
+    @Optional() private readonly shopChoices?: ShopChoiceService,
   ) {}
 
   /**
@@ -7943,6 +7946,30 @@ export class SbgController {
   driverOffers(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverReader(did, actor);
     return this.dispatch.activeOffersFor(did);
+  }
+
+  /**
+   * 2026-11-06 — A BAG ON BOARD FOR A SHOP THAT IS CLOSED (the owner, point 6): the open shops near it with room for the whole
+   * bag, nearest first — for the driver carrying it, who picks the ones they can take it to.
+   */
+  @Roles('driver')
+  @Get('fleet/drivers/:did/bags/:code/shops-near')
+  bagShopsNear(@Param('did') did: string, @Param('code') code: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverSelf(did, actor, 'Only the driver carrying the bag finds a shop for it');
+    return this.shopChoicesOf().near(code, did);
+  }
+
+  /** …the driver's pick (one to three), its buyers asked which they will collect from; or the door found shut, said. */
+  @Roles('driver')
+  @Post('fleet/drivers/:did/bags/:code/shop-choice')
+  bagShopChoice(@Param('did') did: string, @Param('code') code: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverSelf(did, actor, 'Only the driver carrying the bag picks the shops for it');
+    return this.shopChoicesOf().ask(code, did, dto.shopDids, { shut: dto.shut === true });
+  }
+
+  private shopChoicesOf(): ShopChoiceService {
+    if (!this.shopChoices) throw new GlosError('INVALID_STATE', 'Finding another shop is not running in this deployment');
+    return this.shopChoices;
   }
 
   @Roles('driver', 'fleet_manager', 'operator')

@@ -949,6 +949,8 @@ export interface RunningLate {
 
 export interface ConsumerParcelView {
   parcelId: string;
+  /** 2026-11-06 — its pickup shop closed: the shops the driver with it can take it to, to choose from; and where it went. */
+  shopChoice?: { closed: string; picks: Array<{ did: string; name: string; km: number }>; chosen?: string; settled?: { did: string; name: string } };
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner
   relation: 'sent' | 'received'; // the caller's side of this parcel
   direction: ParcelDirection;

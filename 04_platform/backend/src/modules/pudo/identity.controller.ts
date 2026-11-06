@@ -25,8 +25,9 @@ import { RoutingService } from './routing.service';
 import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, EmailCodeDto, AccountCodeDto, UndoNumberDto, RecoverAccountDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CollectionResponseDto, PickupShopChoiceDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, EmailCodeDto, AccountCodeDto, UndoNumberDto, RecoverAccountDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
+import { ShopChoiceService } from './shop-choice.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { PasskeyService } from './passkey.service';
 import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
@@ -67,6 +68,8 @@ export class IdentityController {
     @Optional() private readonly doors?: PersonDoorService,
     // 2026-11-06 — a booking moved by its sender to another drop-off shop, re-priced.
     @Optional() private readonly moves?: DropOffMoveService,
+    // 2026-11-06 — its pickup shop closed: the receiver chooses one of the shops the driver with it picked.
+    @Optional() private readonly shopChoices?: ShopChoiceService,
   ) {}
 
   /**
@@ -483,6 +486,20 @@ export class IdentityController {
    * Returns their twin rather than a bare acknowledgement, because three of the four choices change what
    * the app should be showing them and a screen that has to guess will guess wrong.
    */
+  /**
+   * 2026-11-06 — ITS PICKUP SHOP CLOSED (the owner, point 6): the receiver chooses one of the shops the driver with it picked.
+   * The bag goes to the shop most of its buyers choose, until the driver gets there.
+   */
+  @Roles('consumer')
+  @Post('parcels/:id/pickup-shop')
+  choosePickupShop(@Param('id') id: string, @Body() dto: PickupShopChoiceDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    this.parcels.requireReceiver(id, person);
+    if (!this.shopChoices) throw new GlosError('INVALID_STATE', 'Choosing another shop is not running in this deployment');
+    this.shopChoices.choose(id, dto.shopDid);
+    return { parcel: this.parcels.consumerParcel(id, person) };
+  }
+
   @Roles('consumer')
   @Post('parcels/:id/collection-response')
   collectionResponse(@Param('id') id: string, @Body() dto: CollectionResponseDto, @Actor() actor: IntrospectionResult) {

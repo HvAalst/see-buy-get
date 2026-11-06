@@ -256,6 +256,10 @@ export interface PriceBreakdown {
 
 export interface Claimable {
   kind: ClaimKind;
+  /** 2026-11-06 — a bag on board going to a shop: which, and whether it is closed (find another for it). */
+  destShop?: { did: string; name: string; closed: boolean };
+  /** …once its buyers were asked: the shops picked, where most chose (else the first pick), how many answered. */
+  shopChoice?: { picks: Array<{ did: string; name: string; km: number }>; leading: { did: string; name: string; chose: number }; answered: number; of: number; shut?: boolean; settled?: { did: string; name: string } };
   /** Freight crossing a border whose shipper has not signed its commercial invoice: not to be taken over yet. */
   invoiceMissing?: boolean;
   /** 2026-11-01 — handed in at (acceptance) or collected from (collection) an airline's cargo terminal, under this waybill. */

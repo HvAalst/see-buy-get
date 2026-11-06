@@ -185,6 +185,15 @@ export class ToteService {
   }
 
   /** 2026-11-02 — held for room at the hub it goes to, or let go on (`undefined`). */
+  /** 2026-11-06 — carried to a shop that was closed, handed in at the one its buyers' choosing settled on (ShopChoiceService). */
+  readdressCarried(code: string, destinationNodeId: string, destinationLabel: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.destinationNodeId = destinationNodeId;
+    tote.destinationLabel = destinationLabel;
+    delete tote.toHubId;
+    return this.save(tote);
+  }
+
   markWaiting(code: string, wait: Tote['waitsForRoom']): Tote {
     const tote = this.requireByCode(code);
     tote.waitsForRoom = wait;

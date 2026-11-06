@@ -912,6 +912,25 @@ export function useSendApp() {
    * and a home screen still saying "waiting past its date" after somebody said they were coming is the
    * app not listening.
    */
+  /** 2026-11-06 — its pickup shop closed: one of the shops the driver with it picked, chosen. */
+  const choosePickupShop = useCallback(
+    async (shopDid: string) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id) return;
+      setState((s) => ({ ...s, noticeBusy: `shop:${shopDid}`, noticeError: null }));
+      const r = await client.api.choosePickupShop(id, shopDid);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, noticeBusy: null, noticeError: r.error }));
+        return;
+      }
+      const body = narrow<{ parcel: ConsumerParcelView }>(r.data);
+      setState((s) => ({ ...s, noticeBusy: null, openParcelDetail: body.parcel }));
+      void loadParcels();
+    },
+    [client, loadParcels],
+  );
+
   const respondToNotice = useCallback(
     async (choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine', note?: string) => {
       const id = stateRef.current.openParcelId;
@@ -1372,6 +1391,7 @@ export function useSendApp() {
       raiseDoor,
     rateStore,
     respondToNotice,
+    choosePickupShop,
     nominateCollector,
     movePreview,
     moveParcel,

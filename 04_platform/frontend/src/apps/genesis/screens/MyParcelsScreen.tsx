@@ -262,6 +262,32 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           It sits ABOVE the collection code deliberately: the terms have changed, and finding that out
           after being shown the code is finding it out at the counter instead. It never replaces the code
           — the parcel is still theirs and still there, which is the whole point of the status. */}
+      {/* 2026-11-06 — its pickup shop closed: choose one of the shops the driver with it can take it to (the owner, point 6). */}
+      {parcel.relation === 'received' && parcel.shopChoice ? (
+        <Card title={parcel.shopChoice.settled ? t('send.shopChoice.settledTitle', { shop: parcel.shopChoice.settled.name }) : t('send.shopChoice.title', { shop: parcel.shopChoice.closed })}>
+          {state.noticeError ? <ErrorNote error={state.noticeError} /> : null}
+          {parcel.shopChoice.settled ? (
+            <p class="card__note">{t('send.shopChoice.settled', { shop: parcel.shopChoice.settled.name })}</p>
+          ) : (
+            <>
+              <p class="card__note">{t('send.shopChoice.lede')}</p>
+              <div class="rows">
+                {parcel.shopChoice.picks.map((p) => (
+                  <button key={p.did} type="button" class="row" aria-pressed={parcel.shopChoice?.chosen === p.did} disabled={state.noticeBusy !== null} onClick={() => void actions.choosePickupShop(p.did)}>
+                    <span class="row__body">
+                      <span class="row__t">{p.name}</span>
+                      <span class="row__s">{t('send.shopChoice.km', { km: p.km, shop: parcel.shopChoice!.closed })}</span>
+                    </span>
+                    <span class="row__end">{parcel.shopChoice?.chosen === p.did ? <Icon name="check" size={22} /> : null}</span>
+                  </button>
+                ))}
+              </div>
+              {parcel.shopChoice.chosen ? <p class="hint">{t('send.shopChoice.chosen')}</p> : null}
+            </>
+          )}
+        </Card>
+      ) : null}
+
       {parcel.relation === 'received' && parcel.status === 'Unclaimed' ? (
         <Card title={t('send.notice.title')}>
           <p class="card__note">

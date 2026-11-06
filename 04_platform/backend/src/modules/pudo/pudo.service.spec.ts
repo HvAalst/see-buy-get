@@ -30,6 +30,7 @@ import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
 import { BagOfferService } from './bag-offer.service';
+import { ShopChoiceService } from './shop-choice.service';
 import { offPlanSaid } from './route-plan.types';
 import { byMoney, detoursOf } from './journey-plan.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
@@ -143,6 +144,7 @@ describe('PUDO Light', () => {
   let shelfSvc: ShelfService;
   let routing: RoutingService;
   let journeyPlans: JourneyPlanService;
+  let shopChoices: ShopChoiceService;
   let mdps: MdpService;
   let totes: ToteService;
   let consignments: ConsignmentService;
@@ -217,6 +219,7 @@ describe('PUDO Light', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
+        ShopChoiceService, // 2026-11-06 — a bag for a shop that is closed (point 6)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -235,6 +238,7 @@ describe('PUDO Light', () => {
     borders = moduleRef.get(BorderRuleService);
     // 2026-11-06 — the plan made at take-in and asked at every hand-over: its listener started here, as compile() starts none.
     journeyPlans = moduleRef.get(JourneyPlanService);
+    shopChoices = moduleRef.get(ShopChoiceService);
     journeyPlans.onModuleInit();
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
@@ -2594,6 +2598,103 @@ describe('PUDO Light', () => {
       expect(plan.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'priced_other_way' })]);
       // A price made on another route is not a step it took: nothing about how it moves.
       expect(parcels.get(order.parcelId).shipmentCost).toBe(order.shipmentCost);
+    });
+
+    it('a bag for a shop that is closed: its driver picks open shops near it, its buyers choose — the whole bag to the most chosen (2026-11-06)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU20 Shop', N, 50);
+      const far = onboardAgent('MU20 Far', S, 50);
+      const y = onboardAgent('MU20 Y Shop', S, 50);
+      const z = onboardAgent('MU20 Z Shop', S, 50);
+      // Their own corner of the map: the shops near the closed one are these two, nearest first.
+      agents.setLocation(far.did, { lat: 3.0, lng: 40.0 });
+      agents.setLocation(y.did, { lat: 3.0, lng: 40.02 });
+      agents.setLocation(z.did, { lat: 3.0, lng: 40.05 });
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      const ids = ['MU20-A', 'MU20-B', 'MU20-C'];
+      const buyers = ids.map((id, i) => {
+        const phone = `+2547110002${i}`;
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: phone, dropoffPhotoRef: photoBy(shop.did) } as never);
+        return enrollPerson(phone);
+      });
+      const bag = mdps.openShopBag(shop.did, far.did);
+      for (const id of ids) mdps.fillShopBag(bag.code, shop.did, id);
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      const d = drivers.register({ displayName: 'MU20 Rider', fullName: 'MU20 Rider', nationalId: 'DRV-MU20', mobile: '+254933020000', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'MU20-1', vehicleClass: 'bike', ownerName: 'MU20 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      mdps.loadBag(bag.code, d.badgeId!);
+      takenForTest(bag.code);
+      const told: Array<{ did: string; kind: string; title: string; body: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string; title: string; body: string }) => void told.push({ did, kind: n.kind, title: n.title, body: n.body }) };
+      const claim = () => dispatch.claimsFor(d.did).find((c) => c.ref === bag.code)!;
+      // On board, its shop open: the driver's claim says where it goes, open; it cannot be passed over unless found shut.
+      expect(claim().destShop).toEqual({ did: far.did, name: 'MU20 Far', closed: false });
+      expect(() => shopChoices.ask(bag.code, d.did, [y.did])).toThrow(/is open: say it is shut/);
+      // The shop closes for now: the open shops near it with room, nearest first — for the driver carrying it only.
+      agents.setAvailability(far.did, false);
+      expect(claim().destShop!.closed).toBe(true);
+      const near = shopChoices.near(bag.code, d.did);
+      expect(near.closed).toMatchObject({ did: far.did, marked: true });
+      expect(near.shops.slice(0, 2).map((x) => x.did)).toEqual([y.did, z.did]);
+      expect(() => shopChoices.near(bag.code, 'did:glos:someone-else')).toThrow(/not on your vehicle/);
+      // A pick that is not one of the shops near it: refused, nothing asked.
+      expect(() => shopChoices.ask(bag.code, d.did, ['did:glos:nowhere'])).toThrow(/cannot take this bag now/);
+      expect(told).toEqual([]);
+      // The driver picks the two: each buyer asked, in the app.
+      expect(shopChoices.ask(bag.code, d.did, [y.did, z.did])).toMatchObject({ leading: { did: y.did, chose: 0 }, answered: 0, of: 3 });
+      expect(told.filter((n) => n.kind === 'parcel_choose_shop').map((n) => n.did)).toEqual(buyers.map((b) => b.personDid));
+      expect(told[0].body).toBe('MU20 Far is closed. The driver with your parcel can take it to MU20 Y Shop or MU20 Z Shop: choose one. The bag goes to the shop most of its buyers choose.');
+      // Their parcel says the choice; two choose Z, one Y — Z leads, as the driver sees.
+      expect(parcels.consumerParcel('MU20-A', hashPhone('+25471100020')!).shopChoice).toMatchObject({ closed: 'MU20 Far', picks: [expect.objectContaining({ did: y.did }), expect.objectContaining({ did: z.did })] });
+      shopChoices.choose('MU20-A', z.did);
+      shopChoices.choose('MU20-B', z.did);
+      shopChoices.choose('MU20-C', y.did);
+      expect(() => shopChoices.choose('MU20-A', far.did)).toThrow(/Choose one of the shops offered/);
+      expect(claim().shopChoice).toMatchObject({ leading: { did: z.did, chose: 2 }, answered: 3, of: 3 });
+      // A shop the driver did not pick cannot take it.
+      expect(() => mdps.deliverBag(shop.did, bag.code, receivedAt(shop.did))).toThrow(/addressed to MU20 Far/);
+      // Handed in at Z: the whole bag Z's, each parcel's step kept as its shop closed; the buyer who chose Y told where it went.
+      expect(mdps.deliverBag(z.did, bag.code, receivedAt(z.did)).delivered).toEqual(ids);
+      expect(parcels.get('MU20-A')).toMatchObject({ destAgentDid: z.did, status: 'Ready_For_Pickup' });
+      expect(parcels.get('MU20-C').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: z.did, by: d.did })]);
+      expect(told.filter((n) => n.kind === 'parcel_shop_changed')).toEqual([expect.objectContaining({ did: buyers[2].personDid, title: 'Your parcel went to MU20 Z Shop' })]);
+      expect(parcels.consumerParcel('MU20-C', hashPhone('+25471100022')!).shopChoice).toMatchObject({ settled: { did: z.did, name: 'MU20 Z Shop' } });
+      // No shop was found shut: operations have nothing to look at.
+      expect(monitor.flags().find((f) => f.type === 'Shop_Found_Shut' && f.subject === 'MU20 Far')).toBeUndefined();
+    });
+
+    it('a shop found shut that never said it was closed: the driver says so, the shop and operations are told (2026-11-06)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU21 Shop', N, 50);
+      const far = onboardAgent('MU21 Far', S, 50);
+      const y = onboardAgent('MU21 Y Shop', S, 50);
+      agents.setLocation(far.did, { lat: 4.0, lng: 41.0 });
+      agents.setLocation(y.did, { lat: 4.0, lng: 41.02 });
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU21-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+254711000301', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = mdps.openShopBag(shop.did, far.did);
+      mdps.fillShopBag(bag.code, shop.did, 'MU21-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      const d = drivers.register({ displayName: 'MU21 Rider', fullName: 'MU21 Rider', nationalId: 'DRV-MU21', mobile: '+254933021000', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'MU21-1', vehicleClass: 'bike', ownerName: 'MU21 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      mdps.loadBag(bag.code, d.badgeId!);
+      takenForTest(bag.code);
+      const told: Array<{ did: string; kind: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string }) => void told.push({ did, kind: n.kind }) };
+      // Open by its word, shut at its door: the driver says so with the pick.
+      expect(shopChoices.ask(bag.code, d.did, [y.did], { shut: true })).toMatchObject({ shut: true, leading: { did: y.did } });
+      expect(told).toContainEqual({ did: far.did, kind: 'shop_found_shut' });
+      expect(monitor.flags().find((f) => f.type === 'Shop_Found_Shut' && f.subject === 'MU21 Far')).toMatchObject({ detail: expect.stringMatching(/^A driver found it shut at \d\d:\d\d UTC with 1 parcel for it, its buyers choosing another shop$/) });
+      // Nobody chose by the time the driver came: his first pick takes it.
+      expect(mdps.deliverBag(y.did, bag.code, receivedAt(y.did)).delivered).toEqual(['MU21-A']);
+      expect(parcels.get('MU21-A').destAgentDid).toBe(y.did);
+      expect(monitor.flags().find((f) => f.type === 'Shop_Found_Shut' && f.subject === 'MU21 Far')!.detail).toMatch(/; they went to MU21 Y Shop$/);
     });
 
     it('goes by a direct route in a bag addressed to its shop, which receives it — a bag for the area, no shop could', () => {

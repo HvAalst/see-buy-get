@@ -24,10 +24,11 @@ import { VendorService } from './vendor.service';
 import { MdpService } from './mdp.service';
 import { FleetService } from './fleet.service';
 import { DriverService } from './driver.service';
+import { ShopChoiceService } from './shop-choice.service';
 import { AGENT_ONLINE_H, BAGS_WAITING_H, CARGO_AFTER_SHIFT_MIN, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting' | 'Cargo_After_Shift';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting' | 'Cargo_After_Shift' | 'Shop_Found_Shut';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -69,6 +70,8 @@ export class MonitorService {
     // 2026-11-06 — drivers whose day has ended with cargo aboard. Optional likewise.
     @Optional() private readonly fleet?: FleetService,
     @Optional() private readonly drivers?: DriverService,
+    // 2026-11-06 — shops a driver found shut. Optional likewise.
+    @Optional() private readonly shopChoices?: ShopChoiceService,
   ) {}
 
   /** Time-window auto-flags — 'what's on fire' (Ch 14). */
@@ -174,6 +177,7 @@ export class MonitorService {
     }
     flags.push(...this.bagsWaiting());
     flags.push(...this.cargoAfterShift());
+    flags.push(...this.shopsFoundShut());
     for (const p of this.parcels.list()) {
       if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });
     }
@@ -257,6 +261,21 @@ export class MonitorService {
       flags.push({ type: 'Cargo_After_Shift', subject: badge ?? did, detail: `${name} ended their day ${hours ? `${hours}h` : `${Math.round(minutes)} min`} ago with ${held}`, ageHours: hours });
     }
     return flags;
+  }
+
+  /** 2026-11-06 — a shop a driver found shut in the last day, though it had not said it was closed: one flag per shop. */
+  private shopsFoundShut(now: number = Date.now()): PudoFlag[] {
+    const byShop = new Map<string, { name: string; at: string; parcels: number; to?: string }>();
+    for (const r of this.shopChoices?.shutReports(now) ?? []) {
+      const was = byShop.get(r.did);
+      if (!was || r.at > was.at) byShop.set(r.did, { name: r.name, at: r.at, parcels: r.parcels, ...(r.to ? { to: r.to } : {}) });
+    }
+    return [...byShop.values()].map((s) => ({
+      type: 'Shop_Found_Shut' as const,
+      subject: s.name,
+      detail: `A driver found it shut at ${s.at.slice(11, 16)} UTC with ${s.parcels} parcel${s.parcels === 1 ? '' : 's'} for it${s.to ? `; they went to ${s.to}` : ', its buyers choosing another shop'}`,
+      ageHours: Math.floor(hoursSince(s.at)),
+    }));
   }
 
   private bagsWaiting(): PudoFlag[] {

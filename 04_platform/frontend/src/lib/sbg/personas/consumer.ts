@@ -70,6 +70,9 @@ export function createConsumerApi(sbg: SbgClient) {
      * time, "someone else will" opens a nomination, "I do not want it" gives up the claim, and "I never
      * ordered this" raises it with whoever sent it — which is emphatically NOT giving it up.
      */
+    /** 2026-11-06 — its pickup shop closed: the receiver chooses one of the shops the driver with it picked. */
+    choosePickupShop: (id: string, shopDid: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/pickup-shop', { params: { path: { id } }, body: { shopDid } })),
+
     respondToNotice: (id: string, choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine', note?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/collection-response', { params: { path: { id } }, body: { choice, note } })),
 

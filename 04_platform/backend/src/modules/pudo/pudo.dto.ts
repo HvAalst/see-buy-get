@@ -1567,6 +1567,17 @@ export class EntityInsuranceDto {
  * about a parcel. The note is optional and never required — demanding an explanation before somebody may
  * tell you they are ill is how you get silence instead.
  */
+/** 2026-11-06 — a driver's pick of open shops near a closed one, for its bag; or the door found shut. */
+export class ShopChoiceAskDto {
+  @ApiProperty({ type: [String] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(3) @IsString({ each: true }) @MaxLength(120, { each: true }) shopDids!: string[];
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() shut?: boolean;
+}
+
+/** 2026-11-06 — a buyer's choice of the shops the driver with their parcel picked. */
+export class PickupShopChoiceDto {
+  @ApiProperty() @IsString() @MaxLength(120) shopDid!: string;
+}
+
 export class CollectionResponseDto {
   @IsIn(['coming', 'proxy', 'relinquish', 'not-mine']) choice!: 'coming' | 'proxy' | 'relinquish' | 'not-mine';
   @IsOptional() @IsString() note?: string;

@@ -115,6 +115,13 @@ export class MdpService {
   /** 2026-11-06 — the parcel's plan, asked at every hand-over (RoutePlanService registers it: it reads routing, above this). */
   private routeKeeper?: RouteKeeper;
 
+  /** 2026-11-06 — a bag for a closed shop, handed in at one of its driver's picks (ShopChoiceService registers it). */
+  private shopChoice?: { may: (code: string, agentDid: string) => boolean; settle: (code: string, agentDid: string, now?: number) => void };
+
+  registerShopChoice(c: { may: (code: string, agentDid: string) => boolean; settle: (code: string, agentDid: string, now?: number) => void }): void {
+    this.shopChoice = c;
+  }
+
   registerRouteKeeper(k: RouteKeeper): void {
     this.routeKeeper = k;
   }
@@ -1165,7 +1172,9 @@ export class MdpService {
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     for (const id of tote.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
     const driverDid = tote.claimedBy; // REP2 — the driver who carried the bag here, captured before empty() clears it
-    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
+    // 2026-11-06 — addressed to a shop that was closed, it may be handed in at one of its driver's picks (ShopChoiceService).
+    const redirected = Boolean(tote.destinationNodeId && tote.destinationNodeId !== agentDid && this.shopChoice?.may(code, agentDid));
+    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid && !redirected) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
     if (!this.parcels.shelfTakes(agentDid, tote.parcels)) {
       const holds = tote.parcels.length === 1 ? '1 parcel' : `${tote.parcels.length} parcels`;
       throw new GlosError('SHELF_FULL', `Bag ${code} holds ${holds} and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`, { parcels: tote.parcels.length });
@@ -1175,6 +1184,8 @@ export class MdpService {
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
     const keepReceipt = this.closures.checkReceipt(tote, { did: agentDid, name: byName?.trim() || agent.shopName, place: agent.shopName }, agentDid, receipt);
     keepReceipt({ at: new Date().toISOString() });
+    // Everything that could refuse it has: the bag, and its parcels, this shop's now.
+    if (redirected) this.shopChoice!.settle(code, agentDid);
     const delivered: string[] = [];
     const shelved: Array<{ parcelId: string; slot: string }> = [];
     for (const parcelId of [...tote.parcels]) {

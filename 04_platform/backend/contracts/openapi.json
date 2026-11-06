@@ -24535,6 +24535,83 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/bags/{code}/shops-near": {
+      "get": {
+        "operationId": "Sbg.bagShopsNear",
+        "summary": "",
+        "description": "2026-11-06 — A BAG ON BOARD FOR A SHOP THAT IS CLOSED (the owner, point 6): the open shops near it with room for the whole\nbag, nearest first — for the driver carrying it, who picks the ones they can take it to.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/bags/{code}/shop-choice": {
+      "post": {
+        "operationId": "Sbg.bagShopChoice",
+        "summary": "",
+        "description": "…the driver's pick (one to three), its buyers asked which they will collect from; or the door found shut, said.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopChoiceAskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/claims": {
       "get": {
         "operationId": "Sbg.driverClaims",
@@ -25550,11 +25627,41 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/pickup-shop": {
+      "post": {
+        "operationId": "Identity.choosePickupShop",
+        "summary": "",
+        "description": "The receiver answers the final notice — the four things a person can do about a closed window.\n\nOn their OWN parcel only, and 404 otherwise: this is the one screen in the network where somebody\ncan give up a claim to goods, so it must not be possible to do it to somebody else's.\n\nReturns their twin rather than a bare acknowledgement, because three of the four choices change what\nthe app should be showing them and a screen that has to guess will guess wrong.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PickupShopChoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}/collection-response": {
       "post": {
         "operationId": "Identity.collectionResponse",
-        "summary": "",
-        "description": "The receiver answers the final notice — the four things a person can do about a closed window.\n\nOn their OWN parcel only, and 404 otherwise: this is the one screen in the network where somebody\ncan give up a claim to goods, so it must not be possible to do it to somebody else's.\n\nReturns their twin rather than a bare acknowledgement, because three of the four choices change what\nthe app should be showing them and a screen that has to guess will guess wrong.",
         "parameters": [
           {
             "name": "id",
@@ -69659,6 +69766,24 @@
           "status"
         ]
       },
+      "ShopChoiceAskDto": {
+        "type": "object",
+        "properties": {
+          "shopDids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          "shut": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "shopDids"
+        ]
+      },
       "DeclineOfferDto": {
         "type": "object",
         "properties": {
@@ -70197,6 +70322,18 @@
         },
         "required": [
           "photoRef"
+        ]
+      },
+      "PickupShopChoiceDto": {
+        "type": "object",
+        "properties": {
+          "shopDid": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "shopDid"
         ]
       },
       "CollectionResponseDto": {

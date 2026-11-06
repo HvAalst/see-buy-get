@@ -1819,6 +1819,39 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** 2026-11-06 — the open shops near a closed one this bag goes to (the owner, point 6). */
+  const shopsNear = useCallback(
+    async (code: string): Promise<{ closed: { did: string; name: string; marked: boolean }; shops: Array<{ did: string; name: string; km: number }> } | null> => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return null;
+      const r = await client.api.bagShopsNear(did, code);
+      if (r.error) {
+        fail(r.error);
+        return null;
+      }
+      return narrow<{ closed: { did: string; name: string; marked: boolean }; shops: Array<{ did: string; name: string; km: number }> }>(r.data) ?? null;
+    },
+    [client, fail],
+  );
+
+  /** …the driver's pick, its buyers asked (or the door found shut, said): the bag then says where most chose. */
+  const askBuyers = useCallback(
+    async (code: string, shopDids: string[], shut: boolean): Promise<boolean> => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return false;
+      let ok = false;
+      await run(`shop-choice:${code}`, async () => {
+        const r = await client.api.bagShopChoice(did, code, shopDids, shut);
+        if (r.error) return fail(r.error);
+        ok = true;
+        pushToast({ tone: 'ok', icon: 'send', title: t('driver.shopClosed.asked'), detail: t('driver.shopClosed.askedDetail') });
+        await refresh();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, refresh, t],
+  );
+
   /** Round 37 — a bag the driver takes or carries, not as it was closed: held where it is, operations told. */
   const reportBagTamper = useCallback(
     async (ref: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }): Promise<boolean> => {
@@ -2294,6 +2327,8 @@ export function useDriverApp() {
       loadBag,
       takeBag,
       reportBagTamper,
+      shopsNear,
+      askBuyers,
       uploadPhoto,
       loadRoadPhoto,
       pickupFreight,

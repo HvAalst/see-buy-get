@@ -66,6 +66,10 @@ const KIND_ICON: Record<string, IconName> = {
   parcel_late: 'clock',
   // 2026-11-06 — a parcel its people were told was held up, on the road again.
   parcel_moving: 'truck',
+  // 2026-11-06 — its pickup shop closed: choose another; it went to another; a shop found shut by a driver.
+  parcel_choose_shop: 'home',
+  parcel_shop_changed: 'home',
+  shop_found_shut: 'warning',
   // A defect on a vehicle: reported to the office, decided to the driver.
   vehicle_defect: 'warning',
   vehicle_service: 'warning',

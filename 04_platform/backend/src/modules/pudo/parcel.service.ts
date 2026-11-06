@@ -1284,10 +1284,13 @@ export class ParcelService implements OnApplicationBootstrap {
     // parcel's own, nor the one of somebody named to collect it. Asked of the account that is READING.
     const heldUntil = this.persons?.codesHeldUntil(who.personDid);
     const holding = this.holdingOwed(p);
+    // 2026-11-06 — its shop closed: the shops the driver with it picked, to choose from (its receiver only).
+    const shopChoice = relation === 'received' ? this.shopChoiceView?.(p.parcelId) : undefined;
     const view: ConsumerParcelView = {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
       relation,
+      ...(shopChoice ? { shopChoice } : {}),
       direction: p.direction,
       status: p.status,
       originZone: p.originZone,
@@ -4054,6 +4057,24 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Its plan was changed in place by its keeper: kept. */
   notePlan(parcel: Parcel): void {
     this.persist(parcel);
+  }
+
+  /**
+   * 2026-11-06 — ITS PICKUP SHOP CHANGED, its own being closed (the owner, point 6): the shop its buyers' choosing settled on.
+   * The step kept on its plan with why — before it arrives there, so it arrives where it was said to go.
+   */
+  changePickupShop(parcelId: string, toDid: string, by: string): void {
+    const parcel = this.get(parcelId);
+    this.routeKeeper?.leave(parcel, toDid, by, { reason: 'shop_closed' });
+    parcel.destAgentDid = toDid;
+    this.persist(parcel);
+  }
+
+  /** 2026-11-06 — a buyer's parcel says the choice of shop open for it (ShopChoiceService registers it: it is above this). */
+  private shopChoiceView?: (parcelId: string) => ConsumerParcelView['shopChoice'];
+
+  registerShopChoiceView(fn: (parcelId: string) => ConsumerParcelView['shopChoice']): void {
+    this.shopChoiceView = fn;
   }
 
   /** 2026-11-05 — the bag at a shop already filling for where this parcel goes next (BagPlanService registers it). */

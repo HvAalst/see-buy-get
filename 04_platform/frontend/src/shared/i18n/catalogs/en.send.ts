@@ -69,6 +69,12 @@ export const enSend = {
   // that the parcel is being taken away — because it is not, and a person who believes it is has no
   // reason left to answer at all.
   'send.notice.title': 'Your collection time has run out',
+  'send.shopChoice.title': '{shop} is closed — where will you collect it?',
+  'send.shopChoice.lede': 'The driver with your parcel can take it to one of these shops. Choose one: the bag it is in goes to the shop most of its buyers choose, until the driver gets there.',
+  'send.shopChoice.km': '{km} km from {shop}',
+  'send.shopChoice.chosen': 'Your choice is kept. You are told where it is when it is ready to collect.',
+  'send.shopChoice.settledTitle': 'It went to {shop}',
+  'send.shopChoice.settled': 'The bag went to {shop}. You are told when it is ready to collect there.',
   'send.notice.lede': 'Your parcel is still at {zone} and still yours. Tell us what you would like to do.',
   'send.notice.ledeCost': 'Your parcel is still at {zone} and still yours. Holding it has cost {amount} so far — tell us what you would like to do.',
   'send.notice.coming': 'I am coming — hold it for me',

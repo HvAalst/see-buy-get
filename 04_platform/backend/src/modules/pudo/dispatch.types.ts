@@ -1865,6 +1865,10 @@ export class Claimable {
   tempBand?: TempBand;
   lastTempC?: number;
   tempBreached?: boolean;
+  /** 2026-11-06 — a bag on board going to a shop: which, and whether it is closed (point 6: find another for it). */
+  destShop?: { did: string; name: string; closed: boolean };
+  /** …and, once its buyers were asked, the shops picked, where most chose, how many answered. */
+  shopChoice?: { picks: Array<{ did: string; name: string; km: number }>; leading: { did: string; name: string; chose: number }; answered: number; of: number; shut?: boolean; settled?: { did: string; name: string } };
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

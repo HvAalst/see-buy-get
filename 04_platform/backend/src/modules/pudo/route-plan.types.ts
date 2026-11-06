@@ -11,7 +11,7 @@ import type { Parcel } from './pudo.types';
 export const HUMAN_OFF_PLAN_REASONS = ['no_transport', 'hub_full', 'faster', 'other'] as const;
 // 2026-11-06 — 'done_offline': handed over or bagged on a phone with no signal, and heard of afterwards — the parcel had
 // gone by then, so it is recorded, never refused (pudo.controller offPlanSaid; the outbox's Sbg-Queued-At).
-export const OFF_PLAN_REASONS = [...HUMAN_OFF_PLAN_REASONS, 'room', 'arrived_elsewhere', 'network_changed', 'priced_other_way', 'done_offline'] as const;
+export const OFF_PLAN_REASONS = [...HUMAN_OFF_PLAN_REASONS, 'room', 'arrived_elsewhere', 'network_changed', 'priced_other_way', 'done_offline', 'shop_closed'] as const;
 export type OffPlanReason = (typeof OFF_PLAN_REASONS)[number];
 export type HumanOffPlanReason = (typeof HUMAN_OFF_PLAN_REASONS)[number];
 
@@ -51,7 +51,7 @@ export class OffPlanStep {
 /** What a reasoned hand-over off the plan carries: one of the four reasons, and a few words for "other". */
 export interface OffPlanSaid {
   /** Said by whoever did it — or, done on a phone with no signal, 'done_offline' (nobody could be asked then). */
-  reason: HumanOffPlanReason | 'done_offline';
+  reason: HumanOffPlanReason | 'done_offline' | 'shop_closed';
   note?: string;
 }
 

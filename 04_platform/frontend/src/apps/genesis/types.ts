@@ -333,6 +333,8 @@ export interface ConsumerParcelView {
   holdingCurrency?: string;
   extensionsUsed?: number;
   receiverResponse?: { choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine'; at: string; note?: string };
+  /** 2026-11-06 — its pickup shop closed: the shops the driver with it can take it to, to choose from; and where it went. */
+  shopChoice?: { closed: string; picks: Array<{ did: string; name: string; km: number }>; chosen?: string; settled?: { did: string; name: string } };
   collectProxy?: { name: string; code?: string };
   relinquishedAt?: string;
   /**
