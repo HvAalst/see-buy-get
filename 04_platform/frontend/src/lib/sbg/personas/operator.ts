@@ -46,6 +46,11 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/lost' as never, { params: { path: { id: parcelId } }, body } as never) as never),
     /** The trail: a load's or a bag's anchored steps, each checked now against the chain. */
     trail: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/trail/{ref}', { params: { path: { ref } } })),
+    /** 2026-11-06 — a Bags_Waiting case's bags; the drivers an offer of one would reach; and the offer to the one chosen. */
+    caseBags: (caseId: string) => sbg.request((c) => c.GET('/v1/sbg/flag-cases/{caseId}/bags', { params: { path: { caseId } } })),
+    bagDrivers: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}/drivers', { params: { path: { code } } })),
+    offerBag: (code: string, driverDid: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/offer', { params: { path: { code } }, body: { driverDid, ...(by ? { by } : {}) } })),
     /** What staff opened: each record a member of staff read by its name or number, who, when, how many times. */
     staffReads: (query: { by?: string; record?: string }) => sbg.request((c) => c.GET('/v1/sbg/staff-reads', { params: { query } })),
     /**

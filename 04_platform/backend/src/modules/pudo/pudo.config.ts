@@ -444,6 +444,9 @@ export const BAGS_WAITING_H = 6;
 export const WIDE_OFFER_KM = 25;
 export const WIDE_OFFER_CAP = 20;
 export const WIDE_OFFER_SWEEP_MS = 15 * 60 * 1000;
+// 2026-11-06 — how often a parcel waiting at a shop or a hub is asked whether, leaving now, it could still be ready by the
+// time it was promised (RoutePlanService.sweepStuck).
+export const STUCK_SWEEP_MS = 15 * 60 * 1000;
 export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).

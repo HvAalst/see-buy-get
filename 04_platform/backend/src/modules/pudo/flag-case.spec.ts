@@ -26,6 +26,14 @@ describe('flags as cases', () => {
     return svc;
   };
 
+  it('keeps a note for an act done elsewhere on the live case of its kind and subject — and none where nothing is live (2026-11-06)', () => {
+    const cases = make();
+    cases.sync(T0, [stagnant()]);
+    const noted = cases.noteFor('Stagnant_Inventory', 'PUD-1', amina, 'Offered bag BAG-1 to Kamau, 4 km away', T0 + H)!;
+    expect(noted.history.map((e) => `${e.act}:${e.by ?? ''}:${e.text ?? ''}`)).toContain('note:Amina O:Offered bag BAG-1 to Kamau, 4 km away');
+    expect(cases.noteFor('Ghost_Bus', 'PUD-9', amina, 'nothing to keep it on', T0 + H)).toBeUndefined();
+  });
+
   it('opens one case a flag, with its severity, and keeps its words current while the flag is there', () => {
     const cases = make();
     cases.sync(T0, [stagnant(), ghost]);

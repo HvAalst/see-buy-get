@@ -134,7 +134,10 @@ export class StaffCountryResolvers implements OnModuleInit {
     const bag = this.toteCountries(subject);
     if (bag) return bag;
     const shop = this.agents.list().find((a) => a.shopName === subject);
-    return shop ? some(shop.country) : null;
+    if (shop) return some(shop.country);
+    // 2026-11-06 — a store's own place drivers collect from, named by a Bags_Waiting case: its store's countries.
+    const dock = this.vendors.list().find((v) => v.collection?.label === subject);
+    return dock ? this.vendorCountries(dock.vendorId) : null;
   }
 
   /** A fleet's country: its own, or its company's. */

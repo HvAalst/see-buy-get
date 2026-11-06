@@ -29,6 +29,7 @@ import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf, planVsActual } from './parcel.service';
+import { BagOfferService } from './bag-offer.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -1272,6 +1273,40 @@ describe('PUDO Light', () => {
     expect(dispatch.offerBagTo(other.did, bag2.code)!.ref).toBe(bag2.code);
   });
 
+  it('staff offer a waiting bag to a driver they choose, from its case: the drivers it could reach, their offer, a note (2026-11-06)', () => {
+    const origin = onboardAgent('Staff Offer Shop', 'NorthTown', 50);
+    onboardAgent('Staff Offer Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'staff-offer', originZone: 'NorthTown', destZone: 'SouthTown' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'STO-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, origin.did, 'STO-1');
+    mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
+    totes.requireByCode(bag.code).sealedAt = new Date(Date.now() - 8 * 3_600_000).toISOString();
+    const near = coupleTipper('stonear', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(near.did, { lat: origin.location.lat + 0.05, lng: origin.location.lng });
+    const far = coupleTipper('stofar', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(far.did, { lat: origin.location.lat + 0.3, lng: origin.location.lng });
+    coupleTipper('stonowhere', { min: 0.8, max: 1.5 }); // no position: cannot be told how far it is
+    const told: Array<{ did: string; link?: string }> = [];
+    const notes: string[] = [];
+    const cases = {
+      get: () => ({ kind: 'Bags_Waiting', subject: 'Staff Offer Shop' }),
+      noteFor: (_kind: string, subject: string, staff: { name: string }, text: string) => void notes.push(`${subject} · ${staff.name}: ${text}`),
+    };
+    const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async (did: string, n: { link?: string }) => void told.push({ did, link: n.link }) } as never);
+    // The case's bags: the one closed eight hours ago.
+    expect(svc.bagsOf('case_1')).toEqual({ place: 'Staff Offer Shop', bags: [expect.objectContaining({ code: bag.code, destination: 'SouthTown', waitedHours: 8, claimed: false, offeredWide: false })] });
+    // The drivers an offer would reach: the two with a position, nearest first.
+    expect(svc.drivers(bag.code).map((d) => d.driverDid)).toEqual([near.did, far.did]);
+    // Offered to the one chosen: their own offer, a notice that opens it, a note on the case.
+    const done = svc.offer(bag.code, far.did, { name: 'Amina O', key: 'opr_amina' });
+    expect(told).toEqual([{ did: far.did, link: `/?offer=${done.offerId}` }]);
+    expect(notes).toEqual([expect.stringMatching(new RegExp(`^Staff Offer Shop · Amina O: Offered bag ${bag.code} to stofar, \\d+(\\.\\d)? km away`))]);
+    // A driver an offer could not reach is refused, before anything is written.
+    expect(() => svc.offer(bag.code, 'did:glos:nobody', { name: 'Amina O', key: 'opr_amina' })).toThrow(/cannot take this bag now/);
+    expect(told).toHaveLength(1);
+  });
+
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
     const dest = onboardAgent('Dock Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'dock', originZone: 'NorthTown', destZone: 'SouthTown' });
@@ -2080,6 +2115,31 @@ describe('PUDO Light', () => {
       ((parcels as any).routeKeeper as { redirect: (p: unknown, to: string, why: string, by: string) => void }).redirect(parcels.get('MU14-A'), third.mdpId, 'room', 'system');
       expect(parcels.get('MU14-A').plan!.hops.map((h) => h.id)).toContain(third.mdpId);
       expect(said).toHaveLength(1);
+    });
+
+    it('says it will be late as soon as, leaving where it sits now, it could no longer be ready in time — once (2026-11-06)', () => {
+      const { take } = world('MU15');
+      take('MU15-A');
+      take('MU15-B');
+      const said: string[] = [];
+      events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => void said.push(e.payload.parcelId));
+      const keeper = (parcels as any).routeKeeper as { sweepStuck: (now?: number) => number };
+      // Still on time where it sits: nothing said, nothing written.
+      expect(keeper.sweepStuck()).toBe(0);
+      expect(parcels.get('MU15-A').plan!.lateTold).toBeUndefined();
+      // MU15-A has sat at its shop so long that, leaving now, it could not be ready until well past its promise.
+      parcels.get('MU15-A').plan!.pickupReadyAt = new Date(Date.now() - 3_600_000).toISOString();
+      expect(keeper.sweepStuck()).toBe(1);
+      expect(said).toEqual(['MU15-A']);
+      const plan = parcels.get('MU15-A').plan!;
+      expect(plan.lateTold).toBe(plan.expectedAt);
+      expect(Date.parse(plan.expectedAt!)).toBeGreaterThan(Date.now());
+      // Once: the next sweep says nothing more of it.
+      expect(keeper.sweepStuck()).toBe(0);
+      expect(said).toEqual(['MU15-A']);
+      // The one still on time: nothing said of it, and nothing written on it.
+      expect(parcels.get('MU15-B').plan!.expectedAt).toBeUndefined();
+      expect(parcels.get('MU15-B').plan!.lateTold).toBeUndefined();
     });
 
     it('is sorted on by its plan; a stop no longer to be used is replaced by the hub’s choice, with why', () => {

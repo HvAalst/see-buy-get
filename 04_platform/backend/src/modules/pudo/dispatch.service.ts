@@ -47,7 +47,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { handedAt } from './observed-at';
-import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, PAID_DIRECT_ASK_H, UNPAID_SHOWN_AFTER_D, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, MARKET_SUPPLY_STALE_MIN, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, PAID_DIRECT_ASK_H, UNPAID_SHOWN_AFTER_D, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -1145,8 +1145,44 @@ export class DispatchService {
    * the same refusals as every offer, not snoozed, and above the floor they set for being woken. Null where not.
    */
   offerBagTo(driverDid: string, code: string, now: number = Date.now()): Offer | null {
+    const ok = this.bagOfferable(driverDid, code, now);
+    if (!ok) return null;
+    const { load, vehicle, at, profile } = ok;
+    const km = this.router.roadKm(at, load.pickupLocation);
+    return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(at, load.pickupLocation), ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: at }, load), now });
+  }
+
+  /**
+   * 2026-11-06 — WHO COULD TAKE THIS BAG NOW, for staff choosing one (a Bags_Waiting case; the owner: "go ahead"): the
+   * working drivers with a position from the last MARKET_SUPPLY_STALE_MIN, within their hours, whom an offer of it would
+   * reach (bagOfferable) — nearest first, fifteen at most.
+   */
+  driversForBag(code: string, now: number = Date.now()): Array<{ driverDid: string; name: string; km: number; vehicleClass?: string }> {
+    const staleMs = MARKET_SUPPLY_STALE_MIN * 60_000;
+    const out: Array<{ driverDid: string; name: string; km: number; vehicleClass?: string }> = [];
+    for (const a of this.fleet.list({ status: 'active' })) {
+      if (!a.location || !a.lastLocatedAt || now - Date.parse(a.lastLocatedAt) > staleMs) continue;
+      const ok = this.bagOfferable(a.driverDid, code, now);
+      if (!ok) continue;
+      let name = a.driverDid;
+      try {
+        name = this.drivers.get(a.driverDid).displayName ?? name;
+      } catch {
+        // a driver the register no longer has: named by their id
+      }
+      out.push({ driverDid: a.driverDid, name, km: Math.round(this.router.roadKm(ok.at, ok.load.pickupLocation) * 10) / 10, ...(ok.vehicle.vehicleClass ? { vehicleClass: ok.vehicle.vehicleClass } : {}) });
+    }
+    return out.sort((x, y) => x.km - y.km).slice(0, 15);
+  }
+
+  /**
+   * Whether an offer of this bag would reach this driver now, and what it is priced on: a bag still offered to everybody,
+   * a vehicle that carries it with room aboard, the same refusals as every offer, not snoozed, within their hours, a
+   * position to say how far it is, and above the floor they set for being woken.
+   */
+  private bagOfferable(driverDid: string, code: string, now: number): { load: Claimable; vehicle: NonNullable<ReturnType<FleetService['vehicleForDriver']>>; at: GeoPoint; profile: ReturnType<DispatchService['pricingProfile']> } | null {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle || !this.fleet.acceptingWork(driverDid, now)) return null;
+    if (!vehicle || !this.fleet.acceptingWork(driverDid, now) || this.fleet.overHours(driverDid, now)) return null;
     const load = this.availableLoads().find((l) => l.kind === 'tote' && l.ref === code);
     if (!load) return null;
     if (!this.vehicleCanCarry(vehicle, load, this.remainingCapacity(driverDid), this.remainingTotes(driverDid))) return null;
@@ -1159,8 +1195,7 @@ export class DispatchService {
       const earn = this.expectedEarn(driverDid, load, undefined, profile.ratePerKm);
       if (earn == null || earn < floor) return null;
     }
-    const km = this.router.roadKm(at, load.pickupLocation);
-    return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(at, load.pickupLocation), ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: at }, load), now });
+    return { load, vehicle, at, profile };
   }
 
   /** The driver's standing "do not wake me below this", or undefined. Unknown driver → no floor: a missing

@@ -1,6 +1,12 @@
 import { IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /** Who is acting, typed: only on a laptop's shared staff key, where a name is all there is to tell two people apart. */
+/** 2026-11-06 — offer a waiting bag straight to the driver staff chose. */
+export class BagOfferDto {
+  @IsString() @MaxLength(200) driverDid!: string;
+  @IsOptional() @IsString() @MaxLength(80) by?: string;
+}
+
 export class CaseStaffDto {
   @IsOptional() @IsString() @MaxLength(80) by?: string;
 }

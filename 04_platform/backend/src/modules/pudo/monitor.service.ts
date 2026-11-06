@@ -177,6 +177,26 @@ export class MonitorService {
    * in, so it cannot open another. One flag a place: how many, the oldest one's wait, and its corner. A bag held for room
    * at a full hub is not here: its holder was told, and it goes on by itself when there is room (MdpService.letWaitingGo).
    */
+  /**
+   * 2026-11-06 — THE CLOSED BAGS AT A PLACE, by the name its Bags_Waiting case carries: a shop's, or a store's own place's.
+   * Each with where it goes, how long it has waited, whether a driver is coming for it, and whether it was offered further
+   * away already. The oldest first.
+   */
+  bagsAt(place: string, now: number = Date.now()): Array<{ code: string; destination?: string; waitedHours: number; claimed: boolean; offeredWide: boolean }> {
+    const ids = new Set<string>([
+      ...this.agents.list().filter((a) => a.shopName === place).map((a) => a.did),
+      ...(this.vendors?.list() ?? []).filter((v) => v.collection?.label === place).map((v) => v.did),
+    ]);
+    return this.totes
+      .list()
+      .filter((t) => ids.has(t.locationId) && (t.status === 'available' || t.status === 'claimed') && !t.held)
+      .map((t) => {
+        const since = t.sealedAt ?? t.availableAt;
+        return { code: t.code, ...(t.destinationLabel ? { destination: t.destinationLabel } : {}), waitedHours: since ? Math.floor((now - Date.parse(since)) / 3_600_000) : 0, claimed: t.status === 'claimed', offeredWide: Boolean(t.offeredWideAt) };
+      })
+      .sort((a, b) => b.waitedHours - a.waitedHours);
+  }
+
   private bagsWaiting(): PudoFlag[] {
     const at = new Map<string, number[]>();
     for (const t of this.totes.list()) {

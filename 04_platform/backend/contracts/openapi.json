@@ -30131,6 +30131,82 @@
         }
       }
     },
+    "/v1/sbg/flag-cases/{caseId}/bags": {
+      "get": {
+        "operationId": "FlagCase.caseBags",
+        "summary": "",
+        "description": "2026-11-06 — a Bags_Waiting case's bags: where each goes, how long it has waited, and whether a driver is coming.",
+        "parameters": [
+          {
+            "name": "caseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/totes/{code}/drivers": {
+      "get": {
+        "operationId": "FlagCase.bagDrivers",
+        "summary": "",
+        "description": "The working drivers an offer of this bag would reach now, nearest first.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/totes/{code}/offer": {
+      "post": {
+        "operationId": "FlagCase.offerBag",
+        "summary": "",
+        "description": "Offer the bag straight to the driver staff chose: their own offer, a notice that opens it, a note on its case.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BagOfferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/flag-cases": {
       "get": {
         "operationId": "FlagCase.list",
@@ -74113,6 +74189,22 @@
         },
         "required": [
           "travels"
+        ]
+      },
+      "BagOfferDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "driverDid"
         ]
       },
       "CaseEvent": {

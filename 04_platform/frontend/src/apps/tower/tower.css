@@ -1223,3 +1223,20 @@
   align-items: center;
   margin-inline-end: 8px;
 }
+
+/* 2026-11-06 — a Bags_Waiting case: the drivers an offer of a bag would reach, each with its button. */
+.twr-bagdrivers {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.twr-bagdriver {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: var(--c-fs-sm);
+  color: var(--tx2);
+}

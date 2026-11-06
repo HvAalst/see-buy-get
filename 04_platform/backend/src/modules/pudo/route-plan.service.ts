@@ -1,8 +1,8 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
-import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H } from './pudo.config';
+import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H, STUCK_SWEEP_MS } from './pudo.config';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { JourneyPlan, Mdp, Parcel } from './pudo.types';
@@ -43,7 +43,7 @@ export function nextStopOf(parcel: Parcel): PlanHop | undefined {
  * and the plan made again keeps its own estimate beside it (`expectedAt`).
  */
 @Injectable()
-export class RoutePlanService implements RouteKeeper {
+export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RoutePlanService.name);
 
   constructor(
@@ -56,6 +56,61 @@ export class RoutePlanService implements RouteKeeper {
     // Registered rather than asked for: routing reads the hubs, so the parcel and hub services cannot import it.
     parcels.registerRouteKeeper(this);
     mdps.registerRouteKeeper(this);
+  }
+
+  /** 2026-11-06 — the sweep asking parcels at a stop whether they can still keep their promise. Self-unref'd. */
+  private stuckTimer?: ReturnType<typeof setInterval>;
+
+  onModuleInit(): void {
+    this.stuckTimer = setInterval(() => {
+      try {
+        this.sweepStuck();
+      } catch (err) {
+        this.logger.warn(`stuck sweep failed: ${(err as Error).message}`);
+      }
+    }, STUCK_SWEEP_MS);
+    this.stuckTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.stuckTimer) clearInterval(this.stuckTimer);
+  }
+
+  /**
+   * 2026-11-06 — A PARCEL SITTING TOO LONG AT A STOP (the owner: "go ahead"). Its people were told it would be late only
+   * when its plan was made again, or once the time promised had passed. Now each parcel waiting at a shop or a hub is asked,
+   * every STUCK_SWEEP_MS: leaving here now, when would it be ready? Where that is already EXPECTED_LATE_TELL_H past the
+   * time it was promised, the promise cannot be kept, and its people are told at once (sayIfLate) — once, and again only
+   * if it slips further. Nothing is written for a parcel still on time. Answers how many were told.
+   */
+  sweepStuck(now: number = Date.now()): number {
+    let told = 0;
+    for (const status of ['At_PUDO', 'At_MDP'] as const) {
+      for (const parcel of this.parcels.list({ status })) {
+        const plan = this.planOf(parcel);
+        if (!plan || !parcel.destAgentDid) continue;
+        const here = plan.hops[plan.at!];
+        if (!here || here.type === 'dock' || plan.at === plan.hops.length - 1) continue;
+        // Told of an expected time still to come: a plan made again says more, if it slips.
+        if (plan.lateTold && Date.parse(plan.lateTold) > now) continue;
+        let readyAt: number;
+        try {
+          const hub = here.type === 'mdp' ? this.routing.hubEnd(here.id) : undefined;
+          readyAt = Date.parse(this.routing.planJourney({ ...(hub ? { from: hub } : { originAgentDid: here.id }), destAgentDid: parcel.destAgentDid, startAt: now }).pickupReadyAt);
+        } catch {
+          continue; // no route from here to read: nothing to say
+        }
+        if (readyAt < Date.parse(plan.pickupReadyAt) + EXPECTED_LATE_TELL_H * 3_600_000) continue;
+        const before = plan.lateTold;
+        plan.expectedAt = new Date(readyAt).toISOString();
+        this.sayIfLate(parcel, plan);
+        if (plan.lateTold !== before) {
+          told += 1;
+          this.parcels.notePlan(parcel);
+        }
+      }
+    }
+    return told;
   }
 
   nextStop(parcel: Parcel): PlanHop | undefined {

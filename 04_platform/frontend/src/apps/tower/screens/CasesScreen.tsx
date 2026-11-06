@@ -6,6 +6,7 @@ import { ConsoleDetail } from '../ConsoleDetail';
 import { ConsolePick } from '../ConsolePick';
 import { closedLine, doneBlocker, eventLine, HOLD_KIND, kindCountLine, kindWords, openFor, ownerLine, RECHECK_CHOICES, severityTone, type CaseListName, type FlagCaseRow } from '../cases';
 import { TamperPanel } from './TamperPanel';
+import { BagsWaitingPanel } from './BagsWaitingPanel';
 import { lostLine, lostReasonBlocker, SEARCH_KIND, type LostParcelRow } from '../lost';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -268,6 +269,8 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
       </section>
 
       {hold ? <TamperPanel subject={row.subject} live={live} state={state} actions={actions} onReleased={onClose} /> : null}
+      {/* 2026-11-06 — closed bags waiting long: offered straight to a driver staff choose. */}
+      {live && row.kind === 'Bags_Waiting' ? <BagsWaitingPanel caseId={row.caseId} state={state} actions={actions} /> : null}
 
       {live && search && declaring ? (
         <section class="cons__panel">

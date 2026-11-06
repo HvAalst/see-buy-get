@@ -252,6 +252,15 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
     return live ? this.close(live, staff, reason, MAX_RECHECK_H, now) : undefined;
   }
 
+  /**
+   * 2026-11-06 — a note on the live case for this kind and subject, where there is one: an act done elsewhere (a bag offered
+   * to a driver from its case) kept in the case's own history, in the name of who did it. Nothing where none is live.
+   */
+  noteFor(kind: FlagKind, subject: string, staff: Signer, text: string, now: number = Date.now()): FlagCase | undefined {
+    const live = [...this.cases.values()].find((c) => c.key === `${kind}:${subject}` && (c.state === 'open' || c.state === 'taken'));
+    return live ? this.note(live.caseId, staff, text, now) : undefined;
+  }
+
   get(caseId: string): FlagCase {
     const c = this.cases.get(caseId);
     if (!c) throw new GlosError('NOT_FOUND', 'No such case');

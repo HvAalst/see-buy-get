@@ -5,8 +5,9 @@ import { EVERY_COUNTRY, reaches } from '../../foundation/auth/staff-countries';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
-import { CaseDoneDto, CaseNoteDto, CaseStaffDto } from './flag-case.dto';
+import { BagOfferDto, CaseDoneDto, CaseNoteDto, CaseStaffDto } from './flag-case.dto';
 import { FlagCaseService } from './flag-case.service';
+import { BagOfferService } from './bag-offer.service';
 import { FlagCase, FlagCaseList } from './flag-case.types';
 import { staffOf } from './staff-of';
 
@@ -19,7 +20,29 @@ export class FlagCaseController {
   constructor(
     private readonly cases: FlagCaseService,
     @Optional() private readonly countries?: StaffCountryRegistry,
+    @Optional() private readonly bags?: BagOfferService,
   ) {}
+
+  /** 2026-11-06 — a Bags_Waiting case's bags: where each goes, how long it has waited, and whether a driver is coming. */
+  @Roles('operator')
+  @Get('flag-cases/:caseId/bags')
+  caseBags(@Param('caseId') caseId: string) {
+    return this.bags!.bagsOf(caseId);
+  }
+
+  /** The working drivers an offer of this bag would reach now, nearest first. */
+  @Roles('operator')
+  @Get('totes/:code/drivers')
+  bagDrivers(@Param('code') code: string) {
+    return this.bags!.drivers(code);
+  }
+
+  /** Offer the bag straight to the driver staff chose: their own offer, a notice that opens it, a note on its case. */
+  @Roles('operator')
+  @Post('totes/:code/offer')
+  offerBag(@Param('code') code: string, @Body() dto: BagOfferDto, @Actor() actor: IntrospectionResult) {
+    return this.bags!.offer(code, dto.driverDid, staffOf(actor, dto.by));
+  }
 
   @Roles('operator')
   @Get('flag-cases')
