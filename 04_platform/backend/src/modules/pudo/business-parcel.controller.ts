@@ -12,6 +12,7 @@ import {
   BusinessCallOffDto,
   BusinessCallOffView,
   BusinessCollectFromDto,
+  BusinessCollectRoomDto,
   BusinessFillBagDto,
   BusinessOpenBagDto,
   BusinessSealBagDto,
@@ -83,6 +84,13 @@ export class BusinessParcelController {
   @Post('business/me/parcels/collect-from')
   collectFrom(@Body() dto: BusinessCollectFromDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
     return this.parcels.collectFrom(memberActor(this.businesses.requireMember(actor)), dto.siteId, dto.bays, dto.closedRoom);
+  }
+
+  /** 2026-11-06 — its room for bags there, said again; the place stays. */
+  @Roles('business')
+  @Post('business/me/parcels/collect-room')
+  collectRoom(@Body() dto: BusinessCollectRoomDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
+    return this.parcels.collectRoom(memberActor(this.businesses.requireMember(actor)), dto.bays, dto.closedRoom);
   }
 
   /** Stop collecting there. */

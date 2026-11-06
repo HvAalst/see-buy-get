@@ -191,6 +191,13 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /** 2026-11-06 — offered once more, to drivers further away, after waiting long for one near (NotificationDispatcher). */
+  markOfferedWide(code: string, at: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.offeredWideAt = at;
+    return this.save(tote);
+  }
+
   /** A driver claims an available bag (reserves it for pickup). */
   markClaimed(code: string, driverDid: string): Tote {
     const tote = this.requireByCode(code);

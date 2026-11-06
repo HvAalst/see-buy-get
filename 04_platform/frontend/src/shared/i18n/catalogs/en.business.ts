@@ -1739,6 +1739,7 @@ export const enBusiness = {
   'business.parcels.collectCorner': 'Closed bags you can keep in a corner',
   'business.parcels.collectCornerHint': 'Waiting there for a driver, in any free corner. None: each one stands where you work.',
   'business.parcels.dockCorner': '{waiting, plural, one {# closed bag waits} other {# closed bags wait}} there for a driver · your corner holds {corner}.',
+  'business.parcels.roomSave': 'Save room for bags',
   'business.parcels.collectSet': 'Collect from here',
   'business.parcels.collectAt': 'Drivers collect at {place}, in the {zone} area. You work on {bays, plural, one {# bag} other {# bags}} there at once.',
   'business.parcels.collectStop': 'Stop collecting here',

@@ -1679,6 +1679,7 @@ export const words: Record<string, string> = {
   "business.parcels.collectCorner": "Mifuko iliyofungwa unayoweza kuweka pembeni",
   "business.parcels.collectCornerHint": "Ikimsubiri dereva hapo, katika pembe yoyote iliyo wazi. Bila: kila mmoja hukaa unapofanyia kazi.",
   "business.parcels.dockCorner": "{waiting, plural, one {Mfuko # uliofungwa unasubiri} other {Mifuko # iliyofungwa inasubiri}} dereva hapo · pembe yako inashika {corner}.",
+  "business.parcels.roomSave": "Hifadhi nafasi ya mifuko",
   "business.parcels.collectSet": "Chukua kutoka hapa",
   "business.parcels.collectAt": "Madereva huchukua katika {place}, eneo la {zone}. Unafanyia kazi {bays, plural, one {mfuko #} other {mifuko #}} hapo kwa wakati mmoja.",
   "business.parcels.collectStop": "Acha kuchukua kutoka hapa",

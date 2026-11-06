@@ -41,6 +41,10 @@ interface HarnessOpts {
   onShelf?: unknown[];
   // what the dispatcher said to stores' systems, as [vendorId, event, payload]
   vendorCalls?: unknown[][];
+  /** 2026-11-06 — closed bags standing at their shops, for the sweep that offers long-waiting ones further away. */
+  waitingBags?: Array<Record<string, unknown>>;
+  /** …and the offer dispatch makes one driver for one of them (null: it cannot be theirs). */
+  offerBagTo?: (driverDid: string, code: string) => unknown;
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
   activeOffers?: () => unknown[];
@@ -90,7 +94,15 @@ function harness(opts: HarnessOpts) {
     // FP8 — nobody is over the shift limit unless a test says so.
     overHours: (driverDid: string) => (opts.overHours ?? []).includes(driverDid),
   } as unknown as FleetService;
-  const totes = { byCodeMaybe: (code: string) => opts.totes?.[code] } as unknown as ToteService;
+  const totes = {
+    byCodeMaybe: (code: string) => opts.totes?.[code],
+    list: () => opts.waitingBags ?? [],
+    markOfferedWide: (code: string, at: string) => {
+      const bag = (opts.waitingBags ?? []).find((t) => t.code === code);
+      if (bag) bag.offeredWideAt = at;
+      return bag;
+    },
+  } as unknown as ToteService;
   const mdps = {
     require: (id: string) => {
       const m = opts.mdps?.[id];
@@ -110,6 +122,7 @@ function harness(opts: HarnessOpts) {
       return mdp ? { loc: mdp.location, label: id } : null;
     },
     offerNear: () => (opts.offerNear ? opts.offerNear() : null),
+    offerBagTo: (driverDid: string, code: string) => (opts.offerBagTo ? opts.offerBagTo(driverDid, code) : null),
     // What scanning a bag aboard pays this driver, and in what money — their own company's.
     driverPayTerms: () => ({ bagLoadPay: 0.5, currency: 'KES' }),
     activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
@@ -1286,5 +1299,63 @@ describe('NotificationDispatcher — a shop with no place left is asked to make 
     const { events, notifications } = harness({});
     await events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid: 'mdp-1', reason: 'shelf' });
     expect(notifications.inboxFor('mdp-1')).toHaveLength(0);
+  });
+});
+
+/**
+ * 2026-11-06 — A CLOSED BAG NOBODY NEAR HAS TAKEN, OFFERED FURTHER AWAY (the owner: "go ahead"): after six hours, once, to
+ * working drivers within 25 km — not those near and heading its way, told as it closed — each opening their own offer.
+ */
+describe('NotificationDispatcher — a bag waiting long, offered further away', () => {
+  const HOUR = 3_600_000;
+  const shopAt = { lat: -1.28, lng: 36.82 };
+  const near = (dLat: number) => ({ lat: shopAt.lat + dLat, lng: shopAt.lng });
+  const driver = (did: string, dLat: number) => ({ driverDid: did, location: near(dLat), lastLocatedAt: new Date().toISOString() });
+  const bag = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ code: 'BAG-W1', status: 'available', locationId: 'did:glos:shop', destinationLabel: 'Kisumu', sealedAt: new Date(Date.now() - 7 * HOUR).toISOString(), ...over });
+  const run = (bags: Array<Record<string, unknown>>, heading: (did: string) => boolean = () => true) => {
+    const asked: string[] = [];
+    const h = harness({
+      agents: { 'did:glos:shop': { shopName: 'Kilima Shop', location: shopAt } },
+      // About 1 km (near, heading its way), about 16 km, and about 44 km away.
+      activeDrivers: [driver('d-near', 0.01), driver('d-far', 0.15), driver('d-too-far', 0.4)],
+      heading,
+      waitingBags: bags,
+      offerBagTo: (did: string, code: string) => {
+        asked.push(did);
+        return { offerId: `ofr_${did}`, ref: code };
+      },
+    });
+    return { ...h, asked };
+  };
+
+  it('offers it once to the drivers further away, each a notice that opens their own offer', async () => {
+    const waiting = bag();
+    const { dispatcher, notifications, asked } = run([waiting]);
+    expect(await dispatcher.sweepBagsWaiting()).toBe(1);
+    expect(asked).toEqual(['d-far']);
+    const [told] = notifications.inboxFor('d-far');
+    expect(told).toMatchObject({ kind: 'load_nearby', title: 'A bag is waiting for a driver', link: '/?offer=ofr_d-far' });
+    expect(told.body).toBe('A bag at Kilima Shop, heading to Kisumu, has waited 7 hours for a driver. It is 17 km from you: open it to see what it pays.');
+    expect(notifications.inboxFor('d-near')).toHaveLength(0); // told as it closed
+    expect(notifications.inboxFor('d-too-far')).toHaveLength(0);
+    // Once: the next sweep leaves it be.
+    expect(waiting.offeredWideAt).toBeDefined();
+    expect(await dispatcher.sweepBagsWaiting()).toBe(0);
+  });
+
+  it('reaches a driver near who is not heading its way — they were not told as it closed', async () => {
+    const { dispatcher, asked } = run([bag()], (did) => did !== 'd-near');
+    await dispatcher.sweepBagsWaiting();
+    expect(asked.sort()).toEqual(['d-far', 'd-near']);
+  });
+
+  it('leaves a bag closed only lately, one held for room at a hub, and one a driver has claimed', async () => {
+    const { dispatcher, asked } = run([
+      bag({ code: 'BAG-NEW', sealedAt: new Date(Date.now() - 2 * HOUR).toISOString() }),
+      bag({ code: 'BAG-ROOM', waitsForRoom: { hubId: 'mdp_1', hubName: 'North Sort', since: new Date().toISOString() } }),
+      bag({ code: 'BAG-CLAIMED', status: 'claimed' }),
+    ]);
+    expect(await dispatcher.sweepBagsWaiting()).toBe(0);
+    expect(asked).toEqual([]);
   });
 });

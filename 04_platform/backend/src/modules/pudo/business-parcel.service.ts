@@ -164,6 +164,18 @@ export class BusinessParcelService {
     return this.account(who);
   }
 
+  /**
+   * 2026-11-06 — ITS ROOM FOR BAGS AT ITS OWN PLACE, SAID AGAIN (the owner: "go ahead"), as a shop says it under Set up
+   * shelves: the bags it works on at once, and the closed bags it keeps in a corner. The place stays as it is — choosing it
+   * again would read its area afresh from the shop nearest to it.
+   */
+  collectRoom(who: ParcelActor, bays: number, closedRoom: number): BusinessParcelAccountView {
+    const v = this.requireCollecting(who);
+    const c = v.collection!;
+    this.vendors.setCollectionPoint(v.vendorId, { label: c.label, zone: c.zone, ...(c.country ? { country: c.country } : {}), location: c.location, bays, closedRoom, ...(c.siteId ? { siteId: c.siteId } : {}) });
+    return this.account(who);
+  }
+
   /** Stop collecting there. Bags a driver has already taken stay with that driver. */
   stopCollecting(who: ParcelActor): BusinessParcelAccountView {
     const v = this.requireAccount(who);

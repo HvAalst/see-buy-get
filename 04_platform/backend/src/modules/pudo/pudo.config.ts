@@ -439,6 +439,11 @@ export const EXPECTED_LATE_TELL_H = 1;
 // 2026-11-06 — closed bags at a shop or a store's own place that no driver has come for in this long are flagged to
 // operations (Bags_Waiting): a closed bag is meant to leave the same day, and each one holds a corner or a place to work.
 export const BAGS_WAITING_H = 6;
+// 2026-11-06 — such a bag, still offered to nobody who took it, is offered once more to drivers further away (the owner:
+// "go ahead"): any working driver within this many kilometres, at most this many, the sweep looking this often.
+export const WIDE_OFFER_KM = 25;
+export const WIDE_OFFER_CAP = 20;
+export const WIDE_OFFER_SWEEP_MS = 15 * 60 * 1000;
 export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).

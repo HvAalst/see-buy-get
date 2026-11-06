@@ -184,7 +184,7 @@ interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MerchantRatingService } from './merchant-rating.service';
-import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
+import { BAGS_WAITING_H, MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS, WIDE_OFFER_CAP, WIDE_OFFER_KM, WIDE_OFFER_SWEEP_MS } from './pudo.config';
 import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
 import { licenceDay } from './shop-licence';
 
@@ -297,6 +297,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** The hours sweep's timer, self-unref'd for the same reason. */
   private hoursTimer?: ReturnType<typeof setInterval>;
 
+  /** 2026-11-06 — the sweep offering long-waiting bags further away, self-unref'd for the same reason. */
+  private wideTimer?: ReturnType<typeof setInterval>;
+
   onApplicationBootstrap(): void {
     // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
     // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
@@ -322,6 +325,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     void this.sweepHours().catch(() => undefined);
     this.hoursTimer = setInterval(() => void this.sweepHours().catch(() => undefined), HOURS_SWEEP_MS);
     this.hoursTimer.unref?.();
+    // And a closed bag nobody near has taken: nothing happens when no driver comes, so it is offered further away.
+    this.wideTimer = setInterval(() => void this.sweepBagsWaiting().catch(() => undefined), WIDE_OFFER_SWEEP_MS);
+    this.wideTimer.unref?.();
   }
 
   /**
@@ -370,6 +376,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (this.signupTimer) clearInterval(this.signupTimer);
     if (this.lateTimer) clearInterval(this.lateTimer);
     if (this.hoursTimer) clearInterval(this.hoursTimer);
+    if (this.wideTimer) clearInterval(this.wideTimer);
   }
 
   onModuleInit(): void {
@@ -2451,6 +2458,48 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * fail-safe excluded) fix drops out. Shared by the tote rule (2) and the freight rule (5).
    */
   private nearbyActiveDrivers(pickup: GeoPoint): Array<{ driverDid: string; km: number }> {
+    return this.driversWithin(pickup, NotificationDispatcher.NEARBY_DRIVER_KM, NotificationDispatcher.NEARBY_DRIVER_CAP, true);
+  }
+
+  /**
+   * 2026-11-06 — A CLOSED BAG NOBODY NEAR HAS TAKEN, OFFERED FURTHER AWAY (the owner: "go ahead"). As it closed it was
+   * offered to the drivers within NEARBY_DRIVER_KM heading its way. Still taken by nobody after BAGS_WAITING_H, it is
+   * offered once more to every working driver within WIDE_OFFER_KM — not the ones near and heading its way, told already —
+   * each their own offer at their own rate, which the notice opens in one tap. Once a bag: an offer asked twice is one a
+   * driver learns to ignore. A bag held for room at a full hub, or held under the tamper protocol, is not offered.
+   */
+  async sweepBagsWaiting(now: number = Date.now()): Promise<number> {
+    let offered = 0;
+    for (const tote of this.totes.list()) {
+      if (tote.status !== 'available' || tote.waitsForRoom || tote.held || tote.offeredWideAt) continue;
+      const since = tote.sealedAt ?? tote.availableAt;
+      if (!since || now - Date.parse(since) < BAGS_WAITING_H * 3_600_000) continue;
+      const place = this.dispatch.pickupPlace(tote.locationId);
+      if (!place) continue;
+      this.totes.markOfferedWide(tote.code, new Date(now).toISOString());
+      const hours = Math.floor((now - Date.parse(since)) / 3_600_000);
+      for (const d of this.driversWithin(place.loc, WIDE_OFFER_KM, WIDE_OFFER_CAP, false)) {
+        if (d.km <= NotificationDispatcher.NEARBY_DRIVER_KM && this.dispatch.worksNear(d.driverDid, place.loc)) continue; // told as it closed
+        const offer = this.dispatch.offerBagTo(d.driverDid, tote.code, now);
+        if (!offer) continue;
+        offered += 1;
+        await this.notifications
+          .notify(d.driverDid, {
+            kind: 'load_nearby',
+            title: 'A bag is waiting for a driver',
+            body: `A bag at ${place.label}${tote.destinationLabel ? `, heading to ${tote.destinationLabel},` : ''} has waited ${hours} hours for a driver. It is ${Math.round(d.km)} km from you: open it to see what it pays.`,
+            link: `/?offer=${offer.offerId}`,
+            tag: `load:${tote.code}:waiting`,
+            data: { code: tote.code, offerId: offer.offerId },
+          })
+          .catch(() => undefined);
+      }
+    }
+    return offered;
+  }
+
+  /** The working drivers within a distance of a place: fresh positions, not past their hours, nearest first — and, asked, heading there. */
+  private driversWithin(pickup: GeoPoint, radiusKm: number, cap: number, heading: boolean): Array<{ driverDid: string; km: number }> {
     const now = Date.now();
     const staleMs = MARKET_SUPPLY_STALE_MIN * 60_000;
     return this.fleet
@@ -2468,12 +2517,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
        */
       .filter((a) => !this.fleet.overHours(a.driverDid, now))
       .map((a) => ({ driverDid: a.driverDid, km: haversineKm(a.location as GeoPoint, pickup) }))
-      .filter((d) => d.km <= NotificationDispatcher.NEARBY_DRIVER_KM)
+      .filter((d) => d.km <= radiusKm)
       // …and HEADING there. Near is only half the question: a driver leaving town for the south is metres
       // from a bag going north. A driver who declared no leg is kept — we cannot say they are not going.
-      .filter((d) => this.dispatch.worksNear(d.driverDid, pickup))
+      .filter((d) => !heading || this.dispatch.worksNear(d.driverDid, pickup))
       .sort((a, b) => a.km - b.km)
-      .slice(0, NotificationDispatcher.NEARBY_DRIVER_CAP);
+      .slice(0, cap);
   }
 
   /**

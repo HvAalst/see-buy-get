@@ -98,6 +98,12 @@ export class BusinessCollectFromDto {
   @IsOptional() @IsNumber() @Min(0) closedRoom?: number;
 }
 
+/** 2026-11-06 — its room for bags at its own place, said again: the place itself stays as it is. */
+export class BusinessCollectRoomDto {
+  @IsNumber() @Min(1) bays!: number;
+  @IsNumber() @Min(0) closedRoom!: number;
+}
+
 export class BusinessOpenBagDto {
   @IsString() @MaxLength(120) destZone!: string;
 }

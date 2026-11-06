@@ -4268,6 +4268,36 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/collect-room": {
+      "post": {
+        "operationId": "BusinessParcel.collectRoom",
+        "summary": "",
+        "description": "2026-11-06 — its room for bags there, said again; the place stays.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessCollectRoomDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels/dock": {
       "get": {
         "operationId": "BusinessParcel.dock",
@@ -39910,6 +39940,23 @@
           "siteId"
         ]
       },
+      "BusinessCollectRoomDto": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number",
+            "minimum": 1
+          },
+          "closedRoom": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "bays",
+          "closedRoom"
+        ]
+      },
       "ParcelEnd": {
         "type": "object",
         "properties": {
@@ -59401,6 +59448,10 @@
                 "$ref": "#/components/schemas/ToteWait"
               }
             ]
+          },
+          "offeredWideAt": {
+            "type": "string",
+            "description": "2026-11-06 — when, closed and taken by nobody for BAGS_WAITING_H, it was offered to drivers further away. Once."
           },
           "parcels": {
             "type": "array",

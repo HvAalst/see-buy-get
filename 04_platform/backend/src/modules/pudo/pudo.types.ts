@@ -591,6 +591,8 @@ export class Tote {
   packedFor?: string;
   /** 2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait). */
   waitsForRoom?: ToteWait;
+  /** 2026-11-06 — when, closed and taken by nobody for BAGS_WAITING_H, it was offered to drivers further away. Once. */
+  offeredWideAt?: string;
   parcels: string[]; // parcelIds currently in the bag
   unitsUsed: number; // fill against BAG_CAPACITY_UNITS
   weightKg: number; // accumulated parcel weight (for vehicle capacity / dispatch matching)

@@ -1138,6 +1138,31 @@ export class DispatchService {
     return null;
   }
 
+  /**
+   * 2026-11-06 — ONE CLOSED BAG, OFFERED TO ONE DRIVER FURTHER AWAY (the owner: "go ahead"): a bag no driver near it has
+   * taken in BAGS_WAITING_H, offered to a working driver wherever they are now — priced as any bag (its road, at their own
+   * rate), and only where everything that guards an offer lets them take it: a vehicle that carries it with room aboard,
+   * the same refusals as every offer, not snoozed, and above the floor they set for being woken. Null where not.
+   */
+  offerBagTo(driverDid: string, code: string, now: number = Date.now()): Offer | null {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle || !this.fleet.acceptingWork(driverDid, now)) return null;
+    const load = this.availableLoads().find((l) => l.kind === 'tote' && l.ref === code);
+    if (!load) return null;
+    if (!this.vehicleCanCarry(vehicle, load, this.remainingCapacity(driverDid), this.remainingTotes(driverDid))) return null;
+    if (this.coverRefusalFor(driverDid, load, now) || this.railRefusalFor(load) || this.securedRefusalFor(driverDid, load, vehicle) || this.coldRefusal(driverDid, load.kind, load.ref)) return null;
+    const at = this.fleet.activeForDriver(driverDid)?.location;
+    if (!at) return null;
+    const profile = this.pricingProfile(vehicle);
+    const floor = this.nudgeFloorFor(driverDid);
+    if (floor != null) {
+      const earn = this.expectedEarn(driverDid, load, undefined, profile.ratePerKm);
+      if (earn == null || earn < floor) return null;
+    }
+    const km = this.router.roadKm(at, load.pickupLocation);
+    return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(at, load.pickupLocation), ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: at }, load), now });
+  }
+
   /** The driver's standing "do not wake me below this", or undefined. Unknown driver → no floor: a missing
    *  record must not silence a phone, and every other guard here already fails open the same way. */
   private nudgeFloorFor(driverDid: string): number | undefined {

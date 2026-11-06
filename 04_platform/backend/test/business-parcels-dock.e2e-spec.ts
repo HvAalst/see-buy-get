@@ -139,6 +139,13 @@ describe('a business’s parcels collected from its own place', () => {
     expect(closed.bags[0]).toMatchObject({ code, status: 'available', parcelIds: [id] });
     expect(closed.groups).toEqual([]);
 
+    // 2026-11-06 — its room for bags there, said again: both numbers, and the place itself unchanged.
+    const roomed = (await http().post('/v1/sbg/business/me/parcels/collect-room').set(biz.token).send({ bays: 3, closedRoom: 2 }).expect(201)).body;
+    expect(roomed.collection).toMatchObject({ label: 'Ruiru warehouse', zone: `BpdNairobi${tag}`, bays: 3, closedRoom: 2 });
+    expect((await dock()).corner).toBe(2);
+    await http().post('/v1/sbg/business/me/parcels/collect-room').set(biz.token).send({ bays: 0, closedRoom: 2 }).expect(400);
+    await http().post('/v1/sbg/business/me/parcels/collect-room').set(rival.token).send({ bays: 3, closedRoom: 2 }).expect(400); // no place of its own to say it for (INVALID_STATE is 400 here)
+
     // At a hub, one collected from its own place comes back there as a driver's load, at most what the business allows.
     const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Ruiru Hub ${tag}`, zones: [`BpdNairobi${tag}`], location: { lat: -1.25, lng: 36.88 } }).expect(201)).body;
     const second = (await http().post('/v1/sbg/business/me/parcels').set(biz.token).send(await parcel({ fromOwnPlace: true })).expect(201)).body.parcel.parcelId as string;

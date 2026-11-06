@@ -313,6 +313,11 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
   const [siteId, setSiteId] = useState('');
   const [bays, setBays] = useState('2');
   const [corner, setCorner] = useState('0');
+  // 2026-11-06 — its room for bags, said again once its place is chosen.
+  const [roomBays, setRoomBays] = useState(String(collection?.bays ?? 2));
+  const [roomCorner, setRoomCorner] = useState(String(collection?.closedRoom ?? 0));
+  const roomOk = Number.isInteger(Number(roomBays)) && Number(roomBays) >= 1 && Number.isInteger(Number(roomCorner)) && Number(roomCorner) >= 0;
+  const roomChanged = Number(roomBays) !== (collection?.bays ?? 2) || Number(roomCorner) !== (collection?.closedRoom ?? 0);
   const [dock, setDock] = useState<DockView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -389,6 +394,26 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
           <p class="chint">{t('business.parcels.collectAt', { place: collection.label, zone: collection.zone, bays: collection.bays })}</p>
           {/* 2026-11-06 — the closed bags waiting there for drivers, and the corner they stand in. */}
           {dock && (dock.corner > 0 || dock.closedWaiting > 0) ? <p class="chint">{t('business.parcels.dockCorner', { waiting: dock.closedWaiting, corner: dock.corner })}</p> : null}
+          {works ? (
+            <>
+              <div class="biz-two">
+                <label class="cfield">
+                  <span class="cfield__label">{t('business.parcels.collectBays')}</span>
+                  <input class="cinput" inputMode="numeric" value={roomBays} onInput={(e) => setRoomBays((e.target as HTMLInputElement).value)} />
+                </label>
+                <label class="cfield">
+                  <span class="cfield__label">{t('business.parcels.collectCorner')}</span>
+                  <input class="cinput" inputMode="numeric" value={roomCorner} onInput={(e) => setRoomCorner((e.target as HTMLInputElement).value)} />
+                  <span class="chint">{t('business.parcels.collectCornerHint')}</span>
+                </label>
+              </div>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--ghost" disabled={busy || !roomOk || !roomChanged} onClick={() => void run(() => api.collectRoom(Number(roomBays), Number(roomCorner)), onChanged)}>
+                  {t('business.parcels.roomSave')}
+                </button>
+              </div>
+            </>
+          ) : null}
           {dock && dock.groups.length === 0 && dock.bags.length === 0 ? <p class="cons__empty">{t('business.parcels.dockEmpty')}</p> : null}
           {dock?.groups.length ? (
             <div class="crows">

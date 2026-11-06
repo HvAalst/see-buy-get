@@ -1241,6 +1241,37 @@ describe('PUDO Light', () => {
     expect(flag()).toBeUndefined();
   });
 
+  it('offers a closed bag to one driver further away, priced as any bag — and only one who could take it (2026-11-06)', () => {
+    const origin = onboardAgent('Wide Offer Shop', 'NorthTown', 50);
+    onboardAgent('Wide Offer Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'wide-offer', originZone: 'NorthTown', destZone: 'SouthTown' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'WIDE-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, origin.did, 'WIDE-1');
+    mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
+    const d = coupleTipper('wideoffer', { min: 0.8, max: 1.5 });
+    // No position yet: no offer — nobody can be told how far it is.
+    expect(dispatch.offerBagTo(d.did, bag.code)).toBeNull();
+    fleet.reportLocation(d.did, { lat: origin.location.lat + 0.15, lng: origin.location.lng });
+    const offer = dispatch.offerBagTo(d.did, bag.code)!;
+    expect(offer).toMatchObject({ driverDid: d.did, kind: 'tote', ref: bag.code, status: 'pending' });
+    // Asked again: the same offer, not a second one.
+    expect(dispatch.offerBagTo(d.did, bag.code)!.offerId).toBe(offer.offerId);
+    // A second bag closed at the same shop, for another place.
+    onboardAgent('Wide Offer East', 'EastTown', 50);
+    parcels.accept({ agentDid: origin.did, parcelId: 'WIDE-2', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag2 = mdps.openShopBag(origin.did, 'EastTown');
+    mdps.fillShopBag(bag2.code, origin.did, 'WIDE-2');
+    mdps.sealShopBag(bag2.code, origin.did, { closure: closedBy(origin.did) });
+    // A bag that is no longer offered to anybody — claimed — is offered to nobody further away either: not that one, and
+    // never another in its place.
+    dispatch.claim(offer.offerId);
+    const other = coupleTipper('wideother', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(other.did, { lat: origin.location.lat + 0.15, lng: origin.location.lng });
+    expect(dispatch.offerBagTo(other.did, bag.code)).toBeNull();
+    expect(dispatch.offerBagTo(other.did, bag2.code)!.ref).toBe(bag2.code);
+  });
+
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
     const dest = onboardAgent('Dock Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'dock', originZone: 'NorthTown', destZone: 'SouthTown' });
