@@ -37,6 +37,9 @@ import {
   type ParcelAccount,
   type ParcelBookLine,
   type ParcelCallOff,
+  type ParcelMove,
+  moveLine,
+  moveShopChoices,
   type ParcelForm,
 } from '../parcels';
 
@@ -735,6 +738,8 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
   const t = useT();
   const [d, setD] = useState<BusinessParcelDetail | null>(null);
   const [off, setOff] = useState<ParcelCallOff | null>(null);
+  // 2026-11-06 — handed in at another shop instead: the shop picked, its price shown, then moved.
+  const [mv, setMv] = useState<{ shops: NetworkShop[]; to?: string; view?: ParcelMove } | null>(null);
   const [most, setMost] = useState('');
   const [labelError, setLabelError] = useState<string | null>(null);
 
@@ -825,12 +830,40 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
             {t('business.parcels.payNow', { price: money(row.cost, row.currency) })}
           </button>
         ) : null}
+        {works && stage === 'to_hand_in' && !mv && !off ? (
+          <button type="button" class="cbtn cbtn--ghost" onClick={() => void api.shops().then((r) => setMv({ shops: moveShopChoices(r.data ?? [], row.from?.did) }))}>
+            {t('business.parcels.moveOpen')}
+          </button>
+        ) : null}
         {callable && !off ? (
           <button type="button" class="cbtn cbtn--ghost" onClick={() => void api.callOffPreview(row.parcelId).then((r) => setOff(r.data ?? { parcelId: row.parcelId, outcome: 'no', why: words(r.error) ?? '' }))}>
             {t('business.parcels.callOff')}
           </button>
         ) : null}
       </div>
+
+      {mv ? (
+        <div class="cnote">
+          <p>{mv.view ? moveLine(mv.view, t) : t('business.parcels.movePick', { price: money(row.cost, row.currency) })}</p>
+          <div class="twr-panelend">
+            <ConsolePick
+              label={t('business.parcels.moveTo')}
+              value={mv.to ?? ''}
+              placeholder={t('business.parcels.f.pickShop')}
+              options={mv.shops.map((s) => ({ value: s.did, label: s.shopName, sub: s.zone }))}
+              onChange={(to) => void api.movePreview(row.parcelId, to).then((r) => setMv((m) => (m ? { ...m, to, view: r.data ?? { parcelId: row.parcelId, from: { did: row.from?.did ?? '', shopName: row.from?.name ?? '' }, to: { did: to, shopName: '' }, was: row.cost ?? 0, now: row.cost ?? 0, difference: 0, canMove: false, why: words(r.error) ?? '' } } : m)))}
+            />
+            {mv.view?.canMove ? (
+              <button type="button" class="cbtn cbtn--primary" disabled={busy !== null} onClick={() => void act(`move:${row.parcelId}`, () => api.move(row.parcelId, mv.view!.to.did, mv.view!.now), t('business.parcels.moved', { id: row.parcelId, shop: mv.view!.to.shopName })).then((ok) => ok && setMv(null))}>
+                {t('business.parcels.moveConfirm', { shop: mv.view.to.shopName, amount: money(mv.view.now, mv.view.currency) })}
+              </button>
+            ) : null}
+            <button type="button" class="cbtn cbtn--ghost" onClick={() => setMv(null)}>
+              {t('business.parcels.moveKeep')}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {off ? (
         <div class="cnote">

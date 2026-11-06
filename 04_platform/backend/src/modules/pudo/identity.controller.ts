@@ -29,6 +29,8 @@ import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDt
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { PasskeyService } from './passkey.service';
+import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
+import { MoveDropOffDto } from './pudo.dto';
 import { UnlockDto, UnlockOptionsDto } from './passkey.dto';
 
 /**
@@ -63,6 +65,8 @@ export class IdentityController {
     @Optional() private readonly agreements?: AgreementService,
     // 2026-10-27 — their goods coming back from a hub, to their own door, paid first by mobile money.
     @Optional() private readonly doors?: PersonDoorService,
+    // 2026-11-06 — a booking moved by its sender to another drop-off shop, re-priced.
+    @Optional() private readonly moves?: DropOffMoveService,
   ) {}
 
   /**
@@ -496,6 +500,28 @@ export class IdentityController {
    * a code the network delivered straight to the neighbour would be the network deciding who a person
    * trusts. Their own code keeps working alongside it, and the shop still learns neither.
    */
+  /**
+   * 2026-11-06 — WHAT DROPPING IT OFF AT ANOTHER SHOP WOULD DO (the owner: "moving needs a re-price … so the user is aware of
+   * the implication"): the price the counter will take in cash from there, beside the one it was booked at — or why not.
+   */
+  @Roles('consumer')
+  @Get('parcels/:id/move')
+  @ApiQuery({ name: 'to', required: true, description: 'The id of the shop it would be dropped off at instead' })
+  movePreview(@Param('id') id: string, @Query('to') to: string, @Actor() actor: IntrospectionResult): MoveView {
+    const person = this.persons.requireByDid(actor.did!);
+    if (!this.parcels.sentBy(id, person) || !this.moves) throw new GlosError('NOT_FOUND', 'No such parcel');
+    return this.moves.preview(id, (to ?? '').trim());
+  }
+
+  /** Drop it off at another shop instead, at the price the sender was shown. */
+  @Roles('consumer')
+  @Post('parcels/:id/move')
+  move(@Param('id') id: string, @Body() dto: MoveDropOffDto, @Actor() actor: IntrospectionResult): MovedView {
+    const person = this.persons.requireByDid(actor.did!);
+    if (!this.parcels.sentBy(id, person) || !this.moves) throw new GlosError('NOT_FOUND', 'No such parcel');
+    return this.moves.move(id, dto.to.trim(), dto.expectedTotal, person.personDid);
+  }
+
   @Roles('consumer')
   @Post('parcels/:id/nominate-collector')
   nominateCollector(@Param('id') id: string, @Body() dto: NominateCollectorDto, @Actor() actor: IntrospectionResult) {

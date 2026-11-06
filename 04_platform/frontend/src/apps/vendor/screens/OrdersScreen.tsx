@@ -18,6 +18,7 @@ import { RefusalCard } from '../../../shared/RefusalCard';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
 import { CallOffBlock } from './CallOff';
+import { MoveBlock } from './MoveOrder';
 import { BringsBackLine, SwitchToShopSheet } from './BringsBack';
 
 export interface OrdersScreenProps {
@@ -722,6 +723,8 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               ))}
             </div>
           ) : null}
+          {/* 2026-11-06 — handed in at another shop instead, re-priced, the store's own choice. */}
+          <MoveBlock d={d} state={state} actions={actions} />
           <CallOffBlock d={d} state={state} actions={actions} />
           <Button variant="link" onClick={actions.closeOrder}>
             {t('vendor.close')}

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -114,6 +115,7 @@ export class BusinessParcelService {
     private readonly sites: SiteService,
     private readonly dispatch: DispatchService,
     private readonly doors: BusinessDoorService,
+    @Optional() private readonly moves?: DropOffMoveService,
   ) {}
 
   /* ------------------------------------------------------------------ the account -- */
@@ -395,6 +397,22 @@ export class BusinessParcelService {
     this.owned(v, parcelId);
     const p = this.callOffs.preview(v.vendorId, parcelId, backTo);
     return { parcelId, outcome: p.outcome, ...(p.amount != null ? { amount: p.amount } : {}), ...(p.currency ? { currency: p.currency } : {}), ...(p.backTo ? { backTo: p.backTo } : {}), ...(p.why ? { why: p.why } : {}), ...(p.door ? { door: p.door } : {}), ...(p.suggestedMax != null ? { suggestedMax: p.suggestedMax } : {}) };
+  }
+
+  /** 2026-11-06 — what handing it in at another shop would do: the new price beside the old, and its balance after. */
+  movePreview(who: ParcelActor, parcelId: string, to: string): MoveView {
+    const v = this.requireAccount(who);
+    this.owned(v, parcelId);
+    if (!this.moves) throw new GlosError('NOT_FOUND', 'Moving a parcel is not available here');
+    return this.moves.preview(parcelId, to);
+  }
+
+  /** Hand it in at another shop instead, at the price it was shown. */
+  move(who: ParcelActor, parcelId: string, to: string, expectedTotal: number): MovedView {
+    const v = this.requireAccount(who);
+    this.owned(v, parcelId);
+    if (!this.moves) throw new GlosError('NOT_FOUND', 'Moving a parcel is not available here');
+    return this.moves.move(parcelId, to, expectedTotal, who.name);
   }
 
   /** Call it off. Collected from its own place and at a hub now: `door` brings it back there, at most `maxSpend` to a driver. */

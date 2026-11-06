@@ -43,7 +43,7 @@ import {
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
 import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
-import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
+import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, MoveView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
 import { refusalSentence } from '../../shared/ui/ErrorNote';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
@@ -930,6 +930,41 @@ export function useSendApp() {
     [client, loadParcels],
   );
 
+  /**
+   * 2026-11-06 — DROPPED OFF AT ANOTHER SHOP: what it would cost from there (asked, nothing done), and moving it at the price
+   * the sender was shown. The move answers the server's refusal in its own words, or nothing; done, the parcel is read again.
+   */
+  const movePreview = useCallback(
+    async (id: string, to: string): Promise<MoveView | null> => {
+      if (!client) return null;
+      const r = await client.api.movePreview(id, to);
+      if (r.error) {
+        if (isSignInRequired(r.error)) signOutRef.current(r.error);
+        return null;
+      }
+      return narrow<MoveView>(r.data);
+    },
+    [client],
+  );
+
+  const moveParcel = useCallback(
+    async (id: string, to: string, expectedTotal: number): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.moveParcel(id, to, expectedTotal);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return null;
+        }
+        return r.error.detail || r.error.title || t('send.move.failed');
+      }
+      void openParcel(id);
+      void loadParcels();
+      return null;
+    },
+    [client, openParcel, loadParcels],
+  );
+
   /** Name somebody to collect. The code comes back to THEM to pass on — we do not choose who they trust. */
   const nominateCollector = useCallback(
     async (name: string, phone?: string) => {
@@ -1338,6 +1373,8 @@ export function useSendApp() {
     rateStore,
     respondToNotice,
     nominateCollector,
+    movePreview,
+    moveParcel,
       closeParcel,
       uploadPhoto,
       submitPod,

@@ -40,11 +40,12 @@ export function shopsToPick(points: readonly NetworkPoint[], filter: string, nea
  * The shops to pick from (2026-10-27): found by name or area, the nearest to the store's door first — for a parcel called off
  * at a hub, and for a box whose load to the store's door no driver took.
  */
-export function ShopPicker({ id, label, state, onPick }: { id: string; label: string; state: VendorState; onPick: (did: string) => void }) {
+export function ShopPicker({ id, label, state, onPick, exclude }: { id: string; label: string; state: VendorState; onPick: (did: string) => void; exclude?: string }) {
   const t = useT();
   const [filter, setFilter] = useState('');
   const near = state.vendor?.collection?.location ?? state.vendor?.location ?? null;
-  const shops = shopsToPick(state.points, filter, near);
+  // 2026-11-06 — not the shop it is at already, when it is moved from one.
+  const shops = shopsToPick(exclude ? state.points.filter((p) => p.did !== exclude) : state.points, filter, near);
   return (
     <>
       <div class="field">

@@ -46,6 +46,7 @@ import { VendorCallbackService } from './vendor-callback.service';
 import { ShelfService } from './shelf.service';
 import { DropOffHoldService } from './drop-off-hold.service';
 import { PickupAheadService } from './pickup-ahead.service';
+import { DropOffMoveService } from './drop-off-move.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -170,6 +171,7 @@ describe('PUDO Light', () => {
   let events: EventBus;
   let dropHolds: DropOffHoldService;
   let ahead: PickupAheadService;
+  let moves: DropOffMoveService;
   let presence: PresenceService;
   let borders: BorderRuleService;
 
@@ -205,7 +207,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DropOffMoveService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
@@ -270,6 +272,7 @@ describe('PUDO Light', () => {
     events = moduleRef.get(EventBus);
     dropHolds = moduleRef.get(DropOffHoldService);
     ahead = moduleRef.get(PickupAheadService);
+    moves = moduleRef.get(DropOffMoveService);
   });
 
   let agentSeq = 0;
@@ -1724,6 +1727,118 @@ describe('PUDO Light', () => {
       ahead.takeOn(amos.did, shop.did, 'SouthTown');
       expect(ahead.heldOn(amos.did).bags).toBe(1);
       expect(ahead.heldOn(amos.did, Date.now() + 25 * HOUR)).toEqual({ kg: 0, bags: 0 });
+    });
+  });
+
+  /*
+   * 2026-11-06 — MOVING A BOOKING TO ANOTHER SHOP (the owner: "moving needs a re-price, but it's not automated by us so the
+   * user is aware of the implication"): the booker sees the new price and moves it; refused if the price changed since.
+   */
+  describe('moving a booking to another shop', () => {
+    let seq = 0;
+    const setUp = (name: string, topUp = 500) => {
+      seq += 1;
+      const a = onboardAgent(`${name} A`, 'NorthTown', 500);
+      const b = onboardAgent(`${name} B`, 'NorthTown', 500);
+      const dest = onboardAgent(`${name} Dest`, 'SouthTown', 50);
+      corridors.addCorridor({ name: `mv-${seq}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: `${name} Store`, callbackUrl: 'https://mv.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, topUp);
+      let n = 0;
+      const order = () =>
+        parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `${name}-${(n += 1)}`, originAgentDid: a.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(a.did, dest.did, 'S') }).parcel;
+      return { a, b, dest, vendor, order };
+    };
+
+    it('a store’s order moves at the price it was shown: the first price back, the new one charged, its place and its label with it', () => {
+      const { a, b, vendor, order } = setUp('MV1');
+      agents.setPrice(b.did, agents.get(a.did).pricePerParcel + 20); // a dearer shop: the store pays the difference
+      const booked = order();
+      const balance = vendors.balanceOf(vendor.vendorId);
+      const view = moves.preview(booked.parcelId, b.did);
+      expect(view).toMatchObject({ canMove: true, pays: 'balance', from: { did: a.did }, to: { did: b.did }, was: booked.shipmentCost });
+      expect(view.now).toBeGreaterThan(view.was);
+      expect(view.balanceAfter).toBeCloseTo(balance + view.was - view.now, 2);
+      // Looking changes nothing.
+      expect(parcels.get(booked.parcelId).originAgentDid).toBe(a.did);
+      const done = moves.move(booked.parcelId, b.did, view.now, 'MV1 Store');
+      expect(done).toMatchObject({ moved: true, was: view.was, now: view.now });
+      const p = parcels.get(booked.parcelId);
+      expect(p).toMatchObject({ originAgentDid: b.did, committedNodeDid: b.did, shipmentCost: view.now });
+      expect(p.dropOffMoves).toEqual([expect.objectContaining({ from: a.did, to: b.did, by: 'MV1 Store', was: view.was, now: view.now })]);
+      expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(balance + view.was - view.now, 2);
+      expect(shelfSvc.held(a.did)).toBe(0);
+      expect(shelfSvc.held(b.did)).toBe(1);
+      expect(p.label?.svg).toBeTruthy();
+      // Handed in at the shop it moved to, and no longer at the first.
+      expect(() => parcels.intakeInbound(booked.parcelId, a.did)).toThrow(/vendor-selected origin/);
+      parcels.intakeInbound(booked.parcelId, b.did);
+      expect(parcels.get(booked.parcelId).status).toBe('At_PUDO');
+    });
+
+    it('is refused with the new price when it is no longer the one shown, and nothing moves', () => {
+      const { a, b, order } = setUp('MV2');
+      const booked = order();
+      const view = moves.preview(booked.parcelId, b.did);
+      let refusal: any;
+      try {
+        moves.move(booked.parcelId, b.did, view.now + 1, 'MV2 Store');
+      } catch (err) {
+        refusal = err;
+      }
+      expect(refusal?.code).toBe('PRICE_CHANGED');
+      expect(refusal.params.newTotal).toBe(view.now);
+      expect(parcels.get(booked.parcelId).originAgentDid).toBe(a.did);
+      expect(shelfSvc.held(a.did)).toBe(1);
+    });
+
+    it('says why it cannot move, and refuses with nothing written: handed in, a full shop, a balance short of the new price', () => {
+      const { a, b, vendor, order } = setUp('MV3', 60);
+      // Handed in already.
+      const inHand = order();
+      parcels.intakeInbound(inHand.parcelId, a.did);
+      expect(moves.preview(inHand.parcelId, b.did)).toMatchObject({ canMove: false, why: expect.stringMatching(/handed in already/) });
+      expect(() => moves.move(inHand.parcelId, b.did, 1, 'MV3')).toThrow();
+      // A full shop.
+      const booked = order();
+      shelfSvc.reconfigure(b.did, { rows: 2, cols: 3 });
+      const other = onboardAgent('MV3 Other', 'NorthTown', 500);
+      const rival = vendors.register({ name: 'MV3 Rival', callbackUrl: 'https://mv.example/hook', secret: 'whsec' });
+      vendors.topUp(rival.vendorId, 500);
+      for (let i = 0; i < 12 && shelfSvc.available(b.did) > 0; i += 1) {
+        parcels.createInbound({ vendorId: rival.vendorId, externalOrderId: `MV3R-${i}`, originAgentDid: b.did, destAgentDid: other.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(rival.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: rival.shippingPolicy, quote: routing.quoteShipment(b.did, other.did, 'S') });
+      }
+      expect(shelfSvc.available(b.did)).toBe(0);
+      const full = moves.preview(booked.parcelId, b.did);
+      expect(full).toMatchObject({ canMove: false, why: expect.stringMatching(/no place left/) });
+      expect(() => moves.move(booked.parcelId, b.did, full.now, 'MV3')).toThrow(/no place left/);
+      // A balance short of the new price, at a dearer shop with room.
+      const dear = onboardAgent('MV3 Dear', 'NorthTown', 500);
+      agents.setPrice(dear.did, 9000);
+      const balance = vendors.balanceOf(vendor.vendorId);
+      const short = moves.preview(booked.parcelId, dear.did);
+      expect(short).toMatchObject({ canMove: false, why: expect.stringMatching(/short of the new price: top up first/) });
+      expect(() => moves.move(booked.parcelId, dear.did, short.now, 'MV3')).toThrow(/top up first/);
+      expect(vendors.balanceOf(vendor.vendorId)).toBe(balance);
+      expect(parcels.get(booked.parcelId).originAgentDid).toBe(a.did);
+    });
+
+    it('a Send-app booking moves too: the counter takes the new route’s price in cash, at the shop it moved to', () => {
+      const { a, b, dest } = setUp('MV4');
+      agents.setPrice(b.did, agents.get(a.did).pricePerParcel + 10);
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:mv4', senderPhoneHash: 'h-mv4', receiverMobile: '+254700557', originAgentDid: a.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(a.did, dest.did) }).parcel;
+      const view = moves.preview(sent.parcelId, b.did);
+      expect(view).toMatchObject({ canMove: true, pays: 'counter' });
+      expect(view.balance).toBeUndefined();
+      moves.move(sent.parcelId, b.did, view.now, 'did:person:mv4');
+      expect(parcels.get(sent.parcelId)).toMatchObject({ originAgentDid: b.did, shipmentCost: view.now });
+      expect(shelfSvc.held(b.did)).toBe(1);
+      expect(dropHolds.of(sent.parcelId)?.bookedBy).toEqual({ personDid: 'did:person:mv4' });
+      const funds = gate.canTransact(b.did).balance;
+      parcels.intakeConsumerSend(sent.parcelId, b.did, photoBy(b.did));
+      expect(parcels.get(sent.parcelId).status).toBe('At_PUDO');
+      // The shop remitted the new price it took in cash (and was paid its take-in), not the old one.
+      expect(funds - gate.canTransact(b.did).balance).toBeLessThanOrEqual(view.now);
     });
   });
 

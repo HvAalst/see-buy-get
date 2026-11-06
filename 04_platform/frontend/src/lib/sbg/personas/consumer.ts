@@ -85,6 +85,10 @@ export function createConsumerApi(sbg: SbgClient) {
     /** Raise the most while no driver has taken it: M-Pesa asks for the difference (2026-10-27). */
     doorRaise: (id: string, maxSpend: number) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/door/raise', { params: { path: { id } }, body: { maxSpend } })),
 
+    /** 2026-11-06 — what dropping a booked parcel off at another shop would do, and doing it at the price shown. */
+    movePreview: (id: string, to: string) => sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}/move', { params: { path: { id }, query: { to } } })),
+    moveParcel: (id: string, to: string, expectedTotal: number) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/move', { params: { path: { id } }, body: { to, expectedTotal } })),
+
     /** Name somebody to collect instead. The code comes back HERE, because passing it on is the point. */
     nominateCollector: (id: string, name: string, phone?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/nominate-collector', { params: { path: { id } }, body: { name, phone } })),

@@ -42,6 +42,13 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/mdps/:id/parcels/:parcelId/label': 'support',
   'GET sbg/mdps/:id/parcels/:parcelId/label.zpl': 'support',
   'GET sbg/vendors/:id/orders/:parcelId/call-off': 'none',
+  // 2026-11-06 — a booking moved to another drop-off shop: its booker's own act, as calling it off is.
+  'GET sbg/vendors/:id/orders/:parcelId/move': 'none',
+  'POST sbg/vendors/:id/orders/:parcelId/move': 'none',
+  'GET sbg/business/me/parcels/:parcelId/move': 'none',
+  'POST sbg/business/me/parcels/:parcelId/move': 'none',
+  'GET sbg/identity/parcels/:id/move': 'none',
+  'POST sbg/identity/parcels/:id/move': 'none',
   'POST sbg/vendors/:id/orders/:parcelId/call-off': 'none',
   // …to the store's own door, as a load: the store raises the most it pays; the hub hands the box to that load's driver.
   'POST sbg/vendors/:id/loads/:freightId/max-spend': 'none',

@@ -268,6 +268,20 @@ export interface SwitchResult {
 }
 
 /** One authenticated parcel twin the consumer is a party to (PII-free; mirrors backend ConsumerParcelView). */
+/** 2026-11-06 — what dropping a booked parcel off at another shop would do: the new cash price beside the old — or why not. */
+export interface MoveView {
+  parcelId: string;
+  from: { did: string; shopName: string };
+  to: { did: string; shopName: string };
+  was: number;
+  now: number;
+  difference: number;
+  currency?: string;
+  pays: 'balance' | 'counter';
+  canMove: boolean;
+  why?: string;
+}
+
 export interface ConsumerParcelView {
   parcelId: string;
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin)
@@ -283,6 +297,8 @@ export interface ConsumerParcelView {
   vendorOrder: boolean;
   /** 2026-11-05 — handed in and collected at the one shop: no bus, no hub. */
   sameShop?: boolean;
+  /** 2026-11-06 — to its sender, while not dropped off yet: the shop it is booked at and the cash the counter takes. */
+  dropOff?: { did: string; shopName: string; price: number; currency?: string };
   /** 2026-11-05 — a store's order, to its receiver: the store, and whether this order was rated already. */
   store?: { vendorId: string; name: string; rated: boolean };
   createdAt: string;

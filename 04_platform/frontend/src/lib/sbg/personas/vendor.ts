@@ -150,6 +150,12 @@ export function createVendorApi(sbg: SbgClient) {
     orderLabelZpl: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/label.zpl', { params: { path: { id: vendorId, parcelId } }, parseAs: 'text' })),
 
+    /** 2026-11-06 — what handing an order in at another shop would do (the new price beside the old), and doing it at that price. */
+    movePreview: (vendorId: string, parcelId: string, to: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/move', { params: { path: { id: vendorId, parcelId }, query: { to } } })),
+    moveOrder: (vendorId: string, parcelId: string, body: { to: string; expectedTotal: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/orders/{parcelId}/move', { params: { path: { id: vendorId, parcelId } }, body })),
+
     /** 2026-10-27 — what calling an order off would do now, and doing it: withdrawn with its money back, or brought back from a hub at a price. */
     callOffPreview: (vendorId: string, parcelId: string, backTo?: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId }, query: backTo ? { backTo } : {} } })),

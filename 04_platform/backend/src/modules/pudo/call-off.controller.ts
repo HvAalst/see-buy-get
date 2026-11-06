@@ -14,6 +14,8 @@ import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { PhygitalLabel } from './pudo.types';
 import { VendorService } from './vendor.service';
+import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
+import { MoveDropOffDto } from './pudo.dto';
 
 /**
  * A STORE CALLS ONE OF ITS ORDERS OFF, from its own app (call-off.types.ts) — what it would do and cost, then doing it; signed
@@ -27,7 +29,41 @@ export class CallOffController {
     private readonly vendors: VendorService,
     private readonly mdps: MdpService,
     private readonly parcels: ParcelService,
+    private readonly moves: DropOffMoveService,
   ) {}
+
+  /**
+   * 2026-11-06 — WHAT HANDING THE ORDER IN AT ANOTHER SHOP WOULD DO (the owner: "moving needs a re-price … so the user is
+   * aware of the implication"): the new price beside the old, and what it does to the store's balance — or why it cannot.
+   */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders/:parcelId/move')
+  @ApiQuery({ name: 'to', required: true, description: 'The id of the shop it would be handed in at instead' })
+  movePreview(@Param('id') id: string, @Param('parcelId') parcelId: string, @Query('to') to: string, @Actor() actor: IntrospectionResult): MoveView {
+    this.assertStoreReads(id, actor);
+    this.ownOrder(id, parcelId);
+    return this.moves.preview(parcelId, (to ?? '').trim());
+  }
+
+  /** Hand the order in at another shop instead, at the price the store was shown. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/orders/:parcelId/move')
+  move(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: MoveDropOffDto, @Actor() actor: IntrospectionResult): MovedView {
+    const store = this.assertStoreSelf(id, actor);
+    this.ownOrder(id, parcelId);
+    return this.moves.move(parcelId, dto.to.trim(), dto.expectedTotal, actor?.actorName?.trim() || store.name);
+  }
+
+  /** The store's own order, or 404: another store's order is not confirmed to exist. */
+  private ownOrder(vendorId: string, parcelId: string): void {
+    let mine = false;
+    try {
+      mine = this.parcels.get(parcelId).vendorId === vendorId;
+    } catch {
+      mine = false;
+    }
+    if (!mine) throw new GlosError('NOT_FOUND', 'No such order');
+  }
 
   /** What calling the order off would do now: its money back in full; brought back to the shop it was handed in at, at a price; or why not. */
   @Scopes('vendor:read:self')

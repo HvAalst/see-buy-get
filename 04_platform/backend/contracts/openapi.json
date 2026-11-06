@@ -4676,6 +4676,81 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/{parcelId}/move": {
+      "get": {
+        "operationId": "BusinessParcel.movePreview",
+        "summary": "",
+        "description": "2026-11-06 — what handing it in at another shop would do: the new price beside the old — or why not.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "The id of the shop it would be handed in at instead",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "BusinessParcel.move",
+        "summary": "",
+        "description": "Hand it in at another shop instead, at the price it was shown.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveDropOffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels/{parcelId}/call-off": {
       "get": {
         "operationId": "BusinessParcel.callOffPreview",
@@ -7691,6 +7766,97 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CarrierMoveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/orders/{parcelId}/move": {
+      "get": {
+        "operationId": "CallOff.movePreview",
+        "summary": "",
+        "description": "2026-11-06 — WHAT HANDING THE ORDER IN AT ANOTHER SHOP WOULD DO (the owner: \"moving needs a re-price … so the user is\naware of the implication\"): the new price beside the old, and what it does to the store's balance — or why it cannot.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "The id of the shop it would be handed in at instead",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CallOff.move",
+        "summary": "",
+        "description": "Hand the order in at another shop instead, at the price the store was shown.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveDropOffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -25296,11 +25462,84 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/move": {
+      "get": {
+        "operationId": "Identity.movePreview",
+        "summary": "",
+        "description": "The receiver names somebody to collect for them.\n\nThe code comes BACK to the receiver, which is the point: they are the one who has to pass it on, and\na code the network delivered straight to the neighbour would be the network deciding who a person\ntrusts. Their own code keeps working alongside it, and the shop still learns neither.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "description": "The id of the shop it would be dropped off at instead",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Identity.move",
+        "summary": "",
+        "description": "Drop it off at another shop instead, at the price the sender was shown.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveDropOffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}/nominate-collector": {
       "post": {
         "operationId": "Identity.nominateCollector",
-        "summary": "",
-        "description": "The receiver names somebody to collect for them.\n\nThe code comes BACK to the receiver, which is the point: they are the one who has to pass it on, and\na code the network delivered straight to the neighbour would be the network deciding who a person\ntrusts. Their own code keeps working alongside it, and the shop still learns neither.",
         "parameters": [
           {
             "name": "id",
@@ -40327,6 +40566,25 @@
         },
         "required": [
           "maxSpend"
+        ]
+      },
+      "MoveDropOffDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "The shop it will be handed in at instead.",
+            "maxLength": 200
+          },
+          "expectedTotal": {
+            "type": "number",
+            "description": "The new price as it was shown to them: refused with the current one if it is no longer that.",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "to",
+          "expectedTotal"
         ]
       },
       "BusinessCallOffView": {
@@ -57167,6 +57425,42 @@
           "currency"
         ]
       },
+      "DropOffMove": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "The shop it was booked at, and the one it moved to."
+          },
+          "to": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who moved it: the store or business member by name, or the person who sent it."
+          },
+          "was": {
+            "type": "number"
+          },
+          "now": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "from",
+          "to",
+          "by",
+          "was",
+          "now"
+        ]
+      },
       "CustomsDeclaration": {
         "type": "object",
         "properties": {
@@ -57692,6 +57986,13 @@
           "originSlot": {
             "type": "string",
             "description": "2026-11-05 — PRE-DROP-OFF: the shelf slot a parcel waits on at the shop that took it in, until it is bagged or handed on\n(the owner: \"the open bag for its next stop, or a shelf slot\"). Not its collection slot (binSlot), which is the\ndestination's. Freed the moment it leaves the shop's hands."
+          },
+          "dropOffMoves": {
+            "description": "2026-11-06 — where its booker moved it before it was handed in, and what each move did to its price (the owner: \"moving\nneeds a re-price, but it's not automated by us so the user is aware of the implication\"). Oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DropOffMove"
+            }
           },
           "goesInBag": {
             "type": "object",

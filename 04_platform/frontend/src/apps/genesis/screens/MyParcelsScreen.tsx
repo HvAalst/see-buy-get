@@ -1,4 +1,5 @@
 import type { ChatThread } from '../../../shared/conversation/logic';
+import { MoveDropOff } from './MoveDropOff';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow, type SbgClient } from '../../../lib/sbg';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
@@ -237,6 +238,17 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       </section>
 
       {parcel.runningLate ? <Note tone="warn" icon="clock" title={t('send.late.title')} detail={lateLine(parcel.runningLate, t)} /> : null}
+
+      {/* 2026-11-06 — booked and not dropped off yet: dropped off at another shop instead, re-priced, the sender's own choice. */}
+      <MoveDropOff
+        parcel={parcel}
+        points={state.points}
+        preview={(to) => actions.movePreview(parcel.parcelId, to)}
+        move={(to, expectedTotal) => actions.moveParcel(parcel.parcelId, to, expectedTotal)}
+        onOpen={() => {
+          if (state.pointsState === 'idle' || state.pointsState === 'error') void actions.loadPoints();
+        }}
+      />
 
       {/* The single-parcel twin (which carries the collect token) failed to load — surface it + let them
           retry, instead of silently showing the token-less list row for a parcel that is ready to collect. */}

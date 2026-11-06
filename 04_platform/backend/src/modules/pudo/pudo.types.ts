@@ -929,6 +929,8 @@ export interface ConsumerParcelView {
   trackingKey?: string; // the same shareable public key; handy for a quick-look link
   vendorOrder: boolean; // a vendor/e-commerce order vs a walk-up peer send
   sameShop?: boolean; // 2026-11-05 — handed in and collected at the one shop
+  /** 2026-11-06 — to its sender, while not dropped off yet: the shop it is booked at and the cash the counter takes for it. */
+  dropOff?: { did: string; shopName: string; price: number; currency?: string };
   createdAt: string;
   updatedAt: string; // last movement (for newest-first ordering)
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
@@ -1007,6 +1009,19 @@ export interface ConsumerParcelView {
 }
 
 /** One stop's own fee as the parcel was sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
+/** 2026-11-06 — one move of a booking to another drop-off shop by its booker: from where, to where, by whom, and its price before and after. */
+export class DropOffMove {
+  at!: string;
+  /** The shop it was booked at, and the one it moved to. */
+  from!: string;
+  to!: string;
+  /** Who moved it: the store or business member by name, or the person who sent it. */
+  by!: string;
+  was!: number;
+  now!: number;
+  currency?: string;
+}
+
 export class ParcelStopFee {
   type: 'pudo' | 'mdp';
   id: string;
@@ -1150,6 +1165,11 @@ export class Parcel {
    * destination's. Freed the moment it leaves the shop's hands.
    */
   originSlot?: string;
+  /**
+   * 2026-11-06 — where its booker moved it before it was handed in, and what each move did to its price (the owner: "moving
+   * needs a re-price, but it's not automated by us so the user is aware of the implication"). Oldest first.
+   */
+  dropOffMoves?: DropOffMove[];
   /** 2026-11-05 — the bag already filling for where it goes next, named to the counter as it was taken in. */
   goesInBag?: { code: string; label: string };
   /** 2026-11-05 — what the shelving paid, kept so an undo of a parcel shelved at take-in (same-shop) can take it back. */

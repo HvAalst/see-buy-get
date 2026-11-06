@@ -412,6 +412,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelMinted, (e) => this.onMinted(e.payload));
     // 2026-11-05 — PRE-DROP-OFF: a booking went to another shop because this one had no place left — ask it to make room.
     this.events.subscribe<{ agentDid: string; reason: 'shelf' | 'cap' }>(GlosEvent.Pudo.BookingTurnedAway, (e) => this.onBookingTurnedAway(e.payload));
+    // 2026-11-06 — a booking moved to another drop-off shop by its booker: the new shop expects it, as at a booking.
+    this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.DropOffMoved, (e) => this.onMinted(e.payload));
     // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
     // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint; raisedTo?: number; currency?: string }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));

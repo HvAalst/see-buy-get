@@ -116,6 +116,33 @@ export interface ParcelBookLine {
   at: string;
 }
 
+/** 2026-11-06 — what handing a parcel in at another shop would do: the new price beside the old, the balance after — or why not. */
+export interface ParcelMove {
+  parcelId: string;
+  from: { did: string; shopName: string };
+  to: { did: string; shopName: string };
+  was: number;
+  now: number;
+  difference: number;
+  currency?: string;
+  balance?: number;
+  balanceAfter?: number;
+  canMove: boolean;
+  why?: string;
+}
+
+/** The shops a parcel could be handed in at instead: open, taking parcels, with room, not the one it is booked at. */
+export function moveShopChoices(shops: readonly NetworkShop[], from: string | undefined): NetworkShop[] {
+  return shops.filter((s) => s.did !== from && s.openState !== 'closed' && s.takesNew !== false && s.freeSlots !== 0).sort((a, b) => a.shopName.localeCompare(b.shopName));
+}
+
+/** What moving it would do, in the business's words (2026-11-06; the owner: "so the user is aware of the implication"). */
+export function moveLine(m: ParcelMove, t: Translate): string {
+  if (!m.canMove) return m.why ?? '';
+  const vars = { shop: m.to.shopName, now: money(m.now, m.currency), was: money(m.was, m.currency), diff: money(Math.abs(m.difference), m.currency), after: m.balanceAfter != null ? money(m.balanceAfter, m.currency) : '' };
+  return t(m.difference > 0 ? 'business.parcels.moveDearer' : m.difference < 0 ? 'business.parcels.moveCheaper' : 'business.parcels.moveSame', vars);
+}
+
 export interface ParcelCallOff {
   parcelId: string;
   outcome: 'refund' | 'bring_back' | 'pick' | 'to_door' | 'no';
@@ -178,6 +205,8 @@ export interface ParcelsApi {
   label: (parcelId: string) => Promise<Result<{ parcelId: string; svg: string; qrPayload: string }>>;
   book: () => Promise<Result<{ items: ParcelBookLine[]; total: number; balance?: number | null }>>;
   callOffPreview: (parcelId: string, backTo?: 'door') => Promise<Result<ParcelCallOff>>;
+  movePreview: (parcelId: string, to: string) => Promise<Result<ParcelMove>>;
+  move: (parcelId: string, to: string, expectedTotal: number) => Promise<Result<{ parcelId: string; moved: true; now: number; currency?: string }>>;
   callOff: (parcelId: string, reason?: string, choice?: { backTo?: 'door'; maxSpend?: number }) => Promise<Result<ParcelCallOff>>;
   /** What it costs from a shop or from its own place (`own`), before anything is sent. */
   price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number } }>>;
@@ -211,6 +240,8 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
     pay: (parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/pay` as never, {} as never) as never),
     label: (parcelId) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/label` as never, {} as never) as never),
     book: () => call((c) => c.GET('/v1/sbg/business/me/parcels/book' as never, { params: { query: { limit: '50' } } } as never) as never),
+    movePreview: (parcelId, to) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/move` as never, { params: { query: { to } } } as never) as never),
+    move: (parcelId, to, expectedTotal) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/move` as never, { body: { to, expectedTotal } } as never) as never),
     callOffPreview: (parcelId, backTo) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { params: { query: backTo ? { backTo } : {} } } as never) as never),
     callOff: (parcelId, reason, choice = {}) =>
       call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { body: { ...(reason?.trim() ? { reason: reason.trim() } : {}), ...(choice.backTo ? { backTo: choice.backTo } : {}), ...(choice.maxSpend != null ? { maxSpend: choice.maxSpend } : {}) } } as never) as never),

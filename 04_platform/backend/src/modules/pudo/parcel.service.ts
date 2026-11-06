@@ -1242,6 +1242,8 @@ export class ParcelService implements OnApplicationBootstrap {
       trackingKey: p.trackingKey,
       vendorOrder: Boolean(p.vendorId),
       ...(this.isSameShop(p) ? { sameShop: true } : {}),
+      // 2026-11-06 — the sender's own booking, not dropped off yet: where, and what the counter takes for it — so they may move it.
+      ...(relation === 'sent' && !p.vendorId && p.status === 'Created' && p.originAgentDid ? { dropOff: { did: p.originAgentDid, shopName: this.agents.find(p.originAgentDid)?.shopName ?? '', price: p.shipmentCost ?? 0, ...(p.currency ? { currency: p.currency } : {}) } } : {}),
       createdAt: p.acceptedAt,
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
@@ -3794,17 +3796,133 @@ export class ParcelService implements OnApplicationBootstrap {
    * names the nearest shops with room in the same country, and the shop is told in its bell to make room.
    */
   assertRoomToBook(agentDid: string, now: number = Date.now()): void {
-    if (!this.holds) return;
-    const shop = this.agents.find(agentDid);
-    if (!shop) return;
-    const shelfFull = this.shelf.available(agentDid, now) <= 0;
-    const s = this.shopStanding(agentDid);
-    const capFull = !!s && s.holds + this.holds.heldAt(agentDid, now) + 1 > s.cap;
-    if (!shelfFull && !capFull) return;
+    const full = this.noRoomToBook(agentDid, now);
+    if (!full) return;
+    const shop = this.agents.get(agentDid);
+    const shelfFull = full === 'shelf';
     const near = this.shopsWithRoom(shop, now);
     void this.events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid, reason: shelfFull ? 'shelf' : 'cap' }, { source: 'pudo' }).catch(() => undefined);
     const others = near.length ? ` Shops near it with room: ${near.map((n) => `${n.shopName} (${n.km} km)`).join(', ')}.` : ' No shop near it has room either right now — try again later.';
     throw new GlosError('SHOP_FULL', `${shop.shopName} has no place left for a new parcel right now.${others}`, { agentDid, alternatives: near });
+  }
+
+  /** Why a shop could not hold a place for a new booking now — its shelf, or a new shop's parcel limit — or nothing. Asks only. */
+  noRoomToBook(agentDid: string, now: number = Date.now()): 'shelf' | 'cap' | undefined {
+    if (!this.holds || !this.agents.find(agentDid)) return undefined;
+    if (this.shelf.available(agentDid, now) <= 0) return 'shelf';
+    const s = this.shopStanding(agentDid);
+    return s && s.holds + this.holds.heldAt(agentDid, now) + 1 > s.cap ? 'cap' : undefined;
+  }
+
+  /* ------------------------------------------------------------------------------- moving a booking (2026-11-06) -- */
+
+  /**
+   * WHAT A BOOKING WOULD COST HANDED IN AT ANOTHER SHOP — the new quote's price, charged the way its first price was: a
+   * store's order at its route mode with its cover, a person's send at the locked price they pay at the counter.
+   */
+  moveCostOf(parcel: Parcel, quote: ShipmentQuote): number {
+    if (parcel.vendorId) {
+      const chosen = parcel.routeMode === 'locked' ? quote.locked : quote.flexible;
+      const cover = coverFor({ declaredValue: parcel.declaredValue ?? parcel.subtotal, ...quote.insurance });
+      return Math.round((chosen.gross + cover.premium) * 100) / 100;
+    }
+    return quote.locked.gross;
+  }
+
+  /**
+   * Why this booking cannot move to that shop now, in words for whoever booked it — or nothing. Asked by the preview, and
+   * again by the move itself before anything is written.
+   */
+  moveRefusal(parcel: Parcel, toAgentDid: string, cost: number, now: number = Date.now()): { code: 'INVALID_STATE' | 'NOT_FOUND' | 'NOT_IN_THIS_COUNTRY' | 'SHOP_FULL' | 'WALLET_INSUFFICIENT'; message: string } | undefined {
+    if (parcel.status !== 'Created') return { code: 'INVALID_STATE', message: 'It has been handed in already: it can no longer move to another shop' };
+    if (!parcel.originAgentDid || parcel.handInMdpId || parcel.returnOf || !this.agents.find(parcel.originAgentDid)) return { code: 'INVALID_STATE', message: 'This parcel is not handed in at a shop, so there is no shop to move it from' };
+    if (toAgentDid === parcel.originAgentDid) return { code: 'INVALID_STATE', message: 'That is the shop it is booked at already' };
+    const to = this.agents.find(toAgentDid);
+    if (!to || this.agents.isResting(to.did) || this.agents.notOpenYet(to)) return { code: 'NOT_FOUND', message: 'That shop takes no new parcels' };
+    // The rule a booking is made by (assertNamedAtMint): a shop held or past its licence is not named — the same shops a booking may name.
+    try {
+      this.agents.assertNamedAtMint(toAgentDid, now);
+    } catch (err) {
+      return { code: 'NOT_FOUND', message: (err as Error).message };
+    }
+    if (this.agents.countryOf(to) !== this.agents.countryOf(this.agents.get(parcel.originAgentDid))) return { code: 'NOT_IN_THIS_COUNTRY', message: 'A booking moves to a shop in the same country' };
+    const full = this.noRoomToBook(toAgentDid, now);
+    if (full) return { code: 'SHOP_FULL', message: full === 'shelf' ? `${to.shopName} has no place left for a new parcel right now` : `${to.shopName} is at its parcel limit for now` };
+    if (parcel.vendorId && parcel.paidStatus === 'ParcelPaid') {
+      const short = Math.round((cost - (parcel.shipmentCost ?? 0) - this.vendors.balanceOf(parcel.vendorId)) * 100) / 100;
+      if (short > 0) return { code: 'WALLET_INSUFFICIENT', message: `The balance is ${short.toFixed(2)} short of the new price: top up first` };
+    }
+    return undefined;
+  }
+
+  /**
+   * 2026-11-06 — A BOOKING MOVED TO ANOTHER DROP-OFF SHOP BY ITS BOOKER (the owner: "moving needs a re-price, but it's not
+   * automated by us so the user is aware of the implication"). Never by us: the store, business or sender asks, having
+   * seen the new price (DropOffMoveService refuses if it changed since). Before it is handed in only, in the same country,
+   * to a shop with room. A paid store order is given its first price back and billed the new one — two entries, so the books
+   * say what happened; a person's send is simply priced anew for the counter. The place at the first shop is given back and
+   * one held at the new shop; the label is made again; the new shop is told to expect it.
+   */
+  moveDropOff(parcelId: string, toAgentDid: string, quote: ShipmentQuote, by: string, now: number = Date.now()): { parcel: Parcel; was: number; now: number } {
+    const parcel = this.require(parcelId);
+    const cost = this.moveCostOf(parcel, quote);
+    const refused = this.moveRefusal(parcel, toAgentDid, cost, now);
+    if (refused) throw new GlosError(refused.code, refused.message);
+    const from = parcel.originAgentDid!;
+    const to = this.agents.get(toAgentDid);
+    const was = parcel.shipmentCost ?? 0;
+    const paidStore = Boolean(parcel.vendorId && parcel.paidStatus === 'ParcelPaid');
+    // The first price back, the new one charged: checked above, so the bill below is covered.
+    if (paidStore) this.vendors.rebate(parcel.vendorId!, parcelId, was, 'drop-off moved: the first price given back', parcel.shipmentTax ?? 0, (parcel.shipmentProvision ?? 0) + (parcel.shipmentPremium ?? 0), parcel.fx?.buffer ?? 0);
+    this.repriceFor(parcel, quote, cost);
+    if (paidStore) {
+      const bill = this.vendors.billShipment(parcel.vendorId!, parcelId, cost, quote.fx?.buffer, parcel.shipmentTax ?? 0, Math.round(((parcel.shipmentProvision ?? 0) + (parcel.shipmentPremium ?? 0)) * 100) / 100, { note: 'drop-off moved' });
+      if (!bill.paid) throw new GlosError('WALLET_INSUFFICIENT', 'The balance no longer covers the new price: top up first');
+    }
+    parcel.originAgentDid = toAgentDid;
+    parcel.committedNodeDid = toAgentDid;
+    parcel.originZone = to.zone;
+    if (!parcel.vendorId) parcel.collectingEntityId = this.agents.entityIdOf(to); // the counter that takes the cash collects
+    const dest = parcel.destAgentDid ? this.agents.find(parcel.destAgentDid) : undefined;
+    if (dest && (!parcel.vendorId || parcel.paidStatus === 'ParcelPaid')) parcel.label = this.label(parcel, dest.shopName);
+    parcel.dropOffMoves = [...(parcel.dropOffMoves ?? []), { at: new Date(now).toISOString(), from, to: toAgentDid, by, was, now: cost, currency: parcel.currency }];
+    const sender = this.senderOf(parcel).owner;
+    this.holds?.move(parcelId, toAgentDid, parcel.vendorId ? { vendorId: parcel.vendorId } : { personDid: sender ?? by }, now);
+    this.persist(parcel);
+    void this.events.publish(GlosEvent.Pudo.DropOffMoved, { parcelId, fromAgentDid: from, originAgentDid: toAgentDid }, { source: 'pudo' }).catch(() => undefined);
+    return { parcel, was, now: cost };
+  }
+
+  /** The price fields of a booking set from a new quote, as createInbound / createConsumerSend set them. Kept in step with both. */
+  private repriceFor(parcel: Parcel, quote: ShipmentQuote, cost: number): void {
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const chosen = parcel.vendorId ? (parcel.routeMode === 'locked' ? quote.locked : quote.flexible) : quote.locked;
+    Object.assign(parcel, {
+      routeKm: quote.totalKm,
+      lockedPerKm: quote.perKm.min,
+      nodeFees: quote.nodeFees,
+      stopFees: stopFeesOf(quote),
+      transportCost: chosen.transport,
+      platformFee: round(chosen.total - chosen.base),
+      platformFeePct: quote.platformFeePct,
+      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
+      transportFactor: quote.transportFactor,
+      taxPct: quote.tax.ratePct,
+      taxLabel: quote.tax.label,
+      shipmentTax: chosen.tax,
+      shipmentProvision: chosen.provision,
+      currency: quote.currency,
+      fx: quote.fx,
+      sellerEntityId: quote.sellerEntityId,
+      shipmentCost: cost,
+      ceilingCost: quote.flexible.gross,
+      ceilingTax: quote.flexible.tax,
+      ceilingProvision: quote.flexible.provision,
+    });
+    if (parcel.vendorId) {
+      const cover = coverFor({ declaredValue: parcel.declaredValue ?? parcel.subtotal, ...quote.insurance });
+      Object.assign(parcel, { declaredValue: cover.declaredValue || undefined, coverLimit: cover.limit, shipmentPremium: cover.premium });
+    }
   }
 
   /** The nearest shops in the same country that could hold a place for a booking now, nearest first. */

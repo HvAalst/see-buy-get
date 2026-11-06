@@ -101,6 +101,24 @@ export class DropOffHoldService {
     return wasHeld;
   }
 
+  /**
+   * 2026-11-06 — the booking moved to another shop by its booker: the place at the first is given back and one is held at
+   * the new shop, for a fresh DROP_OFF_HOLD_H hours — a new place, its own reminders.
+   */
+  move(parcelId: string, toAgentDid: string, bookedBy: HoldBooker, now: number = Date.now()): DropOffHold {
+    const h: DropOffHold = {
+      parcelId,
+      agentDid: toAgentDid,
+      heldAt: new Date(now).toISOString(),
+      until: new Date(now + DROP_OFF_HOLD_H * HOUR).toISOString(),
+      bookedBy: this.holds.get(parcelId)?.bookedBy ?? bookedBy,
+      warned: [],
+      state: 'held',
+    };
+    this.holds.set(parcelId, h);
+    return h;
+  }
+
   /** The booking was cancelled or voided before it came in: the place is given back. */
   end(parcelId: string, now: number = Date.now()): void {
     const h = this.holds.get(parcelId);

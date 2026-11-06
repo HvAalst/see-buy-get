@@ -174,6 +174,32 @@ export interface OrderStats {
   active: number;
 }
 
+/** 2026-11-06 — what handing a booking in at another shop would do: the new price beside the old — or why it cannot. */
+export interface MoveView {
+  parcelId: string;
+  from: { did: string; shopName: string };
+  to: { did: string; shopName: string };
+  was: number;
+  now: number;
+  difference: number;
+  currency?: string;
+  pays: 'balance' | 'counter';
+  balance?: number;
+  balanceAfter?: number;
+  canMove: boolean;
+  why?: string;
+}
+
+export interface MovedView {
+  parcelId: string;
+  moved: true;
+  from: { did: string; shopName: string };
+  to: { did: string; shopName: string };
+  was: number;
+  now: number;
+  currency?: string;
+}
+
 export interface OrderDetail extends OrderRow {
   /** The damage claim report made when a problem was reported on this order. */
   damageReport?: { number: string };

@@ -6,7 +6,8 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { BusinessService } from './business.service';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessParcelService, memberActor } from './business-parcel.service';
-import { VendorLedgerQueryDto, VendorOrdersQueryDto } from './pudo.dto';
+import { MoveDropOffDto, VendorLedgerQueryDto, VendorOrdersQueryDto } from './pudo.dto';
+import type { MoveView, MovedView } from './drop-off-move.service';
 import {
   BusinessCallOffDto,
   BusinessCallOffView,
@@ -163,6 +164,21 @@ export class BusinessParcelController {
   @Post('business/me/parcels/:parcelId/pay')
   pay(@Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): BusinessParcelSent {
     return this.parcels.settle(memberActor(this.businesses.requireMember(actor)), parcelId);
+  }
+
+  /** 2026-11-06 — what handing it in at another shop would do: the new price beside the old — or why not. */
+  @Roles('business')
+  @Get('business/me/parcels/:parcelId/move')
+  @ApiQuery({ name: 'to', required: true, description: 'The id of the shop it would be handed in at instead' })
+  movePreview(@Param('parcelId') parcelId: string, @Query('to') to: string, @Actor() actor: IntrospectionResult): MoveView {
+    return this.parcels.movePreview(memberActor(this.businesses.requireMember(actor)), parcelId, (to ?? '').trim());
+  }
+
+  /** Hand it in at another shop instead, at the price it was shown. */
+  @Roles('business')
+  @Post('business/me/parcels/:parcelId/move')
+  move(@Param('parcelId') parcelId: string, @Body() dto: MoveDropOffDto, @Actor() actor: IntrospectionResult): MovedView {
+    return this.parcels.move(memberActor(this.businesses.requireMember(actor)), parcelId, dto.to.trim(), dto.expectedTotal);
   }
 
   /** What calling it off would do now. */

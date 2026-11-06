@@ -64,6 +64,8 @@ import type {
   ApiKeyRow,
   CallbackRow,
   CallOffView,
+  MoveView,
+  MovedView,
   CalledOffView,
   CheckoutRow,
   DockPlan,
@@ -181,6 +183,8 @@ export interface VendorState {
   detailState: 'idle' | 'loading' | 'ready';
   /** 2026-10-27 — an order the store asked to call off, and what doing it would do: said before it is done. */
   callOff: { parcelId: string; view: CallOffView; backTo?: string } | null;
+  /** 2026-11-06 — an order being moved to another shop: picking the shop, then its new price, then moved. */
+  move: { parcelId: string; view?: MoveView } | null;
   /** 2026-10-27 — a load to its door no driver has taken, the store asking to send the box to a shop instead: said first. */
   switchTo: { freightId: string; view: CallOffView; backTo?: string } | null;
   settlement: SettlementRow[];
@@ -245,6 +249,7 @@ const INITIAL: VendorState = {
   detail: null,
   detailState: 'idle',
   callOff: null,
+  move: null,
   switchTo: null,
   settlement: [],
   callbacks: [],
@@ -1268,7 +1273,7 @@ export function useVendorApp() {
   );
 
   const closeOrder = useCallback(() => {
-    setState((s) => ({ ...s, detail: null, detailState: 'idle', callOff: null }));
+    setState((s) => ({ ...s, detail: null, detailState: 'idle', callOff: null, move: null }));
   }, []);
 
   /** 2026-10-27 — what calling the order off would do and cost, asked before anything is done. */
@@ -1288,6 +1293,50 @@ export function useVendorApp() {
   );
 
   const cancelCallOff = useCallback(() => setState((s) => ({ ...s, callOff: null })), []);
+
+  /** 2026-11-06 — moving an order to another shop: the shop picked first, from the network's shops (read once). */
+  const startMove = useCallback((parcelId: string) => {
+    setState((s) => ({ ...s, move: { parcelId }, callOff: null }));
+    if (stateRef.current.pointsState === 'idle') void loadPointsRef.current();
+  }, []);
+
+  /** …then what it would cost from there and do to the balance — asked, nothing done. */
+  const askMove = useCallback(
+    async (parcelId: string, to: string) => {
+      if (!client || !creds) return;
+      await run(`move-ask:${parcelId}`, async () => {
+        const r = await client.api.movePreview(creds.vendorId, parcelId, to);
+        if (r.error) return fail(r.error);
+        const view = narrow<MoveView>(r.data);
+        setState((s) => ({ ...s, move: { parcelId, view } }));
+      });
+    },
+    [client, creds, run, fail],
+  );
+
+  const cancelMove = useCallback(() => setState((s) => ({ ...s, move: null })), []);
+
+  /** Moved at the price the store was shown — refused with the new one if it changed — then the order read again. */
+  const confirmMove = useCallback(
+    async (parcelId: string) => {
+      const view = stateRef.current.move?.parcelId === parcelId ? stateRef.current.move.view : undefined;
+      if (!client || !creds || !view) return;
+      await run(`move:${parcelId}`, async () => {
+        const r = await client.api.moveOrder(creds.vendorId, parcelId, { to: view.to.did, expectedTotal: view.now });
+        if (r.error) {
+          // The price moved since it was shown: asked again, so the store sees the new one before anything is done.
+          if (r.error.code === 'PRICE_CHANGED') await askMove(parcelId, view.to.did);
+          return fail(r.error);
+        }
+        const done = narrow<MovedView>(r.data);
+        pushToast({ tone: 'ok', icon: 'repeat', title: t('vendor.move.done', { shop: done.to.shopName }), detail: t('vendor.move.doneDetail', { amount: money(done.now, done.currency) }) });
+        setState((s) => ({ ...s, move: null }));
+        await refresh();
+        await openOrder(parcelId);
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh, openOrder, askMove],
+  );
 
   /** Call it off: withdrawn and its money back, or brought back from the hub at the price it was told — then read again. */
   const confirmCallOff = useCallback(
@@ -1679,6 +1728,10 @@ export function useVendorApp() {
       askCallOff,
       cancelCallOff,
       confirmCallOff,
+      startMove,
+      askMove,
+      cancelMove,
+      confirmMove,
       raiseMaxSpend,
       askSwitch,
       cancelSwitch,
