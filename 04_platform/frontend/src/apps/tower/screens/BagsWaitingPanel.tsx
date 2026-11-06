@@ -1,14 +1,36 @@
 import { useEffect, useState } from 'preact/hooks';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import { narrow } from '../../../lib/sbg';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
+interface ChainStep {
+  name: string;
+  km: number;
+  at: string;
+  until: string;
+  outcome?: 'taken' | 'not_now' | 'no_answer' | 'passed_over';
+}
 interface CaseBag {
   code: string;
   destination?: string;
   waitedHours: number;
   claimed: boolean;
   offeredWide: boolean;
+  /** 2026-11-06 — whom it was offered to from here, in order, and how it stands. */
+  chain?: { state: 'asking' | 'taken' | 'nobody' | 'gone'; steps: ChainStep[] };
+}
+
+const STEP: Record<NonNullable<ChainStep['outcome']>, MessageKey> = {
+  taken: 'tower.bags.step.taken',
+  not_now: 'tower.bags.step.not_now',
+  no_answer: 'tower.bags.step.no_answer',
+  passed_over: 'tower.bags.step.passed_over',
+};
+
+/** One driver asked, in words: how it ended — or, still asked, the minutes left to answer. */
+export function stepWords(st: ChainStep, t: (key: MessageKey, values?: Record<string, unknown>) => string, now: number = Date.now()): string {
+  if (st.outcome) return t(STEP[st.outcome], { name: st.name });
+  return t('tower.bags.step.asking', { name: st.name, minutes: Math.max(0, Math.ceil((Date.parse(st.until) - now) / 60_000)) });
 }
 interface BagDriver {
   driverDid: string;
@@ -87,6 +109,13 @@ export function BagsWaitingPanel({ caseId, state, actions }: { caseId: string; s
                   <span class="crow__name">{t('tower.bags.line', { code: b.code, destination: b.destination ?? '—', hours: b.waitedHours })}</span>
                   {b.claimed ? <span class="ctag ctag--info">{t('tower.bags.coming')}</span> : b.offeredWide ? <span class="ctag ctag--quiet">{t('tower.bags.offeredWide')}</span> : null}
                 </span>
+                {/* 2026-11-06 — offered from here: each driver asked, and how it went. */}
+                {b.chain?.steps.length ? (
+                  <span class="crow__sub">
+                    {b.chain.steps.map((st) => stepWords(st, t as never)).join(' · ')}
+                    {b.chain.state === 'nobody' ? ` — ${t('tower.bags.chain.nobody')}` : ''}
+                  </span>
+                ) : null}
                 {!b.claimed && choosing === b.code ? (
                   drivers === null ? (
                     <span class="crow__sub">{t('tower.bags.loading')}</span>

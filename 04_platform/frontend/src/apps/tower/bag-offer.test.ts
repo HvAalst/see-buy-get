@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { createOperatorApi } from '../../lib/sbg/personas/operator';
+import { stepWords } from './screens/BagsWaitingPanel';
 
 /*
  * 2026-11-06 — A BAG NOBODY HAS TAKEN, OFFERED BY STAFF TO A DRIVER THEY CHOOSE (the owner: "go ahead"): the case's bags,
@@ -34,5 +35,14 @@ describe('offering a waiting bag from its case', () => {
     expect(t('tower.bags.line', { code: 'BAG-7', destination: 'Kisumu', hours: 8 })).toBe('BAG-7 · to Kisumu · waited 8 h');
     expect(t('tower.bags.driver', { name: 'Kamau', km: 4.2 })).toBe('Kamau · 4.2 km');
     expect(t('tower.bags.offered', { name: 'Kamau' })).toBe('Offered to Kamau: told, and the notice opens their offer.');
+  });
+
+  it('says each driver asked and how it went — still asked, the minutes left to answer', () => {
+    const now = Date.parse('2026-11-06T12:00:00Z');
+    const step = (outcome?: 'taken' | 'not_now' | 'no_answer' | 'passed_over') => ({ name: 'Kamau', km: 4, at: '2026-11-06T11:50:00Z', until: '2026-11-06T12:10:00Z', ...(outcome ? { outcome } : {}) });
+    expect(stepWords(step('not_now'), t as never, now)).toBe('Kamau · said not now');
+    expect(stepWords(step('no_answer'), t as never, now)).toBe('Kamau · no answer in time');
+    expect(stepWords(step('taken'), t as never, now)).toBe('Kamau · took it');
+    expect(stepWords(step(), t as never, now)).toBe('Kamau · asked, 10 min left to answer');
   });
 });

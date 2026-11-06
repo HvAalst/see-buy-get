@@ -48,6 +48,8 @@ const KIND_ICON: Record<string, IconName> = {
   shelf_full: 'box',
   // 2026-11-06 — a shop's corner for closed bags has filled.
   bag_room: 'bag',
+  // 2026-11-06 — a hub told which parcels can no longer be ready in time: sort them first.
+  sort_first: 'clock',
   pickup_ahead: 'truck',
   message: 'send',
   test: 'bell',

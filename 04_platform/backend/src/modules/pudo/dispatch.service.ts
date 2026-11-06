@@ -960,7 +960,7 @@ export class DispatchService {
   private makeOffer(
     driverDid: string,
     load: Claimable,
-    ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; time?: { collectMin: number; deliverMin?: number }; now: number },
+    ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; time?: { collectMin: number; deliverMin?: number }; now: number; ttlMin?: number },
   ): Offer {
     const { detour, minutesAway, price, now } = ctx;
     const earn = this.expectedEarn(driverDid, load, price, ctx.ratePerKm);
@@ -990,7 +990,7 @@ export class DispatchService {
       parcels: load.parcels,
       fillPct: load.fillPct,
       createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + OFFER_TTL_MIN * 60_000).toISOString(),
+      expiresAt: new Date(now + (ctx.ttlMin ?? OFFER_TTL_MIN) * 60_000).toISOString(),
       status: 'pending',
     };
     this.offers.set(offer.offerId, offer);
@@ -1144,12 +1144,24 @@ export class DispatchService {
    * rate), and only where everything that guards an offer lets them take it: a vehicle that carries it with room aboard,
    * the same refusals as every offer, not snoozed, and above the floor they set for being woken. Null where not.
    */
-  offerBagTo(driverDid: string, code: string, now: number = Date.now()): Offer | null {
+  offerBagTo(driverDid: string, code: string, now: number = Date.now(), opts: { ttlMin?: number } = {}): Offer | null {
     const ok = this.bagOfferable(driverDid, code, now);
     if (!ok) return null;
     const { load, vehicle, at, profile } = ok;
     const km = this.router.roadKm(at, load.pickupLocation);
-    return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(at, load.pickupLocation), ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: at }, load), now });
+    return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(at, load.pickupLocation), ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: at }, load), now, ...(opts.ttlMin ? { ttlMin: opts.ttlMin } : {}) });
+  }
+
+  /** An offer by its id, as it stands — or nothing. */
+  offerById(offerId: string): Offer | undefined {
+    return this.offers.get(offerId);
+  }
+
+  /** 2026-11-06 — told when a driver says "Not now" to an offer (BagOfferService passes a staff offer on at once). */
+  private declined?: (offer: Offer) => void;
+
+  registerDeclined(fn: (offer: Offer) => void): void {
+    this.declined = fn;
   }
 
   /**
@@ -1302,7 +1314,9 @@ export class DispatchService {
    */
   mintDeclineToken(offerId: string, now: number = Date.now()): string {
     const token = randomBytes(24).toString('hex');
-    this.declineTokens.set(token, { offerId, expiresAt: now + OFFER_TTL_MIN * 60_000 });
+    // As long as the offer itself waits (2026-11-06: a staff offer waits longer than a suggestion).
+    const offer = this.offers.get(offerId);
+    this.declineTokens.set(token, { offerId, expiresAt: offer ? Date.parse(offer.expiresAt) : now + OFFER_TTL_MIN * 60_000 });
     return token;
   }
 
@@ -3016,7 +3030,15 @@ export class DispatchService {
 
   ignore(offerId: string): Offer {
     const offer = this.requireOffer(offerId);
-    if (offer.status === 'pending') offer.status = 'ignored';
+    if (offer.status === 'pending') {
+      offer.status = 'ignored';
+      // "Not now", in the app or from the notice: whoever waits on this answer hears it now, not when the offer lapses.
+      try {
+        this.declined?.(offer);
+      } catch (err) {
+        Logger.warn(`after "not now" on ${offerId}: ${(err as Error).message}`, DispatchService.name);
+      }
+    }
     return offer;
   }
 

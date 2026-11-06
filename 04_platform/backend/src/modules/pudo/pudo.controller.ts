@@ -3494,7 +3494,9 @@ export class SbgController {
     const all = wanted.length
       ? wanted.flatMap((s) => this.parcels.list({ status: s as never, agentDid: shop }))
       : this.parcels.list({ agentDid: shop });
-    const rows = hub ? all.filter((p) => p.atMdpId === hub) : all;
+    // 2026-11-06 — a hub's, first in first out (the owner): the parcels that came first, first — the order they are sorted in.
+    const cameAt = (p: { scans?: Array<{ status: string; at: string }> }) => [...(p.scans ?? [])].reverse().find((s) => s.status === 'At_MDP')?.at ?? '';
+    const rows = hub ? all.filter((p) => p.atMdpId === hub).sort((a, b) => cameAt(a).localeCompare(cameAt(b))) : all;
     // What a shelf slot has cost, in the holding shop's money — the figure the counter will ask for (2026-10-25).
     return staff ? rows : rows.map((p) => operationalParcelView(p, p.unclaimedAt ? this.parcels.holdingOwed(p) : undefined));
   }

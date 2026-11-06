@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@ne
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
+import { NotificationService } from './notification.service';
 import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H, STUCK_SWEEP_MS } from './pudo.config';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
@@ -52,6 +53,7 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
     private readonly routing: RoutingService,
     private readonly agents: AgentService,
     @Optional() private readonly events?: EventBus,
+    @Optional() private readonly notifications?: NotificationService,
   ) {
     // Registered rather than asked for: routing reads the hubs, so the parcel and hub services cannot import it.
     parcels.registerRouteKeeper(this);
@@ -85,6 +87,8 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
    */
   sweepStuck(now: number = Date.now()): number {
     let told = 0;
+    // 2026-11-06 — the parcels at each hub found late this time: the hub is told which, to sort them first (tellHubs).
+    const lateAtHub = new Map<string, Parcel[]>();
     for (const status of ['At_PUDO', 'At_MDP'] as const) {
       for (const parcel of this.parcels.list({ status })) {
         const plan = this.planOf(parcel);
@@ -107,10 +111,39 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
         if (plan.lateTold !== before) {
           told += 1;
           this.parcels.notePlan(parcel);
+          if (status === 'At_MDP' && parcel.atMdpId) lateAtHub.set(parcel.atMdpId, [...(lateAtHub.get(parcel.atMdpId) ?? []), parcel]);
         }
       }
     }
+    this.tellHubs(lateAtHub, now);
     return told;
+  }
+
+  /**
+   * 2026-11-06 — THE HUB HOLDING THEM, TOLD (the owner: "great, first in first out"): the parcels standing at a hub that can
+   * no longer be ready in time — their people have just been told — named to the hub in its bell, the longest there first,
+   * to sort first. Its list of parcels to sort is first in, first out already; these are at the front of it.
+   */
+  private tellHubs(lateAtHub: Map<string, Parcel[]>, now: number): void {
+    if (!this.notifications) return;
+    for (const [mdpId, late] of lateAtHub) {
+      const hub = this.hub(mdpId);
+      if (!hub) continue;
+      const since = (p: Parcel) => Date.parse([...(p.scans ?? [])].reverse().find((s) => s.status === 'At_MDP')?.at ?? new Date(now).toISOString());
+      const named = [...late].sort((a, b) => since(a) - since(b));
+      const list = named.slice(0, 10).map((p) => `${p.parcelId} (here ${Math.max(0, Math.floor((now - since(p)) / 3_600_000))} h)`).join(', ');
+      const more = named.length > 10 ? `, and ${named.length - 10} more` : '';
+      void this.notifications
+        .notify(hub.did, {
+          kind: 'sort_first',
+          title: named.length === 1 ? 'A parcel here can no longer be ready in time' : `${named.length} parcels here can no longer be ready in time`,
+          body: `Sort ${named.length === 1 ? 'it' : 'them'} first, first in first out: ${list}${more}. ${named.length === 1 ? 'Its receiver has' : 'Their receivers have'} been told ${named.length === 1 ? 'it is' : 'they are'} running late.`,
+          link: '/?go=sort',
+          tag: `sort-first:${mdpId}:${new Date(now).toISOString().slice(0, 13)}`,
+          data: { parcelIds: named.map((p) => p.parcelId) },
+        })
+        .catch(() => undefined);
+    }
   }
 
   nextStop(parcel: Parcel): PlanHop | undefined {
