@@ -1049,7 +1049,7 @@ export const enDriver = {
   'driver.shopClosed.cancel': 'Not now',
   'driver.shopClosed.asked': 'Its buyers are asked',
   'driver.shopClosed.askedDetail': 'Take the bag to the shop most of them choose — it says so on the bag. Nobody chose by then: your first pick.',
-  'driver.shopClosed.status': '{answered} of {asked} buyers answered · take it to {shop}',
+  'driver.shopClosed.status': '{answered} of {asked, plural, one {# buyer} other {# buyers}} answered · take it to {shop}',
   'driver.toast.bagRead': 'Seal read — bag {ref} is yours to hand over',
   'driver.toast.bagReadDetail': 'Whoever receives it reads the seal again before opening it.',
   'driver.toast.bagReadQueued': 'No signal — kept on this phone',

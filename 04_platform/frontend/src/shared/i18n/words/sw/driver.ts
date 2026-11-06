@@ -917,7 +917,7 @@ export const words: Record<string, string> = {
   "driver.shopClosed.cancel": "Si sasa",
   "driver.shopClosed.asked": "Wanunuzi wake wameulizwa",
   "driver.shopClosed.askedDetail": "Peleka mfuko kwenye duka ambalo wengi wao wanachagua — imeandikwa kwenye mfuko. Pasipo aliyechagua kufikia hapo: duka lako la kwanza.",
-  "driver.shopClosed.status": "Wanunuzi {answered} kati ya {asked} wamejibu · upeleke {shop}",
+  "driver.shopClosed.status": "{answered} kati ya {asked, plural, one {mnunuzi #} other {wanunuzi #}} wamejibu · upeleke {shop}",
   "driver.toast.bagRead": "Lakiri imesomwa — mfuko {ref} ni wako kuukabidhi",
   "driver.toast.bagReadDetail": "Yeyote atakayeupokea ataisoma lakiri tena kabla ya kuufungua.",
   "driver.toast.bagReadQueued": "Hakuna mtandao — imehifadhiwa kwenye simu hii",
