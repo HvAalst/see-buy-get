@@ -39686,6 +39686,10 @@
           "bays": {
             "type": "number"
           },
+          "closedRoom": {
+            "type": "number",
+            "description": "2026-11-06 — the closed bags it keeps in a corner, waiting for drivers (0: none said)."
+          },
           "since": {
             "type": "string"
           }
@@ -39694,6 +39698,7 @@
           "label",
           "zone",
           "bays",
+          "closedRoom",
           "since"
         ]
       },
@@ -39892,8 +39897,13 @@
           },
           "bays": {
             "type": "number",
-            "description": "How many closed bags fit there, waiting for drivers.",
+            "description": "How many bags it works on there at once.",
             "minimum": 1
+          },
+          "closedRoom": {
+            "type": "number",
+            "description": "2026-11-06 — how many closed bags it can keep there in a corner, waiting for drivers.",
+            "minimum": 0
           }
         },
         "required": [
@@ -40137,6 +40147,17 @@
           },
           "used": {
             "type": "number"
+          },
+          "free": {
+            "type": "number",
+            "description": "2026-11-06 — the bags it may open now: the places less the open bags and the closed ones with no corner left."
+          },
+          "closedWaiting": {
+            "type": "number",
+            "description": "Closed bags waiting there for drivers, and the corner it keeps them in."
+          },
+          "corner": {
+            "type": "number"
           }
         },
         "required": [
@@ -40144,7 +40165,10 @@
           "groups",
           "bags",
           "capacity",
-          "used"
+          "used",
+          "free",
+          "closedWaiting",
+          "corner"
         ]
       },
       "BusinessOpenBagDto": {
@@ -59162,6 +59186,11 @@
           "bays": {
             "type": "number",
             "minimum": 1
+          },
+          "closedRoom": {
+            "type": "number",
+            "description": "2026-11-06 — the closed bags it can keep waiting for a driver, in a corner. Left out: as it was (none at first).",
+            "minimum": 0
           }
         },
         "required": [

@@ -8,7 +8,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { CheckoutHandoff, CollectionPoint, GeoPoint, ShippingPolicy, Vendor } from './pudo.types';
-import { DEFAULT_BAG_BAYS, DEFAULT_VENDOR_COUNTRY, MAX_BAG_BAYS, NETWORK_CURRENCY } from './pudo.config';
+import { DEFAULT_BAG_BAYS, DEFAULT_VENDOR_COUNTRY, MAX_BAG_BAYS, MAX_CLOSED_BAG_ROOM, NETWORK_CURRENCY } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -618,7 +618,7 @@ export class VendorService {
    * Deliberately a small, revocable thing on the vendor's own record rather than an agent registration: it
    * grants exactly one power — a driver may be sent here to collect a sealed bag — and no other.
    */
-  setCollectionPoint(vendorId: string, input: { label: string; zone: string; country?: string; location: GeoPoint; bays?: number; siteId?: string }): Vendor {
+  setCollectionPoint(vendorId: string, input: { label: string; zone: string; country?: string; location: GeoPoint; bays?: number; closedRoom?: number; siteId?: string }): Vendor {
     const vendor = this.get(vendorId);
     const label = input.label?.trim();
     const zone = input.zone?.trim();
@@ -635,12 +635,18 @@ export class VendorService {
     if (!Number.isFinite(bays) || bays < 1 || bays > MAX_BAG_BAYS) {
       throw new GlosError('INVALID_INPUT', `Bag space must be between 1 and ${MAX_BAG_BAYS} bags`);
     }
+    // 2026-11-06 — and the corner its closed bags wait in, as a shop says: kept as it was where it is not said again.
+    const closedRoom = input.closedRoom ?? vendor.collection?.closedRoom;
+    if (closedRoom !== undefined && (!Number.isFinite(closedRoom) || closedRoom < 0 || closedRoom > MAX_CLOSED_BAG_ROOM)) {
+      throw new GlosError('INVALID_INPUT', `Room for closed bags must be between 0 and ${MAX_CLOSED_BAG_ROOM}`, { field: 'closedRoom' });
+    }
     vendor.collection = {
       label,
       zone,
       country,
       location: { lat: input.location.lat, lng: input.location.lng },
       bays: Math.floor(bays),
+      ...(closedRoom !== undefined ? { closedRoom: Math.floor(closedRoom) } : {}),
       enabledAt: vendor.collection?.enabledAt ?? new Date().toISOString(),
       ...(input.siteId ? { siteId: input.siteId } : {}),
     };

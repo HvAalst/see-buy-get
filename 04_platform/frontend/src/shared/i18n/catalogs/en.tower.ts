@@ -2356,6 +2356,7 @@ export const enTowerNetwork = {
   'tower.network.flag.Short_Shipped': 'Left behind at handover',
   'tower.network.flag.Temp_Breach': 'Cold chain broken',
   'tower.network.flag.Not_Seen': 'Not seen for a week',
+  'tower.network.flag.Bags_Waiting': 'Closed bags waiting for a driver',
   'tower.network.flag.Pilot_Off_Target': 'Pilot number off target',
 
   'tower.network.shopsTitle': 'The shops',
@@ -3113,6 +3114,7 @@ export const enTowerBusinesses = {
   'tower.cases.kind.Short_Shipped': 'A parcel left behind at a handover',
   'tower.cases.kind.Temp_Breach': 'A cold chain broken',
   'tower.cases.kind.Not_Seen': 'A parcel not seen for a week',
+  'tower.cases.kind.Bags_Waiting': 'Closed bags waiting long for a driver',
   'tower.cases.kind.Pilot_Off_Target': 'A pilot number off target',
   'tower.cases.kind.Tamper_Hold': 'Held: tampering found',
   'tower.cases.kind.Held_By_Authority': 'Held by police or customs',

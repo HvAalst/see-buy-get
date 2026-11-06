@@ -55,6 +55,8 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'parcel.disputed': 'business.system.event.parcelDisputed',
   'parcel.called_off': 'business.system.event.parcelCalledOff',
   'parcel.lost': 'business.system.event.parcelLost',
+  // 2026-11-06 — said before it is late: its plan made again expects it an hour or more after the time promised.
+  'parcel.delayed': 'business.system.event.parcelDelayed',
   test: 'business.system.event.test',
 };
 

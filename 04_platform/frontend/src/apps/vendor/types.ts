@@ -45,7 +45,9 @@ export interface CollectionPointView {
   zone: string;
   country?: string; // absent = the store's own; a warehouse abroad says so
   location: { lat: number; lng: number }; // the loading door, which is not always the storefront pin
-  bays: number; // floor room for sealed bags waiting to be collected
+  bays: number; // the bags it works on at once (2026-11-06: was "floor room for sealed bags", before the corner)
+  /** 2026-11-06 — closed bags it can keep in a corner, waiting for a driver. Absent: none. */
+  closedRoom?: number;
   enabledAt: string;
 }
 
@@ -82,7 +84,7 @@ export interface DockPlan {
   groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
   /** `waitsFor` (2026-11-02): closed, and held on the dock for room at the hub it goes to — that hub's name. */
   bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
-  staging: { capacity: number; used: number; free: number };
+  staging: { capacity: number; used: number; free: number; closed?: { waiting: number; corner: number } };
 }
 
 /** vendors/login → the public record plus the actor token the console carries. */

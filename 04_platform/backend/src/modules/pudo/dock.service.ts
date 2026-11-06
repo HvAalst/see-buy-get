@@ -10,7 +10,8 @@ import { RoutingService, type RouteEnd } from './routing.service';
 import { ToteService } from './tote.service';
 import { VendorService } from './vendor.service';
 import { BagClosureService } from './bag-closure.service';
-import { Parcel, Tote, Vendor } from './pudo.types';
+import { NotificationService } from './notification.service';
+import { CollectionPoint, Parcel, Tote, Vendor } from './pudo.types';
 
 /**
  * DockService — bagging at a vendor's OWN collection point.
@@ -46,6 +47,7 @@ export class DockService {
     private readonly routing: RoutingService,
     // Optional only for the tests that build the parcel module without the plans: without it, no plan is kept here.
     @Optional() private readonly journeys?: JourneyPlanService,
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
 
   /** Open a bag on the vendor's dock for one destination. Refused once the dock's floor is full. */
@@ -58,13 +60,16 @@ export class DockService {
     // name, or the shop a direct route runs to, which receives it (MdpService.deliverBag).
     const hub = this.mdps.list().some((m) => m.mdpId === to) ? this.mdps.working(to) : undefined;
     const shop = hub ? undefined : this.agents.find(to);
-    const staged = this.stagedBags(vendor.did);
-    if (staged.length >= dock.bays) {
-      throw new GlosError(
-        'STAGING_FULL',
-        `This dock has room for ${dock.bays} bag(s) and ${staged.length} are waiting — hand one to a driver, or make room for more`,
-        { capacity: dock.bays, used: staged.length },
-      );
+    // 2026-11-06 — its room as it said it, as a shop's: the bags it works on at once, and a corner for closed ones.
+    const room = this.roomOf(vendor.did, dock);
+    if (room.free <= 0) {
+      const why =
+        room.onFloor === 0
+          ? `This dock has room for ${room.places} bag(s) open at once and ${room.open} are open — close one first, or make room for more`
+          : room.corner === 0
+            ? `This dock has room for ${room.places} bag(s) and ${room.open + room.onFloor} are waiting — hand one to a driver, or make room for more`
+            : `This dock has room for ${room.places} bag(s) on its floor, and its corner for closed bags is full (${room.corner}): ${room.onFloor} more closed bag(s) stand where you work — hand one to a driver, or make room for more`;
+      throw new GlosError('STAGING_FULL', why, { capacity: room.places, used: room.open + room.onFloor, open: room.open, closed: room.closed, corner: room.corner });
     }
     // Keyed to the vendor's DID exactly as a shop bag is keyed to the agent's, so every downstream reader
     // (dispatch, the driver's offer, the notification) resolves the pickup the same way for both.
@@ -150,9 +155,12 @@ export class DockService {
     if (missed.length) this.parcels.markShortShipped(missed, vendor.did, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
 
     const announce = bag.status === 'filling';
+    const closedBefore = this.roomOf(vendor.did, this.vendors.requireCollection(vendorId)).closed;
     const tote = announce ? this.totes.markAvailable(code) : bag;
     this.totes.markSealed(code);
     keepClosure({ at: new Date().toISOString() });
+    // 2026-11-06 — closed: into the corner, if it has room. Filled by this one, the store is told.
+    if (announce) this.tellCornerFull(vendor, closedBefore);
     // 2026-11-02 — offered where the hub it goes to has room; held on the dock, the store told, where none has.
     if (announce) this.mdps.offerBag(tote.code, 'sealed');
     return { tote, parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
@@ -176,7 +184,7 @@ export class DockService {
   plan(vendorId: string): {
     groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
     bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
-    staging: { capacity: number; used: number; free: number };
+    staging: { capacity: number; used: number; free: number; closed: { waiting: number; corner: number } };
   } {
     const vendor = this.vendors.get(vendorId);
     const dock = this.vendors.requireCollection(vendorId);
@@ -188,7 +196,7 @@ export class DockService {
       group.parcelIds.push(parcel.parcelId);
       byStop.set(next.key, group);
     }
-    const staged = this.stagedBags(vendor.did);
+    const room = this.roomOf(vendor.did, dock);
     return {
       // Busiest first, exactly as a shop's plan: with a bay or two free, the fullest bag is the one to pack.
       groups: [...byStop.entries()]
@@ -196,8 +204,40 @@ export class DockService {
         .map(([key, g]) => ({ key, label: g.label, parcelIds: g.parcelIds, openBagCode: open.find((t) => t.destinationNodeId === key && t.status === 'filling')?.code })),
       // 2026-11-02 — a closed bag held on the dock for room at its hub says which hub: it goes on by itself.
       bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status, ...(t.waitsForRoom ? { waitsFor: t.waitsForRoom.hubName } : {}) })),
-      staging: { capacity: dock.bays, used: staged.length, free: Math.max(0, dock.bays - staged.length) },
+      staging: { capacity: room.places, used: room.open + room.onFloor, free: room.free, closed: { waiting: room.closed, corner: room.corner } },
     };
+  }
+
+  /**
+   * 2026-11-06 — A DOCK'S ROOM FOR BAGS, as a shop's (MdpService.bagRoomOf; the owner: "go ahead"): the bags it works on at
+   * once (`bays`), and the closed bags it keeps in a corner while they wait for a driver (`closedRoom`). A closed bag with no
+   * corner left stands where it was filled and takes one of the places. A dock that has not said a corner has none.
+   */
+  private roomOf(vendorDid: string, dock: CollectionPoint): { places: number; open: number; closed: number; corner: number; onFloor: number; free: number } {
+    const staged = this.stagedBags(vendorDid);
+    const open = staged.filter((t) => t.status === 'filling').length;
+    const closed = staged.length - open;
+    const corner = dock.closedRoom ?? 0;
+    const onFloor = Math.max(0, closed - corner);
+    return { places: dock.bays, open, closed, corner, onFloor, free: Math.max(0, dock.bays - open - onFloor) };
+  }
+
+  /** The store told in its bell, once, as its corner for closed bags fills — not where it said it has none. */
+  private tellCornerFull(vendor: Vendor, before: number): void {
+    const dock = vendor.collection;
+    if (!this.notifications || !dock) return;
+    const room = this.roomOf(vendor.did, dock);
+    if (room.corner === 0 || before >= room.corner || room.closed < room.corner) return;
+    void this.notifications
+      .notify(vendor.did, {
+        kind: 'bag_room',
+        title: 'Your corner for closed bags is full',
+        body: `${room.closed} closed bags are waiting at ${dock.label} for drivers, as many as you said your corner holds. The next one you close stands where you work, and you can open ${room.free} more now. Each one a driver takes makes room again.`,
+        link: '/?go=dock',
+        tag: `bag-room:${vendor.did}:${new Date().toISOString().slice(0, 13)}`,
+        data: { closed: room.closed, corner: room.corner },
+      })
+      .catch(() => undefined);
   }
 
   /* --------------------------------------------------------------------------------------------------------- inside -- */

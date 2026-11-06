@@ -654,6 +654,19 @@ describe('NotificationDispatcher — a parcel running late', () => {
     expect(notifications.inboxFor('did:glos:person-s')).toHaveLength(1);
   });
 
+  it('tells a store’s own system before the time comes too — parcel.delayed, how much later (2026-11-06)', async () => {
+    const parcel = onItsWay({ vendorId: 'vnd_1', externalOrderId: 'ORD-7', plan: { hops: [], mdpRouted: false, pickupReadyAt: new Date(Date.now() + 2 * HOUR).toISOString(), plannedAt: new Date(Date.now() - 30 * HOUR).toISOString() } });
+    const vendorCalls: unknown[][] = [];
+    const { notifications, events } = harness({ parcel, onShelf: [], personByHash: people, agents: shop, vendorCalls });
+    const promisedAt = (parcel.plan as { pickupReadyAt: string }).pickupReadyAt;
+    const expectedAt = new Date(Date.parse(promisedAt) + 5 * HOUR).toISOString();
+    await events.publish(GlosEvent.Pudo.ParcelExpectedLate, { parcelId: 'PUD-LATE', promisedAt, expectedAt });
+    expect(vendorCalls).toEqual([['vnd_1', 'parcel.delayed', { parcelId: 'PUD-LATE', externalOrderId: 'ORD-7', status: 'On_Bus', promisedAt, expectedAt, hoursLater: 5 }]]);
+    // Its buyer told in the app; a store's order has no person who sent it.
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+    expect(notifications.inboxFor('did:glos:person-s')).toHaveLength(0);
+  });
+
   it('warns nobody of a parcel no longer on its way (2026-11-06)', async () => {
     const parcel = onItsWay({ status: 'Ready_For_Pickup' });
     const { notifications, events } = harness({ parcel, onShelf: [], personByHash: people, agents: shop });

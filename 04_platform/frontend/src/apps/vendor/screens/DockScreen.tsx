@@ -47,11 +47,12 @@ function DockOffer({ state, actions, lead = true }: { state: VendorState; action
   const [label, setLabel] = useState('');
   const [zone, setZone] = useState('');
   const [bays, setBays] = useState('2');
+  const [corner, setCorner] = useState('0');
   // Starts at the storefront pin, which is usually close and always a better start than nothing — but it is
   // editable, because the loading door is not the shop window.
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(state.vendor?.location ?? null);
 
-  const blockers = dockBlockers({ label, zone, point, bays }, t);
+  const blockers = dockBlockers({ label, zone, point, bays, corner }, t);
 
   return (
     <>
@@ -99,6 +100,14 @@ function DockOffer({ state, actions, lead = true }: { state: VendorState; action
         </div>
 
         <div class="field" style="margin-top:12px">
+          <label class="field__label" for="dock-corner">
+            {t('vendor.dock.cornerLabel')}
+          </label>
+          <input id="dock-corner" class="input" type="number" min="0" inputMode="numeric" value={corner} onInput={(e) => setCorner(e.currentTarget.value)} />
+          <p class="card__note">{t('vendor.dock.cornerNote')}</p>
+        </div>
+
+        <div class="field" style="margin-top:12px">
           <span class="field__label">{t('vendor.dock.pinLabel')}</span>
           <p class="card__note">{t('vendor.dock.pinNote')}</p>
           <div style="margin-top:10px">
@@ -120,7 +129,7 @@ function DockOffer({ state, actions, lead = true }: { state: VendorState; action
             busy={state.busy === 'dock-enable'}
             onClick={() => {
               if (blockers || !point) return;
-              void actions.enableDock({ label: label.trim(), zone: zone.trim(), location: point, bays: Number(bays) });
+              void actions.enableDock({ label: label.trim(), zone: zone.trim(), location: point, bays: Number(bays), closedRoom: Number(corner) });
               setOpen(false);
             }}
           >
@@ -169,6 +178,8 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
       {/* A full floor is a real refusal rather than a warning — openDockBag rejects — so it is said before
           the store taps, not after. */}
       {staging.free === 0 ? <Note tone="warn" icon="warning" title={t('vendor.dock.fullTitle')} detail={t('vendor.dock.fullDetail', { n: String(staging.capacity) })} /> : null}
+      {/* 2026-11-06 — the closed bags waiting for a driver, and the corner they stand in. */}
+      {staging.closed?.waiting ? <p class="card__note">{staging.closed.corner ? t('vendor.dock.cornerWaiting', { waiting: staging.closed.waiting, corner: staging.closed.corner }) : t('vendor.dock.closedWaiting', { waiting: staging.closed.waiting })}</p> : null}
 
       <Card title={t('vendor.dock.waitingTitle')}>
         {plan.groups.length === 0 ? (
@@ -254,6 +265,8 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
         ) : null}
       </Sheet>
 
+      <DockRoom state={state} actions={actions} />
+
       <div class="scr__foot">
         <Button variant="link" busy={state.busy === 'dock-disable'} onClick={() => void actions.disableDock()}>
           {t('vendor.dock.stop')}
@@ -261,5 +274,42 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
         <p class="card__note">{t('vendor.dock.stopNote')}</p>
       </div>
     </>
+  );
+}
+
+/**
+ * 2026-11-06 — ITS ROOM FOR BAGS, said again (the owner: "go ahead", as a shop says it under Set up shelves): the bags the
+ * store works on at once, and the closed bags it keeps in a corner while they wait for a driver. A closed bag with no corner
+ * left stands where it works, and takes one of the places.
+ */
+function DockRoom({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  const dock = state.vendor!.collection!;
+  const [bays, setBays] = useState(String(dock.bays));
+  const [corner, setCorner] = useState(String(dock.closedRoom ?? 0));
+  const blockers = dockBlockers({ label: dock.label, zone: dock.zone, point: dock.location, bays, corner }, t);
+  const changed = Number(bays) !== dock.bays || Number(corner) !== (dock.closedRoom ?? 0);
+  return (
+    <Card title={t('vendor.dock.roomTitle')}>
+      <div class="field">
+        <label class="field__label" for="dock-room-bays">
+          {t('vendor.dock.baysLabel')}
+        </label>
+        <input id="dock-room-bays" class="input" type="number" min="1" inputMode="numeric" value={bays} onInput={(e) => setBays(e.currentTarget.value)} />
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="dock-room-corner">
+          {t('vendor.dock.cornerLabel')}
+        </label>
+        <input id="dock-room-corner" class="input" type="number" min="0" inputMode="numeric" value={corner} onInput={(e) => setCorner(e.currentTarget.value)} />
+        <p class="card__note">{t('vendor.dock.cornerNote')}</p>
+      </div>
+      {blockers ? <p class="hint">{blockers}</p> : null}
+      <div style="margin-top:12px">
+        <Button variant="outline" chevron={false} disabled={!changed || Boolean(blockers)} busy={state.busy === 'dock-room'} onClick={() => void actions.saveDockRoom(Number(bays), Number(corner))}>
+          {t('vendor.dock.roomSave')}
+        </Button>
+      </div>
+    </Card>
   );
 }

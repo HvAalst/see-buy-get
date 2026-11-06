@@ -2581,6 +2581,8 @@ export class CollectionPointDto {
   @IsOptional() @IsString() country?: string;
   @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
   @IsOptional() @IsNumber() @Min(1) bays?: number;
+  /** 2026-11-06 — the closed bags it can keep waiting for a driver, in a corner. Left out: as it was (none at first). */
+  @IsOptional() @IsNumber() @Min(0) closedRoom?: number;
 }
 
 /** Open a bag on the dock for one destination zone. */

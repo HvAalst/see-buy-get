@@ -1348,7 +1348,11 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       const parcel = this.parcels.get(p.parcelId);
       if (!['At_PUDO', 'On_Bus', 'At_MDP'].includes(parcel.status)) return; // ready, or no longer on its way: nothing to warn of
-      const later = lateWords((Date.parse(p.expectedAt) - Date.parse(p.promisedAt)) / 3_600_000);
+      const hoursLater = Math.round(((Date.parse(p.expectedAt) - Date.parse(p.promisedAt)) / 3_600_000) * 10) / 10;
+      const later = lateWords(hoursLater);
+      // 2026-11-06 — a store's own system hears it too, before the time comes (the owner: "go ahead"); a business's hears it
+      // on its own (BusinessHooksService, parcel.delayed). parcel.late still follows when the time has passed.
+      if (parcel.vendorId) this.vendors.notify(parcel.vendorId, 'parcel.delayed', { parcelId: parcel.parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, promisedAt: p.promisedAt, expectedAt: p.expectedAt, hoursLater });
       const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
       const seen = new Set<string>();
       const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);

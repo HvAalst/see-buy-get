@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
@@ -20,10 +20,11 @@ export interface ParcelWay {
   offPlan: Array<{ at: string; kind: 'decision' | 'arrival' | 'system'; where: string; planned?: string; took: string; reason: string; note?: string; by?: string }>;
 }
 import { HELD_BY_WORDS } from './load-detention.types';
-import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
+import { VendorService } from './vendor.service';
+import { AGENT_ONLINE_H, BAGS_WAITING_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -58,6 +59,8 @@ export class MonitorService {
     private readonly gate: WalletGateService,
     private readonly dispatch: DispatchService,
     private readonly totes: ToteService,
+    // 2026-11-06 — a store's own place, named in a flag about its bags. Optional for the tests that build this without it.
+    @Optional() private readonly vendors?: VendorService,
   ) {}
 
   /** Time-window auto-flags — 'what's on fire' (Ch 14). */
@@ -161,8 +164,38 @@ export class MonitorService {
     for (const t of this.totes.list()) {
       if (t.held) flags.push({ type: 'Tamper_Hold', subject: t.code, detail: `bag of ${t.parcels.length} · ${FINDING_WORDS[t.held.finding]} · ${t.held.where}`, ageHours: Math.round(hoursSince(t.held.since)) });
     }
+    flags.push(...this.bagsWaiting());
     for (const p of this.parcels.list()) {
       if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });
+    }
+    return flags;
+  }
+
+  /**
+   * 2026-11-06 — CLOSED BAGS WAITING LONG FOR A DRIVER (the owner: "go ahead"), at a shop or a store's own place: closed bags
+   * no driver has come for in BAGS_WAITING_H. Each holds the corner the place said it has — or, past it, a place it works
+   * in, so it cannot open another. One flag a place: how many, the oldest one's wait, and its corner. A bag held for room
+   * at a full hub is not here: its holder was told, and it goes on by itself when there is room (MdpService.letWaitingGo).
+   */
+  private bagsWaiting(): PudoFlag[] {
+    const at = new Map<string, number[]>();
+    for (const t of this.totes.list()) {
+      if ((t.status !== 'available' && t.status !== 'claimed') || t.waitsForRoom || t.held) continue;
+      const since = t.sealedAt ?? t.availableAt;
+      if (!since) continue;
+      at.set(t.locationId, [...(at.get(t.locationId) ?? []), hoursSince(since)]);
+    }
+    const flags: PudoFlag[] = [];
+    for (const [placeId, waits] of at) {
+      const shop = this.agents.find(placeId);
+      const dock = shop ? undefined : this.vendors?.byDid(placeId)?.collection;
+      if (!shop && !dock) continue; // a hub's own bags: its floor has its own reading
+      const oldest = Math.max(...waits);
+      if (oldest <= BAGS_WAITING_H) continue;
+      const corner = shop ? this.agents.closedBagRoomOf(shop) : (dock!.closedRoom ?? 0);
+      const n = waits.length;
+      const room = corner > 0 ? ` · its corner holds ${corner}${n >= corner ? ', full' : ''}` : '';
+      flags.push({ type: 'Bags_Waiting', subject: shop ? shop.shopName : dock!.label, detail: `${n} closed bag${n === 1 ? '' : 's'} waiting for a driver · the oldest ${Math.round(oldest)}h${room}`, ageHours: Math.round(oldest) });
     }
     return flags;
   }

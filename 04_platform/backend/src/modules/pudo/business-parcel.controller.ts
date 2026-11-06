@@ -82,7 +82,7 @@ export class BusinessParcelController {
   @Roles('business')
   @Post('business/me/parcels/collect-from')
   collectFrom(@Body() dto: BusinessCollectFromDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
-    return this.parcels.collectFrom(memberActor(this.businesses.requireMember(actor)), dto.siteId, dto.bays);
+    return this.parcels.collectFrom(memberActor(this.businesses.requireMember(actor)), dto.siteId, dto.bays, dto.closedRoom);
   }
 
   /** Stop collecting there. */

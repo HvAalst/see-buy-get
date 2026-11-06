@@ -436,6 +436,9 @@ export const MAX_CLOSED_BAG_ROOM = 50;
 // 2026-11-06 — a parcel's people told it will be late, before the time it was promised comes (movement unification): when its
 // plan, made again, expects it at least this long after that time — and told again only if it slips at least this much more.
 export const EXPECTED_LATE_TELL_H = 1;
+// 2026-11-06 — closed bags at a shop or a store's own place that no driver has come for in this long are flagged to
+// operations (Bags_Waiting): a closed bag is meant to leave the same day, and each one holds a corner or a place to work.
+export const BAGS_WAITING_H = 6;
 export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).

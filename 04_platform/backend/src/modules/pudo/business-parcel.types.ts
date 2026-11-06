@@ -92,8 +92,10 @@ export class BusinessCallOffDto {
 /** One of its own places as where drivers collect its parcels. */
 export class BusinessCollectFromDto {
   @IsString() @MaxLength(80) siteId!: string;
-  /** How many closed bags fit there, waiting for drivers. */
+  /** How many bags it works on there at once. */
   @IsOptional() @IsNumber() @Min(1) bays?: number;
+  /** 2026-11-06 — how many closed bags it can keep there in a corner, waiting for drivers. */
+  @IsOptional() @IsNumber() @Min(0) closedRoom?: number;
 }
 
 export class BusinessOpenBagDto {
@@ -125,6 +127,8 @@ export class ParcelCollection {
   /** The delivery area it is in, from the shop nearest to it: what routes a bag from there. */
   @ApiProperty() zone!: string;
   @ApiProperty() bays!: number;
+  /** 2026-11-06 — the closed bags it keeps in a corner, waiting for drivers (0: none said). */
+  @ApiProperty() closedRoom!: number;
   @ApiProperty() since!: string;
 }
 
@@ -193,6 +197,11 @@ export class DockView {
   @ApiProperty({ type: [DockBagView] }) bags!: DockBagView[];
   @ApiProperty() capacity!: number;
   @ApiProperty() used!: number;
+  /** 2026-11-06 — the bags it may open now: the places less the open bags and the closed ones with no corner left. */
+  @ApiProperty() free!: number;
+  /** Closed bags waiting there for drivers, and the corner it keeps them in. */
+  @ApiProperty() closedWaiting!: number;
+  @ApiProperty() corner!: number;
 }
 
 /** The company of ours that holds the balance, and in what money. */

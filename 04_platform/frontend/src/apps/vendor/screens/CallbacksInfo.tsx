@@ -8,6 +8,7 @@ const MESSAGES: Array<[string, MessageKey]> = [
   ['collected', 'vendor.store.cbInfo.ev.collected'],
   ['disputed', 'vendor.store.cbInfo.ev.disputed'],
   ['held · released', 'vendor.store.cbInfo.ev.held'],
+  ['parcel.delayed', 'vendor.store.cbInfo.ev.delayed'],
   ['parcel.late', 'vendor.store.cbInfo.ev.late'],
   ['parcel.lost · parcel.found', 'vendor.store.cbInfo.ev.lost'],
   ['parcel.unclaimed', 'vendor.store.cbInfo.ev.unclaimed'],

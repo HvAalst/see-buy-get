@@ -1181,6 +1181,66 @@ describe('PUDO Light', () => {
     expect(parcels.get(parcelId).custody!.map((l) => l.holderKind)).toEqual(['sender', 'driver']);
   });
 
+  it('a store’s own place keeps closed bags in the corner it says it has, as a shop does (2026-11-06)', () => {
+    const dest = onboardAgent('Corner Dock Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'corner-dock', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'Corner Traders', location: { lat: -1.2, lng: 36.8 } });
+    vendors.topUp(store.vendorId, 500);
+    const asStore = { role: 'genesis', did: store.did } as never;
+    const place = { label: 'Corner dock', zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } };
+    expect(() => controller.setCollectionPoint(store.vendorId, { ...place, bays: 1, closedRoom: -1 } as never, asStore)).toThrow(/between 0 and/);
+    controller.setCollectionPoint(store.vendorId, { ...place, bays: 1, closedRoom: 1 } as never, asStore);
+    const mint = () => (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700555', size: 'S', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel.parcelId as string;
+    const a = mint();
+    const told: Array<{ kind: string }> = [];
+    const dockSvc = (controller as any).dock;
+    const was = dockSvc.notifications;
+    dockSvc.notifications = { notify: async (_did: string, n: { kind: string }) => void told.push(n) };
+    try {
+      const first: any = controller.openDockBag(store.vendorId, { destZone: dest.did } as never, asStore);
+      // One place to work in, and a bag open in it: no second bag beside it.
+      expect(() => controller.openDockBag(store.vendorId, { destZone: dest.did } as never, asStore)).toThrow(/room for 1 bag\(s\) open at once/);
+      controller.fillDockBag(store.vendorId, first.code, { parcelId: a } as never, asStore);
+      controller.sealDockBag(store.vendorId, first.code, { closure: closedBy(store.did) } as never, asStore);
+      // Closed, into the corner: the place is free again — and the corner full, the store told.
+      expect((controller.dockPlan(store.vendorId, asStore) as any).staging).toEqual({ capacity: 1, used: 0, free: 1, closed: { waiting: 1, corner: 1 } });
+      expect(told).toEqual([expect.objectContaining({ kind: 'bag_room' })]);
+      const b = mint();
+      const second: any = controller.openDockBag(store.vendorId, { destZone: dest.did } as never, asStore);
+      controller.fillDockBag(store.vendorId, second.code, { parcelId: b } as never, asStore);
+      controller.sealDockBag(store.vendorId, second.code, { closure: closedBy(store.did) } as never, asStore);
+      // The second closed bag has no corner: it stands in the one place, and no bag can be opened.
+      expect((controller.dockPlan(store.vendorId, asStore) as any).staging).toEqual({ capacity: 1, used: 1, free: 0, closed: { waiting: 2, corner: 1 } });
+      expect(() => controller.openDockBag(store.vendorId, { destZone: dest.did } as never, asStore)).toThrow(/corner for closed bags is full \(1\)/);
+      expect(told).toHaveLength(1);
+      // Its place said again without a corner keeps the corner it said.
+      controller.setCollectionPoint(store.vendorId, { ...place, bays: 2 } as never, asStore);
+      expect(vendors.get(store.vendorId).collection!.closedRoom).toBe(1);
+    } finally {
+      dockSvc.notifications = was;
+    }
+  });
+
+  it('flags closed bags no driver has come for in six hours — the place, how many, the oldest, its corner (2026-11-06)', () => {
+    const shop = onboardAgent('Flag Bag Shop', 'NorthTown', 50);
+    onboardAgent('Flag Bag Dest', 'SouthTown', 50);
+    agents.setBagBays(shop.did, 2, 1);
+    parcels.accept({ agentDid: shop.did, parcelId: 'FBW-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+    const bag = mdps.openShopBag(shop.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, shop.did, 'FBW-1');
+    mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+    const flag = () => monitor.flags().find((f) => f.type === 'Bags_Waiting' && f.subject === 'Flag Bag Shop');
+    // Closed just now: nothing to say yet.
+    expect(flag()).toBeUndefined();
+    // Seven hours on, and no driver has come for it.
+    totes.requireByCode(bag.code).sealedAt = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    expect(flag()).toMatchObject({ detail: '1 closed bag waiting for a driver · the oldest 7h · its corner holds 1, full', ageHours: 7 });
+    // Gone with a driver: the flag goes with it.
+    const driver = coupleTipper('flagbag', { min: 0.8, max: 1.5 });
+    mdps.loadBag(bag.code, drivers.get(driver.did).badgeId!);
+    expect(flag()).toBeUndefined();
+  });
+
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
     const dest = onboardAgent('Dock Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'dock', originZone: 'NorthTown', destZone: 'SouthTown' });
@@ -1213,7 +1273,7 @@ describe('PUDO Light', () => {
 
     // 2026-11-06 — by next stop: the shop the direct route runs to, by its name; the bag is opened with the group's key.
     expect(plan.groups[0]).toMatchObject({ key: dest.did, label: 'Dock Dest', parcelIds: [p1, p2] });
-    expect(plan.staging).toEqual({ capacity: 2, used: 0, free: 2 });
+    expect(plan.staging).toEqual({ capacity: 2, used: 0, free: 2, closed: { waiting: 0, corner: 0 } });
 
     const bag: any = controller.openDockBag(store.vendorId, { destZone: plan.groups[0].key } as never, asStore);
     controller.fillDockBag(store.vendorId, bag.code, { parcelId: p1 } as never, asStore);

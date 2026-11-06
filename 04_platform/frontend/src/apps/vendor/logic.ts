@@ -30,7 +30,7 @@ export function money(v: number | null | undefined, currency: string | undefined
  * wasted trip, and the whole point of a dock is saving one.
  */
 export function dockBlockers(
-  f: { label: string; zone: string; point: { lat: number; lng: number } | null; bays: string },
+  f: { label: string; zone: string; point: { lat: number; lng: number } | null; bays: string; corner?: string },
   t: Translate,
 ): string | null {
   if (!f.label.trim()) return t('vendor.logic.dockLabel');
@@ -39,6 +39,9 @@ export function dockBlockers(
   const bays = Number(f.bays);
   // Not `!bays`: a typed 0 is a real answer and a wrong one, and it must not fall through as "unset".
   if (!Number.isFinite(bays) || bays < 1) return t('vendor.logic.dockBays');
+  // 2026-11-06 — the corner for closed bags: none is an answer, a negative or a fraction is not.
+  const corner = Number(f.corner ?? '0');
+  if (!Number.isInteger(corner) || corner < 0) return t('vendor.logic.dockCorner');
   return null;
 }
 

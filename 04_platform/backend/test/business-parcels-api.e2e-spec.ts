@@ -7,6 +7,8 @@ import { AGREED } from './agreed';
 import { FundingService } from '../src/foundation/funding/funding.service';
 import { VendorService } from '../src/modules/pudo/vendor.service';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
+import { EventBus } from '../src/foundation/events/event-bus.service';
+import { GlosEvent } from '../src/foundation/events/glos-events';
 
 /**
  * A BUSINESS'S PARCELS FROM ITS OWN SYSTEM, over the wire (the user, 2026-10-29: sent "both" on screen and from its own
@@ -127,7 +129,10 @@ describe('a business’s parcels from its own system', () => {
     const hooks = app.get(BusinessHookService);
     const heard = (event: string) => hooks.view(biz.entityId).messages.filter((m) => m.event === event).map((m) => JSON.parse(m.body).data.parcel);
     expect(heard('parcel.paid')).toEqual([expect.objectContaining({ parcelId: id, reference: 'SO-5531', collectionCode: expect.stringMatching(/^COL-/) })]);
-    expect((await http().get('/v1/sbg/business/me/system').set(biz.token).expect(200)).body.events).toEqual(expect.arrayContaining(['parcel.paid', 'parcel.ready', 'parcel.collected', 'parcel.called_off']));
+    expect((await http().get('/v1/sbg/business/me/system').set(biz.token).expect(200)).body.events).toEqual(expect.arrayContaining(['parcel.paid', 'parcel.ready', 'parcel.collected', 'parcel.called_off', 'parcel.delayed']));
+    // 2026-11-06 — told before it is late: where its plan made again expects it later than it was promised, its system hears.
+    await app.get(EventBus).publish(GlosEvent.Pudo.ParcelExpectedLate, { parcelId: id, promisedAt: new Date().toISOString(), expectedAt: new Date(Date.now() + 5 * 3_600_000).toISOString() }, { source: 'test' });
+    expect(heard('parcel.delayed')).toEqual([expect.objectContaining({ parcelId: id })]);
 
     // Another business's key: no such parcel.
     const rival = await aBusiness('Mlima Traders');

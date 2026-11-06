@@ -28,6 +28,8 @@ export interface ParcelCollection {
   label: string;
   zone: string;
   bays: number;
+  /** 2026-11-06 — closed bags it keeps in a corner, waiting for drivers (0: none said). */
+  closedRoom: number;
   since: string;
 }
 
@@ -39,6 +41,10 @@ export interface DockView {
   bags: Array<{ code: string; destination?: string; parcelIds: string[]; fillPct: number; status: string }>;
   capacity: number;
   used: number;
+  /** 2026-11-06 — the bags it may open now; closed bags waiting, and the corner it keeps them in. */
+  free: number;
+  closedWaiting: number;
+  corner: number;
 }
 
 /** The form's way of saying "collected from its own place" where a shop would be chosen. */
@@ -213,7 +219,7 @@ export interface ParcelsApi {
   price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number } }>>;
   postDoor: (parcelId: string) => Promise<Result<BusinessParcelDetail>>;
   raiseDoor: (parcelId: string, maxSpend: number) => Promise<Result<BusinessParcelDetail>>;
-  collectFrom: (siteId: string, bays?: number) => Promise<Result<ParcelAccount>>;
+  collectFrom: (siteId: string, bays?: number, closedRoom?: number) => Promise<Result<ParcelAccount>>;
   stopCollecting: () => Promise<Result<ParcelAccount>>;
   dock: () => Promise<Result<DockView>>;
   openBag: (destZone: string) => Promise<Result<DockView>>;
@@ -250,7 +256,7 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
       call((c) => c.GET('/v1/sbg/business/me/parcels/price' as never, { params: { query: { origin, ...(dest.startsWith(TO_PLACE) ? { toPlace: dest.slice(TO_PLACE.length) } : { dest }), l: String(s.l), w: String(s.w), h: String(s.h), kg: String(s.kg), ...(fragile ? { fragile: 'true' } : {}) } } } as never) as never),
     postDoor: (parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/post` as never, {} as never) as never),
     raiseDoor: (parcelId, maxSpend) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/raise` as never, { body: { maxSpend } } as never) as never),
-    collectFrom: (siteId, bays) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-from' as never, { body: { siteId, ...(bays ? { bays } : {}) } } as never) as never),
+    collectFrom: (siteId, bays, closedRoom) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-from' as never, { body: { siteId, ...(bays ? { bays } : {}), ...(closedRoom !== undefined ? { closedRoom } : {}) } } as never) as never),
     stopCollecting: () => call((c) => c.DELETE('/v1/sbg/business/me/parcels/collect-from' as never, {} as never) as never),
     dock: () => call((c) => c.GET('/v1/sbg/business/me/parcels/dock' as never, {} as never) as never),
     openBag: (destZone) => call((c) => c.POST('/v1/sbg/business/me/parcels/dock/bags' as never, { body: { destZone } } as never) as never),

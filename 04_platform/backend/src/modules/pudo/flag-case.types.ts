@@ -8,7 +8,7 @@
  * says so. Its history is kept, never rewritten.
  */
 
-export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold', 'Held_By_Authority'] as const;
+export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold', 'Held_By_Authority', 'Bags_Waiting'] as const;
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
 export const CASE_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -37,6 +37,8 @@ export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
   Buyer_Dispute: 'medium',
   Stagnant_Inventory: 'medium',
   Connectivity_Loss: 'medium',
+  // 2026-11-06 — closed bags at a shop or a store's own place no driver has come for: a shop is waiting, and its room fills.
+  Bags_Waiting: 'medium',
   Uncollected: 'low',
   Never_Dropped_Off: 'low',
 };

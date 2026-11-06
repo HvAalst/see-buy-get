@@ -32,6 +32,8 @@ const PARCEL_TOPICS: ReadonlyArray<[string, BusinessParcelEvent]> = [
   [GlosEvent.Pudo.ParcelDisputed, 'parcel.disputed'],
   [GlosEvent.Pudo.ParcelVoided, 'parcel.called_off'],
   [GlosEvent.Pudo.ParcelLost, 'parcel.lost'],
+  // 2026-11-06 — its plan made again expects it an hour or more after the time it was promised: said before that time comes.
+  [GlosEvent.Pudo.ParcelExpectedLate, 'parcel.delayed'],
 ];
 
 const TOPICS: ReadonlyArray<[string, BusinessHookEvent, (p: Record<string, unknown>) => string | undefined]> = [

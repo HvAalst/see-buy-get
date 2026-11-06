@@ -262,7 +262,7 @@ export function createVendorApi(sbg: SbgClient) {
      *  bags can stand waiting on the floor — the dock refuses to open more than it has room for. */
     setCollectionPoint: (
       vendorId: string,
-      body: { label: string; zone: string; country?: string; location: { lat: number; lng: number }; bays?: number },
+      body: { label: string; zone: string; country?: string; location: { lat: number; lng: number }; bays?: number; closedRoom?: number },
     ) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/collection-point', { params: { path: { id: vendorId } }, body })),
 
     /** Stop collecting here. Bags already claimed stay with the drivers who claimed them. */

@@ -799,6 +799,8 @@ export class CollectionPoint {
   country?: string;
   location: GeoPoint; // the loading door, which is not always the storefront pin
   bays: number; // floor room for staged bags — the shop's bag bays, at a dock
+  /** 2026-11-06 — closed bags it can keep waiting for a driver, in a corner, as a shop says (Agent.closedBagRoom). Absent: none. */
+  closedRoom?: number;
   enabledAt: string;
   /** A business's own place it was made from (2026-10-29): which of its saved places drivers collect its parcels at. */
   siteId?: string;

@@ -965,7 +965,7 @@ export function useVendorApp() {
 
   /** Enable the dock, then immediately load its (empty) plan so the screen lands on the real thing. */
   const enableDock = useCallback(
-    async (input: { label: string; zone: string; location: { lat: number; lng: number }; bays?: number }) => {
+    async (input: { label: string; zone: string; location: { lat: number; lng: number }; bays?: number; closedRoom?: number }) => {
       if (!client || !creds) return;
       await run('dock-enable', async () => {
         const r = await client.api.setCollectionPoint(creds.vendorId, input);
@@ -973,6 +973,22 @@ export function useVendorApp() {
         setState((s) => ({ ...s, vendor: narrow<VendorView>(r.data) ?? s.vendor }));
         await loadDock();
         pushToast({ tone: 'ok', icon: 'home', title: t('vendor.dock.enabled'), detail: input.label });
+      });
+    },
+    [client, creds, run, fail, loadDock, pushToast, t],
+  );
+
+  /** 2026-11-06 — its room for bags, said again: the bags it works on at once, and the closed ones it keeps in a corner. */
+  const saveDockRoom = useCallback(
+    async (bays: number, closedRoom: number) => {
+      const dock = stateRef.current.vendor?.collection;
+      if (!client || !creds || !dock) return;
+      await run('dock-room', async () => {
+        const r = await client.api.setCollectionPoint(creds.vendorId, { label: dock.label, zone: dock.zone, ...(dock.country ? { country: dock.country } : {}), location: dock.location, bays, closedRoom });
+        if (r.error) return fail(r.error);
+        setState((s) => ({ ...s, vendor: narrow<VendorView>(r.data) ?? s.vendor }));
+        await loadDock();
+        pushToast({ tone: 'ok', icon: 'bag', title: t('vendor.dock.roomSaved') });
       });
     },
     [client, creds, run, fail, loadDock, pushToast, t],
@@ -1747,6 +1763,7 @@ export function useVendorApp() {
       loadPoints,
       loadDock,
       enableDock,
+      saveDockRoom,
       disableDock,
       openDockBag,
       fillDockBag,

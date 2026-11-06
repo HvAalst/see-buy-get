@@ -154,13 +154,13 @@ export class BusinessParcelService {
    * the shop nearest to it — which is what routes a bag from there. Refused where no shop of ours is near: a driver has
    * nowhere to be routed to. Its parcels are then bagged there, and a driver collects the closed bag.
    */
-  collectFrom(who: ParcelActor, siteId: string, bays?: number): BusinessParcelAccountView {
+  collectFrom(who: ParcelActor, siteId: string, bays?: number, closedRoom?: number): BusinessParcelAccountView {
     const v = this.requireAccount(who);
     const site = this.sites.require(who.entity.entityId, siteId);
     if (!OWN_PLACES.includes(site.kind)) throw new GlosError('INVALID_INPUT', `${site.name} is a port or a clearing place, not one of your own: choose a place of yours`, { field: 'siteId' });
     const near = this.nearestShop(site.location);
     if (!near) throw new GlosError('INVALID_STATE', `No shop of ours is within ${COLLECT_NEAR_KM} km of ${site.name}, so no driver can be routed from there yet: hand your parcels in at a shop`, { field: 'siteId' });
-    this.vendors.setCollectionPoint(v.vendorId, { label: site.name, zone: near.zone, country: this.agents.countryOf(near), location: site.location, ...(bays ? { bays } : {}), siteId: site.siteId });
+    this.vendors.setCollectionPoint(v.vendorId, { label: site.name, zone: near.zone, country: this.agents.countryOf(near), location: site.location, ...(bays ? { bays } : {}), ...(closedRoom !== undefined ? { closedRoom } : {}), siteId: site.siteId });
     return this.account(who);
   }
 
@@ -185,6 +185,9 @@ export class BusinessParcelService {
       bags: plan.bags.map((b) => ({ code: b.code, ...(b.destinationLabel ? { destination: b.destinationLabel } : {}), parcelIds: b.parcelIds, fillPct: b.fillPct, status: b.status })),
       capacity: plan.staging.capacity,
       used: plan.staging.used,
+      free: plan.staging.free,
+      closedWaiting: plan.staging.closed.waiting,
+      corner: plan.staging.closed.corner,
     };
   }
 
@@ -447,7 +450,7 @@ export class BusinessParcelService {
 
   private collectionOf(v: Vendor): ParcelCollection {
     const c = v.collection!;
-    return { ...(c.siteId ? { siteId: c.siteId } : {}), label: c.label, zone: c.zone, bays: c.bays, since: c.enabledAt };
+    return { ...(c.siteId ? { siteId: c.siteId } : {}), label: c.label, zone: c.zone, bays: c.bays, closedRoom: c.closedRoom ?? 0, since: c.enabledAt };
   }
 
   /** The shop nearest to a point, within reach, that takes new parcels. */
