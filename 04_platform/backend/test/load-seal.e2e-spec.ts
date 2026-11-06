@@ -107,14 +107,16 @@ describe('a seal on a load, over the wire', () => {
     store.set(freightId, { ...store.get(freightId), status: 'claimed', claimedBy: driver.did, claimedAt: new Date().toISOString() });
     const claim = (await http().get(`/v1/sbg/fleet/drivers/${driver.did}/claims`).set(bearer(driver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === freightId);
     expect(claim.seals).toEqual([expect.objectContaining({ sealId: a.sealId, no: 1, sealClass: 'H', maker: 'Leghorn', check: expect.stringMatching(/^[0-9a-f]{64}$/) }), expect.objectContaining({ no: 2 })]);
-    expect(JSON.stringify(claim.seals)).not.toContain('1234');
+    // Read without the long random runs — ids and fingerprints — which may hold any digits by chance (one held "…51234…").
+    const withoutIds = (v: unknown) => JSON.stringify(v).replace(/[0-9a-f]{12,}/gi, '#');
+    expect(withoutIds(claim.seals)).not.toContain('1234');
     // Round 35 — nor anywhere else before the goods are taken over: not the seals list, not the note, not the tracking page
     // (whose key is printed on the load's labels). Read off the door, or not at all. The shipper and staff still read them.
     const asCarrier = (await http().get(`/v1/sbg/dispatch/freight/${freightId}/seals`).set(bearer(driver.token)).expect(200)).body.seals;
     expect(asCarrier).toEqual([expect.objectContaining({ sealId: a.sealId, numberWithheld: true }), expect.objectContaining({ sealId: b.sealId, numberWithheld: true })]);
-    expect(JSON.stringify(asCarrier)).not.toMatch(/1234|7654321/);
+    expect(withoutIds(asCarrier)).not.toMatch(/1234|7654321/);
     const carrierNote = (await http().get(`/v1/sbg/dispatch/freight/${freightId}/consignment-note`).set(bearer(driver.token)).expect(200)).body;
-    expect(JSON.stringify(carrierNote)).not.toMatch(/1234|7654321/);
+    expect(withoutIds(carrierNote)).not.toMatch(/1234|7654321/);
     expect(carrierNote.seals).toEqual([expect.stringContaining('Seal 1: its number is read off the door at taking over'), expect.any(String)]);
     expect((await http().get(`/v1/sbg/dispatch/freight/${freightId}/consignment-note.html`).set(bearer(driver.token)).expect(200)).text).not.toMatch(/1234-567|7654321/);
     const earlyRow = (await http().get('/v1/sbg/dispatch/posted').set(bearer(biz)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === freightId);
