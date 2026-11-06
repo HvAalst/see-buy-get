@@ -2316,7 +2316,27 @@ describe('PUDO Light', () => {
       expect(bagPlans.forShop(shop.did).bags.map((b) => b.code).sort()).toEqual([bag.code, bag2.code].sort());
     });
 
-    it('a bag for a route THROUGH A HUB: planned under the hub, called by its name, filled, and checked at closing (2026-11-05)', async () => {
+    it('a second bag for the same stop closes without counting the first bag’s parcels as left behind (2026-11-05)', () => {
+    // The first bag closed and waiting for its driver holds its parcels: they are not on the shelf, and are never short-shipped.
+    const origin = onboardAgent('Two Bags', 'NorthTown', 50);
+    corridors.addCorridor({ name: 'two-bags', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const take = (id: string) => parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    take('TWO-1');
+    take('TWO-2');
+    const first = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(first.code, origin.did, 'TWO-1');
+    mdps.fillShopBag(first.code, origin.did, 'TWO-2');
+    mdps.sealShopBag(first.code, origin.did, { closure: closedBy(origin.did) });
+    take('TWO-3');
+    const second = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(second.code, origin.did, 'TWO-3');
+    const sealed = mdps.sealShopBag(second.code, origin.did, { closure: closedBy(origin.did) });
+    expect(sealed.missed).toEqual([]);
+    expect(parcels.get('TWO-1').shortShipReason).toBeUndefined();
+    expect(parcels.get('TWO-2').shortShipReason).toBeUndefined();
+  });
+
+  it('a bag for a route THROUGH A HUB: planned under the hub, called by its name, filled, and checked at closing (2026-11-05)', async () => {
       // The other half of the Hawassa case: no road straight there, so these go to the hub that serves the far end.
       // The bag was opened for the hub's id and then compared with each parcel's ZONE, so not one of them went in.
       const shop = onboardAgent('Via Hub Shop', 'ViaNorth', 50);

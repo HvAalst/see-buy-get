@@ -799,10 +799,14 @@ export class MdpService {
     }
 
     const inBag = new Set(bag.parcels);
+    // 2026-11-05 — a parcel already in ANOTHER bag at this shop (closed and waiting for its driver, say) is not on the shelf:
+    // it was counted as missed, and leaving it "on purpose" marked it short-shipped while it sat in the first bag. Read from
+    // the bags themselves, as ALREADY_IN_BAG is — parcel.toteId can be stale.
+    const inOtherBags = new Set(this.totes.list({ locationId: agentDid }).filter((t) => t.code !== bag.code).flatMap((t) => t.parcels));
     const expected = this.parcels
       .list({ status: 'At_PUDO', agentDid })
       // round 35 — a held parcel is not missed. 2026-11-05 — matched by where it goes next, as it is filled (belongsInShopBag).
-      .filter((p) => p.originAgentDid === agentDid && !p.held && this.belongsInShopBag(p, bag))
+      .filter((p) => p.originAgentDid === agentDid && !p.held && !inOtherBags.has(p.parcelId) && this.belongsInShopBag(p, bag))
       .map((p) => p.parcelId);
     const missed = expected.filter((id) => !inBag.has(id));
 

@@ -98,7 +98,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     await http().post(`/v1/sbg/parcels/${late}/intake`).set(north.token).send({ agentDid: north.did }).expect(201);
     const second = (await http().post(`/v1/sbg/agents/${north.did}/totes`).set(north.token).send({ destZone: `BagSouth${tag}` }).expect(201)).body.code as string;
     await http().post(`/v1/sbg/agents/${north.did}/totes/${second}/fill`).set(north.token).send({ parcelId: late }).expect(201);
-    expect((await http().post(`/v1/sbg/agents/${north.did}/totes/${second}/seal`).set(north.token).send({ acknowledgeShortShip: true, shortShipReason: 'in the first bag', closure: { seal: SEAL.replace(' ', '-'), photoRef: await photo(north.token, 'seal') } }).expect(400)).body.detail).toMatch(/closes another bag still on its way: a coded seal is used once/);
+    expect((await http().post(`/v1/sbg/agents/${north.did}/totes/${second}/seal`).set(north.token).send({ closure: { seal: SEAL.replace(' ', '-'), photoRef: await photo(north.token, 'seal') } }).expect(400)).body.detail).toMatch(/closes another bag still on its way: a coded seal is used once/);
 
     // ON ITS WAY: a bag closed is loaded; staff close nothing.
     await http().post(`/v1/sbg/totes/${shopBag}/close`).set(operator).send({ photoRef: 'x' }).expect(403);
