@@ -14001,6 +14001,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "sbg-queued-at",
+            "in": "header",
+            "description": "Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -15013,7 +15022,17 @@
         "operationId": "Sbg.handover",
         "summary": "",
         "description": "Handing parcels to a driver is the driver's act: the counter scans the pass on the driver's own phone (badgeShown).",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "sbg-queued-at",
+            "in": "header",
+            "description": "Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -18611,6 +18630,15 @@
             "name": "code",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sbg-queued-at",
+            "in": "header",
+            "description": "Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.",
+            "required": false,
             "schema": {
               "type": "string"
             }

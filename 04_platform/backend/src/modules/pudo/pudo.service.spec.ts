@@ -2252,14 +2252,14 @@ describe('PUDO Light', () => {
       const asIs = controller.handover({ agentDid: shop.did, driverBadgeId: pass(), parcelIds: ['MU2O-A'] } as never, asShop) as { handed: string[]; rejected: Array<{ reason: string }> };
       expect(asIs.handed).toEqual([]);
       expect(asIs.rejected).toEqual([expect.objectContaining({ reason: 'off_plan' })]);
-      const late = controller.handover({ agentDid: shop.did, driverBadgeId: pass(), parcelIds: ['MU2O-A'] } as never, asShop, new Date(Date.now() - 20 * 60_000).toISOString()) as { handed: string[]; rejected: unknown[] };
+      const late = controller.handover({ agentDid: shop.did, driverBadgeId: pass(), parcelIds: ['MU2O-A'] } as never, asShop, { headers: { 'sbg-queued-at': new Date(Date.now() - 20 * 60_000).toISOString() } }) as { handed: string[]; rejected: unknown[] };
       expect(late.handed).toEqual(['MU2O-A']);
       expect(late.rejected).toEqual([]);
       // The same for a bag filled with no signal: put in a bag its plan does not go by, heard of afterwards — kept.
       const other = mdps.register({ name: 'MU2O Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
       const bag = mdps.openShopBag(shop.did, other.mdpId);
       expect(() => controller.fillShopBag(shop.did, bag.code, { parcelId: 'MU2O-B' } as never, asShop)).toThrow(/goes to MU2O South Sort next by its plan/);
-      controller.fillShopBag(shop.did, bag.code, { parcelId: 'MU2O-B' } as never, asShop, new Date(Date.now() - 20 * 60_000).toISOString());
+      controller.fillShopBag(shop.did, bag.code, { parcelId: 'MU2O-B' } as never, asShop, { headers: { 'sbg-queued-at': new Date(Date.now() - 20 * 60_000).toISOString() } });
       expect(totes.requireByCode(bag.code).parcels).toEqual(['MU2O-B']);
       expect(parcels.get('MU2O-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'done_offline', planned: hub.mdpId, took: other.mdpId })]);
       const left = parcels.get('MU2O-A').plan!;

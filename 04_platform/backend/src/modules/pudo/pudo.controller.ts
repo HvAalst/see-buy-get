@@ -60,7 +60,7 @@ import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, Container
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry, countryOfPhone } from '../../foundation/countries/catalogue';
-import { ApiQuery } from '@nestjs/swagger';
+import { ApiHeader, ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
 import { AgreementService } from '../../foundation/documents/agreement.service';
@@ -232,6 +232,12 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
   };
 }
 
+
+/** 2026-11-06 — the outbox's mark on a step made with no signal (Sbg-Queued-At), or nothing. */
+function queuedAtOf(req?: { headers?: Record<string, unknown> }): string | undefined {
+  const v = req?.headers?.['sbg-queued-at'];
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
 
 @Controller('sbg')
 // B1 — a business sign-in reaches about forty of these routes; whether that person is still in the business, and may
@@ -3058,8 +3064,9 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/fill')
   @AtTheCounter()
-  fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
-    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAt));
+  @ApiHeader({ name: 'sbg-queued-at', required: false, description: 'Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.' })
+  fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Req() req?: { headers?: Record<string, unknown> }) {
+    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAtOf(req)));
   }
 
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
@@ -3438,7 +3445,9 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Post('parcels/handover')
   @AtTheCounter()
-  handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
+  @ApiHeader({ name: 'sbg-queued-at', required: false, description: 'Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.' })
+  handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult, @Req() req?: { headers?: Record<string, unknown> }) {
+    const queuedAt = queuedAtOf(req);
     const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
     const agentDid = actingDid(actor, dto.agentDid);
     const said = offPlanSaid(dto, queuedAt);
@@ -5385,8 +5394,9 @@ export class SbgController {
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/fill')
   @AtTheCounter()
-  fillTote(@Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
-    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAt), actor?.did);
+  @ApiHeader({ name: 'sbg-queued-at', required: false, description: 'Sent by the app’s outbox with a step made where there was no signal: when it was made. Done already, it is recorded — never refused for going another way than the parcel’s plan.' })
+  fillTote(@Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Req() req?: { headers?: Record<string, unknown> }) {
+    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAtOf(req)), actor?.did);
   }
 
   /**
