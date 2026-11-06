@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { laneWords, offPlanWords, planFoldHint, type PlanLane } from './planVsActual';
+import { laneWords, offPlanWords, planFoldHint, type PlanLane, detourWords } from './planVsActual';
 
 const lane = (over: Partial<PlanLane> = {}): PlanLane => ({ from: 'CBD', to: 'Kisumu', arrived: 3, onTime: 1, late: 2, typicalLateHours: 6.5, routeKnown: 3, routeKept: 2, worst: { parcelId: 'P-9', lateHours: 10 }, ...over });
 
@@ -33,5 +33,15 @@ describe('the steps a lane’s parcels took off their plans', () => {
   it('counts them, the commonest reason first, each in words', () => {
     const said = offPlanWords({ offPlan: 3, offPlanReasons: { arrived_elsewhere: 1, no_transport: 2 } }, t);
     expect(said).toBe(t('tower.plan.offPlan', { count: 3, why: `${t('tower.plan.why.noTransport')} (2), ${t('tower.plan.why.arrivedElsewhere')} (1)` }));
+  });
+});
+
+/* 2026-11-06 — what the ways not priced cost (the owner: "I follow point 1 to 6"). */
+describe('a lane’s detours, in words', () => {
+  it('says what was paid at stops not priced, and the priced stops not used — each money apart, never added', () => {
+    const words = detourWords({ detours: { parcels: 3, paid: [{ currency: 'KES', amount: 1200 }, { currency: 'UGX', amount: 40000 }], unused: [{ currency: 'KES', amount: 800 }] } }, t as never);
+    expect(words).toBe('3 paid at stops not priced: 1,200.00 KES · 40,000.00 UGX — priced stops not used: 800.00 KES');
+    expect(detourWords({ detours: { parcels: 1, paid: [{ currency: 'KES', amount: 60 }], unused: [] } }, t as never)).toBe('1 paid at a stop not priced: 60.00 KES');
+    expect(detourWords({}, t as never)).toBe('');
   });
 });

@@ -6,6 +6,7 @@ import { useT } from '../../../shared/i18n';
 import { dockBlockers, stagingTone } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 import { HubHandIn } from './HubHandIn';
+import { AnotherWaySheet } from '../../../shared/AnotherWaySheet';
 
 /**
  * The store's own dock — the screen for a capability that has been backend-complete and invisible.
@@ -150,6 +151,8 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
   const plan = state.dock;
   // Round 36 — the bag being closed for the road, and how.
   const [closingBag, setClosingBag] = useState<string | null>(null);
+  // 2026-11-06 — the group being sent another way (its key and its parcels).
+  const [another, setAnother] = useState<{ key: string; parcelIds: string[] } | null>(null);
   const [closing, setClosing] = useState<BagCloseForm>(EMPTY_BAG_CLOSE);
   // 'idle' counts as loading: this loads after mount, and flashing "nothing to bag" at a store with a full
   // floor would be worse than a moment of nothing (the register epic's lesson).
@@ -181,6 +184,19 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
       {/* 2026-11-06 — the closed bags waiting for a driver, and the corner they stand in. */}
       {staging.closed?.waiting ? <p class="card__note">{staging.closed.corner ? t('vendor.dock.cornerWaiting', { waiting: staging.closed.waiting, corner: staging.closed.corner }) : t('vendor.dock.closedWaiting', { waiting: staging.closed.waiting })}</p> : null}
 
+      <AnotherWaySheet
+        open={another !== null}
+        count={another?.parcelIds.length ?? 0}
+        ways={plan.ways ?? []}
+        exclude={another?.key}
+        busy={state.busy === 'dock-another-way'}
+        onSend={(toHubId, reason, note) => {
+          if (!another) return;
+          void actions.sendDockAnotherWay(another.parcelIds, toHubId, reason, note).then((ok) => ok && setAnother(null));
+        }}
+        onClose={() => setAnother(null)}
+      />
+
       <Card title={t('vendor.dock.waitingTitle')}>
         {plan.groups.length === 0 ? (
           <p class="card__note">{t('vendor.dock.nothingWaiting')}</p>
@@ -190,6 +206,12 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
               <div class="dockrow__text">
                 <span class="dockrow__label">{g.label}</span>
                 <span class="dockrow__sub">{t('vendor.dock.parcelsWaiting', { n: String(g.parcelIds.length) })}</span>
+                {/* 2026-11-06 — no driver going their way, the hub on it full: through another hub, the reason said. */}
+                {plan.ways?.length ? (
+                  <Button variant="link" onClick={() => setAnother({ key: g.key, parcelIds: g.parcelIds })}>
+                    {t('anotherWay.open')}
+                  </Button>
+                ) : null}
               </div>
               {g.openBagCode ? (
                 <Button

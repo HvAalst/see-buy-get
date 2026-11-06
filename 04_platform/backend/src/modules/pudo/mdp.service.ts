@@ -361,6 +361,14 @@ export class MdpService {
    * which is what the store paid for; its fee now where the parcel was never sold through this hub (sent another way
    * since, or sold before fees were kept per stop), or where the hub's money has changed since.
    */
+  /**
+   * 2026-11-06 — sent another way than its plan by whoever holds it — a store's or a business's own place — with the reason
+   * said: the step and the reason kept on its plan, where it is heading kept until it arrives (RouteKeeper.leave).
+   */
+  sendAnotherWay(parcel: Parcel, to: string, by: string, said: OffPlanSaid): void {
+    this.routeKeeper?.leave(parcel, to, by, said);
+  }
+
   sortPayOf(mdp: Mdp, parcel: Pick<Parcel, 'stopFees'>): number {
     const sold = parcel.stopFees?.find((s) => s.type === 'mdp' && s.id === mdp.mdpId);
     return sold && sold.currency === this.currencyOf(mdp) ? sold.fee : mdp.pricePerParcel;
@@ -1255,6 +1263,8 @@ export class MdpService {
     const hubEntity = this.entityIdOrNone(hub);
     const sortPay = this.sortPayOf(hub, parcel);
     if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId);
+    // 2026-11-06 — kept on its plan as paid, priced through this hub or not (what another way cost: the lanes).
+    this.parcels.notePaid(parcel, { type: 'mdp', id: mdpId, label: hub.name }, sortPay, this.currencyOf(hub), now);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     // 2026-11-02 — counted against the day's sorting; and the last parcel of a bag sorted frees that bag's place.

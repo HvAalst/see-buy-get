@@ -414,6 +414,12 @@ export interface JourneyPlan {
   pricedVia?: string[];
   /** When it should be ready by the plan as made again. The promise (pickupReadyAt) is never moved. */
   expectedAt?: string;
+  /**
+   * 2026-11-06 — WHAT EACH STOP WAS PAID FOR IT, as it was paid (a hub's sort, a shop's shelving and release), and whether
+   * the price went through that stop. The price never moves: a stop paid that was not priced is what another way cost, and
+   * a priced stop never paid is what it did not. Kept from that day on; a parcel paid before it has none.
+   */
+  paid?: Array<{ type: 'pudo' | 'mdp'; id: string; label: string; amount: number; currency: string; priced: boolean; at: string }>;
 }
 
 export class CustodyLeg {

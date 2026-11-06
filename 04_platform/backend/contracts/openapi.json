@@ -4383,6 +4383,36 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/dock/another-way": {
+      "post": {
+        "operationId": "BusinessParcel.sendAnotherWay",
+        "summary": "",
+        "description": "2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessAnotherWayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels/dock/bags/{code}/seal": {
       "post": {
         "operationId": "BusinessParcel.sealBag",
@@ -16013,6 +16043,38 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/dock/another-way": {
+      "post": {
+        "operationId": "Sbg.dockAnotherWay",
+        "summary": "",
+        "description": "2026-11-06 — its waiting parcels sent through another hub than their plans' — no driver going their way, the hub on it\nfull, faster, or another reason in its words (as a shop can): the step kept on each, and from then they are bagged for it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DockAnotherWayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         }
@@ -40275,6 +40337,25 @@
           "status"
         ]
       },
+      "DockWayView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "km"
+        ]
+      },
       "DockView": {
         "type": "object",
         "properties": {
@@ -40309,6 +40390,13 @@
           },
           "corner": {
             "type": "number"
+          },
+          "ways": {
+            "description": "2026-11-06 — the hubs its parcels could be sent through instead: working, nearest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DockWayView"
+            }
           }
         },
         "required": [
@@ -40319,7 +40407,8 @@
           "used",
           "free",
           "closedWaiting",
-          "corner"
+          "corner",
+          "ways"
         ]
       },
       "BusinessOpenBagDto": {
@@ -40344,6 +40433,40 @@
         },
         "required": [
           "parcelId"
+        ]
+      },
+      "BusinessAnotherWayDto": {
+        "type": "object",
+        "properties": {
+          "parcelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 60
+            }
+          },
+          "toHubId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "offPlanReason": {
+            "type": "string",
+            "enum": [
+              "no_transport",
+              "hub_full",
+              "faster",
+              "other"
+            ]
+          },
+          "offPlanNote": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "parcelIds",
+          "toHubId",
+          "offPlanReason"
         ]
       },
       "BagCloseDto": {
@@ -59412,6 +59535,39 @@
           "mode",
           "hint",
           "createdAt"
+        ]
+      },
+      "DockAnotherWayDto": {
+        "type": "object",
+        "properties": {
+          "parcelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "toHubId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "offPlanReason": {
+            "type": "string",
+            "enum": [
+              "no_transport",
+              "hub_full",
+              "faster",
+              "other"
+            ]
+          },
+          "offPlanNote": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "parcelIds",
+          "toHubId",
+          "offPlanReason"
         ]
       },
       "OpenDockBagDto": {

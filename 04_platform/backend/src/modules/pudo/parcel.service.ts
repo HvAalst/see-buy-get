@@ -1019,6 +1019,32 @@ export class ParcelService implements OnApplicationBootstrap {
     else delete parcel.floorPaidAhead;
     parcel.shelvingLabour = pay;
     this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    this.noteShopPaid(agentDid, parcel, pay);
+  }
+
+  /**
+   * 2026-11-06 — A STOP'S PAY, KEPT ON THE PARCEL'S PLAN AS IT IS PAID (the owner: "I follow point 1 to 6"): which stop, how
+   * much, in its money, and whether the parcel was priced through it — so a lane can say what the ways not priced cost.
+   * Nothing for a parcel with no plan kept stop by stop, or none priced stop by stop (then nothing can be told apart).
+   */
+  notePaid(parcel: Parcel, stop: { type: 'pudo' | 'mdp'; id: string; label: string }, amount: number, currency: string, now: number = Date.now()): void {
+    const plan = parcel.plan;
+    if (!plan || plan.at === undefined || !parcel.stopFees?.length || !(amount > 0)) return;
+    const priced = parcel.stopFees.some((s) => s.type === stop.type && s.id === stop.id);
+    (plan.paid ??= []).push({ ...stop, amount: Math.round(amount * 100) / 100, currency, priced, at: new Date(now).toISOString() });
+    this.notePlan(parcel);
+  }
+
+  /** A shop's pay for a parcel, kept on its plan (notePaid), in the money it is paid in. */
+  private noteShopPaid(agentDid: string, parcel: Parcel, amount: number): void {
+    this.notePaid(parcel, { type: 'pudo', id: agentDid, label: this.agents.find(agentDid)?.shopName ?? agentDid }, amount, this.amountsAt(agentDid, parcel.sellerEntityId).currency ?? NETWORK_CURRENCY);
+  }
+
+  /** The release pay, paid and kept (notePaid). */
+  private payRelease(agentDid: string, parcel: Parcel): void {
+    const pay = this.releasePayOf(agentDid, parcel);
+    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    this.noteShopPaid(agentDid, parcel, pay);
   }
 
   /** The receiving shop's pay for releasing a parcel: its company's release pay, less what of its own fee it was paid ahead
@@ -1971,7 +1997,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // THE OTHER HALF OF THE SHOP'S PAY (see RELEASE_FEE). It was paid where an order is collected by its QR and not
     // here, so a shop that handed over a parcel sent from a counter was paid for shelving it and nothing for the rest.
     // What of it its own fee has not already paid at shelving (releasePayOf); nothing written where that is nothing.
-    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId);
+    this.payRelease(agentDid, parcel);
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -2849,7 +2875,7 @@ export class ParcelService implements OnApplicationBootstrap {
     );
     this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, byProxy ? 'collected · by a named proxy' : 'collected · OK');
-    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId); // see pickup()
+    this.payRelease(agentDid, parcel); // see pickup()
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -2877,7 +2903,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.shelf.release(agentDid, parcelId);
     this.handTo(parcel, 'driver', driverDid, `handed to the driver of load ${load.code}, for its own door`, { at });
     this.scan(parcel, 'Delivered', agentDid, `handed to the driver of load ${load.code} · to its own door`);
-    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId);
+    this.payRelease(agentDid, parcel);
     this.rebateFlexible(parcel);
     this.persist(parcel);
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId, toDoor: load.code }, { source: 'pudo' }).catch(() => undefined);

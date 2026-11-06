@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
 import { CARGO_NATURES, type CargoNature } from './cargo.types';
 import type { ParcelStatus } from './pudo.types';
 
@@ -112,6 +113,21 @@ export class BusinessFillBagDto {
   @IsString() @MaxLength(60) parcelId!: string;
 }
 
+/** 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said (as a shop can). */
+export class BusinessAnotherWayDto {
+  @ApiProperty({ type: [String] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsString({ each: true }) @MaxLength(60, { each: true }) parcelIds!: string[];
+  @ApiProperty() @IsString() @MaxLength(80) toHubId!: string;
+  @ApiProperty({ enum: HUMAN_OFF_PLAN_REASONS }) @IsIn([...HUMAN_OFF_PLAN_REASONS]) offPlanReason!: HumanOffPlanReason;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) offPlanNote?: string;
+}
+
+/** A hub its parcels could be sent through instead, and how far from its place. */
+export class DockWayView {
+  @ApiProperty() id!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty() km!: number;
+}
+
 class BagCloseDto {
   /** Its coded seal's number, when it has one. */
   @IsOptional() @IsString() @MaxLength(40) seal?: string;
@@ -208,6 +224,8 @@ export class DockView {
   /** Closed bags waiting there for drivers, and the corner it keeps them in. */
   @ApiProperty() closedWaiting!: number;
   @ApiProperty() corner!: number;
+  /** 2026-11-06 — the hubs its parcels could be sent through instead: working, nearest first. */
+  @ApiProperty({ type: [DockWayView] }) ways!: DockWayView[];
 }
 
 /** The company of ours that holds the balance, and in what money. */

@@ -31,6 +31,7 @@ import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.servic
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
 import { BagOfferService } from './bag-offer.service';
 import { offPlanSaid } from './route-plan.types';
+import { byMoney, detoursOf } from './journey-plan.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -141,6 +142,7 @@ describe('PUDO Light', () => {
   let rating: RatingService;
   let shelfSvc: ShelfService;
   let routing: RoutingService;
+  let journeyPlans: JourneyPlanService;
   let mdps: MdpService;
   let totes: ToteService;
   let consignments: ConsignmentService;
@@ -232,7 +234,8 @@ describe('PUDO Light', () => {
     presence = moduleRef.get(PresenceService);
     borders = moduleRef.get(BorderRuleService);
     // 2026-11-06 — the plan made at take-in and asked at every hand-over: its listener started here, as compile() starts none.
-    moduleRef.get(JourneyPlanService).onModuleInit();
+    journeyPlans = moduleRef.get(JourneyPlanService);
+    journeyPlans.onModuleInit();
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
     bagPlans = moduleRef.get(BagPlanService);
@@ -1498,6 +1501,43 @@ describe('PUDO Light', () => {
     expect(operationalParcelView(p({ plan: planned({ at: undefined }) })).due).toBeUndefined();
   });
 
+  it('a store’s own place sends its waiting parcels through another hub, the reason said — bagged for that hub from then (2026-11-06)', () => {
+    const dest = onboardAgent('AW Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'aw-dock', originZone: 'NorthTown', destZone: 'SouthTown' });
+    // A hub no plan from here goes through (it serves another area), near the yard: a way the store may choose all the same.
+    const via = mdps.register({ name: 'AW Via Sort', zones: ['AW West'], location: { lat: -1.22, lng: 36.82 } }, { approvedBy: 'staff' });
+    const farther = mdps.register({ name: 'AW Farther Sort', zones: ['AW West'], location: { lat: -1.4, lng: 36.95 } }, { approvedBy: 'staff' });
+    const store = vendors.register({ name: 'AW Traders', location: { lat: -1.2, lng: 36.8 } });
+    vendors.topUp(store.vendorId, 200);
+    const asStore = { role: 'genesis', did: store.did } as never;
+    controller.setCollectionPoint(store.vendorId, { label: 'AW yard', zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } } as never, asStore);
+    const mint = (mobile: string) => (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel.parcelId;
+    const p1 = mint('+254700611');
+    const p2 = mint('+254700622');
+    const before: any = controller.dockPlan(store.vendorId, asStore);
+    const planned = before.groups.find((g: any) => g.parcelIds.includes(p1));
+    expect(planned.key).not.toBe(via.mdpId);
+    // The hubs it could send them through instead, nearest first.
+    expect(before.ways).toEqual(expect.arrayContaining([expect.objectContaining({ id: via.mdpId, label: 'AW Via Sort' })]));
+    expect(before.ways.map((w: { id: string }) => w.id).filter((id: string) => id === via.mdpId || id === farther.mdpId)).toEqual([via.mdpId, farther.mdpId]);
+    // No driver going their planned way: sent through the hub instead, the reason said — kept on each, by the store.
+    const done: any = controller.dockAnotherWay(store.vendorId, { parcelIds: [p1, p2], toHubId: via.mdpId, offPlanReason: 'no_transport' } as never, asStore);
+    expect(done).toMatchObject({ sent: [p1, p2], left: [], to: { id: via.mdpId, label: 'AW Via Sort' } });
+    expect(parcels.get(p1).plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'no_transport', planned: planned.key, took: via.mdpId, by: store.did })]);
+    // From then they are grouped for that hub, and go into its bag — never refused for it.
+    const after: any = controller.dockPlan(store.vendorId, asStore);
+    expect(after.groups).toEqual([expect.objectContaining({ key: via.mdpId, label: 'AW Via Sort', parcelIds: [p1, p2] })]);
+    const bag: any = controller.openDockBag(store.vendorId, { destZone: via.mdpId } as never, asStore);
+    controller.fillDockBag(store.vendorId, bag.code, { parcelId: p1 } as never, asStore);
+    // One bagged waits in its bag, not in its group — listed there, the next "add one" would send it again.
+    expect((controller.dockPlan(store.vendorId, asStore) as any).groups).toEqual([expect.objectContaining({ key: via.mdpId, parcelIds: [p2] })]);
+    // Sent again where it is going anyway, or once it is in a bag: left as it is.
+    expect(controller.dockAnotherWay(store.vendorId, { parcelIds: [p1, p2], toHubId: via.mdpId, offPlanReason: 'faster' } as never, asStore)).toMatchObject({ sent: [], left: [p1, p2] });
+    // A hub that is not there: refused, nothing written.
+    expect(() => controller.dockAnotherWay(store.vendorId, { parcelIds: [p2], toHubId: 'mdp_nowhere', offPlanReason: 'faster' } as never, asStore)).toThrow();
+    expect(parcels.get(p2).plan!.offPlan).toHaveLength(1);
+  });
+
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
     const dest = onboardAgent('Dock Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'dock', originZone: 'NorthTown', destZone: 'SouthTown' });
@@ -2630,6 +2670,54 @@ describe('PUDO Light', () => {
       expect(parcels.get(a).plan!.at).toBe(1);
       expect(mdps.sortParcel(north.mdpId, a).nextDestination.id).toBe(south.mdpId);
       expect(parcels.get(a).plan!.offPlan).toBeUndefined();
+    });
+
+    it('counts what a way not priced cost: paid at the hub it was sent through instead, and the priced hub never used (2026-11-06)', () => {
+      const { N, S, shop, far, hub, take, toHub } = world('MU19');
+      take('MU19-A');
+      // Sold stop by stop, as a store's or a person's parcel is (a counter's walk-in is not, and has no detours to reckon).
+      parcels.get('MU19-A').stopFees = [{ type: 'pudo', id: shop.did, fee: 0.5, currency: 'KES' }, { type: 'mdp', id: hub.mdpId, fee: 0.3, currency: 'KES' }, { type: 'pudo', id: far.did, fee: 0.5, currency: 'KES' }];
+      const other = mdps.register({ name: 'MU19 Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
+      (mdps.require(other.mdpId) as { pricePerParcel: number }).pricePerParcel = 0.75;
+      const bag = mdps.openShopBag(shop.did, other.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU19-A', undefined, { reason: 'faster' });
+      toHub(bag.code, other.mdpId);
+      const sorted = mdps.sortParcel(other.mdpId, 'MU19-A');
+      closeForTest(sorted.toteCode);
+      mdps.loadBag(sorted.toteCode, 'BUS-MU19-OUT');
+      mdps.deliverBag(far.did, sorted.toteCode, receivedAt(far.did));
+      const done = parcels.get('MU19-A');
+      // Collected: its own shop's fee was met in full when it was shelved, so its release pays nothing more — and a pay of
+      // nothing is not kept.
+      parcels.pickup('MU19-A', far.did, releaseCodeOf('MU19-A'), photoBy(far.did));
+      // Each stop's pay kept on its plan as it was paid: the hub it went through (not priced), its own shop (priced).
+      expect(parcels.get('MU19-A').plan!.paid).toEqual([
+        expect.objectContaining({ type: 'mdp', id: other.mdpId, label: 'MU19 Other Sort', amount: 0.75, priced: false }),
+        expect.objectContaining({ type: 'pudo', id: far.did, priced: true }),
+      ]);
+      // The lane says what that way cost — and the priced hub it never used, at the fee it was priced at — each in its money.
+      const priced = done.stopFees!.find((f) => f.type === 'mdp' && f.id === hub.mdpId)!;
+      const lane = journeyPlans.lanes(30).find((l) => l.from === N && l.to === S)!;
+      expect(lane.detours).toEqual({ parcels: 1, paid: [{ currency: done.plan!.paid![0].currency, amount: 0.75 }], unused: [{ currency: priced.currency, amount: priced.fee }] });
+    });
+
+    it('reckons a parcel’s detours from what was paid: stops not priced, and priced stops never paid — never its first shop (2026-11-06)', () => {
+      const plan = (paid?: unknown[]) => ({ hops: [], mdpRouted: true, pickupReadyAt: '', plannedAt: '', at: 2, ...(paid ? { paid } : {}) }) as never;
+      const stopFees = [
+        { type: 'pudo' as const, id: 'did:shop:a', fee: 0.5, currency: 'KES' },
+        { type: 'mdp' as const, id: 'mdp_1', fee: 0.4, currency: 'KES' },
+        { type: 'pudo' as const, id: 'did:shop:b', fee: 0.5, currency: 'UGX' },
+      ];
+      const paid = [
+        { type: 'mdp', id: 'mdp_2', label: 'Other', amount: 0.6, currency: 'KES', priced: false, at: '' },
+        { type: 'pudo', id: 'did:shop:b', label: 'B', amount: 0.5, currency: 'UGX', priced: true, at: '' },
+      ];
+      expect(detoursOf({ plan: plan(paid), stopFees, originAgentDid: 'did:shop:a' })).toEqual({ paid: [{ currency: 'KES', amount: 0.6 }], unused: [{ currency: 'KES', amount: 0.4 }] });
+      // Each money apart, never added together.
+      expect(byMoney([{ currency: 'KES', amount: 1.25 }, { currency: 'UGX', amount: 400 }, { currency: 'KES', amount: 0.5 }])).toEqual([{ currency: 'KES', amount: 1.75 }, { currency: 'UGX', amount: 400 }]);
+      // Paid before stops were kept, or never priced stop by stop: nothing to reckon with.
+      expect(detoursOf({ plan: plan(), stopFees, originAgentDid: 'did:shop:a' })).toBeUndefined();
+      expect(detoursOf({ plan: plan(paid), stopFees: undefined, originAgentDid: 'did:shop:a' } as never)).toBeUndefined();
     });
 
     it('reads a route kept as kept — a hub is held under its name and planned under its id — and the lanes count the steps off it', () => {

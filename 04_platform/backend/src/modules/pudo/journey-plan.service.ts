@@ -22,6 +22,32 @@ export interface PlanLane {
   offPlanReasons: Partial<Record<string, number>>;
   /** The latest of them, to open and read. */
   worst?: { parcelId: string; lateHours: number };
+  /**
+   * 2026-11-06 — WHAT THE WAYS NOT PRICED COST (the owner: "I follow point 1 to 6"): paid at stops its parcels were not
+   * priced through, and the priced stops they never used (at the fee they were priced at) — each in its own money, never
+   * added across monies. Absent where nothing went another way, or only parcels paid before stops were kept.
+   */
+  detours?: { parcels: number; paid: Array<{ currency: string; amount: number }>; unused: Array<{ currency: string; amount: number }> };
+}
+
+/** Sums by money: a list, by currency, rounded to the cent — monies are compared, never added together. */
+export function byMoney(items: Array<{ currency: string; amount: number }>): Array<{ currency: string; amount: number }> {
+  const at = new Map<string, number>();
+  for (const i of items) at.set(i.currency, (at.get(i.currency) ?? 0) + i.amount);
+  return [...at].map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 })).filter((m) => m.amount > 0).sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+/**
+ * A parcel's detours, from what its plan kept as paid: the stops paid that were not priced, and — its stops now settled
+ * (ready to collect) — the priced stops after the one it was handed in at that were never paid. Nothing for a parcel whose
+ * pays were not kept (paid before 2026-11-06).
+ */
+export function detoursOf(p: Pick<Parcel, 'plan' | 'stopFees' | 'originAgentDid'>): { paid: Array<{ currency: string; amount: number }>; unused: Array<{ currency: string; amount: number }> } | undefined {
+  const paid = p.plan?.paid;
+  if (!paid || !p.stopFees?.length) return undefined;
+  const unpriced = paid.filter((x) => !x.priced).map((x) => ({ currency: x.currency, amount: x.amount }));
+  const unused = p.stopFees.filter((s) => !(s.type === 'pudo' && s.id === p.originAgentDid) && !paid.some((x) => x.type === s.type && x.id === s.id)).map((s) => ({ currency: s.currency, amount: s.fee }));
+  return { paid: unpriced, unused };
 }
 
 const median = (xs: number[]): number => {
@@ -116,14 +142,14 @@ export class JourneyPlanService implements OnModuleInit {
    */
   lanes(sinceDays = 30, now: number = Date.now()): PlanLane[] {
     const since = now - sinceDays * 86_400_000;
-    const byLane = new Map<string, { from: string; to: string; rows: Array<{ parcelId: string; onTime: boolean; lateHours: number; routeKept?: boolean; reasons: string[] }> }>();
+    const byLane = new Map<string, { from: string; to: string; rows: Array<{ parcelId: string; onTime: boolean; lateHours: number; routeKept?: boolean; reasons: string[]; detours?: ReturnType<typeof detoursOf> }> }>();
     for (const p of this.parcels.list()) {
       const said = planVsActual(p);
       if (!said || Date.parse(said.readyAt) < since || !p.plan?.hops.length) continue;
       const from = p.plan.hops[0].zone;
       const to = p.plan.hops[p.plan.hops.length - 1].zone;
       const lane = byLane.get(`${from}>${to}`) ?? { from, to, rows: [] };
-      lane.rows.push({ parcelId: p.parcelId, onTime: said.onTime, lateHours: said.lateHours, ...(said.routeKept === undefined ? {} : { routeKept: said.routeKept }), reasons: (p.plan.offPlan ?? []).filter((x) => x.reason !== 'priced_other_way').map((x) => x.reason) });
+      lane.rows.push({ parcelId: p.parcelId, onTime: said.onTime, lateHours: said.lateHours, ...(said.routeKept === undefined ? {} : { routeKept: said.routeKept }), reasons: (p.plan.offPlan ?? []).filter((x) => x.reason !== 'priced_other_way').map((x) => x.reason), detours: detoursOf(p) });
       byLane.set(`${from}>${to}`, lane);
     }
     return [...byLane.values()]
@@ -143,8 +169,17 @@ export class JourneyPlanService implements OnModuleInit {
           offPlan: rows.filter((r) => r.reasons.length).length,
           offPlanReasons: rows.flatMap((r) => r.reasons).reduce<Partial<Record<string, number>>>((n, why) => ({ ...n, [why]: (n[why] ?? 0) + 1 }), {}),
           ...(worst ? { worst: { parcelId: worst.parcelId, lateHours: worst.lateHours } } : {}),
+          ...laneDetours(rows),
         };
       })
       .sort((a, b) => b.late / b.arrived - a.late / a.arrived || b.arrived - a.arrived);
   }
+}
+
+/** A lane's detours: how many of its parcels were paid at a stop not priced, what that came to, and the priced stops unused. */
+function laneDetours(rows: Array<{ detours?: ReturnType<typeof detoursOf> }>): { detours?: PlanLane['detours'] } {
+  const paid = byMoney(rows.flatMap((r) => r.detours?.paid ?? []));
+  const unused = byMoney(rows.flatMap((r) => r.detours?.unused ?? []));
+  if (!paid.length && !unused.length) return {};
+  return { detours: { parcels: rows.filter((r) => r.detours?.paid.length).length, paid, unused } };
 }

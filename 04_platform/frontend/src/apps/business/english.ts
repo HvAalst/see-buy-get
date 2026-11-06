@@ -6,6 +6,7 @@ import { enSiteHours } from '../../shared/i18n/catalogs/en.site-hours';
 import { enSpecialisms } from '../../shared/i18n/catalogs/en.specialisms';
 import { enTowerBusiness } from '../../shared/i18n/catalogs/en.tower-business';
 import { enRefusal } from '../../shared/i18n/catalogs/en.refusal';
+import { enAnotherWay } from '../../shared/i18n/catalogs/en.another-way';
 import { enDirectoryCard } from '../../shared/i18n/catalogs/en.directory-card';
 
 /**
@@ -16,9 +17,9 @@ import { enDirectoryCard } from '../../shared/i18n/catalogs/en.directory-card';
  * light on a slow connection (the user, 2026-10-23). The help's words come when its Help opens, the articles about
  * working in this app with them (en.help-app.ts), not on the public site.
  */
-addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr, ...enRefusal, ...enDirectoryCard });
+addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr, ...enRefusal, ...enDirectoryCard, ...enAnotherWay });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
 
 // 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
-wordsOf('business', 'abbr', 'goods', 'site-hours', 'specialisms', 'tower-business', 'refusal', 'directory-card');
+wordsOf('business', 'abbr', 'goods', 'site-hours', 'specialisms', 'tower-business', 'refusal', 'directory-card', 'another-way');
 helpWordsOf('help-app');

@@ -24,6 +24,7 @@ import { enFront } from './en.front';
 import { enPrivacy } from './en.privacy';
 import { enAbbr } from './en.abbr';
 import { enRefusal } from './en.refusal';
+import { enAnotherWay } from './en.another-way';
 import { enDirectory } from './en.directory';
 
 export const enApps = {
@@ -43,5 +44,6 @@ export const enApps = {
   ...enPrivacy,
   ...enAbbr,
   ...enRefusal,
+  ...enAnotherWay,
   ...enDirectory,
 };

@@ -14,6 +14,7 @@ import {
   BusinessCollectFromDto,
   BusinessCollectRoomDto,
   BusinessFillBagDto,
+  BusinessAnotherWayDto,
   BusinessOpenBagDto,
   BusinessSealBagDto,
   DockView,
@@ -117,6 +118,13 @@ export class BusinessParcelController {
   @Post('business/me/parcels/dock/bags/:code/parcels')
   fillBag(@Param('code') code: string, @Body() dto: BusinessFillBagDto, @Actor() actor: IntrospectionResult): DockView {
     return this.parcels.fillBag(memberActor(this.businesses.requireMember(actor)), code, dto.parcelId);
+  }
+
+  /** 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said. */
+  @Roles('business')
+  @Post('business/me/parcels/dock/another-way')
+  sendAnotherWay(@Body() dto: BusinessAnotherWayDto, @Actor() actor: IntrospectionResult): DockView {
+    return this.parcels.sendAnotherWay(memberActor(this.businesses.requireMember(actor)), dto);
   }
 
   /** Close a bag for the road: drivers near are told it is ready. */

@@ -42,6 +42,7 @@ import {
   moveShopChoices,
   type ParcelForm,
 } from '../parcels';
+import { AnotherWaySheet } from '../../../shared/AnotherWaySheet';
 
 type Err = { detail?: string; title: string } | null | undefined;
 const words = (e: Err) => (e ? e.detail || e.title : null);
@@ -326,6 +327,8 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
   const [photoRef, setPhotoRef] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSaid, setPhotoSaid] = useState<string | null>(null);
+  // 2026-11-06 — the group being sent another way (its key and its parcels).
+  const [another, setAnother] = useState<{ key: string; parcelIds: string[] } | null>(null);
 
   const loadDock = useCallback(async () => {
     if (!collection) return setDock(null);
@@ -415,6 +418,18 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
             </>
           ) : null}
           {dock && dock.groups.length === 0 && dock.bags.length === 0 ? <p class="cons__empty">{t('business.parcels.dockEmpty')}</p> : null}
+          <AnotherWaySheet
+            open={another !== null}
+            count={another?.parcelIds.length ?? 0}
+            ways={dock?.ways ?? []}
+            exclude={another?.key}
+            busy={busy}
+            onSend={(toHubId, reason, note) => {
+              if (!another) return;
+              void run(() => api.anotherWay(another.parcelIds, toHubId, reason, note), () => setAnother(null));
+            }}
+            onClose={() => setAnother(null)}
+          />
           {dock?.groups.length ? (
             <div class="crows">
               {dock.groups.map((g) => (
@@ -424,6 +439,12 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
                       <span class="crow__name">{t('business.parcels.dockFor', { zone: g.label, n: g.parcels.length })}</span>
                     </span>
                     <span class="crow__sub ctbl__mono">{g.parcels.map((p) => p.parcelId).join(' · ')}</span>
+                    {/* 2026-11-06 — no driver going their way, the hub on it full: through another hub, the reason said. */}
+                    {works && dock.ways?.length ? (
+                      <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={busy} onClick={() => setAnother({ key: g.key, parcelIds: g.parcels.map((p) => p.parcelId) })}>
+                        {t('anotherWay.open')}
+                      </button>
+                    ) : null}
                   </span>
                   {works ? (
                     <span class="crow__tail">

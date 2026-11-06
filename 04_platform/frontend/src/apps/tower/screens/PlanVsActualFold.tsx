@@ -2,7 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleFold } from '../ConsoleFold';
-import { laneWords, offPlanWords, planFoldHint, type PlanLane } from '../planVsActual';
+import { laneWords, offPlanWords, planFoldHint, type PlanLane, detourWords } from '../planVsActual';
 
 type Api = { planVsActual: (days?: number) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }> };
 
@@ -72,6 +72,13 @@ export function PlanVsActualFold({ client }: { client: { api: unknown } | null }
                       <>
                         <br />
                         <span class="ctag ctag--warn">{offPlanWords(lane, t)}</span>
+                      </>
+                    ) : null}
+                    {/* 2026-11-06 — what the ways not priced cost: paid at stops not priced, and priced stops not used. */}
+                    {lane.detours ? (
+                      <>
+                        <br />
+                        <span class="ctbl__sub">{detourWords(lane, t)}</span>
                       </>
                     ) : null}
                   </td>

@@ -2586,6 +2586,14 @@ export class CollectionPointDto {
 }
 
 /** Open a bag on the dock for one destination zone. */
+/** 2026-11-06 — a store's own place sending its waiting parcels through another hub, the reason said. */
+export class DockAnotherWayDto {
+  @ApiProperty({ type: [String] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsString({ each: true }) parcelIds!: string[];
+  @ApiProperty() @IsString() @MaxLength(80) toHubId!: string;
+  @ApiProperty({ enum: HUMAN_OFF_PLAN_REASONS }) @IsIn([...HUMAN_OFF_PLAN_REASONS]) offPlanReason!: HumanOffPlanReason;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) offPlanNote?: string;
+}
+
 export class OpenDockBagDto {
   @IsString() destZone!: string;
 }

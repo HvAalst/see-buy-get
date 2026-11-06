@@ -2199,6 +2199,8 @@ export const enTowerQueues = {
   'tower.plan.neverLate': 'never late',
   'tower.plan.route': '{kept} of {known}',
   'tower.plan.offPlan': '{count, plural, one {# went another way} other {# went another way}}: {why}',
+  'tower.plan.detourPaid': '{count, plural, one {# paid at a stop not priced} other {# paid at stops not priced}}: {paid}',
+  'tower.plan.detourUnused': 'priced stops not used: {unused}',
   'tower.plan.why.noTransport': 'no bus or driver its way',
   'tower.plan.why.hubFull': 'the hub on its way full',
   'tower.plan.why.faster': 'faster that way',

@@ -1,4 +1,5 @@
 import type { Translate } from '../../shared/i18n';
+import { amount } from './queues';
 
 /** One lane, as the server reads it against the plans kept when its parcels were taken in. */
 export interface PlanLane {
@@ -14,6 +15,20 @@ export interface PlanLane {
   offPlan?: number;
   offPlanReasons?: Partial<Record<string, number>>;
   worst?: { parcelId: string; lateHours: number };
+  /** 2026-11-06 — paid at stops its parcels were not priced through, and priced stops never used — each in its own money. */
+  detours?: { parcels: number; paid: Array<{ currency: string; amount: number }>; unused: Array<{ currency: string; amount: number }> };
+}
+
+/**
+ * 2026-11-06 — WHAT THE WAYS NOT PRICED COST, in words (the owner: "I follow point 1 to 6"): "3 paid at stops not priced:
+ * 1,200.00 KES · priced stops not used: 800.00 KES" — or nothing, where nothing went another way. Monies side by side.
+ */
+export function detourWords(lane: Pick<PlanLane, 'detours'>, t: Translate): string {
+  const d = lane.detours;
+  if (!d) return '';
+  const line = (list: Array<{ currency: string; amount: number }>) => list.map((m) => amount(m.amount, m.currency)).join(' · ');
+  const parts = [d.paid.length ? t('tower.plan.detourPaid', { count: d.parcels, paid: line(d.paid) }) : '', d.unused.length ? t('tower.plan.detourUnused', { unused: line(d.unused) }) : ''].filter(Boolean);
+  return parts.join(' — ');
 }
 
 /** The reasons a parcel went another way, in the console's words: said at the counter, or the network's own. */

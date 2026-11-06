@@ -1030,6 +1030,24 @@ export function useVendorApp() {
     [client, creds, run, fail, loadDock],
   );
 
+  /** 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said; then bagged for it. */
+  const sendDockAnotherWay = useCallback(
+    async (parcelIds: string[], toHubId: string, reason: 'no_transport' | 'hub_full' | 'faster' | 'other', note?: string): Promise<boolean> => {
+      if (!client || !creds) return false;
+      let ok = false;
+      await run('dock-another-way', async () => {
+        const r = await client.api.dockAnotherWay(creds.vendorId, parcelIds, toHubId, reason, note);
+        if (r.error) return fail(r.error);
+        const done = narrow<{ sent: string[]; to: { label: string } }>(r.data);
+        ok = true;
+        await loadDock();
+        pushToast({ tone: 'ok', icon: 'repeat', title: t('anotherWay.sent', { count: done?.sent.length ?? 0, hub: done?.to.label ?? '' }) });
+      });
+      return ok;
+    },
+    [client, creds, run, fail, loadDock, pushToast, t],
+  );
+
   /** Sealing is the store's own act and nothing else does it: closing the bag is what tells drivers near
    *  the dock there is something to collect. */
   const sealDockBag = useCallback(
@@ -1767,6 +1785,7 @@ export function useVendorApp() {
       disableDock,
       openDockBag,
       fillDockBag,
+      sendDockAnotherWay,
       sealDockBag,
       uploadSealPhoto,
       pushToast,

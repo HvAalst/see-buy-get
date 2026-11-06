@@ -24,6 +24,7 @@ import { SiteService, type SiteKind } from './site.service';
 import { haversineKm } from './geo';
 import type { Agent } from './pudo.types';
 import type { ShipmentQuote } from './routing.service';
+import type { HumanOffPlanReason } from './route-plan.types';
 import type {
   BusinessCallOffView,
   BusinessParcelAccountView,
@@ -200,7 +201,19 @@ export class BusinessParcelService {
       free: plan.staging.free,
       closedWaiting: plan.staging.closed.waiting,
       corner: plan.staging.closed.corner,
+      ways: plan.ways,
     };
+  }
+
+  /**
+   * 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said (the owner: "I follow point
+   * 1 to 6"): DockService.sendAnotherWay — kept on each, and from then they are bagged for that hub.
+   */
+  sendAnotherWay(who: ParcelActor, input: { parcelIds: string[]; toHubId: string; offPlanReason: HumanOffPlanReason; offPlanNote?: string }): DockView {
+    const v = this.requireCollecting(who);
+    for (const id of input.parcelIds) this.owned(v, id);
+    this.dock.sendAnotherWay(v.vendorId, input.parcelIds, input.toHubId, { reason: input.offPlanReason, ...(input.offPlanNote?.trim() ? { note: input.offPlanNote.trim() } : {}) });
+    return this.dockView(who);
   }
 
   openBag(who: ParcelActor, destZone: string): DockView {

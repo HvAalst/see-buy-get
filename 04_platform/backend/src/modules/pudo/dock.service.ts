@@ -5,7 +5,9 @@ import { AgentService } from './agent.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
-import { nextStopOf } from './route-plan.service';
+import { keptPlanOf, nextStopOf } from './route-plan.service';
+import type { OffPlanSaid } from './route-plan.types';
+import { haversineKm } from './geo';
 import { RoutingService, type RouteEnd } from './routing.service';
 import { ToteService } from './tote.service';
 import { VendorService } from './vendor.service';
@@ -185,12 +187,16 @@ export class DockService {
     groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
     bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
     staging: { capacity: number; used: number; free: number; closed: { waiting: number; corner: number } };
+    /** 2026-11-06 — the hubs its parcels could be sent through instead: working, nearest first. */
+    ways: Array<{ id: string; label: string; km: number }>;
   } {
     const vendor = this.vendors.get(vendorId);
     const dock = this.vendors.requireCollection(vendorId);
     const open = this.totes.atLocation(vendor.did).filter((t) => t.status === 'filling' || t.status === 'available');
     const byStop = new Map<string, { label: string; parcelIds: string[] }>();
-    for (const parcel of this.waiting(vendorId)) {
+    // 2026-11-06 — a parcel already in a bag here waits in the bag, not in its group: listed there, the next "add one" would
+    // be sent it again and refused (ALREADY_IN_BAG).
+    for (const parcel of this.waiting(vendorId).filter((p) => !p.toteId)) {
       const next = this.stopFor(vendor, parcel);
       const group = byStop.get(next.key) ?? { label: next.label, parcelIds: [] };
       group.parcelIds.push(parcel.parcelId);
@@ -205,7 +211,55 @@ export class DockService {
       // 2026-11-02 — a closed bag held on the dock for room at its hub says which hub: it goes on by itself.
       bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status, ...(t.waitsForRoom ? { waitsFor: t.waitsForRoom.hubName } : {}) })),
       staging: { capacity: room.places, used: room.open + room.onFloor, free: room.free, closed: { waiting: room.closed, corner: room.corner } },
+      ways: this.waysFrom(vendor, dock),
     };
+  }
+
+  /** The hubs a parcel here could go through instead: approved and open, in this place's country, nearest first — six at most. */
+  private waysFrom(vendor: Vendor, dock: CollectionPoint): Array<{ id: string; label: string; km: number }> {
+    const country = this.vendors.dockCountryOf(vendor);
+    return this.mdps
+      .list()
+      .filter((m) => this.mdps.isApproved(m) && !this.mdps.notOpenYet(m) && (!country || !m.country || m.country === country))
+      .map((m) => ({ id: m.mdpId, label: m.name, km: Math.round(haversineKm(dock.location, m.location) * 10) / 10 }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 6);
+  }
+
+  /**
+   * 2026-11-06 — SENT ANOTHER WAY FROM ITS OWN PLACE (the owner: "I follow point 1 to 6 at your recommendation"): a store's or
+   * a business's parcels waiting here for a bag, sent through another hub than their plan's — as a shop can send its own —
+   * with the reason said: no driver going their way, the hub on it full, faster, or in its own words. Each keeps its plan
+   * (kept now, where it was not yet) with the step and its reason, and from then is grouped, bagged and offered by the hub
+   * it goes to. Refused before anything is written where that hub may not work, or a parcel is another's; one already in a
+   * bag, or going there anyway, is left as it is.
+   */
+  sendAnotherWay(vendorId: string, parcelIds: string[], toHubId: string, said: OffPlanSaid, now: number = Date.now()): { sent: string[]; left: string[]; to: { id: string; label: string } } {
+    const vendor = this.vendors.get(vendorId);
+    this.vendors.requireCollection(vendorId);
+    const hub = this.mdps.working(toHubId);
+    const from = this.dockEnd(vendor)!;
+    const parcels = parcelIds.map((id) => this.parcels.get(id));
+    const foreign = parcels.find((p) => p.vendorId !== vendorId);
+    if (foreign) throw new GlosError('FORBIDDEN', `Parcel ${foreign.parcelId} belongs to another store`);
+    const sent: string[] = [];
+    const left: string[] = [];
+    for (const p of parcels) {
+      const waitsHere = p.status === 'Created' && p.paidStatus === 'ParcelPaid' && !p.originAgentDid && !p.handInMdpId && !p.toteId;
+      if (!waitsHere || this.stopFor(vendor, p).key === hub.mdpId) {
+        left.push(p.parcelId);
+        continue;
+      }
+      this.journeys?.freeze(p.parcelId, now, from);
+      const parcel = this.parcels.get(p.parcelId);
+      if (!keptPlanOf(parcel)) {
+        left.push(p.parcelId); // no plan could be kept from here: nothing to send another way
+        continue;
+      }
+      this.mdps.sendAnotherWay(parcel, hub.mdpId, vendor.did, said);
+      sent.push(p.parcelId);
+    }
+    return { sent, left, to: { id: hub.mdpId, label: hub.name } };
   }
 
   /**
@@ -253,6 +307,9 @@ export class DockService {
    * a hub, or the shop a direct route runs to; else, with no route to plan, its zone, as before.
    */
   private stopFor(vendor: Vendor, parcel: Parcel): { key: string; label: string } {
+    // 2026-11-06 — sent another way from here on purpose (sendAnotherWay): where it was said to be heading.
+    const heading = keptPlanOf(parcel)?.heading;
+    if (heading) return { key: heading.to, label: heading.label };
     const kept = nextStopOf(parcel);
     if (kept) return { key: kept.id, label: kept.label };
     const from = parcel.destAgentDid ? this.dockEnd(vendor) : undefined;

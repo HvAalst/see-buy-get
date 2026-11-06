@@ -45,6 +45,8 @@ export interface DockView {
   free: number;
   closedWaiting: number;
   corner: number;
+  /** 2026-11-06 — the hubs its parcels could be sent through instead, nearest first. */
+  ways?: Array<{ id: string; label: string; km: number }>;
 }
 
 /** The form's way of saying "collected from its own place" where a shop would be chosen. */
@@ -226,6 +228,8 @@ export interface ParcelsApi {
   dock: () => Promise<Result<DockView>>;
   openBag: (destZone: string) => Promise<Result<DockView>>;
   fillBag: (code: string, parcelId: string) => Promise<Result<DockView>>;
+  /** 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said. */
+  anotherWay: (parcelIds: string[], toHubId: string, reason: 'no_transport' | 'hub_full' | 'faster' | 'other', note?: string) => Promise<Result<DockView>>;
   sealBag: (code: string, closure: { seal?: string; photoRef: string }) => Promise<Result<DockView>>;
   shops: () => Promise<Result<NetworkShop[]>>;
   quote: (originDid: string, destDid: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<ParcelQuote>>;
@@ -264,6 +268,7 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
     dock: () => call((c) => c.GET('/v1/sbg/business/me/parcels/dock' as never, {} as never) as never),
     openBag: (destZone) => call((c) => c.POST('/v1/sbg/business/me/parcels/dock/bags' as never, { body: { destZone } } as never) as never),
     fillBag: (code, parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/parcels` as never, { body: { parcelId } } as never) as never),
+    anotherWay: (parcelIds, toHubId, reason, note) => call((c) => c.POST('/v1/sbg/business/me/parcels/dock/another-way' as never, { body: { parcelIds, toHubId, offPlanReason: reason, ...(note ? { offPlanNote: note } : {}) } } as never) as never),
     sealBag: (code, closure) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/seal` as never, { body: { closure } } as never) as never),
     shops: () => call((c) => c.GET('/v1/sbg/network/points' as never, {} as never) as never),
     upload: (dataUrl, thumbDataUrl) => call((c) => c.POST('/v1/sbg/media' as never, { body: { kind: 'content', dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } } as never) as never),

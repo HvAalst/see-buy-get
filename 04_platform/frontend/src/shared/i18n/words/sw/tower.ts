@@ -1977,6 +1977,8 @@ export const words: Record<string, string> = {
   "tower.plan.neverLate": "haijawahi kuchelewa",
   "tower.plan.route": "{kept} kati ya {known}",
   "tower.plan.offPlan": "{count, plural, one {# kilienda njia nyingine} other {# vilienda njia nyingine}}: {why}",
+  "tower.plan.detourPaid": "{count, plural, one {# kimelipiwa kituo kisichowekwa bei} other {# vimelipiwa vituo visivyowekwa bei}}: {paid}",
+  "tower.plan.detourUnused": "vituo vilivyowekwa bei visivyotumika: {unused}",
   "tower.plan.why.noTransport": "hakuna basi wala dereva njia yake",
   "tower.plan.why.hubFull": "kituo kilicho njiani kimejaa",
   "tower.plan.why.faster": "haraka zaidi njia hiyo",

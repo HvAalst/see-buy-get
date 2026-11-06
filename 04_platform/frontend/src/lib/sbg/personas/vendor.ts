@@ -277,6 +277,10 @@ export function createVendorApi(sbg: SbgClient) {
     openDockBag: (vendorId: string, destZone: string) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags', { params: { path: { id: vendorId } }, body: { destZone } })),
 
+    /** 2026-11-06 — its waiting parcels sent through another hub than their plans', the reason said. */
+    dockAnotherWay: (vendorId: string, parcelIds: string[], toHubId: string, reason: 'no_transport' | 'hub_full' | 'faster' | 'other', note?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/another-way', { params: { path: { id: vendorId } }, body: { parcelIds, toHubId, offPlanReason: reason, ...(note ? { offPlanNote: note } : {}) } })),
+
     /** Put one parcel in the bag. */
     fillDockBag: (vendorId: string, code: string, parcelId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/fill', { params: { path: { id: vendorId, code } }, body: { parcelId } })),

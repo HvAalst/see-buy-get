@@ -85,6 +85,8 @@ export interface DockPlan {
   /** `waitsFor` (2026-11-02): closed, and held on the dock for room at the hub it goes to — that hub's name. */
   bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
   staging: { capacity: number; used: number; free: number; closed?: { waiting: number; corner: number } };
+  /** 2026-11-06 — the hubs its parcels could be sent through instead, nearest first. */
+  ways?: Array<{ id: string; label: string; km: number }>;
 }
 
 /** vendors/login → the public record plus the actor token the console carries. */
