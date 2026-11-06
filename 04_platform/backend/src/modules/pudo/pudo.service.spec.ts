@@ -28,7 +28,7 @@ import { FREIGHT_REPORT_ONLY_NOTE } from './dispatch.service';
 import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
-import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf, planVsActual } from './parcel.service';
+import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
 import { BagOfferService } from './bag-offer.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
@@ -1355,7 +1355,8 @@ describe('PUDO Light', () => {
     expect(notes.at(-1)).toMatch(new RegExp(`^Bag ${bag.code} taken by chainc`));
   });
 
-  it('says so on the case when nobody else can be reached (2026-11-06)', () => {
+  it('nobody able to take it now: offered again every hour — a day on, its people told it is held up, then told when it is aboard (2026-11-06)', () => {
+    const HOUR_MS = 3_600_000;
     const origin = onboardAgent('Lone Chain Shop', 'NorthTown', 50);
     onboardAgent('Lone Chain Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'lone-chain', originZone: 'NorthTown', destZone: 'SouthTown' });
@@ -1363,21 +1364,118 @@ describe('PUDO Light', () => {
     const bag = mdps.openShopBag(origin.did, 'SouthTown');
     mdps.fillShopBag(bag.code, origin.did, 'CHN-2');
     mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
-    // Only drivers placed for this test count: those of other tests have no fresh position here.
+    // Only drivers placed for this test count later: those of other tests have no fresh position an hour on.
     const only = coupleTipper('lonechain', { min: 0.8, max: 1.5 });
     fleet.reportLocation(only.did, { lat: origin.location.lat + 0.01, lng: origin.location.lng });
     const notes: string[] = [];
-    const svc = new BagOfferService(monitor, dispatch, totes, { get: () => ({ kind: 'Bags_Waiting', subject: 'Lone Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) } as never, { notify: async () => undefined } as never);
+    const published: Array<{ type: string; payload: { code: string; parcelIds: string[] } }> = [];
+    let loaded: ((e: { payload: { code?: string } }) => void) | undefined;
+    const events = {
+      subscribe: (type: string, fn: (e: { payload: { code?: string } }) => void) => {
+        if (type === GlosEvent.Pudo.BagLoaded) loaded = fn;
+        return () => undefined;
+      },
+      publish: async (type: string, payload: { code: string; parcelIds: string[] }) => void published.push({ type, payload }),
+    };
+    const cases = { get: () => ({ kind: 'Bags_Waiting', subject: 'Lone Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async () => undefined } as never, events as never);
+    const chainNow = () => svc.bagsOf('case').bags[0].chain!;
     const others = dispatch.driversForBag(bag.code).filter((d) => d.driverDid !== only.did).length;
     svc.offer(bag.code, only.did, { name: 'Amina O', key: 'opr_amina' });
-    // Every one asked says “not now”: then nobody is left, and the case is told.
-    for (let i = 0; i <= others; i += 1) {
-      const chain = svc.bagsOf('case').bags[0].chain!;
-      if (chain.state !== 'asking') break;
-      dispatch.ignore(chain.steps.at(-1)!.offerId);
-    }
-    expect(svc.bagsOf('case').bags[0].chain!.state).toBe('nobody');
-    expect(notes.at(-1)).toMatch(/none took it, and no other working driver can be reached now/);
+    // Every one asked says “not now”: nobody left to ask now — it waits for the next hour, and the case is told.
+    for (let i = 0; i <= others && chainNow().state === 'asking'; i += 1) dispatch.ignore(chainNow().steps.at(-1)!.offerId);
+    const since = Date.parse(chainNow().waitingSince!);
+    expect(chainNow()).toMatchObject({ state: 'waiting', nextTryAt: new Date(since + HOUR_MS).toISOString() });
+    expect(notes.at(-1)).toMatch(/none took it, and no other working driver can be reached now\. It is offered again every hour/);
+    // Not before the hour. On it, offered again — the nearest first, though they said “not now” an hour ago: a new try.
+    expect(svc.sweep(since + 59 * 60_000)).toBe(0);
+    const at = since + 61 * 60_000;
+    fleet.activeForDriver(only.did)!.lastLocatedAt = new Date(at).toISOString(); // its phone has just placed it there
+    expect(svc.sweep(at)).toBe(1);
+    expect(chainNow()).toMatchObject({ state: 'asking', tries: 1, round: 1 });
+    expect(chainNow().steps.at(-1)).toMatchObject({ driverDid: only.did, round: 1 });
+    // No answer in twenty minutes, nobody else: it waits for the next hour, counted from when it began waiting — and the
+    // case is not told again.
+    expect(svc.sweep(at + 21 * 60_000)).toBe(1);
+    expect(chainNow()).toMatchObject({ state: 'waiting', nextTryAt: new Date(since + 2 * HOUR_MS).toISOString() });
+    expect(chainNow().steps.at(-1)!.outcome).toBe('no_answer');
+    expect(notes.filter((n) => /offered again every hour/.test(n))).toHaveLength(1);
+    // Staff choose a driver while it waits for the next hour: a new try, the hour no longer waited for.
+    svc.offer(bag.code, only.did, { name: 'Amina O', key: 'opr_amina' }, at + 22 * 60_000);
+    expect(chainNow()).toMatchObject({ state: 'asking', round: 2, tries: 1 });
+    expect(chainNow().nextTryAt).toBeUndefined();
+    expect(chainNow().steps.at(-1)).toMatchObject({ driverDid: only.did, round: 2 });
+    // A day after it began waiting, still waiting: the people of its parcels told it is held up — once.
+    expect(svc.sweep(since + 24 * HOUR_MS - 60_000)).toBe(1); // that offer unanswered, nobody else: waiting again
+    expect(published).toEqual([]);
+    expect(svc.sweep(since + 24 * HOUR_MS)).toBe(1);
+    expect(published).toEqual([{ type: GlosEvent.Pudo.BagHeldUp, payload: expect.objectContaining({ code: bag.code, parcelIds: ['CHN-2'] }) }]);
+    expect(notes.at(-1)).toMatch(new RegExp(`^Bag ${bag.code}: no driver has taken it in a day of offers every hour — the people of its 1 parcel are told it is held up`));
+    svc.sweep(since + 26 * HOUR_MS);
+    expect(published).toHaveLength(1);
+    expect(chainNow()).toMatchObject({ state: 'waiting', tries: 3 });
+    // Its parcels no longer in it (another trip of the same bag): nobody is told it moves.
+    const inBag = totes.requireByCode(bag.code);
+    const kept = inBag.parcels;
+    inBag.parcels = [];
+    loaded!({ payload: { code: bag.code } });
+    expect(published).toHaveLength(1);
+    inBag.parcels = kept;
+    // A driver scans it aboard: they hear it is on the road again — once.
+    loaded!({ payload: { code: bag.code } });
+    loaded!({ payload: { code: bag.code } });
+    expect(published.slice(1)).toEqual([{ type: GlosEvent.Pudo.BagOnTheRoadAgain, payload: expect.objectContaining({ code: bag.code, parcelIds: ['CHN-2'] }) }]);
+  });
+
+  it('a bag held while it is offered, and released on the same trip: offered again — not a bag of another trip (2026-11-06)', () => {
+    const origin = onboardAgent('Held Chain Shop', 'NorthTown', 50);
+    onboardAgent('Held Chain Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'held-chain', originZone: 'NorthTown', destZone: 'SouthTown' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CHN-3', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, origin.did, 'CHN-3');
+    mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
+    const near = coupleTipper('heldchain', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(near.did, { lat: origin.location.lat + 0.01, lng: origin.location.lng });
+    const notes: string[] = [];
+    const cases = { get: () => ({ kind: 'Bags_Waiting', subject: 'Held Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async () => undefined } as never);
+    svc.offer(bag.code, near.did, { name: 'Amina O', key: 'opr_amina' });
+    const tote = totes.requireByCode(bag.code);
+    totes.hold(tote.toteId, { since: new Date().toISOString(), finding: 'seal_broken', stage: 'counter', exceptionId: 'tx_held_chain', where: 'at Held Chain Shop' } as never);
+    expect(svc.sweep()).toBe(1);
+    expect(notes.at(-1)).toMatch(new RegExp(`^Bag ${bag.code} is no longer waiting here`));
+    // Released: waiting here again, the same trip — offered again, in a new try.
+    totes.unhold(tote.toteId);
+    expect(svc.sweep()).toBe(1);
+    const chain = svc.bagsOf('case').bags[0].chain!;
+    expect(chain).toMatchObject({ state: 'asking', round: 1 });
+    expect(chain.steps.at(-1)!.round).toBe(1);
+    expect(notes.at(-1)).toMatch(new RegExp(`^Bag ${bag.code} is waiting here again — offered again, the nearest driver first`));
+    // The same bag on another trip (filled again after this chain began) is not this chain's: not shown with it, not offered by it.
+    chain.state = 'gone';
+    tote.filledAt = new Date(Date.now() + 60_000).toISOString();
+    expect(svc.sweep()).toBe(0);
+    expect(svc.bagsOf('case').bags[0]?.chain).toBeUndefined();
+  });
+
+  it('late, or on time, against the time it was promised — on the list a hub sorts from (2026-11-06)', () => {
+    const HOUR_MS = 3_600_000;
+    const now = Date.parse('2026-11-06T12:00:00Z');
+    const plan = (over: Record<string, string> = {}) => ({ pickupReadyAt: '2026-11-06T18:00:00Z', ...over });
+    expect(dueOf(plan(), now)).toBe('on_time');
+    expect(dueOf(plan(), now + 7 * HOUR_MS)).toBe('late'); // its time has passed
+    expect(dueOf(plan({ expectedAt: '2026-11-06T19:30:00Z' }), now)).toBe('late'); // the plan made again expects it after it
+    expect(dueOf(plan({ expectedAt: '2026-11-06T17:00:00Z' }), now)).toBe('on_time');
+    expect(dueOf(plan({ lateTold: '2026-11-06T21:00:00Z' }), now)).toBe('late'); // its people told it would be
+    expect(dueOf({ pickupReadyAt: 'not a time' }, now)).toBeUndefined(); // no promise to measure against: neither said
+    // On the shared list: only while on its way, under a plan kept stop by stop.
+    const planned = (over: Record<string, unknown> = {}) => ({ hops: [], mdpRouted: true, pickupReadyAt: new Date(Date.now() + HOUR_MS).toISOString(), plannedAt: new Date().toISOString(), at: 1, ...over });
+    const p = (over: Record<string, unknown>) => ({ parcelId: 'DUE-1', status: 'At_MDP', plan: planned(), ...over }) as never;
+    expect(operationalParcelView(p({})).due).toBe('on_time');
+    expect(operationalParcelView(p({ plan: planned({ pickupReadyAt: new Date(Date.now() - HOUR_MS).toISOString() }) })).due).toBe('late');
+    expect(operationalParcelView(p({ status: 'Ready_For_Pickup' })).due).toBeUndefined();
+    expect(operationalParcelView(p({ plan: planned({ at: undefined }) })).due).toBeUndefined();
   });
 
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {

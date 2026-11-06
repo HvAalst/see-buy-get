@@ -9,6 +9,20 @@ interface ChainStep {
   at: string;
   until: string;
   outcome?: 'taken' | 'not_now' | 'no_answer' | 'passed_over';
+  /** 2026-11-06 — the try it was asked in (0 the first). */
+  round?: number;
+}
+/** A bag's chain of offers, as the server keeps it. */
+export interface OfferChain {
+  state: 'asking' | 'waiting' | 'taken' | 'nobody' | 'gone';
+  steps: ChainStep[];
+  /** 2026-11-06 — the try it is on; how many times it has been offered again on the hour; when next, while waiting. */
+  round?: number;
+  tries?: number;
+  nextTryAt?: string;
+  /** When the people of its parcels were told it is held up — and that it is on the road again. */
+  heldUpToldAt?: string;
+  onRoadToldAt?: string;
 }
 interface CaseBag {
   code: string;
@@ -17,7 +31,7 @@ interface CaseBag {
   claimed: boolean;
   offeredWide: boolean;
   /** 2026-11-06 — whom it was offered to from here, in order, and how it stands. */
-  chain?: { state: 'asking' | 'taken' | 'nobody' | 'gone'; steps: ChainStep[] };
+  chain?: OfferChain;
 }
 
 const STEP: Record<NonNullable<ChainStep['outcome']>, MessageKey> = {
@@ -31,6 +45,22 @@ const STEP: Record<NonNullable<ChainStep['outcome']>, MessageKey> = {
 export function stepWords(st: ChainStep, t: (key: MessageKey, values?: Record<string, unknown>) => string, now: number = Date.now()): string {
   if (st.outcome) return t(STEP[st.outcome], { name: st.name });
   return t('tower.bags.step.asking', { name: st.name, minutes: Math.max(0, Math.ceil((Date.parse(st.until) - now) / 60_000)) });
+}
+/**
+ * 2026-11-06 — A CHAIN IN WORDS (the owner: "check every hour after 24 hour checks"): the drivers asked in the try it is
+ * on, and how each went; waiting, when it is offered again, and how often it has been; whether its people have been told.
+ */
+export function chainWords(chain: OfferChain, t: (key: MessageKey, values?: Record<string, unknown>) => string, now: number = Date.now()): string {
+  const round = chain.round ?? 0;
+  const parts: string[] = [];
+  const steps = chain.steps.filter((st) => (st.round ?? 0) === round).map((st) => stepWords(st, t, now));
+  if (steps.length) parts.push(steps.join(' · '));
+  if (chain.state === 'nobody') parts.push(t('tower.bags.chain.nobody'));
+  if (chain.state === 'waiting' && chain.nextTryAt) parts.push(t('tower.bags.chain.waiting', { time: new Date(chain.nextTryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }));
+  if (chain.tries) parts.push(t('tower.bags.chain.tries', { count: chain.tries }));
+  if (chain.onRoadToldAt) parts.push(t('tower.bags.chain.onRoadTold'));
+  else if (chain.heldUpToldAt) parts.push(t('tower.bags.chain.heldUpTold'));
+  return parts.join(' — ');
 }
 interface BagDriver {
   driverDid: string;
@@ -109,13 +139,8 @@ export function BagsWaitingPanel({ caseId, state, actions }: { caseId: string; s
                   <span class="crow__name">{t('tower.bags.line', { code: b.code, destination: b.destination ?? '—', hours: b.waitedHours })}</span>
                   {b.claimed ? <span class="ctag ctag--info">{t('tower.bags.coming')}</span> : b.offeredWide ? <span class="ctag ctag--quiet">{t('tower.bags.offeredWide')}</span> : null}
                 </span>
-                {/* 2026-11-06 — offered from here: each driver asked, and how it went. */}
-                {b.chain?.steps.length ? (
-                  <span class="crow__sub">
-                    {b.chain.steps.map((st) => stepWords(st, t as never)).join(' · ')}
-                    {b.chain.state === 'nobody' ? ` — ${t('tower.bags.chain.nobody')}` : ''}
-                  </span>
-                ) : null}
+                {/* 2026-11-06 — offered from here: each driver asked in this try and how it went; waiting for the next hour; who is told. */}
+                {b.chain?.steps.length ? <span class="crow__sub">{chainWords(b.chain, t as never)}</span> : null}
                 {!b.claimed && choosing === b.code ? (
                   drivers === null ? (
                     <span class="crow__sub">{t('tower.bags.loading')}</span>

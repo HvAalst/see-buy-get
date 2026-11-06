@@ -388,6 +388,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
     // 2026-11-06 — its plan, made again, expects it later than it was promised: its people are told now (movement unification).
     this.events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => this.onExpectedLate(e.payload));
+    // 2026-11-06 — a bag no driver could be found for in a day, and the moment one takes it on: its parcels' people told.
+    this.events.subscribe<{ code: string; parcelIds: string[]; place: string }>(GlosEvent.Pudo.BagHeldUp, (e) => this.onBagHeldUp(e.payload, 'held'));
+    this.events.subscribe<{ code: string; parcelIds: string[]; place: string }>(GlosEvent.Pudo.BagOnTheRoadAgain, (e) => this.onBagHeldUp(e.payload, 'moving'));
     // Rule 1b (buyer) — the release secret was burned and an operator rotated it. The buyer is very
     // likely standing at the counter right now, so this is urgent and must NOT collapse onto the
     // parcel-ready notification (a fresh tag), or the one message telling them their code changed
@@ -1378,6 +1381,44 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
     } catch (err) {
       this.logger.warn(`expected-late notice failed for ${p.parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 2026-11-06 — HELD UP, AND ON THE ROAD AGAIN (the owner: "notify the buyer that they will be notified when their parcel
+   * is on the road again"): each parcel in a bag no driver could be found for in a day of hourly tries — its receiver, and
+   * a person who sent it — told it is held up and that they are told when it moves; and, when a driver takes it on, told
+   * that it does. In the app, never a text.
+   */
+  private async onBagHeldUp(p: { code: string; parcelIds: string[]; place: string }, what: 'held' | 'moving'): Promise<void> {
+    for (const parcelId of p.parcelIds) {
+      try {
+        const parcel = this.parcels.get(parcelId);
+        if (!['At_PUDO', 'On_Bus', 'At_MDP'].includes(parcel.status)) continue; // ready, or no longer on its way: nothing to say
+        const seen = new Set<string>();
+        const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);
+        for (const [side, who] of sides) {
+          const person = accountFor(who, this.persons);
+          if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
+          seen.add(person.personDid);
+          const yours = side === 'receiver' ? 'Your parcel' : 'A parcel you sent';
+          await this.notifications.notify(person.personDid, {
+            kind: what === 'held' ? 'parcel_late' : 'parcel_moving',
+            title: what === 'held' ? `${yours} is held up` : `${yours} is on the road again`,
+            body:
+              what === 'held'
+                ? `It is waiting at ${p.place} for a driver, and none has been able to take it on yet. You are told as soon as it is on the road again.`
+                : side === 'receiver'
+                  ? `A driver has taken it on from ${p.place}. You are told when it is ready to collect.`
+                  : `A driver has taken it on from ${p.place}. Its tracking page shows where it is.`,
+            link: `/?parcel=${parcelId}`,
+            tag: `parcel-${what}:${parcelId}`,
+            data: { parcelId },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`${what === 'held' ? 'held-up' : 'on-the-road'} notice failed for ${parcelId}: ${(err as Error).message}`);
+      }
     }
   }
 

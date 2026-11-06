@@ -6,6 +6,7 @@ import type { MdpActions, MdpState } from '../useMdpApp';
 import { TamperSheet } from './TamperSheet';
 import { RelabelCard } from './RelabelCard';
 import { HandoverCard } from './HandoverCard';
+import { DueTag, dueById } from './DueTag';
 
 export interface SortScreenProps {
   state: MdpState;
@@ -25,6 +26,8 @@ export function SortScreen({ state, actions }: SortScreenProps) {
   const held = state.inbound.filter((p) => p.held && p.atMdpId === state.hub?.mdpId);
   const heldIds = new Set(held.map((p) => p.parcelId));
   const sortable = state.queue.filter((id) => !heldIds.has(id));
+  // 2026-11-06 — late, or on time, beside each (the owner: "when we show 'late' we can also show 'on time'").
+  const due = dueById(state.inbound);
 
   return (
     <div class="scr">
@@ -70,8 +73,9 @@ export function SortScreen({ state, actions }: SortScreenProps) {
         {sortable.length ? (
           <div class="chips" style="margin-top:12px">
             {sortable.slice(0, 12).map((id) => (
-              <button key={id} type="button" class={`chip chip--tap mono${state.form.sortId === id ? ' chip--on' : ''}`} onClick={() => actions.pickSortId(id)}>
-                {id}
+              <button key={id} type="button" class={`chip chip--tap${state.form.sortId === id ? ' chip--on' : ''}`} onClick={() => actions.pickSortId(id)}>
+                <span class="mono">{id}</span>
+                <DueTag due={due.get(id)} />
               </button>
             ))}
           </div>

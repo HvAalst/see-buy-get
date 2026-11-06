@@ -101,6 +101,13 @@
   cursor: pointer;
 }
 
+/* 2026-11-06 — late, or on time, beside a parcel in the queue: the shared pill, small enough to sit in the chip. */
+.chip .pill {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 .chip--on {
   border-color: var(--blue);
   background: var(--blue-light);

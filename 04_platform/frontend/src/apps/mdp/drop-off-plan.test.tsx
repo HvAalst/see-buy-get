@@ -8,8 +8,10 @@ import { DropScreen } from './screens/DropScreen';
  * (the owner: "build as you suggest"): not the hub's doing, and planned on from here — sorted as the screen says.
  */
 const words = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&');
-const screen = (drop: Record<string, unknown>) =>
-  words(renderToString(<DropScreen state={{ form: { dropCode: '' }, drop, queue: ['PUD-1', 'PUD-2'], busy: null, error: null, hub: { did: 'did:hub:1', mdpId: 'mdp_1' } } as never} actions={{} as never} />));
+const row = (parcelId: string, due?: 'late' | 'on_time') => ({ parcelId, size: 'S', status: 'At_MDP', destZone: 'Kisumu', atMdpId: 'mdp_1', ...(due ? { due } : {}) });
+const render = (drop: Record<string, unknown>, inbound: unknown[] = []) =>
+  renderToString(<DropScreen state={{ form: { dropCode: '' }, drop, queue: ['PUD-1', 'PUD-2'], inbound, busy: null, error: null, hub: { did: 'did:hub:1', mdpId: 'mdp_1' } } as never} actions={{} as never} />);
+const screen = (drop: Record<string, unknown>) => words(render(drop));
 
 describe('a bag emptied at a hub its parcels were not planned to reach', () => {
   it('says how many, and where they were planned to go — once for each place', () => {
@@ -21,5 +23,18 @@ describe('a bag emptied at a hub its parcels were not planned to reach', () => {
 
   it('says nothing where every parcel came as planned', () => {
     expect(screen({})).not.toContain(t('mdp.drop.offPlanTitle'));
+  });
+});
+
+/* 2026-11-06 — the owner: "when we show 'late' we can also show 'on time'". */
+describe('the parcels waiting to be sorted, late or on time', () => {
+  it('says beside each which it is, as the hub’s list has it', () => {
+    const html = render({}, [row('PUD-1', 'late'), row('PUD-2', 'on_time')]);
+    expect(html).toContain('<span class="mono">PUD-1</span><span class="pill pill--warn">late</span>');
+    expect(html).toContain('<span class="mono">PUD-2</span><span class="pill pill--ok">on time</span>');
+  });
+
+  it('says neither for a parcel without a plan to measure against', () => {
+    expect(render({}, [row('PUD-1'), row('PUD-2')])).not.toContain('pill');
   });
 });

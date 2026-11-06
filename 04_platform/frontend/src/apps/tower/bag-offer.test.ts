@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { createOperatorApi } from '../../lib/sbg/personas/operator';
-import { stepWords } from './screens/BagsWaitingPanel';
+import { chainWords, stepWords } from './screens/BagsWaitingPanel';
 
 /*
  * 2026-11-06 — A BAG NOBODY HAS TAKEN, OFFERED BY STAFF TO A DRIVER THEY CHOOSE (the owner: "go ahead"): the case's bags,
@@ -44,5 +44,24 @@ describe('offering a waiting bag from its case', () => {
     expect(stepWords(step('no_answer'), t as never, now)).toBe('Kamau · no answer in time');
     expect(stepWords(step('taken'), t as never, now)).toBe('Kamau · took it');
     expect(stepWords(step(), t as never, now)).toBe('Kamau · asked, 10 min left to answer');
+  });
+
+  /*
+   * 2026-11-06 — NOBODY ABLE TO TAKE IT NOW, OFFERED AGAIN EVERY HOUR (the owner: "check every hour after 24 hour checks and
+   * notify the buyer that they will be notified when their parcel is on the road again").
+   */
+  it('says the try it is on — not every driver ever asked — when it is offered again, and who has been told', () => {
+    const now = Date.parse('2026-11-06T12:00:00Z');
+    const asked = (name: string, round: number, outcome: 'not_now' | 'no_answer') => ({ name, km: 4, at: '2026-11-06T10:00:00Z', until: '2026-11-06T10:20:00Z', outcome, round });
+    const nextTryAt = '2026-11-06T13:00:00Z';
+    const time = new Date(nextTryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const waiting = { state: 'waiting' as const, round: 2, tries: 2, nextTryAt, steps: [asked('Kamau', 0, 'not_now'), asked('Wanjiru', 1, 'no_answer'), asked('Otieno', 2, 'not_now')] };
+    expect(chainWords(waiting, t as never, now)).toBe(`Otieno · said not now — nobody can take it now: offered again every hour, next at ${time} — offered again 2 times so far`);
+    expect(chainWords({ ...waiting, tries: 1 }, t as never, now)).toContain('offered again once so far');
+    // A day on, its people told it is held up; then, aboard, that it is on the road.
+    expect(chainWords({ ...waiting, heldUpToldAt: '2026-11-06T11:00:00Z' }, t as never, now)).toMatch(/— the people of its parcels are told it is held up, and told again when it is on the road$/);
+    expect(chainWords({ ...waiting, state: 'gone', heldUpToldAt: '2026-11-06T11:00:00Z', onRoadToldAt: '2026-11-06T11:30:00Z' }, t as never, now)).toMatch(/— on the road: the people of its parcels are told$/);
+    // A chain from before the hourly tries reads as it did.
+    expect(chainWords({ state: 'nobody', steps: [{ name: 'Kamau', km: 4, at: '2026-11-06T10:00:00Z', until: '2026-11-06T10:20:00Z', outcome: 'not_now' }] }, t as never, now)).toBe('Kamau · said not now — Nobody else can be reached now: choose a driver again later, or call one.');
   });
 });

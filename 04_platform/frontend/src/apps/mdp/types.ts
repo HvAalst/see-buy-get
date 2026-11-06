@@ -94,6 +94,8 @@ export interface ParcelRow {
   held?: UnitHold;
   /** 2026-10-27 — called off here by its store: the box it is, under its old label. Its new label goes over that one. */
   returnOf?: { parcelId: string; atMdpId: string; at: string };
+  /** 2026-11-06 — against the time it was promised, while on its way under a plan: late, or on time. */
+  due?: 'late' | 'on_time';
 }
 
 /** A box called off here, going to its store's door as a load: kept aside for that load's driver (2026-10-27). */

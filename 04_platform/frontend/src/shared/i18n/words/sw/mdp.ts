@@ -105,6 +105,8 @@ export const words: Record<string, string> = {
   "mdp.sort.scanSticker": "Changanua stika",
   "mdp.sort.cta": "Panga — kinaenda wapi?",
   "mdp.sort.queueEmpty": "Foleni iko tupu — changanua kifurushi chochote kilicho hapa kweli.",
+  "mdp.due.late": "kimechelewa",
+  "mdp.due.onTime": "kwa wakati",
   "mdp.relabel.title": "Kimesitishwa hapa: lebo mpya",
   "mdp.relabel.lede": "Kilisitishwa kikiwa hapa, kwa hiyo kinarudi kwenye duka kama kifurushi kipya. Chapisha lebo yake mpya, iweke juu ya ile ya zamani, kisha ukipange.",
   "mdp.relabel.body": "{old} kilisitishwa na duka lake la mtandaoni. Kinarudi kama {new}: chapisha lebo yake mpya, iweke juu ya ile ya zamani, kisha changanua {new}.",

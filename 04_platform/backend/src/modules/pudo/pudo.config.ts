@@ -451,6 +451,10 @@ export const STUCK_SWEEP_MS = 15 * 60 * 1000;
 // next nearest driver at once (BagOfferService). The chain is looked at this often.
 export const STAFF_OFFER_WAIT_MIN = 20;
 export const OFFER_CHAIN_SWEEP_MS = 60 * 1000;
+// 2026-11-06 — where nobody could take it, it is tried again every hour; after this many hourly tries (a day) its buyers
+// are told it is held up, and told again when it is on the road (the owner: "check every hour after 24 hour checks").
+export const CHAIN_RETRY_EVERY_MIN = 60;
+export const CHAIN_TELL_BUYERS_AFTER_CHECKS = 24;
 export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).

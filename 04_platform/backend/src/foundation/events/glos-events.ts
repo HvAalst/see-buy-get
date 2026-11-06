@@ -177,6 +177,8 @@ export const GlosEvent = {
     OrderHandedOn: 'pudo.order_handed_on', // P4 — orders moved between a fleet and its partners; the other office is told
     OrderPlaced: 'pudo.order_placed', // an order came in under a fleet's contract — from its shipper, or a sheet the office uploaded
     InboundAddressed: 'pudo.inbound_addressed', // a load posted to a business's receiving point: it is coming in to them (inbound, reading A)
+    BagHeldUp: 'pudo.bag_held_up', // 2026-11-06 — a closed bag no driver could be found for in a day of hourly tries: its parcels' people are told
+    BagOnTheRoadAgain: 'pudo.bag_on_the_road_again', // …and when a driver has taken it on after that
     ParcelExpectedLate: 'pudo.parcel_expected_late', // 2026-11-06 — its plan, made again, expects it at least an hour after the time it was promised: its people are told before that time comes
     ParcelTakenInAtHub: 'pudo.parcel_taken_in_at_hub', // a store's parcel scanned off its pallet at a hub it was handed in at (inbound, reading B) — or a person's goods turned round at a hub: either way its journey starts there
     ParcelAtDoor: 'pudo.parcel_at_door', // a business's parcel delivered at its own door by the driver of its last leg (2026-10-29)

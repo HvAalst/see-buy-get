@@ -693,6 +693,32 @@ describe('NotificationDispatcher — a parcel running late', () => {
     await dispatcher.sweepParcelsLate();
     expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
   });
+
+  it('a bag no driver took in a day: its people told it is held up, and that they hear when it moves — then that it does (2026-11-06)', async () => {
+    const parcel = onItsWay({ status: 'At_PUDO' });
+    const { notifications, events } = harness({ parcel, onShelf: [], personByHash: people, agents: shop });
+    await events.publish(GlosEvent.Pudo.BagHeldUp, { code: 'BAG-9', parcelIds: ['PUD-LATE'], place: 'Duka Moja' });
+    expect(notifications.inboxFor('did:glos:person-r')[0]).toMatchObject({ kind: 'parcel_late', title: 'Your parcel is held up', body: 'It is waiting at Duka Moja for a driver, and none has been able to take it on yet. You are told as soon as it is on the road again.', link: '/?parcel=PUD-LATE' });
+    expect(notifications.inboxFor('did:glos:person-s')[0]).toMatchObject({ kind: 'parcel_late', title: 'A parcel you sent is held up' });
+    // A driver scans it aboard: on the road again.
+    (parcel as { status: string }).status = 'On_Bus';
+    await events.publish(GlosEvent.Pudo.BagOnTheRoadAgain, { code: 'BAG-9', parcelIds: ['PUD-LATE'], place: 'Duka Moja' });
+    const moving = (did: string) => notifications.inboxFor(did).find((n) => n.kind === 'parcel_moving');
+    expect(moving('did:glos:person-r')).toMatchObject({ kind: 'parcel_moving', title: 'Your parcel is on the road again', body: 'A driver has taken it on from Duka Moja. You are told when it is ready to collect.', link: '/?parcel=PUD-LATE' });
+    expect(moving('did:glos:person-s')).toMatchObject({ kind: 'parcel_moving', title: 'A parcel you sent is on the road again', body: 'A driver has taken it on from Duka Moja. Its tracking page shows where it is.' });
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(2);
+  });
+
+  it('a store’s parcel held up: its buyer told, nobody as its sender; a parcel no longer on its way: nobody (2026-11-06)', async () => {
+    const parcel = onItsWay({ status: 'At_PUDO', vendorId: 'vnd_1' });
+    const { notifications, events } = harness({ parcel, onShelf: [], personByHash: people, agents: shop });
+    await events.publish(GlosEvent.Pudo.BagHeldUp, { code: 'BAG-9', parcelIds: ['PUD-LATE'], place: 'Duka Moja' });
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+    expect(notifications.inboxFor('did:glos:person-s')).toHaveLength(0);
+    (parcel as { status: string }).status = 'Ready_For_Pickup';
+    await events.publish(GlosEvent.Pudo.BagOnTheRoadAgain, { code: 'BAG-9', parcelIds: ['PUD-LATE'], place: 'Duka Moja' });
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+  });
 });
 
 describe('NotificationDispatcher — the uncollected reminder', () => {

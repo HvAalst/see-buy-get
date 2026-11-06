@@ -119,6 +119,8 @@ export const enMdp = {
   'mdp.sort.scanSticker': 'Scan the sticker',
   'mdp.sort.cta': 'Sort — where does it go?',
   'mdp.sort.queueEmpty': 'Queue empty — scan any parcel that is physically here.',
+  'mdp.due.late': 'late',
+  'mdp.due.onTime': 'on time',
   // A store's parcel called off at this hub (the user, 2026-10-27: "Comes back, store pays").
   'mdp.relabel.title': 'Called off here: a new label',
   'mdp.relabel.lede': 'Called off while it was here, it goes back to a shop as a new parcel. Print its new label, put it over the old one, then sort it.',

@@ -5,6 +5,7 @@ import { BagReceiptFields, BagReportSheet } from '../../../shared/BagSealFields'
 import { EMPTY_BAG_RECEIPT, receiptBody, receiptReady, type BagReceiptForm } from '../../../shared/bagSeal';
 import { heldLine } from '../../../shared/tamper';
 import type { MdpActions, MdpState } from '../useMdpApp';
+import { DueTag, dueById } from './DueTag';
 
 export interface DropScreenProps {
   state: MdpState;
@@ -22,6 +23,8 @@ export function DropScreen({ state, actions }: DropScreenProps) {
   const bag = state.drop.bag;
   const looked = bag !== undefined && bag !== null;
   const busy = state.busy === 'drop';
+  // 2026-11-06 — late, or on time, beside each parcel waiting to be sorted.
+  const due = dueById(state.inbound);
   const [receipt, setReceipt] = useState<BagReceiptForm>(EMPTY_BAG_RECEIPT);
   const [reporting, setReporting] = useState(false);
   useEffect(() => {
@@ -102,8 +105,9 @@ export function DropScreen({ state, actions }: DropScreenProps) {
         <Card title={state.queue.length === 1 ? t('mdp.drop.readyOne', { count: state.queue.length }) : t('mdp.drop.readyMany', { count: state.queue.length })}>
           <div class="chips">
             {state.queue.slice(0, 12).map((id) => (
-              <span key={id} class="chip mono">
-                {id}
+              <span key={id} class="chip">
+                <span class="mono">{id}</span>
+                <DueTag due={due.get(id)} />
               </span>
             ))}
           </div>

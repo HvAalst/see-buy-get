@@ -23,7 +23,7 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -552,6 +552,24 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 
+/**
+ * 2026-11-06 — LATE, OR ON TIME, against the time it was promised (never moved): late once that time has passed, or where
+ * the plan as made again expects it after that time, or its people were told it would be; on time otherwise.
+ */
+export function dueOf(plan: Pick<JourneyPlan, 'pickupReadyAt' | 'expectedAt' | 'lateTold'>, now: number): 'late' | 'on_time' | undefined {
+  const promised = Date.parse(plan.pickupReadyAt);
+  if (!Number.isFinite(promised)) return undefined; // no promise to measure against: neither said
+  const after = (iso?: string) => iso !== undefined && Date.parse(iso) > promised;
+  return now > promised || after(plan.expectedAt) || after(plan.lateTold) ? 'late' : 'on_time';
+}
+
+/** The list's late-or-on-time, while it is on its way under a plan kept stop by stop; nothing otherwise. */
+function dueField(p: Parcel): { due?: 'late' | 'on_time' } {
+  if (!p.plan || p.plan.at === undefined || !(p.status === 'At_PUDO' || p.status === 'On_Bus' || p.status === 'At_MDP')) return {};
+  const due = dueOf(p.plan, Date.now());
+  return due ? { due } : {};
+}
+
 /** PG2 — the OPERATIONAL projection of a parcel for the shared agent/hub list surface: everything the
  *  counter, handover and sort screens work with, NOTHING personal — no phones or hashes, no handover
  *  secrets (collection code / OTP), no label or scan bodies, no dispute material. The raw record leaves
@@ -559,6 +577,9 @@ import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '..
 export function operationalParcelView(p: Parcel, holding?: { amount: number; currency: string }) {
   return {
     parcelId: p.parcelId,
+    // 2026-11-06 — late or on time, while it is on its way (the owner: "when we show 'late' we can also show 'on time'").
+    // Absent where no plan is kept stop by stop.
+    ...dueField(p),
     did: p.did,
     direction: p.direction,
     size: p.size,
