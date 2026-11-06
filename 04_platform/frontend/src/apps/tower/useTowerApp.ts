@@ -1,4 +1,5 @@
 import { FLEET_PAPERS, fleetBody, type FleetForm, type FleetPaperKey, type FleetSetupRow } from './fleets';
+import type { ParcelWay } from './parcelWay';
 import type { CaseBoard, CaseKindCount, CaseListName, FlagCaseRow } from './cases';
 import type { LostParcelRow } from './lost';
 import type { TamperUnit } from '../../shared/tamper';
@@ -263,6 +264,8 @@ export interface ParcelView {
   payAtCollection?: { amount: number; currency: string };
   holdingOwed?: number;
   holdingCurrency?: string;
+  /** 2026-11-06 — its way, for staff: its plan's stops and every step it took off them (movement unification). */
+  way?: ParcelWay;
 }
 
 /** `GET /finance` is untyped in the contract; these are the fields the screen reads. */

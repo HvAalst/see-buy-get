@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
+import { nextStopOf } from './route-plan.service';
 import { RoutingService } from './routing.service';
 import { ToteService } from './tote.service';
 import { Parcel } from './pudo.types';
 
 /** One bag's worth of work: the parcels sharing a next hop, and the open bag for it if there is one. */
 export interface BagGroup {
-  key: string; // the next hop's id — an MDP id, or a zone when the route runs direct
+  key: string; // the next stop's id — an MDP id, or the shop a direct route runs to (2026-11-06); a zone only with no shop named
   label: string;
   via: 'direct' | 'hub';
   parcelIds: string[];
@@ -106,16 +107,23 @@ export class BagPlanService {
   }
 
   /**
-   * Where this parcel goes NEXT from here. A route through a hub stops at the hub; a direct route runs to
-   * the destination zone. Routing is only asked when it can answer — a parcel with no nominated
-   * destination PUDO has no plannable journey yet, and its zone is the honest next hop.
+   * Where this parcel goes NEXT from here. 2026-11-06 — BY ITS PLAN, where it has one kept stop by stop (movement
+   * unification): its next stop itself — a hub, or the shop it is collected at. A direct route's bag was addressed to the
+   * AREA, and only a hub takes a bag for an area: a shop receives a bag addressed to that shop (MdpService.deliverBag), so
+   * where no hub served the area, nobody could receive it. Without a plan, as it would be planned now: a route through a
+   * hub stops at the hub, a direct route runs to its shop. Routing is only asked when it can answer — a parcel with no
+   * nominated destination PUDO has no plannable journey yet, and its zone is the honest next hop.
    */
   private nextHopFor(parcel: Parcel): { key: string; label: string; via: 'direct' | 'hub' } {
+    const next = nextStopOf(parcel);
+    if (next && next.type !== 'dock') return { key: next.id, label: next.label, via: next.type === 'mdp' ? 'hub' : 'direct' };
     if (parcel.destAgentDid) {
       try {
         const plan = this.routing.planJourney({ originAgentDid: parcel.originAgentDid, destAgentDid: parcel.destAgentDid, weightKg: parcel.weightKg });
         const hub = plan.hops.find((h) => h.type === 'mdp');
         if (hub) return { key: hub.id, label: hub.label, via: 'hub' };
+        const shop = plan.hops[plan.hops.length - 1];
+        if (plan.hops.length > 1) return { key: shop.id, label: shop.label, via: 'direct' };
       } catch {
         // No plannable route (no corridor, no hub) — the zone is still a true answer, so fall through.
       }

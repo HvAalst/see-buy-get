@@ -3,7 +3,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { ParcelService, planVsActual } from './parcel.service';
 import type { JourneyPlan, Parcel } from './pudo.types';
-import { RoutingService } from './routing.service';
+import { RoutingService, type RouteEnd } from './routing.service';
 
 /** One lane, as the plan said and as it went: how many arrived, how many by the time promised, how late the late ones were. */
 export interface PlanLane {
@@ -65,8 +65,11 @@ export class JourneyPlanService implements OnModuleInit {
     });
   }
 
-  /** Plan the journey now and keep it on the parcel — once. Nothing where it has a plan already or nowhere to go. */
-  freeze(parcelId: string, now: number = Date.now()): JourneyPlan | undefined {
+  /**
+   * Plan the journey now and keep it on the parcel — once. Nothing where it has a plan already or nowhere to go. `dock`: a
+   * store's own dock it is bagged on (DockService) — the journey starts there, at the bagging, the store's "it goes now".
+   */
+  freeze(parcelId: string, now: number = Date.now(), dock?: RouteEnd): JourneyPlan | undefined {
     let parcel: Parcel;
     try {
       parcel = this.parcels.get(parcelId);
@@ -78,8 +81,9 @@ export class JourneyPlanService implements OnModuleInit {
       // From the take-in, which is when the promise starts — earlier than now where the counter had no signal (round 23).
       // Reading B — handed in at a hub: the journey starts at the hub, at the take-in, which is now.
       const fromHub = parcel.handInMdpId ? this.routing.hubEnd(parcel.handInMdpId) : undefined;
-      const takenIn = fromHub ? NaN : parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
-      const j = this.routing.planJourney({ ...(fromHub ? { from: fromHub } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}) });
+      const from = fromHub ?? dock;
+      const takenIn = from ? NaN : parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
+      const j = this.routing.planJourney({ ...(from ? { from } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}) });
       const plan: JourneyPlan = {
         hops: j.hops.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone })),
         mdpRouted: j.mdpRouted,

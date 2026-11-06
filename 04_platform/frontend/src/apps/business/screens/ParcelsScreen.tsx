@@ -385,10 +385,10 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
           {dock?.groups.length ? (
             <div class="crows">
               {dock.groups.map((g) => (
-                <div class="crow" key={g.zone}>
+                <div class="crow" key={g.key}>
                   <span class="crow__body">
                     <span class="crow__top">
-                      <span class="crow__name">{t('business.parcels.dockFor', { zone: g.zone, n: g.parcels.length })}</span>
+                      <span class="crow__name">{t('business.parcels.dockFor', { zone: g.label, n: g.parcels.length })}</span>
                     </span>
                     <span class="crow__sub ctbl__mono">{g.parcels.map((p) => p.parcelId).join(' · ')}</span>
                   </span>
@@ -399,7 +399,7 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
                           {t('business.parcels.dockFill', { code: g.openBagCode })}
                         </button>
                       ) : (
-                        <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={busy || dock.used >= dock.capacity} onClick={() => void run(() => api.openBag(g.zone))}>
+                        <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={busy || dock.used >= dock.capacity} onClick={() => void run(() => api.openBag(g.key))}>
                           {t('business.parcels.dockOpen')}
                         </button>
                       )}

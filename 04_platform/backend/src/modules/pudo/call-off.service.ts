@@ -351,8 +351,7 @@ export class CallOffService implements OnModuleInit {
     if (bag?.parcels.includes(parcelId)) this.totes.takeOut(bag.code, parcelId, p.size);
     this.tellHub(hub, p, `it goes back to ${shop.shopName}, where its sender handed it in, as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Withdrawn: a new label', bag?.code, { returnParcelId: back.parcelId }, 'was withdrawn');
     const amount = back.shipmentCost ?? price;
-    // Its journey starts at the hub, now: the promise of when it is ready is kept from here (JourneyPlanService).
-    void this.events?.publish(GlosEvent.Pudo.ParcelTakenInAtHub, { parcelId: back.parcelId, mdpId: hub.mdpId }, { source: 'pudo' }).catch(() => undefined);
+    // (Its journey starts at the hub, now — said where it is made, ParcelService.startsAtHub, as for every parcel made at a hub.)
     // Its sender is told where to collect it and what they pay there; its receiver, that it will not come — in the app.
     void this.events?.publish(GlosEvent.Pudo.ParcelWithdrawn, { parcelId, returnParcelId: back.parcelId, hubName: hub.name, shopName: shop.shopName, amount, currency: parcelCurrency(back) }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, status: 'Returned', outcome: 'turn_round', amount, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: shop.shopName, atHub: hub.name };

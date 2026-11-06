@@ -30,7 +30,7 @@ describe('a store’s dock and the parcels it hands in elsewhere', () => {
       atLocation: () => [],
     } as unknown as ToteService;
     const mdps = { fillTote: () => ({ tote: {}, fillPct: 10 }) } as unknown as MdpService;
-    return new DockService(vendors, parcelSvc, totes, mdps, {} as EventBus, {} as BagClosureService);
+    return new DockService(vendors, parcelSvc, totes, mdps, {} as EventBus, {} as BagClosureService, {} as never, {} as never);
   };
 
   it('waits on the dock only with what leaves from it: never a parcel for a shop’s counter or a hub', () => {

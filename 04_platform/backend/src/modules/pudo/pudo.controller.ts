@@ -3509,7 +3509,8 @@ export class SbgController {
   @Get('parcels/:id')
   @AtTheCounter()
   getParcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    if (actor?.role === 'operator') return this.monitor.parcelTimeline(id);
+    // Staff read its way as well: its plan's stops and the steps it took off them (2026-11-06). A shop reads its history.
+    if (actor?.role === 'operator') return this.monitor.parcelTimeline(id, { staff: true });
     const shop = actingDid(actor);
     const p = this.parcels.get(id);
     if (p.originAgentDid === shop || p.destAgentDid === shop) return this.monitor.parcelTimeline(id);

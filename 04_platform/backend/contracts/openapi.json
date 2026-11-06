@@ -40060,8 +40060,13 @@
       "DockGroupView": {
         "type": "object",
         "properties": {
-          "zone": {
-            "type": "string"
+          "key": {
+            "type": "string",
+            "description": "2026-11-06 — the stop they go to next, as a bag for it is opened: a hub's id, or the shop a direct route runs to."
+          },
+          "label": {
+            "type": "string",
+            "description": "Its name: the hub's, or the shop's."
           },
           "parcels": {
             "type": "array",
@@ -40074,7 +40079,8 @@
           }
         },
         "required": [
-          "zone",
+          "key",
+          "label",
           "parcels"
         ]
       },

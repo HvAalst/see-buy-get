@@ -864,6 +864,48 @@
   margin: 0;
 }
 
+/* 2026-11-06 — a parcel's way on the Support screen (WayPanel): its plan's stops in a line, where it is now tagged. */
+.twr-way {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 2px;
+  margin: 4px 0 8px;
+  font-size: var(--c-fs-sm);
+}
+
+.twr-way__stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.twr-way__arrow {
+  color: var(--tx3);
+  margin: 0 6px;
+}
+
+.twr-way__stop--passed .twr-way__name {
+  color: var(--tx3);
+}
+
+.twr-way__stop--here .twr-way__name {
+  color: var(--tx);
+  font-weight: 600;
+}
+
+/* Its steps off the plan are sentences, not codes (a row is one line for a code): they wrap rather than end in an
+   ellipsis on a narrow screen, where the cut-off part is the half that says where it went. */
+.twr-way__steps .crow__top {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.twr-way__steps .crow__name,
+.twr-way__steps .crow__sub {
+  white-space: normal;
+}
+
 .twr-pics {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));

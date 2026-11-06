@@ -5,6 +5,7 @@ import type { LoadFound } from '../../../shared/loadFinder';
 import { isLoadLabel, ssccOfScan } from '../../../shared/scan';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { TrailPanel } from './TrailPanel';
+import { WayPanel } from './WayPanel';
 import { WithdrawBlock } from './Withdraw';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -184,6 +185,8 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
               </table>
             )}
           </section>
+          {/* 2026-11-06 — its way: its plan's stops, where it is, and every step it took off them, with why. */}
+          {p.way ? <WayPanel way={p.way} /> : null}
           <TrailPanel unitRef={p.parcelId} actions={actions} />
 
           {p.dropoffPhotoRef || p.deliveredPhotoRef || p.contentPhotoRef ? (

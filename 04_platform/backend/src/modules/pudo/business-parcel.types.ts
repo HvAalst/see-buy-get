@@ -176,9 +176,12 @@ export class DockBagView {
   @ApiProperty() status!: string;
 }
 
-/** Parcels waiting at its place for one destination, and the bag open for it. */
+/** Parcels waiting at its place for one next stop, and the bag open for it. */
 export class DockGroupView {
-  @ApiProperty() zone!: string;
+  /** 2026-11-06 — the stop they go to next, as a bag for it is opened: a hub's id, or the shop a direct route runs to. */
+  @ApiProperty() key!: string;
+  /** Its name: the hub's, or the shop's. */
+  @ApiProperty() label!: string;
   @ApiProperty({ type: () => [BusinessParcelRow] }) parcels!: BusinessParcelRow[];
   @ApiPropertyOptional() openBagCode?: string;
 }

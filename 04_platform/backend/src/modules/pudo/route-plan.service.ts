@@ -6,6 +6,20 @@ import type { JourneyPlan, Mdp, Parcel } from './pudo.types';
 import type { OffPlanReason, OffPlanSaid, OffPlanStep, PlanHop, RouteKeeper } from './route-plan.types';
 import { RoutingService } from './routing.service';
 
+/** A plan kept stop by stop. One made before (no `at`), or none at all, is not asked: the parcel moves as it always did. */
+export function keptPlanOf(parcel: Parcel): JourneyPlan | undefined {
+  return parcel.plan && parcel.plan.at !== undefined && parcel.plan.hops.length ? parcel.plan : undefined;
+}
+
+/**
+ * The stop a parcel goes to next by its kept plan, if it has one. A plain function as well as the keeper's: the shop's bag
+ * plan and a store's dock address their bags by it, and are made in places the keeper is not (movement unification).
+ */
+export function nextStopOf(parcel: Parcel): PlanHop | undefined {
+  const plan = keptPlanOf(parcel);
+  return plan ? plan.hops[plan.at! + 1] : undefined;
+}
+
 /**
  * 2026-11-06 — ONE PLAN PER PARCEL, ASKED AT EVERY HAND-OVER (movement unification; the owner: "build the whole thing").
  *
@@ -41,8 +55,7 @@ export class RoutePlanService implements RouteKeeper {
   }
 
   nextStop(parcel: Parcel): PlanHop | undefined {
-    const plan = this.planOf(parcel);
-    return plan ? plan.hops[plan.at! + 1] : undefined;
+    return nextStopOf(parcel);
   }
 
   offPlan(parcel: Parcel, to: string, opts: { loose?: boolean } = {}): PlanHop | undefined {
@@ -109,9 +122,8 @@ export class RoutePlanService implements RouteKeeper {
 
   /* --------------------------------------------------------------------------------------------------------- inside -- */
 
-  /** A plan kept stop by stop. One made before (no `at`), or none at all, is not asked: the parcel moves as it always did. */
   private planOf(parcel: Parcel): JourneyPlan | undefined {
-    return parcel.plan && parcel.plan.at !== undefined && parcel.plan.hops.length ? parcel.plan : undefined;
+    return keptPlanOf(parcel);
   }
 
   /**

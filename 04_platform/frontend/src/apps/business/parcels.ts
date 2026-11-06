@@ -34,7 +34,8 @@ export interface ParcelCollection {
 /** The day's bagging at its own place. */
 export interface DockView {
   collection: ParcelCollection;
-  groups: Array<{ zone: string; parcels: BusinessParcel[]; openBagCode?: string }>;
+  /** 2026-11-06 — by the stop they go to next: a hub, or the shop a direct route runs to. A bag for it is opened with its key. */
+  groups: Array<{ key: string; label: string; parcels: BusinessParcel[]; openBagCode?: string }>;
   bags: Array<{ code: string; destination?: string; parcelIds: string[]; fillPct: number; status: string }>;
   capacity: number;
   used: number;

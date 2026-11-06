@@ -122,10 +122,11 @@ describe('a business’s parcels collected from its own place', () => {
     // A parcel handed in at a shop is that shop's to expect: it is never one to bag at the warehouse.
     const atShop = (await http().post('/v1/sbg/business/me/parcels').set(biz.token).send(await parcel({ originPudoDid: nairobi })).expect(201)).body.parcel.parcelId as string;
 
-    // Bagged at its place: waiting by destination, a bag opened, the parcel in it, closed with its own photograph.
+    // Bagged at its place: waiting by the stop it goes to next (2026-11-06 — the shop its direct route runs to, which can
+    // receive the bag; not the area), a bag opened with that key, the parcel in it, closed with its own photograph.
     const dock = () => http().get('/v1/sbg/business/me/parcels/dock').set(biz.token).expect(200).then((r) => r.body);
-    expect((await dock()).groups).toEqual([expect.objectContaining({ zone: `BpdKisumu${tag}`, parcels: [expect.objectContaining({ parcelId: id })] })]);
-    const opened = (await http().post('/v1/sbg/business/me/parcels/dock/bags').set(biz.token).send({ destZone: `BpdKisumu${tag}` }).expect(201)).body;
+    expect((await dock()).groups).toEqual([expect.objectContaining({ key: kisumu, label: `Kisumu BPD ${tag}`, parcels: [expect.objectContaining({ parcelId: id })] })]);
+    const opened = (await http().post('/v1/sbg/business/me/parcels/dock/bags').set(biz.token).send({ destZone: kisumu }).expect(201)).body;
     const code = opened.bags[0].code as string;
     expect(opened.groups[0].openBagCode).toBe(code);
     // Another business's parcel, or one going to a shop, is not this place's to bag.

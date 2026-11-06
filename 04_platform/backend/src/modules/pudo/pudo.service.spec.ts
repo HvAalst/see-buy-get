@@ -1166,7 +1166,8 @@ describe('PUDO Light', () => {
     // And the store is holding its own goods: it is the SENDER in the chain, not a node of the network.
     expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'sender', holderId: store.vendorId });
 
-    const bag: any = controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
+    // 2026-11-06 — addressed to its next stop: the shop its direct route runs to, which can receive it (not the area).
+    const bag: any = controller.openDockBag(store.vendorId, { destZone: dest.did } as never, asStore);
     controller.fillDockBag(store.vendorId, bag.code, { parcelId } as never, asStore);
     controller.sealDockBag(store.vendorId, bag.code, { closure: closedBy(store.did) } as never, asStore);
     // Bagging is not a hand-off: the goods are still the store's while the bag stands on its own dock.
@@ -1210,10 +1211,11 @@ describe('PUDO Light', () => {
     const dropped = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: viaShop.did, destPudoDid: dest.did, buyerMobile: '+254700444', size: 'M', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel;
     expect(dropped.nodeFees).toBe(Math.round((viaShop.pricePerParcel + dest.pricePerParcel) * 100) / 100);
 
-    expect(plan.groups[0]).toMatchObject({ label: 'SouthTown', parcelIds: [p1, p2] });
+    // 2026-11-06 — by next stop: the shop the direct route runs to, by its name; the bag is opened with the group's key.
+    expect(plan.groups[0]).toMatchObject({ key: dest.did, label: 'Dock Dest', parcelIds: [p1, p2] });
     expect(plan.staging).toEqual({ capacity: 2, used: 0, free: 2 });
 
-    const bag: any = controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
+    const bag: any = controller.openDockBag(store.vendorId, { destZone: plan.groups[0].key } as never, asStore);
     controller.fillDockBag(store.vendorId, bag.code, { parcelId: p1 } as never, asStore);
 
     // The same completeness gate a shop answers to: a paid parcel left on a dock is as stranded as one on
@@ -1536,7 +1538,7 @@ describe('PUDO Light', () => {
       expect(shelfSvc.held(shop.did)).toBe(0);
       expect(shelfSvc.available(shop.did)).toBe(free - 1);
       // A bag opened for where it goes next: the next one goes straight in, and takes no slot.
-      const bag = mdps.openShopBag(shop.did, onShelf.destZone);
+      const bag = mdps.openShopBag(shop.did, bagPlans.hopOf(onShelf).key);
       const second = order();
       parcels.intakeInbound(second.parcelId, shop.did);
       expect(parcels.get(second.parcelId).goesInBag?.code).toBe(bag.code);
@@ -1660,23 +1662,23 @@ describe('PUDO Light', () => {
     };
 
     it('sees what a shop has coming for its next stop — booked and waiting — and takes it on: the room is held on the vehicle', () => {
-      const { shop, order, walkUp, rider, road } = setUp('PAH1');
+      const { shop, dest, order, walkUp, rider, road } = setUp('PAH1');
       order();
       walkUp('PAH1-W');
-      const group = ahead.comingAt(shop.did).find((g) => g.hopKey === 'SouthTown')!;
-      expect(group).toMatchObject({ parcels: 2, booked: 1, hopLabel: 'SouthTown' });
+      const group = ahead.comingAt(shop.did).find((g) => g.hopKey === dest.did)!;
+      expect(group).toMatchObject({ parcels: 2, booked: 1, hopLabel: 'PAH1 Dest' });
       const amos = rider('A');
       const seen = ahead.nearRoute(amos.did, road as never).filter((g) => g.agentDid === shop.did);
-      expect(seen.map((g) => g.hopKey)).toEqual(['SouthTown']);
+      expect(seen.map((g) => g.hopKey)).toEqual([dest.did]);
       const room = dispatch.remainingCapacity(amos.did);
       const bags = dispatch.remainingTotes(amos.did);
-      const p = ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      const p = ahead.takeOn(amos.did, shop.did, dest.did);
       expect(p).toMatchObject({ state: 'promised', parcels: 2, kg: group.kg });
       expect(dispatch.remainingCapacity(amos.did)).toBe(Math.round((room - group.kg) * 100) / 100);
       expect(dispatch.remainingTotes(amos.did)).toBe(bags - 1);
       // One driver a stop: the next is told who has them.
       const kilima = rider('K');
-      expect(() => ahead.takeOn(kilima.did, shop.did, 'SouthTown')).toThrow(/PAH1 A has taken these on already/);
+      expect(() => ahead.takeOn(kilima.did, shop.did, dest.did)).toThrow(/PAH1 A has taken these on already/);
       expect(ahead.nearRoute(kilima.did, road as never).find((g) => g.agentDid === shop.did)?.takenBy?.name).toBe('PAH1 A');
       // The shop sees who takes them.
       const shelf: any = controller.getShelf(shop.did, ({ role: 'agent', did: shop.did }) as never);
@@ -1684,13 +1686,13 @@ describe('PUDO Light', () => {
     });
 
     it('is given the shop\'s bag for that stop when it is closed — claimed for them, the promise counted once', () => {
-      const { shop, walkUp, rider } = setUp('PAH2');
+      const { shop, dest, walkUp, rider } = setUp('PAH2');
       // 16 kg on a 20 kg bike: the room the promise held is the room the bag uses — counted once, or it would not fit.
       walkUp('PAH2-W1');
       walkUp('PAH2-W2', 'L');
       const amos = rider('A');
-      ahead.takeOn(amos.did, shop.did, 'SouthTown');
-      const bag = mdps.openShopBag(shop.did, 'SouthTown');
+      ahead.takeOn(amos.did, shop.did, dest.did);
+      const bag = mdps.openShopBag(shop.did, dest.did);
       mdps.fillShopBag(bag.code, shop.did, 'PAH2-W1');
       mdps.fillShopBag(bag.code, shop.did, 'PAH2-W2');
       mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
@@ -1701,21 +1703,21 @@ describe('PUDO Light', () => {
     });
 
     it('let go, the room is free and the parcels anybody\'s; a driver who can no longer carry it is passed over, and told', () => {
-      const { shop, walkUp, rider } = setUp('PAH3');
+      const { shop, dest, walkUp, rider } = setUp('PAH3');
       walkUp('PAH3-W1');
       const amos = rider('A');
       const room = dispatch.remainingCapacity(amos.did);
-      const p = ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      const p = ahead.takeOn(amos.did, shop.did, dest.did);
       ahead.letGo(amos.did, p.promiseId);
       expect(dispatch.remainingCapacity(amos.did)).toBe(room);
       // Taken on again for a 1 kg parcel. Then a 15 kg one comes in for the same stop, and the bike takes 5 kg at another
       // counter: the bag of 16 kg no longer fits what it has left plus what it held (14 + 1).
-      ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      ahead.takeOn(amos.did, shop.did, dest.did);
       walkUp('PAH3-W2', 'L');
       const other = onboardAgent('PAH3 Other', 'NorthTown', 50);
       parcels.accept({ agentDid: other.did, parcelId: 'PAH3-MID', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(other.did) } as never);
       expect(parcels.handover({ agentDid: other.did, driverBadgeId: drivers.get(amos.did).badgeId!, parcelIds: ['PAH3-MID'] }).handed).toEqual(['PAH3-MID']);
-      const bag = mdps.openShopBag(shop.did, 'SouthTown');
+      const bag = mdps.openShopBag(shop.did, dest.did);
       mdps.fillShopBag(bag.code, shop.did, 'PAH3-W1');
       mdps.fillShopBag(bag.code, shop.did, 'PAH3-W2');
       mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
@@ -1725,10 +1727,10 @@ describe('PUDO Light', () => {
     });
 
     it('a promise ends by itself after 24 hours, and holds no room after it', () => {
-      const { shop, walkUp, rider } = setUp('PAH4');
+      const { shop, dest, walkUp, rider } = setUp('PAH4');
       walkUp('PAH4-W1');
       const amos = rider('A');
-      ahead.takeOn(amos.did, shop.did, 'SouthTown');
+      ahead.takeOn(amos.did, shop.did, dest.did);
       expect(ahead.heldOn(amos.did).bags).toBe(1);
       expect(ahead.heldOn(amos.did, Date.now() + 25 * HOUR)).toEqual({ kg: 0, bags: 0 });
     });
@@ -1908,6 +1910,12 @@ describe('PUDO Light', () => {
       expect(arrived.plan!.heading).toBeUndefined();
       expect(arrived.plan!.offPlan).toHaveLength(1);
       expect(planVsActual(arrived)).toMatchObject({ routeKept: false, offPlan: 1 });
+      // Staff read its way: the stops, where it is now, and the step off its plan — where, what it said, why, by whom. A shop
+      // reading its own parcel reads its history only.
+      const way = (monitor.parcelTimeline('MU2-A', { staff: true }) as any).way;
+      expect(way.stops).toEqual([expect.objectContaining({ label: 'MU2 Shop', state: 'passed' }), expect.objectContaining({ label: 'MU2 Far', state: 'here' })]);
+      expect(way.offPlan).toEqual([expect.objectContaining({ kind: 'decision', where: 'MU2 Shop', planned: hub.name, took: S, reason: 'no_transport', by: 'MU2 Shop' })]);
+      expect(monitor.parcelTimeline('MU2-A')).not.toHaveProperty('way');
     });
 
     it('goes into a bag for another place only with the reason said — the plan’s own bag takes it as before', () => {
@@ -1984,24 +1992,27 @@ describe('PUDO Light', () => {
       expect(p.plan!.hops.map((h) => h.id)).toEqual([shop.did, away.mdpId, far.did]);
     });
 
-    it('follows its plan where the hub’s own rule would send it elsewhere', () => {
-      // The south hub joined first, then a north hub serving both areas: the plan goes north hub → south hub → shop, while
-      // the north hub's own rule (it serves the shop's area) would send it straight to the shop. The plan is followed.
+    it('goes straight to its shop from a first hub that serves the shop’s area too — planned, priced and sorted so', () => {
+      // The south hub joined first, then a north hub serving both areas. The route ran north hub → south hub → shop, priced
+      // with both hubs, while the north hub's own rule takes it straight to the shop; kept to that plan, it would have been
+      // driven to the south hub for nothing. The hubs collapse when they are shared: one hub, as the hub's rule does.
       seq += 1;
       const N = `MU${seq}North`;
       const S = `MU${seq}South`;
       const shop = onboardAgent('MU8 Shop', N, 50);
       const far = onboardAgent('MU8 Far', S, 50);
-      const south = mdps.register({ name: 'MU8 South Sort', zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      mdps.register({ name: 'MU8 South Sort', zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
       const north = mdps.register({ name: 'MU8 North Sort', zones: [N, S], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
       parcels.accept({ agentDid: shop.did, parcelId: 'MU8-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
-      expect(parcels.get('MU8-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, north.mdpId, south.mdpId, far.did]);
+      expect(parcels.get('MU8-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, north.mdpId, far.did]);
       const bag = mdps.openShopBag(shop.did, north.mdpId);
       mdps.fillShopBag(bag.code, shop.did, 'MU8-A');
       mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
       mdps.loadBag(bag.code, 'BUS-MU8');
       mdps.dropBag(north.mdpId, bag.code, receivedAtHub(north.mdpId));
-      expect(mdps.sortParcel(north.mdpId, 'MU8-A').nextDestination.id).toBe(south.mdpId);
+      expect(mdps.sortParcel(north.mdpId, 'MU8-A').nextDestination.id).toBe(far.did);
+      // Priced on the stops it is planned on — nothing to say — and sorted as both say.
+      expect(parcels.get('MU8-A').plan!.pricedVia).toBeUndefined();
       expect(parcels.get('MU8-A').plan!.offPlan).toBeUndefined();
     });
 
@@ -2043,6 +2054,82 @@ describe('PUDO Light', () => {
       expect(plan.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'priced_other_way' })]);
       // A price made on another route is not a step it took: nothing about how it moves.
       expect(parcels.get(order.parcelId).shipmentCost).toBe(order.shipmentCost);
+    });
+
+    it('goes by a direct route in a bag addressed to its shop, which receives it — a bag for the area, no shop could', () => {
+      // No hub on either side: shop → shop. The bag plan's group was the AREA, and a shop receives only a bag addressed to it.
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU12 Shop', N, 50);
+      const far = onboardAgent('MU12 Far', S, 50);
+      corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU12-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      expect(parcels.get('MU12-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, far.did]);
+      const group = bagPlans.forShop(shop.did).groups.find((g) => g.parcelIds.includes('MU12-A'))!;
+      expect(group).toMatchObject({ key: far.did, label: 'MU12 Far', via: 'direct' });
+      const bag = mdps.openShopBag(shop.did, group.key);
+      expect(bag).toMatchObject({ destinationNodeId: far.did, destinationLabel: 'MU12 Far' });
+      mdps.fillShopBag(bag.code, shop.did, 'MU12-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, 'BUS-MU12');
+      expect(mdps.deliverBag(far.did, bag.code, receivedAt(far.did)).delivered).toEqual(['MU12-A']);
+      // At its last stop, as planned: nothing off it.
+      const arrived = parcels.get('MU12-A');
+      expect(arrived.plan!.at).toBe(1);
+      expect(arrived.plan!.offPlan).toBeUndefined();
+      // A bag is never addressed to the shop it stands at: a parcel collected there stays on its shelf.
+      expect(() => mdps.openShopBag(shop.did, shop.did)).toThrow(/A bag goes to another place/);
+    });
+
+    it('is planned from a store’s own dock as it is bagged there — in the bag for its next stop, the hub its plan names', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const far = onboardAgent('MU13 Far', S, 50);
+      const north = mdps.register({ name: 'MU13 North Sort', zones: [N], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      const south = mdps.register({ name: 'MU13 South Sort', zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      const store = vendors.register({ name: 'MU13 Store', location: { lat: -1.2, lng: 36.8 } });
+      vendors.topUp(store.vendorId, 500);
+      const asStore = { role: 'genesis', did: store.did } as never;
+      controller.setCollectionPoint(store.vendorId, { label: 'MU13 dock', zone: N, location: { lat: -1.21, lng: 36.81 }, bays: 3 } as never, asStore);
+      const mint = () => (controller.createInbound({ vendorId: store.vendorId, destPudoDid: far.did, buyerMobile: '+254700131', size: 'S', contentPhotoRef: photoOf(store.vendorId) } as never, asStore) as any).parcel.parcelId as string;
+      const a = mint();
+      const b = mint();
+      // On the dock by NEXT STOP: priced from the dock through its own area's hub, so that hub — not the area it goes to.
+      const plan: any = controller.dockPlan(store.vendorId, asStore);
+      expect(plan.groups).toEqual([expect.objectContaining({ key: north.mdpId, label: 'MU13 North Sort', parcelIds: [a, b] })]);
+      // Not planned while the goods are the store's and not bagged.
+      expect(parcels.get(a).plan).toBeUndefined();
+      // A bag for the area it goes to is not its next stop: refused, saying where it goes — and nothing written.
+      const wrong: any = controller.openDockBag(store.vendorId, { destZone: S } as never, asStore);
+      expect(() => controller.fillDockBag(store.vendorId, wrong.code, { parcelId: a } as never, asStore)).toThrow(`${a} goes to MU13 North Sort next, but this bag goes to ${S}`);
+      expect(parcels.get(a).plan).toBeUndefined();
+      // Its own bag, opened with the group's key: in, and planned from the dock now — the dock its first stop.
+      const bag: any = controller.openDockBag(store.vendorId, { destZone: plan.groups[0].key } as never, asStore);
+      expect(bag).toMatchObject({ destinationNodeId: north.mdpId, destinationLabel: 'MU13 North Sort' });
+      controller.fillDockBag(store.vendorId, bag.code, { parcelId: a } as never, asStore);
+      controller.fillDockBag(store.vendorId, bag.code, { parcelId: b } as never, asStore);
+      const kept = parcels.get(a).plan!;
+      expect(kept.at).toBe(0);
+      expect(kept.hops.map((h) => h.id)).toEqual([store.did, north.mdpId, south.mdpId, far.did]);
+      expect(kept.hops[0]).toMatchObject({ type: 'dock', label: 'MU13 dock' });
+      // Priced on the same stops: nothing to say.
+      expect(kept.offPlan).toBeUndefined();
+      controller.sealDockBag(store.vendorId, bag.code, { closure: closedBy(store.did) } as never, asStore);
+      // A second bag for the same stop closes without counting the first bag's parcels, still on the dock, as left behind.
+      const c = mint();
+      const second: any = controller.openDockBag(store.vendorId, { destZone: north.mdpId } as never, asStore);
+      controller.fillDockBag(store.vendorId, second.code, { parcelId: c } as never, asStore);
+      const sealed: any = controller.sealDockBag(store.vendorId, second.code, { closure: closedBy(store.did) } as never, asStore);
+      expect(sealed.missed).toEqual([]);
+      expect(parcels.get(a).shortShippedAt).toBeUndefined();
+      // Dropped at the hub its plan names: the plan moves on, and the hub sorts it to the next.
+      mdps.loadBag(bag.code, 'BUS-MU13');
+      mdps.dropBag(north.mdpId, bag.code, receivedAtHub(north.mdpId));
+      expect(parcels.get(a).plan!.at).toBe(1);
+      expect(mdps.sortParcel(north.mdpId, a).nextDestination.id).toBe(south.mdpId);
+      expect(parcels.get(a).plan!.offPlan).toBeUndefined();
     });
 
     it('reads a route kept as kept — a hub is held under its name and planned under its id — and the lanes count the steps off it', () => {
@@ -2630,24 +2717,27 @@ describe('PUDO Light', () => {
       drop('QR-AM1', 'ArbaMinch', arba.did);
 
       const plan = bagPlans.forShop(shop.did);
-      // Two groups, busiest first — two bags' worth of work, not one queue of loose parcels.
-      expect(plan.groups.map((g) => g.label)).toEqual(['Addis', 'ArbaMinch']);
+      // Two groups, busiest first — two bags' worth of work, not one queue of loose parcels. 2026-11-06 — keyed by the stop
+      // itself: the shop each direct route runs to, by its name. A bag for the AREA could be received by no shop.
+      expect(plan.groups.map((g) => g.label)).toEqual(['Addis PUDO', 'Arba Minch PUDO']);
+      expect(plan.groups.map((g) => g.key)).toEqual([addis.did, arba.did]);
       expect(plan.groups[0].parcelIds.sort()).toEqual(['QR-AA1', 'QR-AA2']);
       expect(plan.groups[0].via).toBe('direct'); // a direct corridor: no hub in the middle
       expect(plan.groups.every((g) => g.openBagCode === undefined)).toBe(true);
       expect(plan.bags).toEqual([]);
 
       // Open the Addis bag; the plan now points at it, and the other group is still waiting for its own.
-      const bag = mdps.openShopBag(shop.did, 'Addis');
+      const bag = mdps.openShopBag(shop.did, plan.groups[0].key);
+      expect(bag).toMatchObject({ destinationNodeId: addis.did, destinationLabel: 'Addis PUDO' });
       mdps.fillShopBag(bag.code, shop.did, 'QR-AA1');
       const after = bagPlans.forShop(shop.did);
-      expect(after.groups.find((g) => g.label === 'Addis')?.openBagCode).toBe(bag.code);
-      expect(after.groups.find((g) => g.label === 'ArbaMinch')?.openBagCode).toBeUndefined();
+      expect(after.groups.find((g) => g.key === addis.did)?.openBagCode).toBe(bag.code);
+      expect(after.groups.find((g) => g.key === arba.did)?.openBagCode).toBeUndefined();
       expect(after.bags).toHaveLength(1);
-      expect(after.bags[0]).toMatchObject({ code: bag.code, destinationLabel: 'Addis', parcels: 1, status: 'filling' });
+      expect(after.bags[0]).toMatchObject({ code: bag.code, destinationLabel: 'Addis PUDO', parcels: 1, status: 'filling' });
 
       // And a second bag for the other place can be open at the same time — the whole point.
-      const bag2 = mdps.openShopBag(shop.did, 'ArbaMinch');
+      const bag2 = mdps.openShopBag(shop.did, arba.did);
       expect(bagPlans.forShop(shop.did).bags.map((b) => b.code).sort()).toEqual([bag.code, bag2.code].sort());
     });
 
@@ -11821,6 +11911,11 @@ describe('PUDO Light', () => {
         expect(back.returnOf).toEqual({ parcelId: id, atMdpId: hub.mdpId, at: expect.any(String) });
         expect(back.custody).toEqual([expect.objectContaining({ holderKind: 'hub', holderId: hub.name })]);
         expect(back.label).toBeDefined();
+        // 2026-11-06 — its journey starts at the hub: its plan kept from there, as one handed in at a hub — it had none, so
+        // nothing asked its way and plan versus actual never saw it (movement unification).
+        expect(back.plan).toMatchObject({ at: 0 });
+        expect(back.plan!.hops[0]).toMatchObject({ type: 'mdp', id: hub.mdpId });
+        expect(back.plan!.hops.at(-1)).toMatchObject({ id: origin.did });
         // Sold at no checkout: no buyer paid for it. And it is not called off: it is the store's own goods, coming to it.
         expect(back.buyerCharge).toBeUndefined();
         expect(callOffs.preview(vendor.vendorId, back.parcelId)).toEqual({ parcelId: back.parcelId, outcome: 'no', why: 'It brings your goods back to you: collect it at the shop it goes to. It cannot be called off.' });

@@ -180,7 +180,7 @@ export class BusinessParcelService {
       collection: this.collectionOf(v),
       // What is still to be bagged: a parcel in a bag waits in the bag, not here.
       groups: plan.groups
-        .map((g) => ({ zone: g.label, parcels: g.parcelIds.map((id) => this.parcels.get(id)).filter((p) => !p.toteId).map((p) => this.rowOf(p)), ...(g.openBagCode ? { openBagCode: g.openBagCode } : {}) }))
+        .map((g) => ({ key: g.key, label: g.label, parcels: g.parcelIds.map((id) => this.parcels.get(id)).filter((p) => !p.toteId).map((p) => this.rowOf(p)), ...(g.openBagCode ? { openBagCode: g.openBagCode } : {}) }))
         .filter((g) => g.parcels.length > 0),
       bags: plan.bags.map((b) => ({ code: b.code, ...(b.destinationLabel ? { destination: b.destinationLabel } : {}), parcelIds: b.parcelIds, fillPct: b.fillPct, status: b.status })),
       capacity: plan.staging.capacity,

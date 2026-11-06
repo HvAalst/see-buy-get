@@ -146,6 +146,7 @@ export class MdpService {
     if (this.routeKeeper?.nextStop(parcel)) return !this.offPlanInto(parcel, bag);
     const to = [bag.destinationNodeId, bag.packedFor].filter((id): id is string => Boolean(id));
     if (to.includes(parcel.destZone)) return true;
+    if (parcel.destAgentDid && to.includes(parcel.destAgentDid)) return true; // 2026-11-06 — a bag for its own shop
     const hubs = to.filter((id) => this.mdps.has(id));
     if (!hubs.length || !this.nextHopOf) return false;
     return hubs.includes(this.nextHopOf(parcel));
@@ -710,6 +711,10 @@ export class MdpService {
     // (assignTote: an approved hub only), and called by its name — its id was the label a driver and a tracking page read.
     const hub = this.mdps.get(destZone.trim());
     if (hub && !this.isApproved(hub)) throw this.notApproved(hub);
+    // 2026-11-06 — or the shop a direct route runs to (the bag plan's group, by the parcels' plans): called by its name, and
+    // received there (deliverBag takes a bag addressed to that shop). Never to this shop itself: a parcel collected here stays.
+    const shop = hub ? undefined : this.agents.find(destZone.trim());
+    if (shop?.did === agentDid) throw new GlosError('INVALID_INPUT', 'A bag goes to another place: a parcel collected at this shop stays on its shelf here', { field: 'destZone' });
     // A bag is a physical object standing on a floor, and floors run out. The shelf has always been sized by
     // the shop; this is the same declaration for the other pile in the room. Counted as what is STANDING
     // there — filling, sealed and waiting, or claimed by a driver who has not arrived — because all three
@@ -718,7 +723,7 @@ export class MdpService {
     const tote = this.totes.register(agentDid);
     // sealRequired: this bag leaves the shop when the SHOPKEEPER says it is closed, never when a sweep
     // decides it looks full. A bag on a counter is open until a human shuts it.
-    return this.totes.assign(tote.code, destZone.trim(), hub ? hub.name : destZone.trim(), { sealRequired: true });
+    return this.totes.assign(tote.code, destZone.trim(), hub ? hub.name : shop ? shop.shopName : destZone.trim(), { sealRequired: true });
   }
 
   /** The bags physically taking up room at this shop right now (see openShopBag for why these three). */

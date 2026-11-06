@@ -17,7 +17,7 @@ export interface PlanLane {
 }
 
 /** The reasons a parcel went another way, in the console's words: said at the counter, or the network's own. */
-const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged'> = {
+const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged' | 'tower.plan.why.pricedOtherWay'> = {
   no_transport: 'tower.plan.why.noTransport',
   hub_full: 'tower.plan.why.hubFull',
   faster: 'tower.plan.why.faster',
@@ -25,7 +25,14 @@ const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull
   room: 'tower.plan.why.room',
   arrived_elsewhere: 'tower.plan.why.arrivedElsewhere',
   network_changed: 'tower.plan.why.networkChanged',
+  // Read on one parcel's way (the Support screen); a lane does not count it — a price is not a step it took.
+  priced_other_way: 'tower.plan.why.pricedOtherWay',
 };
+
+/** Why a parcel went another way than its plan, in words — the code itself where it is one this console does not know yet. */
+export function reasonWords(reason: string, t: Translate): string {
+  return WHY[reason] ? t(WHY[reason]) : reason;
+}
 
 /** "2 went another way: no bus or driver that way (1), arrived elsewhere, nobody said why (1)" — or nothing, where none did. */
 export function offPlanWords(lane: Pick<PlanLane, 'offPlan' | 'offPlanReasons'>, t: Translate): string {
@@ -33,7 +40,7 @@ export function offPlanWords(lane: Pick<PlanLane, 'offPlan' | 'offPlanReasons'>,
   const why = Object.entries(lane.offPlanReasons ?? {})
     .filter(([, n]) => (n ?? 0) > 0)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-    .map(([reason, n]) => `${WHY[reason] ? t(WHY[reason]) : reason} (${n})`)
+    .map(([reason, n]) => `${reasonWords(reason, t)} (${n})`)
     .join(', ');
   return t('tower.plan.offPlan', { count: lane.offPlan, why });
 }

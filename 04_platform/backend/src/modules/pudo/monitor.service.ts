@@ -6,7 +6,19 @@ import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
 import { ToteService } from './tote.service';
 import { FINDING_WORDS } from './tamper.types';
-import { isCollectable } from './pudo.types';
+import { isCollectable, type Parcel } from './pudo.types';
+
+/**
+ * A parcel's way as staff read it (2026-11-06, movement unification): its plan's stops — passed, where it is, next, later —
+ * the time promised and, where the plan was made again, the time now expected; and each step it took off its plan.
+ */
+export interface ParcelWay {
+  stops: Array<{ label: string; kind: 'shop' | 'hub' | 'dock'; state: 'passed' | 'here' | 'next' | 'later' }>;
+  promisedAt: string;
+  expectedAt?: string;
+  heading?: { to: string; reason: string; note?: string };
+  offPlan: Array<{ at: string; kind: 'decision' | 'arrival' | 'system'; where: string; planned?: string; took: string; reason: string; note?: string; by?: string }>;
+}
 import { HELD_BY_WORDS } from './load-detention.types';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
@@ -233,7 +245,7 @@ export class MonitorService {
   }
 
   /** User/Support — the parcel audit timeline ('where is my package', 'it was damaged'). */
-  parcelTimeline(parcelId: string) {
+  parcelTimeline(parcelId: string, opts: { staff?: boolean } = {}) {
     const p = this.parcels.get(parcelId);
     const holding = p.unclaimedAt && isCollectable(p.status) ? this.parcels.holdingOwed(p) : undefined;
     // `releaseLockedAt` (never the secret itself) so the support desk can SEE why a customer at the
@@ -262,7 +274,29 @@ export class MonitorService {
       // Turned round at a hub: the parcel taking it back to its sender, or the one this one takes back.
       ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
       ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
+      // 2026-11-06 — ITS WAY, for staff (movement unification): the stops its plan names and which it has reached, and every
+      // step it took off its plan — where, what the plan said, where it went, why and by whom. Kept for operations to read.
+      ...(opts.staff ? this.wayOf(p) : {}),
       scans: p.scans,
+    };
+  }
+
+  private wayOf(p: Parcel): { way?: ParcelWay } {
+    const plan = p.plan;
+    if (!plan || plan.at === undefined || !plan.hops.length) return {};
+    const at = plan.at;
+    const byName = (by: string): string | undefined => (by === 'system' ? undefined : (this.agents.find(by)?.shopName ?? by));
+    return {
+      way: {
+        stops: plan.hops.map((h, i) => ({ label: h.label, kind: h.type === 'mdp' ? 'hub' : h.type === 'dock' ? 'dock' : 'shop', state: i < at ? 'passed' : i === at ? 'here' : i === at + 1 ? 'next' : 'later' })),
+        promisedAt: plan.pickupReadyAt,
+        ...(plan.expectedAt ? { expectedAt: plan.expectedAt } : {}),
+        ...(plan.heading ? { heading: { to: plan.heading.label, reason: plan.heading.reason, ...(plan.heading.note ? { note: plan.heading.note } : {}) } } : {}),
+        offPlan: (plan.offPlan ?? []).map((s) => {
+          const by = byName(s.by);
+          return { at: s.at, kind: s.kind, where: s.whereLabel, ...(s.plannedLabel ? { planned: s.plannedLabel } : {}), took: s.tookLabel, reason: s.reason, ...(s.note ? { note: s.note } : {}), ...(by ? { by } : {}) };
+        }),
+      },
     };
   }
 }

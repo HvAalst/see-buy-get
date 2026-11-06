@@ -3471,7 +3471,17 @@ export class ParcelService implements OnApplicationBootstrap {
     back.custody = [{ holderId: input.hub.name, holderKind: 'hub', from: at, note: `called off by the store: turned round here — the goods of ${parcel.parcelId}` }];
     this.scan(back, 'At_MDP', input.hub.name, `called off at ${input.hub.name}: the goods of ${parcel.parcelId}, going back · its new label goes over the old one`, { at });
     this.persist(back);
+    this.startsAtHub(back, input.hub.mdpId);
     return back;
+  }
+
+  /**
+   * 2026-11-06 — A PARCEL MADE AT A HUB STARTS ITS JOURNEY THERE, and says so as one handed in at a hub does: its plan is
+   * kept from this hub (JourneyPlanService), so its sort follows it and plan versus actual reads it. Only a withdrawal said
+   * so before; a store's call-off and the two turned to a shop from a withdrawn load had no plan at all (movement unification).
+   */
+  private startsAtHub(back: Parcel, mdpId: string): void {
+    void this.events.publish(GlosEvent.Pudo.ParcelTakenInAtHub, { parcelId: back.parcelId, mdpId }, { source: 'pudo' }).catch(() => undefined);
   }
 
   /**
@@ -3619,6 +3629,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // Kept by the account that sent the first one, on both sides — or by the number, until an account is certain of it.
     const owner = this.senderOf(parcel).owner ?? this.accountAt(parcel.senderPhoneHash);
     this.keep(parcelId, { sender: owner, receiver: owner });
+    this.startsAtHub(back, input.hub.mdpId);
     return back;
   }
 
