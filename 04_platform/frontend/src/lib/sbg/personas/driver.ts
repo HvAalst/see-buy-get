@@ -376,6 +376,13 @@ export function createDriverApi(sbg: SbgClient) {
     bagShopChoice: (did: string, code: string, shopDids: string[], shut?: boolean) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/bags/{code}/shop-choice', { params: { path: { did, code } }, body: { shopDids, ...(shut ? { shut: true } : {}) } })),
 
+    /** 2026-11-06 — a parcel handed to this driver loose, for a shop that is closed: the open shops near it with a place. */
+    parcelShopsNear: (did: string, parcelId: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/parcels/{parcelId}/shops-near', { params: { path: { did, parcelId } } })),
+
+    /** …the driver's pick, its buyer asked; or the door found shut, said. */
+    parcelShopChoice: (did: string, parcelId: string, shopDids: string[], shut?: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/parcels/{parcelId}/shop-choice', { params: { path: { did, parcelId } }, body: { shopDids, ...(shut ? { shut: true } : {}) } })),
+
     /** Round 37 — a bag the driver takes or carries, not as it was closed: held, operations told. */
     reportBagTamper: (code: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/totes/{code}/tamper', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),

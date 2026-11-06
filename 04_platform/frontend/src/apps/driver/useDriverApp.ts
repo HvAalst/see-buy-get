@@ -99,6 +99,8 @@ export interface DriverState {
   /** Bag spaces left in the hold — on a line-haul this is usually what binds, not the kilos. */
   remainingTotes: number | null;
   claims: ClaimsView['claims'];
+  /** 2026-11-06 — parcels handed to this driver loose, each with its shop. */
+  loose: NonNullable<ClaimsView['loose']>;
   rates: RatesView | null;
   /** Round 38 — where this rider stands under their company's custody cap. Null until read; `capped` false when none applies. */
   custodyCap: CustodyCapView | null;
@@ -226,6 +228,7 @@ const INITIAL: DriverState = {
   remaining: 0,
   remainingTotes: null,
   claims: [],
+  loose: [],
   rates: null,
   custodyCap: null,
   nodes: [],
@@ -460,6 +463,7 @@ export function useDriverApp() {
       let remaining = 0;
       let remainingTotes: number | null = null;
       let claims: ClaimsView['claims'] = [];
+      let loose: NonNullable<ClaimsView['loose']> = [];
       let rates: RatesView | null = null;
 
       if (session.active && session.vehicle) {
@@ -475,6 +479,7 @@ export function useDriverApp() {
         remaining = cv?.remainingCapacityKg ?? 0;
         remainingTotes = cv?.remainingTotes ?? null;
         claims = cv?.claims ?? [];
+        loose = cv?.loose ?? [];
         // The papers kept on the phone: each load of theirs, its note fetched while there is signal. Not awaited.
         void keepNotes(claims);
 
@@ -540,6 +545,7 @@ export function useDriverApp() {
         remaining,
         remainingTotes,
         claims,
+        loose,
         rates,
         custodyCap: custodyCap === undefined ? s.custodyCap : custodyCap,
         route: savedRoute(did),
@@ -1821,10 +1827,10 @@ export function useDriverApp() {
 
   /** 2026-11-06 — the open shops near a closed one this bag goes to (the owner, point 6). */
   const shopsNear = useCallback(
-    async (code: string): Promise<{ closed: { did: string; name: string; marked: boolean }; shops: Array<{ did: string; name: string; km: number }> } | null> => {
+    async (kind: 'bag' | 'parcel', ref: string): Promise<{ closed: { did: string; name: string; marked: boolean }; shops: Array<{ did: string; name: string; km: number }> } | null> => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return null;
-      const r = await client.api.bagShopsNear(did, code);
+      const r = kind === 'bag' ? await client.api.bagShopsNear(did, ref) : await client.api.parcelShopsNear(did, ref);
       if (r.error) {
         fail(r.error);
         return null;
@@ -1836,12 +1842,12 @@ export function useDriverApp() {
 
   /** …the driver's pick, its buyers asked (or the door found shut, said): the bag then says where most chose. */
   const askBuyers = useCallback(
-    async (code: string, shopDids: string[], shut: boolean): Promise<boolean> => {
+    async (kind: 'bag' | 'parcel', ref: string, shopDids: string[], shut: boolean): Promise<boolean> => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return false;
       let ok = false;
-      await run(`shop-choice:${code}`, async () => {
-        const r = await client.api.bagShopChoice(did, code, shopDids, shut);
+      await run(`shop-choice:${ref}`, async () => {
+        const r = kind === 'bag' ? await client.api.bagShopChoice(did, ref, shopDids, shut) : await client.api.parcelShopChoice(did, ref, shopDids, shut);
         if (r.error) return fail(r.error);
         ok = true;
         pushToast({ tone: 'ok', icon: 'send', title: t('driver.shopClosed.asked'), detail: t('driver.shopClosed.askedDetail') });

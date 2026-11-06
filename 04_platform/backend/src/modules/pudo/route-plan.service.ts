@@ -266,6 +266,22 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
     this.parcels.notePlan(parcel);
   }
 
+  /**
+   * 2026-11-06 — ITS PICKUP SHOP CHANGED, its own being closed (the owner, point 6): kept as a decision — planned to the
+   * closed shop, going to the one chosen — and that shop its plan's last stop. The shops offered are near the closed one, so
+   * the way there is the way it was: only the end of it moves.
+   */
+  changeDestination(parcel: Parcel, fromDid: string, toDid: string, by: string, reason: OffPlanReason): void {
+    const plan = this.planOf(parcel);
+    if (!plan) return;
+    const last = plan.hops[plan.hops.length - 1];
+    this.record(plan, 'decision', plan.hops[plan.at!], last?.id === fromDid ? last : plan.hops[plan.at! + 1], toDid, reason, by);
+    const shop = this.agents.find(toDid);
+    if (last?.id === fromDid && shop) plan.hops = [...plan.hops.slice(0, -1), { type: 'pudo', id: shop.did, label: shop.shopName, zone: shop.zone }];
+    if (plan.heading?.to === fromDid) delete plan.heading;
+    this.parcels.notePlan(parcel);
+  }
+
   sortTarget(parcel: Parcel, mdpId: string): { type: 'pudo' | 'mdp'; id: string; label: string; zone: string } | undefined {
     const plan = this.planOf(parcel);
     if (!plan || plan.hops[plan.at!]?.id !== mdpId) return undefined; // the plan does not have it at this hub

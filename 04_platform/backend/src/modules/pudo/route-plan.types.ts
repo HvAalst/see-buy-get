@@ -86,6 +86,11 @@ export interface RouteKeeper {
    * Somewhere it was not planned, nobody having said why: the stop it was planned for, so whoever received it is told.
    */
   arrived(parcel: Parcel, where: string, by: string): { planned: string } | undefined;
+  /**
+   * 2026-11-06 — its pickup shop changed, its own being closed (ShopChoiceService): the step kept — the shop it was planned
+   * to, the one it goes to now, why, by whom — and the new shop its plan's last stop, the way there as it was.
+   */
+  changeDestination(parcel: Parcel, fromDid: string, toDid: string, by: string, reason: OffPlanReason): void;
   /** The network sends it to `to` instead of its next stop (a full hub, a hub no longer used): recorded, the plan made again. */
   redirect(parcel: Parcel, to: string, reason: OffPlanReason, by: string): void;
   /** At a hub, sorting: the plan's next stop where it can still be used — else nothing, and the hub chooses as it always did. */

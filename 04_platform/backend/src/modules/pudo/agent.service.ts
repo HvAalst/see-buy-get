@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -454,8 +454,24 @@ export class AgentService {
   /** Agent marks the shop open or temporarily closed (Risk #30 mitigation). */
   setAvailability(did: string, open: boolean): Agent {
     const agent = this.require(did);
+    const was = agent.openState;
     agent.openState = open ? 'open' : 'closed';
+    // 2026-11-06 — closed now: its parcels on the way are offered other shops near it at once (the owner: "ask straight
+    // away, less risk") — ShopChoiceService, registered: it is above this.
+    if (!open && was !== 'closed') {
+      try {
+        this.onClose?.(did);
+      } catch (err) {
+        Logger.warn(`after ${did} closed: ${(err as Error).message}`, AgentService.name);
+      }
+    }
     return agent;
+  }
+
+  private onClose?: (did: string) => void;
+
+  registerOnClose(fn: (did: string) => void): void {
+    this.onClose = fn;
   }
 
   /** Update the weekly opening schedule. */

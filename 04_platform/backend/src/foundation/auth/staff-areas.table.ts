@@ -310,6 +310,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/fleet/drivers/:did/claims': 'support',
   'GET sbg/fleet/drivers/:did/bags/:code/shops-near': 'none',
   'POST sbg/fleet/drivers/:did/bags/:code/shop-choice': 'none',
+  'GET sbg/fleet/drivers/:did/parcels/:parcelId/shops-near': 'none',
+  'POST sbg/fleet/drivers/:did/parcels/:parcelId/shop-choice': 'none',
   'GET sbg/fleet/drivers/:did/departures': 'support',
   'GET sbg/fleet/drivers/:did/hours': 'support',
   'GET sbg/fleet/drivers/:did/jobs': 'money',

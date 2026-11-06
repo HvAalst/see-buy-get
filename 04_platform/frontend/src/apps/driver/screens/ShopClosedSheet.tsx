@@ -6,26 +6,33 @@ import type { DriverActions } from '../useDriverApp';
 
 const MAX_PICKS = 3;
 
+/** A bag on board, or a parcel handed over loose, whose shop is closed — or found shut. */
+export interface ShopClosedTarget {
+  kind: 'bag' | 'parcel';
+  ref: string;
+  shop: string;
+  shut: boolean;
+}
+
 /**
- * 2026-11-06 — A BAG ON BOARD FOR A SHOP THAT IS CLOSED (the owner, point 6: "let a driver be able to search for a pudos near
- * to the closed shop so the buyer can select from his pick"): the open shops near it with room for the whole bag, nearest
- * first; the driver picks up to three they can take it to — the first is where it goes when nobody chooses. Its buyers are
- * asked; the bag goes whole to the shop most chose. Found SHUT though it never said so: said, and the shop and operations told.
+ * 2026-11-06 — A BAG ON BOARD — OR A PARCEL HANDED OVER LOOSE — FOR A SHOP THAT IS CLOSED (the owner, point 6: "let a driver
+ * be able to search for a pudos near to the closed shop so the buyer can select from his pick"): the open shops near it with
+ * room, nearest first; the driver picks up to three they can take it to — the first is where it goes when nobody chooses.
+ * Its buyers are asked. Found SHUT though it never said so: said, and the shop and operations told.
  */
-export function ShopClosedSheet({ target, actions, busy, onClose }: { target: { claim: Claimable; shut: boolean } | null; actions: DriverActions; busy?: boolean; onClose: () => void }) {
+export function ShopClosedSheet({ target, actions, busy, onClose }: { target: ShopClosedTarget | null; actions: DriverActions; busy?: boolean; onClose: () => void }) {
   const t = useT();
-  const code = target ? (target.claim.code ?? target.claim.ref) : null;
   const [near, setNear] = useState<{ shops: Array<{ did: string; name: string; km: number }> } | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
+  const key = target ? `${target.kind}:${target.ref}` : null;
   useEffect(() => {
     setNear(null);
     setPicked([]);
-    if (code) void actions.shopsNear(code).then((n) => setNear(n ?? { shops: [] }));
-  }, [code]);
+    if (target) void actions.shopsNear(target.kind, target.ref).then((n) => setNear(n ?? { shops: [] }));
+  }, [key]);
   const toggle = (did: string) => setPicked((p) => (p.includes(did) ? p.filter((x) => x !== did) : p.length < MAX_PICKS ? [...p, did] : p));
-  const shop = target?.claim.destShop?.name ?? '';
   return (
-    <Sheet open={target !== null} onClose={onClose} title={target?.shut ? t('driver.shopClosed.shutTitle', { shop }) : t('driver.shopClosed.findTitle')}>
+    <Sheet open={target !== null} onClose={onClose} title={target?.shut ? t('driver.shopClosed.shutTitle', { shop: target.shop }) : t('driver.shopClosed.findTitle')}>
       <p class="hint">{target?.shut ? t('driver.shopClosed.shutLede') : t('driver.shopClosed.findLede')}</p>
       {near === null ? (
         <p class="hint">{t('driver.shopClosed.loading')}</p>
@@ -47,7 +54,7 @@ export function ShopClosedSheet({ target, actions, busy, onClose }: { target: { 
           })}
         </div>
       )}
-      <Button chevron={false} busy={busy} disabled={!picked.length} onClick={() => code && target && void actions.askBuyers(code, picked, target.shut).then((ok) => ok && onClose())}>
+      <Button chevron={false} busy={busy} disabled={!picked.length} onClick={() => target && void actions.askBuyers(target.kind, target.ref, picked, target.shut).then((ok) => ok && onClose())}>
         {t('driver.shopClosed.ask')}
       </Button>
       <Button variant="link" onClick={onClose}>
@@ -57,7 +64,7 @@ export function ShopClosedSheet({ target, actions, busy, onClose }: { target: { 
   );
 }
 
-/** The bag's line once its buyers were asked: how many answered, and the shop to take it to (most chose; else the first pick). */
+/** The line once its buyers were asked: how many answered, and the shop to take it to (most chose; else the first pick). */
 export function shopChoiceLine(c: NonNullable<Claimable['shopChoice']>, t: (key: 'driver.shopClosed.status', values: Record<string, string | number>) => string): string {
   return t('driver.shopClosed.status', { answered: c.answered, asked: c.of, shop: c.leading.name });
 }

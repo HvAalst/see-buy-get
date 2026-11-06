@@ -24612,6 +24612,83 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/parcels/{parcelId}/shops-near": {
+      "get": {
+        "operationId": "Sbg.parcelShopsNear",
+        "summary": "",
+        "description": "2026-11-06 — a parcel handed to this driver loose, for a shop that is closed: the open shops near it with a place.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/parcels/{parcelId}/shop-choice": {
+      "post": {
+        "operationId": "Sbg.parcelShopChoice",
+        "summary": "",
+        "description": "…the driver's pick, its buyer asked; or the door found shut, said.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopChoiceAskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/claims": {
       "get": {
         "operationId": "Sbg.driverClaims",

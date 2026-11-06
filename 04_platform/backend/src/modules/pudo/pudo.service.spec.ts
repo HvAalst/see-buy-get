@@ -2600,7 +2600,7 @@ describe('PUDO Light', () => {
       expect(parcels.get(order.parcelId).shipmentCost).toBe(order.shipmentCost);
     });
 
-    it('a bag for a shop that is closed: its driver picks open shops near it, its buyers choose — the whole bag to the most chosen (2026-11-06)', () => {
+    it('a bag for a shop that closes: its buyers asked at once, from the open shops near it — the whole bag to the most chosen (2026-11-06)', () => {
       seq += 1;
       const N = `MU${seq}North`;
       const S = `MU${seq}South`;
@@ -2633,22 +2633,23 @@ describe('PUDO Light', () => {
       // On board, its shop open: the driver's claim says where it goes, open; it cannot be passed over unless found shut.
       expect(claim().destShop).toEqual({ did: far.did, name: 'MU20 Far', closed: false });
       expect(() => shopChoices.ask(bag.code, d.did, [y.did])).toThrow(/is open: say it is shut/);
-      // The shop closes for now: the open shops near it with room, nearest first — for the driver carrying it only.
+      // The shop closes for now: its buyers asked AT ONCE (the owner: "ask straight away, less risk") — the open shops near it
+      // with room for the whole bag, nearest first (a shop far off is not offered).
       agents.setAvailability(far.did, false);
       expect(claim().destShop!.closed).toBe(true);
+      expect(told.filter((n) => n.kind === 'parcel_choose_shop').map((n) => n.did)).toEqual(buyers.map((b) => b.personDid));
+      expect(told[0].body).toBe('MU20 Far is closed. It can go to MU20 Y Shop or MU20 Z Shop instead: choose one. The bag it is in goes to the shop most of its buyers choose.');
+      expect(claim().shopChoice).toMatchObject({ picks: [expect.objectContaining({ did: y.did }), expect.objectContaining({ did: z.did })], leading: { did: y.did, chose: 0 }, answered: 0, of: 3 });
+      // The driver sees the shops near it too — and cannot ask its buyers twice; a pick not near is refused first.
       const near = shopChoices.near(bag.code, d.did);
       expect(near.closed).toMatchObject({ did: far.did, marked: true });
       expect(near.shops.slice(0, 2).map((x) => x.did)).toEqual([y.did, z.did]);
       expect(() => shopChoices.near(bag.code, 'did:glos:someone-else')).toThrow(/not on your vehicle/);
-      // A pick that is not one of the shops near it: refused, nothing asked.
-      expect(() => shopChoices.ask(bag.code, d.did, ['did:glos:nowhere'])).toThrow(/cannot take this bag now/);
-      expect(told).toEqual([]);
-      // The driver picks the two: each buyer asked, in the app.
-      expect(shopChoices.ask(bag.code, d.did, [y.did, z.did])).toMatchObject({ leading: { did: y.did, chose: 0 }, answered: 0, of: 3 });
-      expect(told.filter((n) => n.kind === 'parcel_choose_shop').map((n) => n.did)).toEqual(buyers.map((b) => b.personDid));
-      expect(told[0].body).toBe('MU20 Far is closed. The driver with your parcel can take it to MU20 Y Shop or MU20 Z Shop: choose one. The bag goes to the shop most of its buyers choose.');
+      expect(() => shopChoices.ask(bag.code, d.did, ['did:glos:nowhere'])).toThrow(/cannot take this now/);
+      expect(() => shopChoices.ask(bag.code, d.did, [y.did, z.did])).toThrow(/asked already/);
+      expect(told.filter((n) => n.kind === 'parcel_choose_shop')).toHaveLength(3);
       // Their parcel says the choice; two choose Z, one Y — Z leads, as the driver sees.
-      expect(parcels.consumerParcel('MU20-A', hashPhone('+25471100020')!).shopChoice).toMatchObject({ closed: 'MU20 Far', picks: [expect.objectContaining({ did: y.did }), expect.objectContaining({ did: z.did })] });
+      expect(parcels.consumerParcel('MU20-A', hashPhone('+25471100020')!).shopChoice).toMatchObject({ closed: 'MU20 Far', inBag: true, picks: [expect.objectContaining({ did: y.did }), expect.objectContaining({ did: z.did })] });
       shopChoices.choose('MU20-A', z.did);
       shopChoices.choose('MU20-B', z.did);
       shopChoices.choose('MU20-C', y.did);
@@ -2659,11 +2660,59 @@ describe('PUDO Light', () => {
       // Handed in at Z: the whole bag Z's, each parcel's step kept as its shop closed; the buyer who chose Y told where it went.
       expect(mdps.deliverBag(z.did, bag.code, receivedAt(z.did)).delivered).toEqual(ids);
       expect(parcels.get('MU20-A')).toMatchObject({ destAgentDid: z.did, status: 'Ready_For_Pickup' });
-      expect(parcels.get('MU20-C').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: z.did, by: d.did })]);
+      // Where it went was its buyers' (SeeBuyGet offered the shops as the shop closed): kept as that.
+      expect(parcels.get('MU20-C').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: z.did, by: 'system' })]);
       expect(told.filter((n) => n.kind === 'parcel_shop_changed')).toEqual([expect.objectContaining({ did: buyers[2].personDid, title: 'Your parcel went to MU20 Z Shop' })]);
       expect(parcels.consumerParcel('MU20-C', hashPhone('+25471100022')!).shopChoice).toMatchObject({ settled: { did: z.did, name: 'MU20 Z Shop' } });
       // No shop was found shut: operations have nothing to look at.
       expect(monitor.flags().find((f) => f.type === 'Shop_Found_Shut' && f.subject === 'MU20 Far')).toBeUndefined();
+    });
+
+    it('a parcel not in a bag, its shop closing: its buyer chooses and it goes there at once — the way the same, the end of it moved (2026-11-06)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU22 Shop', N, 50);
+      const far = onboardAgent('MU22 Far', S, 50);
+      const y = onboardAgent('MU22 Y Shop', S, 50);
+      agents.setLocation(far.did, { lat: 5.0, lng: 42.0 });
+      agents.setLocation(y.did, { lat: 5.0, lng: 42.03 });
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU22-B', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+254711000402', dropoffPhotoRef: photoBy(shop.did) } as never);
+      // MU22-B handed to a driver loose, over the counter — on its way to the closed shop on the driver's vehicle.
+      const d = drivers.register({ displayName: 'MU22 Rider', fullName: 'MU22 Rider', nationalId: 'DRV-MU22', mobile: '+254933022000', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'MU22-1', vehicleClass: 'bike', ownerName: 'MU22 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      expect(parcels.handover({ agentDid: shop.did, driverBadgeId: d.badgeId!, parcelIds: ['MU22-B'] }).handed).toEqual(['MU22-B']);
+      // MU22-A taken in after: still at its first shop when its shop closes.
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU22-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+254711000401', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const buyer = enrollPerson('+254711000401');
+      enrollPerson('+254711000402');
+      const told: Array<{ did: string; kind: string; body: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string; body: string }) => void told.push({ did, kind: n.kind, body: n.body }) };
+      // The shop closes: each buyer asked at once — one parcel still at its first shop, one on a driver's vehicle.
+      agents.setAvailability(far.did, false);
+      expect(told).toContainEqual({ did: buyer.personDid, kind: 'parcel_choose_shop', body: 'MU22 Far is closed. It can go to MU22 Y Shop instead: choose one. It goes to the one you choose.' });
+      expect(parcels.consumerParcel('MU22-A', hashPhone('+254711000401')!).shopChoice).toMatchObject({ closed: 'MU22 Far', inBag: false, picks: [expect.objectContaining({ did: y.did })] });
+      // Its buyer chooses: it goes there at once — its way the same, the end of it the shop chosen, the step kept.
+      shopChoices.choose('MU22-A', y.did, buyer.personDid);
+      const a = parcels.get('MU22-A');
+      expect(a.destAgentDid).toBe(y.did);
+      expect(a.plan!.hops.map((h) => h.id)).toEqual([shop.did, y.did]);
+      expect(a.plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: y.did, by: buyer.personDid })]);
+      expect(parcels.consumerParcel('MU22-A', hashPhone('+254711000401')!).shopChoice).toMatchObject({ settled: { did: y.did } });
+      expect(() => shopChoices.choose('MU22-A', y.did)).toThrow(/no choice of shop to make/);
+      // The driver with the loose one sees it, its shop closed, its buyer asked.
+      const loose = (controller.driverClaims(d.did, { active: true, role: 'driver', did: d.did } as never) as { loose?: Array<{ parcelId: string; destShop?: { closed: boolean }; shopChoice?: { leading: { did: string } } }> }).loose;
+      expect(loose).toEqual([expect.objectContaining({ parcelId: 'MU22-B', destShop: expect.objectContaining({ closed: true }), shopChoice: expect.objectContaining({ leading: expect.objectContaining({ did: y.did }) }) })]);
+      // Its buyer was asked as the shop closed: the driver does not ask again.
+      expect(() => shopChoices.askParcel('MU22-B', d.did, [y.did])).toThrow(/asked already/);
+      // Nobody chose by the time the driver came: handed in at the shop offered, it is that shop's — its step kept, no surprise.
+      parcels.arrive('MU22-B', y.did);
+      const b = parcels.get('MU22-B');
+      expect(b).toMatchObject({ status: 'Ready_For_Pickup', destAgentDid: y.did });
+      expect(b.plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: y.did })]);
+      expect(b.plan!.hops[b.plan!.at!].id).toBe(y.did);
     });
 
     it('a shop found shut that never said it was closed: the driver says so, the shop and operations are told (2026-11-06)', () => {

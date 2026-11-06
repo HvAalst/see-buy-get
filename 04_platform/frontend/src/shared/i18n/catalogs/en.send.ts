@@ -70,7 +70,10 @@ export const enSend = {
   // reason left to answer at all.
   'send.notice.title': 'Your collection time has run out',
   'send.shopChoice.title': '{shop} is closed — where will you collect it?',
-  'send.shopChoice.lede': 'The driver with your parcel can take it to one of these shops. Choose one: the bag it is in goes to the shop most of its buyers choose, until the driver gets there.',
+  'send.shopChoice.lede': 'It can go to one of these shops near it instead. Choose one: the bag it is in goes to the shop most of its buyers choose, until the driver gets there.',
+  'send.shopChoice.ledeOne': 'It can go to one of these shops near it instead. Choose one, and it goes there.',
+  'send.shopChoice.settledOneTitle': 'It goes to {shop}',
+  'send.shopChoice.settledOne': 'It goes to {shop} now, as you chose. You are told when it is ready to collect there.',
   'send.shopChoice.km': '{km} km from {shop}',
   'send.shopChoice.chosen': 'Your choice is kept. You are told where it is when it is ready to collect.',
   'send.shopChoice.settledTitle': 'It went to {shop}',

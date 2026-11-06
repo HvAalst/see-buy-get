@@ -18,7 +18,8 @@ import { foundBody, foundProblem, noneFound, unloadItemsAfter, type FoundForm } 
 import { inspectionBody, inspectionReady, type InspectionLook } from '../inspection';
 import { heldLine } from '../../../shared/tamper';
 import { utcMoment } from '../../../shared/refusal';
-import { ShopClosedSheet, shopChoiceLine } from './ShopClosedSheet';
+import { ShopClosedSheet, shopChoiceLine, type ShopClosedTarget } from './ShopClosedSheet';
+import { LooseParcels } from './LooseParcels';
 import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
 import { BagReportSheet } from '../../../shared/BagSealFields';
 import { receiptBody } from '../../../shared/bagSeal';
@@ -45,7 +46,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [heldFor, setHeldFor] = useState<Claimable | null>(null); // held by the police or customs: being said
   const [readFor, setReadFor] = useState<Claimable | null>(null); // round 37 — a bag loaded onto them by their pass, to read
   const [bagReport, setBagReport] = useState<{ claim: Claimable; numberRead?: string } | null>(null); // round 37 — a bag not as closed
-  const [shopFor, setShopFor] = useState<{ claim: Claimable; shut: boolean } | null>(null); // 2026-11-06 — its shop closed, or found shut
+  const [shopFor, setShopFor] = useState<ShopClosedTarget | null>(null); // 2026-11-06 — its shop closed, or found shut
   const pickTake = useBagTake(pick); // round 37 — the bag taken on its seal
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
@@ -262,13 +263,13 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   ) : c.destShop.closed ? (
                     <div class="load__nav">
                       <Note tone="warn" icon="warning" title={t('driver.shopClosed.title', { shop: c.destShop.name })} detail={t('driver.shopClosed.detail')} />
-                      <Button full={false} onClick={() => setShopFor({ claim: c, shut: false })}>
+                      <Button full={false} onClick={() => setShopFor({ kind: 'bag', ref: c.code ?? c.ref, shop: c.destShop!.name, shut: false })}>
                         {t('driver.shopClosed.find')}
                       </Button>
                     </div>
                   ) : (
                     <div class="load__nav">
-                      <Button variant="link" full={false} onClick={() => setShopFor({ claim: c, shut: true })}>
+                      <Button variant="link" full={false} onClick={() => setShopFor({ kind: 'bag', ref: c.code ?? c.ref, shop: c.destShop!.name, shut: true })}>
                         {t('driver.shopClosed.shut')}
                       </Button>
                     </div>
@@ -279,6 +280,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
           })}
         </ul>
       )}
+
+      {/* 2026-11-06 — the parcels handed to this driver loose over a counter: each one's shop; closed, another found for it. */}
+      <LooseParcels loose={state.loose ?? []} onFind={(p, shut) => setShopFor({ kind: 'parcel', ref: p.parcelId, shop: p.destShop?.name ?? '', shut })} />
 
       <div class="scr__cta">
         <Button onClick={() => actions.go('route')}>{t('driver.loads.findMore')}</Button>
@@ -351,7 +355,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <BrokenSealSheet claim={brokenFor} state={state} actions={actions} onClose={() => setBrokenFor(null)} />
       <TamperSheet target={tamper} state={state} actions={actions} onClose={() => setTamper(null)} />
       <HeldSheet claim={heldFor} state={state} actions={actions} onClose={() => setHeldFor(null)} />
-      <ShopClosedSheet target={shopFor} actions={actions} busy={shopFor ? state.busy === `shop-choice:${shopFor.claim.code ?? shopFor.claim.ref}` : false} onClose={() => setShopFor(null)} />
+      <ShopClosedSheet target={shopFor} actions={actions} busy={shopFor ? state.busy === `shop-choice:${shopFor.ref}` : false} onClose={() => setShopFor(null)} />
       <BagTakeSheet
         claim={readFor}
         state={state}

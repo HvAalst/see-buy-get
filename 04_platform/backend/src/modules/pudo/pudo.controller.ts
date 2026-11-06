@@ -7967,6 +7967,22 @@ export class SbgController {
     return this.shopChoicesOf().ask(code, did, dto.shopDids, { shut: dto.shut === true });
   }
 
+  /** 2026-11-06 — a parcel handed to this driver loose, for a shop that is closed: the open shops near it with a place. */
+  @Roles('driver')
+  @Get('fleet/drivers/:did/parcels/:parcelId/shops-near')
+  parcelShopsNear(@Param('did') did: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverSelf(did, actor, 'Only the driver holding the parcel finds a shop for it');
+    return this.shopChoicesOf().nearParcel(parcelId, did);
+  }
+
+  /** …the driver's pick, its buyer asked; or the door found shut, said. */
+  @Roles('driver')
+  @Post('fleet/drivers/:did/parcels/:parcelId/shop-choice')
+  parcelShopChoice(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverSelf(did, actor, 'Only the driver holding the parcel picks the shops for it');
+    return this.shopChoicesOf().askParcel(parcelId, did, dto.shopDids, { shut: dto.shut === true });
+  }
+
   private shopChoicesOf(): ShopChoiceService {
     if (!this.shopChoices) throw new GlosError('INVALID_STATE', 'Finding another shop is not running in this deployment');
     return this.shopChoices;
@@ -7976,7 +7992,9 @@ export class SbgController {
   @Get('fleet/drivers/:did/claims')
   driverClaims(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverReader(did, actor);
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), claims: this.dispatch.claimsFor(did) };
+    // 2026-11-06 — and the parcels handed to them loose over a counter, each with its shop (closed or not): point 6.
+    const loose = this.shopChoices?.looseFor(this.drivers.get(did).badgeId) ?? [];
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), claims: this.dispatch.claimsFor(did), ...(loose.length ? { loose } : {}) };
   }
 
   /** A driver's JOBS + EARNINGS register (R5): the dedicated-freight hauls they claimed, server-side searched /

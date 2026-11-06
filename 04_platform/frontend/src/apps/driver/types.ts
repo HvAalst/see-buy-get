@@ -388,6 +388,15 @@ export interface ClaimsView {
   /** Bag spaces left in the hold — the capacity kilos cannot express (a bus's boot, not its scales). */
   remainingTotes?: number;
   claims: Claimable[];
+  /** 2026-11-06 — the parcels handed to this driver loose over a counter, each with its shop (closed or not). */
+  loose?: LooseParcel[];
+}
+
+/** A parcel handed to the driver loose: the shop it goes to, closed or not, and — its buyer asked — where it goes. */
+export interface LooseParcel {
+  parcelId: string;
+  destShop?: { did: string; name: string; closed: boolean };
+  shopChoice?: Claimable['shopChoice'];
 }
 
 export interface Benchmark {

@@ -264,13 +264,19 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           — the parcel is still theirs and still there, which is the whole point of the status. */}
       {/* 2026-11-06 — its pickup shop closed: choose one of the shops the driver with it can take it to (the owner, point 6). */}
       {parcel.relation === 'received' && parcel.shopChoice ? (
-        <Card title={parcel.shopChoice.settled ? t('send.shopChoice.settledTitle', { shop: parcel.shopChoice.settled.name }) : t('send.shopChoice.title', { shop: parcel.shopChoice.closed })}>
+        <Card
+          title={
+            parcel.shopChoice.settled
+              ? t(parcel.shopChoice.inBag ? 'send.shopChoice.settledTitle' : 'send.shopChoice.settledOneTitle', { shop: parcel.shopChoice.settled.name })
+              : t('send.shopChoice.title', { shop: parcel.shopChoice.closed })
+          }
+        >
           {state.noticeError ? <ErrorNote error={state.noticeError} /> : null}
           {parcel.shopChoice.settled ? (
-            <p class="card__note">{t('send.shopChoice.settled', { shop: parcel.shopChoice.settled.name })}</p>
+            <p class="card__note">{t(parcel.shopChoice.inBag ? 'send.shopChoice.settled' : 'send.shopChoice.settledOne', { shop: parcel.shopChoice.settled.name })}</p>
           ) : (
             <>
-              <p class="card__note">{t('send.shopChoice.lede')}</p>
+              <p class="card__note">{t(parcel.shopChoice.inBag ? 'send.shopChoice.lede' : 'send.shopChoice.ledeOne')}</p>
               <div class="rows">
                 {parcel.shopChoice.picks.map((p) => (
                   <button key={p.did} type="button" class="row" aria-pressed={parcel.shopChoice?.chosen === p.did} disabled={state.noticeBusy !== null} onClick={() => void actions.choosePickupShop(p.did)}>

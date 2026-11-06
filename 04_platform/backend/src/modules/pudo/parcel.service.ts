@@ -1862,6 +1862,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // a slot: on a full shelf the ask was refused, and the parcel stayed marked ready, in no slot, with nobody told
     // — and could not be scanned again, because it was no longer "on the bus". A six-slot shop is full by lunchtime.
     const slot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // small parcels may bundle
+    // 2026-11-06 — its own shop closed, and this one of those offered it: this shop's, the step kept (ShopChoiceService).
+    if (parcel.destAgentDid && parcel.destAgentDid !== destAgentDid) this.shopChoiceArrive?.(parcelId, destAgentDid);
     parcel.status = 'Ready_For_Pickup';
     parcel.destAgentDid = destAgentDid;
     if (!parcel.otp && !parcel.collectionCode) parcel.otp = releaseOtp(); // legacy record, minted before the code moved to genesis
@@ -4065,9 +4067,18 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   changePickupShop(parcelId: string, toDid: string, by: string): void {
     const parcel = this.get(parcelId);
-    this.routeKeeper?.leave(parcel, toDid, by, { reason: 'shop_closed' });
+    const from = parcel.destAgentDid;
+    if (!from || from === toDid) return;
     parcel.destAgentDid = toDid;
+    this.routeKeeper?.changeDestination(parcel, from, toDid, by, 'shop_closed');
     this.persist(parcel);
+  }
+
+  /** 2026-11-06 — a parcel handed in loose at a shop offered it, its own being closed (ShopChoiceService registers it). */
+  private shopChoiceArrive?: (parcelId: string, agentDid: string) => void;
+
+  registerShopChoiceArrive(fn: (parcelId: string, agentDid: string) => void): void {
+    this.shopChoiceArrive = fn;
   }
 
   /** 2026-11-06 — a buyer's parcel says the choice of shop open for it (ShopChoiceService registers it: it is above this). */

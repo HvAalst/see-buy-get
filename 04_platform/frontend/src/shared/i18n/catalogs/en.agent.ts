@@ -1163,7 +1163,7 @@ export const enAgent = {
   'agent.toast.shopOpen': 'Shop is open',
   'agent.toast.shopOpenDetail': 'You will get parcels again.',
   'agent.toast.shopClosed': 'Shop marked closed',
-  'agent.toast.shopClosedDetail': 'No new parcels will be routed here.',
+  'agent.toast.shopClosedDetail': 'The buyers of parcels on their way here are asked to choose a shop near you instead.',
   'agent.toast.priceUpdated': 'Price updated',
   'agent.toast.priceUpdatedDetail': 'You now charge {price} per parcel.',
   'agent.toast.baysSaved': 'Bag space saved',

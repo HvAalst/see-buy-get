@@ -1026,7 +1026,7 @@ export const words: Record<string, string> = {
   "agent.toast.shopOpen": "Duka liko wazi",
   "agent.toast.shopOpenDetail": "Utapata vifurushi tena.",
   "agent.toast.shopClosed": "Duka limewekwa alama ya kufungwa",
-  "agent.toast.shopClosedDetail": "Hakuna vifurushi vipya vitakavyoelekezwa hapa.",
+  "agent.toast.shopClosedDetail": "Wanunuzi wa vifurushi vilivyo njiani kuja hapa wanaombwa kuchagua duka jingine karibu nawe.",
   "agent.toast.priceUpdated": "Bei imesasishwa",
   "agent.toast.priceUpdatedDetail": "Sasa unatoza {price} kwa kila kifurushi.",
   "agent.toast.baysSaved": "Nafasi ya mifuko imehifadhiwa",
