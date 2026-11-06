@@ -191,6 +191,7 @@ import { CounterLogInterceptor } from './shop-staff.controller';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import { PilotService } from './pilot.service';
 import { CustodyCapView, HandoverManifest } from './pudo.types';
+import { offPlanSaid } from './route-plan.types';
 
 interface ModuleInfo {
   module: string;
@@ -230,6 +231,7 @@ export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): 
     capBasis: stated ? (p.declaredValue ? 'declared' : 'free-limit') : 'none',
   };
 }
+
 
 @Controller('sbg')
 // B1 — a business sign-in reaches about forty of these routes; whether that person is still in the business, and may
@@ -3056,8 +3058,8 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Post('agents/:did/totes/:code/fill')
   @AtTheCounter()
-  fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt, dto.offPlanReason ? { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } : undefined);
+  fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
+    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAt));
   }
 
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
@@ -3436,10 +3438,11 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Post('parcels/handover')
   @AtTheCounter()
-  handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
+  handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
     const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
     const agentDid = actingDid(actor, dto.agentDid);
-    const loaded = this.parcels.handover({ ...dto, driverBadgeId, agentDid, ...(dto.offPlanReason ? { offPlan: { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } } : {}) });
+    const said = offPlanSaid(dto, queuedAt);
+    const loaded = this.parcels.handover({ ...dto, driverBadgeId, agentDid, ...(said ? { offPlan: said } : {}) });
     // The handshake the pilot is judged on: what was due onto the bus, and what the shop scanned onto it.
     this.pilot?.noteHandover(agentDid, loaded);
     return loaded;
@@ -5382,8 +5385,8 @@ export class SbgController {
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/fill')
   @AtTheCounter()
-  fillTote(@Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt, dto.offPlanReason ? { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } : undefined, actor?.did);
+  fillTote(@Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult, @Headers('sbg-queued-at') queuedAt?: string) {
+    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt, offPlanSaid(dto, queuedAt), actor?.did);
   }
 
   /**

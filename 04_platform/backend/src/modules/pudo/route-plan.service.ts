@@ -1,9 +1,12 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
 import { NotificationService } from './notification.service';
-import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H, STUCK_SWEEP_MS } from './pudo.config';
+import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H, NEAR_LOCATED_H, STUCK_SWEEP_MS, VEHICLE_SPEED_KMH } from './pudo.config';
+import { FleetService } from './fleet.service';
+import { nextOpenAt } from './hours';
+import { ROUTER, type Router } from './router';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { JourneyPlan, Mdp, Parcel } from './pudo.types';
@@ -54,6 +57,9 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
     private readonly agents: AgentService,
     @Optional() private readonly events?: EventBus,
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-06 — where a driver carrying a parcel last was, and how long the road from there: a parcel on a vehicle.
+    @Optional() private readonly fleet?: FleetService,
+    @Optional() @Inject(ROUTER) private readonly router?: Router,
   ) {
     // Registered rather than asked for: routing reads the hubs, so the parcel and hub services cannot import it.
     parcels.registerRouteKeeper(this);
@@ -115,8 +121,66 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
         }
       }
     }
+    // 2026-11-06 — …and each parcel ON A VEHICLE (the owner: "I follow point 1 to 6"): it reaches its next stop when the
+    // road from where its driver last was says, and goes on from there — ready when? The same telling, once, and again
+    // only if it slips further. A driver who has gone home with it is found here before its time has passed, not after.
+    for (const parcel of this.parcels.list({ status: 'On_Bus' })) {
+      const plan = this.planOf(parcel);
+      if (!plan || !parcel.destAgentDid) continue;
+      if (plan.lateTold && Date.parse(plan.lateTold) > now) continue;
+      const readyAt = this.readyFromTheRoad(parcel, plan, now);
+      if (readyAt === undefined || readyAt < Date.parse(plan.pickupReadyAt) + EXPECTED_LATE_TELL_H * 3_600_000) continue;
+      const before = plan.lateTold;
+      plan.expectedAt = new Date(readyAt).toISOString();
+      this.sayIfLate(parcel, plan);
+      if (plan.lateTold !== before) {
+        told += 1;
+        this.parcels.notePlan(parcel);
+      }
+    }
     this.tellHubs(lateAtHub, now);
     return told;
+  }
+
+  /**
+   * A parcel on a vehicle: where it is going next (sent another way: there; else its plan's next stop), reached when the
+   * road from its driver's last position says — a position from the last NEAR_LOCATED_H, else as if there now, which never
+   * makes it later than it is — then ready when: at its own shop, when the shop is next open; at a hub or a shop on the
+   * way, the plan from there. Nothing where the next stop cannot be found or no way on from it can be read.
+   */
+  private readyFromTheRoad(parcel: Parcel, plan: JourneyPlan, now: number): number | undefined {
+    const target = plan.heading?.to ?? plan.hops[plan.at! + 1]?.id;
+    if (!target) return undefined;
+    const hub = this.hub(target);
+    const shop = hub ? undefined : this.agents.find(target);
+    const at = hub?.location ?? shop?.location;
+    if (!at) return undefined; // an area, a dock, a place no longer there: no stop to reckon from
+    let arrival = now;
+    const driverDid = [...(parcel.custody ?? [])].reverse().find((l) => !l.to && l.holderKind === 'driver')?.holderId;
+    const seen = driverDid ? this.lastSeen(driverDid) : undefined;
+    if (seen && this.router && now - Date.parse(seen.at) <= NEAR_LOCATED_H * 3_600_000) {
+      arrival = now + this.router.etaMinutes(seen.location, at, VEHICLE_SPEED_KMH.bus) * 60_000;
+    }
+    try {
+      if (shop && shop.did === parcel.destAgentDid) return shop.openingHours ? nextOpenAt(shop.openingHours, new Date(arrival)).getTime() : arrival;
+      const end = hub ? this.routing.hubEnd(hub.mdpId) : undefined;
+      return Date.parse(this.routing.planJourney({ ...(end ? { from: end } : { originAgentDid: target }), destAgentDid: parcel.destAgentDid!, startAt: arrival }).pickupReadyAt);
+    } catch {
+      return undefined; // no way on from there to read: nothing to say
+    }
+  }
+
+  /** Where a driver's phone last placed them: on shift, or — the day ended — where it ended. */
+  private lastSeen(driverDid: string): { location: { lat: number; lng: number }; at: string } | undefined {
+    if (!this.fleet) return undefined;
+    const active = this.fleet.activeForDriver(driverDid);
+    const a =
+      active ??
+      this.fleet
+        .list({ status: 'ended' })
+        .filter((x) => x.driverDid === driverDid)
+        .sort((x, y) => Date.parse(y.endedAt ?? '') - Date.parse(x.endedAt ?? ''))[0];
+    return a?.location && a.lastLocatedAt ? { location: a.location, at: a.lastLocatedAt } : undefined;
   }
 
   /**

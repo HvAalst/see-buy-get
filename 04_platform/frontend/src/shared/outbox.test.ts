@@ -215,6 +215,17 @@ describe('the outbox', () => {
       expect(key).toBe('key-a'); // …which is what makes a replay free rather than a second parcel
     });
 
+    it('says it was done without a signal, and when — so what already happened is recorded, not refused (2026-11-06)', async () => {
+      queue('a', '/v1/sbg/parcels/handover', 'Handed to the bus');
+      let queuedAt: string | null = null;
+      const ok = (async (_u: RequestInfo | URL, init?: RequestInit) => {
+        queuedAt = new Headers(init?.headers).get('sbg-queued-at');
+        return new Response('{}', { status: 200 });
+      }) as unknown as typeof fetch;
+      await drain(deps(ok));
+      expect(queuedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
     it('STOPS at the first item that cannot go — order is part of the meaning', async () => {
       // Shelving a parcel the server has not been told arrived would fail in a way nobody could read,
       // and the queue would look like it was working.

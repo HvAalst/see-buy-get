@@ -21,10 +21,13 @@ export interface ParcelWay {
 }
 import { HELD_BY_WORDS } from './load-detention.types';
 import { VendorService } from './vendor.service';
-import { AGENT_ONLINE_H, BAGS_WAITING_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
+import { MdpService } from './mdp.service';
+import { FleetService } from './fleet.service';
+import { DriverService } from './driver.service';
+import { AGENT_ONLINE_H, BAGS_WAITING_H, CARGO_AFTER_SHIFT_MIN, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting' | 'Cargo_After_Shift';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -61,6 +64,11 @@ export class MonitorService {
     private readonly totes: ToteService,
     // 2026-11-06 — a store's own place, named in a flag about its bags. Optional for the tests that build this without it.
     @Optional() private readonly vendors?: VendorService,
+    // 2026-11-06 — a hub, named in a flag about the bags on its floor waiting for a driver. Optional likewise.
+    @Optional() private readonly mdps?: MdpService,
+    // 2026-11-06 — drivers whose day has ended with cargo aboard. Optional likewise.
+    @Optional() private readonly fleet?: FleetService,
+    @Optional() private readonly drivers?: DriverService,
   ) {}
 
   /** Time-window auto-flags — 'what's on fire' (Ch 14). */
@@ -165,6 +173,7 @@ export class MonitorService {
       if (t.held) flags.push({ type: 'Tamper_Hold', subject: t.code, detail: `bag of ${t.parcels.length} · ${FINDING_WORDS[t.held.finding]} · ${t.held.where}`, ageHours: Math.round(hoursSince(t.held.since)) });
     }
     flags.push(...this.bagsWaiting());
+    flags.push(...this.cargoAfterShift());
     for (const p of this.parcels.list()) {
       if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });
     }
@@ -178,7 +187,8 @@ export class MonitorService {
    * at a full hub is not here: its holder was told, and it goes on by itself when there is room (MdpService.letWaitingGo).
    */
   /**
-   * 2026-11-06 — THE CLOSED BAGS AT A PLACE, by the name its Bags_Waiting case carries: a shop's, or a store's own place's.
+   * 2026-11-06 — THE CLOSED BAGS AT A PLACE, by the name its Bags_Waiting case carries: a shop's, a store's own place's, or a
+   * hub's (the owner: "I follow point 1 to 6" — bags waiting at a hub get what a shop's get).
    * Each with where it goes, how long it has waited, whether a driver is coming for it, and whether it was offered further
    * away already. The oldest first.
    */
@@ -186,6 +196,7 @@ export class MonitorService {
     const ids = new Set<string>([
       ...this.agents.list().filter((a) => a.shopName === place).map((a) => a.did),
       ...(this.vendors?.list() ?? []).filter((v) => v.collection?.label === place).map((v) => v.did),
+      ...(this.mdps?.list() ?? []).filter((m) => m.name === place).map((m) => m.mdpId),
     ]);
     return this.totes
       .list()
@@ -195,6 +206,57 @@ export class MonitorService {
         return { code: t.code, ...(t.destinationLabel ? { destination: t.destinationLabel } : {}), waitedHours: since ? Math.floor((now - Date.parse(since)) / 3_600_000) : 0, claimed: t.status === 'claimed', offeredWide: Boolean(t.offeredWideAt) };
       })
       .sort((a, b) => b.waitedHours - a.waitedHours);
+  }
+
+  /**
+   * 2026-11-06 — A DRIVER WHOSE DAY HAS ENDED WITH BAGS OR PARCELS STILL IN THEIR HANDS (the owner: "I follow point 1 to 6"):
+   * the shift ended CARGO_AFTER_SHIFT_MIN ago or more, no new one begun, and bags aboard, bags claimed and not collected, or
+   * parcels handed to them loose. Somebody calls the driver. One flag per driver, named by their pass.
+   */
+  private cargoAfterShift(now: number = Date.now()): PudoFlag[] {
+    if (!this.fleet) return [];
+    const lastEnded = new Map<string, string>();
+    for (const a of this.fleet.list({ status: 'ended' })) {
+      if (!a.endedAt) continue;
+      const was = lastEnded.get(a.driverDid);
+      if (!was || Date.parse(a.endedAt) > Date.parse(was)) lastEnded.set(a.driverDid, a.endedAt);
+    }
+    if (!lastEnded.size) return [];
+    const count = (m: Map<string, number>, did: string | undefined) => did && m.set(did, (m.get(did) ?? 0) + 1);
+    const aboard = new Map<string, number>();
+    const claimed = new Map<string, number>();
+    for (const t of this.totes.list()) {
+      if (t.status === 'in_transit') count(aboard, t.carriedBy ?? t.claimedBy);
+      else if (t.status === 'claimed') count(claimed, t.claimedBy);
+    }
+    const loose = new Map<string, number>();
+    for (const p of this.parcels.list({ status: 'On_Bus' })) {
+      if (p.toteId) continue;
+      const leg = [...(p.custody ?? [])].reverse().find((l) => !l.to);
+      if (leg?.holderKind === 'driver') count(loose, leg.holderId);
+    }
+    const flags: PudoFlag[] = [];
+    for (const [did, endedAt] of lastEnded) {
+      const minutes = (now - Date.parse(endedAt)) / 60_000;
+      if (minutes < CARGO_AFTER_SHIFT_MIN || this.fleet.activeForDriver(did)) continue;
+      const bags = aboard.get(did) ?? 0;
+      const reserved = claimed.get(did) ?? 0;
+      const parcels = loose.get(did) ?? 0;
+      if (!bags && !reserved && !parcels) continue;
+      let name = did;
+      let badge: string | undefined;
+      try {
+        const d = this.drivers?.get(did);
+        name = d?.displayName ?? did;
+        badge = d?.badgeId;
+      } catch {
+        // a driver the register no longer has: named by their id
+      }
+      const held = [bags ? `${bags} bag${bags === 1 ? '' : 's'} aboard` : '', reserved ? `${reserved} bag${reserved === 1 ? '' : 's'} claimed and not collected` : '', parcels ? `${parcels} parcel${parcels === 1 ? '' : 's'} handed to them` : ''].filter(Boolean).join(', ');
+      const hours = Math.floor(minutes / 60);
+      flags.push({ type: 'Cargo_After_Shift', subject: badge ?? did, detail: `${name} ended their day ${hours ? `${hours}h` : `${Math.round(minutes)} min`} ago with ${held}`, ageHours: hours });
+    }
+    return flags;
   }
 
   private bagsWaiting(): PudoFlag[] {
@@ -209,13 +271,21 @@ export class MonitorService {
     for (const [placeId, waits] of at) {
       const shop = this.agents.find(placeId);
       const dock = shop ? undefined : this.vendors?.byDid(placeId)?.collection;
-      if (!shop && !dock) continue; // a hub's own bags: its floor has its own reading
+      // 2026-11-06 — and a hub's: bags on its floor no driver has come for (a bag held for room there is not counted).
+      const hub = shop || dock ? undefined : this.mdps?.list().find((m) => m.mdpId === placeId);
+      if (!shop && !dock && !hub) continue;
       const oldest = Math.max(...waits);
       if (oldest <= BAGS_WAITING_H) continue;
-      const corner = shop ? this.agents.closedBagRoomOf(shop) : (dock!.closedRoom ?? 0);
       const n = waits.length;
-      const room = corner > 0 ? ` · its corner holds ${corner}${n >= corner ? ', full' : ''}` : '';
-      flags.push({ type: 'Bags_Waiting', subject: shop ? shop.shopName : dock!.label, detail: `${n} closed bag${n === 1 ? '' : 's'} waiting for a driver · the oldest ${Math.round(oldest)}h${room}`, ageHours: Math.round(oldest) });
+      let room = '';
+      if (hub) {
+        const space = this.mdps!.spaceOf(hub);
+        room = space.bagPlaces !== undefined ? ` · ${space.free ?? 0} of its ${space.bagPlaces} bag places free` : '';
+      } else {
+        const corner = shop ? this.agents.closedBagRoomOf(shop) : (dock!.closedRoom ?? 0);
+        room = corner > 0 ? ` · its corner holds ${corner}${n >= corner ? ', full' : ''}` : '';
+      }
+      flags.push({ type: 'Bags_Waiting', subject: shop ? shop.shopName : dock ? dock.label : hub!.name, detail: `${n} closed bag${n === 1 ? '' : 's'} waiting for a driver · the oldest ${Math.round(oldest)}h${room}`, ageHours: Math.round(oldest) });
     }
     return flags;
   }

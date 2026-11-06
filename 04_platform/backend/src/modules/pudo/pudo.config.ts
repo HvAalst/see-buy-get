@@ -455,6 +455,9 @@ export const OFFER_CHAIN_SWEEP_MS = 60 * 1000;
 // are told it is held up, and told again when it is on the road (the owner: "check every hour after 24 hour checks").
 export const CHAIN_RETRY_EVERY_MIN = 60;
 export const CHAIN_TELL_BUYERS_AFTER_CHECKS = 24;
+// 2026-11-06 — a driver's day ended this long ago with bags or parcels still in their hands: operations is told (flag
+// Cargo_After_Shift) — long enough not to catch a driver ending a shift on their last doorstep.
+export const CARGO_AFTER_SHIFT_MIN = 30;
 export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).

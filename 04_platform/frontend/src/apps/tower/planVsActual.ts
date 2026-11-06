@@ -17,7 +17,7 @@ export interface PlanLane {
 }
 
 /** The reasons a parcel went another way, in the console's words: said at the counter, or the network's own. */
-const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged' | 'tower.plan.why.pricedOtherWay'> = {
+const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged' | 'tower.plan.why.pricedOtherWay' | 'tower.plan.why.doneOffline'> = {
   no_transport: 'tower.plan.why.noTransport',
   hub_full: 'tower.plan.why.hubFull',
   faster: 'tower.plan.why.faster',
@@ -25,6 +25,8 @@ const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull
   room: 'tower.plan.why.room',
   arrived_elsewhere: 'tower.plan.why.arrivedElsewhere',
   network_changed: 'tower.plan.why.networkChanged',
+  // 2026-11-06 — handed over or bagged with no signal: nobody could be asked then, so it is recorded, not refused.
+  done_offline: 'tower.plan.why.doneOffline',
   // Read on one parcel's way (the Support screen); a lane does not count it — a price is not a step it took.
   priced_other_way: 'tower.plan.why.pricedOtherWay',
 };

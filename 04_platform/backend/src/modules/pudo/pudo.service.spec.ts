@@ -30,6 +30,7 @@ import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
 import { BagOfferService } from './bag-offer.service';
+import { offPlanSaid } from './route-plan.types';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -1242,6 +1243,25 @@ describe('PUDO Light', () => {
     expect(flag()).toBeUndefined();
   });
 
+  it('flags bags on a HUB’s floor no driver has come for in six hours too — and lists them on its case to offer (2026-11-06)', () => {
+    const hub = mdps.register({ name: 'Flag Bag Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } }, { approvedBy: 'staff' });
+    const dest = onboardAgent('Flag Hub Dest', 'SouthTown', 50);
+    const bag = totes.register(hub.mdpId);
+    totes.assign(bag.code, dest.did, 'Flag Hub Dest');
+    totes.add(bag.code, 'FBH-1', 'S');
+    totes.markAvailable(bag.code, new Date(Date.now() - 2 * 3_600_000).toISOString());
+    const flag = () => monitor.flags().find((f) => f.type === 'Bags_Waiting' && f.subject === 'Flag Bag Hub');
+    // Two hours: nothing to say yet.
+    expect(flag()).toBeUndefined();
+    // Seven hours on its floor with no driver: the hub's case, as a shop's — and its bag on the case, to offer to a driver.
+    totes.requireByCode(bag.code).availableAt = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    expect(flag()).toMatchObject({ detail: expect.stringMatching(/^1 closed bag waiting for a driver · the oldest 7h/), ageHours: 7 });
+    expect(monitor.bagsAt('Flag Bag Hub')).toEqual([expect.objectContaining({ code: bag.code, destination: 'Flag Hub Dest', waitedHours: 7, claimed: false })]);
+    // Held for room at the place it goes to: not a bag nobody has come for.
+    totes.requireByCode(bag.code).waitsForRoom = { since: new Date().toISOString() } as never;
+    expect(flag()).toBeUndefined();
+  });
+
   it('offers a closed bag to one driver further away, priced as any bag — and only one who could take it (2026-11-06)', () => {
     const origin = onboardAgent('Wide Offer Shop', 'NorthTown', 50);
     onboardAgent('Wide Offer Dest', 'SouthTown', 50);
@@ -2215,6 +2235,40 @@ describe('PUDO Light', () => {
       expect(monitor.parcelTimeline('MU2-A')).not.toHaveProperty('way');
     });
 
+    it('done on a phone with no signal and heard of afterwards: recorded as that, never refused — the parcel has gone (2026-11-06)', () => {
+      // The rule: a reason said wins; sent afterwards by the outbox (Sbg-Queued-At), "done without a signal"; else nothing.
+      expect(offPlanSaid({ offPlanReason: 'faster', offPlanNote: 'the bus was here' }, '2026-11-06T09:00:00Z')).toEqual({ reason: 'faster', note: 'the bus was here' });
+      expect(offPlanSaid({}, '2026-11-06T09:00:00Z')).toEqual({ reason: 'done_offline' });
+      expect(offPlanSaid({}, undefined)).toBeUndefined();
+      // A hand-over the counter made with no signal, onto a bus its plan does not go: heard of as it happens, refused (the
+      // counter is asked why); sent afterwards by the phone that had no signal (Sbg-Queued-At), taken — the step kept, the plan
+      // made again from where it arrives.
+      const { S, far, hub, shop, take, rider } = world('MU2O');
+      take('MU2O-A');
+      take('MU2O-B');
+      const d = rider();
+      const asShop = { active: true, role: 'agent', did: shop.did } as never;
+      const pass = () => (controller.driverSession(d.did, { active: true, role: 'driver', did: d.did } as never) as { handoverPass?: string }).handoverPass!;
+      const asIs = controller.handover({ agentDid: shop.did, driverBadgeId: pass(), parcelIds: ['MU2O-A'] } as never, asShop) as { handed: string[]; rejected: Array<{ reason: string }> };
+      expect(asIs.handed).toEqual([]);
+      expect(asIs.rejected).toEqual([expect.objectContaining({ reason: 'off_plan' })]);
+      const late = controller.handover({ agentDid: shop.did, driverBadgeId: pass(), parcelIds: ['MU2O-A'] } as never, asShop, new Date(Date.now() - 20 * 60_000).toISOString()) as { handed: string[]; rejected: unknown[] };
+      expect(late.handed).toEqual(['MU2O-A']);
+      expect(late.rejected).toEqual([]);
+      // The same for a bag filled with no signal: put in a bag its plan does not go by, heard of afterwards — kept.
+      const other = mdps.register({ name: 'MU2O Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
+      const bag = mdps.openShopBag(shop.did, other.mdpId);
+      expect(() => controller.fillShopBag(shop.did, bag.code, { parcelId: 'MU2O-B' } as never, asShop)).toThrow(/goes to MU2O South Sort next by its plan/);
+      controller.fillShopBag(shop.did, bag.code, { parcelId: 'MU2O-B' } as never, asShop, new Date(Date.now() - 20 * 60_000).toISOString());
+      expect(totes.requireByCode(bag.code).parcels).toEqual(['MU2O-B']);
+      expect(parcels.get('MU2O-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'done_offline', planned: hub.mdpId, took: other.mdpId })]);
+      const left = parcels.get('MU2O-A').plan!;
+      expect(left.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'done_offline', planned: hub.mdpId, took: S, by: shop.did })]);
+      parcels.arrive('MU2O-A', far.did);
+      expect(parcels.get('MU2O-A').plan!.hops[parcels.get('MU2O-A').plan!.at!].id).toBe(far.did);
+      expect(planVsActual(parcels.get('MU2O-A'))).toMatchObject({ routeKept: false, offPlan: 1 });
+    });
+
     it('goes into a bag for another place only with the reason said — the plan’s own bag takes it as before', () => {
       const { shop, hub, S, take } = world('MU3');
       take('MU3-A');
@@ -2311,6 +2365,63 @@ describe('PUDO Light', () => {
       // The one still on time: nothing said of it, and nothing written on it.
       expect(parcels.get('MU15-B').plan!.expectedAt).toBeUndefined();
       expect(parcels.get('MU15-B').plan!.lateTold).toBeUndefined();
+    });
+
+    it('on a vehicle: asked "ready when?" from where its driver last was — a driver gone far off with it is found before its time (2026-11-06)', () => {
+      const { shop, hub, far, take, rider } = world('MU17');
+      take('MU17-A');
+      const d = rider();
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU17-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, d.badgeId!);
+      expect(parcels.get('MU17-A').status).toBe('On_Bus');
+      const said: string[] = [];
+      events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => void said.push(e.payload.parcelId));
+      const keeper = (parcels as any).routeKeeper as { sweepStuck: (now?: number) => number };
+      // Its driver beside the hub it goes to: on time — nothing said, nothing written.
+      fleet.reportLocation(d.did, { lat: -1.25, lng: 36.86 });
+      keeper.sweepStuck();
+      expect(said).not.toContain('MU17-A');
+      expect(parcels.get('MU17-A').plan!.expectedAt).toBeUndefined();
+      // Promised so that, at the hub now, it would just be ready in time: still nothing to say with its driver beside the hub.
+      const fromTheHubNow = Date.parse(routing.planJourney({ from: routing.hubEnd(hub.mdpId), destAgentDid: far.did, startAt: Date.now() }).pickupReadyAt);
+      parcels.get('MU17-A').plan!.pickupReadyAt = new Date(fromTheHubNow + 30 * 60_000).toISOString();
+      keeper.sweepStuck();
+      expect(said).not.toContain('MU17-A');
+      // Its driver now some 1,500 km off with it: more than a day of road before the hub — past its promise whatever the hour
+      // (a few hours more can be lost in a night the shop is closed anyway). Told now.
+      fleet.reportLocation(d.did, { lat: 12.25, lng: 36.85 });
+      keeper.sweepStuck();
+      expect(said).toEqual(['MU17-A']);
+      expect(Date.parse(parcels.get('MU17-A').plan!.expectedAt!)).toBeGreaterThan(Date.now() + 5 * 3_600_000);
+      // Once: the next sweep says nothing more of it.
+      keeper.sweepStuck();
+      expect(said).toEqual(['MU17-A']);
+    });
+
+    it('tells operations when a driver’s day has ended with a bag still aboard — named by their pass, gone when they work again (2026-11-06)', () => {
+      const { shop, hub, take, rider, corridor } = world('MU18');
+      take('MU18-A');
+      const d = rider();
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU18-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, d.badgeId!);
+      const flag = () => monitor.flags().find((f) => f.type === 'Cargo_After_Shift' && f.subject === d.badgeId);
+      // On shift: nothing to say.
+      expect(flag()).toBeUndefined();
+      // The day ended a few minutes ago — maybe on the last doorstep: not yet.
+      fleet.endSession(d.did);
+      expect(flag()).toBeUndefined();
+      // Two hours on, the bag still with them: operations is told who, how long, and what.
+      const ended = fleet.list({ status: 'ended' }).find((a) => a.driverDid === d.did)!;
+      ended.endedAt = new Date(Date.now() - 2 * 3_600_000 - 60_000).toISOString();
+      expect(flag()).toMatchObject({ detail: 'MU18 Rider ended their day 2h ago with 1 bag aboard', ageHours: 2 });
+      // Back at work: it is theirs to carry on with.
+      const bike = vehicles.register({ plate: 'MU18-B', vehicleClass: 'bike', ownerName: 'MU18 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      expect(flag()).toBeUndefined();
     });
 
     it('tells the hub holding them which parcels can no longer be ready in time, first in first out — and lists its parcels so (2026-11-06)', () => {

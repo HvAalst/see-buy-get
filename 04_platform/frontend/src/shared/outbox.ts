@@ -342,6 +342,9 @@ async function drainOnce(deps: DrainDeps): Promise<{ sent: number; blocked: numb
           // The same name it was first sent with. This is what makes a replay free rather than a
           // second parcel, a second charge, or a second handover.
           'idempotency-key': next.key,
+          // 2026-11-06 — and that it was done without a signal, when: what has already happened is recorded, never refused
+          // for going another way than its plan (the server's offPlanSaid).
+          'sbg-queued-at': next.at,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });

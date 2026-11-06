@@ -9,7 +9,9 @@ import type { Parcel } from './pudo.types';
 
 /** Why a parcel went another way than its plan. The first four are said by whoever hands it over; the rest by the system. */
 export const HUMAN_OFF_PLAN_REASONS = ['no_transport', 'hub_full', 'faster', 'other'] as const;
-export const OFF_PLAN_REASONS = [...HUMAN_OFF_PLAN_REASONS, 'room', 'arrived_elsewhere', 'network_changed', 'priced_other_way'] as const;
+// 2026-11-06 — 'done_offline': handed over or bagged on a phone with no signal, and heard of afterwards — the parcel had
+// gone by then, so it is recorded, never refused (pudo.controller offPlanSaid; the outbox's Sbg-Queued-At).
+export const OFF_PLAN_REASONS = [...HUMAN_OFF_PLAN_REASONS, 'room', 'arrived_elsewhere', 'network_changed', 'priced_other_way', 'done_offline'] as const;
 export type OffPlanReason = (typeof OFF_PLAN_REASONS)[number];
 export type HumanOffPlanReason = (typeof HUMAN_OFF_PLAN_REASONS)[number];
 
@@ -48,8 +50,19 @@ export class OffPlanStep {
 
 /** What a reasoned hand-over off the plan carries: one of the four reasons, and a few words for "other". */
 export interface OffPlanSaid {
-  reason: HumanOffPlanReason;
+  /** Said by whoever did it — or, done on a phone with no signal, 'done_offline' (nobody could be asked then). */
+  reason: HumanOffPlanReason | 'done_offline';
   note?: string;
+}
+
+/**
+ * 2026-11-06 — WHY A PARCEL WENT ANOTHER WAY THAN ITS PLAN, as the counter or hub said it — or, sent afterwards by a phone
+ * that had no signal (the outbox marks it: Sbg-Queued-At), "done without a signal": the parcel had gone by the time we heard,
+ * and refusing it then would only leave the record behind the parcel. Recorded on it, and its plan made again from there.
+ */
+export function offPlanSaid(dto: { offPlanReason?: HumanOffPlanReason; offPlanNote?: string }, queuedAt?: string): OffPlanSaid | undefined {
+  if (dto.offPlanReason) return { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) };
+  return queuedAt ? { reason: 'done_offline' } : undefined;
 }
 
 /**
