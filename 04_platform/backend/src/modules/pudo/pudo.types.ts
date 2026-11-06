@@ -107,6 +107,12 @@ export class Agent {
    * reads as DEFAULT_BAG_BAYS: read it through AgentService.bagBaysOf, never off the field.
    */
   bagBays?: number;
+  /**
+   * 2026-11-06 — how many CLOSED bags this shop can keep waiting for a driver, in a corner (the owner: "open bags need space
+   * to work around, but full bags can be kept in any empty corner, but that differs from shop to shop"). The shop says it;
+   * absent reads as none (AgentService.closedBagRoomOf): every closed bag then stands where it was filled, as before.
+   */
+  closedBagRoom?: number;
   shopfrontMediaId?: string; // the shop-front photo shown on the My-shop dashboard (owner-gated media)
   pricePerParcel: number; // open-data handling fee the agent advertises (public — competition pressure)
   // S32c — load/unload equipment on hand at this site (MAN baseline + declared). A heavy dedicated-freight
@@ -402,6 +408,8 @@ export interface JourneyPlan {
   heading?: { to: string; label: string; reason: OffPlanReason; note?: string };
   /** Every step it took that the plan did not say, oldest first (see OffPlanStep). */
   offPlan?: OffPlanStep[];
+  /** 2026-11-06 — the expected time its people were last told it would be late by (RoutePlanService; told again only if it slips further). */
+  lateTold?: string;
   /** The stops it was priced on, where they are not the ones it was planned on when it was taken in. */
   pricedVia?: string[];
   /** When it should be ready by the plan as made again. The promise (pickupReadyAt) is never moved. */

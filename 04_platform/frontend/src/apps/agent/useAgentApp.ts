@@ -1533,12 +1533,12 @@ export function useAgentApp() {
 
   /** Declare the floor room for outbound BAGS — the shelf's counterpart for the other pile in the room. */
   const saveBagBays = useCallback(
-    async (bays: number) => {
+    async (bays: number, closedRoom: number) => {
       if (!client || !did) return;
       await run('bag-bays', async () => {
-        const r = await client.api.setBagBays(did, bays);
+        const r = await client.api.setBagBays(did, bays, closedRoom);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.baysSaved'), detail: t('agent.toast.baysSavedDetail', { count: bays }) });
+        pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.baysSaved'), detail: t('agent.toast.baysSavedDetail', { count: bays, closed: closedRoom }) });
         await refresh(); // the merged agent record carries the new number (and the wallet hero it sits beside)
       });
     },

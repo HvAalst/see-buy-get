@@ -87,6 +87,17 @@ export function DropScreen({ state, actions }: DropScreenProps) {
         </>
       ) : null}
 
+      {/* 2026-11-06 — in the bag just emptied, parcels not planned to come here, nobody having said why: not the hub's doing, and
+          planned on from here — sorted as the screen says. Said until the next bag. */}
+      {state.drop.offPlan?.length ? (
+        <Note
+          tone="info"
+          icon="info"
+          title={t('mdp.drop.offPlanTitle')}
+          detail={t('mdp.drop.offPlanBody', { count: state.drop.offPlan.length, planned: [...new Set(state.drop.offPlan.map((o) => o.planned))].join(', ') })}
+        />
+      ) : null}
+
       {state.queue.length ? (
         <Card title={state.queue.length === 1 ? t('mdp.drop.readyOne', { count: state.queue.length }) : t('mdp.drop.readyMany', { count: state.queue.length })}>
           <div class="chips">

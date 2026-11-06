@@ -565,13 +565,17 @@ export class MdpService {
 
   /** Keep the hub a bag was placed at: a hub's bag readdressed to it, a zone's bag given it. */
   private keepPlace(tote: Tote, hub: Mdp, zoneBag: boolean): void {
+    const moved = zoneBag ? tote.toHubId !== hub.mdpId : tote.destinationNodeId !== hub.mdpId;
     if (zoneBag) {
       if (tote.toHubId !== hub.mdpId) this.totes.pointTo(tote.code, { toHubId: hub.mdpId });
     } else if (tote.destinationNodeId !== hub.mdpId) {
       this.totes.pointTo(tote.code, { destinationNodeId: hub.mdpId, destinationLabel: hub.name });
     }
     // 2026-11-06 — the hub it goes to is each parcel's next stop now: where their plans said another hub, that hub was full,
-    // and the plans are made again through this one — kept, with why (movement unification).
+    // and the plans are made again through this one — kept, with why (movement unification). Only where the bag goes to
+    // another hub than it was addressed to: a bag going where it was addressed changes no plan. A parcel put in it for
+    // another way had its own reason kept as it went in, and was recorded as sent on for room when it was not.
+    if (!moved) return;
     for (const parcelId of tote.parcels) {
       try {
         this.routeKeeper?.redirect(this.parcels.get(parcelId), hub.mdpId, 'room', 'system');
@@ -748,17 +752,57 @@ export class MdpService {
     return this.totes.assign(code, destinationNodeId, destinationLabel);
   }
 
-  /** Refuse a new bag when the shop's floor is already carrying as many as it declared it can. */
-  private assertStagingRoom(agentDid: string): void {
-    const bays = this.agents.bagBaysOf(this.agents.get(agentDid));
+  /**
+   * 2026-11-06 — A SHOP'S ROOM FOR BAGS, as the shop declared it (the owner: "open bags need space to work around, but full
+   * bags can be kept in any empty corner"): the bags it works on at once (`places`), and the closed bags it can keep waiting
+   * for a driver in a corner (`corner`). A closed bag the corner has no room for stands where it was filled and takes one of
+   * the places. So `free` — the bags it may open now — is the places less the open bags and the closed ones on the floor.
+   * A shop that has not said has no corner: every closed bag stands on the floor, as every bag was counted before.
+   */
+  bagRoomOf(agentDid: string): { places: number; open: number; closed: number; corner: number; onFloor: number; free: number } {
+    const agent = this.agents.get(agentDid);
+    const places = this.agents.bagBaysOf(agent);
+    const corner = this.agents.closedBagRoomOf(agent);
     const staged = this.stagedBags(agentDid);
-    if (staged.length >= bays) {
-      throw new GlosError(
-        'STAGING_FULL',
-        `This shop has room for ${bays} bag(s) and ${staged.length} are on the floor — hand one to a driver, or raise your bag space`,
-        { capacity: bays, used: staged.length },
-      );
-    }
+    const open = staged.filter((t) => t.status === 'filling').length;
+    const closed = staged.length - open;
+    const onFloor = Math.max(0, closed - corner);
+    return { places, open, closed, corner, onFloor, free: Math.max(0, places - open - onFloor) };
+  }
+
+  /** Refuse a new bag when the shop's floor is already carrying as many as it declared it can. Closing one is never refused. */
+  private assertStagingRoom(agentDid: string): void {
+    const room = this.bagRoomOf(agentDid);
+    if (room.free > 0) return;
+    // Said as it is: its open bags fill the places, or closed bags the corner has no room for stand in them.
+    const why =
+      room.onFloor === 0
+        ? `This shop has room for ${room.places} bag(s) open at once and ${room.open} are open — close one first, or raise your bag space under Set up shelves`
+        : room.corner === 0
+          ? `This shop has room for ${room.places} bag(s) and ${room.open + room.onFloor} are on the floor — hand one to a driver, or under Set up shelves say how many closed bags you can keep in a corner`
+          : `This shop has room for ${room.places} bag(s) on its floor, and its corner for closed bags is full (${room.corner}): ${room.onFloor} more closed bag(s) stand where you work — hand one to a driver, or say you have more room under Set up shelves`;
+    throw new GlosError('STAGING_FULL', why, { capacity: room.places, used: room.open + room.onFloor, open: room.open, closed: room.closed, corner: room.corner });
+  }
+
+  /**
+   * 2026-11-06 — the shop told, in its bell, when its corner for closed bags has just filled: no bag stands in it any more, the
+   * next closed one takes a place it works in, and drivers are what empties it. Once as it fills — not at every bag after.
+   * A shop that has said it has no corner is not told: its closed bags stand where they were filled, as they always have.
+   */
+  private tellCornerFull(agentDid: string, before: number): void {
+    const room = this.bagRoomOf(agentDid);
+    if (!this.notifications || room.corner === 0 || before >= room.corner || room.closed < room.corner) return;
+    const shop = this.agents.get(agentDid);
+    void this.notifications
+      .notify(shop.did, {
+        kind: 'bag_room',
+        title: 'Your corner for closed bags is full',
+        body: `${room.closed} closed bags are waiting for drivers, as many as you said your corner holds. The next one you close stands where you work, and you can open ${room.free} more now. Each one a driver takes makes room again.`,
+        link: '/?go=bag',
+        tag: `bag-room:${agentDid}:${new Date().toISOString().slice(0, 13)}`,
+        data: { closed: room.closed, corner: room.corner },
+      })
+      .catch(() => undefined);
   }
 
   /**
@@ -863,9 +907,12 @@ export class MdpService {
 
     // Sealed = published to the marketplace, so a driver can claim it and arrive knowing it is one scan.
     const announce = bag.status === 'filling'; // an already-published bag was announced when it was published
+    const closedBefore = this.bagRoomOf(agentDid).closed;
     const tote = announce ? this.totes.markAvailable(code, sealed.at) : bag;
     this.totes.markSealed(code, sealed);
     keepClosure(sealed);
+    // 2026-11-06 — closed: into the corner, if it has room. Filled by this one, the shop is told.
+    if (announce) this.tellCornerFull(agentDid, closedBefore);
     // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
     // only publish in the network that pinged nobody, while the passive 24 h sweep did. 2026-11-02 — offered where its hub
     // has room; held at the counter, and the shop told, where none has (offerBag).
@@ -1061,7 +1108,7 @@ export class MdpService {
    * past its places takes the bag all the same, and says so in red on the hub's start screen (spaceOf.overBy). The bag
    * stands on the floor until its parcels are sorted.
    */
-  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[] } {
+  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }> } {
     const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
@@ -1074,16 +1121,20 @@ export class MdpService {
     keepReceipt({ at: new Date().toISOString() });
     const { parcels } = this.totes.empty(code, mdpId);
     this.payHaul(before, carrier);
+    // 2026-11-06 — each kept, and planned on from here; those its plan did not have coming here, nobody having said why, are
+    // said to the hub (its drop screen): not its fault, and planned on from here — sorted as the screen says.
+    const offPlan: Array<{ parcelId: string; planned: string }> = [];
     for (const parcelId of parcels) {
       const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
       p.atMdpId = mdpId; // scope the inbound queue to this hub
-      this.routeKeeper?.arrived(p, mdpId, byName?.trim() || mdp.name); // 2026-11-06 — kept, and planned on from here
+      const off = this.routeKeeper?.arrived(p, mdpId, byName?.trim() || mdp.name);
+      if (off) offPlan.push({ parcelId, planned: off.planned });
     }
     this.noteDrop(mdpId, code, parcels, now);
     void this.events.publish(GlosEvent.Pudo.BagArrivedAtMdp, { mdpId, mdpName: mdp.name, code, emptied: parcels.length }, { source: 'pudo' }).catch(() => undefined);
     // A bag sent to another hub and dropped here instead is no longer on its way there: room may have freed at that one.
     this.letWaitingGo(now);
-    return { mdpId, emptied: parcels };
+    return { mdpId, emptied: parcels, ...(offPlan.length ? { offPlan } : {}) };
   }
 
   /**

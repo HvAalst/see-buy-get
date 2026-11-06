@@ -46,6 +46,8 @@ const KIND_ICON: Record<string, IconName> = {
   // 2026-11-05 — pre-drop-off: the time left on a booking's place at its shop; a shop asked to make room.
   drop_off_hold: 'clock',
   shelf_full: 'box',
+  // 2026-11-06 — a shop's corner for closed bags has filled.
+  bag_room: 'bag',
   pickup_ahead: 'truck',
   message: 'send',
   test: 'bell',

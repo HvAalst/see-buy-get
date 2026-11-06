@@ -429,6 +429,14 @@ export const TOTE_CODE_PREFIX = 'BAG';
 // the common case, and a shop that needs more can see the number and raise it.
 export const DEFAULT_BAG_BAYS = 2;
 export const MAX_BAG_BAYS = 20;
+// 2026-11-06 — the corner a shop keeps CLOSED bags in while they wait for a driver (the owner: full bags "can be kept in any
+// empty corner, but that differs from shop to shop"). Declared by the shop; one that has not said has none, which is how
+// every shop counted its bags before: each closed bag standing where it was filled.
+export const MAX_CLOSED_BAG_ROOM = 50;
+// 2026-11-06 — a parcel's people told it will be late, before the time it was promised comes (movement unification): when its
+// plan, made again, expects it at least this long after that time — and told again only if it slips at least this much more.
+export const EXPECTED_LATE_TELL_H = 1;
+export const EXPECTED_LATE_RETELL_H = 3;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).
 export const TOTE_LOAD_FEE = 0.5; // paid to the driver who scans a bag onto their vehicle

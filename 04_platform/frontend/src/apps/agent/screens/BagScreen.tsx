@@ -104,6 +104,8 @@ export function BagScreen({ state, actions }: BagScreenProps) {
               {staging.free > 0
                 ? t('agent.bag.roomFree', { free: staging.free, capacity: staging.capacity })
                 : t('agent.bag.roomNone', { capacity: staging.capacity })}
+              {/* 2026-11-06 — the closed bags waiting for a driver, and the corner they stand in. */}
+              {staging.closed?.waiting ? ` ${staging.closed.corner ? t('agent.bag.cornerWaiting', { waiting: staging.closed.waiting, corner: staging.closed.corner }) : t('agent.bag.closedWaiting', { waiting: staging.closed.waiting })}` : ''}
             </p>
           ) : null}
         </Card>

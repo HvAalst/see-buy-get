@@ -11,7 +11,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
-import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, MAX_BAG_BAYS, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
+import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, MAX_BAG_BAYS, MAX_CLOSED_BAG_ROOM, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
 import { creditLimitOf, lockThresholdOf, type Amounts } from './amounts';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -482,13 +482,26 @@ export class AgentService {
     return typeof n === 'number' && Number.isFinite(n) && n >= 1 ? Math.floor(n) : DEFAULT_BAG_BAYS;
   }
 
-  /** The shop declares its floor room for outbound bags (the shelf's counterpart for the other pile). */
-  setBagBays(did: string, bays: number): Agent {
+  /** 2026-11-06 — how many closed bags this shop keeps waiting in a corner: what it said, or none where it has not. */
+  closedBagRoomOf(agent: Agent): number {
+    const n = agent.closedBagRoom;
+    return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  }
+
+  /**
+   * The shop declares its floor room for outbound bags (the shelf's counterpart for the other pile): the bags it works on
+   * at once — and, 2026-11-06, the closed bags it can keep waiting in a corner for a driver. Left out, the corner stays.
+   */
+  setBagBays(did: string, bays: number, closedRoom?: number): Agent {
     const agent = this.require(did);
     if (!Number.isFinite(bays) || bays < 1 || bays > MAX_BAG_BAYS) {
       throw new GlosError('INVALID_INPUT', `Bag space must be between 1 and ${MAX_BAG_BAYS} bags`);
     }
+    if (closedRoom !== undefined && (!Number.isFinite(closedRoom) || closedRoom < 0 || closedRoom > MAX_CLOSED_BAG_ROOM)) {
+      throw new GlosError('INVALID_INPUT', `Room for closed bags must be between 0 and ${MAX_CLOSED_BAG_ROOM}`, { field: 'closedRoom' });
+    }
     agent.bagBays = Math.floor(bays);
+    if (closedRoom !== undefined) agent.closedBagRoom = Math.floor(closedRoom);
     this.agents.set(did, agent); // durable record, mutated in place — re-store so the snapshot flushes
     return agent;
   }

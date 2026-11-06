@@ -68,8 +68,11 @@ export interface RouteKeeper {
   offPlan(parcel: Parcel, to: string, opts?: { loose?: boolean }): PlanHop | undefined;
   /** Sent another way on purpose, with the reason said: recorded, and where it is heading kept until it arrives. */
   leave(parcel: Parcel, to: string, by: string, said: OffPlanSaid): void;
-  /** Arrived at a hub or a shop: the plan moves on, or — somewhere else — is made again from here, and that is recorded. */
-  arrived(parcel: Parcel, where: string, by: string): void;
+  /**
+   * Arrived at a hub or a shop: the plan moves on, or — somewhere else — is made again from here, and that is recorded.
+   * Somewhere it was not planned, nobody having said why: the stop it was planned for, so whoever received it is told.
+   */
+  arrived(parcel: Parcel, where: string, by: string): { planned: string } | undefined;
   /** The network sends it to `to` instead of its next stop (a full hub, a hub no longer used): recorded, the plan made again. */
   redirect(parcel: Parcel, to: string, reason: OffPlanReason, by: string): void;
   /** At a hub, sorting: the plan's next stop where it can still be used — else nothing, and the hub chooses as it always did. */

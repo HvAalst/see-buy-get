@@ -44,6 +44,8 @@ export interface BagStaging {
   capacity: number;
   used: number;
   free: number;
+  /** 2026-11-06 — closed bags waiting for a driver, and the corner the shop said it keeps them in (0: none said). */
+  closed?: { waiting: number; corner: number };
 }
 
 /** A bag already open on the shop's floor. */
@@ -85,6 +87,8 @@ export interface AgentView {
   shopfrontMediaId?: string; // the shop-front photo (owner-gated media)
   /** Floor room for outbound bags. Absent until the shop says — the plan's `staging.capacity` is the answer. */
   bagBays?: number;
+  /** 2026-11-06 — closed bags it can keep waiting for a driver, in a corner. Absent until the shop says: none. */
+  closedBagRoom?: number;
   /** Merged in by the controller alongside the record. NULL where we hold no money for this shop at all —
    *  a different fact from an empty float, and never to be shown as 0.00. */
   balance: number | null;

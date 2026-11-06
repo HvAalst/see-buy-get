@@ -50009,6 +50009,10 @@
           "bagBays": {
             "type": "number"
           },
+          "closedBagRoom": {
+            "type": "number",
+            "description": "2026-11-06 — how many CLOSED bags this shop can keep waiting for a driver, in a corner (the owner: \"open bags need space\nto work around, but full bags can be kept in any empty corner, but that differs from shop to shop\"). The shop says it;\nabsent reads as none (AgentService.closedBagRoomOf): every closed bag then stands where it was filled, as before."
+          },
           "shopfrontMediaId": {
             "type": "string"
           },
@@ -56940,6 +56944,11 @@
           "bays": {
             "type": "number",
             "minimum": 1
+          },
+          "closedRoom": {
+            "type": "number",
+            "description": "2026-11-06 — the closed bags it can keep waiting in a corner for a driver. Left out: as it was.",
+            "minimum": 0
           }
         },
         "required": [

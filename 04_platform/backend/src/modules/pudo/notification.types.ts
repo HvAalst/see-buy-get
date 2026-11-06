@@ -83,6 +83,8 @@ export const NOTIFICATION_KINDS = [
   'drop_off_hold',
   /** 2026-11-05 — to a shop, that bookings are going elsewhere because its shelf has no place left: make room. */
   'shelf_full',
+  /** 2026-11-06 — to a shop, that its corner for closed bags has just filled: the next closed bag stands where it works. */
+  'bag_room',
   /** 2026-11-05 — parcels taken on ahead: to the shop, who takes them; to the driver, that the bag is theirs (or went to everyone). */
   'pickup_ahead',
   'message',

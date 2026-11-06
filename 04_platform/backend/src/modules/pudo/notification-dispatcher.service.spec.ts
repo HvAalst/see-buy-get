@@ -638,6 +638,29 @@ describe('NotificationDispatcher — a parcel running late', () => {
     expect(await dispatcher.sweepParcelsLate()).toBe(0);
   });
 
+  it('tells them BEFORE its time comes, where its plan made again expects it later — and not twice when that time passes (2026-11-06)', async () => {
+    const parcel = onItsWay({ plan: { hops: [], mdpRouted: false, pickupReadyAt: new Date(Date.now() + 2 * HOUR).toISOString(), plannedAt: new Date(Date.now() - 30 * HOUR).toISOString() } });
+    const { dispatcher, notifications, events } = harness({ parcel, onShelf: [parcel], personByHash: people, agents: shop });
+    const plan = parcel.plan as { pickupReadyAt: string; lateTold?: string };
+    plan.lateTold = new Date(Date.parse(plan.pickupReadyAt) + 5 * HOUR).toISOString();
+    await events.publish(GlosEvent.Pudo.ParcelExpectedLate, { parcelId: 'PUD-LATE', promisedAt: plan.pickupReadyAt, expectedAt: plan.lateTold });
+    const [r] = notifications.inboxFor('did:glos:person-r');
+    expect(r).toMatchObject({ kind: 'parcel_late', title: 'Your parcel is running late', body: "It is now expected at Mama Sarah's about 5 hours later than we said. You are told when it is ready to collect.", link: '/?parcel=PUD-LATE' });
+    expect(notifications.inboxFor('did:glos:person-s')[0]).toMatchObject({ title: 'A parcel you sent is running late', body: "It is now expected at Mama Sarah's about 5 hours later than we said. Its tracking page shows where it is." });
+    // The time it was promised passes: found late, and nobody told a second time — they know it comes later.
+    plan.pickupReadyAt = new Date(Date.now() - 5 * HOUR).toISOString();
+    expect(await dispatcher.sweepParcelsLate()).toBe(1);
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(1);
+    expect(notifications.inboxFor('did:glos:person-s')).toHaveLength(1);
+  });
+
+  it('warns nobody of a parcel no longer on its way (2026-11-06)', async () => {
+    const parcel = onItsWay({ status: 'Ready_For_Pickup' });
+    const { notifications, events } = harness({ parcel, onShelf: [], personByHash: people, agents: shop });
+    await events.publish(GlosEvent.Pudo.ParcelExpectedLate, { parcelId: 'PUD-LATE', promisedAt: new Date().toISOString(), expectedAt: new Date(Date.now() + 5 * HOUR).toISOString() });
+    expect(notifications.inboxFor('did:glos:person-r')).toHaveLength(0);
+  });
+
   it('tells a person who sent a parcel to themselves once, not twice', async () => {
     const { dispatcher, notifications, list } = started();
     list.push(onItsWay({ senderPhoneHash: 'hash-r' }));

@@ -379,6 +379,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       this.onParcelReadyForPickup(e.payload.parcelId),
     );
     this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
+    // 2026-11-06 — its plan, made again, expects it later than it was promised: its people are told now (movement unification).
+    this.events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => this.onExpectedLate(e.payload));
     // Rule 1b (buyer) — the release secret was burned and an operator rotated it. The buyer is very
     // likely standing at the counter right now, so this is urgent and must NOT collapse onto the
     // parcel-ready notification (a fresh tag), or the one message telling them their code changed
@@ -1299,6 +1301,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         if (!late || parcel.lateToldAt) continue;
         parcel.lateToldAt = new Date(now).toISOString();
         found += 1;
+        // 2026-11-06 — told already, before its time came, that it would be later than this (onExpectedLate): its people
+        // are not told twice. Its store still hears, on its systems.
+        const warned = parcel.plan?.lateTold !== undefined && Date.parse(parcel.plan.lateTold) > now;
+        if (warned) {
+          if (parcel.vendorId) this.vendors.notify(parcel.vendorId, 'parcel.late', { parcelId: parcel.parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, promisedAt: late.promisedAt, lateHours: late.lateHours });
+          continue;
+        }
         const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
         const ago = lateWords(late.lateHours);
         const where = PARCEL_WHERE[late.where];
@@ -1326,6 +1335,39 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
     }
     return found;
+  }
+
+  /**
+   * 2026-11-06 — WILL BE LATE, SAID BEFORE IT IS (the owner: "build as you suggest"). A parcel's plan made again — it went
+   * another way, or reached a hub it was not planned to — expects it at least an hour after the time it was promised. Its
+   * receiver, and a person who sent it, are told now, in the app (never a text), how much later — not when it would have
+   * been past the promise. The promise is not moved: lateness is still measured against it, and when that time comes the
+   * sweep does not tell them a second time (sweepParcelsLate).
+   */
+  private async onExpectedLate(p: { parcelId: string; promisedAt: string; expectedAt: string }): Promise<void> {
+    try {
+      const parcel = this.parcels.get(p.parcelId);
+      if (!['At_PUDO', 'On_Bus', 'At_MDP'].includes(parcel.status)) return; // ready, or no longer on its way: nothing to warn of
+      const later = lateWords((Date.parse(p.expectedAt) - Date.parse(p.promisedAt)) / 3_600_000);
+      const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
+      const seen = new Set<string>();
+      const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);
+      for (const [side, who] of sides) {
+        const person = accountFor(who, this.persons);
+        if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
+        seen.add(person.personDid);
+        await this.notifications.notify(person.personDid, {
+          kind: 'parcel_late',
+          title: side === 'receiver' ? 'Your parcel is running late' : 'A parcel you sent is running late',
+          body: side === 'receiver' ? `It is now expected at ${shop} about ${later} later than we said. You are told when it is ready to collect.` : `It is now expected at ${shop} about ${later} later than we said. Its tracking page shows where it is.`,
+          link: `/?parcel=${parcel.parcelId}`,
+          tag: `parcel-late:${parcel.parcelId}:expected`,
+          data: { parcelId: parcel.parcelId },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`expected-late notice failed for ${p.parcelId}: ${(err as Error).message}`);
+    }
   }
 
   /** A load reached the other end. Whoever sent it hears it once, with who signed for it — and (D9) what they found not as the note says. */

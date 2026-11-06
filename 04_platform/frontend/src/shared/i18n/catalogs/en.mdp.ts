@@ -180,6 +180,8 @@ export const enMdp = {
   'mdp.drop.readyOne': '{count} parcel ready to sort',
   'mdp.drop.readyMany': '{count} parcels ready to sort',
   'mdp.drop.startSorting': 'Start sorting',
+  'mdp.drop.offPlanTitle': 'Not planned to come here',
+  'mdp.drop.offPlanBody': '{count, plural, one {# parcel in this bag was} other {# parcels in this bag were}} planned to go to {planned}, and nobody said why it came here. Nothing for you to do but sort as the screen says: {count, plural, one {it is} other {they are}} planned on from here, and operations can see it.',
   'mdp.drop.whatHappens': 'What happens',
   'mdp.drop.item1': 'The bag is emptied and freed for reuse',
   'mdp.drop.item2': 'Every parcel inside joins the sort queue',

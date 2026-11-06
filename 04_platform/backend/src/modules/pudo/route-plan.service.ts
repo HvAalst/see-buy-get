@@ -1,5 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
+import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H } from './pudo.config';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { JourneyPlan, Mdp, Parcel } from './pudo.types';
@@ -48,6 +51,7 @@ export class RoutePlanService implements RouteKeeper {
     private readonly mdps: MdpService,
     private readonly routing: RoutingService,
     private readonly agents: AgentService,
+    @Optional() private readonly events?: EventBus,
   ) {
     // Registered rather than asked for: routing reads the hubs, so the parcel and hub services cannot import it.
     parcels.registerRouteKeeper(this);
@@ -77,24 +81,27 @@ export class RoutePlanService implements RouteKeeper {
     this.parcels.notePlan(parcel);
   }
 
-  arrived(parcel: Parcel, where: string, by: string): void {
+  arrived(parcel: Parcel, where: string, by: string): { planned: string } | undefined {
     const plan = this.planOf(parcel);
-    if (!plan) return;
+    if (!plan) return undefined;
     const at = plan.at!;
-    if (plan.hops[at]?.id === where) return; // scanned here again: it is where the plan already has it
+    if (plan.hops[at]?.id === where) return undefined; // scanned here again: it is where the plan already has it
     const next = plan.hops[at + 1];
     if (next?.id === where) {
       plan.at = at + 1;
       delete plan.heading;
       this.parcels.notePlan(parcel);
-      return;
+      return undefined;
     }
     // Somewhere it was not planned to be. Sent this way on purpose, the reason was kept when it left; nobody said so, and
-    // it is kept now, for operations to see. Either way the plan is made again from here.
-    if (!plan.heading) this.record(plan, 'arrival', plan.hops[at], next, where, 'arrived_elsewhere', by);
+    // it is kept now, for operations to see — and said to whoever received it (a hub's drop, 2026-11-06). Either way the
+    // plan is made again from here.
+    const unsaid = !plan.heading;
+    if (unsaid) this.record(plan, 'arrival', plan.hops[at], next, where, 'arrived_elsewhere', by);
     this.remake(parcel, plan, where, 'here');
     delete plan.heading;
     this.parcels.notePlan(parcel);
+    return unsaid && next ? { planned: next.label } : undefined;
   }
 
   redirect(parcel: Parcel, to: string, reason: OffPlanReason, by: string): void {
@@ -164,24 +171,39 @@ export class RoutePlanService implements RouteKeeper {
     const stop = this.hopFor(place, parcel);
     let onward: PlanHop[] = [];
     const dest = parcel.destAgentDid ? this.agents.find(parcel.destAgentDid) : undefined;
-    // A hub serving the area of its shop sends it straight there — the hub's own rule (MdpService.nextHop). Planned as a new
-    // journey from a hub, it would go through that area's first hub instead, a stop it does not need.
-    if (dest && stop.type === 'mdp' && this.hub(stop.id)?.zones.includes(dest.zone)) {
-      onward = [{ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone }];
-    } else if (parcel.destAgentDid && stop.type !== 'dock') {
+    // Planned as a new journey from there — a hub that serves its shop's area takes it straight to the shop (RoutingService
+    // collapses shared hubs since 2026-11-06), as its own rule does — with the time that journey would take from now.
+    if (parcel.destAgentDid && stop.type !== 'dock') {
       try {
         const hub = stop.type === 'mdp' ? this.routing.hubEnd(stop.id) : undefined;
         const j = this.routing.planJourney({ ...(hub ? { from: hub } : { originAgentDid: stop.id }), destAgentDid: parcel.destAgentDid });
         onward = j.hops.slice(1).map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone }));
         plan.expectedAt = j.pickupReadyAt;
       } catch (err) {
-        // No route from there: straight on to its shop, which is the one thing certain about where it goes.
+        // No route from there: straight on to its shop, which is the one thing certain about where it goes — and no estimate.
         onward = dest && dest.did !== stop.id ? [{ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone }] : [];
+        delete plan.expectedAt;
         this.logger.warn(`plan for ${parcel.parcelId} made again without a route from ${stop.label}: ${(err as Error).message}`);
       }
     }
     plan.hops = [...kept, stop, ...onward];
     if (as === 'here') plan.at = kept.length; // it is at `stop` now
+    this.sayIfLate(parcel, plan);
+  }
+
+  /**
+   * 2026-11-06 — ITS PEOPLE TOLD IT WILL BE LATE, before the time it was promised comes (the owner: "build as you suggest"):
+   * where its plan, made again, expects it at least EXPECTED_LATE_TELL_H after that time. Once; again only where it slips at
+   * least EXPECTED_LATE_RETELL_H more. Who is told, and how, is the notice dispatcher's (ParcelExpectedLate). The promise is
+   * never moved.
+   */
+  private sayIfLate(parcel: Parcel, plan: JourneyPlan): void {
+    if (!plan.expectedAt) return;
+    const expected = Date.parse(plan.expectedAt);
+    if (!(expected >= Date.parse(plan.pickupReadyAt) + EXPECTED_LATE_TELL_H * 3_600_000)) return;
+    if (plan.lateTold && expected < Date.parse(plan.lateTold) + EXPECTED_LATE_RETELL_H * 3_600_000) return;
+    plan.lateTold = plan.expectedAt;
+    void this.events?.publish(GlosEvent.Pudo.ParcelExpectedLate, { parcelId: parcel.parcelId, promisedAt: plan.pickupReadyAt, expectedAt: plan.expectedAt }, { source: 'pudo' }).catch(() => undefined);
   }
 
   /** A place as a stop: a shop, a hub — or an area it is heading for, standing in until it arrives somewhere. */

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { DEFAULT_BAG_BAYS, MAX_BAG_BAYS, MIN_SHELF_SLOTS, SHELF_COLORS, gridDims } from '../logic';
+import { DEFAULT_BAG_BAYS, MAX_BAG_BAYS, MAX_CLOSED_BAG_ROOM, MIN_SHELF_SLOTS, SHELF_COLORS, gridDims } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
 export interface ShelfScreenProps {
@@ -158,23 +158,32 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
 }
 
 /**
- * Bag space — how many outbound bags this shop can stand on its floor at once.
+ * Bag space — how many outbound bags this shop works on at once, and (2026-11-06) how many closed ones it can keep waiting.
  *
  * The same declaration as the shelf, for the other pile in the room: a kiosk has space for a couple, a
  * hardware store for plenty, and only the shopkeeper knows which they are. It matters because a bag is
  * refused once the floor is full, and because the bag plan then has to say WHICH destinations to pack
  * first rather than listing everything that is waiting.
+ *
+ * Two numbers, because the two kinds of bag need different room (the owner: "open bags need space to work around, but full
+ * bags can be kept in any empty corner, but that differs from shop to shop"): an open bag needs space beside the counter;
+ * a closed one waiting for a driver can stand in any corner — as many as the shop says. A closed bag with no corner left
+ * stands where it was filled, and takes a place to work in.
  */
 function BagBays({ state, actions }: ShelfScreenProps) {
   const t = useT();
   const current = state.agent?.bagBays ?? DEFAULT_BAG_BAYS;
+  const currentCorner = state.agent?.closedBagRoom ?? 0;
   const [bays, setBays] = useState<number | null>(null);
+  const [corner, setCorner] = useState<number | null>(null);
   const n = bays ?? current;
+  const c = corner ?? currentCorner;
   return (
     <Card label={t('agent.shelf.baysTitle')}>
       <Stepper id="bag-bays" label={t('agent.shelf.baysLabel')} value={n} min={1} max={MAX_BAG_BAYS} onChange={setBays} />
+      <Stepper id="bag-corner" label={t('agent.shelf.cornerLabel')} value={c} min={0} max={MAX_CLOSED_BAG_ROOM} onChange={setCorner} />
       <p class="card__note">{t('agent.shelf.baysNote')}</p>
-      <Button variant="outline" chevron={false} busy={state.busy === 'bag-bays'} disabled={n === current} onClick={() => void actions.saveBagBays(n)}>
+      <Button variant="outline" chevron={false} busy={state.busy === 'bag-bays'} disabled={n === current && c === currentCorner} onClick={() => void actions.saveBagBays(n, c)}>
         {t('agent.shelf.baysSave')}
       </Button>
     </Card>

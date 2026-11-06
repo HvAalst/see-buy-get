@@ -30,7 +30,7 @@ export class BagPlanService {
     private readonly parcels: ParcelService,
     private readonly totes: ToteService,
     private readonly routing: RoutingService,
-    mdps: MdpService,
+    private readonly mdps: MdpService,
   ) {
     // 2026-11-05 — the shop's bag is filled and checked against the same next hop it is planned by: a bag for a hub was
     // compared with each parcel's zone, so it took none of the parcels the plan had put in its group. Registered rather
@@ -70,9 +70,9 @@ export class BagPlanService {
   forShop(agentDid: string): {
     groups: BagGroup[];
     bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
-    staging: { capacity: number; used: number; free: number };
+    staging: { capacity: number; used: number; free: number; closed: { waiting: number; corner: number } };
   } {
-    const agent = this.agents.get(agentDid); // 404 for an unknown shop
+    this.agents.get(agentDid); // 404 for an unknown shop
     const open = this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available');
     const byKey = new Map<string, BagGroup>();
 
@@ -88,8 +88,9 @@ export class BagPlanService {
     // What the floor can take. Once bags are limited, "here is everything" stops being a plan: with room for
     // two bags and four destinations, the shop needs to know WHICH two to pack — which is what busiest-first
     // has always answered, now with the number that makes the ordering matter.
-    const staged = this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available' || t.status === 'claimed');
-    const capacity = this.agents.bagBaysOf(agent);
+    // 2026-11-06 — the room as the shop declared it: the bags it works on at once, and the corner closed bags wait in for a
+    // driver; a closed bag the corner has no room for takes a place (MdpService.bagRoomOf).
+    const room = this.mdps.bagRoomOf(agentDid);
 
     return {
       // Busiest first: the bag with the most parcels in it is the one worth packing next.
@@ -98,7 +99,7 @@ export class BagPlanService {
         // Only a FILLING bag is "the bag for this group": a sealed one is waiting for its driver, and
         // pointing the shop back into it would trap them there — the next parcel needs a new bag.
         .map((g) => ({ ...g, openBagCode: open.find((t) => t.destinationNodeId === g.key && t.status === 'filling')?.code })),
-      staging: { capacity, used: staged.length, free: Math.max(0, capacity - staged.length) },
+      staging: { capacity: room.places, used: room.open + room.onFloor, free: room.free, closed: { waiting: room.closed, corner: room.corner } },
       // parcelIds, not just a count: a shop fills a bag across a working day, so re-opening one has to show
       // what is already inside it — otherwise the screen says "0 in the bag" over a bag holding three.
       // 2026-11-02 — a closed bag held at the counter for room at its hub says which hub: it goes on by itself.

@@ -122,6 +122,8 @@ export interface SortView {
 export interface DropView {
   mdpId: string;
   emptied: string[];
+  /** 2026-11-06 — those its plan did not have coming here, nobody having said why: the stop each was planned to go to. */
+  offPlan?: Array<{ parcelId: string; planned: string }>;
 }
 
 export interface LoadView {

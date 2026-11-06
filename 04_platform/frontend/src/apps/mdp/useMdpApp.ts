@@ -69,7 +69,7 @@ export interface MdpState {
   /** Round 35 — a parcel found cut or opened, being reported: which, its photograph, what is seen. `null` when closed. */
   tamper: { parcelId: string; photoRef: string; note: string } | null;
   /** Round 36 — the bag scanned to drop, looked at before it is opened: how it was closed, held; a seal read that did not match. */
-  drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string };
+  drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string; offPlan?: Array<{ parcelId: string; planned: string }> };
   /** One of the hub's people working its floor on this device, under their own name; null for the hub's own sign-in. */
   staff: StaffAtCounter | null;
   /** 2026-10-27 — an old label scanned of a parcel its store called off here: which new label goes over it. */
@@ -533,12 +533,15 @@ export function useMdpApp() {
         return fail(r.error);
       }
       signal('ok');
-      const emptied = narrow<DropView>(r.data)?.emptied ?? [];
+      const dropped = narrow<DropView>(r.data);
+      const emptied = dropped?.emptied ?? [];
+      // 2026-11-06 — kept on the screen until the next bag: the ones not planned to come here, said as the bag is emptied.
+      const offPlan = dropped?.offPlan ?? [];
       setState((s) => ({
         ...s,
         queue: addToQueue(s.queue, emptied),
         form: { ...s.form, dropCode: '' },
-        drop: {},
+        drop: offPlan.length ? { offPlan } : {},
       }));
       pushToast({
         tone: 'ok',

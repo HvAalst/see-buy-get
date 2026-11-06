@@ -1935,6 +1935,12 @@ describe('PUDO Light', () => {
       expect(totes.requireByCode(wrong.code).parcels).toEqual([]);
       mdps.fillShopBag(wrong.code, shop.did, 'MU3-A', undefined, { reason: 'faster' });
       expect(parcels.get('MU3-A').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'faster', planned: hub.mdpId, took: other.mdpId })]);
+      // Dropped at the hub it was sent to on purpose: the reason is kept, and the hub is not told it was not planned to come.
+      mdps.sealShopBag(wrong.code, shop.did, { closure: closedBy(shop.did), acknowledgeShortShip: true, shortShipReason: 'next bag' });
+      mdps.loadBag(wrong.code, 'BUS-MU3');
+      expect(mdps.dropBag(other.mdpId, wrong.code, receivedAtHub(other.mdpId)).offPlan).toBeUndefined();
+      // …nor was it sent on for room: the bag went where it was addressed. The one step off its plan is the one said.
+      expect(parcels.get('MU3-A').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'faster' })]);
       // The plan's own bag: in it goes, nothing said, nothing kept.
       const right = mdps.openShopBag(shop.did, hub.mdpId);
       mdps.fillShopBag(right.code, shop.did, 'MU3-B');
@@ -1947,13 +1953,42 @@ describe('PUDO Light', () => {
       const bag = mdps.openShopBag(shop.did, hub.mdpId);
       mdps.fillShopBag(bag.code, shop.did, 'MU4-A');
       const other = mdps.register({ name: 'MU4 Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
-      toHub(bag.code, other.mdpId);
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, 'BUS-MU4');
+      const dropped = mdps.dropBag(other.mdpId, bag.code, receivedAtHub(other.mdpId));
+      // Said to the hub that took it in (2026-11-06): planned for the other hub, nobody having said why — planned on from here.
+      expect(dropped.offPlan).toEqual([{ parcelId: 'MU4-A', planned: hub.name }]);
       const p = parcels.get('MU4-A');
       expect(p.status).toBe('At_MDP');
       expect(p.plan!.offPlan).toEqual([expect.objectContaining({ kind: 'arrival', reason: 'arrived_elsewhere', planned: hub.mdpId, took: other.mdpId })]);
       expect(p.plan!.hops[p.plan!.at!].id).toBe(other.mdpId);
       // Sorted where it is: on to its shop, by the plan made again.
       expect(mdps.sortParcel(other.mdpId, 'MU4-A').nextDestination.id).toBe(far.did);
+    });
+
+    it('says it will be late before the time it was promised, where its plan made again expects it later — once, as it slips', () => {
+      const { shop, hub, S, take, toHub } = world('MU14');
+      take('MU14-A');
+      // Promised for an hour ago, as a parcel is that has been on its way a while.
+      parcels.get('MU14-A').plan!.pickupReadyAt = new Date(Date.now() - 3_600_000).toISOString();
+      const said: Array<{ parcelId: string; promisedAt: string; expectedAt: string }> = [];
+      events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => void said.push(e.payload));
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU14-A');
+      const other = mdps.register({ name: 'MU14 Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
+      // Dropped at a hub it was not planned to reach: planned on from there, from now — later than it was promised.
+      toHub(bag.code, other.mdpId);
+      const plan = parcels.get('MU14-A').plan!;
+      expect(Date.parse(plan.expectedAt!)).toBeGreaterThan(Date.parse(plan.pickupReadyAt) + 3_600_000);
+      expect(said).toEqual([{ parcelId: 'MU14-A', promisedAt: plan.pickupReadyAt, expectedAt: plan.expectedAt }]);
+      expect(plan.lateTold).toBe(plan.expectedAt);
+      // The promise is not moved.
+      expect(Date.parse(plan.pickupReadyAt)).toBeLessThan(Date.now());
+      // Sent on from there by the network a moment later, about as late: not said again.
+      const third = mdps.register({ name: 'MU14 Third Sort', zones: [S], location: { lat: -1.27, lng: 36.87 } }, { approvedBy: 'staff' });
+      ((parcels as any).routeKeeper as { redirect: (p: unknown, to: string, why: string, by: string) => void }).redirect(parcels.get('MU14-A'), third.mdpId, 'room', 'system');
+      expect(parcels.get('MU14-A').plan!.hops.map((h) => h.id)).toContain(third.mdpId);
+      expect(said).toHaveLength(1);
     });
 
     it('is sorted on by its plan; a stop no longer to be used is replaced by the hub’s choice, with why', () => {
@@ -2986,11 +3021,11 @@ describe('PUDO Light', () => {
       onboardAgent('West Dest', 'WestTown', 50);
 
       // The default is deliberately modest: a small counter is the common case.
-      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 0, free: 2 });
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 0, free: 2, closed: { waiting: 0, corner: 0 } });
 
       const one = mdps.openShopBag(origin.did, 'SouthTown');
       const two = mdps.openShopBag(origin.did, 'EastTown');
-      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 2, free: 0 });
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 2, free: 0, closed: { waiting: 0, corner: 0 } });
       expect(() => mdps.openShopBag(origin.did, 'WestTown')).toThrow(/room for 2 bag/);
 
       // A SEALED bag still takes up the same square metre — it is standing there waiting for its driver.
@@ -3003,7 +3038,7 @@ describe('PUDO Light', () => {
       const driver = coupleTipper('bays', { min: 0.8, max: 1.5 });
       closeForTest(one.code);
       mdps.loadBag(one.code, drivers.get(driver.did).badgeId!);
-      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 1, free: 1 });
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 1, free: 1, closed: { waiting: 0, corner: 0 } });
       expect(mdps.openShopBag(origin.did, 'WestTown').code).toBeTruthy();
 
       // The limit cannot be walked around by opening a bare tote and ADDRESSING it afterwards — two calls
@@ -3014,8 +3049,49 @@ describe('PUDO Light', () => {
       // …or when the shop says it has more floor than we assumed. The declaration is the shop's, like the shelf's.
       expect(() => agents.setBagBays(origin.did, 0)).toThrow(/between 1 and/);
       agents.setBagBays(origin.did, 4);
-      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 4, used: 2, free: 2 });
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 4, used: 2, free: 2, closed: { waiting: 0, corner: 0 } });
       expect(two.code).toBeTruthy();
+    });
+
+    it('keeps closed bags in the corner the shop says it has — one with no corner left takes a place it works in (2026-11-06)', () => {
+      // The owner: "open bags need space to work around, but full bags can be kept in any empty corner, but that differs
+      // from shop to shop". The shop says both: the bags it works on at once, and the closed bags it can keep waiting.
+      const { origin } = shopWithTwoWaiting();
+      onboardAgent('Corner East', 'EastTown', 50);
+      onboardAgent('Corner West', 'WestTown', 50);
+      expect(() => agents.setBagBays(origin.did, 2, -1)).toThrow(/between 0 and/);
+      agents.setBagBays(origin.did, 2, 1);
+      expect(agents.closedBagRoomOf(agents.get(origin.did))).toBe(1);
+      const told: Array<{ kind: string; title: string }> = [];
+      const was = (mdps as any).notifications;
+      (mdps as any).notifications = { notify: async (_did: string, n: { kind: string; title: string }) => void told.push(n) };
+      try {
+        const one = mdps.openShopBag(origin.did, 'SouthTown');
+        mdps.fillShopBag(one.code, origin.did, 'QR-B1');
+        mdps.sealShopBag(one.code, origin.did, { closure: closedBy(origin.did), acknowledgeShortShip: true, shortShipReason: 'later bus' });
+        // Closed, into the corner: both places free to work in — and the corner full now, the shop told.
+        expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 0, free: 2, closed: { waiting: 1, corner: 1 } });
+        expect(told).toEqual([expect.objectContaining({ kind: 'bag_room', title: 'Your corner for closed bags is full' })]);
+        const two = mdps.openShopBag(origin.did, 'EastTown');
+        const three = mdps.openShopBag(origin.did, 'WestTown');
+        expect(() => mdps.openShopBag(origin.did, 'SouthTown')).toThrow(/room for 2 bag\(s\) open at once and 2 are open/);
+        // A second closed bag has no corner: it stands where the shop works, and no bag can be opened beside it.
+        parcels.accept({ agentDid: origin.did, parcelId: 'QR-CE1', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+        mdps.fillShopBag(two.code, origin.did, 'QR-CE1');
+        mdps.sealShopBag(two.code, origin.did, { closure: closedBy(origin.did) });
+        expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 2, free: 0, closed: { waiting: 2, corner: 1 } });
+        expect(() => mdps.openShopBag(origin.did, 'SouthTown')).toThrow(/corner for closed bags is full \(1\): 1 more closed bag\(s\) stand where you work/);
+        // Told once, as the corner filled — not again for the bag after it.
+        expect(told).toHaveLength(1);
+        // A driver takes one: the other goes into the corner, and a place is free again.
+        const driver = coupleTipper('corner', { min: 0.8, max: 1.5 });
+        closeForTest(one.code);
+        mdps.loadBag(one.code, drivers.get(driver.did).badgeId!);
+        expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 1, free: 1, closed: { waiting: 1, corner: 1 } });
+        expect(three.code).toBeTruthy();
+      } finally {
+        (mdps as any).notifications = was;
+      }
     });
 
     it('refuses the manual early-release for a shop bag — closing it IS the shop’s release', () => {

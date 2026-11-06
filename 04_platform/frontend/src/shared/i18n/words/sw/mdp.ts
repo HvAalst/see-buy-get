@@ -159,6 +159,8 @@ export const words: Record<string, string> = {
   "mdp.drop.readyOne": "Kifurushi {count} kiko tayari kupangwa",
   "mdp.drop.readyMany": "Vifurushi {count} viko tayari kupangwa",
   "mdp.drop.startSorting": "Anza kupanga",
+  "mdp.drop.offPlanTitle": "Hakikupangwa kuja hapa",
+  "mdp.drop.offPlanBody": "{count, plural, one {Kifurushi # katika mfuko huu kilipangwa} other {Vifurushi # katika mfuko huu vilipangwa}} kwenda {planned}, na hakuna aliyesema kwa nini kimekuja hapa. Huna la kufanya ila kupanga kama skrini inavyosema: {count, plural, one {kimepangwa} other {vimepangwa}} kuendelea kutoka hapa, na operesheni wanaweza kuona.",
   "mdp.drop.whatHappens": "Kinachotokea",
   "mdp.drop.item1": "Mfuko unaondolewa vilivyomo na kuachiwa ili utumike tena",
   "mdp.drop.item2": "Kila kifurushi kilichomo kinaingia kwenye foleni ya kupanga",

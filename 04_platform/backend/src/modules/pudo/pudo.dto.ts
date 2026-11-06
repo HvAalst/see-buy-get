@@ -2688,6 +2688,8 @@ export class DeclineOfferDto {
 /** How many outbound bags a shop can stage on its floor at once. */
 export class BagBaysDto {
   @IsNumber() @Min(1) bays!: number;
+  /** 2026-11-06 — the closed bags it can keep waiting in a corner for a driver. Left out: as it was. */
+  @IsOptional() @IsNumber() @Min(0) closedRoom?: number;
 }
 
 export class AssignCorridorDto {

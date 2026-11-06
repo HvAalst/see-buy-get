@@ -235,6 +235,8 @@ export const MIN_SHELF_SLOTS = 6;
  *  (mirrors the backend DEFAULT_BAG_BAYS / MAX_BAG_BAYS). The server stays authoritative. */
 export const DEFAULT_BAG_BAYS = 2;
 export const MAX_BAG_BAYS = 20;
+/** 2026-11-06 — the corner for CLOSED bags waiting for a driver (mirrors the backend MAX_CLOSED_BAG_ROOM): none until said. */
+export const MAX_CLOSED_BAG_ROOM = 50;
 
 /** The current grid's dimensions, read back from its slots (max row/col), or null for an empty grid. */
 export function gridDims(slots: ReadonlyArray<{ row: number; col: number }> | undefined): { rows: number; cols: number } | null {

@@ -3022,7 +3022,7 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Post('agents/:did/bag-bays')
   setBagBays(@Param('did') did: string, @Body() dto: BagBaysDto, @Actor() actor: IntrospectionResult) {
-    return this.agents.setBagBays(actingDid(actor, did), dto.bays);
+    return this.agents.setBagBays(actingDid(actor, did), dto.bays, dto.closedRoom);
   }
 
   /** Move the shop's map pin (My-shop location editor). */
