@@ -56972,6 +56972,20 @@
           "parcelId": {
             "type": "string"
           },
+          "offPlanReason": {
+            "type": "string",
+            "description": "2026-11-06 — why it goes in this bag when its plan sends it elsewhere (movement unification).",
+            "enum": [
+              "no_transport",
+              "hub_full",
+              "faster",
+              "other"
+            ]
+          },
+          "offPlanNote": {
+            "type": "string",
+            "maxLength": 100
+          },
           "observedAt": {
             "type": "string",
             "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
@@ -58661,6 +58675,19 @@
         "properties": {
           "agentDid": {
             "type": "string"
+          },
+          "offPlanReason": {
+            "type": "string",
+            "enum": [
+              "no_transport",
+              "hub_full",
+              "faster",
+              "other"
+            ]
+          },
+          "offPlanNote": {
+            "type": "string",
+            "maxLength": 100
           },
           "driverBadgeId": {
             "type": "string"

@@ -10,7 +10,32 @@ export interface PlanLane {
   typicalLateHours: number;
   routeKnown: number;
   routeKept: number;
+  /** 2026-11-06 — how many took a step their plan did not say, and why (movement unification). */
+  offPlan?: number;
+  offPlanReasons?: Partial<Record<string, number>>;
   worst?: { parcelId: string; lateHours: number };
+}
+
+/** The reasons a parcel went another way, in the console's words: said at the counter, or the network's own. */
+const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged'> = {
+  no_transport: 'tower.plan.why.noTransport',
+  hub_full: 'tower.plan.why.hubFull',
+  faster: 'tower.plan.why.faster',
+  other: 'tower.plan.why.other',
+  room: 'tower.plan.why.room',
+  arrived_elsewhere: 'tower.plan.why.arrivedElsewhere',
+  network_changed: 'tower.plan.why.networkChanged',
+};
+
+/** "2 went another way: no bus or driver that way (1), arrived elsewhere, nobody said why (1)" — or nothing, where none did. */
+export function offPlanWords(lane: Pick<PlanLane, 'offPlan' | 'offPlanReasons'>, t: Translate): string {
+  if (!lane.offPlan) return '';
+  const why = Object.entries(lane.offPlanReasons ?? {})
+    .filter(([, n]) => (n ?? 0) > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([reason, n]) => `${WHY[reason] ? t(WHY[reason]) : reason} (${n})`)
+    .join(', ');
+  return t('tower.plan.offPlan', { count: lane.offPlan, why });
 }
 
 /**

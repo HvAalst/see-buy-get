@@ -314,7 +314,7 @@ export function createAgentApi(sbg: SbgClient) {
       agentDid: string,
       driverBadgeId: string,
       parcelIds: string[],
-      opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string },
+      opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string; offPlanReason?: 'no_transport' | 'hub_full' | 'faster' | 'other'; offPlanNote?: string },
     ) =>
       sbg.request((c) =>
         c.POST('/v1/sbg/parcels/handover', {
@@ -323,6 +323,8 @@ export function createAgentApi(sbg: SbgClient) {
             driverBadgeId,
             parcelIds,
             ...(opts?.acknowledgeShortShip ? { acknowledgeShortShip: true, shortShipReason: opts.shortShipReason } : {}),
+            // 2026-11-06 — why parcels whose plan goes another way are handed onto this bus all the same.
+            ...(opts?.offPlanReason ? { offPlanReason: opts.offPlanReason, ...(opts.offPlanNote ? { offPlanNote: opts.offPlanNote } : {}) } : {}),
             observedAt: new Date().toISOString(),
           },
         }),
@@ -370,8 +372,14 @@ export function createAgentApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes', { params: { path: { did } }, body: { destZone } })),
 
     /** Drop a waiting parcel into the open bag. The shop path, so a parcel going elsewhere is refused. */
-    fillBag: (did: string, code: string, parcelId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes/{code}/fill', { params: { path: { did, code } }, body: { parcelId, observedAt: new Date().toISOString() } })),
+    fillBag: (did: string, code: string, parcelId: string, offPlan?: { reason: string; note?: string }) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/agents/{did}/totes/{code}/fill', {
+          params: { path: { did, code } },
+          // 2026-11-06 — why it goes in this bag when its plan sends it elsewhere.
+          body: { parcelId, observedAt: new Date().toISOString(), ...(offPlan ? { offPlanReason: offPlan.reason as never, ...(offPlan.note ? { offPlanNote: offPlan.note } : {}) } : {}) },
+        }),
+      ),
 
     /** Seal it. The server refuses if a parcel for that destination is still on the shelf, unless the
      *  shop knowingly leaves it — the same gate the parcel-by-parcel handover has. */

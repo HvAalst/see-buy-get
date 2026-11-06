@@ -3057,7 +3057,7 @@ export class SbgController {
   @Post('agents/:did/totes/:code/fill')
   @AtTheCounter()
   fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt);
+    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId, dto.observedAt, dto.offPlanReason ? { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } : undefined);
   }
 
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
@@ -3439,7 +3439,7 @@ export class SbgController {
   handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
     const driverBadgeId = this.fleet.badgeShown(dto.driverBadgeId);
     const agentDid = actingDid(actor, dto.agentDid);
-    const loaded = this.parcels.handover({ ...dto, driverBadgeId, agentDid });
+    const loaded = this.parcels.handover({ ...dto, driverBadgeId, agentDid, ...(dto.offPlanReason ? { offPlan: { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } } : {}) });
     // The handshake the pilot is judged on: what was due onto the bus, and what the shop scanned onto it.
     this.pilot?.noteHandover(agentDid, loaded);
     return loaded;
@@ -5379,8 +5379,8 @@ export class SbgController {
   @Roles('agent', 'mdp', 'operator')
   @Post('totes/:code/fill')
   @AtTheCounter()
-  fillTote(@Param('code') code: string, @Body() dto: FillToteDto) {
-    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt);
+  fillTote(@Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
+    return this.mdps.fillTote(code, dto.parcelId, dto.observedAt, dto.offPlanReason ? { reason: dto.offPlanReason, ...(dto.offPlanNote ? { note: dto.offPlanNote } : {}) } : undefined, actor?.did);
   }
 
   /**

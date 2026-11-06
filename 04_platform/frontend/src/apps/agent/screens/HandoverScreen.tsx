@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { OffPlanSheet } from './OffPlanSheet';
 import { Button, Card, ErrorNote, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { handoverSummary } from '../logic';
@@ -157,6 +158,9 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => handoverSummary(list?.parcels.length ?? 0, f.selected.length, f.missed.length, t)} label={t('agent.readAloud')} />
       </div>
+
+      {/* 2026-11-06 — left at the counter because their plan goes another way: kept for it, or sent this way with why. */}
+      <OffPlanSheet open={f.offPlan.length > 0} items={f.offPlan} goingTo={list?.destZone ?? ''} busy={busy} onSend={(reason, note) => void actions.submitOffPlanHandover(reason, note)} onKeep={actions.keepOffPlanHandover} />
 
       <Sheet open={leaveOpen} onClose={() => setLeaveOpen(false)} title={t('agent.handover.leaveSheetTitle')}>
         <p class="hint">

@@ -39,6 +39,24 @@ describe('a parcel held against its promise', () => {
     expect(planVsActual({ plan: planned, readyAt })).not.toHaveProperty('routeKept');
   });
 
+  it('2026-11-06 — a hub is held under its NAME and planned under its id: either is that hub, so a route through one can read as kept', () => {
+    const planned = plan('CBD', 'Westlands', '2026-10-14T12:00:00.000Z', 'Industrial');
+    const readyAt = '2026-10-14T11:00:00.000Z';
+    const custody = [...held('shop:CBD', 'drv:a'), { holderId: 'Industrial Hub', holderKind: 'hub' as const, from: '2026-10-14T09:00:00.000Z' }, ...held('drv:b', 'shop:Westlands')];
+    expect(planVsActual({ plan: planned, readyAt, custody })!.routeKept).toBe(true);
+  });
+
+  it('2026-11-06 — a step off the plan is not a route kept, whatever the plan made again says; a price made on another route is not a step', () => {
+    const readyAt = '2026-10-14T11:00:00.000Z';
+    const custody = held('shop:CBD', 'drv:a', 'shop:Westlands');
+    const step = (reason: string) => ({ at: readyAt, kind: 'decision' as const, where: 'shop:CBD', whereLabel: 'CBD Shop', took: 'Westlands', tookLabel: 'Westlands', reason: reason as never, by: 'shop:CBD' });
+    const off = { ...plan('CBD', 'Westlands', '2026-10-14T12:00:00.000Z'), offPlan: [step('no_transport')] };
+    expect(planVsActual({ plan: off, readyAt, custody })).toMatchObject({ routeKept: false, offPlan: 1 });
+    const priced = { ...plan('CBD', 'Westlands', '2026-10-14T12:00:00.000Z'), offPlan: [step('priced_other_way')] };
+    expect(planVsActual({ plan: priced, readyAt, custody })).toMatchObject({ routeKept: true });
+    expect(planVsActual({ plan: priced, readyAt, custody })).not.toHaveProperty('offPlan');
+  });
+
   it('says nothing for a parcel with no kept plan, or one not ready to collect yet', () => {
     expect(planVsActual({ readyAt: '2026-10-14T11:00:00.000Z' })).toBeUndefined();
     expect(planVsActual({ plan: plan('CBD', 'Westlands', '2026-10-14T12:00:00.000Z') })).toBeUndefined();
@@ -87,8 +105,8 @@ describe('the lanes, as they went', () => {
   it('puts the lanes most often late first, with how late they usually are and the latest of them to open', () => {
     expect(service.lanes(30, now).map((l) => l.to)).toEqual(['Kisumu', 'Thika', 'Westlands']);
     const [kisumu, , westlands] = service.lanes(30, now);
-    expect(kisumu).toEqual({ from: 'CBD', to: 'Kisumu', arrived: 3, onTime: 1, late: 2, typicalLateHours: 6.5, routeKnown: 3, routeKept: 2, worst: { parcelId: 'LATE-2', lateHours: 10 } });
-    expect(westlands).toEqual({ from: 'CBD', to: 'Westlands', arrived: 2, onTime: 2, late: 0, typicalLateHours: 0, routeKnown: 2, routeKept: 2 });
+    expect(kisumu).toEqual({ from: 'CBD', to: 'Kisumu', arrived: 3, onTime: 1, late: 2, typicalLateHours: 6.5, routeKnown: 3, routeKept: 2, offPlan: 0, offPlanReasons: {}, worst: { parcelId: 'LATE-2', lateHours: 10 } });
+    expect(westlands).toEqual({ from: 'CBD', to: 'Westlands', arrived: 2, onTime: 2, late: 0, typicalLateHours: 0, routeKnown: 2, routeKept: 2, offPlan: 0, offPlanReasons: {} });
   });
 
   it('reads only the parcels ready within the window asked for', () => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CodeCard, ErrorNote, Explainer, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { OffPlanSheet } from './OffPlanSheet';
 import { BagCloseFields } from '../../../shared/BagSealFields';
 import { closeReady, closureBody, EMPTY_BAG_CLOSE, type BagCloseForm } from '../../../shared/bagSeal';
 
@@ -233,6 +234,18 @@ export function BagScreen({ state, actions }: BagScreenProps) {
         </div>
         <Button variant="link" onClick={() => setLeaveOpen(false)}>{t('agent.cancel')}</Button>
       </Sheet>
+
+      {/* 2026-11-06 — its plan sends it elsewhere next: kept out of this bag, or put in with why. */}
+      {bag ? (
+        <OffPlanSheet
+          open={Boolean(bag.offPlan)}
+          items={bag.offPlan ? [bag.offPlan] : []}
+          goingTo={bag.label}
+          busy={state.busy === 'bag-fill'}
+          onSend={(reason, note) => void actions.addToBagOffPlan(reason, note)}
+          onKeep={actions.keepBagOffPlan}
+        />
+      ) : null}
     </div>
   );
 }

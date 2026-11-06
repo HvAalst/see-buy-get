@@ -24,6 +24,7 @@ import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { HubPapers, HubSpaceView, Mdp, NextHop, Parcel, Tote } from './pudo.types';
+import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
@@ -111,6 +112,22 @@ export class MdpService {
     this.promisedFor = fn;
   }
 
+  /** 2026-11-06 — the parcel's plan, asked at every hand-over (RoutePlanService registers it: it reads routing, above this). */
+  private routeKeeper?: RouteKeeper;
+
+  registerRouteKeeper(k: RouteKeeper): void {
+    this.routeKeeper = k;
+  }
+
+  /** Whether this bag is not where the parcel's plan sends it next: the stop it should go to, or nothing. Either of a readdressed bag's addresses will do. */
+  private offPlanInto(parcel: Parcel, bag: Tote) {
+    const keeper = this.routeKeeper;
+    if (!keeper || !bag.destinationNodeId) return undefined;
+    const off = keeper.offPlan(parcel, bag.destinationNodeId);
+    if (!off || (bag.packedFor && !keeper.offPlan(parcel, bag.packedFor))) return undefined;
+    return off;
+  }
+
   /** 2026-11-05 — where a parcel waiting at its shop goes NEXT (BagPlanService.nextHopFor): a hub's id, or its own zone. */
   private nextHopOf?: (parcel: Parcel) => string;
 
@@ -125,6 +142,8 @@ export class MdpService {
    * and took nothing. A bag room sent on to another hub still answers for the hub it was packed for (Tote.packedFor).
    */
   private belongsInShopBag(parcel: Parcel, bag: Tote): boolean {
+    // 2026-11-06 — by its plan, where it has one: its next stop is where this bag goes.
+    if (this.routeKeeper?.nextStop(parcel)) return !this.offPlanInto(parcel, bag);
     const to = [bag.destinationNodeId, bag.packedFor].filter((id): id is string => Boolean(id));
     if (to.includes(parcel.destZone)) return true;
     const hubs = to.filter((id) => this.mdps.has(id));
@@ -550,6 +569,15 @@ export class MdpService {
     } else if (tote.destinationNodeId !== hub.mdpId) {
       this.totes.pointTo(tote.code, { destinationNodeId: hub.mdpId, destinationLabel: hub.name });
     }
+    // 2026-11-06 — the hub it goes to is each parcel's next stop now: where their plans said another hub, that hub was full,
+    // and the plans are made again through this one — kept, with why (movement unification).
+    for (const parcelId of tote.parcels) {
+      try {
+        this.routeKeeper?.redirect(this.parcels.get(parcelId), hub.mdpId, 'room', 'system');
+      } catch {
+        // a parcel the bag lists and the store does not: nothing to plan
+      }
+    }
   }
 
   /**
@@ -739,7 +767,7 @@ export class MdpService {
    * Without it a parcel for one city rides to another in a sealed bag, and nothing notices: the seal gate
    * only checks that everything EXPECTED is in the bag, never that everything in the bag BELONGS.
    */
-  fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
+  fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string, said?: OffPlanSaid): { tote: Tote; fillPct: number } {
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
     if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it is closed`);
@@ -748,7 +776,9 @@ export class MdpService {
     if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
       throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
     }
-    if (!this.belongsInShopBag(parcel, bag)) {
+    // 2026-11-06 — a parcel with a plan is asked its way by fillTote (refused, or put in with a reason said); one without,
+    // here as before.
+    if (!this.routeKeeper?.nextStop(parcel) && !this.belongsInShopBag(parcel, bag)) {
       throw new GlosError(
         'WRONG_DESTINATION',
         `${parcelId} is going to ${parcel.destZone}, but this bag goes to ${bag.destinationLabel}`,
@@ -766,7 +796,7 @@ export class MdpService {
         sameBag: holder.code === code,
       });
     }
-    return this.fillTote(code, parcelId, observedAt);
+    return this.fillTote(code, parcelId, observedAt, said, agentDid);
   }
 
   /**
@@ -883,7 +913,7 @@ export class MdpService {
   // --- bag flow ---
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
-  fillTote(code: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
+  fillTote(code: string, parcelId: string, observedAt?: string, said?: OffPlanSaid, by?: string): { tote: Tote; fillPct: number } {
     this.workingWhereBagIs(this.totes.requireByCode(code).locationId); // a bag at a hub that may not work takes nothing
     const parcel = this.parcels.get(parcelId);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
@@ -894,8 +924,14 @@ export class MdpService {
     if (!this.bagAccepts(parcel.natureCode ?? 'GEN', bag.parcels)) {
       throw new GlosError('CARGO_INCOMPATIBLE', `Parcel ${parcelId} cannot share bag ${code} — its cargo is incompatible with the bag's contents`);
     }
+    // 2026-11-06 — ITS NEXT STOP BY ITS PLAN (movement unification): into a bag going elsewhere only with the reason said.
+    const offPlan = this.offPlanInto(parcel, bag);
+    if (offPlan && !said) {
+      throw new GlosError('OFF_PLAN', `${parcelId} goes to ${offPlan.label} next by its plan, not ${bag.destinationLabel ?? bag.destinationNodeId}. Put it in the bag for ${offPlan.label} — or say why it goes this way.`, { parcelId, planned: offPlan.id, plannedLabel: offPlan.label, bag: code });
+    }
     // Bagged when it was bagged (round 23): never before the parcel's own last step — it was not here to bag before then.
     const tote = this.totes.add(code, parcelId, parcel.size, this.parcels.stepOf(parcelId, observedAt));
+    if (offPlan && said) this.routeKeeper!.leave(parcel, bag.destinationNodeId!, by ?? bag.locationId, said);
     this.parcels.get(parcelId).toteId = tote.toteId; // connect parcel ↔ bag (still where it was)
     // 2026-11-05 — in a bag now, off the shelf slot it waited on at its shop: the slot is free for the next one.
     this.parcels.leftShelf(parcelId);
@@ -1036,6 +1072,7 @@ export class MdpService {
     for (const parcelId of parcels) {
       const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
       p.atMdpId = mdpId; // scope the inbound queue to this hub
+      this.routeKeeper?.arrived(p, mdpId, byName?.trim() || mdp.name); // 2026-11-06 — kept, and planned on from here
     }
     this.noteDrop(mdpId, code, parcels, now);
     void this.events.publish(GlosEvent.Pudo.BagArrivedAtMdp, { mdpId, mdpName: mdp.name, code, emptied: parcels.length }, { source: 'pudo' }).catch(() => undefined);
@@ -1138,8 +1175,12 @@ export class MdpService {
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
 
-    // 2026-11-02 — onward to another hub: of those serving its zone, one with room (mdpForZone).
-    const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid, now);
+    // 2026-11-06 — ITS NEXT STOP BY ITS PLAN, where that can still be used (movement unification). Where it cannot — a hub
+    // no longer to be used, or a plan that does not have it here — the hub chooses as it always did (2026-11-02: onward, of
+    // the hubs serving its zone, one with room), and the plan is made again from that choice, with why.
+    const planned = this.routeKeeper?.sortTarget(parcel, mdpId);
+    const next: NextHop = planned ?? this.nextHop(mdp, parcel.destZone, parcel.destAgentDid, now);
+    if (!planned) this.routeKeeper?.redirect(parcel, next.id, 'network_changed', mdp.name);
 
     // Find a filling bag already bound to that next hop with room AND cargo-compatible with this parcel, else
     // open a fresh one (S31). Passing the compatibility gate to findFilling means an incompatible parcel never

@@ -39,6 +39,7 @@ import { FINDING_WORDS, type UnitHold } from './tamper.types';
 import { parcelLabelZpl } from './parcel-label';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
 import { DropOffHoldService } from './drop-off-hold.service';
+import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { haversineKm } from './geo';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -443,19 +444,26 @@ export function runningLate(p: Pick<Parcel, 'plan' | 'status'>, now: number = Da
   return { promisedAt: p.plan.pickupReadyAt, lateHours: Math.round(late * 10) / 10, where };
 }
 
-export function planVsActual(p: Pick<Parcel, 'plan' | 'readyAt' | 'custody'>): { promisedAt: string; readyAt: string; onTime: boolean; lateHours: number; routeKept?: boolean } | undefined {
+export function planVsActual(p: Pick<Parcel, 'plan' | 'readyAt' | 'custody'>): { promisedAt: string; readyAt: string; onTime: boolean; lateHours: number; routeKept?: boolean; offPlan?: number } | undefined {
   if (!p.plan || !p.readyAt) return undefined;
   const late = (Date.parse(p.readyAt) - Date.parse(p.plan.pickupReadyAt)) / 3_600_000;
   const lateHours = late > 0 ? Math.round(late * 10) / 10 : 0;
   // The places it was held, in order, without the drivers between them — and each once, however often it was scanned.
   const held = (p.custody ?? []).filter((l) => l.holderKind === 'shop' || l.holderKind === 'hub').map((l) => l.holderId).filter((id, i, all) => id !== all[i - 1]);
-  const planned = p.plan.hops.filter((h) => h.type !== 'dock').map((h) => h.id);
+  // 2026-11-06 — a hub's custody is kept under its NAME, its stop under its id: either one is that hub. Compared by id
+  // alone, no parcel through a hub ever read as having kept its route.
+  const planned = p.plan.hops.filter((h) => h.type !== 'dock');
+  // …and the steps it took off the plan (not the price's: a route that changed between the booking and the take-in is the
+  // network's, before it moved at all). The plan made again afterwards would otherwise read as a route kept.
+  const offPlan = (p.plan.offPlan ?? []).filter((s) => s.reason !== 'priced_other_way').length;
+  const keptTheWay = held.length === planned.length && held.every((id, i) => id === planned[i].id || id === planned[i].label);
   return {
     promisedAt: p.plan.pickupReadyAt,
     readyAt: p.readyAt,
     onTime: late <= 0,
     lateHours,
-    ...(p.custody?.length ? { routeKept: held.length === planned.length && held.every((id, i) => id === planned[i]) } : {}),
+    ...(p.custody?.length ? { routeKept: keptTheWay && offPlan === 0 } : {}),
+    ...(offPlan ? { offPlan } : {}),
   };
 }
 
@@ -656,7 +664,8 @@ export interface HandoverResult {
   corridorId?: string;
   vehicle: 'bus' | 'truck';
   handed: string[];
-  rejected: Array<{ parcelId: string; reason: string }>;
+  /** 2026-11-06 — one not handed over because its plan goes another way says the stop it goes to, as `planned`. */
+  rejected: Array<{ parcelId: string; reason: string; planned?: string }>;
   // S25 — the completeness gate makes the manifest legible: `expected` is every waiting parcel that
   // belongs on THIS bus (this shop → the driver's corridor destination); `missed` is the ones that were
   // not scanned. A clean run has `missed: []`. A knowing short-ship returns them here with shortShipped.
@@ -1598,6 +1607,8 @@ export class ParcelService implements OnApplicationBootstrap {
     acknowledgeShortShip?: boolean;
     shortShipReason?: string;
     observedAt?: string;
+    /** 2026-11-06 — said for every parcel here whose plan does not go this bus's way (movement unification). */
+    offPlan?: OffPlanSaid;
   }): HandoverResult {
     const { fleet, badgeId, corridorId, corridorDestZone, vehicleType } = this.busFor(input.driverBadgeId);
 
@@ -1623,7 +1634,7 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     const handed: string[] = [];
-    const rejected: Array<{ parcelId: string; reason: string }> = [];
+    const rejected: Array<{ parcelId: string; reason: string; planned?: string }> = [];
     const manifestId = `man_${randomBytes(6).toString('hex')}`;
     // 2026-11-05 — weighed from what the vehicle carries already: its bags, its loads and what other counters handed it. It
     // started at an empty vehicle, so a bike filled at one counter was filled again at the next.
@@ -1650,6 +1661,10 @@ export class ParcelService implements OnApplicationBootstrap {
       // Round 35 — held under the tamper protocol: set apart, and not on the bus until operations releases it.
       if (parcel.held) { rejected.push({ parcelId, reason: 'held' }); continue; }
       if (parcel.status !== 'At_PUDO') { rejected.push({ parcelId, reason: `status_${parcel.status}` }); continue; }
+      // 2026-11-06 — ITS NEXT STEP BY ITS PLAN (movement unification). A bus to an area takes a parcel to a shop there, never
+      // through a hub: one whose plan says another way goes onto it only with the counter's reason, kept on the parcel.
+      const offPlan = this.routeKeeper?.offPlan(parcel, corridorDestZone, { loose: true });
+      if (offPlan && !input.offPlan) { rejected.push({ parcelId, reason: 'off_plan', planned: offPlan.label }); continue; }
       const nature: CargoNature = parcel.natureCode ?? 'GEN';
       // S30 cargo compatibility (applies to ANY driver — it is parcel-vs-parcel, not vehicle-specific): this
       // parcel must be able to share the vehicle with everything already loaded. A strictly INCOMPATIBLE pair
@@ -1687,6 +1702,7 @@ export class ParcelService implements OnApplicationBootstrap {
       this.handTo(parcel, 'driver', this.driverIdOf(badgeId), `handed to the bus · manifest ${manifestId}`, step);
       this.scan(parcel, 'On_Bus', badgeId, `manifest ${manifestId}`, step);
       handed.push(parcelId);
+      if (offPlan && input.offPlan) this.routeKeeper!.leave(parcel, corridorDestZone, input.agentDid, input.offPlan);
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId: badgeId, corridorId, manifestId }, { source: 'pudo' }).catch(() => undefined);
     }
 
@@ -1763,7 +1779,18 @@ export class ParcelService implements OnApplicationBootstrap {
   /** What is due onto a bus at this shop: every parcel waiting here bound for the corridor's destination. */
   private dueOnto(agentDid: string, destZone: string): Parcel[] {
     // A parcel held under the tamper protocol is not due onto anything: it is set apart until operations releases it.
-    return this.list({ status: 'At_PUDO', agentDid }).filter((p) => p.originAgentDid === agentDid && p.destZone === destZone && !p.held);
+    return this.list({ status: 'At_PUDO', agentDid }).filter((p) => p.originAgentDid === agentDid && !p.held && this.dueOnBusTo(p, destZone));
+  }
+
+  /**
+   * 2026-11-06 — DUE ONTO A BUS TO THIS AREA: by its plan, where it has one — its next stop a shop there — and never a parcel
+   * already in a bag, which goes with its bag (it was asked for here too, and could be handed over twice). Without a plan,
+   * by its area as before.
+   */
+  private dueOnBusTo(p: Parcel, destZone: string): boolean {
+    if (p.toteId) return false;
+    if (this.routeKeeper?.nextStop(p)) return !this.routeKeeper.offPlan(p, destZone, { loose: true });
+    return p.destZone === destZone;
   }
 
   /**
@@ -1792,6 +1819,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpLockedAt = undefined;
     parcel.binSlot = slot;
     this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point', step);
+    this.routeKeeper?.arrived(parcel, destAgentDid, destAgentDid); // 2026-11-06 — never refused: kept, and planned on from here
     parcel.readyAt = step.at; // when the wait began — see Parcel.readyAt; on the shelf since it arrived, however late we heard
     // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
     // slot is finished work at this moment, and it stays finished whether or not anybody ever comes. At least the
@@ -2712,6 +2740,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
     this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
+    this.routeKeeper?.arrived(parcel, agentDid, agentDid); // 2026-11-06 — never refused: kept, and planned on from here
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
     this.payShelving(agentDid, parcel); // see arrive()
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
@@ -3955,6 +3984,18 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!this.isSameShop(parcel) && this.shopBagFor?.(agentDid, parcel)) return;
     const shop = this.agents.get(agentDid);
     throw new GlosError('SHOP_FULL', `The place held here for this parcel has ended, and ${shop.shopName} has no room for it now. It still goes: make room — put the parcels waiting for their next stop in their bag, or hand them to a driver — then take it in.`, { agentDid, heldUntil: hold.until });
+  }
+
+  /** 2026-11-06 — the parcel's plan, asked at every hand-over (RoutePlanService registers it: it reads routing, above this). */
+  private routeKeeper?: RouteKeeper;
+
+  registerRouteKeeper(k: RouteKeeper): void {
+    this.routeKeeper = k;
+  }
+
+  /** Its plan was changed in place by its keeper: kept. */
+  notePlan(parcel: Parcel): void {
+    this.persist(parcel);
   }
 
   /** 2026-11-05 — the bag at a shop already filling for where this parcel goes next (BagPlanService registers it). */

@@ -1,4 +1,5 @@
 import { unsentPapersOf } from '../../shared/papers';
+import type { OffPlanReason } from './screens/OffPlanSheet';
 import type { InstructionsView } from '../../shared/instructions';
 import { onLaunch, type RunAsked } from '../../shared/launch';
 import { bookingNamed, openLinked, openLinkedLoad } from '../../shared/linkedLoad';
@@ -243,7 +244,7 @@ export interface AgentState {
    *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
    *  in the field, and what went in last (spoken back, so the counter never has to hunt the list). */
   /** `waitsFor` (2026-11-02): closed, and held at the counter for room at the hub it goes to — that hub's name. */
-  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null; fillPct: number; waitsFor?: string } | null;
+  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null; fillPct: number; waitsFor?: string; offPlan?: { parcelId: string; planned: string } } | null;
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
@@ -336,7 +337,7 @@ export interface AgentState {
    * The bus at the counter: the driver's pass, then the bus's list from the server, and the parcels scanned onto it
    * (`selected`, in the order they were scanned). `missed` is the server's answer when some on the list were not.
    */
-  handover: { badge: string; selected: string[]; missed: string[]; list: BusList | null; listState: 'idle' | 'loading' | 'ready'; scan: string; lastScanned: string | null };
+  handover: { badge: string; selected: string[]; missed: string[]; list: BusList | null; listState: 'idle' | 'loading' | 'ready'; scan: string; lastScanned: string | null; offPlan: Array<{ parcelId: string; planned: string }> };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string; handPhotoRef: string };
   /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
@@ -349,7 +350,7 @@ export interface AgentState {
   driverRating: { driverDid: string; profile: ReputationProfileView | null } | null;
 }
 
-const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[], list: null as BusList | null, listState: 'idle' as 'idle' | 'loading' | 'ready', scan: '', lastScanned: null as string | null };
+const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[], list: null as BusList | null, listState: 'idle' as 'idle' | 'loading' | 'ready', scan: '', lastScanned: null as string | null, offPlan: [] as Array<{ parcelId: string; planned: string }> };
 const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', stars: 0, photoRef: '' };
 const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '', handPhotoRef: '' };
 
@@ -2185,6 +2186,12 @@ export function useAgentApp() {
         const r = await client.api.fillBag(did, bag.code, parcelId);
         if (r.error) {
           signal('error');
+          // 2026-11-06 — its plan sends it elsewhere next: asked whether it goes in this bag all the same, and why.
+          if (r.error.code === 'OFF_PLAN') {
+            const planned = String(r.error.params?.plannedLabel ?? '');
+            setState((s) => (s.bag ? { ...s, error: null, bag: { ...s.bag, scan: '', offPlan: { parcelId, planned } } } : s));
+            return;
+          }
           return fail(r.error);
         }
         signal('ok');
@@ -2210,6 +2217,36 @@ export function useAgentApp() {
     },
     [client, did, run, fail],
   );
+
+  /** 2026-11-06 — into this bag all the same, the reason said and kept on the parcel. */
+  const addToBagOffPlan = useCallback(
+    async (reason: OffPlanReason, note?: string) => {
+      const bag = stateRef.current.bag;
+      if (!client || !did || !bag?.offPlan) return;
+      const parcelId = bag.offPlan.parcelId;
+      await run('bag-fill', async () => {
+        const r = await client.api.fillBag(did, bag.code, parcelId, { reason, ...(note ? { note } : {}) });
+        if (r.error) {
+          signal('error');
+          setState((s) => (s.bag ? { ...s, bag: { ...s.bag, offPlan: undefined } } : s));
+          return fail(r.error);
+        }
+        signal('ok');
+        const fillPct = narrow<{ fillPct?: number }>(r.data)?.fillPct;
+        setState((s) =>
+          s.bag
+            ? { ...s, bag: { ...s.bag, offPlan: undefined, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId), scan: '', lastAdded: parcelId, fillPct: typeof fillPct === 'number' ? fillPct : s.bag.fillPct } }
+            : s,
+        );
+      });
+    },
+    [client, did, run, fail],
+  );
+
+  /** …or kept out of it, for its own way. */
+  const keepBagOffPlan = useCallback(() => {
+    setState((s) => (s.bag ? { ...s, bag: { ...s.bag, offPlan: undefined } } : s));
+  }, []);
 
   /** What is typed/scanned into the bag's parcel field. */
   const setBagScan = useCallback((scan: string) => {
@@ -2352,7 +2389,9 @@ export function useAgentApp() {
       const left = v?.missed?.length ?? 0;
       // Round 38 — left at the counter because the rider carries the most a new rider may: said as that, not as missing.
       const capped = v?.rejected?.filter((x) => x.reason === 'custody_cap').length ?? 0;
-      setState((s) => ({ ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
+      // 2026-11-06 — left at the counter because their plan goes another way: the shop is asked, the driver still here.
+      const offPlan = (v?.rejected ?? []).filter((x) => x.reason === 'off_plan').map((x) => ({ parcelId: x.parcelId, planned: x.planned ?? '' }));
+      setState((s) => (offPlan.length ? { ...s, handover: { ...EMPTY_HANDOVER, badge: f.badge, list: s.handover.list, offPlan } } : { ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
       pushToast({
         tone: left ? 'warn' : 'ok',
         icon: 'truck',
@@ -2369,6 +2408,34 @@ export function useAgentApp() {
       if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this pickup
     });
   }, [client, did, run, fail, pushToast, refresh, loadShopParcels, openRateDriver]);
+
+  /** 2026-11-06 — handed onto this bus all the same, the reason said and kept on each parcel. */
+  const submitOffPlanHandover = useCallback(
+    async (reason: OffPlanReason, note?: string) => {
+      if (!client || !did) return;
+      const f = stateRef.current.handover;
+      if (!f.badge.trim() || !f.offPlan.length) return;
+      await run('handover', async () => {
+        const r = await client.api.handover(did, f.badge.trim().toUpperCase(), f.offPlan.map((x) => x.parcelId), { offPlanReason: reason, ...(note ? { offPlanNote: note } : {}) });
+        if (r.error) {
+          await loadShopParcels();
+          fail(r.error);
+          return;
+        }
+        buzz();
+        const v = narrow<HandoverView>(r.data);
+        setState((s) => ({ ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.toast.onBusTitle', { count: v?.handed?.length ?? f.offPlan.length }), detail: t('agent.offPlan.sentDetail') });
+        await refresh();
+      });
+    },
+    [client, did, run, fail, pushToast, refresh, loadShopParcels],
+  );
+
+  /** …or kept at the counter for their own way. */
+  const keepOffPlanHandover = useCallback(() => {
+    setState((s) => ({ ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
+  }, []);
 
   // `override` carries a freshly scanned value: a camera read sets state AND calls here in
   // the same tick, and stateRef has not caught up yet, so the scan passes its value in.
@@ -2757,9 +2824,13 @@ export function useAgentApp() {
       submitIntake,
       dismissIntakeDone,
       submitHandover,
+      submitOffPlanHandover,
+      keepOffPlanHandover,
       loadBagPlan,
       openBag,
       addToBag,
+      addToBagOffPlan,
+      keepBagOffPlan,
       setBagScan,
       submitBagScan,
       sealBag,

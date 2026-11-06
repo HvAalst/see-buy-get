@@ -137,6 +137,8 @@ export const ERROR_CODES = {
   SHELF_FULL: { status: 400, title: 'The shelf is full' },
   /** 2026-11-05 — pre-drop-off: no place left at that shop to hold for a new booking; the problem names shops with room. */
   SHOP_FULL: { status: 409, title: 'That shop has no place left for a new parcel' },
+  /** 2026-11-06 — movement unification: not the parcel's next stop by its plan; it goes that way only with a reason said. */
+  OFF_PLAN: { status: 409, title: 'That is not where it goes next by its plan' },
   NO_CAPACITY_AVAILABLE: { status: 400, title: 'No pick-up point with free capacity' },
 
   // --- 400 Bad Request: OTP + PIN --------------------------------------------------------------

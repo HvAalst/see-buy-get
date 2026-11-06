@@ -28,7 +28,7 @@ import { FREIGHT_REPORT_ONLY_NOTE } from './dispatch.service';
 import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
-import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
+import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf, planVsActual } from './parcel.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -47,6 +47,8 @@ import { ShelfService } from './shelf.service';
 import { DropOffHoldService } from './drop-off-hold.service';
 import { PickupAheadService } from './pickup-ahead.service';
 import { DropOffMoveService } from './drop-off-move.service';
+import { RoutePlanService } from './route-plan.service';
+import { JourneyPlanService } from './journey-plan.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -207,7 +209,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DropOffMoveService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DropOffMoveService, RoutePlanService, JourneyPlanService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
@@ -227,6 +229,8 @@ describe('PUDO Light', () => {
     entities.seed();
     presence = moduleRef.get(PresenceService);
     borders = moduleRef.get(BorderRuleService);
+    // 2026-11-06 — the plan made at take-in and asked at every hand-over: its listener started here, as compile() starts none.
+    moduleRef.get(JourneyPlanService).onModuleInit();
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
     bagPlans = moduleRef.get(BagPlanService);
@@ -1839,6 +1843,222 @@ describe('PUDO Light', () => {
       expect(parcels.get(sent.parcelId).status).toBe('At_PUDO');
       // The shop remitted the new price it took in cash (and was paid its take-in), not the old one.
       expect(funds - gate.canTransact(b.did).balance).toBeLessThanOrEqual(view.now);
+    });
+  });
+
+  /*
+   * 2026-11-06 — ONE PLAN PER PARCEL, ASKED AT EVERY HAND-OVER (movement unification; the owner: "build the whole thing").
+   * Where somebody decides its next step — the counter, a bag, the hub's sort — it must be the plan's, or go that way with a
+   * reason said; where it arrives, it is never refused: the plan moves on, or is made again from there, and that is kept.
+   */
+  describe('one plan per parcel, asked at every hand-over', () => {
+    let seq = 0;
+    const world = (tag: string, opts: { northHub?: boolean } = {}) => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent(`${tag} Shop`, N, 50);
+      const far = onboardAgent(`${tag} Far`, S, 50);
+      const northHub = opts.northHub ? mdps.register({ name: `${tag} North Sort`, zones: [N], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' }) : undefined;
+      const hub = mdps.register({ name: `${tag} South Sort`, zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      const take = (id: string) => parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const rider = () => {
+        const d = drivers.register({ displayName: `${tag} Rider`, fullName: `${tag} Rider`, nationalId: `DRV-MU-${seq}`, mobile: `+2549330${String(seq).padStart(4, '0')}`, licenceClasses: ['bike'] });
+        const bike = vehicles.register({ plate: `MU-${seq}`, vehicleClass: 'bike', ownerName: `${tag} Rider` });
+        fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+        return d;
+      };
+      const toHub = (code: string, at: string) => {
+        mdps.sealShopBag(code, shop.did, { closure: closedBy(shop.did) });
+        mdps.loadBag(code, `BUS-${tag}`);
+        mdps.dropBag(at, code, receivedAtHub(at));
+      };
+      return { N, S, shop, far, hub, northHub, corridor, take, rider, toHub };
+    };
+
+    it('is taken in with its plan, stop by stop: where it is, and where it goes next', () => {
+      const { shop, far, hub, take } = world('MU1');
+      take('MU1-A');
+      const plan = parcels.get('MU1-A').plan!;
+      expect(plan.at).toBe(0);
+      expect(plan.hops.map((h) => h.id)).toEqual([shop.did, hub.mdpId, far.did]);
+      expect(plan.offPlan).toBeUndefined();
+    });
+
+    it('is not handed loose onto a bus when its plan says a hub — unless the counter says why, which is kept', () => {
+      const { S, far, hub, shop, take, rider } = world('MU2');
+      take('MU2-A');
+      const d = rider();
+      const first = parcels.handover({ agentDid: shop.did, driverBadgeId: d.badgeId!, parcelIds: ['MU2-A'] });
+      expect(first.handed).toEqual([]);
+      expect(first.rejected).toEqual([{ parcelId: 'MU2-A', reason: 'off_plan', planned: hub.name }]);
+      // Not due onto that bus by its plan, so not left behind either.
+      expect(first.expected).toEqual([]);
+      expect(parcels.get('MU2-A').shortShippedAt).toBeUndefined();
+      const second = parcels.handover({ agentDid: shop.did, driverBadgeId: d.badgeId!, parcelIds: ['MU2-A'], offPlan: { reason: 'no_transport' } });
+      expect(second.handed).toEqual(['MU2-A']);
+      const left = parcels.get('MU2-A').plan!;
+      expect(left.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'no_transport', planned: hub.mdpId, took: S, by: shop.did })]);
+      expect(left.heading).toMatchObject({ to: S, reason: 'no_transport' });
+      // It arrives at its shop: the plan is made again from there, the step kept once, and the route read as not kept.
+      parcels.arrive('MU2-A', far.did);
+      const arrived = parcels.get('MU2-A');
+      expect(arrived.plan!.hops[arrived.plan!.at!].id).toBe(far.did);
+      expect(arrived.plan!.heading).toBeUndefined();
+      expect(arrived.plan!.offPlan).toHaveLength(1);
+      expect(planVsActual(arrived)).toMatchObject({ routeKept: false, offPlan: 1 });
+    });
+
+    it('goes into a bag for another place only with the reason said — the plan’s own bag takes it as before', () => {
+      const { shop, hub, S, take } = world('MU3');
+      take('MU3-A');
+      take('MU3-B');
+      const other = mdps.register({ name: 'MU3 Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
+      const wrong = mdps.openShopBag(shop.did, other.mdpId);
+      let refusal: any;
+      try {
+        mdps.fillShopBag(wrong.code, shop.did, 'MU3-A');
+      } catch (err) {
+        refusal = err;
+      }
+      expect(refusal?.code).toBe('OFF_PLAN');
+      expect(refusal.message).toMatch(/goes to MU3 South Sort next by its plan, not MU3 Other Sort/);
+      expect(totes.requireByCode(wrong.code).parcels).toEqual([]);
+      mdps.fillShopBag(wrong.code, shop.did, 'MU3-A', undefined, { reason: 'faster' });
+      expect(parcels.get('MU3-A').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'faster', planned: hub.mdpId, took: other.mdpId })]);
+      // The plan's own bag: in it goes, nothing said, nothing kept.
+      const right = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(right.code, shop.did, 'MU3-B');
+      expect(parcels.get('MU3-B').plan!.offPlan).toBeUndefined();
+    });
+
+    it('dropped at a hub it was not planned to reach: taken in all the same, kept, and planned on from there', () => {
+      const { shop, far, hub, S, take, toHub } = world('MU4');
+      take('MU4-A');
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU4-A');
+      const other = mdps.register({ name: 'MU4 Other Sort', zones: [S], location: { lat: -1.26, lng: 36.86 } }, { approvedBy: 'staff' });
+      toHub(bag.code, other.mdpId);
+      const p = parcels.get('MU4-A');
+      expect(p.status).toBe('At_MDP');
+      expect(p.plan!.offPlan).toEqual([expect.objectContaining({ kind: 'arrival', reason: 'arrived_elsewhere', planned: hub.mdpId, took: other.mdpId })]);
+      expect(p.plan!.hops[p.plan!.at!].id).toBe(other.mdpId);
+      // Sorted where it is: on to its shop, by the plan made again.
+      expect(mdps.sortParcel(other.mdpId, 'MU4-A').nextDestination.id).toBe(far.did);
+    });
+
+    it('is sorted on by its plan; a stop no longer to be used is replaced by the hub’s choice, with why', () => {
+      const { shop, far, hub, northHub, take, toHub } = world('MU5', { northHub: true });
+      take('MU5-A');
+      take('MU5-B');
+      expect(parcels.get('MU5-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, northHub!.mdpId, hub.mdpId, far.did]);
+      const bag = mdps.openShopBag(shop.did, northHub!.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU5-A');
+      mdps.fillShopBag(bag.code, shop.did, 'MU5-B');
+      toHub(bag.code, northHub!.mdpId);
+      expect(parcels.get('MU5-A').plan!.at).toBe(1);
+      expect(mdps.sortParcel(northHub!.mdpId, 'MU5-A').nextDestination.id).toBe(hub.mdpId);
+      expect(parcels.get('MU5-A').plan!.offPlan).toBeUndefined();
+      // A next stop that can no longer be used (here, one that no longer exists): the hub chooses, and it is kept with why.
+      const b = parcels.get('MU5-B');
+      b.plan!.hops[2] = { type: 'mdp', id: 'mdp_gone', label: 'Gone Sort', zone: b.destZone };
+      expect(mdps.sortParcel(northHub!.mdpId, 'MU5-B').nextDestination.id).toBe(hub.mdpId);
+      expect(parcels.get('MU5-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'network_changed', planned: 'mdp_gone', took: hub.mdpId })]);
+    });
+
+    it('a bag sent on to another hub for room takes its parcels’ plans with it, and why', () => {
+      const shop = onboardAgent('MU6 Shop', 'MU6North', 50);
+      const far = onboardAgent('MU6 Far', 'MU6South', 50);
+      const near = mdps.register({ name: 'MU6 North Sort', zones: ['MU6North'], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      const away = mdps.register({ name: 'MU6 South Sort', zones: ['MU6South'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU6-A', size: 'S', destZone: 'MU6South', destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = totes.register(shop.did);
+      mdps.assignTote(bag.code, near.mdpId, near.name);
+      mdps.fillShopBag(bag.code, shop.did, 'MU6-A');
+      mdps.setSpace(near.mdpId, { bagPlaces: 1, sortPerDay: 50 });
+      mdps.assignTote(mdps.registerTote(near.mdpId).code, 'Elsewhere', 'Elsewhere');
+      dispatch.release(bag.code);
+      const p = parcels.get('MU6-A');
+      expect(p.plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'room', planned: near.mdpId, took: away.mdpId })]);
+      expect(p.plan!.hops.map((h) => h.id)).toEqual([shop.did, away.mdpId, far.did]);
+    });
+
+    it('follows its plan where the hub’s own rule would send it elsewhere', () => {
+      // The south hub joined first, then a north hub serving both areas: the plan goes north hub → south hub → shop, while
+      // the north hub's own rule (it serves the shop's area) would send it straight to the shop. The plan is followed.
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU8 Shop', N, 50);
+      const far = onboardAgent('MU8 Far', S, 50);
+      const south = mdps.register({ name: 'MU8 South Sort', zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      const north = mdps.register({ name: 'MU8 North Sort', zones: [N, S], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU8-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      expect(parcels.get('MU8-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, north.mdpId, south.mdpId, far.did]);
+      const bag = mdps.openShopBag(shop.did, north.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU8-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, 'BUS-MU8');
+      mdps.dropBag(north.mdpId, bag.code, receivedAtHub(north.mdpId));
+      expect(mdps.sortParcel(north.mdpId, 'MU8-A').nextDestination.id).toBe(south.mdpId);
+      expect(parcels.get('MU8-A').plan!.offPlan).toBeUndefined();
+    });
+
+    it('is not on a bus’s list while it is in a bag — it goes with its bag', () => {
+      // No hub on its way: its plan goes straight to its shop, so a bus there would take it loose — not once it is bagged.
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU9 Shop', N, 50);
+      const far = onboardAgent('MU9 Far', S, 50);
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      for (const id of ['MU9-LOOSE', 'MU9-BAGGED']) parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = mdps.openShopBag(shop.did, S);
+      mdps.fillShopBag(bag.code, shop.did, 'MU9-BAGGED');
+      const d = drivers.register({ displayName: 'MU9 Rider', fullName: 'MU9 Rider', nationalId: `DRV-MU-${seq}`, mobile: `+2549330${String(seq).padStart(4, '0')}`, licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: `MU-${seq}`, vehicleClass: 'bike', ownerName: 'MU9 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      expect(parcels.handoverManifest(shop.did, d.badgeId!).parcels.map((x) => x.parcelId)).toEqual(['MU9-LOOSE']);
+    });
+
+    it('says so where it was priced on another route than the one it is planned on when it is taken in', () => {
+      // Priced when no hub served either area: straight to its shop. A hub for the far area joins before it is handed in, so
+      // it is planned through the hub. The price stands; the difference is kept on the plan.
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU10 Shop', N, 50);
+      const far = onboardAgent('MU10 Far', S, 50);
+      corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      const vendor = vendors.register({ name: 'MU10 Store', callbackUrl: 'https://mu.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 500);
+      const order = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'MU10-1', originAgentDid: shop.did, destAgentDid: far.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, far.did, 'S') }).parcel;
+      const priced = order.stopFees?.map((f) => f.id);
+      const hub = mdps.register({ name: 'MU10 South Sort', zones: [S], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      parcels.intakeInbound(order.parcelId, shop.did);
+      const plan = parcels.get(order.parcelId).plan!;
+      expect(plan.hops.map((h) => h.id)).toEqual([shop.did, hub.mdpId, far.did]);
+      expect(plan.pricedVia).toEqual(priced);
+      expect(plan.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'priced_other_way' })]);
+      // A price made on another route is not a step it took: nothing about how it moves.
+      expect(parcels.get(order.parcelId).shipmentCost).toBe(order.shipmentCost);
+    });
+
+    it('reads a route kept as kept — a hub is held under its name and planned under its id — and the lanes count the steps off it', () => {
+      const { shop, far, hub, take, toHub } = world('MU7');
+      take('MU7-A');
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      mdps.fillShopBag(bag.code, shop.did, 'MU7-A');
+      toHub(bag.code, hub.mdpId);
+      const sorted = mdps.sortParcel(hub.mdpId, 'MU7-A');
+      closeForTest(sorted.toteCode);
+      mdps.loadBag(sorted.toteCode, 'BUS-MU7-OUT');
+      mdps.deliverBag(far.did, sorted.toteCode, receivedAt(far.did));
+      const kept = parcels.get('MU7-A');
+      expect(kept.plan!.hops[kept.plan!.at!].id).toBe(far.did);
+      expect(planVsActual(kept)).toMatchObject({ routeKept: true });
+      expect(planVsActual(kept)?.offPlan).toBeUndefined();
     });
   });
 
@@ -11561,7 +11781,9 @@ describe('PUDO Light', () => {
         const bag = totes.register(origin.did);
         totes.assign(bag.code, hub.mdpId, hub.name);
         parcels.intakeInbound(parcel.parcelId, origin.did);
-        mdps.fillTote(bag.code, parcel.parcelId);
+        // 2026-11-06 — this test's hub, which the plan may not choose among the hubs earlier tests left serving these areas:
+        // sent there on purpose, with the reason said (movement unification).
+        mdps.fillTote(bag.code, parcel.parcelId, undefined, { reason: 'other', note: 'sent to this hub by the test' });
         closeForTest(bag.code);
         mdps.loadBag(bag.code, `BUS-${tag}`);
         mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
@@ -11933,7 +12155,7 @@ describe('PUDO Light', () => {
         parcels.intakeConsumerSend(parcel.parcelId, origin.did, photoBy(origin.did));
         const bag = totes.register(origin.did);
         totes.assign(bag.code, hub.mdpId, hub.name);
-        mdps.fillTote(bag.code, parcel.parcelId);
+        mdps.fillTote(bag.code, parcel.parcelId, undefined, { reason: 'other', note: 'sent to this hub by the test' }); // 2026-11-06 — on purpose, said
         closeForTest(bag.code);
         mdps.loadBag(bag.code, `BUS-${tag}`);
         mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));

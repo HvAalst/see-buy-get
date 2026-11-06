@@ -2,6 +2,7 @@
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
+import type { OffPlanReason, OffPlanStep } from './route-plan.types';
 import { FxRate } from '../../foundation/money/fx.service';
 import { BorderCrossing } from './country';
 import { UnitHold } from './tamper.types';
@@ -392,6 +393,19 @@ export interface JourneyPlan {
   mdpRouted: boolean;
   pickupReadyAt: string;
   plannedAt: string;
+  /**
+   * 2026-11-06 — MOVEMENT UNIFICATION: which of the hops it last reached (0, where it was taken in). Every hand-over asks
+   * the plan for its next stop from here. A plan made before plans were kept stop by stop has none, and is not asked.
+   */
+  at?: number;
+  /** Sent another way on purpose, with the reason said: where it is heading until it arrives there. */
+  heading?: { to: string; label: string; reason: OffPlanReason; note?: string };
+  /** Every step it took that the plan did not say, oldest first (see OffPlanStep). */
+  offPlan?: OffPlanStep[];
+  /** The stops it was priced on, where they are not the ones it was planned on when it was taken in. */
+  pricedVia?: string[];
+  /** When it should be ready by the plan as made again. The promise (pickupReadyAt) is never moved. */
+  expectedAt?: string;
 }
 
 export class CustodyLeg {

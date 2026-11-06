@@ -350,7 +350,7 @@ export interface HandoverView {
   /** REP2 — the fleet driver who took the batch, so the shop can rate them for this leg (absent for a legacy driver). */
   driverDid?: string;
   /** Each parcel scanned and not taken, with why: the vehicle, the cargo — round 38, `custody_cap`, the rider's cap. */
-  rejected?: Array<{ parcelId: string; reason: string }>;
+  rejected?: Array<{ parcelId: string; reason: string; planned?: string }>;
 }
 
 export interface CollectView {

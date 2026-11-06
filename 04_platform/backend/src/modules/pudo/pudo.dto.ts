@@ -7,6 +7,7 @@ import { MAX_SEALS, SEALS_AT_DELIVERY, SealReadDto, type SealsAtDelivery } from 
 import { DESTINATION_KINDS } from './destination.types';
 import { BAG_PLACES_MAX, BAG_PLACES_MIN, SORT_PER_DAY_MAX, SORT_PER_DAY_MIN } from './hub-space';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
+import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
@@ -252,6 +253,9 @@ export class HandoverManifestDto {
 
 export class HandoverDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
+  /** 2026-11-06 — why parcels whose plan goes another way are handed onto this bus all the same (movement unification). */
+  @IsOptional() @IsIn([...HUMAN_OFF_PLAN_REASONS]) offPlanReason?: HumanOffPlanReason;
+  @IsOptional() @IsString() @MaxLength(100) offPlanNote?: string;
   @IsString() driverBadgeId!: string;
   @IsString({ each: true }) parcelIds!: string[];
   // S25 completeness gate: a short load is refused unless the agent knowingly leaves parcels behind.
@@ -1636,6 +1640,9 @@ export class AssignToteDto {
 
 export class FillToteDto {
   @IsString() parcelId!: string;
+  /** 2026-11-06 — why it goes in this bag when its plan sends it elsewhere (movement unification). */
+  @IsOptional() @IsIn([...HUMAN_OFF_PLAN_REASONS]) offPlanReason?: HumanOffPlanReason;
+  @IsOptional() @IsString() @MaxLength(100) offPlanNote?: string;
   /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
 }

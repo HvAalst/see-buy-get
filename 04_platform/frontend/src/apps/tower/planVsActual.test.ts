@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { laneWords, planFoldHint, type PlanLane } from './planVsActual';
+import { laneWords, offPlanWords, planFoldHint, type PlanLane } from './planVsActual';
 
 const lane = (over: Partial<PlanLane> = {}): PlanLane => ({ from: 'CBD', to: 'Kisumu', arrived: 3, onTime: 1, late: 2, typicalLateHours: 6.5, routeKnown: 3, routeKept: 2, worst: { parcelId: 'P-9', lateHours: 10 }, ...over });
 
@@ -20,5 +20,18 @@ describe('a lane against its plans, as the console says it', () => {
     expect(planFoldHint([lane({ late: 0 })], t)).toBe('Every lane on time');
     expect(planFoldHint([], t)).toBe('Nothing to read yet');
     expect(planFoldHint(null, t)).toBe('Reading the lanes…');
+  });
+});
+
+/* 2026-11-06 — MOVEMENT UNIFICATION: a lane says how many of its parcels went another way than their plan, and why. */
+describe('the steps a lane’s parcels took off their plans', () => {
+  it('says nothing where none did', () => {
+    expect(offPlanWords({ offPlan: 0, offPlanReasons: {} }, t)).toBe('');
+    expect(offPlanWords({}, t)).toBe('');
+  });
+
+  it('counts them, the commonest reason first, each in words', () => {
+    const said = offPlanWords({ offPlan: 3, offPlanReasons: { arrived_elsewhere: 1, no_transport: 2 } }, t);
+    expect(said).toBe(t('tower.plan.offPlan', { count: 3, why: `${t('tower.plan.why.noTransport')} (2), ${t('tower.plan.why.arrivedElsewhere')} (1)` }));
   });
 });

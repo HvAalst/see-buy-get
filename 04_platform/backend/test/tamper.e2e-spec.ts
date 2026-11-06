@@ -238,7 +238,9 @@ describe('the tamper protocol, over the wire', () => {
     const corridor = (await http().post('/v1/sbg/corridors').set(operator).send({ name: `TmpNorth → TmpSouth ${tag}`, originZone: `TmpNorth${tag}`, destZone: `TmpSouth${tag}` }).expect(201)).body;
     const bus = (await http().post('/v1/sbg/drivers').set(operator).send({ driverDid: `did:glos:tmpbus${tag}`, name: 'Odhiambo', corridorId: corridor.corridorId }).expect(201)).body;
     const manifest = (await http().post('/v1/sbg/parcels/handover/manifest').set(north.token).send({ driverBadgeId: bus.badgeId }).expect(201)).body as { parcels: Array<{ parcelId: string }> };
-    expect(manifest.parcels.map((p) => p.parcelId)).toEqual([two.parcelId]);
+    // 2026-11-06 — and not the one beside it either: its plan goes through the hub, so it is not due loose onto a bus
+    // (movement unification). The one set apart is still refused at the counter by what it is — held — below.
+    expect(manifest.parcels.map((p) => p.parcelId)).toEqual([]);
     const handed = (await http().post('/v1/sbg/parcels/handover').set(north.token).send({ driverBadgeId: bus.badgeId, parcelIds: [one.parcelId], acknowledgeShortShip: true, shortShipReason: 'Next bus' }).expect(201)).body;
     expect(handed.rejected).toEqual([{ parcelId: one.parcelId, reason: 'held' }]);
     expect(handed.handed).toEqual([]);
