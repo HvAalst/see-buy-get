@@ -57,7 +57,8 @@ describe('a seal on a load (round 15)', () => {
     // The driver's app: which seal to find and what it is — never its number; a fingerprint to check a reading against.
     const [find] = svc.toFind(f.freightId);
     expect(find).toEqual({ sealId: seal.sealId, no: 1, sealClass: 'H', maker: 'Leghorn', appliedBy: 'sender', state: 'on', check: sealCheck(f.freightId, 'KE1234567') });
-    expect(JSON.stringify(find)).not.toContain('1234');
+    // Read without the long random runs (its id, its fingerprint), which may hold any digits by chance.
+    expect(JSON.stringify(find).replace(/[0-9a-f]{12,}/gi, '#')).not.toContain('1234');
     // The fingerprint the phone checks a reading against — the same value the driver app's own test pins (shared/seals).
     expect(sealCheck('frt_1', 'KE1234567')).toBe('41f5b3d6143aa2cf96c45494677275519c5a9341b92e5e63ecc2bf9dd822af5c');
     // Taken off again before pickup; not after.

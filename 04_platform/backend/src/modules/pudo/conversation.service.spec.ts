@@ -136,7 +136,8 @@ describe('conversations about a load', () => {
     const { conversationId } = service.open('fr_1', 'did:drv:amos');
     service.send(conversationId, 'did:drv:amos', { body: 'my number is 0712 000 000' });
     expect(notify).toHaveBeenCalledWith('did:shop', expect.objectContaining({ kind: 'message', title: 'New message about FR-001' }));
-    expect(JSON.stringify(notify.mock.calls)).not.toMatch(/0712/);
+    // Read without the long random runs (ids), which may hold any digits by chance.
+    expect(JSON.stringify(notify.mock.calls).replace(/[0-9a-f]{12,}/gi, '#')).not.toMatch(/0712/);
   });
 
   it('points the message notice at its own chat — a query on the app root, as every deep link (2026-11-02: Reply in the bell)', () => {
