@@ -9,6 +9,7 @@ import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import type { Agent, GeoPoint, Mdp } from './pudo.types';
 import { AreaFileProblem, AreaIndex, boxOf, decodePolygon, encodePolygon, measure, parseAreaFile, type Shape } from './zone-geometry';
+import { proposalFor } from './zone-proposals';
 import type { PlaceZone, StoredArea, StoredAreaSet, StoredZone, StoredZoneMap, StoredZoneSetup, ZoneAreaSetView, ZoneGroup, ZoneMapSummary, ZoneMapView, ZoneSetupView, ZoneShapesView, ZoneView } from './zone-map.types';
 
 /** What every country starts from: three groups, in plain English, for the country to rename in its own words. */
@@ -61,9 +62,11 @@ export class ZoneMapService {
     const inForce = this.inForceOf(s, now);
     const draft = s.maps.find((m) => m.status === 'draft');
     const published = s.maps.filter((m) => m.status === 'published');
+    const proposal = proposalFor(s.country);
     return {
       entityId,
       country: s.country,
+      ...(proposal ? { proposal: { label: proposal.label, source: proposal.source, licence: proposal.licence, attribution: proposal.attribution, level: proposal.level, areas: proposal.areas.length, zones: proposal.zones.length } } : {}),
       groups: s.groups,
       ...(inForce ? { inForce: this.mapView(s, inForce, now, true) } : {}),
       scheduled: published.filter((m) => this.statusOf(s, m, now) === 'scheduled').map((m) => this.mapView(s, m, now, false)),
@@ -160,6 +163,46 @@ export class ZoneMapService {
     this.areaSets.set(this.setKey(entityId, setId), set);
     this.save({ ...s, maps: [...s.maps, draft] });
     this.note(entityId, by, this.inForceLine(s, now), `draft ${draft.version}: ${areas.length} ${set.level} from ${source}, one zone each`);
+    return this.setup(entityId, now);
+  }
+
+  /**
+   * A draft from the first map proposed for this company's country (zone-proposals), where there is one: its areas, its
+   * zones and each zone's proposed group with the evidence for it. A proposed group the company no longer has starts in
+   * the middle group. Refused while a draft is open, and for a country with no proposal: one country's map is never
+   * offered to another.
+   */
+  startFromProposal(entityId: string, by: string, now: number = Date.now()): ZoneSetupView {
+    const company = this.company(entityId);
+    const s = this.stored(company);
+    const proposal = proposalFor(s.country);
+    if (!proposal || proposal.country !== s.country) throw new GlosError('NOT_FOUND', `No map is proposed for ${company.name}`);
+    if (s.maps.some((m) => m.status === 'draft')) throw new GlosError('INVALID_STATE', 'A draft is open: publish it or throw it away before starting from the proposed map');
+    const setId = `${new Date(now).toISOString().slice(0, 10)}-proposal-${randomBytes(2).toString('hex')}`;
+    const areas: StoredArea[] = proposal.areas.map((a, i) => {
+      const shape = a.polygons.map(decodePolygon);
+      const { areaKm2, centre } = measure(shape);
+      return { id: String(i + 1), name: a.name, box: boxOf(shape), polygons: a.polygons, areaKm2, centre };
+    });
+    const set: StoredAreaSet = { entityId, setId, country: s.country, source: proposal.source, licence: proposal.licence, attribution: proposal.attribution, level: proposal.level, importedAt: new Date(now).toISOString(), importedBy: by, areas };
+    const middle = this.middleGroup(s);
+    const draft: StoredZoneMap = {
+      version: this.nextVersion(s),
+      status: 'draft',
+      setId,
+      zones: proposal.zones.map((z) => ({
+        code: this.newCode(s),
+        name: z.name,
+        group: s.groups.some((g) => g.key === z.group) ? z.group : middle,
+        areas: z.areas.map((i) => String(i + 1)),
+        ...(z.evidence.length ? { evidence: [...z.evidence] } : {}),
+      })),
+      createdAt: new Date(now).toISOString(),
+      createdBy: by,
+    };
+    this.areaSets.set(this.setKey(entityId, setId), set);
+    this.save({ ...s, maps: [...s.maps, draft] });
+    this.note(entityId, by, this.inForceLine(s, now), `draft ${draft.version}: the proposed map (${areas.length} ${set.level}, ${draft.zones.length} zones)`);
     return this.setup(entityId, now);
   }
 

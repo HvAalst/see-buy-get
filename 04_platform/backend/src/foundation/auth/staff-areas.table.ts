@@ -755,6 +755,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/entities/:entityId/record/declare': 'none',
   'POST sbg/entities/:entityId/seal-rules': 'admin',
   'POST sbg/entities/:entityId/zones/areas': 'admin',
+  'POST sbg/entities/:entityId/zones/proposal': 'admin',
   'POST sbg/entities/:entityId/zones/groups': 'admin',
   'POST sbg/entities/:entityId/zones/draft': 'admin',
   'DELETE sbg/entities/:entityId/zones/draft': 'admin',

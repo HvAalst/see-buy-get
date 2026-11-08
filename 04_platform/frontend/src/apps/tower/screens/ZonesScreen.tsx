@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { UPLOAD_LIMITS, limitWords, sizeWords, uploadHint } from '../../../shared/upload';
 import { ConsolePick } from '../ConsolePick';
 import { ConsoleFold } from '../ConsoleFold';
 import { holds } from '../staffRoles';
@@ -238,6 +239,19 @@ export function ZonesScreen({ state, actions }: { state: TowerState; actions: To
             ) : null}
           </ConsoleFold>
 
+          {writer && setup.proposal && !setup.draft ? (
+            <section class="cons__panel twr-zonechosen">
+              <p class="twr-clear__t">{t('tower.zones.proposal.title')}</p>
+              <p class="chint">{t('tower.zones.proposal.lede', { label: setup.proposal.label, areas: setup.proposal.areas, zones: setup.proposal.zones })}</p>
+              <p class="chint">{t('tower.zones.proposal.credit', { source: setup.proposal.source, credit: setup.proposal.attribution, licence: setup.proposal.licence })}</p>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy !== null} onClick={() => client && run('proposal', () => client.api.startZoneProposal(entityId), t('tower.zones.proposal.started'), { shapes: true })}>
+                  {t('tower.zones.proposal.start')}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           {writer ? <ImportFold setup={setup} busy={busy === 'import'} onSend={(form) => client && run('import', () => client.api.importZoneAreas(entityId, { geojson: form.text, source: form.source.trim(), licence: form.licence.trim(), attribution: form.attribution.trim(), ...(form.level.trim() ? { level: form.level.trim() } : {}), ...(form.nameField.trim() ? { nameField: form.nameField.trim() } : {}) }), t('tower.zones.import.sent'), { shapes: true })} /> : null}
 
           <VersionsFold setup={setup} />
@@ -459,9 +473,17 @@ function ImportFold({ setup, busy, onSend }: { setup: ZoneSetup; busy: boolean; 
   const [tried, setTried] = useState(false);
   const problem = areaFormProblem(form);
   const set = (k: keyof AreaForm) => (e: Event) => setForm({ ...form, [k]: (e.target as HTMLInputElement).value });
+  const [tooBig, setTooBig] = useState<string | null>(null);
   const readFile = async (e: Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    // Its size said and checked here, before it is read or sent (the owner: "if we put a filesize limit, it needs to show or tell").
+    if (file.size > UPLOAD_LIMITS.zoneAreasText) {
+      setTooBig(t('tower.zones.import.tooLargeSized', { size: sizeWords(file.size), limit: limitWords(UPLOAD_LIMITS.zoneAreasText) }));
+      setForm({ ...form, text: '', fileName: '' });
+      return;
+    }
+    setTooBig(null);
     setForm({ ...form, text: await file.text(), fileName: file.name });
   };
   return (
@@ -470,8 +492,10 @@ function ImportFold({ setup, busy, onSend }: { setup: ZoneSetup; busy: boolean; 
       <fieldset class="twr-knobs" disabled={Boolean(setup.draft) || busy}>
         <label class="cfield">
           <span class="cfield__label">{t('tower.zones.import.file')}</span>
-          <input id="zone-areas-file" class="cinput" type="file" accept=".geojson,.json,application/geo+json,application/json" onChange={(e) => void readFile(e)} />
+          <input id="zone-areas-file" class="cinput" type="file" data-upload="sheet" accept=".geojson,.json,application/geo+json,application/json" onChange={(e) => void readFile(e)} />
+          <span class="chint">{uploadHint('boundary', UPLOAD_LIMITS.zoneAreasText)}</span>
           {form.fileName ? <span class="chint">{t('tower.zones.import.size', { name: form.fileName, kb: Math.ceil(form.text.length / 1024).toLocaleString() })}</span> : null}
+          {tooBig ? <span class="cerr">{tooBig}</span> : null}
         </label>
         <label class="cfield">
           <span class="cfield__label">{t('tower.zones.import.source')}</span>

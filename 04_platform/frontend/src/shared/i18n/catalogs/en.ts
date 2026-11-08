@@ -704,6 +704,7 @@ export const en = {
   'upload.hint.document': 'A PDF or a photo, up to {limit}. A photo is made smaller before it is sent, if it needs to be.',
   'upload.hint.evidence': 'A screenshot or a photo: it is made smaller before it is sent.',
   'upload.hint.sheet': 'A spreadsheet, up to {limit}.',
+  'upload.hint.boundary': 'A GeoJSON file of areas, up to {limit}.',
   'photo.uploading': 'Sending the photo…',
   'photo.saved': 'Photo saved — tap to retake',
   'photo.failed': 'The photo did not go — tap to try again',

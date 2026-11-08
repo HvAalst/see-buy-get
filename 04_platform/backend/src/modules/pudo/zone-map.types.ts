@@ -145,9 +145,23 @@ export class ZoneMapSummary {
   zones: number;
 }
 
+/** A first map proposed for this country, where there is one (zone-proposals): what it is, where it came from, how many. */
+export class ZoneProposalView {
+  label: string;
+  source: string;
+  licence: string;
+  attribution: string;
+  level: string;
+  areas: number;
+  zones: number;
+}
+
 export class ZoneSetupView {
   entityId: string;
   country: string;
+  /** Offered to this country's company only, and only where its country has one. */
+  @ApiPropertyOptional({ type: ZoneProposalView })
+  proposal?: ZoneProposalView;
   @ApiProperty({ type: [ZoneGroup] })
   groups: ZoneGroup[];
   /** The map in force now. */

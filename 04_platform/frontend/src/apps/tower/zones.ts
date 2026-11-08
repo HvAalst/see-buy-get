@@ -57,9 +57,21 @@ export interface ZoneVersion {
   zones: number;
 }
 
+/** A first map proposed for this country, where there is one — only ever its own. */
+export interface ZoneProposal {
+  label: string;
+  source: string;
+  licence: string;
+  attribution: string;
+  level: string;
+  areas: number;
+  zones: number;
+}
+
 export interface ZoneSetup {
   entityId: string;
   country: string;
+  proposal?: ZoneProposal;
   groups: ZoneGroup[];
   inForce?: ZoneMap;
   scheduled: ZoneMap[];

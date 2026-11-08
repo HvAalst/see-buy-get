@@ -13732,6 +13732,35 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/zones/proposal": {
+      "post": {
+        "operationId": "Sbg.startEntityZoneProposal",
+        "summary": "",
+        "description": "A draft from the first map proposed for this country, where there is one (Kenya's, for Kenya's company alone).",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/zones/groups": {
       "post": {
         "operationId": "Sbg.setEntityZoneGroups",
@@ -57729,6 +57758,41 @@
           }
         }
       },
+      "ZoneProposalView": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          },
+          "attribution": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "areas": {
+            "type": "number"
+          },
+          "zones": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "source",
+          "licence",
+          "attribution",
+          "level",
+          "areas",
+          "zones"
+        ]
+      },
       "ZoneGroup": {
         "type": "object",
         "properties": {
@@ -57935,6 +57999,14 @@
       "ZoneSetupView": {
         "type": "object",
         "properties": {
+          "proposal": {
+            "description": "Offered to this country's company only, and only where its country has one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZoneProposalView"
+              }
+            ]
+          },
           "groups": {
             "type": "array",
             "items": {

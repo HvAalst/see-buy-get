@@ -215,3 +215,49 @@ describe('a country’s zones (zone pricing, step 1)', () => {
     expect(decodePolygon(nw.polygons[0])).toEqual([square(36.7, -1.2).map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5])]);
   });
 });
+
+describe('the first map proposed for a country — Kenya’s, for Kenya’s company alone (2026-11-08)', () => {
+  let zones: ZoneMapService;
+  const none = { list: () => [], countryOf: () => 'KE' };
+
+  beforeEach(async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [EntityService, DidService, LedgerService, EventBus, { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter }],
+    }).compile();
+    const entities = moduleRef.get(EntityService);
+    entities.seed();
+    zones = new ZoneMapService(entities, none as never, none as never);
+  });
+
+  it('is offered to Kenya’s company, and to no other country’s', () => {
+    const ke = zones.setup('sbg-ke').proposal!;
+    expect(ke).toMatchObject({ level: 'wards', areas: 1452 });
+    expect(ke.zones).toBeGreaterThan(250);
+    expect(ke.attribution).toMatch(/geoBoundaries/);
+    expect(zones.setup('sbg-et').proposal).toBeUndefined();
+    expect(() => zones.startFromProposal('sbg-et', 'N')).toThrow(/No map is proposed for SeeBuyGet Ethiopia/);
+  });
+
+  it('opens as a draft: every ward in one zone, each zone with its proposed group and the evidence for it; published, pins find their zones', () => {
+    const s = zones.startFromProposal('sbg-ke', 'Njeri W.');
+    const draft = s.draft!;
+    expect(draft.areas).toMatchObject({ count: 1452, level: 'wards', importedBy: 'Njeri W.' });
+    expect(draft.zones.reduce((n, z) => n + z.areas, 0)).toBe(1452);
+    expect(draft.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
+    zones.publish('sbg-ke', undefined, 'Njeri W.');
+    expect(zones.zoneAt('KE', { lat: -1.2864, lng: 36.8172 })).toMatchObject({ name: 'Nairobi', group: 'urban' });
+    expect(zones.zoneAt('KE', { lat: -4.0435, lng: 39.6682 })).toMatchObject({ name: 'Mombasa', group: 'urban' });
+    expect(zones.zoneAt('KE', { lat: -1.0333, lng: 37.0693 })).toMatchObject({ name: 'Thika', group: 'urban' });
+    expect(zones.zoneAt('KE', { lat: 3.1191, lng: 35.5973 })).toMatchObject({ name: 'Turkana Central', group: 'remote' });
+    // Still Kenya's alone: an Ethiopian pin finds nothing, even where Kenya keeps a zone.
+    expect(zones.zoneAt('ET', { lat: -1.2864, lng: 36.8172 })).toBeUndefined();
+  });
+
+  it('a proposed group the company has taken away starts in its middle group; refused over an open draft', () => {
+    zones.setGroups('sbg-ke', [{ key: 'urban', name: 'Urban' }, { key: 'rural', name: 'Rural' }], 'N');
+    const s = zones.startFromProposal('sbg-ke', 'N');
+    expect(s.draft!.zones.some((z) => z.group === 'remote')).toBe(false);
+    expect(s.draft!.zones.find((z) => z.name === 'Turkana Central')!.group).toBe('rural');
+    expect(() => zones.startFromProposal('sbg-ke', 'N')).toThrow(/A draft is open/);
+  });
+});

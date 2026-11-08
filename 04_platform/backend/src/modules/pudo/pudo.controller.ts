@@ -2966,6 +2966,14 @@ export class SbgController {
     return this.zonesOf().importAreas(entityId, dto, auditActor(actor));
   }
 
+  /** A draft from the first map proposed for this country, where there is one (Kenya's, for Kenya's company alone). */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/proposal')
+  startEntityZoneProposal(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().startFromProposal(entityId, auditActor(actor));
+  }
+
   /** The country's price groups, the whole list in its order. */
   @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/zones/groups')

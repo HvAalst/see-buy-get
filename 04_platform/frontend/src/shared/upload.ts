@@ -77,8 +77,10 @@ export function limitWords(maxBytes: number): string {
 }
 
 /** The hint beside a picker, said before a file is chosen: what it may be, and up to how large. */
-export function uploadHint(kind: 'document' | 'sheet' | 'photo' | 'evidence', maxBytes?: number): string {
+export function uploadHint(kind: 'document' | 'sheet' | 'photo' | 'evidence' | 'boundary', maxBytes?: number): string {
   if (kind === 'photo') return t('upload.hint.photo');
+  // 2026-11-08 — a country's official areas as a boundary file, for its zones: its own words, never a spreadsheet's.
+  if (kind === 'boundary') return t('upload.hint.boundary', { limit: limitWords(maxBytes ?? UPLOAD_LIMITS.zoneAreasText) });
   if (kind === 'evidence') return t('upload.hint.evidence');
   if (kind === 'sheet') return t('upload.hint.sheet', { limit: limitWords(maxBytes ?? UPLOAD_LIMITS.workbook) });
   return t('upload.hint.document', { limit: limitWords(maxBytes ?? UPLOAD_LIMITS.document) });

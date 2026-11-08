@@ -157,6 +157,7 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/zones/shapes', { params: { path: { entityId }, query: version ? { version: String(version) } : {} } })),
     importZoneAreas: (entityId: string, body: { geojson: string; source: string; licence: string; attribution: string; level?: string; nameField?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/areas', { params: { path: { entityId } }, body })),
+    startZoneProposal: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/proposal', { params: { path: { entityId } } })),
     setZoneGroups: (entityId: string, groups: Array<{ key?: string; name: string }>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/groups', { params: { path: { entityId } }, body: { groups } })),
     startZoneDraft: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
