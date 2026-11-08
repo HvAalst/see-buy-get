@@ -164,7 +164,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -193,6 +193,8 @@ import { PilotService } from './pilot.service';
 import { CustodyCapView, HandoverManifest } from './pudo.types';
 import { offPlanSaid } from './route-plan.types';
 import { ShopChoiceService } from './shop-choice.service';
+import { ZoneMapService } from './zone-map.service';
+import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
 interface ModuleInfo {
   module: string;
@@ -364,6 +366,7 @@ export class SbgController {
     @Optional() private readonly pickupAhead?: PickupAheadService,
     // 2026-11-06 — a bag for a shop that is closed: the driver's pick, its buyers choosing (point 6).
     @Optional() private readonly shopChoices?: ShopChoiceService,
+    @Optional() private readonly zones?: ZoneMapService,
   ) {}
 
   /**
@@ -2934,6 +2937,90 @@ export class SbgController {
     return { entityId, ...this.entities.custodyCapsFor(entityId) };
   }
 
+  /* --- 2026-11-08 — a country's zones (zone pricing, step 1): its company's own administrators, or staff. --- */
+
+  /** Its price groups, the map in force, a draft being worked on, the versions, and the shops and hubs in no zone. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/zones')
+  entityZones(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().setup(entityId);
+  }
+
+  /** The shapes of a map's areas, and the zone each is in: the draft when one is open, else the map in force. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/zones/shapes')
+  @ApiQuery({ name: 'version', required: false })
+  entityZoneShapes(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('version') version?: string): ZoneShapesView {
+    this.requireReach(actor, entityId);
+    const v = version != null && version !== '' ? Number(version) : undefined;
+    if (v != null && !(Number.isInteger(v) && v > 0)) throw new GlosError('VALIDATION_FAILED', 'A map version is a whole number', { field: 'version' });
+    return this.zonesOf().shapes(entityId, v);
+  }
+
+  /** The country's official areas from a boundary file: a new draft, one zone per area. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/areas')
+  importEntityZoneAreas(@Param('entityId') entityId: string, @Body() dto: ImportZoneAreasDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().importAreas(entityId, dto, auditActor(actor));
+  }
+
+  /** The country's price groups, the whole list in its order. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/groups')
+  setEntityZoneGroups(@Param('entityId') entityId: string, @Body() dto: ZoneGroupsDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().setGroups(entityId, dto.groups, auditActor(actor));
+  }
+
+  /** A new draft, copied from the newest published map. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/draft')
+  startEntityZoneDraft(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().startDraft(entityId, auditActor(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Delete('entities/:entityId/zones/draft')
+  discardEntityZoneDraft(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().discardDraft(entityId, auditActor(actor));
+  }
+
+  /** A zone of the draft renamed, or given another group. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/draft/zones/:code')
+  changeEntityZone(@Param('entityId') entityId: string, @Param('code') code: string, @Body() dto: ZoneChangeDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().changeZone(entityId, code, dto, auditActor(actor));
+  }
+
+  /** Zones of the draft made one. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/draft/merge')
+  mergeEntityZones(@Param('entityId') entityId: string, @Body() dto: ZoneMergeDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().merge(entityId, dto.codes, dto.name, auditActor(actor));
+  }
+
+  /** Areas of the draft moved to another zone, or into a new one. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/draft/move')
+  moveEntityZoneAreas(@Param('entityId') entityId: string, @Body() dto: ZoneMoveDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().move(entityId, dto.areas, dto.to, dto.name, auditActor(actor));
+  }
+
+  /** The draft published, from now or a date to come. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/zones/draft/publish')
+  publishEntityZones(@Param('entityId') entityId: string, @Body() dto: ZonePublishDto, @Actor() actor: IntrospectionResult): ZoneSetupView {
+    this.requireReach(actor, entityId);
+    return this.zonesOf().publish(entityId, dto.from, auditActor(actor));
+  }
+
   /**
    * Round 38 — WHERE THE CALLER STANDS UNDER THE CUSTODY CAP: a shop (and its people at the counter) or an independent rider.
    * Nothing when no cap applies to them now — set by nobody, lifted, or a fleet's driver.
@@ -3113,7 +3200,9 @@ export class SbgController {
     this.assertAgentOwner(did, actor);
     const a = this.agents.get(did);
     // Round 40 — and where its trading licence stands, so the home screen says it before the counter refuses anything.
-    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did), licenceStanding: this.agents.licenceStandingOf(did) };
+    // 2026-11-08 — and the zone it stands in, on its country's map in force (absent where the country keeps none yet).
+    const priceZone = this.zones?.zoneOfShop(a);
+    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did), licenceStanding: this.agents.licenceStandingOf(did), ...(priceZone ? { priceZone } : {}) };
   }
 
   /** The money a shop's float is in, and what one parcel costs it there: its own company's (amounts.ts). */
@@ -5354,7 +5443,11 @@ export class SbgController {
       // What it charges is said with the money it charges in: the company's that contracts the hub.
       const currency = this.mdps.currencyOf(m);
       // 2026-11-02 — and what its floor holds against its space: its start screen, and staff's list of hubs ("full — bags wait").
-      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m) };
+      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) {
+        // 2026-11-08 — the zone it stands in, on its country's map in force.
+        const priceZone = this.zones?.zoneOfHub(m);
+        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}) };
+      }
       return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency };
     });
   }
@@ -7981,6 +8074,11 @@ export class SbgController {
   parcelShopChoice(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverSelf(did, actor, 'Only the driver holding the parcel picks the shops for it');
     return this.shopChoicesOf().askParcel(parcelId, did, dto.shopDids, { shut: dto.shut === true });
+  }
+
+  private zonesOf(): ZoneMapService {
+    if (!this.zones) throw new GlosError('INVALID_STATE', 'Zones are not available here');
+    return this.zones;
   }
 
   private shopChoicesOf(): ShopChoiceService {

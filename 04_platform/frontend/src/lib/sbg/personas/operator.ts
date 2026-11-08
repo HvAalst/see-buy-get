@@ -151,6 +151,24 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Round 38 — where this company requires a seal on loads taken over in its country. */
     setSealRules: (entityId: string, body: { crossBorder: boolean; containers: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/seal-rules', { params: { path: { entityId } }, body })),
+    /* 2026-11-08 — a country's zones (zone pricing, step 1). */
+    zones: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/zones', { params: { path: { entityId } } })),
+    zoneShapes: (entityId: string, version?: number) =>
+      sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/zones/shapes', { params: { path: { entityId }, query: version ? { version: String(version) } : {} } })),
+    importZoneAreas: (entityId: string, body: { geojson: string; source: string; licence: string; attribution: string; level?: string; nameField?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/areas', { params: { path: { entityId } }, body })),
+    setZoneGroups: (entityId: string, groups: Array<{ key?: string; name: string }>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/groups', { params: { path: { entityId } }, body: { groups } })),
+    startZoneDraft: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
+    discardZoneDraft: (entityId: string) => sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
+    changeZone: (entityId: string, code: string, body: { name?: string; group?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/zones/{code}', { params: { path: { entityId, code } }, body })),
+    mergeZones: (entityId: string, codes: string[], name?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/merge', { params: { path: { entityId } }, body: { codes, ...(name ? { name } : {}) } })),
+    moveZoneAreas: (entityId: string, areas: string[], to?: string, name?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/move', { params: { path: { entityId } }, body: { areas, ...(to ? { to } : {}), ...(name ? { name } : {}) } })),
+    publishZones: (entityId: string, from?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/publish', { params: { path: { entityId } }, body: from ? { from } : {} })),
     setCarrierPapers: (entityId: string, enforce: Array<'operator_licence' | 'carrier_insurance'>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/carrier-papers', { params: { path: { entityId } }, body: { enforce } })),
 

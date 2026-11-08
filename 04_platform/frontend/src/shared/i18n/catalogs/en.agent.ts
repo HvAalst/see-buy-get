@@ -31,6 +31,8 @@ export const enAgent = {
   'agent.cancel': 'Cancel',
   'agent.done': 'Done',
   'agent.zone': 'Zone {zone}',
+  // 2026-11-08 — the zone the shop's pin lies in, on its country's map, and its price group in the country's own words.
+  'agent.priceZone': 'Zone {zone} · {group}',
   'agent.scanPlaceholder': 'Scan or type the code',
   'agent.saveRating': 'Save the rating',
 

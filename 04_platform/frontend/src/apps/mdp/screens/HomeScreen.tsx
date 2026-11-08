@@ -208,6 +208,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
             aloud={(words) => t('mdp.home.hubWordsAloud', { words })}
             aloudLabel={t('mdp.home.sayWords')}
           />
+          {hub.priceZone ? <p class="hubzone">{t('mdp.home.priceZone', { zone: hub.priceZone.name, group: hub.priceZone.groupName })}</p> : null}
         </Card>
       ) : null}
 

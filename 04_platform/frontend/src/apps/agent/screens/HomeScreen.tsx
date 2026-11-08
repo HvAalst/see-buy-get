@@ -114,7 +114,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           )}
           <div class="shophead__body">
             <h1 class="shophead__name">{agent?.shopName ?? '…'}</h1>
-            <p class="shophead__meta">{agent ? t('agent.zone', { zone: agent.zone }) : ''}</p>
+            <p class="shophead__meta">{agent ? (agent.priceZone ? t('agent.priceZone', { zone: agent.priceZone.name, group: agent.priceZone.groupName }) : t('agent.zone', { zone: agent.zone })) : ''}</p>
             <Pill tone={open ? 'ok' : 'idle'} dot>{open ? t('agent.open') : t('agent.closed')}</Pill>
           </div>
         </div>

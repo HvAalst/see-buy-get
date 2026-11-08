@@ -59,6 +59,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   // administration — staff and settings
   pilot: ['admin'],
   rates: ['admin'],
+  // 2026-11-08 — a country's zones: set where its other terms are set.
+  zones: ['admin'],
   corridors: ['admin'],
   borders: ['admin'],
   presence: ['admin'],

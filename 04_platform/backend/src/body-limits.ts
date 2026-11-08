@@ -52,6 +52,7 @@ export const BODY_LIMITS: BodyLimit[] = [
   file('what shows a paper is wrong', ['/v1/sbg/entities/:id/documents/:id/report', '/v1/sbg/contract/company/papers/report', '/v1/sbg/paper-reports/:id/answer'], UPLOAD_LIMITS.evidence),
   text('a sheet of orders', ['/v1/sbg/fleet/managers/:id/contracts/:id/orders/import'], UPLOAD_LIMITS.orderSheetText),
   text('a packing list', ['/v1/sbg/exports/:id/packing-list/check', '/v1/sbg/exports/:id/packing-list', '/v1/sbg/api/business/exports/:id/packing-list'], UPLOAD_LIMITS.packingText),
+  text('a country’s areas', ['/v1/sbg/entities/:id/zones/areas'], UPLOAD_LIMITS.zoneAreasText),
 ];
 
 /** Everything else takes no file: 2 MB, as before, is far more than any form. */

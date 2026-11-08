@@ -454,3 +454,10 @@
   border-top: 1px solid var(--bd);
   padding-top: 20px;
 }
+
+/* 2026-11-08 — the zone the hub’s pin lies in, on its country’s map, under its place words. */
+.hubzone {
+  margin: 10px 0 0;
+  color: var(--tx2);
+  font-size: 14px;
+}

@@ -16,6 +16,7 @@ import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { StaffReadsScreen } from './screens/StaffReadsScreen';
 import { DocumentsScreen } from './screens/DocumentsScreen';
 import { LanguagesScreen } from './screens/LanguagesScreen';
+import { ZonesScreen } from './screens/ZonesScreen';
 import { MessagesScreen } from './screens/MessagesScreen';
 import { messagesWaiting } from './messages';
 import { HazardsScreen } from './screens/HazardsScreen';
@@ -182,6 +183,8 @@ export function App() {
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
     'company',
+    // 2026-11-08 — a country's zones are its own company's to keep (the owner: "every country ... determine zones"); staff's administration reads and keeps them too.
+    'zones',
     // Their own entry, their saved places and their password. Staff act for nobody and have none.
     ...(state.who?.entityId ? (['settings'] as Screen[]) : []),
     'imports',
@@ -324,6 +327,8 @@ export function App() {
             <DocumentsScreen state={state} actions={actions} />
           ) : state.screen === 'languages' ? (
             <LanguagesScreen state={state} actions={actions} />
+          ) : state.screen === 'zones' ? (
+            <ZonesScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (
             <CorridorsScreen state={state} actions={actions} />
           ) : state.screen === 'support' ? (

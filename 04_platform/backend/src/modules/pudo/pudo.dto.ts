@@ -1,4 +1,5 @@
 import { STAFF_ROLES } from '../../foundation/auth/staff-roles';
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 import { TruckFlightDto } from './air-terminal.types';
 import { ParcelInvoiceDto } from './parcel-invoice.types';
 import { AddressPartsDto } from './address-parts.dto';
@@ -1810,6 +1811,53 @@ export class CustodyCapsDto {
 export class SealRulesDto {
   @IsBoolean() crossBorder!: boolean;
   @IsBoolean() containers!: boolean;
+}
+
+/** 2026-11-08 — a country's official areas, from a boundary file (GeoJSON), with where they came from and the credit their licence asks for. */
+export class ImportZoneAreasDto {
+  @IsString() @MaxLength(UPLOAD_LIMITS.zoneAreasText) geojson!: string;
+  @IsString() @MaxLength(300) source!: string;
+  @IsString() @MaxLength(300) licence!: string;
+  @IsString() @MaxLength(300) attribution!: string;
+  /** What kind of area they are, in the country's words (wards, districts …). */
+  @IsOptional() @IsString() @MaxLength(60) level?: string;
+  /** The field of the file that holds each area's name, when it is not one of the usual ones. */
+  @IsOptional() @IsString() @MaxLength(60) nameField?: string;
+}
+
+export class ZoneGroupDto {
+  /** Absent for a new group. */
+  @IsOptional() @IsString() @MaxLength(20) key?: string;
+  @IsString() @MaxLength(40) name!: string;
+}
+
+/** A country's price groups, all of them, in its order: the whole list every time. */
+export class ZoneGroupsDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(8) @ValidateNested({ each: true }) @Type(() => ZoneGroupDto)
+  @ApiProperty({ type: [ZoneGroupDto] })
+  groups!: ZoneGroupDto[];
+}
+
+export class ZoneChangeDto {
+  @IsOptional() @IsString() @MaxLength(80) name?: string;
+  @IsOptional() @IsString() @MaxLength(20) group?: string;
+}
+
+export class ZoneMergeDto {
+  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(20000) @IsString({ each: true }) codes!: string[];
+  @IsOptional() @IsString() @MaxLength(80) name?: string;
+}
+
+/** Areas moved to another zone (`to`), or into a new one when `to` is absent. */
+export class ZoneMoveDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20000) @IsString({ each: true }) areas!: string[];
+  @IsOptional() @IsString() @MaxLength(20) to?: string;
+  @IsOptional() @IsString() @MaxLength(80) name?: string;
+}
+
+export class ZonePublishDto {
+  /** From when it is the country's map; absent means now. */
+  @IsOptional() @IsDateString() from?: string;
 }
 
 export class CarrierPapersDto {

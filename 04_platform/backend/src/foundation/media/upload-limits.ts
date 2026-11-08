@@ -30,6 +30,8 @@ export const UPLOAD_LIMITS = {
   orderSheetText: 1_500_000,
   /** A packing list pasted or sent as text, in characters — PackingImportDto.text. */
   packingText: 3_000_000,
+  /** A country's official areas as a boundary file (GeoJSON), in characters — ImportZoneAreasDto.geojson. About a ward map's twice. */
+  zoneAreasText: 6_000_000,
 } as const;
 
 export type UploadLimitName = keyof typeof UPLOAD_LIMITS;

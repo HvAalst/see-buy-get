@@ -13629,6 +13629,366 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/zones": {
+      "get": {
+        "operationId": "Sbg.entityZones",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/shapes": {
+      "get": {
+        "operationId": "Sbg.entityZoneShapes",
+        "summary": "",
+        "description": "The shapes of a map's areas, and the zone each is in: the draft when one is open, else the map in force.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneShapesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/areas": {
+      "post": {
+        "operationId": "Sbg.importEntityZoneAreas",
+        "summary": "",
+        "description": "The country's official areas from a boundary file: a new draft, one zone per area.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportZoneAreasDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/groups": {
+      "post": {
+        "operationId": "Sbg.setEntityZoneGroups",
+        "summary": "",
+        "description": "The country's price groups, the whole list in its order.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoneGroupsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/draft": {
+      "post": {
+        "operationId": "Sbg.startEntityZoneDraft",
+        "summary": "",
+        "description": "A new draft, copied from the newest published map.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.discardEntityZoneDraft",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/draft/zones/{code}": {
+      "post": {
+        "operationId": "Sbg.changeEntityZone",
+        "summary": "",
+        "description": "A zone of the draft renamed, or given another group.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoneChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/draft/merge": {
+      "post": {
+        "operationId": "Sbg.mergeEntityZones",
+        "summary": "",
+        "description": "Zones of the draft made one.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoneMergeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/draft/move": {
+      "post": {
+        "operationId": "Sbg.moveEntityZoneAreas",
+        "summary": "",
+        "description": "Areas of the draft moved to another zone, or into a new one.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZoneMoveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/zones/draft/publish": {
+      "post": {
+        "operationId": "Sbg.publishEntityZones",
+        "summary": "",
+        "description": "The draft published, from now or a date to come.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZonePublishDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZoneSetupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/custody-cap": {
       "get": {
         "operationId": "Sbg.custodyCap",
@@ -56425,6 +56785,7 @@
               "carrierPapers",
               "sealRules",
               "custodyCaps",
+              "zones",
               "created",
               "record",
               "activated",
@@ -57365,6 +57726,448 @@
           },
           "rider": {
             "$ref": "#/components/schemas/CustodyCapDto"
+          }
+        }
+      },
+      "ZoneGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
+      "GeoCentre": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ZoneView": {
+        "type": "object",
+        "properties": {
+          "shops": {
+            "type": "number",
+            "description": "How many shops and hubs stand in it now (for the map in force), so a change is weighed against who it touches."
+          },
+          "hubs": {
+            "type": "number"
+          },
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string",
+            "description": "The key of its price group."
+          },
+          "areas": {
+            "type": "number",
+            "description": "How many areas it is made of."
+          },
+          "areaKm2": {
+            "type": "number"
+          },
+          "centre": {
+            "$ref": "#/components/schemas/GeoCentre"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "group",
+          "areas",
+          "areaKm2",
+          "centre"
+        ]
+      },
+      "ZoneAreaSetView": {
+        "type": "object",
+        "properties": {
+          "setId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          },
+          "attribution": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "importedAt": {
+            "type": "string"
+          },
+          "importedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "setId",
+          "source",
+          "licence",
+          "attribution",
+          "level",
+          "count",
+          "importedAt",
+          "importedBy"
+        ]
+      },
+      "ZoneMapView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "draft: being worked on · scheduled: published, from a date still to come · in_force: the map now · past: replaced.",
+            "enum": [
+              "draft",
+              "scheduled",
+              "in_force",
+              "past"
+            ]
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneView"
+            }
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "areas": {
+            "$ref": "#/components/schemas/ZoneAreaSetView"
+          }
+        },
+        "required": [
+          "status",
+          "zones",
+          "version",
+          "createdAt",
+          "createdBy",
+          "areas"
+        ]
+      },
+      "ZoneMapSummary": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "in_force",
+              "past"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "effectiveFrom": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "string"
+          },
+          "zones": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "effectiveFrom",
+          "publishedBy",
+          "zones"
+        ]
+      },
+      "ZoneSetupView": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneGroup"
+            }
+          },
+          "inForce": {
+            "description": "The map in force now.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ZoneMapView"
+              }
+            ]
+          },
+          "scheduled": {
+            "description": "Published maps whose date has not come yet.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneMapView"
+            }
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ZoneMapView"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneMapSummary"
+            }
+          },
+          "outside": {
+            "description": "Shops and hubs of this country whose pin lies in no zone of the map in force: each must be looked at.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "groups",
+          "scheduled",
+          "versions",
+          "outside",
+          "entityId",
+          "country"
+        ]
+      },
+      "ZoneAreaShape": {
+        "type": "object",
+        "properties": {
+          "polygons": {
+            "description": "Each polygon as one string: its rings as encoded polylines (precision 5), outer first, separated by a space.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "polygons",
+          "id",
+          "name",
+          "zone"
+        ]
+      },
+      "ZoneShapesView": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneAreaShape"
+            }
+          },
+          "version": {
+            "type": "number"
+          },
+          "setId": {
+            "type": "string"
+          },
+          "attribution": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "areas",
+          "version",
+          "setId",
+          "attribution"
+        ]
+      },
+      "ImportZoneAreasDto": {
+        "type": "object",
+        "properties": {
+          "geojson": {
+            "type": "string",
+            "maxLength": 6000000
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "licence": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "attribution": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "level": {
+            "type": "string",
+            "description": "What kind of area they are, in the country's words (wards, districts …).",
+            "maxLength": 60
+          },
+          "nameField": {
+            "type": "string",
+            "description": "The field of the file that holds each area's name, when it is not one of the usual ones.",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "geojson",
+          "source",
+          "licence",
+          "attribution"
+        ]
+      },
+      "ZoneGroupDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Absent for a new group.",
+            "maxLength": 20
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ZoneGroupsDto": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZoneGroupDto"
+            }
+          }
+        },
+        "required": [
+          "groups"
+        ]
+      },
+      "ZoneChangeDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 20
+          }
+        }
+      },
+      "ZoneMergeDto": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "codes"
+        ]
+      },
+      "ZoneMoveDto": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "areas"
+        ]
+      },
+      "ZonePublishDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "From when it is the country's map; absent means now."
           }
         }
       },

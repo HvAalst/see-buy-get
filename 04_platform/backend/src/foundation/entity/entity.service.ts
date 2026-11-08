@@ -957,6 +957,14 @@ export class EntityService implements OnApplicationBootstrap {
     return [...(this.changeLog.get(entityId) ?? [])].reverse().slice(0, limit);
   }
 
+  /**
+   * A change to what this company decides that is kept elsewhere — its zones (2026-11-08) — recorded here beside its other
+   * terms, with the person on it, so "who changed what, and when" has one answer for a company.
+   */
+  noteChange(entityId: string, change: { by: string; what: EntityChange['what']; from: string; to: string; lane?: string; at?: string }): void {
+    this.record(entityId, { at: change.at ?? new Date().toISOString(), by: change.by, what: change.what, ...(change.lane ? { lane: change.lane } : {}), from: change.from, to: change.to });
+  }
+
   private record(entityId: string, change: EntityChange): void {
     const kept = [...(this.changeLog.get(entityId) ?? []), change];
     // A bounded history: the last 200 changes to one company's terms is years of them, and this file is

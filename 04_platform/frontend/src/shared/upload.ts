@@ -27,6 +27,7 @@ export const UPLOAD_LIMITS = {
   workbook: 1_000_000,
   orderSheetText: 1_500_000,
   packingText: 3_000_000,
+  zoneAreasText: 6_000_000,
 } as const;
 
 /** What a file is for, which says its most, what it may be, and what to do when it is refused. */

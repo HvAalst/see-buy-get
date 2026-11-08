@@ -74,6 +74,8 @@ export interface AgentView {
   did: string;
   shopName: string;
   zone: string;
+  /** 2026-11-08 — the zone its pin lies in, on its country's map in force; absent where the country keeps none yet. */
+  priceZone?: { code: string; name: string; group: string; groupName: string; version: number };
   /** The country the shop stands in (absent on a record written before sites had one — the home country). */
   country?: string;
   location?: { lat: number; lng: number };
