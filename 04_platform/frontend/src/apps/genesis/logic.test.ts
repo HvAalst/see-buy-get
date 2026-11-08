@@ -204,6 +204,11 @@ describe('which carriers set the price (2026-10-25)', () => {
     expect(carriersLine(at({ from: 'company', carriers: 0 }), 'Mama Njeri', t)).toBe('No carrier can carry it yet, so the road is priced at the standard rate per kilometre.');
   });
 
+  it('priced from the country’s price card: names the list’s two zones, not a carrier (2026-11-08)', () => {
+    const q = { ...at({ from: 'carriers', carriers: 12 }), zone: { version: 1, fromName: 'Westlands', toName: 'Thika', bandName: 'Near' } };
+    expect(carriersLine(q, 'Mama Njeri', t)).toBe('The price on the price list from Westlands to Thika (Near), whoever carries it.');
+  });
+
   it('"near me" with nobody near: says so, and says the price came from further away', () => {
     expect(carriersLine(at({ from: 'carriers', carriers: 4, nearWanted: true }), 'Mama Njeri', t)).toBe('No carrier near Mama Njeri can carry it yet, so it is priced by the cheapest of the 4 further away that can.');
     expect(carriersLine(at({ from: 'company', carriers: 0, nearWanted: true }), 'Mama Njeri', t)).toBe('No carrier can carry it yet, so the road is priced at the standard rate per kilometre.');

@@ -218,7 +218,7 @@ export interface ParcelsApi {
   move: (parcelId: string, to: string, expectedTotal: number) => Promise<Result<{ parcelId: string; moved: true; now: number; currency?: string }>>;
   callOff: (parcelId: string, reason?: string, choice?: { backTo?: 'door'; maxSpend?: number }) => Promise<Result<ParcelCallOff>>;
   /** What it costs from a shop or from its own place (`own`), before anything is sent. */
-  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number } }>>;
+  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } }>>;
   postDoor: (parcelId: string) => Promise<Result<BusinessParcelDetail>>;
   raiseDoor: (parcelId: string, maxSpend: number) => Promise<Result<BusinessParcelDetail>>;
   collectFrom: (siteId: string, bays?: number, closedRoom?: number) => Promise<Result<ParcelAccount>>;

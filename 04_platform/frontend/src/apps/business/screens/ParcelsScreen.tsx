@@ -589,7 +589,7 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   const t = useT();
   // Collected from its own place, where it set one: offered first, as the way it usually sends.
   const [form, setForm] = useState<ParcelForm>({ ...EMPTY_PARCEL, ...(collection ? { originDid: OWN_PLACE } : {}) });
-  const [quote, setQuote] = useState<{ flexible: number; currency: string; door?: { via: string; suggestedMax: number } } | null>(null);
+  const [quote, setQuote] = useState<{ flexible: number; currency: string; door?: { via: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSaid, setPhotoSaid] = useState<string | null>(null);
@@ -703,7 +703,8 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
       {quoteError ? <p class="cerr"><Abbreviated text={quoteError} /></p> : null}
       {price != null ? (
         <p class="cnote">
-          {t('business.parcels.price', { price: money(price, quote!.currency) })} {price > balance ? t('business.parcels.priceShort') : ''}
+          {/* 2026-11-08 — from the country's price card: the price, not a most with the rest given back. */}
+          {quote?.priceList ? t('business.parcels.priceList', { price: money(price, quote.currency), from: quote.priceList.from, to: quote.priceList.to }) : t('business.parcels.price', { price: money(price, quote!.currency) })} {price > balance ? t('business.parcels.priceShort') : ''}
         </p>
       ) : null}
       {gaps.length ? <p class="chint">{t('business.parcels.stillNeeded', { list: gaps.join(', ') })}</p> : null}

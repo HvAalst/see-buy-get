@@ -388,6 +388,8 @@ export interface QuoteLegPrice {
 
 export interface QuoteView {
   hops: Array<{ type: 'pudo' | 'mdp'; id: string; label: string }>;
+  /** 2026-11-08 — priced from the country's price card: its two zones and their band, whoever carries it (zone pricing). */
+  zone?: { version: number; fromName: string; toName: string; bandName: string };
   /** Whether the transport was priced on the box the store MEASURED or on the tier it was declared as.
    *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */
   factorBasis?: 'measured' | 'band';

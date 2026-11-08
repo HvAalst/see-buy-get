@@ -41125,6 +41125,25 @@
           "suggestedMax"
         ]
       },
+      "ParcelPriceList": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "band": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "band"
+        ]
+      },
       "ParcelPriceView": {
         "type": "object",
         "properties": {
@@ -41147,6 +41166,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ParcelDoorPrice"
+              }
+            ]
+          },
+          "priceList": {
+            "description": "Priced from the country's price card: one price whoever carries it, nothing given back.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelPriceList"
               }
             ]
           }

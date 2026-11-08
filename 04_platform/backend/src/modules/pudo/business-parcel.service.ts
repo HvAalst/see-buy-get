@@ -247,7 +247,14 @@ export class BusinessParcelService {
     if (!dest) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is collected at, or one of your places', { field: 'dest' });
     const { quote } = this.quoteOf(v, own ? undefined : q.origin, dest, { l: q.l, w: q.w, h: q.h }, q.kg, q.fragile ?? false);
     const suggestedMax = door ? this.dispatch.doorGuide({ from: door.shop.location, to: door.site.location, weightKg: q.kg, fragile: q.fragile ?? false, shipperDid: v.vendorId }).suggestedMax : undefined;
-    return { flexible: quote.flexible.gross, locked: quote.locked.gross, currency: quote.currency, crossesBorder: quote.crossesBorder, ...(door ? { door: { via: door.shop.shopName, viaDid: door.shop.did, suggestedMax: suggestedMax! } } : {}) };
+    return {
+      flexible: quote.flexible.gross,
+      locked: quote.locked.gross,
+      currency: quote.currency,
+      crossesBorder: quote.crossesBorder,
+      ...(door ? { door: { via: door.shop.shopName, viaDid: door.shop.did, suggestedMax: suggestedMax! } } : {}),
+      ...(quote.zone ? { priceList: { from: quote.zone.fromName, to: quote.zone.toName, band: quote.zone.bandName } } : {}),
+    };
   }
 
   /** Post the last leg to its own place now — after a top-up, where it waited for the money. */

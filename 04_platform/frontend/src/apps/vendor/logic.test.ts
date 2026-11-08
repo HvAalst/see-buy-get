@@ -206,6 +206,14 @@ describe('price cards', () => {
     expect(cards[1].total).toBe(taxed.flexible.gross);
   });
 
+  it('priced from the country’s price card: one price, the list’s two zones under it (2026-11-08)', () => {
+    const q = { ...quote(), zone: { version: 1, fromName: 'Westlands', toName: 'Thika', bandName: 'Near' } };
+    q.flexible = q.locked;
+    const cards = priceCards(q, t);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ key: 'locked', title: 'The price', sub: 'From the price list: Westlands to Thika (Near), whoever carries it', total: chargeOf(q.locked) });
+  });
+
   it('falls back to the total for a quote taken before tax existed', () => {
     // Where the two were the same number to the cent, so the fallback is not a guess.
     expect(chargeOf({ transport: 1, base: 10, total: 12 })).toBe(12);

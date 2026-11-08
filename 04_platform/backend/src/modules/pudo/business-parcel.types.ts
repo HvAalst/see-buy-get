@@ -161,6 +161,13 @@ export class ParcelDoorPrice {
   @ApiProperty() suggestedMax!: number;
 }
 
+/** 2026-11-08 — priced from the country's price card: its two zones and their band (zone pricing). */
+export class ParcelPriceList {
+  @ApiProperty() from!: string;
+  @ApiProperty() to!: string;
+  @ApiProperty() band!: string;
+}
+
 /** What it costs, before anything is sent. */
 export class ParcelPriceView {
   /** Held when sent, and what it costs less given back once it is collected. */
@@ -171,6 +178,8 @@ export class ParcelPriceView {
   @ApiProperty() crossesBorder!: boolean;
   /** Delivered to its own place: the shop it goes via, and the most we suggest allowing a driver for the last leg. */
   @ApiPropertyOptional({ type: () => ParcelDoorPrice }) door?: ParcelDoorPrice;
+  /** Priced from the country's price card: one price whoever carries it, nothing given back. */
+  @ApiPropertyOptional({ type: () => ParcelPriceList }) priceList?: ParcelPriceList;
 }
 
 /** A parcel's last leg to its own place, as the business reads it. */

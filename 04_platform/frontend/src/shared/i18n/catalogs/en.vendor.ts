@@ -227,6 +227,9 @@ export const enVendor = {
   'vendor.price.explainAloud':
     'Fastest holds the highest rate so any carrier can take it, and refunds what it did not cost. Cheapest commits the lowest rate and waits for a carrier at that price.',
   'vendor.price.cheapest': 'Cheapest',
+  // 2026-11-08 — priced from the country's price card (zone pricing): one price.
+  'vendor.price.listTitle': 'The price',
+  'vendor.price.listSub': 'From the price list: {from} to {to} ({band}), whoever carries it',
   'vendor.price.cheapestSub': 'Waits for the lowest-price bus',
   // The one fee line a merchant is owed. Named plainly: they are a business partner reconciling their
   // books, and a take that has to be worked out from two other numbers reads as one being hidden.

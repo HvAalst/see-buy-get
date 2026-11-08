@@ -397,8 +397,9 @@ function QuoteStep({ state, actions }: SendScreenProps) {
 
       {/* Which carriers set the price (the user, 2026-10-25: "the asker should be able to filter quotations from 'near
           me'"): all that can carry it, or only those near the shop it starts from. Outside the price, so it stays put
-          while the price is asked again. A shop with no place on record offers no "near me". */}
-      {from?.location ? (
+          while the price is asked again. A shop with no place on record offers no "near me". Not where the country's price card
+          prices it (2026-11-08): whoever carries it, the price is the card's. */}
+      {from?.location && !q?.zone ? (
         <div class="seg" role="group" aria-label={t('send.quote.carriersAria')}>
           <button type="button" class={`seg__btn${state.nearMe ? '' : ' seg__btn--on'}`} aria-pressed={!state.nearMe} onClick={() => actions.setNearMe(false)}>
             <Icon name="truck" size={18} /> {t('send.quote.allCarriers')}

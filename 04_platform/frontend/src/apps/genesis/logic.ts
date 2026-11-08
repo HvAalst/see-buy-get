@@ -184,6 +184,8 @@ export function mintTaxLine(price: { tax?: number; taxLabel?: string; currency?:
  * own money; "near me", only those near the shop it starts from). Null for a quote that does not say.
  */
 export function carriersLine(q: QuoteView, shop: string, t: Translate): string | null {
+  // 2026-11-08 — priced from the country's price card: no carrier's rate set it, and none near changes it.
+  if (q.zone) return t('send.logic.priceList', { from: q.zone.fromName, to: q.zone.toName, band: q.zone.bandName });
   const { from, carriers = 0, nearWanted } = q.perKm;
   if (from === 'company') return t('send.logic.carriersStandard');
   if (from === 'near') return carriers === 1 ? t('send.logic.carriersNearOne', { shop }) : t('send.logic.carriersNearMany', { shop, count: carriers });

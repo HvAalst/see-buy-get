@@ -213,6 +213,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/agents/:did/parcels/:id/label.zpl',
         // the shop as the counter sees it, and open or closed now
         'GET sbg/agents/:did', 'GET sbg/custody-cap', 'GET sbg/agents/:did/shelf', 'GET sbg/agents/:did/bag-plan', 'GET sbg/agents/:did/can-transact', 'GET sbg/agents/:did/take-in-terms',
+        // 2026-11-08 — the price list the counter keeps to price a walk-up with no signal (zone pricing, step 3b)
+        'GET sbg/agents/:did/counter-prices',
         'POST sbg/agents/:did/ping', 'POST sbg/agents/:did/availability',
         // bags
         'POST sbg/totes/:code/assign', 'POST sbg/totes/:code/fill', 'POST sbg/totes/:code/load', 'POST sbg/totes/:code/release', 'GET sbg/totes/:code',

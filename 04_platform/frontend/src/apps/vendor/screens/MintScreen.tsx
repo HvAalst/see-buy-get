@@ -573,7 +573,9 @@ function PriceStep({ state, actions }: MintScreenProps) {
       <div class="info-row">
         <h1 class="scr__title">{t('vendor.mint.priceTitle')}</h1>
         {/* The two prices are a CEILING and a COMMITMENT, which "Fastest" and "Cheapest" cannot say in
-            one word each. The explanation belongs a tap away rather than crammed under the buttons. */}
+            one word each. The explanation belongs a tap away rather than crammed under the buttons. Not for a price from
+            the country's price card (2026-11-08): there is one price, and nothing to explain between two. */}
+        {q?.zone ? null : (
         <Info title={t('vendor.price.explainTitle')} aloud={t('vendor.price.explainAloud')}>
           {/* The bubble names the SAME two words the buttons show, so a reader can map one to the other
               without translating between two vocabularies. */}
@@ -585,6 +587,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
           </p>
           <p>{t('vendor.price.explainEither')}</p>
         </Info>
+        )}
       </div>
       <p class="scr__lede">{t('vendor.mint.priceLede')}</p>
       {/* The size tier is shown three steps back as a Pill, so without this a store reads the price as
@@ -601,7 +604,8 @@ function PriceStep({ state, actions }: MintScreenProps) {
         <>
           <div class="prices" role="group" aria-label={t('vendor.mint.choosePrice')}>
             {priceCards(q, t).map((c) => {
-              const on = f.routeMode === c.key;
+              // One price from the card is the price: always the one chosen.
+              const on = Boolean(q.zone) || f.routeMode === c.key;
               return (
                 <button key={c.key} type="button" class={`price price--tap${on ? ' price--on' : ''}`} aria-pressed={on} onClick={() => actions.setForm({ routeMode: c.key })}>
                   <span class="price__title">{c.title}</span>

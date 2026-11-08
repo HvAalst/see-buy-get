@@ -299,6 +299,8 @@ export function feeLines(leg: QuoteLegPrice, t: Translate): Array<{ label: strin
 }
 
 export function priceCards(q: QuoteView, t: Translate): PriceCard[] {
+  // 2026-11-08 — priced from the country's price card: ONE price, whoever carries it — nothing held, nothing given back.
+  if (q.zone) return [{ key: 'locked', title: t('vendor.price.listTitle'), sub: t('vendor.price.listSub', { from: q.zone.fromName, to: q.zone.toName, band: q.zone.bandName }), total: chargeOf(q.locked) }];
   return [
     { key: 'locked', title: t('vendor.price.cheapest'), sub: t('vendor.price.cheapestSub'), total: chargeOf(q.locked) },
     { key: 'flexible', title: t('vendor.price.fastest'), sub: t('vendor.price.fastestSub'), total: chargeOf(q.flexible) },

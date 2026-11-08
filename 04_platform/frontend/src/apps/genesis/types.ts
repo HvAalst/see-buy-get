@@ -87,6 +87,8 @@ export interface QuoteView {
    * Absent `from` on a quote from before this, which reads as nothing to say.
    */
   perKm: { min: number; max: number; from?: 'near' | 'carriers' | 'company'; carriers?: number; nearWanted?: true };
+  /** 2026-11-08 — priced from the country's price card: its two zones and their band, whoever carries it (zone pricing). */
+  zone?: { version: number; fromName: string; toName: string; bandName: string };
   platformFeePct: number;
   /** The tax the selling sister charges, and the authority it collects under. The one part of a price
    *  breakdown that is nobody's secret — unlike the platform's three rate layers, which never leave the

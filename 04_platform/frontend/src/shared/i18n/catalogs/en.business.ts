@@ -1678,6 +1678,8 @@ export const enBusiness = {
   'business.parcels.gap.photo': 'a photo of what is inside',
   'business.parcels.stillNeeded': 'Still needed: {list}.',
   'business.parcels.price': 'At most {price}. What it costs less comes back to your balance once it is collected.',
+  // 2026-11-08 — priced from the country's price card (zone pricing): one price, nothing given back.
+  'business.parcels.priceList': '{price}, from the price list ({from} to {to}).',
   'business.parcels.priceShort': 'Your balance does not cover it yet: it is made unpaid, and paid once you top up.',
   'business.parcels.send': 'Send',
   'business.parcels.sendFor': 'Send · {price}',

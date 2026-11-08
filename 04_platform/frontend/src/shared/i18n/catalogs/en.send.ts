@@ -216,6 +216,8 @@ export const enSend = {
   'send.logic.carriersNoneNearOne': 'No carrier near {shop} can carry it yet, so it is priced by the one further away that can.',
   'send.logic.carriersNoneNearMany': 'No carrier near {shop} can carry it yet, so it is priced by the cheapest of the {count} further away that can.',
   'send.logic.carriersStandard': 'No carrier can carry it yet, so the road is priced at the standard rate per kilometre.',
+  // 2026-11-08 — priced from the country's price card (zone pricing).
+  'send.logic.priceList': 'The price on the price list from {from} to {to} ({band}), whoever carries it.',
   'send.logic.quoteSummary': '{km, plural, one {# kilometre} other {# kilometres}} across {stops, plural, one {# stop} other {# stops}}. The price is {price}.',
   'send.logic.trackPlain': 'Parcel {ref}: {status}.',
   'send.logic.trackAt': 'Parcel {ref}: {status} at {dest}.',
