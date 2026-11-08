@@ -1,0 +1,360 @@
+{
+  "note": "Written by pudo.service.spec.ts (zone pricing, step 3b). The Shop app works out each case from this list and must reach the same gross: at now on the first card, at later on the second.",
+  "now": "2026-06-01T00:00:00.000Z",
+  "later": "2026-07-02T00:00:00.000Z",
+  "row": {
+    "shop": "shop-west",
+    "country": "KE",
+    "currency": "KES",
+    "at": "2026-06-01T00:00:00.000Z",
+    "sizes": [
+      {
+        "maxCm": [
+          35,
+          25,
+          10
+        ],
+        "maxKg": 2,
+        "lane": "pudo"
+      },
+      {
+        "maxCm": [
+          45,
+          35,
+          25
+        ],
+        "maxKg": 5,
+        "lane": "pudo"
+      },
+      {
+        "maxCm": [
+          60,
+          50,
+          40
+        ],
+        "maxKg": 15,
+        "lane": "mdp"
+      },
+      {
+        "maxCm": [
+          120,
+          80,
+          80
+        ],
+        "maxKg": 30,
+        "lane": "mdp"
+      }
+    ],
+    "lanes": {
+      "pudo": {
+        "feePct": 0.02,
+        "taxPct": 0.16
+      },
+      "mdp": {
+        "feePct": 0.07,
+        "taxPct": 0.16
+      }
+    },
+    "fees": {
+      "shop-west": 0.5,
+      "shop-west-two": 27.5,
+      "shop-east": 0.5,
+      "shop-coast": 0.5
+    },
+    "cards": [
+      {
+        "version": 1,
+        "zoneMapVersion": 1,
+        "from": "2026-01-01T00:00:00.000Z",
+        "origin": "Z0001",
+        "steps": [
+          1,
+          2,
+          5,
+          10,
+          20
+        ],
+        "table": {
+          "local": [
+            70,
+            80,
+            100,
+            140,
+            220
+          ],
+          "near": [
+            90,
+            105,
+            140,
+            210,
+            350
+          ],
+          "regional": [
+            120,
+            140,
+            200,
+            320,
+            560
+          ],
+          "national": [
+            150,
+            180,
+            260,
+            440,
+            800
+          ]
+        },
+        "perExtraKg": {
+          "local": 7,
+          "near": 9,
+          "regional": 11,
+          "national": 13
+        },
+        "weight": {
+          "divisorShop": 6000,
+          "stepKg": 0.5,
+          "maxKg": 30,
+          "volumeFromKg": 0
+        },
+        "surcharges": {
+          "oversize": 40,
+          "oversizeCm": 100,
+          "fragile": 25
+        },
+        "minimum": 95,
+        "cashStep": 0,
+        "bands": {
+          "Z0001": "local",
+          "Z0002": "local"
+        },
+        "ends": {
+          "Z0001": [
+            5,
+            0.75
+          ],
+          "Z0002": [
+            15,
+            2.5
+          ]
+        },
+        "zoneOf": {
+          "shop-west": "Z0001",
+          "shop-west-two": "Z0001",
+          "shop-east": "Z0002"
+        }
+      },
+      {
+        "version": 2,
+        "zoneMapVersion": 1,
+        "from": "2026-07-01T00:00:00.000Z",
+        "origin": "Z0001",
+        "steps": [
+          1,
+          2,
+          5,
+          10,
+          20
+        ],
+        "table": {
+          "local": [
+            70,
+            80,
+            100,
+            140,
+            220
+          ],
+          "near": [
+            90,
+            105,
+            140,
+            210,
+            350
+          ],
+          "regional": [
+            120,
+            140,
+            200,
+            320,
+            560
+          ],
+          "national": [
+            150,
+            180,
+            260,
+            440,
+            800
+          ]
+        },
+        "perExtraKg": {
+          "local": 7,
+          "near": 9,
+          "regional": 11,
+          "national": 13
+        },
+        "weight": {
+          "divisorShop": 6000,
+          "stepKg": 0.5,
+          "maxKg": 30,
+          "volumeFromKg": 0
+        },
+        "surcharges": {
+          "oversize": 40,
+          "oversizeCm": 100,
+          "fragile": 25
+        },
+        "minimum": 95,
+        "cashStep": 10,
+        "bands": {
+          "Z0001": "local",
+          "Z0002": "local"
+        },
+        "ends": {
+          "Z0001": [
+            5,
+            0.75
+          ],
+          "Z0002": [
+            15,
+            2.5
+          ]
+        },
+        "zoneOf": {
+          "shop-west": "Z0001",
+          "shop-west-two": "Z0001",
+          "shop-east": "Z0002"
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "dest": "shop-east",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 2,
+      "gross": 127.19,
+      "grossLater": 130
+    },
+    {
+      "dest": "shop-east",
+      "l": 40,
+      "w": 30,
+      "h": 20,
+      "kg": 2,
+      "gross": 158.55,
+      "grossLater": 160
+    },
+    {
+      "dest": "shop-east",
+      "l": 60,
+      "w": 50,
+      "h": 40,
+      "kg": 12,
+      "gross": 379.81,
+      "grossLater": 380
+    },
+    {
+      "dest": "shop-east",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 2,
+      "fragile": true,
+      "gross": 156.77,
+      "grossLater": 160
+    },
+    {
+      "dest": "shop-east",
+      "l": 110,
+      "w": 30,
+      "h": 20,
+      "kg": 8,
+      "gross": 393.15,
+      "grossLater": 390
+    },
+    {
+      "dest": "shop-east",
+      "l": 20,
+      "w": 15,
+      "h": 5,
+      "kg": 0.3,
+      "gross": 113.59,
+      "grossLater": 120
+    },
+    {
+      "dest": "shop-east",
+      "l": 50,
+      "w": 40,
+      "h": 40,
+      "kg": 25,
+      "gross": 443.42,
+      "grossLater": 440
+    },
+    {
+      "dest": "shop-east",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 31,
+      "gross": null,
+      "grossLater": null
+    },
+    {
+      "dest": "shop-west-two",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 1,
+      "gross": 145.53,
+      "grossLater": 150
+    },
+    {
+      "dest": "shop-west-two",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 1,
+      "fragile": true,
+      "gross": 152.33,
+      "grossLater": 150
+    },
+    {
+      "dest": "shop-west-two",
+      "l": 35,
+      "w": 25,
+      "h": 10,
+      "kg": 4.2,
+      "fragile": true,
+      "gross": 190.95,
+      "grossLater": 190
+    },
+    {
+      "dest": "shop-west",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 1,
+      "gross": 113,
+      "grossLater": 120
+    },
+    {
+      "dest": "shop-west",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 3.3,
+      "gross": 127.94,
+      "grossLater": 130
+    },
+    {
+      "dest": "shop-coast",
+      "l": 30,
+      "w": 20,
+      "h": 10,
+      "kg": 2,
+      "gross": null,
+      "grossLater": null
+    }
+  ]
+}

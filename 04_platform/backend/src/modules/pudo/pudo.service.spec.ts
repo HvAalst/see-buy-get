@@ -33,6 +33,9 @@ import { BagOfferService } from './bag-offer.service';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService } from './price-card.service';
+import { CounterPriceService } from './counter-price.service';
+import { readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import type { PriceCardTerms } from './price-card.types';
 import { withPlatformFee } from './pudo.config';
 import { offPlanSaid } from './route-plan.types';
@@ -149,6 +152,7 @@ describe('PUDO Light', () => {
   let routing: RoutingService;
   let zoneMaps: ZoneMapService;
   let priceCards: PriceCardService;
+  let counterPrices: CounterPriceService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let mdps: MdpService;
@@ -228,6 +232,7 @@ describe('PUDO Light', () => {
         ShopChoiceService, // 2026-11-06 — a bag for a shop that is closed (point 6)
         ZoneMapService, // 2026-11-08 — a country's zones, and its price card (zone pricing)
         PriceCardService,
+        CounterPriceService, // 2026-11-08 — what a counter keeps to price with no signal (step 3b)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -263,6 +268,7 @@ describe('PUDO Light', () => {
     routing = moduleRef.get(RoutingService);
     zoneMaps = moduleRef.get(ZoneMapService);
     priceCards = moduleRef.get(PriceCardService);
+    counterPrices = moduleRef.get(CounterPriceService);
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -13480,6 +13486,151 @@ describe('PUDO Light', () => {
       cardInForce({ surcharges: { door: 0, oversize: 0, oversizeCm: 100, fragile: 25 } });
       expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone?.amount).toBe(80);
       expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, fragile: true }).zone?.amount).toBe(105);
+    });
+
+    /**
+     * 2026-11-08 — THE COUNTER'S PRICE LIST (step 3b): the phone works out a walk-up's price from it with no signal, and must
+     * come to the figure the server gives. The cases and the list are kept in contracts/counter-price-cases.json; the Shop
+     * app's test works every case out from that list and must agree. Run with UPDATE_GOLDEN=1 to write it again after a
+     * deliberate change — and then the Shop app's test says whether its sums still agree.
+     */
+    it('the counter’s price list prices every walk-up as the server does (the golden cases the Shop app is checked against)', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const west2 = shopAt('ZP West Two', { lat: -1.22, lng: 36.62 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      const coast = shopAt('ZP Coast', { lat: -4.05, lng: 39.67 });
+      agents.setPrice(west2.did, 27.5);
+      // The two lanes differ — a large parcel pays another fee — and the tax is 16%.
+      entities.setTax('sbg-ke', { lane: 'pudo', ratePct: 0.16, label: 'VAT', registration: 'P051234567X' });
+      entities.setTax('sbg-ke', { lane: 'mdp', ratePct: 0.16, label: 'VAT' });
+      entities.setRates('sbg-ke', { lane: 'mdp', marginPct: 0.07 });
+      const end = { perParcel: 5, perKg: 0.75 };
+      // The card in force prices to the cent (no cash step), so an error of half a shilling shows…
+      cardInForce({
+        steps: [1, 2, 5, 10, 20],
+        table: { local: [70, 80, 100, 140, 220], near: [90, 105, 140, 210, 350], regional: [120, 140, 200, 320, 560], national: [150, 180, 260, 440, 800] },
+        perExtraKg: { local: 7, near: 9, regional: 11, national: 13 },
+        groupCharges: { urban: end, rural: end, remote: end },
+        zoneCharges: { Z0002: { perParcel: 15, perKg: 2.5 } },
+        surcharges: { door: 0, oversize: 40, oversizeCm: 100, fragile: 25 },
+        minimum: 95,
+        cashStep: 0,
+      });
+      // …and the next one, from tomorrow, rounds a person's price to 10.
+      const draft = priceCards.startDraft('sbg-ke', undefined, A).pending[0] as unknown as PriceCardTerms;
+      priceCards.saveDraft('sbg-ke', { ...draft, cashStep: 10 }, A);
+      priceCards.ready('sbg-ke', A);
+      const tomorrow = Date.now() + 24 * 3_600_000;
+      priceCards.approve('sbg-ke', 2, new Date(tomorrow).toISOString(), B);
+      const row = counterPrices.rowFor(west.did);
+      expect(row.cards.map((c) => [c.version, c.cashStep])).toEqual([[1, 0], [2, 10]]);
+      expect(row.cards[0].zoneOf[east.did]).toBe('Z0002');
+      expect(row.cards[0].zoneOf[coast.did]).toBeUndefined();
+      const names = new Map([[west.did, 'shop-west'], [west2.did, 'shop-west-two'], [east.did, 'shop-east'], [coast.did, 'shop-coast']]);
+      const asks: Array<{ dest: string; l: number; w: number; h: number; kg: number; fragile?: boolean }> = [
+        { dest: east.did, l: 30, w: 20, h: 10, kg: 2 },
+        { dest: east.did, l: 40, w: 30, h: 20, kg: 2 },
+        { dest: east.did, l: 60, w: 50, h: 40, kg: 12 },
+        { dest: east.did, l: 30, w: 20, h: 10, kg: 2, fragile: true },
+        { dest: east.did, l: 110, w: 30, h: 20, kg: 8 },
+        { dest: east.did, l: 20, w: 15, h: 5, kg: 0.3 },
+        { dest: east.did, l: 50, w: 40, h: 40, kg: 25 },
+        { dest: east.did, l: 30, w: 20, h: 10, kg: 31 },
+        { dest: west2.did, l: 30, w: 20, h: 10, kg: 1 },
+        { dest: west2.did, l: 30, w: 20, h: 10, kg: 1, fragile: true },
+        { dest: west2.did, l: 35, w: 25, h: 10, kg: 4.2, fragile: true },
+        { dest: west.did, l: 30, w: 20, h: 10, kg: 1 },
+        { dest: west.did, l: 30, w: 20, h: 10, kg: 3.3 },
+        { dest: coast.did, l: 30, w: 20, h: 10, kg: 2 },
+      ];
+      // What the server charges a walk-up at a moment — the take-in's own quote (the controller's walkInQuote) — or nothing
+      // where the card does not price it.
+      const charged = (a: (typeof asks)[number], at: number): number | null => {
+        try {
+          const dims = { l: a.l, w: a.w, h: a.h };
+          const q = routing.quoteShipment(west.did, a.dest, classifySize({ ...dims, kg: a.kg }), measuredFactor({ ...dims, kg: a.kg }), { kg: a.kg, fragile: a.fragile, dims, consumer: true, at });
+          return q.zone ? q.locked.gross : null;
+        } catch {
+          return null; // refused by the card (heavier than it takes): the counter has no price for it either
+        }
+      };
+      const cases = asks.map((a) => {
+        const gross = charged(a, Date.now());
+        // What the counter is shown with a signal is what it is charged.
+        let shown: number | null = null;
+        try {
+          const q = controller.quote(west.did, a.dest, undefined, String(a.l), String(a.w), String(a.h), String(a.kg), a.fragile ? 'true' : undefined, undefined, 'true') as { zone?: unknown; locked: { gross: number } };
+          shown = q.zone ? q.locked.gross : null;
+        } catch {
+          shown = null;
+        }
+        expect(shown).toBe(gross);
+        return { ...a, dest: names.get(a.dest)!, gross, grossLater: charged(a, tomorrow + 3_600_000) };
+      });
+      // Every kind of case has a price, the ones the card does not price have none, and the cash step rounds the later ones.
+      expect(cases.filter((c) => c.gross != null)).toHaveLength(12);
+      expect(cases.every((c) => c.grossLater == null || c.grossLater % 10 === 0)).toBe(true);
+      const rename = (rec: Record<string, unknown>) => Object.fromEntries(Object.entries(rec).map(([k, v]) => [names.get(k) ?? k, v]));
+      const dates = ['2026-01-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'];
+      const golden = {
+        note: 'Written by pudo.service.spec.ts (zone pricing, step 3b). The Shop app works out each case from this list and must reach the same gross: at now on the first card, at later on the second.',
+        now: '2026-06-01T00:00:00.000Z',
+        later: '2026-07-02T00:00:00.000Z',
+        row: {
+          ...row,
+          shop: names.get(row.shop),
+          at: '2026-06-01T00:00:00.000Z',
+          fees: rename(row.fees),
+          cards: row.cards.map((c, i) => ({ ...c, from: dates[i], zoneOf: rename(c.zoneOf) })),
+        },
+        cases,
+      };
+      const file = join(__dirname, '../../../contracts/counter-price-cases.json');
+      const text = JSON.stringify(golden, null, 2) + '\n';
+      if (process.env.UPDATE_GOLDEN === '1') writeFileSync(file, text);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(JSON.parse(text));
+    });
+
+    it('the counter’s price list carries the card coming into force too, from its date — and nothing where no card prices from the shop', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const coast = shopAt('ZP Coast', { lat: -4.05, lng: 39.67 });
+      expect(counterPrices.rowFor(west.did).cards).toEqual([]);
+      cardInForce();
+      const draft = priceCards.startDraft('sbg-ke', undefined, A).pending[0] as unknown as PriceCardTerms;
+      priceCards.saveDraft('sbg-ke', { ...draft, minimum: 150 }, A);
+      priceCards.ready('sbg-ke', A);
+      const tomorrow = new Date(Date.now() + 24 * 3_600_000).toISOString();
+      priceCards.approve('sbg-ke', 2, tomorrow, B);
+      const row = counterPrices.rowFor(west.did);
+      expect(row.cards.map((c) => [c.version, c.minimum])).toEqual([[1, 0], [2, 150]]);
+      expect(row.cards[1].from).toBe(tomorrow);
+      // A shop whose pin lies in no zone: no card prices from it.
+      expect(counterPrices.rowFor(coast.did).cards).toEqual([]);
+    });
+
+    it('a take-in kept with no signal is priced from the card in force when it was made — and never refused for a price that moved', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 }, 500);
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      // The first card came into force two hours ago…
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() - 2 * 3_600_000);
+      cardInForce();
+      clock.mockRestore();
+      // …and a dearer one from now, while the counter had no signal.
+      const draft = priceCards.startDraft('sbg-ke', undefined, A).pending[0] as unknown as PriceCardTerms;
+      priceCards.saveDraft('sbg-ke', { ...draft, table: { local: [170, 180, 200, 240, 320, 400], near: [190, 205, 240, 310, 450, 590], regional: [220, 240, 300, 420, 660, 900], national: [250, 280, 360, 540, 900, 1260] } }, A);
+      priceCards.ready('sbg-ke', A);
+      priceCards.approve('sbg-ke', 2, undefined, B);
+      const asShop = { active: true, role: 'agent', did: west.did } as never;
+      const dto = { agentDid: west.did, destPudoDid: east.did, destZone: 'MidTown', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2, senderMobile: '+254700000001', receiverMobile: '+254700000002' };
+      // Taken in an hour ago with no signal, the counter's own price said (wrongly, here): it happened — it is taken in, at
+      // the first card's price.
+      const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+      const late = controller.accept({ ...dto, parcelId: 'QR-ZP-LATE', dropoffPhotoRef: photoBy(west.did), observedAt: hourAgo, expectedTotal: 1 } as never, asShop) as unknown as { zonePrice: { cardVersion: number; amount: number }; shipmentCost: number };
+      expect(late.zonePrice).toMatchObject({ cardVersion: 1, amount: 80 });
+      // Taken in now: the card in force now, and a price that moved is refused.
+      expect(() => controller.accept({ ...dto, parcelId: 'QR-ZP-NOW', dropoffPhotoRef: photoBy(west.did), expectedTotal: late.shipmentCost } as never, asShop)).toThrow(/The price is now/);
+      const now = controller.accept({ ...dto, parcelId: 'QR-ZP-NOW', dropoffPhotoRef: photoBy(west.did) } as never, asShop) as unknown as { zonePrice: { cardVersion: number; amount: number } };
+      expect(now.zonePrice).toMatchObject({ cardVersion: 2, amount: 180 });
     });
   });
 

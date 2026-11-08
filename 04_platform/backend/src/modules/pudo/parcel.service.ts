@@ -34,7 +34,7 @@ import type { ShipmentQuote } from './routing.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
-import { handedAt, type Step } from './observed-at';
+import { handedAt, whenSeen, type Step } from './observed-at';
 import { FINDING_WORDS, type UnitHold } from './tamper.types';
 import { parcelLabelZpl } from './parcel-label';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
@@ -1466,9 +1466,12 @@ export class ParcelService implements OnApplicationBootstrap {
     const sameShop = Boolean(input.destPudoDid) && input.destPudoDid === input.agentDid;
     if (sameShop && !input.sameShopQuote) throw new GlosError('INVALID_STATE', 'A parcel collected where it is handed in is priced from its route — none was given');
     // 2026-11-08 — the price the counter showed is the one collected: a card's price that moved since is refused, before
-    // anything is written, so the counter can say the new one.
+    // anything is written, so the counter can say the new one. Not a take-in kept with no signal (step 3b): it happened, the
+    // cash changed hands then, and it is priced at the card in force at that moment — a refusal now would only stop the
+    // phone's queue. The counter compares the two when it is told the take-in arrived.
     const priced = (sameShop ? input.sameShopQuote : input.walkInQuote)?.locked.gross;
-    if (input.expectedTotal != null && priced != null && Math.abs(priced - input.expectedTotal) > 0.005) {
+    const late = whenSeen(input.observedAt).receivedAt != null;
+    if (!late && input.expectedTotal != null && priced != null && Math.abs(priced - input.expectedTotal) > 0.005) {
       throw new GlosError('PRICE_CHANGED', `The price is now ${priced}, not ${input.expectedTotal}: tell the sender the new price`, { expected: input.expectedTotal, now: priced });
     }
     const agent = this.agents.get(input.agentDid);

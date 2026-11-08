@@ -20,6 +20,8 @@ import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import { failedWords, mediaIdOf, type Uploaded } from '../../shared/upload';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { onOutboxSent } from '../../shared/outbox';
+import { isOfflineNow } from '../../shared/connectivity';
+import { priceFromRow, type CounterPriceRow } from './counterPrice';
 import type { TamperUnit, UnitHold } from '../../shared/tamper';
 import type { BagClosedWith } from '../../shared/bagSeal';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
@@ -280,7 +282,9 @@ export interface AgentState {
   /** The derived tier + cargo class for the measured dims (null until all four are entered). */
   acceptDerived: ClassifyView | null;
   /** 2026-11-08 — a walk-up's price as the sender pays it, said before it is taken in: from the country's price card, or a parcel collected here. */
-  acceptPrice: { gross: number; currency: string } | null;
+  acceptPrice: { gross: number; currency: string; local?: boolean } | null;
+  /** 2026-11-08 — the price list this counter keeps, to price a walk-up with no signal (step 3b): the last the server gave. */
+  counterPrices: CounterPriceRow | null;
   /** The geocoded point for the Address mode's nearest-first sort (+ a plain note on the match/quality). */
   acceptNear: GeoPoint | null;
   acceptGeoBusy: boolean;
@@ -408,6 +412,7 @@ const INITIAL: AgentState = {
   acceptPointsState: 'idle',
   acceptDerived: null,
   acceptPrice: null,
+  counterPrices: null,
   acceptNear: null,
   acceptGeoBusy: false,
   acceptGeoNote: null,
@@ -444,6 +449,8 @@ export interface TakenIn {
   here?: { binSlot?: string; cashDue?: number; currency?: string };
   /** 2026-11-08 — a walk-up priced from the country's price card: the cash to take for it. */
   cash?: { amount: number; currency?: string };
+  /** 2026-11-08 — taken in with no signal: the price the counter told the sender, where the one charged differs. */
+  told?: number;
   /** 2026-11-05 — pre-drop-off: where it goes now — a shelf slot until it is bagged, or the open bag for its next stop. */
   place?: TakenInPlace;
 }
@@ -929,6 +936,14 @@ export function useAgentApp() {
     setState((s) => ({ ...s, takeInTerms: narrow<TakeInTerms>(r.data), takeInTermsState: 'ready' }));
   }, [client, did]);
 
+  /** 2026-11-08 — the counter's price list (step 3b). A failure keeps the one it had: the read cache answers with no signal. */
+  const loadCounterPrices = useCallback(async () => {
+    if (!client || !did) return;
+    const r = await client.api.counterPrices(did);
+    if (r.error || !r.data) return;
+    setState((s) => ({ ...s, counterPrices: narrow<CounterPriceRow>(r.data) }));
+  }, [client, did]);
+
   const setTermsTold = useCallback((told: boolean) => setState((s) => ({ ...s, termsTold: told })), []);
   const retryTerms = useCallback(() => void loadTakeInTerms(), [loadTakeInTerms]);
 
@@ -1107,12 +1122,13 @@ export function useAgentApp() {
       if (screen === 'accept') {
         void loadAcceptPoints();
         void loadTakeInTerms();
+        void loadCounterPrices();
       }
       if (screen === 'consignments') void loadConsignments();
       if (screen === 'freight') void loadPosted();
       if (screen === 'shelf') void loadShelf();
     },
-    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadTakeInTerms, loadConsignments, loadShelf, loadPosted],
+    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadTakeInTerms, loadCounterPrices, loadConsignments, loadShelf, loadPosted],
   );
 
   /**
@@ -1245,22 +1261,31 @@ export function useAgentApp() {
   // 2026-11-08 — A WALK-UP'S PRICE, said before it is taken in: once its size is known and its shop is chosen, the server is
   // asked what the sender pays (its country's price card, rounded to the cash step). Said only where there is such a price —
   // a parcel collected here always has one; elsewhere, only where the country's card is in force (else the shop's own price).
+  // 2026-11-08 — with NO SIGNAL (step 3b), worked out on this phone from the price list it keeps, the server's sums step for
+  // step (counterPrice.ts); the size check needs the server, so it is not waited for. A take-in kept with no signal is priced
+  // again by the server at the card in force when it was made.
   const priceEpoch = useRef(0);
   useEffect(() => {
     const f = state.accept;
     const parsed = parseDims(f.dims);
     const epoch = ++priceEpoch.current;
-    if (!client || !did || !parsed || !f.destPudoDid || !state.acceptDerived || state.acceptDerived.dedicated) {
-      setState((s) => (s.acceptPrice ? { ...s, acceptPrice: null } : s));
-      return;
-    }
-    const here = f.destPudoDid === did;
-    void client.api.walkUpQuote(did, f.destPudoDid, parsed, f.fragile || undefined).then((r) => {
+    const clear = () => setState((s) => (s.acceptPrice ? { ...s, acceptPrice: null } : s));
+    if (!client || !did || !parsed || !f.destPudoDid) return clear();
+    const dest = f.destPudoDid;
+    const onPhone = () => {
+      const p = priceFromRow(stateRef.current.counterPrices, { dest, ...parsed, fragile: f.fragile || undefined }, Date.now());
+      setState((s) => ({ ...s, acceptPrice: p ? { gross: p.gross, currency: p.currency, local: true } : null }));
+    };
+    if (isOfflineNow()) return onPhone();
+    if (!state.acceptDerived || state.acceptDerived.dedicated) return clear();
+    const here = dest === did;
+    void client.api.walkUpQuote(did, dest, parsed, f.fragile || undefined).then((r) => {
       if (epoch !== priceEpoch.current) return;
+      if (r.error && isOffline(r.error)) return onPhone();
       const q = r.error ? null : narrow<{ zone?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
       setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
     });
-  }, [client, did, state.accept.destPudoDid, state.acceptDerived, state.accept.fragile]);
+  }, [client, did, state.accept.destPudoDid, state.acceptDerived, state.accept.fragile, state.accept.dims, state.counterPrices]);
 
   // The typed area drives the nearest-first sort + the confidence note — but ONLY after Find geocodes it.
   // Editing the text (or switching mode) drops the stale near-point/note so the list + distances can never
@@ -1772,7 +1797,8 @@ export function useAgentApp() {
       // Taken in without a signal: it is in the outbox, and says so. Its label and release code are made when it
       // reaches SeeBuyGet, and shown then (lateTakeIns).
       if (narrow<{ queued?: boolean }>(r.data)?.queued) {
-        setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: { parcelId: f.parcelId.trim().toUpperCase(), queued: true } }));
+        const told = stateRef.current.acceptPrice;
+        setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: { parcelId: f.parcelId.trim().toUpperCase(), queued: true, ...(told ? { cash: { amount: told.gross, currency: told.currency } } : {}) } }));
         pushToast({ tone: 'info', icon: 'box', title: t('agent.toast.parcelQueued'), detail: t('agent.toast.parcelQueuedDetail') });
         return;
       }
@@ -1800,10 +1826,14 @@ export function useAgentApp() {
     () =>
       onOutboxSent((item, answer) => {
         if (item.path !== '/v1/sbg/parcels/accept') return;
-        const p = narrow<{ parcelId?: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(answer);
+        const p = narrow<{ parcelId?: string; trackingKey?: string; otp?: string; label?: { svg?: string }; shipmentCost?: number; currency?: string }>(answer);
         if (!p?.parcelId) return;
-        const sender = (item.body as { senderMobile?: string } | undefined)?.senderMobile;
-        const late = { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(sender && sender !== 'n/a' ? { senderMobile: sender } : {}), queuedAt: item.at };
+        const body = item.body as { senderMobile?: string; expectedTotal?: number } | undefined;
+        const sender = body?.senderMobile;
+        // Priced from the card (step 3b): the cash it was charged — and what the counter told the sender, where that differs.
+        const cash = p.shipmentCost != null ? { amount: p.shipmentCost, currency: p.currency } : undefined;
+        const told = cash && body?.expectedTotal != null && Math.abs(body.expectedTotal - cash.amount) > 0.005 ? body.expectedTotal : undefined;
+        const late = { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(sender && sender !== 'n/a' ? { senderMobile: sender } : {}), ...(cash ? { cash } : {}), ...(told != null ? { told } : {}), queuedAt: item.at };
         setState((s) => ({ ...s, lateTakeIns: [...s.lateTakeIns, late] }));
         pushToast({ tone: 'info', icon: 'box', title: t('agent.toast.lateTakeIn', { parcel: p.parcelId }), detail: t('agent.toast.lateTakeInDetail') });
       }),

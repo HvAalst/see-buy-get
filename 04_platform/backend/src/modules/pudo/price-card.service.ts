@@ -126,10 +126,7 @@ export class PriceCardService {
     const billableKg = Math.max(w.stepKg, Math.ceil(raw / w.stepKg - 1e-9) * w.stepKg);
     if (billableKg > w.maxKg + 1e-9) throw new GlosError('INVALID_INPUT', `It counts as ${r2(billableKg)} kg; the most a parcel may be here is ${w.maxKg} kg: send it as freight`, { field: 'kg' });
 
-    const pair = card.pairs.find((p) => (p.a === from.code && p.b === to.code) || (p.a === to.code && p.b === from.code));
-    const crossing = this.zones.crossing(entityId, card.zoneMapVersion, from.code, to.code);
-    const km = from.code === to.code ? 0 : r2(this.router ? this.router.roadKm(from.centre, to.centre) : crossing.straightKm * ROAD_CIRCUITY_FACTOR);
-    const band = pair ? card.bands.find((b) => b.key === pair.band) ?? this.bandOf(card.bands, crossing.zonesCrossed, km) : this.bandOf(card.bands, crossing.zonesCrossed, km);
+    const { band, zonesCrossed, km } = this.bandFor(entityId, card, from, to);
 
     const lines: ZonePriceLine[] = [];
     const prices = card.table[band.key] ?? [];
@@ -161,13 +158,39 @@ export class PriceCardService {
       toName: to.name,
       band: band.key,
       bandName: band.name,
-      zonesCrossed: crossing.zonesCrossed,
+      zonesCrossed,
       km,
       billableKg: r2(billableKg),
       by: counted > (weighed ?? 0) ? 'size' : 'weight',
       lines,
       amount: r2(Math.max(subtotal, card.minimum)),
     };
+  }
+
+  /**
+   * The band two zones are priced in on a card: a pair named on the card, else the zones between them and the km between
+   * their centres, the further of the two. The same for a price worked out here and for a counter's price list.
+   */
+  bandFor(entityId: string, card: StoredPriceCard, from: { code: string; centre: { lat: number; lng: number } }, to: { code: string; centre: { lat: number; lng: number } }): { band: PriceBand; zonesCrossed: number; km: number } {
+    const pair = card.pairs.find((p) => (p.a === from.code && p.b === to.code) || (p.a === to.code && p.b === from.code));
+    const crossing = this.zones.crossing(entityId, card.zoneMapVersion, from.code, to.code);
+    const km = from.code === to.code ? 0 : r2(this.router ? this.router.roadKm(from.centre, to.centre) : crossing.straightKm * ROAD_CIRCUITY_FACTOR);
+    const band = pair ? card.bands.find((b) => b.key === pair.band) ?? this.bandOf(card.bands, crossing.zonesCrossed, km) : this.bandOf(card.bands, crossing.zonesCrossed, km);
+    return { band, zonesCrossed: crossing.zonesCrossed, km };
+  }
+
+  /**
+   * 2026-11-08 — the cards a counter prices from with no signal (zone pricing, step 3b): the one in force in a country now,
+   * and every approved one that comes into force after it, oldest first. Each says from when.
+   */
+  cardsFrom(country: string | undefined, now: number = Date.now()): { entityId: string; cards: StoredPriceCard[] } | undefined {
+    const company = this.entities.forJurisdiction(country);
+    if (!company) return undefined;
+    const s = this.store.get(company.entityId);
+    if (!s) return undefined;
+    const inForce = this.inForceOf(s, now);
+    const later = s.cards.filter((c) => c.status === 'approved' && Date.parse(c.effectiveFrom!) > now).sort((a, b) => Date.parse(a.effectiveFrom!) - Date.parse(b.effectiveFrom!) || a.version - b.version);
+    return { entityId: company.entityId, cards: [...(inForce ? [inForce] : []), ...later] };
   }
 
   /** The band of a pair: the first band its zones-between fit, and the first its km fit — the further of the two. */

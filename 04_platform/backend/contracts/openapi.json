@@ -15000,6 +15000,35 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/counter-prices": {
+      "get": {
+        "operationId": "Sbg.counterPriceRow",
+        "summary": "",
+        "description": "2026-11-08 — WHAT THIS COUNTER KEEPS TO PRICE A WALK-UP WITH NO SIGNAL (zone pricing, step 3b): its country's price\ncards (in force, and coming), every shop's own fee and zone, our fee and the tax by size class. The phone keeps the last\nanswer and works out the price the server would; a take-in it keeps is priced again by the server, at its moment.\nOwner-scoped, as the take-in terms are.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/can-transact": {
       "get": {
         "operationId": "Sbg.canTransact",

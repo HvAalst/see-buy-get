@@ -378,6 +378,10 @@ export const enAgent = {
   // 2026-11-08 — a walk-up's price, said before it is taken in, and the cash to take for it after.
   'agent.accept.priceShown': 'Tell the sender this price before you take the parcel in, and take it in cash.',
   'agent.accept.walkInCash': 'Take {amount} in cash for it.',
+  // 2026-11-08 — with no signal: the price worked out on this phone; and, when the take-in reaches SeeBuyGet, what it was charged.
+  'agent.accept.priceOnPhone': 'No signal: worked out on this phone from the prices it last had. Tell the sender this price before you take the parcel in, and take it in cash.',
+  'agent.accept.lateCharged': 'Taken in at {amount}, charged to your float.',
+  'agent.accept.lateToldOther': 'You told the sender {told}: the price changed while you had no signal.',
   'agent.accept.priceLocked': 'The price was locked when the sender booked — no arguing at the counter.',
   'agent.accept.prepaidTitle': 'Prepaid by the store',
   'agent.accept.prepaidDetail': 'Nothing to collect — the store already paid for this shipment.',

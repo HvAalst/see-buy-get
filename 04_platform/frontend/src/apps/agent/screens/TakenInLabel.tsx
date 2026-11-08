@@ -1,4 +1,5 @@
-import { Button, CodeCard, labelGot, PaperSheet, ReadAloud, Sheet, usePaper } from '../../../shared/ui';
+import { Button, CodeCard, labelGot, Note, PaperSheet, ReadAloud, Sheet, usePaper } from '../../../shared/ui';
+import { money } from '../logic';
 import { useT } from '../../../shared/i18n';
 import type { AgentActions, AgentState, TakenIn } from '../useAgentApp';
 
@@ -56,6 +57,15 @@ export function LateTakeInSheet({ state, actions }: { state: AgentState; actions
       {late ? (
         <>
           <p class="t-body">{t('agent.accept.lateBody', { parcel: late.parcelId, time: new Date(late.queuedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}</p>
+          {/* 2026-11-08 — priced from the card at the moment it was taken in: the cash it was charged, and the price told where they differ. */}
+          {late.cash ? (
+            <Note
+              tone={late.told != null ? 'warn' : 'info'}
+              icon="wallet"
+              title={t('agent.accept.lateCharged', { amount: money(late.cash.amount, late.cash.currency) })}
+              detail={late.told != null ? t('agent.accept.lateToldOther', { told: money(late.told, late.cash.currency) }) : ''}
+            />
+          ) : null}
           <TakenInLabel label={late} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
           {late.releaseCode && late.senderMobile ? <p class="hint">{t('agent.accept.lateCall', { phone: late.senderMobile })}</p> : null}
           <Button variant="link" onClick={actions.dismissLateTakeIn}>

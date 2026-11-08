@@ -195,6 +195,8 @@ import { offPlanSaid } from './route-plan.types';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
+import { whenSeen } from './observed-at';
+import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
@@ -370,6 +372,8 @@ export class SbgController {
     @Optional() private readonly shopChoices?: ShopChoiceService,
     @Optional() private readonly zones?: ZoneMapService,
     @Optional() private readonly priceCards?: PriceCardService,
+    // 2026-11-08 — what a counter keeps to price a walk-up with no signal (zone pricing, step 3b).
+    @Optional() private readonly counterPrices?: CounterPriceService,
   ) {}
 
   /**
@@ -3343,6 +3347,21 @@ export class SbgController {
     return this.parcels.takeInTerms(did);
   }
 
+  /**
+   * 2026-11-08 — WHAT THIS COUNTER KEEPS TO PRICE A WALK-UP WITH NO SIGNAL (zone pricing, step 3b): its country's price
+   * cards (in force, and coming), every shop's own fee and zone, our fee and the tax by size class. The phone keeps the last
+   * answer and works out the price the server would; a take-in it keeps is priced again by the server, at its moment.
+   * Owner-scoped, as the take-in terms are.
+   */
+  @Scopes('agent:read:self')
+  @Get('agents/:did/counter-prices')
+  @AtTheCounter()
+  counterPriceRow(@Param('did') did: string, @Actor() actor: IntrospectionResult): CounterPriceRow {
+    this.assertAgentOwner(did, actor);
+    if (!this.counterPrices) throw new GlosError('NOT_FOUND', 'Counter prices are not available on this server');
+    return this.counterPrices.rowFor(did);
+  }
+
   // --- pre-paid wallet (Light SSE) ---
 
   /**
@@ -3549,12 +3568,14 @@ export class SbgController {
    */
   private walkInQuote(agentDid: string, dto: AcceptParcelDto) {
     if (!this.priceCards || (dto.paymentMode && dto.paymentMode !== 'cash')) return undefined;
-    if (!this.priceCards.inForceFor(this.agents.countryOf(this.agents.get(agentDid)))) return undefined;
+    // At the moment it was taken in: a take-in kept with no signal is priced from the card in force then (step 3b).
+    const at = whenSeen(dto.observedAt).at;
+    if (!this.priceCards.inForceFor(this.agents.countryOf(this.agents.get(agentDid)), at)) return undefined;
     const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
     const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg }) : undefined;
     try {
-      const quote = this.routing.quoteShipment(agentDid, dto.destPudoDid!, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true });
+      const quote = this.routing.quoteShipment(agentDid, dto.destPudoDid!, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true, at });
       return quote.zone ? quote : undefined;
     } catch {
       return undefined;
@@ -3566,7 +3587,7 @@ export class SbgController {
     const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
     const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg }) : undefined;
-    return this.routing.quoteShipment(agentDid, agentDid, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true });
+    return this.routing.quoteShipment(agentDid, agentDid, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true, at: whenSeen(dto.observedAt).at });
   }
 
   /** F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable

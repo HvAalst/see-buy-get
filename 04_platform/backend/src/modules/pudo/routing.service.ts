@@ -34,6 +34,8 @@ export interface QuoteCarriers {
   dims?: { l: number; w: number; h: number };
   /** A person pays this price (the Send app, a walk-in at a counter): rounded to the country's cash step, where it has one. */
   consumer?: boolean;
+  /** 2026-11-08 — the moment it is priced at (ms): when a take-in kept with no signal was made, so the card in force then prices it. */
+  at?: number;
 }
 
 export interface NodePick {
@@ -524,7 +526,7 @@ export class RoutingService {
     if (!this.priceCards || !this.zoneMaps || !plan.hops.length) return undefined;
     const country = this.entities.find(sellerId)?.jurisdiction;
     if (!country || plan.hops.some((h) => (h.country ?? NETWORK_JURISDICTION) !== country)) return undefined;
-    const live = this.priceCards.inForceFor(country);
+    const live = this.priceCards.inForceFor(country, carriers.at ?? Date.now());
     if (!live || live.card.currency !== currency) return undefined;
     const first = plan.hops[0];
     const last = plan.hops[plan.hops.length - 1];

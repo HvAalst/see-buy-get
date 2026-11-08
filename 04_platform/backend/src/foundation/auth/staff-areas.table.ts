@@ -149,6 +149,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/agents/:did/rating': 'any',
   'GET sbg/agents/:did/shelf': 'support',
   'GET sbg/agents/:did/take-in-terms': 'support',
+  'GET sbg/agents/:did/counter-prices': 'support',
   'GET sbg/agents/kyc-queue': 'vetting',
   'GET sbg/agents/unfinished': 'vetting',
   'GET sbg/border-rules': 'any',

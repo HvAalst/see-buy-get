@@ -232,7 +232,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           <span>{t('agent.accept.fragileCheck')}</span>
         </label>
         {/* 2026-11-08 — what the sender pays, said before the parcel is taken in. */}
-        {state.acceptPrice ? <GlanceNumber label={t('agent.accept.collectCash')} value={money(state.acceptPrice.gross, state.acceptPrice.currency)} sub={t('agent.accept.priceShown')} /> : null}
+        {state.acceptPrice ? <GlanceNumber label={t('agent.accept.collectCash')} value={money(state.acceptPrice.gross, state.acceptPrice.currency)} sub={t(state.acceptPrice.local ? 'agent.accept.priceOnPhone' : 'agent.accept.priceShown')} /> : null}
       </Card>
 
       <Card label={t('agent.accept.whatsInside')}>
