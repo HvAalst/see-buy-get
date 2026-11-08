@@ -109,7 +109,7 @@ export class ReturnService {
         toAgentDid,
         parcel.size,
         parcel.dimensionsCm ? measuredFactor({ ...parcel.dimensionsCm, kg: parcel.weightKg }) : undefined,
-        { kg: parcel.weightKg, fragile: parcel.fragile },
+        { kg: parcel.weightKg, fragile: parcel.fragile, dims: parcel.dimensionsCm },
       );
     } catch {
       return null; // nowhere to send it back through — offering a return we cannot perform is worse than none
@@ -164,7 +164,7 @@ export class ReturnService {
       offer.toAgentDid,
       parcel.size,
       parcel.dimensionsCm ? measuredFactor({ ...parcel.dimensionsCm, kg: parcel.weightKg }) : undefined,
-      { kg: parcel.weightKg, fragile: parcel.fragile },
+      { kg: parcel.weightKg, fragile: parcel.fragile, dims: parcel.dimensionsCm },
     );
     const vendor = this.vendors.get(vendorId);
     // What the shop is owed for the days it held the slot. The store is ending the situation, so the

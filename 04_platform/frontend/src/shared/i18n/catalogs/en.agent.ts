@@ -375,6 +375,9 @@ export const enAgent = {
   'agent.accept.alreadyTitle': 'Already taken in',
   'agent.accept.alreadyDetail': 'This parcel is {status} — nothing to do at the counter.',
   'agent.accept.collectCash': 'Collect in cash',
+  // 2026-11-08 — a walk-up's price, said before it is taken in, and the cash to take for it after.
+  'agent.accept.priceShown': 'Tell the sender this price before you take the parcel in, and take it in cash.',
+  'agent.accept.walkInCash': 'Take {amount} in cash for it.',
   'agent.accept.priceLocked': 'The price was locked when the sender booked — no arguing at the counter.',
   'agent.accept.prepaidTitle': 'Prepaid by the store',
   'agent.accept.prepaidDetail': 'Nothing to collect — the store already paid for this shipment.',

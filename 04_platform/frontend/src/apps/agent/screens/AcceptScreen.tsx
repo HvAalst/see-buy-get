@@ -231,6 +231,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           <input type="checkbox" checked={f.fragile} onChange={(e) => actions.setAccept({ fragile: e.currentTarget.checked })} />
           <span>{t('agent.accept.fragileCheck')}</span>
         </label>
+        {/* 2026-11-08 — what the sender pays, said before the parcel is taken in. */}
+        {state.acceptPrice ? <GlanceNumber label={t('agent.accept.collectCash')} value={money(state.acceptPrice.gross, state.acceptPrice.currency)} sub={t('agent.accept.priceShown')} /> : null}
       </Card>
 
       <Card label={t('agent.accept.whatsInside')}>
@@ -358,6 +360,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
                 }
               />
             ) : null}
+            {state.acceptedLabel.cash ? <Note tone="info" icon="wallet" title={t('agent.accept.walkInCash', { amount: money(state.acceptedLabel.cash.amount, state.acceptedLabel.cash.currency) })} detail="" /> : null}
             <PlaceNote place={state.acceptedLabel.place} />
             <TakenInLabel label={state.acceptedLabel} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>

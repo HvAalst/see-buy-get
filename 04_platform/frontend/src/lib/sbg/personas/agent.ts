@@ -283,6 +283,11 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** Derive the size tier + cargo class from measured dims (shown live at the counter before accept). */
     classify: (l: number, w: number, h: number, kg: number) => sbg.request((c) => c.POST('/v1/sbg/size/classify', { body: { l, w, h, kg } })),
+    /** 2026-11-08 — what a walk-up costs, as a person pays it (rounded to the country's cash step): said before it is taken in. */
+    walkUpQuote: (origin: string, dest: string, m: { l: number; w: number; h: number; kg: number }, fragile?: boolean) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/quote', { params: { query: { origin, dest, size: 'M', l: String(m.l), w: String(m.w), h: String(m.h), kg: String(m.kg), consumer: 'true', ...(fragile ? { fragile: 'true' } : {}) } } }),
+      ),
 
     /** PG4 — what a scanned sticker IS before confirming: a pre-minted peer send (with the cash due), a
      *  store order, or an already-used sticker. 404 = a fresh sticker → the walk-up form. Server-pinned

@@ -41,6 +41,9 @@ const SHOPS: Record<string, { did: string; shopName: string; country: string }> 
 const PARCELS: Record<string, unknown> = {
   'PUD-APP': { parcelId: 'PUD-APP', paymentMode: 'cash', senderMobile: 'app' },
   'PUD-WALK': { parcelId: 'PUD-WALK', paymentMode: 'cash', senderMobile: '+254700000001' },
+  // 2026-11-08 — a walk-up priced from the country's card, and one collected where it was handed in: our price, in cash.
+  'PUD-CARD': { parcelId: 'PUD-CARD', paymentMode: 'cash', senderMobile: '+254700000002', shipmentCost: 230, zonePrice: { band: 'local', amount: 80 } },
+  'PUD-HERE': { parcelId: 'PUD-HERE', paymentMode: 'cash', senderMobile: '+254700000003', originAgentDid: SHOP, destAgentDid: SHOP, shipmentCost: 120 },
 };
 
 describe('tax invoices — KRA eTIMS, Kenya only', () => {
@@ -171,6 +174,15 @@ describe('tax invoices — KRA eTIMS, Kenya only', () => {
     expect(invoices.forRef('PUD-APP')[0].buyer.id).toBeUndefined();
     expect(invoices.forRef('PUD-WALK')[0]).toMatchObject({ buyer: { kind: 'shop', id: SHOP }, paidBy: 'prepaid' });
     expect(rail!.sent[0].body).toMatchObject({ pmtTyCd: '01', custNm: 'Cash customer' });
+  });
+
+  it('a walk-up paid in cash at our price — from the country’s card, or collected where it was handed in — is sold to the person', async () => {
+    await boot();
+    shopSale('PUD-CARD');
+    shopSale('PUD-HERE');
+    await invoices.settled();
+    expect(invoices.forRef('PUD-CARD')[0]).toMatchObject({ buyer: { kind: 'person', name: 'Cash customer' }, paidBy: 'cash' });
+    expect(invoices.forRef('PUD-HERE')[0]).toMatchObject({ buyer: { kind: 'person', name: 'Cash customer' }, paidBy: 'cash' });
   });
 
   it('one KRA refused holds back the ones after it; sent again, they go in number order', async () => {

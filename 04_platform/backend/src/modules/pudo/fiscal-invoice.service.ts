@@ -226,9 +226,12 @@ export class FiscalInvoiceService implements OnModuleInit, OnApplicationBootstra
   /**
    * Who bought it. A shop buys carriage at the wholesale price and sells it on; a store buys it for its buyers. A person
    * who sent their own parcel paid the shop the price the app showed them, and the shop passed it on: the sale is theirs.
+   * So is a walk-up paid in cash at its route's price (2026-11-08) — one collected where it was handed in, or one priced
+   * from its country's price card: the counter told the sender our price and passed it on whole. Only a walk-up at the
+   * flat price, which the shop buys at wholesale and sells on at its own, is the shop's.
    */
   private buyerOf(payer: { code: AccountCode; counterparty: string } | undefined, parcel: Parcel | undefined): { buyer: FiscalBuyer; paidBy: 'cash' | 'prepaid' } {
-    if (parcel?.paymentMode === 'cash' && parcel.senderMobile === 'app') return { buyer: { kind: 'person', name: PERSON }, paidBy: 'cash' };
+    if (parcel?.paymentMode === 'cash' && !parcel.vendorId && (parcel.senderMobile === 'app' || parcel.shipmentCost != null)) return { buyer: { kind: 'person', name: PERSON }, paidBy: 'cash' };
     if (payer && SHOP_CODES.has(payer.code)) return { buyer: { kind: 'shop', id: payer.counterparty, name: this.agents.find(payer.counterparty)?.shopName ?? 'Shop' }, paidBy: 'prepaid' };
     if (payer) return { buyer: { kind: 'store', id: payer.counterparty, name: this.vendorName(payer.counterparty) }, paidBy: 'prepaid' };
     return { buyer: { kind: 'person', name: PERSON }, paidBy: 'cash' };

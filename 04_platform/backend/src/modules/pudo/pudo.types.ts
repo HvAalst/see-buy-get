@@ -1063,6 +1063,30 @@ export class ParcelStopFee {
   currency: string;
 }
 
+/** 2026-11-08 — one line of a parcel's price on its country's price card (zone pricing, step 3). */
+export class ParcelZonePriceLine {
+  key: string;
+  label: string;
+  amount: number;
+}
+
+/**
+ * WHAT A PARCEL'S PRICE WAS MADE OF ON ITS COUNTRY'S PRICE CARD, kept as it was sold (zone pricing, step 3): the card and
+ * the zone map it was made with, the two zones, the band, the weight it counted as, and the card's price line by line —
+ * before the two shops' own fees, our fee and the tax, which the parcel keeps beside it as before. A card changed later
+ * never reprices it.
+ */
+export class ParcelZonePrice {
+  cardVersion: number;
+  zoneMapVersion: number;
+  from: string;
+  to: string;
+  band: string;
+  billableKg: number;
+  amount: number;
+  lines: ParcelZonePriceLine[];
+}
+
 export class Parcel {
   parcelId: string; // pre-printed QR sticker id (the human handle; reusable across shipments)
   // DT — the shipment's stable GLOS identity: a real DID minted at creation (the digital twin's id, distinct
@@ -1187,6 +1211,8 @@ export class Parcel {
    * sold at is the one the store paid for: a fee raised or lowered afterwards changes what later parcels pay, not this.
    */
   stopFees?: ParcelStopFee[];
+  /** 2026-11-08 — where its country's price card priced it: what that price was made of, as sold. */
+  zonePrice?: ParcelZonePrice;
   /**
    * WHAT OF ITS OWN FEE THE RECEIVING SHOP WAS PAID AHEAD, AT SHELVING (the user, 2026-10-26: "shops are at minimum paid the
    * fee they set"): the part of what it was paid there beyond its company's shelving pay. Its release then pays only what

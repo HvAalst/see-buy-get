@@ -136,6 +136,12 @@ export function vendorOrderStatsOf(rows: Parcel[]): VendorOrderStats {
   return { total: rows.length, unpaid, active };
 }
 
+/** 2026-11-08 — what a parcel's price was made of on its country's price card, where one priced it (zone pricing, step 3). */
+function zoneStampOf(quote: ShipmentQuote): Pick<Parcel, 'zonePrice'> {
+  const z = quote.zone;
+  return z ? { zonePrice: { cardVersion: z.version, zoneMapVersion: z.zoneMapVersion, from: z.from, to: z.to, band: z.band, billableKg: z.billableKg, amount: z.amount, lines: z.lines.map((l) => ({ ...l })) } } : {};
+}
+
 /** Each stop's own fee as the parcel is sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
 function stopFeesOf(quote: ShipmentQuote): NonNullable<Parcel['stopFees']> {
   return quote.nodes.map((n) => ({ type: n.type, id: n.id, fee: n.nativeFee, currency: n.currency }));
@@ -651,6 +657,9 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
 }
 
 interface AcceptInput {
+  /** 2026-11-08 — a walk-up to another shop priced from its country's price card (the controller works it out), and the price the counter showed. */
+  walkInQuote?: ShipmentQuote;
+  expectedTotal?: number;
   agentDid: string;
   parcelId: string; // pre-printed QR sticker id
   size?: ParcelSize; // legacy declared tier; DERIVED from dimensionsCm+weightKg when those are supplied
@@ -1456,6 +1465,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // which the route works out — one stop, the shop's fee once, no transport — and is handed in by the controller.
     const sameShop = Boolean(input.destPudoDid) && input.destPudoDid === input.agentDid;
     if (sameShop && !input.sameShopQuote) throw new GlosError('INVALID_STATE', 'A parcel collected where it is handed in is priced from its route — none was given');
+    // 2026-11-08 — the price the counter showed is the one collected: a card's price that moved since is refused, before
+    // anything is written, so the counter can say the new one.
+    const priced = (sameShop ? input.sameShopQuote : input.walkInQuote)?.locked.gross;
+    if (input.expectedTotal != null && priced != null && Math.abs(priced - input.expectedTotal) > 0.005) {
+      throw new GlosError('PRICE_CHANGED', `The price is now ${priced}, not ${input.expectedTotal}: tell the sender the new price`, { expected: input.expectedTotal, now: priced });
+    }
     const agent = this.agents.get(input.agentDid);
     // A counter take-in declares a size and a photo, never a contents list and a value, so a parcel handed
     // over this counter cannot be papered for a border. Compared shop-to-shop rather than through a quote,
@@ -1587,6 +1602,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
     // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
     if (sameShop && input.sameShopQuote) Object.assign(parcel, this.pricedFrom(input.sameShopQuote));
+    // A walk-up priced from its country's card keeps that price and what it was made of, as a booking does.
+    else if (input.walkInQuote) Object.assign(parcel, this.pricedFrom(input.walkInQuote));
     // A same-shop parcel goes on this shop's shelf now: the slot FIRST, before the parcel is kept — a full shelf refuses
     // the take-in with nothing written, rather than keeping a parcel that is ready to collect and on no shelf.
     if (sameShop) parcel.binSlot = this.shelf.assign(input.agentDid, parcel.parcelId, parcel.size);
@@ -1606,7 +1623,7 @@ export class ParcelService implements OnApplicationBootstrap {
      * to a float we do not hold, no labour accrued by a company that does not operate there. What the
      * network still does is the thing it went there to do — hold the custody chain, and prove it.
      */
-    if (promise === 'ours' && sameShop && mode === 'cash') {
+    if (promise === 'ours' && mode === 'cash' && (sameShop || input.walkInQuote) && parcel.shipmentCost != null) {
       // Collected in cash against the price its route gave — the shop's fee once, our fee, the tax — and remitted, tax and
       // all, as a Send parcel's is; then the shop is paid its take-in, which meets its own fee (takeInPayOf).
       const due = parcel.shipmentCost ?? 0;
@@ -1897,6 +1914,7 @@ export class ParcelService implements OnApplicationBootstrap {
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       stopFees: stopFeesOf(quote),
+      ...zoneStampOf(quote),
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct,
@@ -2053,7 +2071,8 @@ export class ParcelService implements OnApplicationBootstrap {
     }
     // A same-shop walk-up (2026-11-05) was charged as a Send parcel is — its route's price, then its take-in paid — and is
     // reversed as one.
-    if (parcel.senderMobile === 'app' || (this.isSameShop(parcel) && parcel.shipmentCost != null)) {
+    // 2026-11-08 — a walk-up priced from its country's card was charged that price, as a booking is: given back the same way.
+    if (parcel.senderMobile === 'app' || (this.isSameShop(parcel) && parcel.shipmentCost != null) || (parcel.zonePrice != null && parcel.shipmentCost != null)) {
       // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
       // sale un-owes its tax as surely as it un-earns its revenue.
       this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
@@ -2209,7 +2228,8 @@ export class ParcelService implements OnApplicationBootstrap {
 
     // Open-data quote: vendor is billed the FULL cost (prepaid). flexible reserves the ceiling (rebated on
     // delivery); locked commits the cheapest route. The buyer-charge is REPORTED only (collected at checkout).
-    const routeMode = input.routeMode === 'locked' ? 'locked' : 'flexible';
+    // 2026-11-08 — a price from the card is the card's whoever carries it: nothing is held back to rebate.
+    const routeMode = quote.zone || input.routeMode === 'locked' ? 'locked' : 'flexible';
     const chosen = routeMode === 'locked' ? quote.locked : quote.flexible;
     // GROSS — what actually leaves the store's float. `chosen.total` is the sister's own price and stays
     // the basis of every margin figure; what a customer is billed is that plus the tax on it.
@@ -2268,6 +2288,7 @@ export class ParcelService implements OnApplicationBootstrap {
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       stopFees: stopFeesOf(quote),
+      ...zoneStampOf(quote),
       transportCost: chosen.transport,
       platformFee,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
@@ -2412,6 +2433,7 @@ export class ParcelService implements OnApplicationBootstrap {
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       stopFees: stopFeesOf(quote),
+      ...zoneStampOf(quote),
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
@@ -3028,7 +3050,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * may have been cheaper. Refund (ceiling − actual) to the vendor's balance — GLOS keeps only the 2%.
    */
   private rebateFlexible(parcel: Parcel): void {
-    if (parcel.routeMode !== 'flexible' || !parcel.vendorId || parcel.rebate != null) return;
+    if (parcel.routeMode !== 'flexible' || !parcel.vendorId || parcel.rebate != null || parcel.zonePrice) return;
     if (parcel.ceilingCost == null || parcel.nodeFees == null || parcel.routeKm == null) return;
     // The carrier's rate where it is known in the parcel's money; else the cheapest it was quoted at — never the
     // cheapest on the whole network, which is a figure in whatever money that vehicle happens to be priced in.
@@ -3647,6 +3669,7 @@ export class ParcelService implements OnApplicationBootstrap {
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       stopFees: stopFeesOf(quote),
+      ...zoneStampOf(quote),
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct,
@@ -3994,6 +4017,7 @@ export class ParcelService implements OnApplicationBootstrap {
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       stopFees: stopFeesOf(quote),
+      ...zoneStampOf(quote),
       transportCost: chosen.transport,
       platformFee: round(chosen.total - chosen.base),
       platformFeePct: quote.platformFeePct,

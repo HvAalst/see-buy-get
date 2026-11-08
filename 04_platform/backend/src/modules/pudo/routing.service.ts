@@ -18,6 +18,9 @@ import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/mo
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
 import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
+import { PriceCardService } from './price-card.service';
+import { ZoneMapService } from './zone-map.service';
+import type { ZonePrice } from './price-card.types';
 
 /**
  * WHICH CARRIERS PRICE A QUOTE (the user, 2026-10-25). What the parcel weighs and whether it is fragile — only vehicles
@@ -27,6 +30,10 @@ export interface QuoteCarriers {
   kg?: number;
   fragile?: boolean;
   near?: GeoPoint;
+  /** 2026-11-08 — its measurements, where they were taken: a price card counts size by its own divisor. */
+  dims?: { l: number; w: number; h: number };
+  /** A person pays this price (the Send app, a walk-in at a counter): rounded to the country's cash step, where it has one. */
+  consumer?: boolean;
 }
 
 export interface NodePick {
@@ -78,6 +85,20 @@ export interface QuoteLeg {
  * they must not be conflated, because one of them is a promise to a shop and the other is a promise to a
  * buyer, and the rate between them can move.
  */
+/**
+ * A person's price rounded to the country's cash step (2026-11-08): the nearest step, the tax worked out of the rounded price
+ * so that net + tax is the price to the cent — and the step above where the nearest would come under the cost of the journey.
+ */
+export function cashRounded(base: number, gross: number, ratePct: number, step: number): { total: number; tax: number; gross: number } {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const at = (g: number) => {
+    const tax = r2((g * ratePct) / (1 + ratePct));
+    return { total: r2(g - tax), tax, gross: r2(g) };
+  };
+  const nearest = at(Math.round(gross / step) * step);
+  return nearest.total >= base ? nearest : at(Math.ceil(gross / step) * step);
+}
+
 export interface QuoteNode {
   type: 'pudo' | 'mdp';
   id: string;
@@ -98,7 +119,9 @@ export interface QuoteNode {
  *  parcel, so what was quoted and what was minted can be compared line for line. */
 export type QuoteFx = ParcelFx;
 export interface ShipmentQuote {
-  hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string; country: string }>;
+  hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string; country: string; location?: GeoPoint }>;
+  /** 2026-11-08 — where the country's price card priced it: what the card's price was made of. Absent: priced by the route. */
+  zone?: ZonePrice;
   nodes: QuoteNode[]; // each stop + its open-data fee (the tail)
   legs: Array<{ from: string; to: string; km: number }>; // per-leg distance (the tail)
   /** The sister companies that perform this journey. One today; on a cross-border route the second is
@@ -256,6 +279,9 @@ export class RoutingService {
     // What money each vehicle's rate is in (rateCurrencyOf). Without it no rate can be placed in a money, and a quote
     // is priced at the selling company's own road rate — never at a rate read in the wrong money.
     @Optional() private readonly drivers?: DriverService,
+    // 2026-11-08 — a country's price card, and its zones (zone pricing, step 3). Optional for the specs that build this by hand.
+    @Optional() private readonly priceCards?: PriceCardService,
+    @Optional() private readonly zoneMaps?: ZoneMapService,
   ) {}
 
   /**
@@ -433,6 +459,10 @@ export class RoutingService {
       };
     });
     const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
+    // 2026-11-08 — ZONE PRICES (step 3). Where the selling company's country has a price card in force and the whole journey
+    // stays in that country, the card prices it, and the two shops' own fees are added as before; the hubs are paid their own
+    // fees out of it. Anywhere else — no card, a border crossed, a pin in no zone — the route prices it as it always has.
+    const zoned = this.cardPriceFor(plan, size, sellerId, currency, nodes, carriers);
     const rates = [...used.values()];
     // What the buffer actually came to, in money: the gap between what the buyer is charged for the
     // foreign stops and what the sisters will settle them at. Computed HERE, where both numbers exist,
@@ -454,13 +484,16 @@ export class RoutingService {
     // holds exactly — a rounding difference between a stated line and the total it belongs to is the kind
     // of penny a merchant reconciles for an hour and never forgives.
     const leg = (rate: number): QuoteLeg => {
-      const t = transport(rate);
-      const base = Math.round((nodeFees + t) * 100) / 100;
-      const total = withPlatformFee(base, feePct);
+      // On a card the price is the card's whatever carrier takes it: the two legs come to the same figure.
+      const t = zoned ? zoned.price.amount : transport(rate);
+      const base = Math.round(((zoned ? zoned.shopFees : nodeFees) + t) * 100) / 100;
+      let total = withPlatformFee(base, feePct);
       // Tax on the WHOLE price including the platform's take, not on the cost base — what is taxed is the
       // sale, not the profit. Zero-rated by default, in which case `gross` is `total` to the cent and
       // every figure below is the number it was before tax existed.
-      const { tax, gross } = taxOn(total, taxRule.ratePct);
+      let { tax, gross } = taxOn(total, taxRule.ratePct);
+      // A person pays a round figure where the country has a cash step: the tax worked out of the rounded price.
+      if (zoned && carriers.consumer && zoned.cashStep > 0) ({ total, tax, gross } = cashRounded(base, gross, taxRule.ratePct, zoned.cashStep));
       // The cost-of-risk slice, on the same base the fee was computed on. Carved OUT of the fee rather
       // than added on: the three layers are additive on `base`, so the risk layer's money is exactly
       // `base × costOfRiskPct` and it is already inside the total above.
@@ -471,7 +504,37 @@ export class RoutingService {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
       totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', ...(measured != null && chargedByOf(measured, carriers.kg) ? { chargedBy: chargedByOf(measured, carriers.kg) } : {}), perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
+      ...(zoned ? { zone: zoned.price } : {}),
     };
+  }
+
+  /**
+   * THE CARD'S PRICE FOR A JOURNEY (2026-11-08 — zone pricing, step 3), or nothing where the route prices it: no card in force
+   * in the selling company's country, a stop in another country (a card prices one country), a card in another money, or a
+   * first or last stop whose pin lies in no zone of the card's map. With the two shops' own fees, and the cash step.
+   */
+  private cardPriceFor(
+    plan: ReturnType<RoutingService['planJourney']>,
+    size: ParcelSize,
+    sellerId: string,
+    currency: string,
+    nodes: QuoteNode[],
+    carriers: QuoteCarriers,
+  ): { price: ZonePrice; shopFees: number; cashStep: number } | undefined {
+    if (!this.priceCards || !this.zoneMaps || !plan.hops.length) return undefined;
+    const country = this.entities.find(sellerId)?.jurisdiction;
+    if (!country || plan.hops.some((h) => (h.country ?? NETWORK_JURISDICTION) !== country)) return undefined;
+    const live = this.priceCards.inForceFor(country);
+    if (!live || live.card.currency !== currency) return undefined;
+    const first = plan.hops[0];
+    const last = plan.hops[plan.hops.length - 1];
+    const from = this.zoneMaps.zoneCodeIn(live.entityId, live.card.zoneMapVersion, first.location);
+    const to = this.zoneMaps.zoneCodeIn(live.entityId, live.card.zoneMapVersion, last.location);
+    if (!from || !to) return undefined;
+    const price = this.priceCards.priceOn(live.entityId, live.card, { from, to, kg: carriers.kg ?? SIZE_WEIGHT_KG[size], dims: carriers.dims, fragile: carriers.fragile });
+    const shopFee = (h: { type: string; id: string }) => (h.type === 'pudo' ? (nodes.find((n) => n.type === 'pudo' && n.id === h.id)?.fee ?? 0) : 0);
+    const shopFees = Math.round((shopFee(first) + (plan.hops.length > 1 ? shopFee(last) : 0)) * 100) / 100;
+    return { price, shopFees, cashStep: live.card.cashStep };
   }
 
   /** The money a sister is owed in — from the company, never from a deployment default. */
@@ -597,7 +660,7 @@ export class RoutingService {
       // — the journey starts there, but nothing was committed to anybody — so it reports itself plainly
       // rather than pretending to be a shop with a DID.
       originNode: { agentDid: origin.type === 'pudo' ? origin.id : '', shopName: origin.label, zone: origin.zone, country: origin.country, committed: origin.type === 'pudo' },
-      hops: route.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone, country: h.country })),
+      hops: route.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone, country: h.country, location: h.location })),
       mdpRouted: viaMdp,
       // The borders on this route, if any. A plan can be made across one; what cannot yet be made across
       // one is a PRICE (see the currency gate in quoteJourney) or an honest arrival time.

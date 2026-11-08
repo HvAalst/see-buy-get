@@ -503,8 +503,8 @@ export class BusinessParcelService {
     const dock = origin ? undefined : v.collection;
     if (!origin && !dock) throw new GlosError('INVALID_STATE', 'Choose the place of yours drivers collect from first');
     const quote = dock
-      ? this.routing.quoteShipmentFrom({ type: 'dock', id: v.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(v), location: dock.location }, dest, size, this.vendors.entityIdOf(v), measured, { kg, fragile })
-      : this.routing.quoteShipment(origin!, dest, size, measured, { kg, fragile });
+      ? this.routing.quoteShipmentFrom({ type: 'dock', id: v.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(v), location: dock.location }, dest, size, this.vendors.entityIdOf(v), measured, { kg, fragile, dims })
+      : this.routing.quoteShipment(origin!, dest, size, measured, { kg, fragile, dims });
     return { quote, size };
   }
 

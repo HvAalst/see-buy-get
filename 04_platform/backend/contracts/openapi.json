@@ -17725,6 +17725,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "consumer",
+            "required": false,
+            "in": "query",
+            "description": "true — a person pays it: rounded to the country’s cash step, where it has one",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -59816,6 +59825,11 @@
       "AcceptParcelDto": {
         "type": "object",
         "properties": {
+          "expectedTotal": {
+            "type": "number",
+            "description": "2026-11-08 — the price the counter showed the sender, where its country's price card priced it: refused if it has moved.",
+            "minimum": 0
+          },
           "agentDid": {
             "type": "string"
           },
@@ -59953,6 +59967,67 @@
           "id",
           "fee",
           "currency"
+        ]
+      },
+      "ParcelZonePriceLine": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "amount"
+        ]
+      },
+      "ParcelZonePrice": {
+        "type": "object",
+        "properties": {
+          "cardVersion": {
+            "type": "number"
+          },
+          "zoneMapVersion": {
+            "type": "number"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "band": {
+            "type": "string"
+          },
+          "billableKg": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelZonePriceLine"
+            }
+          }
+        },
+        "required": [
+          "cardVersion",
+          "zoneMapVersion",
+          "from",
+          "to",
+          "band",
+          "billableKg",
+          "amount",
+          "lines"
         ]
       },
       "DropOffMove": {
@@ -60499,6 +60574,14 @@
             "items": {
               "$ref": "#/components/schemas/ParcelStopFee"
             }
+          },
+          "zonePrice": {
+            "description": "2026-11-08 — where its country's price card priced it: what that price was made of, as sold.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelZonePrice"
+              }
+            ]
           },
           "floorPaidAhead": {
             "type": "object",

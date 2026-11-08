@@ -279,6 +279,8 @@ export interface AgentState {
   acceptPointsState: 'idle' | 'loading' | 'ready' | 'error';
   /** The derived tier + cargo class for the measured dims (null until all four are entered). */
   acceptDerived: ClassifyView | null;
+  /** 2026-11-08 — a walk-up's price as the sender pays it, said before it is taken in: from the country's price card, or a parcel collected here. */
+  acceptPrice: { gross: number; currency: string } | null;
   /** The geocoded point for the Address mode's nearest-first sort (+ a plain note on the match/quality). */
   acceptNear: GeoPoint | null;
   acceptGeoBusy: boolean;
@@ -405,6 +407,7 @@ const INITIAL: AgentState = {
   acceptPoints: [],
   acceptPointsState: 'idle',
   acceptDerived: null,
+  acceptPrice: null,
   acceptNear: null,
   acceptGeoBusy: false,
   acceptGeoNote: null,
@@ -439,6 +442,8 @@ export interface TakenIn {
   releaseCode?: string;
   /** 2026-11-05 — collected here: on this shop's shelf already, and the cash it is taken in for. */
   here?: { binSlot?: string; cashDue?: number; currency?: string };
+  /** 2026-11-08 — a walk-up priced from the country's price card: the cash to take for it. */
+  cash?: { amount: number; currency?: string };
   /** 2026-11-05 — pre-drop-off: where it goes now — a shelf slot until it is bagged, or the open bag for its next stop. */
   place?: TakenInPlace;
 }
@@ -1237,6 +1242,26 @@ export function useAgentApp() {
     setState((s) => ({ ...s, acceptDerived: narrow<ClassifyView>(r.data) }));
   }, [client]);
 
+  // 2026-11-08 — A WALK-UP'S PRICE, said before it is taken in: once its size is known and its shop is chosen, the server is
+  // asked what the sender pays (its country's price card, rounded to the cash step). Said only where there is such a price —
+  // a parcel collected here always has one; elsewhere, only where the country's card is in force (else the shop's own price).
+  const priceEpoch = useRef(0);
+  useEffect(() => {
+    const f = state.accept;
+    const parsed = parseDims(f.dims);
+    const epoch = ++priceEpoch.current;
+    if (!client || !did || !parsed || !f.destPudoDid || !state.acceptDerived || state.acceptDerived.dedicated) {
+      setState((s) => (s.acceptPrice ? { ...s, acceptPrice: null } : s));
+      return;
+    }
+    const here = f.destPudoDid === did;
+    void client.api.walkUpQuote(did, f.destPudoDid, parsed, f.fragile || undefined).then((r) => {
+      if (epoch !== priceEpoch.current) return;
+      const q = r.error ? null : narrow<{ zone?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
+      setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
+    });
+  }, [client, did, state.accept.destPudoDid, state.acceptDerived, state.accept.fragile]);
+
   // The typed area drives the nearest-first sort + the confidence note — but ONLY after Find geocodes it.
   // Editing the text (or switching mode) drops the stale near-point/note so the list + distances can never
   // lag behind what the box says.
@@ -1735,8 +1760,14 @@ export function useAgentApp() {
         // Cash at this counter is OUR cash. Where no cash of ours may cross it, the take-in books nothing of
         // ours — the carrier prices and collects its own work — so it is not sent as a cash take-in.
         ...(terms && !terms.cashAccepted ? { paymentMode: 'prepaid' as const } : {}),
+        // 2026-11-08 — the price the sender was told: refused, and said anew, if it has moved since.
+        ...(stateRef.current.acceptPrice ? { expectedTotal: stateRef.current.acceptPrice.gross } : {}),
       });
-      if (r.error) return fail(r.error);
+      if (r.error) {
+        const now = (r.error as { params?: { now?: unknown } }).params?.now;
+        if (r.error.code === 'PRICE_CHANGED' && typeof now === 'number') setState((s) => (s.acceptPrice ? { ...s, acceptPrice: { ...s.acceptPrice, gross: now } } : s));
+        return fail(r.error);
+      }
       buzz();
       // Taken in without a signal: it is in the outbox, and says so. Its label and release code are made when it
       // reaches SeeBuyGet, and shown then (lateTakeIns).
@@ -1750,7 +1781,9 @@ export function useAgentApp() {
       const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string; originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data);
       // Collected here (2026-11-05): on the shelf already, and taken in for its route's price, in cash.
       const here = p && p.destAgentDid && p.originAgentDid === p.destAgentDid ? { binSlot: p.binSlot, cashDue: p.shipmentCost, currency: p.currency } : undefined;
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}) } : null }));
+      // A walk-up priced from the country's card: the cash to take, said again on the label sheet.
+      const cash = p && !here && p.shipmentCost != null ? { amount: p.shipmentCost, currency: p.currency } : undefined;
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(cash ? { cash } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}) } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });

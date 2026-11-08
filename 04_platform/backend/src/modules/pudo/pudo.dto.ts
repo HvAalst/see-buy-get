@@ -223,6 +223,8 @@ class DimensionsDto {
 }
 
 export class AcceptParcelDto {
+  /** 2026-11-08 — the price the counter showed the sender, where its country's price card priced it: refused if it has moved. */
+  @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   /** How long this take-in took at the counter, by the app's own clock, in seconds — for the pilot's numbers. */
   @IsOptional() @IsNumber() @Min(0) @Max(86_400) takeInSeconds?: number;

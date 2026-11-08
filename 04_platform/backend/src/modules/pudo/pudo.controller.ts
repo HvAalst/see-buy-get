@@ -3532,11 +3532,33 @@ export class SbgController {
     // 2026-11-05 — collected at this same shop: priced by its route, one stop (the shop's fee once, no transport), as a
     // Send parcel is — the counter collects that price in cash.
     const sameShopQuote = dto.destPudoDid && dto.destPudoDid === agentDid ? this.sameShopQuote(agentDid, dto) : undefined;
-    const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}) });
+    // 2026-11-08 — and where its country's price card is in force, a walk-up to another shop is priced from the card too: the
+    // counter collects that price in cash, as for a booking. Elsewhere it is the flat price it always was.
+    const walkInQuote = !sameShopQuote && dto.destPudoDid ? this.walkInQuote(agentDid, dto) : undefined;
+    const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}), ...(walkInQuote ? { walkInQuote } : {}) });
     // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it. Counted in
     // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
     this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
     return taken;
+  }
+
+  /**
+   * A walk-up's price from its country's price card (2026-11-08), or nothing: no card in force there, a take-in that is not
+   * cash of ours, or a route the card does not price (a pin in no zone). A quote that cannot be made at all leaves the
+   * walk-up at the flat price it always had, rather than turning a customer away at the counter.
+   */
+  private walkInQuote(agentDid: string, dto: AcceptParcelDto) {
+    if (!this.priceCards || (dto.paymentMode && dto.paymentMode !== 'cash')) return undefined;
+    if (!this.priceCards.inForceFor(this.agents.countryOf(this.agents.get(agentDid)))) return undefined;
+    const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
+    const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
+    const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg }) : undefined;
+    try {
+      const quote = this.routing.quoteShipment(agentDid, dto.destPudoDid!, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true });
+      return quote.zone ? quote : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** A parcel's price where it is handed in and collected at the one shop: its size as the counter measured it, one stop. */
@@ -3544,7 +3566,7 @@ export class SbgController {
     const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
     const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg }) : undefined;
-    return this.routing.quoteShipment(agentDid, agentDid, size, measured, { kg, fragile: dto.fragile });
+    return this.routing.quoteShipment(agentDid, agentDid, size, measured, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true });
   }
 
   /** F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable
@@ -4433,15 +4455,17 @@ export class SbgController {
   // take them — and, with `near` ("lat,lng"), only those near the asker.
   @ApiQuery({ name: 'fragile', required: false })
   @ApiQuery({ name: 'near', required: false, description: 'lat,lng — price from the carriers near here' })
+  @ApiQuery({ name: 'consumer', required: false, description: 'true — a person pays it: rounded to the country’s cash step, where it has one' })
   @Get('quote')
-  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string, @Query('fragile') fragile?: string, @Query('near') near?: string) {
+  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string, @Query('fragile') fragile?: string, @Query('near') near?: string, @Query('consumer') consumer?: string) {
     if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
     const m = this.measuredFrom(l, w, h, kg);
     // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
     // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
     this.agents.assertNamedAtMint(origin);
     this.agents.assertNamedAtMint(dest);
-    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor, this.carriersFrom(kg, fragile, near)));
+    const dims = m ? { l: Number(l), w: Number(w), h: Number(h) } : undefined;
+    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor, { ...this.carriersFrom(kg, fragile, near), ...(dims ? { dims } : {}), ...(consumer === 'true' ? { consumer: true } : {}) }));
   }
 
   /** What a quote's query says about the parcel and the asker: its weight, whether it is fragile, where "near me" is. */
@@ -4906,7 +4930,7 @@ export class SbgController {
     const hubFrom = hub ? this.routing.hubEnd(hub.mdpId) : undefined;
     const dock = dto.originPudoDid || hub ? undefined : this.vendors.requireCollection(dto.vendorId);
     const quote = hubFrom
-      ? this.routing.quoteShipmentFrom(hubFrom, destPudoDid, size, this.vendors.entityIdOf(vendor), measured, { kg: weightKg, fragile: dto.fragile })
+      ? this.routing.quoteShipmentFrom(hubFrom, destPudoDid, size, this.vendors.entityIdOf(vendor), measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) })
       : dock
       ? this.routing.quoteShipmentFrom(
           { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(vendor), location: dock.location },
@@ -4914,9 +4938,9 @@ export class SbgController {
           size,
           this.vendors.entityIdOf(vendor),
           measured,
-          { kg: weightKg, fragile: dto.fragile },
+          { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) },
         )
-      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile });
+      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) });
     // (The hub branch above is the third way a store's parcel starts; see HubArrivalService.)
     // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
     // before the parcel exists; one staying inside a country needs none and is told so.

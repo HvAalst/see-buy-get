@@ -31,6 +31,10 @@ import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.servic
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
 import { BagOfferService } from './bag-offer.service';
 import { ShopChoiceService } from './shop-choice.service';
+import { ZoneMapService } from './zone-map.service';
+import { PriceCardService } from './price-card.service';
+import type { PriceCardTerms } from './price-card.types';
+import { withPlatformFee } from './pudo.config';
 import { offPlanSaid } from './route-plan.types';
 import { byMoney, detoursOf } from './journey-plan.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
@@ -143,6 +147,8 @@ describe('PUDO Light', () => {
   let rating: RatingService;
   let shelfSvc: ShelfService;
   let routing: RoutingService;
+  let zoneMaps: ZoneMapService;
+  let priceCards: PriceCardService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let mdps: MdpService;
@@ -220,6 +226,8 @@ describe('PUDO Light', () => {
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
         ShopChoiceService, // 2026-11-06 — a bag for a shop that is closed (point 6)
+        ZoneMapService, // 2026-11-08 — a country's zones, and its price card (zone pricing)
+        PriceCardService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -253,6 +261,8 @@ describe('PUDO Light', () => {
     rating = moduleRef.get(RatingService);
     shelfSvc = moduleRef.get(ShelfService);
     routing = moduleRef.get(RoutingService);
+    zoneMaps = moduleRef.get(ZoneMapService);
+    priceCards = moduleRef.get(PriceCardService);
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -13317,4 +13327,160 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
   });
+
+  /**
+   * 2026-11-08 — ZONE PRICES (step 3): a country with a price card in force prices from it — the Send app, a store, a
+   * business, the counter's walk-ups; a country without one is priced exactly as before.
+   */
+  describe('a country’s prices from its card (zone pricing, step 3)', () => {
+    const square = (lng: number, lat: number, size = 0.1) => [
+      [lng, lat],
+      [lng + size, lat],
+      [lng + size, lat + size],
+      [lng, lat + size],
+      [lng, lat],
+    ];
+    const TWO = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        ['West', 36.6, -1.3],
+        ['East', 36.7, -1.3],
+      ].map(([name, lng, lat]) => ({ type: 'Feature', properties: { shapeName: name }, geometry: { type: 'Polygon', coordinates: [square(lng as number, lat as number)] } })),
+    });
+    const A = { name: 'Njeri W.', id: 'acct-1' };
+    const B = { name: 'Otieno K.', id: 'acct-2' };
+
+    function shopAt(shopName: string, location: { lat: number; lng: number }, topUp = 0) {
+      const a = onboardAgent(shopName, 'MidTown', topUp);
+      agents.setLocation(a.did, location);
+      return agents.get(a.did);
+    }
+
+    /** Kenya's two zones published, and a card in force from now. */
+    function cardInForce(over: Partial<PriceCardTerms> = {}) {
+      zoneMaps.importAreas('sbg-ke', { geojson: TWO, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+      zoneMaps.publish('sbg-ke', undefined, 'N');
+      priceCards.setSettings('sbg-ke', { noticeDays: 0 }, A);
+      const draft = priceCards.startDraft('sbg-ke', undefined, A).pending[0] as unknown as PriceCardTerms;
+      priceCards.saveDraft('sbg-ke', { ...draft, table: { local: [70, 80, 100, 140, 220, 300], near: [90, 105, 140, 210, 350, 490], regional: [120, 140, 200, 320, 560, 800], national: [150, 180, 260, 440, 800, 1160] }, ...over }, A);
+      priceCards.ready('sbg-ke', A);
+      priceCards.approve('sbg-ke', priceCards.overview('sbg-ke').pending[0].version, undefined, B);
+    }
+
+    /** A Kenyan fleet with a cheap and a dear vehicle, so the road would price the two legs differently. */
+    function twoRates() {
+      const m = managers.register({ companyName: 'ZP Haulage', jurisdiction: 'KE', contactPhone: '+254700950001', ownerFullName: 'Z P', ownerNationalId: 'MGR-ZP-1', location: { lat: -1.25, lng: 36.7 }, requirements: { businessRegistrationNo: 'BRN-ZP1', transportOperatorLicence: 'TOL-ZP1', taxId: 'TAX-ZP1' } } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(m.did, true);
+      managers.recordBond(m.did);
+      vehicles.register({ plate: 'ZP-CHEAP', vehicleClass: 'car', ownerName: 'Z', managerDid: m.did, pricePerKm: 1 });
+      vehicles.register({ plate: 'ZP-DEAR', vehicleClass: 'car', ownerName: 'Z', managerDid: m.did, pricePerKm: 90 });
+    }
+
+    it('prices a journey inside the country from the card, the two shops’ own fees on top; before the card, as it always was', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      twoRates();
+      const before = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(before.zone).toBeUndefined();
+      // On the road the dearest carrier is held for a flexible parcel: the two legs differ.
+      expect(before.flexible.total).toBeGreaterThan(before.locked.total);
+      cardInForce();
+      const q = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(q.zone).toMatchObject({ band: 'local', billableKg: 2, amount: 80 });
+      expect(q.locked.base).toBe(Math.round((80 + west.pricePerParcel + east.pricePerParcel) * 100) / 100);
+      expect(q.locked.total).toBe(withPlatformFee(q.locked.base, q.platformFeePct));
+      expect(q.flexible).toEqual(q.locked);
+      // Its measurements count by the card's divisor: 40 × 30 × 20 cm is 4 kg shop to shop, so the 5 kg price.
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, dims: { l: 40, w: 30, h: 20 } }).zone).toMatchObject({ billableKg: 4, amount: 100 });
+    });
+
+    it('rounds a person’s price to the country’s cash step, the tax worked out of it; a business pays it to the cent', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      cardInForce({ cashStep: 10 });
+      const person = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, consumer: true });
+      const business = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(person.locked.gross % 10).toBe(0);
+      expect(person.locked.gross).toBeGreaterThanOrEqual(business.locked.gross);
+      expect(Math.round((person.locked.total + person.locked.tax) * 100) / 100).toBe(person.locked.gross);
+      expect(business.locked.gross % 10).not.toBe(0);
+    });
+
+    it('a walk-up at the counter is priced from the card: collected in cash, the float charged it and the shop paid its fee; a price that moved is refused; voided, it all comes back', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 }, 500);
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      cardInForce();
+      const asShop = { active: true, role: 'agent', did: west.did } as never;
+      const dto = { agentDid: west.did, parcelId: 'QR-ZP-1', destPudoDid: east.did, destZone: 'MidTown', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2, senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: photoBy(west.did) };
+      expect(() => controller.accept({ ...dto, expectedTotal: 1 } as never, asShop)).toThrow(/The price is now/);
+      expect(parcels.list().some((x) => x.parcelId === 'QR-ZP-1')).toBe(false);
+      const before = agents.balance(west.did)!;
+      const taken = controller.accept(dto as never, asShop) as unknown as { parcelId: string; shipmentCost: number; intakeLabour: number; zonePrice: { band: string; amount: number }; stopFees: unknown[] };
+      expect(taken.zonePrice).toMatchObject({ band: 'local', amount: 80 });
+      expect(taken.shipmentCost).toBeGreaterThan(80);
+      expect(taken.stopFees).toHaveLength(2);
+      expect(agents.balance(west.did)!).toBeCloseTo(before - taken.shipmentCost + taken.intakeLabour, 2);
+      parcels.void(taken.parcelId, west.did, photoBy(west.did));
+      expect(agents.balance(west.did)!).toBeCloseTo(before, 2);
+    });
+
+    it('a walk-up where no card is in force pays the flat price it always did', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 }, 500);
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      const before = agents.balance(west.did)!;
+      const taken = controller.accept({ agentDid: west.did, parcelId: 'QR-ZP-2', destPudoDid: east.did, destZone: 'MidTown', size: 'M', senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: photoBy(west.did) } as never, { active: true, role: 'agent', did: west.did } as never) as unknown as { zonePrice?: unknown; shipmentCost?: number };
+      expect(taken.zonePrice).toBeUndefined();
+      expect(taken.shipmentCost).toBeUndefined();
+      expect(agents.balance(west.did)!).toBeCloseTo(before - WHOLESALE, 2);
+    });
+
+    it('a store’s order priced from the card is the card’s whoever carries it: locked, with what the card made of it', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      cardInForce();
+      const vendor = vendors.register({ name: 'ZP Store' });
+      vendors.topUp(vendor.vendorId, 500);
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ZP-1', originAgentDid: west.did, destAgentDid: east.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(west.did, east.did, 'S', undefined, { kg: 1 }) });
+      expect(parcel.routeMode).toBe('locked');
+      expect(parcel.zonePrice).toMatchObject({ band: 'local', billableKg: 1, amount: 70 });
+    });
+
+    it('a journey that leaves the country, or a shop whose pin lies in no zone, is priced by the route as before', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      // Mombasa: in Kenya, but in neither of the card's two zones.
+      const outside = shopAt('ZP Coast', { lat: -4.05, lng: 39.67 });
+      cardInForce();
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toBeDefined();
+      expect(routing.quoteShipment(west.did, outside.did, 'M', undefined, { kg: 2 }).zone).toBeUndefined();
+      expect(routing.quoteShipment(outside.did, west.did, 'M', undefined, { kg: 2 }).zone).toBeUndefined();
+      // A twin town on the border (Moyale, Busia): a pin 1 km past a zone's edge takes that zone — a Kenyan shop there does…
+      const twinPin = { lat: -1.25, lng: 36.809 };
+      expect(routing.quoteShipment(west.did, shopAt('ZP Twin KE', twinPin).did, 'M', undefined, { kg: 2 }).zone).toBeDefined();
+      // …but the shop across the street in Ethiopia is abroad: a Kenyan card does not price a journey into another country.
+      const twinEt = agents.register({ shopName: 'ZP Twin ET', zone: 'TwinTown', country: 'ET', location: twinPin, pricePerParcel: 60, landmark: 'by the road', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'ZP Twin owner', nationalId: 'ID-ZP-ET', mobile: '+254700990001', deviceImei: 'IMEI-ZP-ET', requirements: eligibleReqs() });
+      corridors.addCorridor({ name: 'ZP West–Twin Town', originZone: 'MidTown', destZone: 'TwinTown' });
+      const abroad = routing.quoteShipment(west.did, twinEt.did, 'M', undefined, { kg: 2 });
+      expect(abroad.crossesBorder).toBe(true);
+      expect(abroad.zone).toBeUndefined();
+    });
+
+    it('collected where it is handed in: the card’s price inside its zone, the shop’s own fee once', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      cardInForce();
+      const q = routing.quoteShipment(west.did, west.did, 'M', undefined, { kg: 2 });
+      expect(q.zone).toMatchObject({ band: 'local', amount: 80 });
+      expect(q.locked.base).toBe(Math.round((80 + west.pricePerParcel) * 100) / 100);
+    });
+
+    it('a fragile parcel pays the card’s fragile surcharge', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      cardInForce({ surcharges: { door: 0, oversize: 0, oversizeCm: 100, fragile: 25 } });
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone?.amount).toBe(80);
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, fragile: true }).zone?.amount).toBe(105);
+    });
+  });
+
 });
