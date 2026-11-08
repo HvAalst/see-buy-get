@@ -19,13 +19,14 @@ export interface ShopNear {
 }
 
 /**
- * A closed shop's parcels, offered other shops near it: a BAG's (it goes whole to the shop most of its buyers choose, when its
- * driver gets there), or ONE parcel not in a bag (it goes to the shop its buyer chooses, as soon as they choose).
+ * A closed shop's parcels, offered other shops near it: a BAG's going to it (it goes whole to the shop most of its buyers
+ * choose, when its driver gets there), or ONE parcel not in such a bag — in none, or in a bag going on to a hub (it goes to
+ * the shop its buyer chooses, as soon as they choose).
  */
 export interface ShopChoice {
   /** The bag's code — a bag's choice. */
   code?: string;
-  /** One parcel not in a bag — its own choice. */
+  /** One parcel not in a bag going to the closed shop — its own choice. */
   parcelId?: string;
   /** The bag's trip (its filledAt): a bag is used again, and a choice is one trip's. */
   trip?: string;
@@ -86,9 +87,9 @@ const keyOf = (c: Pick<ShopChoice, 'code' | 'parcelId'>): string => c.code ?? `p
  * is in a bag he can't go all over the place to deliver these individual parcels"). Nothing moved such a parcel before.
  *
  * AS THE SHOP CLOSES (the owner: "ask straight away, less risk"): its buyers are asked at once which of the open shops near
- * it with room (three at most) they will collect from. A parcel not yet in a bag goes to the one its buyer chooses as soon
- * as they choose — its plan made again to it. A bag goes WHOLE to the one most of its buyers chose (the owner's choice),
- * when its driver gets there; nobody chose, the nearest.
+ * it with room (three at most) they will collect from. A parcel not in a bag going there — in none, or in one going on to a
+ * hub — goes to the one its buyer chooses as soon as they choose, the end of its plan moved to it. A bag going there goes
+ * WHOLE to the one most of its buyers chose (the owner's choice), when its driver gets there; nobody chose, the nearest.
  *
  * ON THE ROAD: the driver carrying a bag — or a parcel handed to them loose — for a shop that is closed, or found SHUT at
  * the door though it never said so, sees the open shops near it with room and picks up to three they can take it to. The
@@ -117,18 +118,26 @@ export class ShopChoiceService {
     dispatch?.registerShopChoiceView((code, holder) => this.forBag(code, holder));
   }
 
-  /** Whether a shop takes parcels now: it has not said it is closed, and it takes new ones (not locked, held, lapsed or resting). */
+  /**
+   * Whether a shop is closed: it said so ("Close for now"). 2026-11-08 — not a shop that only takes no NEW parcels (short of
+   * float, held over its ID, its licence lapsed, its owner resting): a hold stops new work, never old, so what was already on
+   * its way there still arrives and is handed out. Said closed, a driver could have sent a whole bag elsewhere for nothing.
+   */
   isClosed(did: string): boolean {
     const shop = this.agents.find(did);
-    return !shop || shop.openState === 'closed' || !this.agents.takesNew(shop);
+    return !shop || shop.openState === 'closed';
   }
 
   /* ---------------------------------------------------------------------------------------- as the shop closes -- */
 
   /**
-   * A shop has said it is closed: each of its parcels on the way, offered the open shops near it with room — a bag's together,
-   * one not in a bag on its own — and their buyers asked at once. Nothing where no shop near can take them (a driver finds
-   * one on the road), nor where they were asked already. Answers how many parcels' buyers were asked.
+   * A shop has said it is closed: each of its parcels on the way, offered the open shops near it with room — a bag's going to
+   * it together, any other on its own — and their buyers asked at once. Nothing where no shop near can take them (a driver
+   * finds one on the road), nor where they were asked already. Answers how many parcels' buyers were asked.
+   *
+   * 2026-11-08 — a parcel in a bag going on to a HUB is not that bag's: the bag carries parcels for many shops, and only the
+   * parcel's own buyer is asked. (Grouped by any bag, every buyer in it was asked — or, no shop near having room for the whole
+   * bag, nobody was, not even its own.) Chosen, it goes there at once: the hub sorts it to the shop chosen.
    */
   onShopClosed(did: string, now: number = Date.now()): number {
     const shop = this.agents.find(did);
@@ -139,7 +148,7 @@ export class ShopChoiceService {
     let asked = 0;
     const bags = new Map<string, Tote>();
     for (const p of onTheWay) {
-      const bag = this.bagOf(p);
+      const bag = this.inBagTo(p, did);
       if (bag) {
         bags.set(bag.code, bag);
         continue;
@@ -207,8 +216,8 @@ export class ShopChoiceService {
   }
 
   /**
-   * A buyer's choice, of the shops offered — until the bag is handed in. One parcel not in a bag goes to the shop chosen at
-   * once (its plan made again to it); a bag's vote counts toward where the whole bag goes.
+   * A buyer's choice, of the shops offered — until the bag is handed in. A parcel's own choice is kept at once (the end of its
+   * plan moved to the shop chosen); a bag's vote counts toward where the whole bag goes.
    */
   choose(parcelId: string, shopDid: string, by: string = 'buyer', now: number = Date.now()): ShopChoiceForBuyer {
     const choice = this.openFor(parcelId);
@@ -381,6 +390,12 @@ export class ShopChoiceService {
     }
   }
 
+  /** The bag a parcel is in now, where that bag goes to this shop: then the parcel goes where the bag goes. */
+  private inBagTo(p: Parcel, did: string): Tote | undefined {
+    const bag = this.bagOf(p);
+    return bag?.destinationNodeId === did ? bag : undefined;
+  }
+
   /** A bag's choice, on the trip the bag is on now and not yet handed in. */
   private liveChoice(code: string): ShopChoice | undefined {
     const choice = this.choices.get(code);
@@ -390,12 +405,12 @@ export class ShopChoiceService {
     return choice;
   }
 
-  /** The open choice a parcel is in, if any: its bag's, or its own. */
+  /** The open choice a parcel is in, if any: its bag's, or its own — while it is not in a bag going to the closed shop. */
   private openFor(parcelId: string): ShopChoice | undefined {
     const own = this.choices.get(`parcel:${parcelId}`);
     if (own && !own.settled) {
       const p = this.parcels.get(parcelId);
-      if (ON_THE_WAY.includes(p.status) && p.destAgentDid === own.closed.did && !p.toteId) return own;
+      if (ON_THE_WAY.includes(p.status) && p.destAgentDid === own.closed.did && !this.inBagTo(p, own.closed.did)) return own;
     }
     const bag = [...this.choices.values()].find((c) => c.code && c.parcelIds.includes(parcelId) && !c.settled);
     return bag?.code && this.liveChoice(bag.code) === bag && this.totes.requireByCode(bag.code).parcels.includes(parcelId) ? bag : undefined;

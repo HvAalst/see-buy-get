@@ -2746,6 +2746,81 @@ describe('PUDO Light', () => {
       expect(monitor.flags().find((f) => f.type === 'Shop_Found_Shut' && f.subject === 'MU21 Far')!.detail).toMatch(/; they went to MU21 Y Shop$/);
     });
 
+    it('a parcel for a shop that closes, in a bag going on to a hub with others: only its own buyer is asked, and the choice is kept at once (2026-11-08)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU23 Shop', N, 50);
+      const far = onboardAgent('MU23 Far', S, 50);
+      const other = onboardAgent('MU23 Other', S, 50);
+      const y = onboardAgent('MU23 Y Shop', S, 50);
+      // Their own corner of the map: the only open shop near the closed one is Y; the other parcel's shop is far off.
+      agents.setLocation(far.did, { lat: 6.0, lng: 43.0 });
+      agents.setLocation(y.did, { lat: 6.0, lng: 43.02 });
+      agents.setLocation(other.did, { lat: 6.0, lng: 43.5 });
+      const hub = mdps.register({ name: 'MU23 Sort', zones: [N, S], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU23-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+254711000501', dropoffPhotoRef: photoBy(shop.did) } as never);
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU23-B', size: 'S', destZone: S, destPudoDid: other.did, senderMobile: '+1', receiverMobile: '+254711000502', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const buyerA = enrollPerson('+254711000501');
+      enrollPerson('+254711000502');
+      expect(parcels.get('MU23-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, hub.mdpId, far.did]);
+      // Both in one bag from their first shop to the hub — a bag for more than one shop — on its way there.
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      for (const id of ['MU23-A', 'MU23-B']) mdps.fillShopBag(bag.code, shop.did, id);
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, 'BUS-MU23');
+      const told: Array<{ did: string; kind: string; body: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string; body: string }) => void told.push({ did, kind: n.kind, body: n.body }) };
+      agents.setAvailability(far.did, false);
+      // Only the buyer whose parcel goes to the closed shop is asked — its own choice, not the bag's.
+      expect(told).toEqual([{ did: buyerA.personDid, kind: 'parcel_choose_shop', body: 'MU23 Far is closed. It can go to MU23 Y Shop instead: choose one. It goes to the one you choose.' }]);
+      expect(parcels.consumerParcel('MU23-B', hashPhone('+254711000502')!).shopChoice).toBeUndefined();
+      expect(parcels.consumerParcel('MU23-A', hashPhone('+254711000501')!).shopChoice).toMatchObject({ closed: 'MU23 Far', inBag: false, picks: [expect.objectContaining({ did: y.did })] });
+      // Chosen while in the bag: kept at once — the end of its plan moved, the bag still going to the hub.
+      shopChoices.choose('MU23-A', y.did, buyerA.personDid);
+      expect(parcels.get('MU23-A').destAgentDid).toBe(y.did);
+      expect(parcels.get('MU23-A').plan!.hops.map((h) => h.id)).toEqual([shop.did, hub.mdpId, y.did]);
+      expect(totes.requireByCode(bag.code).destinationNodeId).toBe(hub.mdpId);
+      // At the hub it is sorted to the shop chosen; the other parcel goes on to its own.
+      mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
+      expect(mdps.sortParcel(hub.mdpId, 'MU23-A').nextDestination.id).toBe(y.did);
+      expect(mdps.sortParcel(hub.mdpId, 'MU23-B').nextDestination.id).toBe(other.did);
+    });
+
+    it('a shop that takes no new parcels — held over its ID, or short of float — still takes what was on its way: not "closed" to the driver (2026-11-08)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU24 Shop', N, 50);
+      const far = onboardAgent('MU24 Far', S, 50);
+      const y = onboardAgent('MU24 Y Shop', S, 50);
+      agents.setLocation(far.did, { lat: 7.0, lng: 44.0 });
+      agents.setLocation(y.did, { lat: 7.0, lng: 44.02 });
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      parcels.accept({ agentDid: shop.did, parcelId: 'MU24-A', size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+254711000601', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = mdps.openShopBag(shop.did, far.did);
+      mdps.fillShopBag(bag.code, shop.did, 'MU24-A');
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      const d = drivers.register({ displayName: 'MU24 Rider', fullName: 'MU24 Rider', nationalId: 'DRV-MU24', mobile: '+254933024000', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'MU24-1', vehicleClass: 'bike', ownerName: 'MU24 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      mdps.loadBag(bag.code, d.badgeId!);
+      takenForTest(bag.code);
+      const claim = () => dispatch.claimsFor(d.did).find((c) => c.ref === bag.code)!;
+      // Held over its national ID: no new parcel names it, but what is on its way still arrives — open, to the driver.
+      agents.holdForId(far.did, { reference: 'MU24-REF', at: new Date().toISOString() });
+      expect(agents.takesNew(agents.get(far.did))).toBe(false);
+      expect(claim().destShop).toEqual({ did: far.did, name: 'MU24 Far', closed: false });
+      expect(shopChoices.near(bag.code, d.did).closed).toMatchObject({ did: far.did, marked: false });
+      expect(() => shopChoices.ask(bag.code, d.did, [y.did])).toThrow(/is open: say it is shut/);
+      // Short of float as well (locked): the same — the lock stops cash at its counter, not what it receives.
+      (agents.get(far.did) as { status: string }).status = 'LOCKED';
+      expect(claim().destShop!.closed).toBe(false);
+      // It takes the bag, as any shop it is addressed to.
+      expect(mdps.deliverBag(far.did, bag.code, receivedAt(far.did)).delivered).toEqual(['MU24-A']);
+      expect(parcels.get('MU24-A')).toMatchObject({ destAgentDid: far.did, status: 'Ready_For_Pickup' });
+    });
+
     it('goes by a direct route in a bag addressed to its shop, which receives it — a bag for the area, no shop could', () => {
       // No hub on either side: shop → shop. The bag plan's group was the AREA, and a shop receives only a bag addressed to it.
       seq += 1;
