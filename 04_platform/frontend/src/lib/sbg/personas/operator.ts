@@ -170,6 +170,30 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/move', { params: { path: { entityId } }, body: { areas, ...(to ? { to } : {}), ...(name ? { name } : {}) } })),
     publishZones: (entityId: string, from?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/publish', { params: { path: { entityId } }, body: from ? { from } : {} })),
+    /* 2026-11-08 — a country's price card (zone pricing, step 2). */
+    priceCards: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/price-cards', { params: { path: { entityId } } })),
+    setPriceCardSettings: (entityId: string, body: { filingRequired?: boolean; noticeDays?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/settings', { params: { path: { entityId } }, body })),
+    startPriceCard: (entityId: string, zoneMapVersion?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } }, body: zoneMapVersion ? { zoneMapVersion } : {} })),
+    savePriceCard: (entityId: string, terms: unknown) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft/terms', { params: { path: { entityId } }, body: terms as never })),
+    discardPriceCard: (entityId: string) => sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } } })),
+    readyPriceCard: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft/ready', { params: { path: { entityId } } })),
+    filePriceCard: (entityId: string, version: number, reference: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/{version}/filed', { params: { path: { entityId, version: String(version) } }, body: { reference } })),
+    clearPriceCard: (entityId: string, version: number, reference: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/{version}/cleared', { params: { path: { entityId, version: String(version) } }, body: { reference } })),
+    approvePriceCard: (entityId: string, version: number, from?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/{version}/approve', { params: { path: { entityId, version: String(version) } }, body: from ? { from } : {} })),
+    withdrawPriceCard: (entityId: string, version: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/{version}/withdraw', { params: { path: { entityId, version: String(version) } } })),
+    tryZonePrice: (entityId: string, q: { from: string; to: string; kg?: string; l?: string; w?: string; h?: string; door?: boolean; fragile?: boolean }) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/entities/{entityId}/price-cards/price', {
+          params: { path: { entityId }, query: { from: q.from, to: q.to, ...(q.kg ? { kg: q.kg } : {}), ...(q.l ? { l: q.l } : {}), ...(q.w ? { w: q.w } : {}), ...(q.h ? { h: q.h } : {}), ...(q.door ? { door: 'true' } : {}), ...(q.fragile ? { fragile: 'true' } : {}) } },
+        }),
+      ),
     setCarrierPapers: (entityId: string, enforce: Array<'operator_licence' | 'carrier_insurance'>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/carrier-papers', { params: { path: { entityId } }, body: { enforce } })),
 

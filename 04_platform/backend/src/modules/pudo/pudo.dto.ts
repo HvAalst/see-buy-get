@@ -1860,6 +1860,74 @@ export class ZonePublishDto {
   @IsOptional() @IsDateString() from?: string;
 }
 
+/* 2026-11-08 — a country's price card (zone pricing, step 2). */
+export class PriceCardSettingsDto {
+  @IsOptional() @IsBoolean() filingRequired?: boolean;
+  @IsOptional() @IsInt() @Min(0) @Max(180) noticeDays?: number;
+}
+
+export class PriceCardStartDto {
+  /** The published zone map it is made on; absent means the map in force. */
+  @IsOptional() @IsInt() @Min(1) zoneMapVersion?: number;
+}
+
+export class PriceBandDto {
+  @IsString() @MaxLength(20) key!: string;
+  @IsString() @MaxLength(40) name!: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @ApiPropertyOptional({ type: Number, nullable: true }) maxZones!: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @ApiPropertyOptional({ type: Number, nullable: true }) maxKm!: number | null;
+}
+
+export class EndChargeDto {
+  @IsNumber() perParcel!: number;
+  @IsNumber() perKg!: number;
+}
+
+export class PricePairDto {
+  @IsString() @MaxLength(20) a!: string;
+  @IsString() @MaxLength(20) b!: string;
+  @IsString() @MaxLength(20) band!: string;
+}
+
+export class PriceWeightRulesDto {
+  @IsNumber() divisorShop!: number;
+  @IsNumber() divisorDoor!: number;
+  @IsNumber() stepKg!: number;
+  @IsNumber() maxKg!: number;
+  @IsNumber() volumeFromKg!: number;
+}
+
+export class PriceSurchargesDto {
+  @IsNumber() door!: number;
+  @IsNumber() oversize!: number;
+  @IsNumber() oversizeCm!: number;
+  @IsNumber() fragile!: number;
+}
+
+/** The draft card's terms: the whole card, every time. */
+export class PriceCardTermsDto {
+  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(8) @ValidateNested({ each: true }) @Type(() => PriceBandDto) @ApiProperty({ type: [PriceBandDto] }) bands!: PriceBandDto[];
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsNumber({}, { each: true }) @ApiProperty({ type: [Number] }) steps!: number[];
+  @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'array', items: { type: 'number' } } }) table!: Record<string, number[]>;
+  @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) perExtraKg!: Record<string, number>;
+  @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'object', properties: { perParcel: { type: 'number' }, perKg: { type: 'number' } } } }) groupCharges!: Record<string, EndChargeDto>;
+  @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'object', properties: { perParcel: { type: 'number' }, perKg: { type: 'number' } } } }) zoneCharges!: Record<string, EndChargeDto>;
+  @IsArray() @ArrayMaxSize(2000) @ValidateNested({ each: true }) @Type(() => PricePairDto) @ApiProperty({ type: [PricePairDto] }) pairs!: PricePairDto[];
+  @ValidateNested() @Type(() => PriceWeightRulesDto) weight!: PriceWeightRulesDto;
+  @ValidateNested() @Type(() => PriceSurchargesDto) surcharges!: PriceSurchargesDto;
+  @IsNumber() minimum!: number;
+  @IsNumber() cashStep!: number;
+}
+
+export class PriceCardRefDto {
+  @IsString() @MaxLength(120) reference!: string;
+}
+
+export class PriceCardApproveDto {
+  /** From when it is in force; absent means as soon as the country's notice allows. */
+  @IsOptional() @IsDateString() from?: string;
+}
+
 export class CarrierPapersDto {
   @IsOptional()
   @IsArray()

@@ -9,6 +9,8 @@ import { resolve } from 'path';
  *   - a request body resolves to a property-less schema (a DTO the swagger plugin never introspected —
  *     the classic "all-empty schemas" failure)
  *   - an operation declares no responses at all
+ *   - a $ref points at a schema the contract never defines (2026-11-08: a hand-written `$ref` in an @ApiProperty to a class
+ *     the swagger plugin never registered passed this gate and broke the apps' generated client instead)
  *
  * It reads the emitted JSON (not the app) so it also guards a hand-edited or stale contract file.
  */
@@ -68,6 +70,20 @@ function main(): void {
       }
     }
   }
+
+  // Every $ref must point at a schema the contract defines: a dangling one passes everything above and fails the client.
+  const defined = new Set(Object.keys(doc.components?.schemas ?? {}));
+  const dangling = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (k === '$ref' && typeof v === 'string' && v.startsWith('#/components/schemas/') && !defined.has(v.slice('#/components/schemas/'.length))) dangling.add(v);
+      else walk(v);
+    }
+  };
+  walk(doc);
+  if (dangling.size) errors.push(`$ref to a schema the contract never defines: ${[...dangling].join(', ')}`);
 
   const seen = new Set<string>();
   const dupes = new Set<string>();

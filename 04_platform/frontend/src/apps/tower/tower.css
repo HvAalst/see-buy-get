@@ -912,6 +912,22 @@
 .twr-zonerow--on td {
   background: rgba(251, 98, 0, 0.06);
 }
+/* 2026-11-08 — a country's price card: the table of prices, an estimated cost under each. */
+.twr-card {
+  display: grid;
+  gap: 10px;
+}
+.twr-pricegrid {
+  overflow-x: auto;
+}
+.twr-pricein {
+  max-width: 110px;
+}
+.twr-pricecost {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
 
 /* ------------------------------------------------------ support + pictures -- */
 

@@ -8,7 +8,7 @@ import type { Screen } from './useTowerApp';
  * Refresh: read again by itself every few seconds, it would count in what staff opened (staff-reads) as opened again
  * and again, by nobody's hand.
  */
-export const LIVE_STAYS: ReadonlySet<Screen> = new Set<Screen>(['support', 'rates', 'money', 'pictures', 'companies', 'zones']);
+export const LIVE_STAYS: ReadonlySet<Screen> = new Set<Screen>(['support', 'rates', 'money', 'pictures', 'companies', 'zones', 'zoneprices']);
 
 /** Whether the screen that is open reads itself again when the live view says something changed. */
 export function readsAgainLive(screen: Screen): boolean {

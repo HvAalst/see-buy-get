@@ -47,7 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     screens: ['messages', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
-  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'zones', 'corridors', 'borders', 'presence', 'documents', 'languages', 'pictures', 'connections', 'staffreads'] },
+  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'zones', 'zoneprices', 'corridors', 'borders', 'presence', 'documents', 'languages', 'pictures', 'connections', 'staffreads'] },
 ];
 
 /**
@@ -98,6 +98,8 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   languages: { labelKey: 'tower.nav.languages', icon: 'globe' },
   // 2026-11-08 — a country's zones: its official areas, grouped, each in one of its price groups.
   zones: { labelKey: 'tower.nav.zones', icon: 'pin' },
+  // 2026-11-08 — its price card: what a parcel costs between two of its zones.
+  zoneprices: { labelKey: 'tower.nav.zoneprices', icon: 'scale' },
 };
 
 /** Which group a screen lives in. Every screen has exactly one home. */

@@ -13761,6 +13761,469 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/price-cards": {
+      "get": {
+        "operationId": "Sbg.entityPriceCards",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/settings": {
+      "post": {
+        "operationId": "Sbg.setEntityPriceCardSettings",
+        "summary": "",
+        "description": "Whether its regulator must have each card filed and cleared, and how many days' notice a new card gives.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/draft": {
+      "post": {
+        "operationId": "Sbg.startEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardStartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.discardEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/draft/terms": {
+      "post": {
+        "operationId": "Sbg.saveEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardTermsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/draft/ready": {
+      "post": {
+        "operationId": "Sbg.readyEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/{version}/filed": {
+      "post": {
+        "operationId": "Sbg.fileEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardRefDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/{version}/cleared": {
+      "post": {
+        "operationId": "Sbg.clearEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardRefDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/{version}/approve": {
+      "post": {
+        "operationId": "Sbg.approveEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCardApproveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/{version}/withdraw": {
+      "post": {
+        "operationId": "Sbg.withdrawEntityPriceCard",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/price-cards/price": {
+      "get": {
+        "operationId": "Sbg.tryEntityPrice",
+        "summary": "",
+        "description": "A price tried on a card: two zones, a weight or measurements, door or shop, fragile or not — line by line.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kg",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "l",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "w",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "h",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "door",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fragile",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZonePrice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/zones/groups": {
       "post": {
         "operationId": "Sbg.setEntityZoneGroups",
@@ -56815,6 +57278,7 @@
               "sealRules",
               "custodyCaps",
               "zones",
+              "prices",
               "created",
               "record",
               "activated",
@@ -58148,6 +58612,686 @@
           "source",
           "licence",
           "attribution"
+        ]
+      },
+      "PriceBand": {
+        "type": "object",
+        "properties": {
+          "maxZones": {
+            "type": "number",
+            "nullable": true,
+            "description": "The most zones that may lie between the two zones for a pair to be in this band; null on the last band."
+          },
+          "maxKm": {
+            "type": "number",
+            "nullable": true,
+            "description": "The most km between the two zones' centres for this band; null on the last band."
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
+      "PricePair": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          },
+          "b": {
+            "type": "string"
+          },
+          "band": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "band"
+        ]
+      },
+      "PriceWeightRules": {
+        "type": "object",
+        "properties": {
+          "divisorShop": {
+            "type": "number",
+            "description": "cm³ per kg, handed in and collected at shops."
+          },
+          "divisorDoor": {
+            "type": "number",
+            "description": "cm³ per kg, taken to a door."
+          },
+          "stepKg": {
+            "type": "number",
+            "description": "Billable weight is rounded up to a multiple of this."
+          },
+          "maxKg": {
+            "type": "number",
+            "description": "The most a parcel may weigh, billable."
+          },
+          "volumeFromKg": {
+            "type": "number",
+            "description": "Below this weight the volume is not counted (a small light parcel is charged what it weighs). 0: always counted."
+          }
+        },
+        "required": [
+          "divisorShop",
+          "divisorDoor",
+          "stepKg",
+          "maxKg",
+          "volumeFromKg"
+        ]
+      },
+      "PriceSurcharges": {
+        "type": "object",
+        "properties": {
+          "door": {
+            "type": "number",
+            "description": "Taken to a door rather than collected at a shop: per parcel."
+          },
+          "oversize": {
+            "type": "number",
+            "description": "A parcel whose longest side is over `oversizeCm`: per parcel."
+          },
+          "oversizeCm": {
+            "type": "number"
+          },
+          "fragile": {
+            "type": "number",
+            "description": "A parcel marked fragile: per parcel."
+          }
+        },
+        "required": [
+          "door",
+          "oversize",
+          "oversizeCm",
+          "fragile"
+        ]
+      },
+      "PriceCardView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "draft · ready · filed · cleared · approved (from a date to come: scheduled) · in_force · past · withdrawn.",
+            "enum": [
+              "draft",
+              "ready",
+              "filed",
+              "cleared",
+              "scheduled",
+              "in_force",
+              "past",
+              "withdrawn"
+            ]
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceBand"
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "table": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "perExtraKg": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "groupCharges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "perParcel": {
+                  "type": "number"
+                },
+                "perKg": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "zoneCharges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "perParcel": {
+                  "type": "number"
+                },
+                "perKg": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricePair"
+            }
+          },
+          "readyBy": {
+            "type": "string"
+          },
+          "filedRef": {
+            "type": "string"
+          },
+          "filedBy": {
+            "type": "string"
+          },
+          "clearedRef": {
+            "type": "string"
+          },
+          "clearedBy": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string"
+          },
+          "withdrawnBy": {
+            "type": "string"
+          },
+          "problems": {
+            "description": "What stops it going on: each problem in words. Empty when nothing does.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "number"
+          },
+          "zoneMapVersion": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "weight": {
+            "$ref": "#/components/schemas/PriceWeightRules"
+          },
+          "surcharges": {
+            "$ref": "#/components/schemas/PriceSurcharges"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "cashStep": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "bands",
+          "steps",
+          "table",
+          "perExtraKg",
+          "groupCharges",
+          "zoneCharges",
+          "pairs",
+          "problems",
+          "version",
+          "zoneMapVersion",
+          "currency",
+          "weight",
+          "surcharges",
+          "minimum",
+          "cashStep",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "PriceCostCell": {
+        "type": "object",
+        "properties": {
+          "band": {
+            "type": "string"
+          },
+          "stepKg": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "cost": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "band",
+          "stepKg",
+          "price",
+          "cost"
+        ]
+      },
+      "PriceCardSettingsView": {
+        "type": "object",
+        "properties": {
+          "filingRequired": {
+            "type": "boolean"
+          },
+          "noticeDays": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "filingRequired",
+          "noticeDays"
+        ]
+      },
+      "PriceCardsView": {
+        "type": "object",
+        "properties": {
+          "zoneMaps": {
+            "description": "The zone maps a card can be made with: the published versions.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "inForce": {
+            "$ref": "#/components/schemas/PriceCardView"
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceCardView"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceCardView"
+            }
+          },
+          "costs": {
+            "description": "The card being worked on, ready or on its way: its estimated cost per cell.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceCostCell"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/PriceCardSettingsView"
+          }
+        },
+        "required": [
+          "zoneMaps",
+          "pending",
+          "history",
+          "costs",
+          "entityId",
+          "currency",
+          "settings"
+        ]
+      },
+      "PriceCardSettingsDto": {
+        "type": "object",
+        "properties": {
+          "filingRequired": {
+            "type": "boolean"
+          },
+          "noticeDays": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 180
+          }
+        }
+      },
+      "PriceCardStartDto": {
+        "type": "object",
+        "properties": {
+          "zoneMapVersion": {
+            "type": "number",
+            "description": "The published zone map it is made on; absent means the map in force.",
+            "minimum": 1
+          }
+        }
+      },
+      "PriceBandDto": {
+        "type": "object",
+        "properties": {
+          "maxZones": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxKm": {
+            "type": "number",
+            "nullable": true
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
+      "PricePairDto": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "b": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "band": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "band"
+        ]
+      },
+      "PriceWeightRulesDto": {
+        "type": "object",
+        "properties": {
+          "divisorShop": {
+            "type": "number"
+          },
+          "divisorDoor": {
+            "type": "number"
+          },
+          "stepKg": {
+            "type": "number"
+          },
+          "maxKg": {
+            "type": "number"
+          },
+          "volumeFromKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "divisorShop",
+          "divisorDoor",
+          "stepKg",
+          "maxKg",
+          "volumeFromKg"
+        ]
+      },
+      "PriceSurchargesDto": {
+        "type": "object",
+        "properties": {
+          "door": {
+            "type": "number"
+          },
+          "oversize": {
+            "type": "number"
+          },
+          "oversizeCm": {
+            "type": "number"
+          },
+          "fragile": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "door",
+          "oversize",
+          "oversizeCm",
+          "fragile"
+        ]
+      },
+      "PriceCardTermsDto": {
+        "type": "object",
+        "properties": {
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceBandDto"
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "table": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "perExtraKg": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "groupCharges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "perParcel": {
+                  "type": "number"
+                },
+                "perKg": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "zoneCharges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "perParcel": {
+                  "type": "number"
+                },
+                "perKg": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricePairDto"
+            }
+          },
+          "weight": {
+            "$ref": "#/components/schemas/PriceWeightRulesDto"
+          },
+          "surcharges": {
+            "$ref": "#/components/schemas/PriceSurchargesDto"
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "cashStep": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bands",
+          "steps",
+          "table",
+          "perExtraKg",
+          "groupCharges",
+          "zoneCharges",
+          "pairs",
+          "weight",
+          "surcharges",
+          "minimum",
+          "cashStep"
+        ]
+      },
+      "PriceCardRefDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
+      "PriceCardApproveDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "From when it is in force; absent means as soon as the country's notice allows."
+          }
+        }
+      },
+      "ZonePriceLine": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "amount"
+        ]
+      },
+      "ZonePrice": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "What set the billable weight: what it weighs, or how big it is.",
+            "enum": [
+              "weight",
+              "size"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ZonePriceLine"
+            }
+          },
+          "version": {
+            "type": "number"
+          },
+          "zoneMapVersion": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "band": {
+            "type": "string"
+          },
+          "bandName": {
+            "type": "string"
+          },
+          "zonesCrossed": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number"
+          },
+          "billableKg": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number",
+            "description": "The card's price for the journey: the table, the ends, the surcharges — at least the minimum. Before shop fees, our fee and tax."
+          }
+        },
+        "required": [
+          "by",
+          "lines",
+          "version",
+          "zoneMapVersion",
+          "currency",
+          "from",
+          "to",
+          "fromName",
+          "toName",
+          "band",
+          "bandName",
+          "zonesCrossed",
+          "km",
+          "billableKg",
+          "amount"
         ]
       },
       "ZoneGroupDto": {

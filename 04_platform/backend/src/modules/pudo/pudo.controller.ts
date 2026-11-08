@@ -164,7 +164,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -194,6 +194,8 @@ import { CustodyCapView, HandoverManifest } from './pudo.types';
 import { offPlanSaid } from './route-plan.types';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
+import { PriceCardService, type Doer } from './price-card.service';
+import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
 interface ModuleInfo {
@@ -367,6 +369,7 @@ export class SbgController {
     // 2026-11-06 — a bag for a shop that is closed: the driver's pick, its buyers choosing (point 6).
     @Optional() private readonly shopChoices?: ShopChoiceService,
     @Optional() private readonly zones?: ZoneMapService,
+    @Optional() private readonly priceCards?: PriceCardService,
   ) {}
 
   /**
@@ -2972,6 +2975,109 @@ export class SbgController {
   startEntityZoneProposal(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
     this.requireReach(actor, entityId);
     return this.zonesOf().startFromProposal(entityId, auditActor(actor));
+  }
+
+  /* --- 2026-11-08 — a country's price card (zone pricing, step 2): its company's own administrators, or staff. --- */
+
+  /** Its settings, the card in force, the cards on their way with what still stops them, and each cell's estimated cost. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/price-cards')
+  entityPriceCards(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().overview(entityId);
+  }
+
+  /** Whether its regulator must have each card filed and cleared, and how many days' notice a new card gives. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/settings')
+  setEntityPriceCardSettings(@Param('entityId') entityId: string, @Body() dto: PriceCardSettingsDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().setSettings(entityId, dto, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/draft')
+  startEntityPriceCard(@Param('entityId') entityId: string, @Body() dto: PriceCardStartDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().startDraft(entityId, dto.zoneMapVersion, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/draft/terms')
+  saveEntityPriceCard(@Param('entityId') entityId: string, @Body() dto: PriceCardTermsDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().saveDraft(entityId, dto as unknown as PriceCardTerms, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Delete('entities/:entityId/price-cards/draft')
+  discardEntityPriceCard(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().discardDraft(entityId, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/draft/ready')
+  readyEntityPriceCard(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().ready(entityId, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/:version/filed')
+  fileEntityPriceCard(@Param('entityId') entityId: string, @Param('version') version: string, @Body() dto: PriceCardRefDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().filed(entityId, this.versionOf(version), dto.reference, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/:version/cleared')
+  clearEntityPriceCard(@Param('entityId') entityId: string, @Param('version') version: string, @Body() dto: PriceCardRefDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().cleared(entityId, this.versionOf(version), dto.reference, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/:version/approve')
+  approveEntityPriceCard(@Param('entityId') entityId: string, @Param('version') version: string, @Body() dto: PriceCardApproveDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().approve(entityId, this.versionOf(version), dto.from, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/price-cards/:version/withdraw')
+  withdrawEntityPriceCard(@Param('entityId') entityId: string, @Param('version') version: string, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    return this.cardsOf().withdraw(entityId, this.versionOf(version), this.doerOf(actor));
+  }
+
+  /** A price tried on a card: two zones, a weight or measurements, door or shop, fragile or not — line by line. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/price-cards/price')
+  @ApiQuery({ name: 'version', required: false })
+  @ApiQuery({ name: 'kg', required: false })
+  @ApiQuery({ name: 'l', required: false })
+  @ApiQuery({ name: 'w', required: false })
+  @ApiQuery({ name: 'h', required: false })
+  @ApiQuery({ name: 'door', required: false })
+  @ApiQuery({ name: 'fragile', required: false })
+  tryEntityPrice(
+    @Param('entityId') entityId: string,
+    @Actor() actor: IntrospectionResult,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('version') version?: string,
+    @Query('kg') kg?: string,
+    @Query('l') l?: string,
+    @Query('w') w?: string,
+    @Query('h') h?: string,
+    @Query('door') door?: string,
+    @Query('fragile') fragile?: string,
+  ): ZonePrice {
+    this.requireReach(actor, entityId);
+    const n = (v?: string) => (v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : undefined);
+    const dims = n(l) && n(w) && n(h) ? { l: n(l)!, w: n(w)!, h: n(h)! } : undefined;
+    return this.cardsOf().price(entityId, { from, to, kg: n(kg), dims, door: door === 'true', fragile: fragile === 'true' }, version ? this.versionOf(version) : undefined);
   }
 
   /** The country's price groups, the whole list in its order. */
@@ -8082,6 +8188,22 @@ export class SbgController {
   parcelShopChoice(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverSelf(did, actor, 'Only the driver holding the parcel picks the shops for it');
     return this.shopChoicesOf().askParcel(parcelId, did, dto.shopDids, { shut: dto.shut === true });
+  }
+
+  private cardsOf(): PriceCardService {
+    if (!this.priceCards) throw new GlosError('INVALID_STATE', 'Price cards are not available here');
+    return this.priceCards;
+  }
+
+  /** Who is acting: the name for the record, and the account, which tells two people apart (never their names). */
+  private doerOf(actor: IntrospectionResult): Doer {
+    return { name: auditActor(actor), id: actor?.sub || actor?.did || auditActor(actor) };
+  }
+
+  private versionOf(version: string): number {
+    const v = Number(version);
+    if (!Number.isInteger(v) || v < 1) throw new GlosError('VALIDATION_FAILED', 'A card version is a whole number', { field: 'version' });
+    return v;
   }
 
   private zonesOf(): ZoneMapService {

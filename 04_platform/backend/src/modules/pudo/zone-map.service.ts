@@ -47,6 +47,9 @@ export class ZoneMapService {
   private readonly indexes = new Map<string, { shapes: Map<string, Shape>; index: AreaIndex }>();
   /** A published map's areas → their zone. Published maps never change, so this is never stale. */
   private readonly zoneOfArea = new Map<string, Map<string, StoredZone>>();
+  /** A published map's zone centres, and the zones counted between two of its zones: worked out once, never stale. */
+  private readonly centresOf = new Map<string, Map<string, { lat: number; lng: number }>>();
+  private readonly crossings = new Map<string, { zonesCrossed: number; straightKm: number }>();
 
   constructor(
     private readonly entities: EntityService,
@@ -105,6 +108,71 @@ export class ZoneMapService {
     const zone = this.zoneOfPoint(company.entityId, map, point);
     if (!zone) return undefined;
     return { code: zone.code, name: zone.name, group: zone.group, groupName: s.groups.find((g) => g.key === zone.group)?.name ?? zone.group, version: map.version };
+  }
+
+  /**
+   * The zones of one published version, with their groups and centres — what a price card made with that version prices.
+   * Published versions never change, so this is kept once worked out.
+   */
+  publishedZones(entityId: string, version: number): { country: string; groups: ZoneGroup[]; zones: Array<{ code: string; name: string; group: string; centre: { lat: number; lng: number } }> } {
+    const company = this.company(entityId);
+    const s = this.stored(company);
+    const map = s.maps.find((m) => m.status === 'published' && m.version === version);
+    if (!map) throw new GlosError('NOT_FOUND', `${company.name} has no published zone map ${version}`);
+    const key = `${entityId}#v${version}`;
+    let centres = this.centresOf.get(key);
+    if (!centres) {
+      const set = this.areaSet(entityId, map.setId);
+      const byId = new Map(set.areas.map((a) => [a.id, a]));
+      centres = new Map();
+      for (const z of map.zones) {
+        const parts = z.areas.map((id) => byId.get(id)).filter((a): a is StoredArea => !!a);
+        const km2 = parts.reduce((n, a) => n + a.areaKm2, 0) || parts.length || 1;
+        const w = (a: StoredArea) => (parts.some((p) => p.areaKm2 > 0) ? a.areaKm2 : 1);
+        centres.set(z.code, { lat: parts.reduce((n, a) => n + a.centre.lat * w(a), 0) / km2, lng: parts.reduce((n, a) => n + a.centre.lng * w(a), 0) / km2 });
+      }
+      this.centresOf.set(key, centres);
+    }
+    return { country: s.country, groups: s.groups, zones: map.zones.map((z) => ({ code: z.code, name: z.name, group: z.group, centre: centres!.get(z.code)! })) };
+  }
+
+  /** The zone a pin lies in on one published version (a price card's own), whatever version is in force today. */
+  zoneCodeIn(entityId: string, version: number, point: GeoPoint | undefined): string | undefined {
+    if (!point) return undefined;
+    const company = this.company(entityId);
+    const map = this.stored(company).maps.find((m) => m.status === 'published' && m.version === version);
+    return map ? this.zoneOfPoint(entityId, map, point)?.code : undefined;
+  }
+
+  /**
+   * HOW MANY ZONES LIE BETWEEN TWO ZONES (the owner: "the zones it is passing"), counted once for the pair on one published
+   * version and kept: the straight line between their centres, looked at every kilometre, and every other zone it passes
+   * through counted once. With the line's length — the distance a band is also measured by. The same pair always answers
+   * the same for the same version, so a price made from it never moves.
+   */
+  crossing(entityId: string, version: number, from: string, to: string): { zonesCrossed: number; straightKm: number } {
+    const key = `${entityId}#v${version}#${from < to ? `${from}|${to}` : `${to}|${from}`}`;
+    const known = this.crossings.get(key);
+    if (known) return known;
+    const { zones } = this.publishedZones(entityId, version);
+    const a = zones.find((z) => z.code === from);
+    const b = zones.find((z) => z.code === to);
+    if (!a || !b) throw new GlosError('NOT_FOUND', `There is no zone ${!a ? from : to} in zone map ${version}`);
+    const company = this.company(entityId);
+    const map = this.stored(company).maps.find((m) => m.status === 'published' && m.version === version)!;
+    const straightKm = Math.hypot((a.centre.lat - b.centre.lat) * 110.574, (a.centre.lng - b.centre.lng) * 111.32 * Math.cos(((a.centre.lat + b.centre.lat) / 2) * (Math.PI / 180)));
+    const passed = new Set<string>();
+    if (from !== to) {
+      const samples = Math.min(2000, Math.max(2, Math.ceil(straightKm)));
+      for (let i = 1; i < samples; i++) {
+        const t = i / samples;
+        const z = this.zoneOfPoint(entityId, map, { lat: a.centre.lat + (b.centre.lat - a.centre.lat) * t, lng: a.centre.lng + (b.centre.lng - a.centre.lng) * t });
+        if (z && z.code !== from && z.code !== to) passed.add(z.code);
+      }
+    }
+    const answer = { zonesCrossed: passed.size, straightKm: Math.round(straightKm * 10) / 10 };
+    this.crossings.set(key, answer);
+    return answer;
   }
 
   zoneOfShop(shop: Agent | undefined, at?: number): PlaceZone | undefined {
