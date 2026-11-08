@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addStep, approveFrom, belowCost, cellCost, earliestDay, figure, removeStep, setCell, workingCard, type PriceCardTerms, type PriceCardsView } from './priceCards';
+import { addStep, approveFrom, belowCost, cellCost, earliestDay, figure, marginOf, removeStep, setCell, weekShift, workingCard, type PriceCardTerms, type PriceCardsView } from './priceCards';
 
 const TERMS: PriceCardTerms = {
   bands: [
@@ -17,6 +17,16 @@ const TERMS: PriceCardTerms = {
   minimum: 0,
   cashStep: 0,
 };
+
+describe('price and cost per pair of zones in the console (step 4)', () => {
+  it('steps a week at a time from its Sunday, and says what a price leaves after its planned cost', () => {
+    expect(weekShift('2026-11-08', -7)).toBe('2026-11-01');
+    expect(weekShift('2026-11-08', 7)).toBe('2026-11-15');
+    expect(weekShift('2026-12-27', 7)).toBe('2027-01-03');
+    expect(marginOf({ price: 10, planned: 12.5 })).toBe(-2.5);
+    expect(marginOf({ price: 0.3, planned: 0.1 })).toBe(0.2);
+  });
+});
 
 describe('a country’s price card in the console (2026-11-08)', () => {
   it('works on the one card on its way: a draft, ready, filed or cleared — never one in force or scheduled', () => {

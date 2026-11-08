@@ -10,7 +10,7 @@ import { PublicShell } from './screens/PublicShell';
 import { welcomeSpoken } from './logic';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 // Not in the homepage's first download: each is fetched when it is opened (lazyScreens.ts).
-import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, YesItIsMeScreen, directoryScreen, helpScreen, loadDirectoryPage, loadHelpPage } from './lazyScreens';
+import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, ZonesScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, YesItIsMeScreen, directoryScreen, helpScreen, loadDirectoryPage, loadHelpPage } from './lazyScreens';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -109,6 +109,7 @@ export function App() {
       <main class={`app__scroll app__scroll--nonav${state.screen === 'info' ? ' app__scroll--land' : ''}`}>
         <Suspense fallback={<div class="scr" aria-busy="true" />}>
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
+        {state.screen === 'zones' ? <ZonesScreen /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
         {state.screen === 'agents' ? <AgentsScreen state={state} actions={actions} /> : null}

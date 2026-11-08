@@ -139,7 +139,7 @@ export function vendorOrderStatsOf(rows: Parcel[]): VendorOrderStats {
 /** 2026-11-08 — what a parcel's price was made of on its country's price card, where one priced it (zone pricing, step 3). */
 function zoneStampOf(quote: ShipmentQuote): Pick<Parcel, 'zonePrice'> {
   const z = quote.zone;
-  return z ? { zonePrice: { cardVersion: z.version, zoneMapVersion: z.zoneMapVersion, from: z.from, to: z.to, band: z.band, billableKg: z.billableKg, amount: z.amount, lines: z.lines.map((l) => ({ ...l })) } } : {};
+  return z ? { zonePrice: { cardVersion: z.version, zoneMapVersion: z.zoneMapVersion, from: z.from, to: z.to, band: z.band, billableKg: z.billableKg, amount: z.amount, lines: z.lines.map((l) => ({ ...l })), ...(z.plannedCost != null ? { plannedCost: z.plannedCost } : {}) } } : {};
 }
 
 /** Each stop's own fee as the parcel is sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */

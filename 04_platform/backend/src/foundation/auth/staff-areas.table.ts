@@ -295,6 +295,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/entities/:entityId/zones/shapes': 'admin',
   // 2026-11-08 — a country's price card (zone pricing, step 2).
   'GET sbg/entities/:entityId/price-cards': 'admin',
+  'GET sbg/entities/:entityId/price-cards/report': 'admin',
   'GET sbg/entities/:entityId/price-cards/price': 'admin',
   'GET sbg/entities/:entityId/sites': 'any',
   'GET sbg/entities/:entityId/tax': 'admin',

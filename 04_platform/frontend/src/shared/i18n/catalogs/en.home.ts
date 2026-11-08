@@ -675,6 +675,22 @@ export const enHome = {
 
   /* FB3b — the public freight market. Read by people who do not have an account and may never want one. */
   'home.market.title': 'What freight moves here',
+  // 2026-11-08 — which price zone a place is in (zone pricing). No place of any one country in these words.
+  'home.zones.title': 'Price zones',
+  'home.zones.lede': 'Each country SeeBuyGet runs in is divided into price zones. Look up the zone a place is in.',
+  'home.zones.whereLabel': 'A place',
+  'home.zones.wherePh': 'A town, a street or a landmark',
+  'home.zones.look': 'Look it up',
+  'home.zones.useHere': 'Use where I am',
+  'home.zones.here': 'Where you are',
+  'home.zones.answerLabel': 'The zone',
+  'home.zones.inZone': '{where} is in the zone {zone} ({group}), {country}.',
+  'home.zones.none': 'No price zone there yet: {where} is not in a country whose zones are set.',
+  'home.zones.notFound': 'No place found for that. Try a town and a street.',
+  'home.zones.hereFailed': 'Your phone did not say where you are. Type the place instead.',
+  'home.zones.failed': 'The zones could not be asked just now. Try again in a moment.',
+  'home.zones.how': 'A parcel’s price is read from the two zones it travels between, on its country’s price list, and you are told it before you send.',
+  'home.zones.send': 'See the price of a parcel',
   'home.market.lede': 'Every load open on the network around a place you choose — what it needs, how far it runs, and what it is worth. No account, no sign-in.',
   'home.market.whereLabel': 'Which place do you want to look at?',
   'home.market.wherePh': 'A town or a city',

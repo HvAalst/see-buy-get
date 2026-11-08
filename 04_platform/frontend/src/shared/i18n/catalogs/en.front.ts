@@ -127,6 +127,7 @@ export const enFront = {
   'front.foot.terms': 'Terms of use',
   'front.foot.write': 'Write to us',
   'front.foot.directory': 'Logistics directory',
+  'front.foot.zones': 'Price zones',
   'front.foot.data': 'How we treat your data',
   'front.foot.cookies': 'Cookies',
   'front.foot.line': 'SeeBuyGet — parcels through neighbourhood shops',

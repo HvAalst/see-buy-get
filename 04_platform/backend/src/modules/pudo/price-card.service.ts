@@ -1,12 +1,12 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { BAG_CAPACITY_UNITS, MEDIUM_KG, ROAD_CIRCUITY_FACTOR, SIZE_WEIGHT_KG } from './pudo.config';
 import type { ParcelSize } from './pudo.types';
-import { ROUTER, type Router } from './router';
 import { ZoneMapService } from './zone-map.service';
+import { haversineKm } from './geo';
 import type {
   EndCharge,
   PriceBand,
@@ -64,7 +64,6 @@ export class PriceCardService {
   constructor(
     private readonly entities: EntityService,
     private readonly zones: ZoneMapService,
-    @Optional() @Inject(ROUTER) private readonly router?: Router,
   ) {}
 
   /* --------------------------------------------------------------- reading -- */
@@ -174,7 +173,11 @@ export class PriceCardService {
   bandFor(entityId: string, card: StoredPriceCard, from: { code: string; centre: { lat: number; lng: number } }, to: { code: string; centre: { lat: number; lng: number } }): { band: PriceBand; zonesCrossed: number; km: number } {
     const pair = card.pairs.find((p) => (p.a === from.code && p.b === to.code) || (p.a === to.code && p.b === from.code));
     const crossing = this.zones.crossing(entityId, card.zoneMapVersion, from.code, to.code);
-    const km = from.code === to.code ? 0 : r2(this.router ? this.router.roadKm(from.centre, to.centre) : crossing.straightKm * ROAD_CIRCUITY_FACTOR);
+    // A CARD'S DISTANCES ARE ITS OWN (2026-11-08, zone pricing step 4): the estimate — the straight line between the zones'
+    // centres times the road factor, as the network has always estimated a road — never whatever router is wired in that day.
+    // A card approved on one measure is charged on that measure: switching real road distances on must not re-band a card
+    // already approved. Real road km come to a card of their own, frozen when it is made ready, once a routing server runs.
+    const km = from.code === to.code ? 0 : r2(haversineKm(from.centre, to.centre) * ROAD_CIRCUITY_FACTOR);
     const band = pair ? card.bands.find((b) => b.key === pair.band) ?? this.bandOf(card.bands, crossing.zonesCrossed, km) : this.bandOf(card.bands, crossing.zonesCrossed, km);
     return { band, zonesCrossed: crossing.zonesCrossed, km };
   }

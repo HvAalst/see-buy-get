@@ -13761,9 +13761,45 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/price-cards/report": {
+      "get": {
+        "operationId": "Sbg.entityPriceReport",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "week",
+            "required": false,
+            "in": "query",
+            "description": "YYYY-MM-DD — a day in the week (Sunday to Saturday); this week where absent",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceReportView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/price-cards": {
       "get": {
         "operationId": "Sbg.entityPriceCards",
+        "summary": "",
+        "description": "Its settings, the card in force, the cards on their way with what still stops them, and each cell's estimated cost.",
         "parameters": [
           {
             "name": "entityId",
@@ -18513,11 +18549,39 @@
         }
       }
     },
+    "/v1/sbg/zones/at": {
+      "get": {
+        "operationId": "Sbg.zoneAtPoint",
+        "summary": "",
+        "description": "Resolve a free-text address, place or landmark to a point — the Send app's and the counter's \"An address\", which\nthen rank the shops nearest-first client-side.  for the same open-data reasoning as /quote and\n/network/points: nothing of ours is read or written. `country` (ISO-3166 alpha-2, comma-separated) keeps an\naddress to where the shops are. `confidence` says a house found (exact) from a street or a town's middle (approx).\n\nAn address anywhere: a Nominatim-compatible service where GLOS_GEOCODER_URL is set, the offline gazetteer where it\nis not (AddressSearchService). WHAT NEITHER FINDS IS NOT FOUND (2026-10-25) — it used to come back as a stand-in\npoint near the middle of the network, which a screen then drew as a pin somewhere nobody said. Rate-limited per\ncaller, because the service behind it is somebody's to be asked politely.",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/geocode": {
       "get": {
         "operationId": "Sbg.geocode",
-        "summary": "",
-        "description": "Resolve a free-text address, place or landmark to a point — the Send app's and the counter's \"An address\", which\nthen rank the shops nearest-first client-side.  for the same open-data reasoning as /quote and\n/network/points: nothing of ours is read or written. `country` (ISO-3166 alpha-2, comma-separated) keeps an\naddress to where the shops are. `confidence` says a house found (exact) from a street or a town's middle (approx).\n\nAn address anywhere: a Nominatim-compatible service where GLOS_GEOCODER_URL is set, the offline gazetteer where it\nis not (AddressSearchService). WHAT NEITHER FINDS IS NOT FOUND (2026-10-25) — it used to come back as a stand-in\npoint near the middle of the network, which a screen then drew as a pin somewhere nobody said. Rate-limited per\ncaller, because the service behind it is somebody's to be asked politely.",
         "parameters": [
           {
             "name": "q",
@@ -58679,6 +58743,32 @@
           "attribution"
         ]
       },
+      "PriceReportRow": {
+        "type": "object",
+        "properties": {}
+      },
+      "PriceReportTotals": {
+        "type": "object",
+        "properties": {}
+      },
+      "PriceReportView": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceReportRow"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PriceReportTotals"
+          }
+        },
+        "required": [
+          "rows",
+          "totals"
+        ]
+      },
       "PriceBand": {
         "type": "object",
         "properties": {
@@ -59339,6 +59429,10 @@
           "amount": {
             "type": "number",
             "description": "The card's price for the journey: the table, the ends, the surcharges — at least the minimum. Before shop fees, our fee and tax."
+          },
+          "plannedCost": {
+            "type": "number",
+            "description": "2026-11-08 — what carrying this journey is planned to cost, where a quote priced a real journey (step 4's report): the\nroad at the cheapest carrier that can take it, the hubs' own fees on the way, and its share of each leg's bag loading."
           }
         },
         "required": [
@@ -60073,6 +60167,10 @@
             "items": {
               "$ref": "#/components/schemas/ParcelZonePriceLine"
             }
+          },
+          "plannedCost": {
+            "type": "number",
+            "description": "2026-11-08 — what carrying it was planned to cost when it was sold (the weekly price-and-cost report)."
           }
         },
         "required": [

@@ -922,14 +922,14 @@ export function formatDuration(minutes: number, t: Translate): string {
  * it can be shared, bookmarked, opened in a new tab and followed by a search engine; the app reads it once and
  * takes the visitor to the screen it names.
  */
-export type DeepLink = { join: RoleSpec['id'] } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' } | null;
+export type DeepLink = { join: RoleSpec['id'] } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' | 'zones' } | null;
 
 export function readDeepLink(search: string): DeepLink {
   const q = new URLSearchParams(search);
   const join = q.get('join');
   if (join && ROLES.some((r) => r.id === join)) return { join: join as RoleSpec['id'] };
   const go = q.get('go');
-  if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles') return { go };
+  if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles' || go === 'zones') return { go };
   return null;
 }
 

@@ -928,6 +928,11 @@
   font-size: 12px;
   margin-top: 2px;
 }
+/* 2026-11-08 — a pair of zones priced below what carrying it costs (the price report): the one row that is an alarm. */
+.twr-below td:last-child {
+  color: var(--dang);
+  font-weight: 700;
+}
 
 /* ------------------------------------------------------ support + pictures -- */
 

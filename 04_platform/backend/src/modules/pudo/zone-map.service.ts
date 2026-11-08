@@ -111,6 +111,19 @@ export class ZoneMapService {
   }
 
   /**
+   * 2026-11-08 — THE ZONE A PLACE IS IN, WHEREVER IT IS (the public zone lookup, zone pricing step 3): each country's map in
+   * force is asked, and only a pin inside one of its zones answers — a country's map never claims a pin over its border,
+   * except the 2 km a pin in a gap between its own areas may reach. Nothing where no country keeps zones there.
+   */
+  zoneAnywhere(point: GeoPoint, at: number = Date.now()): { country: string; zone: PlaceZone } | undefined {
+    for (const s of this.setups.values()) {
+      const zone = this.zoneAt(s.country, point, at);
+      if (zone) return { country: s.country, zone };
+    }
+    return undefined;
+  }
+
+  /**
    * The zones of one published version, with their groups and centres — what a price card made with that version prices.
    * Published versions never change, so this is kept once worked out.
    */

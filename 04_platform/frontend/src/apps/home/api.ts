@@ -638,6 +638,16 @@ export function geocode(q: string, countries: string[] = []): Promise<Result<Geo
   return publicRequest<GeocodeView>(homeConfig(), `/v1/sbg/geocode?q=${encodeURIComponent(q)}${where}`);
 }
 
+/** 2026-11-08 — which price zone a point is in (zone pricing): nothing where no country keeps zones there. */
+export interface ZoneAnswer {
+  country?: string;
+  zone?: { code: string; name: string; groupName: string; version: number };
+}
+
+export function zoneAt(lat: number, lng: number): Promise<Result<ZoneAnswer>> {
+  return publicRequest<ZoneAnswer>(homeConfig(), `/v1/sbg/zones/at?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`);
+}
+
 /* ---------------------------------------------------------------- handoff -- */
 
 /**

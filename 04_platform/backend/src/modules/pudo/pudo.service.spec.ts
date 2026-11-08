@@ -34,10 +34,11 @@ import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService } from './price-card.service';
 import { CounterPriceService } from './counter-price.service';
+import { PriceReportService } from './price-report.service';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { PriceCardTerms } from './price-card.types';
-import { withPlatformFee } from './pudo.config';
+import { BAG_CAPACITY_UNITS, withPlatformFee } from './pudo.config';
 import { offPlanSaid } from './route-plan.types';
 import { byMoney, detoursOf } from './journey-plan.service';
 import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
@@ -153,6 +154,7 @@ describe('PUDO Light', () => {
   let zoneMaps: ZoneMapService;
   let priceCards: PriceCardService;
   let counterPrices: CounterPriceService;
+  let priceReports: PriceReportService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let mdps: MdpService;
@@ -233,6 +235,7 @@ describe('PUDO Light', () => {
         ZoneMapService, // 2026-11-08 — a country's zones, and its price card (zone pricing)
         PriceCardService,
         CounterPriceService, // 2026-11-08 — what a counter keeps to price with no signal (step 3b)
+        PriceReportService, // 2026-11-08 — price against planned cost per pair of zones (step 4)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -269,6 +272,7 @@ describe('PUDO Light', () => {
     zoneMaps = moduleRef.get(ZoneMapService);
     priceCards = moduleRef.get(PriceCardService);
     counterPrices = moduleRef.get(CounterPriceService);
+    priceReports = moduleRef.get(PriceReportService);
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -13589,6 +13593,60 @@ describe('PUDO Light', () => {
       const text = JSON.stringify(golden, null, 2) + '\n';
       if (process.env.UPDATE_GOLDEN === '1') writeFileSync(file, text);
       expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(JSON.parse(text));
+    });
+
+it('a parcel priced from the card keeps what carrying it was planned to cost — and the week’s report pairs its price against that, worst first (step 4)', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const west2 = shopAt('ZP West Two', { lat: -1.22, lng: 36.62 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      // Carriers at 1 and 90 a km (the cheapest plans the road), and a card priced far below what carrying costs.
+      twoRates();
+      // So every pair shows it.
+      cardInForce({ table: { local: [1, 2, 3, 4, 5, 6], near: [1, 2, 3, 4, 5, 6], regional: [1, 2, 3, 4, 5, 6], national: [1, 2, 3, 4, 5, 6] } });
+      const vendor = vendors.register({ name: 'ZP Store' });
+      vendors.topUp(vendor.vendorId, 500);
+      const order = (id: string, dest: string) => {
+        const quote = routing.quoteShipment(west.did, dest, 'S', undefined, { kg: 1 });
+        return { quote, parcel: parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: id, originAgentDid: west.did, destAgentDid: dest, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote }).parcel };
+      };
+      const first = order('ZP-R1', east.did);
+      // Planned: the road at the cheapest carrier, the hubs' fees (none on this road), and its share of each leg's bag loading.
+      const q = first.quote;
+      const hubs = q.nodes.filter((n) => n.type === 'mdp').reduce((sum, n) => sum + n.fee, 0);
+      const loading = q.legs.length * entities.amountsFor('sbg-ke').toteLoadFee * (Math.min(q.transportFactor, BAG_CAPACITY_UNITS) / BAG_CAPACITY_UNITS);
+      const planned = Math.round((Math.round(q.totalKm * q.perKm.min * q.transportFactor * 100) / 100 + hubs + loading) * 100) / 100;
+      expect(q.zone?.plannedCost).toBe(planned);
+      expect(first.parcel.zonePrice?.plannedCost).toBe(planned);
+      order('ZP-R2', east.did);
+      order('ZP-R3', west2.did);
+      const voided = order('ZP-R4', west2.did);
+      parcels.cancel(voided.parcel.parcelId);
+      const report = priceReports.weekOf('sbg-ke');
+      expect(report.currency).toBe('KES');
+      expect(new Date(`${report.week}T00:00:00Z`).getUTCDay()).toBe(0);
+      // Two pairs; the one furthest below its cost first; the cancelled order in neither.
+      expect(report.rows.map((r) => [r.fromName, r.toName, r.parcels, r.below])).toEqual([
+        ['West', 'East', 2, 2],
+        ['West', 'West', 1, 1],
+      ]);
+      expect(report.rows[0].price).toBe(2);
+      expect(report.totals).toMatchObject({ parcels: 3, below: 3 });
+      // Another week: nothing.
+      const lastWeek = new Date(Date.parse(`${report.week}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10);
+      expect(priceReports.weekOf('sbg-ke', lastWeek).rows).toEqual([]);
+      expect(() => priceReports.weekOf('sbg-ke', 'soon')).toThrow(/YYYY-MM-DD/);
+    });
+
+    it('anybody may ask which price zone a place is in — and a place no country keeps zones for has none', () => {
+      expect(controller.zoneAtPoint('-1.25', '36.65')).toEqual({});
+      cardInForce();
+      expect(controller.zoneAtPoint('-1.25', '36.65')).toEqual({ country: 'KE', zone: { code: 'Z0001', name: 'West', groupName: expect.any(String), version: 1 } });
+      expect(controller.zoneAtPoint('-1.25', '36.75').zone?.name).toBe('East');
+      // Mombasa: in Kenya, in no zone of this map. Addis Ababa: no country there keeps zones.
+      expect(controller.zoneAtPoint('-4.05', '39.67')).toEqual({});
+      expect(controller.zoneAtPoint('9.03', '38.74')).toEqual({});
+      expect(() => controller.zoneAtPoint('nowhere', '36.65')).toThrow(/lat and lng/);
+      expect(() => controller.zoneAtPoint('95', '36.65')).toThrow(/lat and lng/);
     });
 
     it('the counter’s price list carries the card coming into force too, from its date — and nothing where no card prices from the shop', () => {

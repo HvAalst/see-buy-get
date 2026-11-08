@@ -7,8 +7,9 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
-import { HeuristicRouter } from './router';
 import type { PriceCardTerms } from './price-card.types';
+import { haversineKm } from './geo';
+import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 
 /** Five areas in a row, a tenth of a degree each (about 11 km), west to east: A B C D E. */
 const ROW = JSON.stringify({
@@ -37,7 +38,7 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     entities = moduleRef.get(EntityService);
     entities.seed();
     zones = new ZoneMapService(entities, none as never, none as never);
-    cards = new PriceCardService(entities, zones, new HeuristicRouter());
+    cards = new PriceCardService(entities, zones);
   });
 
   /** Kenya's zones published: A to E, E remote. */
@@ -106,6 +107,16 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     // The same pair named on the card: Near.
     cards.saveDraft('sbg-ke', { ...filled(draftTerms()), pairs: [{ a: code.E, b: code.A, band: 'near' }] }, NJERI);
     expect(cards.price('sbg-ke', { from: code.A, to: code.E, kg: 1 })).toMatchObject({ band: 'near', amount: 490 });
+  });
+
+  it('measures the km between two zones by the estimate — the straight line between their centres times the road factor — and nothing wired in beside it (step 4)', () => {
+    publishRow();
+    cards.startDraft('sbg-ke', undefined, NJERI);
+    cards.saveDraft('sbg-ke', filled(draftTerms()), NJERI);
+    const { zones: all } = zones.publishedZones('sbg-ke', 1);
+    const a = all.find((z) => z.code === code.A)!;
+    const d = all.find((z) => z.code === code.D)!;
+    expect(cards.price('sbg-ke', { from: code.A, to: code.D, kg: 1 }).km).toBe(Math.round(haversineKm(a.centre, d.centre) * ROAD_CIRCUITY_FACTOR * 100) / 100);
   });
 
   it('counts the size by the service’s divisor, rounds up to the step, adds the surcharges, and keeps to the minimum and the most', () => {

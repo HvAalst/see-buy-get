@@ -197,6 +197,7 @@ import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
 import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
+import { PriceReportService, PriceReportView } from './price-report.service';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
@@ -374,6 +375,8 @@ export class SbgController {
     @Optional() private readonly priceCards?: PriceCardService,
     // 2026-11-08 — what a counter keeps to price a walk-up with no signal (zone pricing, step 3b).
     @Optional() private readonly counterPrices?: CounterPriceService,
+    // 2026-11-08 — price against planned cost per pair of zones, a week at a time (zone pricing, step 4).
+    @Optional() private readonly priceReports?: PriceReportService,
   ) {}
 
   /**
@@ -2983,6 +2986,19 @@ export class SbgController {
 
   /* --- 2026-11-08 — a country's price card (zone pricing, step 2): its company's own administrators, or staff. --- */
 
+  /**
+   * 2026-11-08 — PRICE AND COST PER PAIR OF ZONES, a week at a time (step 4): what its card priced each pair at and what
+   * carrying them was planned to cost, worst first, with the pairs priced below cost counted. `week`: a day in it.
+   */
+  @Roles('operator', 'entity_admin')
+  @ApiQuery({ name: 'week', required: false, description: 'YYYY-MM-DD — a day in the week (Sunday to Saturday); this week where absent' })
+  @Get('entities/:entityId/price-cards/report')
+  entityPriceReport(@Param('entityId') entityId: string, @Query('week') week: string | undefined, @Actor() actor: IntrospectionResult): PriceReportView {
+    this.requireReach(actor, entityId);
+    if (!this.priceReports) throw new GlosError('NOT_FOUND', 'The price report is not available on this server');
+    return this.priceReports.weekOf(entityId, week);
+  }
+
   /** Its settings, the card in force, the cards on their way with what still stops them, and each cell's estimated cost. */
   @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/price-cards')
@@ -4795,6 +4811,24 @@ export class SbgController {
    * point near the middle of the network, which a screen then drew as a pin somewhere nobody said. Rate-limited per
    * caller, because the service behind it is somebody's to be asked politely.
    */
+  /**
+   * 2026-11-08 — WHICH PRICE ZONE A PLACE IS IN (zone pricing, step 3: the public zone lookup page). Anybody may ask: a price
+   * is public, and so is the zone a price is read from. A point in, the zone and its group out — or nothing where no country
+   * keeps zones there. Rate-limited like the place search beside it.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
+  @Get('zones/at')
+  zoneAtPoint(@Query('lat') lat?: string, @Query('lng') lng?: string): { country?: string; zone?: { code: string; name: string; groupName: string; version: number } } {
+    const point = { lat: Number(lat), lng: Number(lng) };
+    if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
+      throw new GlosError('VALIDATION_FAILED', 'Give a place as lat and lng', { field: 'lat' });
+    }
+    const found = this.zones?.zoneAnywhere(point);
+    return found ? { country: found.country, zone: { code: found.zone.code, name: found.zone.name, groupName: found.zone.groupName, version: found.zone.version } } : {};
+  }
+
   @Public()
   @UseGuards(RateLimitGuard)
   @RateLimit(60, 15 * 60)

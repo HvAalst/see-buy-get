@@ -44,7 +44,7 @@ import { captureInvite } from '../../shared/invite';
 import { readEmailLink } from './emailLink';
 import { takeCarry, type Carried, enrollPerson, mySignups, sendPapersAgain, sendShopPapers as sendShopPapersApi, signUpDriver, signUpFleet, uploadPaper, uploadShopPaper as uploadShopPaperApi, type FleetSignupView, type PersonSession } from './api';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'link' | 'town' | 'help' | 'info' | 'directory';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'link' | 'town' | 'help' | 'info' | 'directory' | 'zones';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;

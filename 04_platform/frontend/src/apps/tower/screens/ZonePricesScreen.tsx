@@ -14,12 +14,15 @@ import {
   cellCost,
   earliestDay,
   figure,
+  marginOf,
   removeStep,
   setCell,
   statusKey,
   termsOf,
+  weekShift,
   workingCard,
   type PriceCardTerms,
+  type PriceReportView,
   type PriceCardView,
   type PriceCardsView,
   type ZonePrice,
@@ -187,6 +190,8 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
           )}
 
           {card || view.inForce ? <TryPrice entityId={entityId} actions={actions} zoneList={zoneList} /> : null}
+          {/* 2026-11-08 — once a card has priced anything: its price against what carrying it costs, pair by pair (step 4). */}
+          {view.inForce || view.history.length ? <PriceReport entityId={entityId} actions={actions} /> : null}
 
           <ConsoleFold title={t('tower.prices.history')} hint={t('tower.prices.historyHint', { n: view.history.length })}>
             {view.history.length ? (
@@ -204,6 +209,118 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
         </>
       )}
     </>
+  );
+}
+
+/**
+ * PRICE AND COST PER PAIR OF ZONES, A WEEK AT A TIME (2026-11-08 — zone pricing, step 4). What the card priced each pair's
+ * parcels at against what carrying them was planned to cost — the road at the cheapest carrier, the hubs' fees, the bag
+ * loading — worst first, the pairs priced below cost marked. Planned costs at estimated distances for now.
+ */
+function PriceReport({ entityId, actions }: { entityId: string; actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [week, setWeek] = useState<string | undefined>(undefined);
+  const [report, setReport] = useState<PriceReportView | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!client) return;
+    let live = true;
+    setProblem(null);
+    void client.api.priceReport(entityId, week).then((r) => {
+      if (!live) return;
+      if (r.error) setProblem(r.error.detail || r.error.title || '');
+      else setReport(r.data as unknown as PriceReportView);
+    });
+    return () => {
+      live = false;
+    };
+  }, [client, entityId, week]);
+  const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (
+    <ConsoleFold title={t('tower.prices.report.title')} hint={report ? t('tower.prices.report.hint', { from: report.week, to: report.weekEnds }) : ''}>
+      <p class="chint">{t('tower.prices.report.lede')}</p>
+      <div class="twr-zonepublish">
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!report} onClick={() => report && setWeek(weekShift(report.week, -7))}>
+          {t('tower.prices.report.prev')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!report || weekShift(report.week, 7) > new Date().toISOString().slice(0, 10)} onClick={() => report && setWeek(weekShift(report.week, 7))}>
+          {t('tower.prices.report.next')}
+        </button>
+      </div>
+      {problem ? (
+        <p class="cerr">
+          <Abbreviated text={problem} />
+        </p>
+      ) : null}
+      {report && !report.rows.length ? <p class="cons__empty">{t('tower.prices.report.none')}</p> : null}
+      {report && report.rows.length ? (
+        <table class="ctbl ctbl--stack">
+          <thead>
+            <tr>
+              <th>{t('tower.prices.report.col.pair')}</th>
+              <th>{t('tower.prices.col.band')}</th>
+              <th>{t('tower.prices.report.col.parcels')}</th>
+              <th>{t('tower.prices.report.col.price', { currency: report.currency })}</th>
+              <th>{t('tower.prices.report.col.planned', { currency: report.currency })}</th>
+              <th>{t('tower.prices.report.col.left', { currency: report.currency })}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.rows.map((r) => {
+              const left = marginOf(r);
+              return (
+                <tr key={`${r.from}>${r.to}`} class={left < 0 ? 'twr-below' : undefined}>
+                  <td class="ctbl__strong">{t('tower.prices.report.pair', { from: r.fromName, to: r.toName })}</td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.prices.col.band')}</span>
+                    {r.band}
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="ctbl__lbl">{t('tower.prices.report.col.parcels')}</span>
+                    {r.parcels}
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="ctbl__lbl">{t('tower.prices.report.col.price', { currency: report.currency })}</span>
+                    {money(r.price)}
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="ctbl__lbl">{t('tower.prices.report.col.planned', { currency: report.currency })}</span>
+                    {money(r.planned)}
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="ctbl__lbl">{t('tower.prices.report.col.left', { currency: report.currency })}</span>
+                    {money(left)}
+                    {r.below ? <span class="chint"> {t('tower.prices.report.below', { n: r.below })}</span> : null}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr>
+              <td class="ctbl__strong">{t('tower.prices.report.total')}</td>
+              <td />
+              <td class="ctbl__num">
+                <span class="ctbl__lbl">{t('tower.prices.report.col.parcels')}</span>
+                {report.totals.parcels}
+              </td>
+              <td class="ctbl__num">
+                <span class="ctbl__lbl">{t('tower.prices.report.col.price', { currency: report.currency })}</span>
+                {money(report.totals.price)}
+              </td>
+              <td class="ctbl__num">
+                <span class="ctbl__lbl">{t('tower.prices.report.col.planned', { currency: report.currency })}</span>
+                {money(report.totals.planned)}
+              </td>
+              <td class="ctbl__num">
+                <span class="ctbl__lbl">{t('tower.prices.report.col.left', { currency: report.currency })}</span>
+                {money(marginOf(report.totals))}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      ) : null}
+      {report?.unplanned ? <p class="chint">{t('tower.prices.report.unplanned', { n: report.unplanned })}</p> : null}
+    </ConsoleFold>
   );
 }
 

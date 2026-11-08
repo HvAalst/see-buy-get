@@ -15,6 +15,8 @@ function screen<P>(load: () => Promise<ComponentType<P>>): ComponentType<P> {
 
 export const JoinScreen = screen(() => import('./screens/JoinScreen').then((m) => m.JoinScreen));
 export const MarketScreen = screen(() => import('./screens/MarketScreen').then((m) => m.MarketScreen));
+// 2026-11-08 — which price zone a place is in (zone pricing).
+export const ZonesScreen = screen(() => import('./screens/ZonesScreen').then((m) => m.ZonesScreen));
 export const RolesScreen = screen(() => import('./screens/RolesScreen').then((m) => m.RolesScreen));
 export const StoreScreen = screen(() => import('./screens/StoreScreen').then((m) => m.StoreScreen));
 export const ProfileScreen = screen(() => import('./screens/ProfileScreen').then((m) => m.ProfileScreen));

@@ -30,6 +30,8 @@ describe('the front page', () => {
   it('follows a card’s address to its screen, and nothing it does not know', () => {
     expect(readDeepLink('?join=driver')).toEqual({ join: 'driver' });
     expect(readDeepLink('?go=market')).toEqual({ go: 'market' });
+    // 2026-11-08 — which price zone a place is in (zone pricing): a real address too.
+    expect(readDeepLink('?go=zones')).toEqual({ go: 'zones' });
     expect(readDeepLink('?join=admin')).toBeNull();
     expect(readDeepLink('?go=tower')).toBeNull();
     expect(readDeepLink('')).toBeNull();

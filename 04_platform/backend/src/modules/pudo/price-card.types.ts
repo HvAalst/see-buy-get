@@ -222,4 +222,9 @@ export class ZonePrice {
   lines: ZonePriceLine[];
   /** The card's price for the journey: the table, the ends, the surcharges — at least the minimum. Before shop fees, our fee and tax. */
   amount: number;
+  /**
+   * 2026-11-08 — what carrying this journey is planned to cost, where a quote priced a real journey (step 4's report): the
+   * road at the cheapest carrier that can take it, the hubs' own fees on the way, and its share of each leg's bag loading.
+   */
+  plannedCost?: number;
 }

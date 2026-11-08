@@ -172,6 +172,9 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/publish', { params: { path: { entityId } }, body: from ? { from } : {} })),
     /* 2026-11-08 — a country's price card (zone pricing, step 2). */
     priceCards: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/price-cards', { params: { path: { entityId } } })),
+    /** 2026-11-08 — price against planned cost per pair of zones, the week a day falls in (zone pricing, step 4). */
+    priceReport: (entityId: string, week?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/price-cards/report', { params: { path: { entityId }, query: week ? { week } : {} } })),
     setPriceCardSettings: (entityId: string, body: { filingRequired?: boolean; noticeDays?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/settings', { params: { path: { entityId } }, body })),
     startPriceCard: (entityId: string, zoneMapVersion?: number) =>

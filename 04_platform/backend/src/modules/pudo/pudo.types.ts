@@ -1085,6 +1085,8 @@ export class ParcelZonePrice {
   billableKg: number;
   amount: number;
   lines: ParcelZonePriceLine[];
+  /** 2026-11-08 — what carrying it was planned to cost when it was sold (the weekly price-and-cost report). */
+  plannedCost?: number;
 }
 
 export class Parcel {

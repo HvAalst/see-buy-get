@@ -11,7 +11,7 @@ import type { Vehicle } from './fleet.types';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { BORDER_DWELL_H, chargedByOf, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BAG_CAPACITY_UNITS, BORDER_DWELL_H, chargedByOf, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
@@ -485,6 +485,14 @@ export class RoutingService {
     // The fee is derived from the two figures rather than computed a second way, so `base + fee === total`
     // holds exactly — a rounding difference between a stated line and the total it belongs to is the kind
     // of penny a merchant reconciles for an hour and never forgives.
+    // 2026-11-08 — what carrying it is planned to cost, beside the card's price (step 4's weekly report): the road at the
+    // cheapest carrier that can take it, the hubs' own fees on the way, and its share of each leg's bag-loading pay — the
+    // pay no price covered before, which a card now has to.
+    const plannedCostOf = (): number => {
+      const hubFees = nodes.filter((n) => n.type === 'mdp').reduce((sum, n) => sum + n.fee, 0);
+      const loading = plan.legs.length * this.entities.amountsFor(sellerId).toteLoadFee * (Math.min(factor, BAG_CAPACITY_UNITS) / BAG_CAPACITY_UNITS);
+      return Math.round((transport(min) + hubFees + loading) * 100) / 100;
+    };
     const leg = (rate: number): QuoteLeg => {
       // On a card the price is the card's whatever carrier takes it: the two legs come to the same figure.
       const t = zoned ? zoned.price.amount : transport(rate);
@@ -506,7 +514,7 @@ export class RoutingService {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
       totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', ...(measured != null && chargedByOf(measured, carriers.kg) ? { chargedBy: chargedByOf(measured, carriers.kg) } : {}), perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
-      ...(zoned ? { zone: zoned.price } : {}),
+      ...(zoned ? { zone: { ...zoned.price, plannedCost: plannedCostOf() } } : {}),
     };
   }
 

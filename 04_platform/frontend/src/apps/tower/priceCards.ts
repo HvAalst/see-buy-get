@@ -29,6 +29,38 @@ export interface PriceCardTerms {
   cashStep: number;
 }
 export type CardStatus = 'draft' | 'ready' | 'filed' | 'cleared' | 'scheduled' | 'in_force' | 'past' | 'withdrawn';
+
+/** 2026-11-08 — one pair of zones in a week: its parcels' card prices and what carrying them was planned to cost (step 4). */
+export interface PriceReportRow {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  band: string;
+  parcels: number;
+  price: number;
+  planned: number;
+  below: number;
+}
+export interface PriceReportView {
+  entityId: string;
+  currency: string;
+  week: string;
+  weekEnds: string;
+  rows: PriceReportRow[];
+  totals: { parcels: number; price: number; planned: number; below: number };
+  unplanned: number;
+}
+
+/** The day a week away from a week's Sunday (YYYY-MM-DD): -7 the week before, +7 the week after. */
+export function weekShift(week: string, days: number): string {
+  return new Date(Date.parse(`${week}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** What a pair's price leaves after its planned cost: below zero, priced below what carrying it costs. */
+export function marginOf(row: { price: number; planned: number }): number {
+  return Math.round((row.price - row.planned) * 100) / 100;
+}
 export interface PriceCardView extends PriceCardTerms {
   version: number;
   status: CardStatus;

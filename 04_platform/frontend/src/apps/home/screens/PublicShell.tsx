@@ -73,6 +73,7 @@ export function PublicShell({
               <a href="/?go=market">{t('home.landing.footMarket')}</a>
               <a href="/?go=agents">{t('home.landing.footAgents')}</a>
               <a href="/directory/">{t('front.foot.directory')}</a>
+              <a href="/?go=zones">{t('front.foot.zones')}</a>
               <a href="/?go=verify">{t('home.landing.footVerify')}</a>
               <a href="/?go=signin">{t('home.landing.footSignIn')}</a>
             </div>
