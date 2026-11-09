@@ -73,13 +73,21 @@ describe('a read the network cannot answer', () => {
 });
 
 describe('what its service worker keeps', () => {
-  it('the app and nothing else: the one runtime cache is the front page’s, and the push handler answers no read', () => {
+  it('the app and nothing else: what it keeps once fetched is the camera reader’s code; every other runtime cache is the front page’s; the push handler answers no read', () => {
     const config = readFileSync('vite.config.ts', 'utf8');
     const caches = [...config.matchAll(/runtimeCaching:/g)];
     expect(caches.length).toBe(1);
-    // …inside the front page's own branch, and that front page is not the Business app.
     const at = caches[0].index ?? 0;
-    expect(config.slice(Math.max(0, at - 40), at)).toMatch(/\.\.\.\(IS_ROOT\s*\?\s*\{\s*$/);
+    const block = config.slice(at, config.indexOf('navigateFallback:', at));
+    // 2026-11-09 — every app keeps one thing once fetched: the camera reader for a phone without one (zxingDetector) —
+    // code, never a read, never data.
+    const everyApp = block.slice(0, block.indexOf('...(IS_ROOT'));
+    expect([...everyApp.matchAll(/urlPattern:/g)]).toHaveLength(1);
+    expect(everyApp).toMatch(/\/\\\/assets\\\/zxingDetector-\[\\w-\]\+\\\.js\$\//);
+    expect(everyApp).not.toMatch(/v1|navigate/);
+    // …and the rest inside the front page's own branch, and that front page is not the Business app.
+    expect(block).toMatch(/\.\.\.\(IS_ROOT\s*\?\s*\[/);
+    expect(block.slice(block.indexOf('...(IS_ROOT'))).toMatch(/request\.mode === 'navigate'/);
     expect(config).toMatch(/const IS_ROOT = BASE === '\/'/);
     expect(config).toMatch(/business: \{\s*base: '\/business\/'/);
     // The handler it imports: a notification, a window, and a share's photos — never a read answered, never data kept.
