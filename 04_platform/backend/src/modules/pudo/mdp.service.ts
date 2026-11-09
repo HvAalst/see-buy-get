@@ -23,7 +23,7 @@ import { CargoNature, VehicleCapability } from './cargo.types';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { HubPapers, HubSpaceView, Mdp, NextHop, Parcel, Tote } from './pudo.types';
+import { GeoPoint, HubPapers, HubSpaceView, Mdp, NextHop, Parcel, Tote } from './pudo.types';
 import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
@@ -1289,7 +1289,24 @@ export class MdpService {
    * if this MDP serves the destination zone → the destination PUDO (last mile);
    * otherwise → the MDP that serves the destination zone (inter-hub leg).
    */
+  /**
+   * 2026-11-09 — WHICH HUB SERVES A PIN, where its country has said (hub catchments, the catchments-and-runs plan, Part A).
+   * Given by CatchmentService when it starts, so the two never need each other to be built.
+   */
+  private catchmentOf?: (country: string, point: GeoPoint, now: number) => string | undefined;
+
+  useCatchments(resolve: (country: string, point: GeoPoint, now: number) => string | undefined): void {
+    this.catchmentOf = resolve;
+  }
+
   nextHop(mdp: Mdp, destZone: string, destAgentDid: string, now: number = Date.now()): NextHop {
+    // 2026-11-09 — the hub that serves the destination shop's zone, where its country has said: this hub hands it to the
+    // shop, any other hub is where it goes next. The area name typed at sign-up only where no catchment answers.
+    const shop = destAgentDid ? this.agents.list().find((a) => a.did === destAgentDid) : undefined;
+    const servedBy = shop && this.catchmentOf ? this.catchmentOf(this.agents.countryOf(shop), shop.location, now) : undefined;
+    if (shop && servedBy === mdp.mdpId) return { type: 'pudo', id: shop.did, label: shop.shopName, zone: destZone };
+    const byZone = servedBy ? this.list().find((m) => m.mdpId === servedBy) : undefined;
+    if (byZone) return { type: 'mdp', id: byZone.mdpId, label: byZone.name, zone: destZone };
     if (mdp.zones.includes(destZone)) {
       const dest = this.agents.get(destAgentDid);
       return { type: 'pudo', id: dest.did, label: dest.shopName, zone: destZone };

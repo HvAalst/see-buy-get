@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -74,7 +74,7 @@ export class CatchmentsView {
  * it always has.
  */
 @Injectable()
-export class CatchmentService {
+export class CatchmentService implements OnModuleInit {
   private readonly store = new PersistentMap<string, StoredCatchments>('pudo-catchments');
 
   constructor(
@@ -83,6 +83,11 @@ export class CatchmentService {
     private readonly mdps: MdpService,
     @Optional() @Inject(ROUTER) private readonly router?: Router,
   ) {}
+
+  /** The hubs sort by catchment too: given the lookup here, so neither needs the other to be built. */
+  onModuleInit(): void {
+    this.mdps.useCatchments?.((country, point, now) => this.hubForPoint(country, point, now));
+  }
 
   view(entityId: string, now: number = Date.now()): CatchmentsView {
     const company = this.company(entityId);

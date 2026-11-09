@@ -20,6 +20,7 @@ import { BorderCrossing, crossingsOn } from './country';
 import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
 import { PriceCardService } from './price-card.service';
 import { ZoneMapService } from './zone-map.service';
+import { CatchmentService } from './catchment.service';
 import type { ZonePrice } from './price-card.types';
 
 /**
@@ -289,6 +290,8 @@ export class RoutingService {
     // 2026-11-08 — a country's price card, and its zones (zone pricing, step 3). Optional for the specs that build this by hand.
     @Optional() private readonly priceCards?: PriceCardService,
     @Optional() private readonly zoneMaps?: ZoneMapService,
+    // 2026-11-09 — which hub serves each zone (hub catchments, Part A): a journey's hubs, where a country has said.
+    @Optional() private readonly catchments?: CatchmentService,
   ) {}
 
   /**
@@ -708,13 +711,19 @@ export class RoutingService {
     // the zone's hub priced as two journeys and the shop's fee twice; or [X, X], its fee twice for one stay on one shelf.
     // The owner: the shop's fee once, no transport.
     if (origin.type === 'pudo' && origin.id === dest.did) return route;
+    // 2026-11-09 — WHICH HUB, BY ZONE (hub catchments, the catchments-and-runs plan, Part A): the hub that serves the zone
+    // a pin lies in, where its country has said; the area name typed at sign-up only where no catchment answers.
+    const servedBy = (country: string | undefined, location: GeoPoint | undefined) => {
+      const id = this.catchments?.hubForPoint(country, location);
+      return id ? this.mdps.list().find((m) => m.mdpId === id) : undefined;
+    };
     // A journey handed in at a hub starts AT its first hub: that hub is the origin, not the zone's.
-    const originMdp = origin.type === 'mdp' ? this.mdps.require(origin.id) : this.mdps.mdpForZone(origin.zone);
+    const originMdp = origin.type === 'mdp' ? this.mdps.require(origin.id) : (servedBy(origin.country, origin.location) ?? this.mdps.mdpForZone(origin.zone));
     // 2026-11-06 — a first hub that serves the destination's zone too takes it straight to the shop, as its own rule does
     // (MdpService.nextHop): the hubs collapse when they are shared. It was routed — and priced — through the zone's first hub
     // as well, a stop it does not need; and with every hand-over now keeping a parcel to its plan, it would have been driven
     // there (movement unification).
-    const destMdp = originMdp?.zones.includes(dest.zone) ? originMdp : this.mdps.mdpForZone(dest.zone);
+    const destMdp = servedBy(this.agents.countryOf(dest), dest.location) ?? (originMdp?.zones.includes(dest.zone) ? originMdp : this.mdps.mdpForZone(dest.zone));
     if (originMdp && origin.type !== 'mdp') route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, country: this.mdps.countryOf(originMdp), location: originMdp.location });
     if (destMdp && destMdp.mdpId !== originMdp?.mdpId) route.push({ type: 'mdp', id: destMdp.mdpId, label: destMdp.name, zone: dest.zone, country: this.mdps.countryOf(destMdp), location: destMdp.location });
     route.push({ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone, country: this.agents.countryOf(dest), location: dest.location });

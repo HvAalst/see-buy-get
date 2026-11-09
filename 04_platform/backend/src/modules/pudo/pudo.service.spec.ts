@@ -36,6 +36,7 @@ import { ZoneMapService } from './zone-map.service';
 import { PriceCardService } from './price-card.service';
 import { CounterPriceService } from './counter-price.service';
 import { PriceReportService } from './price-report.service';
+import { CatchmentService } from './catchment.service';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { PriceCardTerms } from './price-card.types';
@@ -157,6 +158,7 @@ describe('PUDO Light', () => {
   let counterPrices: CounterPriceService;
   let priceReports: PriceReportService;
   let roadRouter: RoadRouter;
+  let catchments: CatchmentService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let mdps: MdpService;
@@ -238,6 +240,7 @@ describe('PUDO Light', () => {
         PriceCardService,
         CounterPriceService, // 2026-11-08 — what a counter keeps to price with no signal (step 3b)
         PriceReportService, // 2026-11-08 — price against planned cost per pair of zones (step 4)
+        CatchmentService, // 2026-11-09 — which hub serves each zone (Part A)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -277,6 +280,8 @@ describe('PUDO Light', () => {
     counterPrices = moduleRef.get(CounterPriceService);
     priceReports = moduleRef.get(PriceReportService);
     roadRouter = moduleRef.get(RoadRouter);
+    catchments = moduleRef.get(CatchmentService);
+    catchments.onModuleInit();
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -13683,6 +13688,38 @@ it('a parcel priced from the card keeps what carrying it was planned to cost —
       expect(routing.quoteShipment(west.did, west.did, 'M', undefined, { kg: 2 }).totalKm).toBe(0);
       expect(controller.zoneAtPoint('-1.25', '36.75').zone?.flags).toEqual(['notServed']);
       expect(controller.zoneAtPoint('-1.25', '36.65').zone?.flags).toBeUndefined();
+    });
+
+    it('a journey’s hubs, and a hub’s sorting, follow the hub that serves each zone — the typed area name only where none does (Part A, 2026-11-09)', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      // Both hubs serve the area both shops typed; by name, the first one takes the whole journey.
+      const hubWest = mdps.register({ name: 'ZP West Hub', zones: ['MidTown'], location: { lat: -1.24, lng: 36.66 } }, { approvedBy: 'staff' });
+      const hubEast = mdps.register({ name: 'ZP East Hub', zones: ['MidTown'], location: { lat: -1.24, lng: 36.76 } }, { approvedBy: 'staff' });
+      const hops = () => routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).hops.map((h) => h.id);
+      expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
+      expect(mdps.nextHop(mdps.require(hubWest.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'pudo', id: east.did });
+      // Kenya's zones published, and each zone given its own hub: the West zone the west hub, the East zone the east hub.
+      zoneMaps.importAreas('sbg-ke', { geojson: TWO, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+      zoneMaps.publish('sbg-ke', undefined, 'N');
+      catchments.propose('sbg-ke', 'N');
+      expect(catchments.hubForPoint('KE', east.location)).toBe(hubEast.mdpId);
+      expect(hops()).toEqual([west.did, hubWest.mdpId, hubEast.mdpId, east.did]);
+      // Sorted at the west hub with no plan to follow: on to the east hub; at the east hub: to the shop.
+      expect(mdps.nextHop(mdps.require(hubWest.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'mdp', id: hubEast.mdpId });
+      expect(mdps.nextHop(mdps.require(hubEast.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'pudo', id: east.did });
+      // The west zone given the east hub, though by name the west hub comes first: the journey starts there.
+      const westCode = zoneMaps.zoneAt('KE', west.location)!.code;
+      catchments.assign('sbg-ke', westCode, hubEast.mdpId, 'N');
+      expect(hops()).toEqual([west.did, hubEast.mdpId, east.did]);
+      catchments.assign('sbg-ke', westCode, hubWest.mdpId, 'N');
+      // Both shops in one hub's zones: one hub, as before.
+      const eastCode = zoneMaps.zoneAt('KE', east.location)!.code;
+      catchments.assign('sbg-ke', eastCode, hubWest.mdpId, 'N');
+      expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
+      // A zone left without a hub: by name, as before.
+      catchments.assign('sbg-ke', eastCode, undefined, 'N');
+      expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
     });
 
     it('anybody may ask which price zone a place is in — and a place no country keeps zones for has none', () => {
