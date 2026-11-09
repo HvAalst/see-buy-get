@@ -92,6 +92,9 @@ export const NOTIFICATION_KINDS = [
   /** 2026-11-06 — its pickup shop closed: choose one of the shops the driver with it can take it to; it went to another. */
   'parcel_choose_shop',
   'parcel_shop_changed',
+  /** 2026-11-09 — to a buyer whose parcel is on its shelf: the shop closed (its free days stop running); it is open again. */
+  'parcel_shop_closed',
+  'parcel_shop_open',
   /** 2026-11-06 — to a shop: a driver found its door shut. */
   'shop_found_shut',
   /** 2026-11-05 — parcels taken on ahead: to the shop, who takes them; to the driver, that the bag is theirs (or went to everyone). */

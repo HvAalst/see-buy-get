@@ -30,7 +30,7 @@ import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, dueOf, labelDate, operationalParcelView, ownershipOf, planVsActual } from './parcel.service';
-import { BagOfferService } from './bag-offer.service';
+import { BagOfferService, dayInCountry } from './bag-offer.service';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService } from './price-card.service';
@@ -161,6 +161,7 @@ describe('PUDO Light', () => {
   let catchments: CatchmentService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
+  let unclaimedSvc: UnclaimedService;
   let mdps: MdpService;
   let totes: ToteService;
   let consignments: ConsignmentService;
@@ -261,6 +262,7 @@ describe('PUDO Light', () => {
     // 2026-11-06 — the plan made at take-in and asked at every hand-over: its listener started here, as compile() starts none.
     journeyPlans = moduleRef.get(JourneyPlanService);
     shopChoices = moduleRef.get(ShopChoiceService);
+    unclaimedSvc = moduleRef.get(UnclaimedService);
     journeyPlans.onModuleInit();
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
@@ -1382,7 +1384,7 @@ describe('PUDO Light', () => {
     const told: string[] = [];
     const tokens: string[] = [];
     const notes: string[] = [];
-    const cases = { get: () => ({ kind: 'Bags_Waiting', subject: 'Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const cases = { list: () => [], get: () => ({ kind: 'Bags_Waiting', subject: 'Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
     const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async (did: string, n: { data?: { declineToken?: string } }) => void (told.push(did), tokens.push(n.data?.declineToken ?? '')) } as never);
     const lastOffer = () => svc.bagsOf('case').bags[0].chain!.steps.at(-1)!.offerId;
     // Staff choose the nearest.
@@ -1433,7 +1435,7 @@ describe('PUDO Light', () => {
       },
       publish: async (type: string, payload: { code: string; parcelIds: string[] }) => void published.push({ type, payload }),
     };
-    const cases = { get: () => ({ kind: 'Bags_Waiting', subject: 'Lone Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const cases = { list: () => [], get: () => ({ kind: 'Bags_Waiting', subject: 'Lone Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
     const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async () => undefined } as never, events as never);
     const chainNow = () => svc.bagsOf('case').bags[0].chain!;
     const others = dispatch.driversForBag(bag.code).filter((d) => d.driverDid !== only.did).length;
@@ -1494,7 +1496,7 @@ describe('PUDO Light', () => {
     const near = coupleTipper('heldchain', { min: 0.8, max: 1.5 });
     fleet.reportLocation(near.did, { lat: origin.location.lat + 0.01, lng: origin.location.lng });
     const notes: string[] = [];
-    const cases = { get: () => ({ kind: 'Bags_Waiting', subject: 'Held Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const cases = { list: () => [], get: () => ({ kind: 'Bags_Waiting', subject: 'Held Chain Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
     const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async () => undefined } as never);
     svc.offer(bag.code, near.did, { name: 'Amina O', key: 'opr_amina' });
     const tote = totes.requireByCode(bag.code);
@@ -1513,6 +1515,93 @@ describe('PUDO Light', () => {
     tote.filledAt = new Date(Date.now() + 60_000).toISOString();
     expect(svc.sweep()).toBe(0);
     expect(svc.bagsOf('case').bags[0]?.chain).toBeUndefined();
+  });
+
+  it('a second “Not now” from the same driver to the same bag is “not today”: not asked again until the next day, on the clock of the bag’s country (the owner, Q4, 2026-11-09)', () => {
+    const HOUR_MS = 3_600_000;
+    // The day, on the country's clock: 21:30 UTC is already the next day in Nairobi, still the same in Amsterdam (winter).
+    expect(dayInCountry(Date.parse('2026-11-09T21:30:00Z'), 'KE')).toBe('2026-11-10');
+    expect(dayInCountry(Date.parse('2026-11-09T21:30:00Z'), 'NL')).toBe('2026-11-09');
+    expect(dayInCountry(Date.parse('2026-11-09T21:30:00Z'), undefined)).toBe('2026-11-09');
+    const origin = onboardAgent('Not Today Shop', 'NorthTown', 50);
+    onboardAgent('Not Today Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'not-today', originZone: 'NorthTown', destZone: 'SouthTown' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CHN-4', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, origin.did, 'CHN-4');
+    mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
+    const only = coupleTipper('nottoday', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(only.did, { lat: origin.location.lat + 0.01, lng: origin.location.lng });
+    const notes: string[] = [];
+    const cases = { list: () => [], get: () => ({ kind: 'Bags_Waiting', subject: 'Not Today Shop' }), noteFor: (_k: string, _s: string, _st: unknown, text: string) => void notes.push(text) };
+    const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async () => undefined } as never);
+    const chainNow = () => svc.bagsOf('case').bags[0].chain!;
+    const others = dispatch.driversForBag(bag.code).filter((d) => d.driverDid !== only.did).length;
+    svc.offer(bag.code, only.did, { name: 'Amina O', key: 'opr_amina' });
+    for (let i = 0; i <= others && chainNow().state === 'asking'; i += 1) dispatch.ignore(chainNow().steps.at(-1)!.offerId);
+    const since = Date.parse(chainNow().waitingSince!);
+    const placed = (at: number) => void (fleet.activeForDriver(only.did)!.lastLocatedAt = new Date(at).toISOString());
+    // The hour on: asked again — one “Not now” is only not now. They say it again.
+    placed(since + 61 * 60_000);
+    expect(svc.sweep(since + 61 * 60_000)).toBe(1);
+    expect(chainNow().steps.at(-1)).toMatchObject({ driverDid: only.did, round: 1 });
+    dispatch.ignore(chainNow().steps.at(-1)!.offerId);
+    expect(chainNow().steps.filter((st) => st.driverDid === only.did).map((st) => st.outcome)).toEqual(['not_now', 'not_now']);
+    // The next hour: not asked — twice today is not today. Nobody else: it waits for the hour after.
+    const asked = chainNow().steps.length;
+    placed(since + 121 * 60_000);
+    expect(svc.sweep(since + 121 * 60_000)).toBe(1);
+    expect(chainNow().steps).toHaveLength(asked);
+    expect(chainNow().state).toBe('waiting');
+    // Said yesterday (on the bag's country's clock): asked again.
+    for (const st of chainNow().steps) if (st.endedAt) st.endedAt = new Date(Date.parse(st.endedAt) - 25 * HOUR_MS).toISOString();
+    placed(since + 181 * 60_000);
+    expect(svc.sweep(since + 181 * 60_000)).toBe(1);
+    expect(chainNow().steps.at(-1)).toMatchObject({ driverDid: only.did, round: 3 });
+    // Staff may still choose them: the second “Not now” stops only the tries SeeBuyGet makes.
+    expect(notes.some((n) => /offered again every hour/.test(n))).toBe(true);
+  });
+
+  it('a bag of a Bags_Waiting case with no chain is offered by itself — the nearest driver first, down the list, every hour (the owner, Q5, 2026-11-09)', () => {
+    const origin = onboardAgent('Auto Chain Shop', 'NorthTown', 50);
+    onboardAgent('Auto Chain Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'auto-chain', originZone: 'NorthTown', destZone: 'SouthTown' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CHN-5', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    const bag = mdps.openShopBag(origin.did, 'SouthTown');
+    mdps.fillShopBag(bag.code, origin.did, 'CHN-5');
+    mdps.sealShopBag(bag.code, origin.did, { closure: closedBy(origin.did) });
+    totes.requireByCode(bag.code).sealedAt = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    const near = coupleTipper('autonear', { min: 0.8, max: 1.5 });
+    fleet.reportLocation(near.did, { lat: origin.location.lat + 0.001, lng: origin.location.lng });
+    const told: string[] = [];
+    const notes: Array<{ by: string; text: string }> = [];
+    let live: Array<{ kind: string; subject: string }> = [{ kind: 'Uncollected', subject: 'Auto Chain Shop' }];
+    const cases = { list: () => live, get: () => ({ kind: 'Bags_Waiting', subject: 'Auto Chain Shop' }), noteFor: (_k: string, _s: string, st: { name: string }, text: string) => void notes.push({ by: st.name, text }) };
+    const svc = new BagOfferService(monitor, dispatch, totes, cases as never, { notify: async (did: string) => void told.push(did) } as never);
+    // No Bags_Waiting case for the place: nothing starts.
+    expect(svc.sweep()).toBe(0);
+    expect(svc.bagsOf('case').bags[0].chain).toBeUndefined();
+    // The case opens: the chain starts by itself, in SeeBuyGet's name, asking the nearest driver an offer would reach.
+    live = [{ kind: 'Bags_Waiting', subject: 'Auto Chain Shop' }];
+    const nearest = dispatch.driversForBag(bag.code)[0].driverDid;
+    expect(svc.sweep()).toBe(1);
+    const chain = svc.bagsOf('case').bags[0].chain!;
+    expect(chain).toMatchObject({ by: 'SeeBuyGet', state: 'asking', round: 0 });
+    expect(chain.steps.map((st) => st.driverDid)).toEqual([nearest]);
+    expect(told).toEqual([nearest]);
+    expect(notes[0]).toEqual({ by: 'SeeBuyGet', text: expect.stringMatching(new RegExp(`^Bag ${bag.code} has waited 7 h: offered to the working drivers near it, the nearest first`)) });
+    // Started once: the next sweep does not start another, nor ask anyone new while the first is asked.
+    expect(svc.sweep()).toBe(0);
+    expect(told).toHaveLength(1);
+    // A bag claimed by a driver, or held, is not started.
+    const other = mdps.openShopBag(origin.did, 'SouthTown');
+    parcels.accept({ agentDid: origin.did, parcelId: 'CHN-6', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never);
+    mdps.fillShopBag(other.code, origin.did, 'CHN-6');
+    mdps.sealShopBag(other.code, origin.did, { closure: closedBy(origin.did) });
+    const otherTote = totes.requireByCode(other.code);
+    totes.hold(otherTote.toteId, { since: new Date().toISOString(), finding: 'seal_broken', stage: 'counter', exceptionId: 'tx_auto_chain', where: 'at Auto Chain Shop' } as never);
+    expect(svc.sweep()).toBe(0);
+    totes.unhold(otherTote.toteId);
   });
 
   it('late, or on time, against the time it was promised — on the list a hub sorts from (2026-11-06)', () => {
@@ -2814,6 +2903,111 @@ describe('PUDO Light', () => {
       mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
       expect(mdps.sortParcel(hub.mdpId, 'MU23-A').nextDestination.id).toBe(y.did);
       expect(mdps.sortParcel(hub.mdpId, 'MU23-B').nextDestination.id).toBe(other.did);
+    });
+
+    it('an unanswered buyer’s time ends when the hub bags it for the closed shop: the nearest shop offered; open again, the questions withdrawn (the owner, Q3, 2026-11-09)', () => {
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU25 Shop', N, 50);
+      const far = onboardAgent('MU25 Far', S, 50);
+      const y = onboardAgent('MU25 Y Shop', S, 50);
+      const z = onboardAgent('MU25 Z Shop', S, 50);
+      agents.setLocation(far.did, { lat: 6.5, lng: 43.0 });
+      agents.setLocation(y.did, { lat: 6.5, lng: 43.02 });
+      agents.setLocation(z.did, { lat: 6.5, lng: 43.05 });
+      const hub = mdps.register({ name: 'MU25 Sort', zones: [N, S], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      for (const [id, phone] of [['MU25-A', '+254711000701'], ['MU25-B', '+254711000702']]) {
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: phone, dropoffPhotoRef: photoBy(shop.did) } as never);
+      }
+      const buyerA = enrollPerson('+254711000701');
+      const buyerB = enrollPerson('+254711000702');
+      const bag = mdps.openShopBag(shop.did, hub.mdpId);
+      for (const id of ['MU25-A', 'MU25-B']) mdps.fillShopBag(bag.code, shop.did, id);
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      mdps.loadBag(bag.code, 'BUS-MU25');
+      const told: Array<{ did: string; kind: string; title: string; body: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string; title: string; body: string }) => void told.push({ did, kind: n.kind, title: n.title, body: n.body }) };
+      agents.setAvailability(far.did, false);
+      expect(told.map((n) => [n.did, n.kind])).toEqual([[buyerA.personDid, 'parcel_choose_shop'], [buyerB.personDid, 'parcel_choose_shop']]);
+      // Neither answers. At the hub, MU25-A is about to be bagged for the closed shop: it goes to the nearest offered.
+      mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
+      told.length = 0;
+      expect(mdps.sortParcel(hub.mdpId, 'MU25-A').nextDestination.id).toBe(y.did);
+      expect(parcels.get('MU25-A').destAgentDid).toBe(y.did);
+      expect(parcels.get('MU25-A').plan!.hops.at(-1)!.id).toBe(y.did);
+      expect(parcels.get('MU25-A').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'decision', reason: 'shop_closed', planned: far.did, took: y.did, by: 'system' })]);
+      expect(told).toEqual([{ did: buyerA.personDid, kind: 'parcel_shop_changed', title: 'Your parcel goes to MU25 Y Shop', body: expect.stringMatching(/^MU25 Far was still closed when your parcel was sorted for it, and no shop had been chosen, so it goes to MU25 Y Shop, the nearest of the shops offered/) }]);
+      expect(parcels.consumerParcel('MU25-A', hashPhone('+254711000701')!).shopChoice).toMatchObject({ settled: { did: y.did, name: 'MU25 Y Shop' } });
+      expect(() => shopChoices.choose('MU25-A', z.did)).toThrow(/no choice of shop to make/);
+      // The shop opens again before MU25-B is sorted: its question withdrawn, its buyer told it goes there as planned.
+      told.length = 0;
+      agents.setAvailability(far.did, true);
+      expect(told).toEqual([{ did: buyerB.personDid, kind: 'parcel_shop_open', title: 'MU25 Far is open again', body: expect.stringMatching(/goes there as planned: there is no shop to choose/) }]);
+      expect(parcels.consumerParcel('MU25-B', hashPhone('+254711000702')!).shopChoice).toBeUndefined();
+      expect(() => shopChoices.choose('MU25-B', y.did)).toThrow(/no choice of shop to make/);
+      expect(mdps.sortParcel(hub.mdpId, 'MU25-B').nextDestination.id).toBe(far.did);
+      // MU25-A's move stands: it is the other shop's now.
+      expect(parcels.get('MU25-A').destAgentDid).toBe(y.did);
+      // Closed again: asked again, a new question.
+      told.length = 0;
+      agents.setAvailability(far.did, false);
+      expect(told.filter((n) => n.kind === 'parcel_choose_shop').map((n) => n.did)).toEqual([buyerB.personDid]);
+      agents.setAvailability(far.did, true);
+    });
+
+    it('a shop closing with parcels on its shelf: their buyers told, their free days stop, and opening gives the closed time back (the owner, Q2, 2026-11-09)', () => {
+      const HOUR_MS = 3_600_000;
+      seq += 1;
+      const N = `MU${seq}North`;
+      const S = `MU${seq}South`;
+      const shop = onboardAgent('MU26 Shop', N, 50);
+      const far = onboardAgent('MU26 Far', S, 50);
+      const corridor = corridors.addCorridor({ name: `mu-${seq}`, originZone: N, destZone: S });
+      for (const [id, phone] of [['MU26-A', '+254711000801'], ['MU26-B', '+254711000802']]) {
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: phone, dropoffPhotoRef: photoBy(shop.did) } as never);
+      }
+      const buyerA = enrollPerson('+254711000801');
+      const buyerB = enrollPerson('+254711000802');
+      const bag = mdps.openShopBag(shop.did, far.did);
+      for (const id of ['MU26-A', 'MU26-B']) mdps.fillShopBag(bag.code, shop.did, id);
+      mdps.sealShopBag(bag.code, shop.did, { closure: closedBy(shop.did) });
+      const d = drivers.register({ displayName: 'MU26 Rider', fullName: 'MU26 Rider', nationalId: 'DRV-MU26', mobile: '+254933026000', licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: 'MU26-1', vehicleClass: 'bike', ownerName: 'MU26 Rider' });
+      fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+      mdps.loadBag(bag.code, d.badgeId!);
+      takenForTest(bag.code);
+      mdps.deliverBag(far.did, bag.code, receivedAt(far.did));
+      // A on the shelf 70 hours, two short of its free days; B past them, its holding charged two days.
+      const now = Date.now();
+      parcels.get('MU26-A').readyAt = new Date(now - 70 * HOUR_MS).toISOString();
+      parcels.get('MU26-B').readyAt = new Date(now - 120 * HOUR_MS).toISOString();
+      parcels.markUnclaimed('MU26-B', now - 48 * HOUR_MS);
+      const told: Array<{ did: string; kind: string; title: string; body: string }> = [];
+      (shopChoices as any).notifications = { notify: async (did: string, n: { kind: string; title: string; body: string }) => void told.push({ did, kind: n.kind, title: n.title, body: n.body }) };
+      agents.setAvailability(far.did, false);
+      expect(told.map((n) => [n.did, n.kind, n.title])).toEqual([
+        [buyerA.personDid, 'parcel_shop_closed', 'MU26 Far is closed for now'],
+        [buyerB.personDid, 'parcel_shop_closed', 'MU26 Far is closed for now'],
+      ]);
+      expect(agents.get(far.did).closedAt).toBeDefined();
+      // Closed: its free days do not run out — nobody can collect.
+      expect(unclaimedSvc.sweep(now + 5 * HOUR_MS).map((p) => p.parcelId)).not.toContain('MU26-A');
+      // Open again ten hours after it closed: the ten hours added back — to A's free days, to the days before B's holding.
+      agents.get(far.did).closedAt = new Date(now - 10 * HOUR_MS).toISOString();
+      const owedBefore = parcels.holdingOwed(parcels.get('MU26-B'), now).amount;
+      told.length = 0;
+      agents.setAvailability(far.did, true);
+      expect(agents.get(far.did).closedAt).toBeUndefined();
+      expect(Math.round((Date.parse(parcels.get('MU26-A').readyAt!) - now) / 60_000)).toBe(-60 * 60);
+      expect(Math.abs(Date.parse(parcels.get('MU26-B').unclaimedAt!) - (now - 38 * HOUR_MS))).toBeLessThan(60_000);
+      expect(parcels.holdingOwed(parcels.get('MU26-B'), now).amount).toBeLessThanOrEqual(owedBefore);
+      expect(told.map((n) => [n.did, n.kind])).toEqual([[buyerA.personDid, 'parcel_shop_open'], [buyerB.personDid, 'parcel_shop_open']]);
+      expect(told[0].body).toMatch(/^MU26 Far is open again, and your parcel is waiting there. The 10 hours it was closed are added back/);
+      expect(parcels.get('MU26-A').scans.at(-1)!.note).toMatch(/its shop was closed 10 h · that time added back/);
+      // A's free days end twelve hours on now, not two.
+      expect(unclaimedSvc.sweep(now + 3 * HOUR_MS).map((p) => p.parcelId)).not.toContain('MU26-A');
+      expect(unclaimedSvc.sweep(now + 13 * HOUR_MS).map((p) => p.parcelId)).toContain('MU26-A');
     });
 
     it('a shop that takes no new parcels — held over its ID, or short of float — still takes what was on its way: not "closed" to the driver (2026-11-08)', () => {

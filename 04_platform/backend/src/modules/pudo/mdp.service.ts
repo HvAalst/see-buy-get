@@ -49,6 +49,15 @@ import { HubDrop, HubFloorBook, spaceProblem } from './hub-space';
  *
  * Bulk goods never enter a tote — they go truck-direct and are rejected here.
  */
+/** 2026-11-06 — what the closed-shop choices tell the hubs (ShopChoiceService registers them: it is above this). */
+export interface ShopChoiceHooks {
+  /** A bag for a closed shop, handed in at one of its driver's picks: may it be? */
+  may: (code: string, agentDid: string) => boolean;
+  settle: (code: string, agentDid: string, now?: number) => void;
+  /** 2026-11-09 — a parcel about to be bagged for its closed shop, its buyer not having chosen: moved to the nearest offered? */
+  beforeBag?: (parcelId: string, now: number) => boolean;
+}
+
 @Injectable()
 export class MdpService {
   // Durable: onboarded MDP sort-hubs (a signed-up participant type).
@@ -116,9 +125,9 @@ export class MdpService {
   private routeKeeper?: RouteKeeper;
 
   /** 2026-11-06 — a bag for a closed shop, handed in at one of its driver's picks (ShopChoiceService registers it). */
-  private shopChoice?: { may: (code: string, agentDid: string) => boolean; settle: (code: string, agentDid: string, now?: number) => void };
+  private shopChoice?: ShopChoiceHooks;
 
-  registerShopChoice(c: { may: (code: string, agentDid: string) => boolean; settle: (code: string, agentDid: string, now?: number) => void }): void {
+  registerShopChoice(c: ShopChoiceHooks): void {
     this.shopChoice = c;
   }
 
@@ -1254,8 +1263,14 @@ export class MdpService {
     // no longer to be used, or a plan that does not have it here — the hub chooses as it always did (2026-11-02: onward, of
     // the hubs serving its zone, one with room), and the plan is made again from that choice, with why.
     const planned = this.routeKeeper?.sortTarget(parcel, mdpId);
-    const next: NextHop = planned ?? this.nextHop(mdp, parcel.destZone, parcel.destAgentDid, now);
+    let next: NextHop = planned ?? this.nextHop(mdp, parcel.destZone, parcel.destAgentDid, now);
     if (!planned) this.routeKeeper?.redirect(parcel, next.id, 'network_changed', mdp.name);
+    // 2026-11-09 — about to be bagged for its shop, which is closed, and its buyer never chose another (the owner, Q3: "until
+    // bagged for it"): it goes to the nearest of the shops offered them, the end of its plan moved there — sorted for that.
+    if (next.type === 'pudo' && next.id === parcel.destAgentDid && this.shopChoice?.beforeBag?.(parcelId, now)) {
+      const moved = this.parcels.get(parcelId);
+      next = this.routeKeeper?.sortTarget(moved, mdpId) ?? this.nextHop(mdp, moved.destZone, moved.destAgentDid!, now);
+    }
 
     // Find a filling bag already bound to that next hop with room AND cargo-compatible with this parcel, else
     // open a fresh one (S31). Passing the compatibility gate to findFilling means an incompatible parcel never

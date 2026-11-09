@@ -51566,6 +51566,9 @@
           "openState": {
             "type": "object"
           },
+          "closedAt": {
+            "type": "string"
+          },
           "openingHours": {
             "type": "object"
           },

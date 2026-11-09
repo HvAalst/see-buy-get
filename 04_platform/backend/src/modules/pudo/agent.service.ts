@@ -456,6 +456,11 @@ export class AgentService {
     const agent = this.require(did);
     const was = agent.openState;
     agent.openState = open ? 'open' : 'closed';
+    // 2026-11-09 — when it closed, kept: opening again gives the time it was closed back to the buyers of its shelf (Q2).
+    const closedSince = agent.closedAt;
+    if (!open && was !== 'closed') agent.closedAt = new Date().toISOString();
+    if (open) delete agent.closedAt;
+    this.agents.set(did, agent); // mutated in place — re-stored so the record is kept (it was not, before)
     // 2026-11-06 — closed now: its parcels on the way are offered other shops near it at once (the owner: "ask straight
     // away, less risk") — ShopChoiceService, registered: it is above this.
     if (!open && was !== 'closed') {
@@ -465,13 +470,26 @@ export class AgentService {
         Logger.warn(`after ${did} closed: ${(err as Error).message}`, AgentService.name);
       }
     }
+    // 2026-11-09 — open again: its shelf's buyers given the time back, and the questions about its parcels withdrawn (Q2, Q3).
+    if (open && was === 'closed') {
+      try {
+        this.onOpen?.(did, closedSince);
+      } catch (err) {
+        Logger.warn(`after ${did} opened: ${(err as Error).message}`, AgentService.name);
+      }
+    }
     return agent;
   }
 
   private onClose?: (did: string) => void;
+  private onOpen?: (did: string, closedSince?: string) => void;
 
   registerOnClose(fn: (did: string) => void): void {
     this.onClose = fn;
+  }
+
+  registerOnOpen(fn: (did: string, closedSince?: string) => void): void {
+    this.onOpen = fn;
   }
 
   /** Update the weekly opening schedule. */

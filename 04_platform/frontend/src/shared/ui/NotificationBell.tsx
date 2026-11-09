@@ -69,6 +69,8 @@ const KIND_ICON: Record<string, IconName> = {
   // 2026-11-06 — its pickup shop closed: choose another; it went to another; a shop found shut by a driver.
   parcel_choose_shop: 'home',
   parcel_shop_changed: 'home',
+  parcel_shop_closed: 'home',
+  parcel_shop_open: 'home',
   shop_found_shut: 'warning',
   // A defect on a vehicle: reported to the office, decided to the driver.
   vehicle_defect: 'warning',

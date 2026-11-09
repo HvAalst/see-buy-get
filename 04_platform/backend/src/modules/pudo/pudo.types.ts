@@ -99,6 +99,8 @@ export class Agent {
   physicalAddress?: string; // typed physical address (optional if a pin is given)
   landmark: string; // no street addresses — landmark + GPS
   openState: OpenState; // agent-controlled open / temporarily-closed
+  /** 2026-11-09 — when it said "Close for now": the time it was closed is given back to its shelf's buyers when it opens. */
+  closedAt?: string;
   openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
   shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
   /**

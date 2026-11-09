@@ -82,6 +82,9 @@ export class UnclaimedService {
       if (this.parcels.codeHeldUntil(parcel, now)) continue;
       // Its last leg to its business's door is looking for a driver: nobody is late to collect it.
       if (this.doors?.driverSought(parcel.parcelId)) continue;
+      // 2026-11-09 — its shop is closed: nobody can collect it, so its free days do not run out (Q2). Opening again, the time
+      // it was closed is added to them (ParcelService.giveClosedTimeBack).
+      if (parcel.destAgentDid && this.agents?.find(parcel.destAgentDid)?.openState === 'closed') continue;
       moved.push(this.parcels.markUnclaimed(parcel.parcelId, now));
     }
     return moved;

@@ -4092,6 +4092,25 @@ export class ParcelService implements OnApplicationBootstrap {
    * 2026-11-06 — ITS PICKUP SHOP CHANGED, its own being closed (the owner, point 6): the shop its buyers' choosing settled on.
    * The step kept on its plan with why — before it arrives there, so it arrives where it was said to go.
    */
+  /**
+   * 2026-11-09 — ITS SHOP WAS CLOSED WHILE IT WAITED ON THE SHELF (the owner, Q2: "tell + give time back"): the time it was
+   * closed added back — to its free days where it is still in them (readyAt later), to the days before holding is charged
+   * where it is past them (unclaimedAt later: the meter does not count days nobody could collect). The same fields every
+   * reader keys off, so the reminder, the monitor and the sweeps follow without knowing. Answers the time given, in ms.
+   */
+  giveClosedTimeBack(parcelId: string, closedSince: number, now: number = Date.now()): number {
+    const parcel = this.require(parcelId);
+    const field = parcel.status === 'Ready_For_Pickup' ? 'readyAt' : parcel.status === 'Unclaimed' ? 'unclaimedAt' : undefined;
+    const from = field ? parcel[field] : undefined;
+    if (!field || !from) return 0;
+    const given = now - Math.max(closedSince, Date.parse(from));
+    if (given <= 0) return 0;
+    parcel[field] = new Date(Date.parse(from) + given).toISOString();
+    const hours = Math.round(given / 360_000) / 10;
+    this.scan(parcel, parcel.status, 'network', `its shop was closed ${hours} h · that time added back to collect it`);
+    return given;
+  }
+
   changePickupShop(parcelId: string, toDid: string, by: string): void {
     const parcel = this.get(parcelId);
     const from = parcel.destAgentDid;

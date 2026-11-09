@@ -43,6 +43,8 @@ export interface ShopChoice {
   askedAt: string;
   /** Where it went: the shop that took the bag, or the one its buyer chose for one parcel. */
   settled?: { did: string; name: string; at: string };
+  /** 2026-11-09 — the shop opened again before it was settled: the question withdrawn, the parcels going there as planned. */
+  withdrawnAt?: string;
 }
 
 /** What the driver reads of it: where most buyers chose (the first pick where nobody has), and how many answered. */
@@ -80,6 +82,16 @@ const OFFERED_WITHIN_KM = 15;
 const ON_THE_WAY: ReadonlyArray<ParcelStatus> = ['Created', 'At_PUDO', 'At_MDP', 'On_Bus'];
 
 const keyOf = (c: Pick<ShopChoice, 'code' | 'parcelId'>): string => c.code ?? `parcel:${c.parcelId}`;
+/** On the shelf, waiting for its buyer. */
+const ON_THE_SHELF: ReadonlyArray<ParcelStatus> = ['Ready_For_Pickup', 'Unclaimed'];
+
+/** How long, said in words: "3 hours", "2 days". */
+function durationOf(ms: number): string {
+  const h = Math.max(1, Math.round(ms / 3_600_000));
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`;
+  const d = Math.round(h / 24);
+  return `${d} days`;
+}
 
 /**
  * 2026-11-06 — A PARCEL ON ITS WAY TO A SHOP THAT IS CLOSED (the owner, point 6: "let a driver be able to search for a pudos
@@ -112,7 +124,8 @@ export class ShopChoiceService {
   ) {
     // Registered rather than asked for: the shop, hub, parcel and dispatch services are below this.
     agents.registerOnClose((did) => this.onShopClosed(did));
-    mdps.registerShopChoice({ may: (code, did) => this.mayHandIn(code, did), settle: (code, did, now) => this.settle(code, did, now) });
+    agents.registerOnOpen((did, closedSince) => this.onShopOpened(did, closedSince));
+    mdps.registerShopChoice({ may: (code, did) => this.mayHandIn(code, did), settle: (code, did, now) => this.settle(code, did, now), beforeBag: (parcelId, now) => this.beforeBag(parcelId, now) });
     parcels.registerShopChoiceView((parcelId) => this.forBuyer(parcelId));
     parcels.registerShopChoiceArrive((parcelId, did) => this.arrivedAt(parcelId, did));
     dispatch?.registerShopChoiceView((code, holder) => this.forBag(code, holder));
@@ -142,6 +155,7 @@ export class ShopChoiceService {
   onShopClosed(did: string, now: number = Date.now()): number {
     const shop = this.agents.find(did);
     if (!shop) return 0;
+    this.tellShelf(did, shop.shopName);
     const onTheWay = this.parcels.list().filter((p) => p.destAgentDid === did && ON_THE_WAY.includes(p.status));
     if (!onTheWay.length) return 0;
     const near = this.parcels.shopsWithRoom(shop, now, NEAR_SHOWN * 2).filter((s) => s.km <= OFFERED_WITHIN_KM);
@@ -167,6 +181,90 @@ export class ShopChoiceService {
       asked += bag.parcels.length;
     }
     return asked;
+  }
+
+  /**
+   * 2026-11-09 — THE BUYERS OF ITS SHELF, AS IT CLOSES (the owner, Q2: "tell + give time back"): each told it is closed, and
+   * that their free days to collect stop running until it opens — the sweep that ends them passes a closed shop by.
+   */
+  private tellShelf(did: string, name: string): number {
+    const shelf = this.parcels.list().filter((p) => p.destAgentDid === did && ON_THE_SHELF.includes(p.status));
+    for (const p of shelf) {
+      this.tellBuyers(p.parcelId, {
+        kind: 'parcel_shop_closed',
+        title: `${name} is closed for now`,
+        body: `${name}, where your parcel is waiting, has closed for now. The days you have to collect it stop counting until it opens again, and you are told when it does.`,
+        tag: `shop-closed:${p.parcelId}`,
+      });
+    }
+    return shelf.length;
+  }
+
+  /**
+   * 2026-11-09 — OPEN AGAIN (the owner, Q2 and Q3). The buyers of its shelf given back the time it was closed and told so; and
+   * every question about its parcels on the way not yet settled withdrawn — they go there as planned — their buyers told.
+   * A choice already made stands: that parcel is the other shop's now. Answers how many parcels' buyers were told.
+   */
+  onShopOpened(did: string, closedSince?: string, now: number = Date.now()): number {
+    const shop = this.agents.find(did);
+    if (!shop) return 0;
+    let told = 0;
+    const since = closedSince ? Date.parse(closedSince) : NaN;
+    if (Number.isFinite(since)) {
+      for (const p of this.parcels.list().filter((x) => x.destAgentDid === did && ON_THE_SHELF.includes(x.status))) {
+        const given = this.parcels.giveClosedTimeBack(p.parcelId, since, now);
+        if (given <= 0) continue;
+        this.tellBuyers(p.parcelId, {
+          kind: 'parcel_shop_open',
+          title: `${shop.shopName} is open again`,
+          body: `${shop.shopName} is open again, and your parcel is waiting there. The ${durationOf(given)} it was closed are added back: you have as long to collect it as you had when it closed.`,
+          tag: `shop-open:${p.parcelId}`,
+        });
+        told += 1;
+      }
+    }
+    const at = new Date(now).toISOString();
+    for (const choice of [...this.choices.values()]) {
+      if (choice.closed.did !== did || choice.settled || choice.withdrawnAt) continue;
+      choice.withdrawnAt = at;
+      this.choices.set(keyOf(choice), choice);
+      for (const parcelId of choice.parcelIds) {
+        const p = this.parcels.get(parcelId);
+        if (p.destAgentDid !== did || !ON_THE_WAY.includes(p.status)) continue;
+        this.tellBuyers(parcelId, {
+          kind: 'parcel_shop_open',
+          title: `${shop.shopName} is open again`,
+          body: `${shop.shopName} is open again, so your parcel goes there as planned: there is no shop to choose. You are told when it is ready to collect.`,
+          tag: `choose-shop:${parcelId}`,
+        });
+        told += 1;
+      }
+    }
+    return told;
+  }
+
+  /**
+   * 2026-11-09 — A HUB ABOUT TO BAG A PARCEL FOR ITS CLOSED SHOP, ITS BUYER NOT HAVING CHOSEN (the owner, Q3: "until bagged for
+   * it"): the buyer's time to choose ends there, and it goes to the nearest of the shops offered them that still has a place
+   * for it — the step kept on its plan as "its shop closed", the buyer told. Nothing where it has no open question.
+   */
+  private beforeBag(parcelId: string, now: number): boolean {
+    const own = this.choices.get(`parcel:${parcelId}`);
+    if (!own || own.settled || own.withdrawnAt) return false;
+    const p = this.parcels.get(parcelId);
+    if (p.destAgentDid !== own.closed.did || !this.isClosed(own.closed.did)) return false;
+    const pick = own.picks.find((s) => this.parcels.shelfTakes(s.did, [parcelId])) ?? own.picks[0];
+    if (!pick) return false;
+    this.parcels.changePickupShop(parcelId, pick.did, 'system');
+    own.settled = { did: pick.did, name: pick.name, at: new Date(now).toISOString() };
+    this.choices.set(keyOf(own), own);
+    this.tellBuyers(parcelId, {
+      kind: 'parcel_shop_changed',
+      title: `Your parcel goes to ${pick.name}`,
+      body: `${own.closed.name} was still closed when your parcel was sorted for it, and no shop had been chosen, so it goes to ${pick.name}, the nearest of the shops offered. You are told when it is ready to collect.`,
+      tag: `shop-changed:${parcelId}`,
+    });
+    return true;
   }
 
   /* --------------------------------------------------------------------------------------------- on the road -- */
@@ -399,7 +497,7 @@ export class ShopChoiceService {
   /** A bag's choice, on the trip the bag is on now and not yet handed in. */
   private liveChoice(code: string): ShopChoice | undefined {
     const choice = this.choices.get(code);
-    if (!choice || choice.settled) return undefined;
+    if (!choice || choice.settled || choice.withdrawnAt) return undefined;
     const tote = this.totes.byCodeMaybe(code);
     if (!tote || tote.status === 'free' || (choice.trip !== undefined && tote.filledAt !== choice.trip)) return undefined;
     return choice;
@@ -408,11 +506,11 @@ export class ShopChoiceService {
   /** The open choice a parcel is in, if any: its bag's, or its own — while it is not in a bag going to the closed shop. */
   private openFor(parcelId: string): ShopChoice | undefined {
     const own = this.choices.get(`parcel:${parcelId}`);
-    if (own && !own.settled) {
+    if (own && !own.settled && !own.withdrawnAt) {
       const p = this.parcels.get(parcelId);
       if (ON_THE_WAY.includes(p.status) && p.destAgentDid === own.closed.did && !this.inBagTo(p, own.closed.did)) return own;
     }
-    const bag = [...this.choices.values()].find((c) => c.code && c.parcelIds.includes(parcelId) && !c.settled);
+    const bag = [...this.choices.values()].find((c) => c.code && c.parcelIds.includes(parcelId) && !c.settled && !c.withdrawnAt);
     return bag?.code && this.liveChoice(bag.code) === bag && this.totes.requireByCode(bag.code).parcels.includes(parcelId) ? bag : undefined;
   }
 
@@ -432,7 +530,7 @@ export class ShopChoiceService {
   }
 
   /** Its receiver told, in the app (never a text). */
-  private tellBuyers(parcelId: string, n: { kind: 'parcel_choose_shop' | 'parcel_shop_changed'; title: string; body: string; tag: string }): void {
+  private tellBuyers(parcelId: string, n: { kind: 'parcel_choose_shop' | 'parcel_shop_changed' | 'parcel_shop_closed' | 'parcel_shop_open'; title: string; body: string; tag: string }): void {
     if (!this.notifications) return;
     let person: { personDid: string } | undefined;
     try {

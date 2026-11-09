@@ -5036,6 +5036,14 @@ export class DispatchService {
    * required — everything downstream (the offer, the price, the notification) reads the pickup through this.
    * Public because the notification rules need the same answer, and two copies of this question would drift.
    */
+  /** 2026-11-09 — the country of a hub or shop a bag waits at (a store's own place: none known — its day is the UTC one). */
+  pickupCountry(locationId: string): string | undefined {
+    const mdp = this.mdps.list().find((m) => m.mdpId === locationId);
+    if (mdp) return this.mdps.countryOf(mdp);
+    const a = this.agents.find(locationId);
+    return a ? this.agents.countryOf(a) : undefined;
+  }
+
   pickupPlace(locationId: string): { loc: { lat: number; lng: number }; label: string } | null {
     const mdp = this.mdps.list().find((m) => m.mdpId === locationId);
     if (mdp) return { loc: mdp.location, label: mdp.name };

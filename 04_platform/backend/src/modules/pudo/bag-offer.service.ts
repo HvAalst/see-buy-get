@@ -12,6 +12,7 @@ import { CHAIN_RETRY_EVERY_MIN, CHAIN_TELL_BUYERS_AFTER_CHECKS, OFFER_CHAIN_SWEE
 import type { Offer } from './dispatch.types';
 import type { Tote } from './pudo.types';
 import { ToteService } from './tote.service';
+import { clockAt, utcDay, zonesOfCountry } from './fleet-clock';
 
 /** One driver asked, in a bag's chain of offers, and how it ended. */
 export interface OfferStep {
@@ -60,12 +61,20 @@ export interface OfferChain {
 }
 
 const RETRY_MS = CHAIN_RETRY_EVERY_MIN * 60_000;
+/** 2026-11-09 — "Not now" this many times to one bag in a day is "not today": not asked again until the next (Q4). */
+const NOT_NOW_IS_NOT_TODAY = 2;
 const SYSTEM: Signer = { name: 'SeeBuyGet', key: 'system' };
 
 /** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st. */
 export function ordinal(n: number): string {
   const v = n % 100;
   return `${n}${v >= 11 && v <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
+}
+
+/** 2026-11-09 — the day a moment falls on, on the clock of a country (its first time zone); none known, the UTC day. */
+export function dayInCountry(ms: number, country?: string): string {
+  const zone = zonesOfCountry(country)[0];
+  return zone ? clockAt(ms, zone).day : utcDay(ms);
 }
 
 /** The next whole try after `now`, counted on the hour from when it began waiting. */
@@ -186,6 +195,11 @@ export class BagOfferService implements OnModuleInit, OnModuleDestroy {
    */
   sweep(now: number = Date.now()): number {
     let moved = 0;
+    try {
+      moved += this.startForCases(now);
+    } catch (err) {
+      this.logger.warn(`starting offer chains for waiting bags: ${(err as Error).message}`);
+    }
     for (const chain of [...this.chains.values()]) {
       try {
         const did = chain.state === 'asking' ? this.sweepAsking(chain, now) : chain.state === 'waiting' ? this.sweepWaiting(chain, now) : chain.state === 'taken' || chain.state === 'gone' ? this.sweepBack(chain, now) : false;
@@ -195,6 +209,28 @@ export class BagOfferService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return moved;
+  }
+
+  /**
+   * 2026-11-09 — THE CHAIN STARTS ITSELF (the owner, Q5: "start automatically"): a bag of a live Bags_Waiting case — closed
+   * and waiting for a driver longer than the case allows — with no chain on its trip is offered by SeeBuyGet as staff would:
+   * the nearest working driver an offer would reach first, down the list on "Not now" or no answer, and — nobody able to take
+   * it now — every hour. Staff can still offer it to a driver they choose. Answers how many chains started.
+   */
+  private startForCases(now: number): number {
+    let started = 0;
+    for (const c of this.cases.list('live', now)) {
+      if (c.kind !== 'Bags_Waiting') continue;
+      for (const b of this.monitor.bagsAt(c.subject, now)) {
+        const tote = this.totes.byCodeMaybe(b.code);
+        if (!tote || tote.status !== 'available' || tote.held || tote.waitsForRoom || this.chainFor(b.code)) continue;
+        const chain: OfferChain = { code: b.code, place: c.subject, by: SYSTEM.name, startedAt: new Date(now).toISOString(), steps: [], state: 'asking', round: 0, ...(tote.filledAt ? { trip: tote.filledAt } : {}) };
+        this.cases.noteFor('Bags_Waiting', c.subject, SYSTEM, `Bag ${b.code} has waited ${b.waitedHours} h: offered to the working drivers near it, the nearest first — "Not now", or no answer in ${STAFF_OFFER_WAIT_MIN} minutes, passes it to the next.`);
+        this.next(chain, now);
+        started += 1;
+      }
+    }
+    return started;
   }
 
   /** Asking somebody: taken, gone from the board, or no answer in time — passed on. A day waiting, its people told. */
@@ -316,8 +352,9 @@ export class BagOfferService implements OnModuleInit, OnModuleDestroy {
   private next(chain: OfferChain, now: number): void {
     const round = chain.round ?? 0;
     const asked = new Set(chain.steps.filter((s) => (s.round ?? 0) === round).map((s) => s.driverDid));
+    const notToday = this.notToday(chain, now);
     for (const d of this.dispatch.driversForBag(chain.code, now)) {
-      if (asked.has(d.driverDid)) continue;
+      if (asked.has(d.driverDid) || notToday.has(d.driverDid)) continue;
       if (this.ask(chain, d, now, round)) {
         this.chains.set(chain.code, chain);
         return;
@@ -330,8 +367,26 @@ export class BagOfferService implements OnModuleInit, OnModuleDestroy {
     this.chains.set(chain.code, chain);
     if (first) {
       const n = chain.steps.length;
-      this.cases.noteFor('Bags_Waiting', chain.place, SYSTEM, `Bag ${chain.code}: asked ${n} driver${n === 1 ? '' : 's'} — none took it, and no other working driver can be reached now. It is offered again every hour; if nobody has taken it in a day, the people of its parcels are told it is held up.`);
+      const asked = n ? `asked ${n} driver${n === 1 ? '' : 's'} — none took it, and no other working driver can be reached now` : 'no working driver an offer would reach can be reached now';
+      this.cases.noteFor('Bags_Waiting', chain.place, SYSTEM, `Bag ${chain.code}: ${asked}. It is offered again every hour; if nobody has taken it in a day, the people of its parcels are told it is held up.`);
     }
+  }
+
+  /**
+   * 2026-11-09 — THE DRIVERS WHO SAID "NOT NOW" TO THIS BAG TWICE TODAY (the owner, Q4: a second "Not now" is "Not today"):
+   * not asked again in its hourly tries until the day is over — the day on the clock of the country the bag waits in.
+   */
+  private notToday(chain: OfferChain, now: number): Set<string> {
+    const tote = this.totes.byCodeMaybe(chain.code);
+    const country = tote ? this.dispatch.pickupCountry(tote.locationId) : undefined;
+    const dayOf = (ms: number) => dayInCountry(ms, country);
+    const today = dayOf(now);
+    const count = new Map<string, number>();
+    for (const s of chain.steps) {
+      if (s.outcome !== 'not_now' || !s.endedAt || dayOf(Date.parse(s.endedAt)) !== today) continue;
+      count.set(s.driverDid, (count.get(s.driverDid) ?? 0) + 1);
+    }
+    return new Set([...count].filter(([, n]) => n >= NOT_NOW_IS_NOT_TODAY).map(([did]) => did));
   }
 
   /** One driver asked: their offer, waiting STAFF_OFFER_WAIT_MIN, and a notice with "Take it" and "Not now" on it. */
