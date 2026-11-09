@@ -445,6 +445,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/staff-reads': 'admin',
   'GET sbg/totes': 'any',
   'GET sbg/totes/:code': 'support',
+  // 2026-11-09 — a bag's tag to print, with its GRAI.
+  'GET sbg/totes/:code/tag': 'support',
   'GET sbg/vehicles': 'any',
   'GET sbg/vehicles/:id': 'any',
   'GET sbg/vehicles/:id/breakdowns/:breakdownId/photo': 'support',

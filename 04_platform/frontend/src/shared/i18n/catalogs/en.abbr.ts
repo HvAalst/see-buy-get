@@ -12,6 +12,8 @@ export const enAbbr = {
   'abbr.sscc.about': 'A GS1 number for one package on its way, printed as a barcode on its label. Every scanner reads it, and no two packages share one.',
   'abbr.gln.name': 'Global Location Number',
   'abbr.gln.about': 'A GS1 number of 13 digits naming a company, or one of its places: a warehouse, a dock, a yard. A receiving dock reads it to know whose goods it is and where they are going.',
+  'abbr.grai.name': 'Global Returnable Asset Identifier',
+  'abbr.grai.about': 'A GS1 number for one reusable thing that travels and comes back — here, one of SeeBuyGet’s bags: which kind of thing it is, and which one. It stays with the bag for its whole life; what the bag carries on a trip has numbers of its own.',
   'abbr.gsin.name': 'Global Shipment Identification Number',
   'abbr.gsin.about': 'A GS1 number of 17 digits for one whole shipment: every package sent together. Customs accept it as the shipment’s reference, and it is never given to a second shipment.',
   'abbr.kraPin.name': 'Kenya Revenue Authority Personal Identification Number',

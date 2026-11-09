@@ -20,6 +20,8 @@ export const ABBREVIATIONS = [
   'GLN',
   // A whole shipment, by GS1's number (2026-11-09).
   'GSIN',
+  // A reusable bag, by GS1's number (2026-11-09).
+  'GRAI',
   'KRA PIN',
   'KRA',
   'eTIMS',

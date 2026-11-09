@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
+import { graiFromScan } from '../../foundation/gs1/gs1';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
 import { ParcelSize, Tote, ToteHaul, ToteHaulPart } from './pudo.types';
 import type { Step } from './observed-at';
@@ -316,7 +317,17 @@ export class ToteService {
 
   /** Looked up by scan rather than kept as a second index — one source of truth cannot drift from itself. */
   byCodeMaybe(code: string): Tote | undefined {
-    return [...this.totes.values()].find((t) => t.code === code);
+    // 2026-11-09 — or by its GRAI, as any GS1 scanner hands it over: the same bag.
+    const grai = graiFromScan(code);
+    return [...this.totes.values()].find((t) => t.code === code || (grai !== undefined && t.grai === grai));
+  }
+
+  /** 2026-11-09 — its GRAI, given once and kept: a bag that has one keeps it. */
+  giveGrai(toteId: string, grai: string): Tote {
+    const tote = this.requireById(toteId);
+    if (tote.grai) return tote;
+    tote.grai = grai;
+    return this.save(tote);
   }
 
   requireByCode(code: string): Tote {

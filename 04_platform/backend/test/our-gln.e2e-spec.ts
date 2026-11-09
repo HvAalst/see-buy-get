@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { glnProblem } from '../src/foundation/gs1/gs1';
+import { glnProblem, graiOf } from '../src/foundation/gs1/gs1';
 import { OurGlnSweeper } from '../src/modules/pudo/our-gln.service';
 import { shopPhotoOver } from './content-photo';
 import { declared } from './declared';
@@ -115,8 +115,34 @@ describe('our own GS1 prefix, over the wire', () => {
 
     // The console: the prefix, and the numbers given under it. Staff only.
     const ours = (await http().get('/v1/sbg/gs1/ours').set(operator).expect(200)).body;
-    expect(ours).toMatchObject({ prefix: PREFIX, capacity: 99_999 });
+    expect(ours).toMatchObject({ prefix: PREFIX, capacity: 99_998 });
     expect(ours.used).toBeGreaterThanOrEqual(3);
     await http().get('/v1/sbg/gs1/ours').set(from.token).expect(403);
+  });
+
+  it('a bag’s tag: its code alone without the prefix; with it, its GRAI — kept, printed, and found by a scan of it', async () => {
+    delete process.env.SBG_GS1_PREFIX;
+    const tag = digits();
+    const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `GRAI Hub ${tag}`, zones: [`GraiA${tag}`], location: { lat: -1.26, lng: 36.9 } }).expect(201)).body;
+    const hubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
+    declared(app, 'hub', hub.did);
+    const bag = (await http().post(`/v1/sbg/mdps/${hub.mdpId}/totes`).set(hubToken).expect(201)).body as { code: string };
+    const before = (await http().get(`/v1/sbg/totes/${bag.code}/tag`).set(hubToken).expect(200)).body;
+    expect(before.grai).toBeUndefined();
+    expect(before.svg).toContain(`>${bag.code}<`);
+    expect(before.svg).not.toContain('GRAI');
+
+    process.env.SBG_GS1_PREFIX = PREFIX;
+    const after = (await http().get(`/v1/sbg/totes/${bag.code}/tag`).set(hubToken).expect(200)).body;
+    expect(after.grai).toBe(graiOf(PREFIX, 99_999, bag.code));
+    expect(after.svg).toContain(`(8003) ${after.grai}`);
+    expect(after.zpl).toContain(`>6${bag.code}^FS`);
+    // Kept on the bag: read with it, and the bag found by a scan of it.
+    expect((await http().get(`/v1/sbg/totes/${bag.code}`).set(hubToken).expect(200)).body.grai).toBe(after.grai);
+    expect((await http().get(`/v1/sbg/totes/${encodeURIComponent(`(8003)${after.grai}`)}`).set(hubToken).expect(200)).body.code).toBe(bag.code);
+    // A sender, a store, a business never holds a bag: not theirs to print.
+    const shop = await aShop(`GRAI Shop ${tag}`, `GraiA${tag}`, -1.2);
+    expect((await http().get(`/v1/sbg/totes/${bag.code}/tag`).set(shop.token).expect(200)).body.grai).toBe(after.grai);
+    await http().get(`/v1/sbg/totes/${bag.code}/tag`).expect(401);
   });
 });

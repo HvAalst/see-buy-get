@@ -664,6 +664,33 @@ export function useMdpApp() {
     [client, run, fail],
   );
 
+  /** 2026-11-09 — a bag's tag, to print and laminate: our QR, its code, its GRAI once SeeBuyGet's prefix is set. */
+  const printBagTag = useCallback(
+    async (code: string) => {
+      if (!client || !code.trim()) return;
+      showPaper(t('mdp.newtote.tagTitle'), async () => {
+        const r = await client.api.bagTag(code.trim());
+        if (r.error) return { error: r.error };
+        return labelGot(narrow<{ svg?: string }>(r.data)?.svg, `${t('mdp.newtote.tagTitle')} — ${code.trim()}`, t('common.doc.labelGone'));
+      });
+    },
+    [client, showPaper],
+  );
+
+  /** …and for a thermal label printer. */
+  const thermalBagTag = useCallback(
+    async (code: string) => {
+      if (!client || !code.trim()) return;
+      await run(`tag:${code.trim()}`, async () => {
+        const r = await client.api.bagTag(code.trim());
+        if (r.error) return fail(r.error);
+        const tag = narrow<{ code: string; zpl: string }>(r.data);
+        downloadZpl(`bag-${tag.code}`, tag.zpl);
+      });
+    },
+    [client, run, fail],
+  );
+
   const dismissRelabel = useCallback(() => setState((s) => ({ ...s, relabel: null })), []);
 
   /** 2026-10-27 — a box going to its store's door handed to the driver who took its load: their pass, scanned at the counter. */
@@ -1063,6 +1090,8 @@ export function useMdpApp() {
       dismissAside,
       submitLoad,
       submitNewTote,
+      printBagTag,
+      thermalBagTag,
       sendPapers,
       setPrice,
       openArrival,

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { cleanPrefix, glnCapacity, glnOf, glnProblem } from '../../foundation/gs1/gs1';
+import { cleanPrefix, glnCapacity, glnOf, glnProblem, graiOf } from '../../foundation/gs1/gs1';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import type { GeoPoint } from './pudo.types';
 
@@ -20,6 +20,11 @@ export const GLN_MOVED_KM = 0.5;
 
 /** Location reference 0 is kept for SeeBuyGet itself, as a party. */
 const FIRST_REFERENCE = 1;
+/**
+ * 2026-11-09 — the last number under the prefix is kept as the ASSET TYPE of our bags (GRAI, AI 8003): never given to a
+ * place, so no number we give names two things. Its serial is the bag's own code.
+ */
+const RESERVED_AT_TOP = 1;
 
 export type OurPlaceKind = 'shop' | 'hub';
 
@@ -47,6 +52,11 @@ export interface OurGs1Status {
   live: number;
   /** Set but no numbers left: new places wait for a larger prefix. */
   full?: boolean;
+}
+
+/** The asset type of our bags under a prefix: its last number (all nines, or none for a 12-digit prefix). */
+export function bagAssetType(prefix: string): number {
+  return glnCapacity(prefix) - 1;
 }
 
 /** The book of GLNs given: no other service's dependencies, so a label can read it without a cycle. */
@@ -94,7 +104,7 @@ export class OurGlnBook {
     const all = this.all();
     if (!prefix) return { used: all.length, capacity: 0, live: all.filter((g) => !g.retiredAt).length };
     const used = all.filter((g) => g.gln.startsWith(prefix)).length;
-    const capacity = Math.max(0, glnCapacity(prefix) - FIRST_REFERENCE);
+    const capacity = Math.max(0, glnCapacity(prefix) - FIRST_REFERENCE - RESERVED_AT_TOP);
     return { prefix, used, capacity, live: all.filter((g) => !g.retiredAt).length, ...(used >= capacity ? { full: true } : {}) };
   }
 
@@ -102,8 +112,9 @@ export class OurGlnBook {
   give(prefix: string, place: Omit<OurGln, 'gln' | 'issuedAt'>, now: number): OurGln | undefined {
     let ref = Math.max(FIRST_REFERENCE, this.next.get(prefix)?.next ?? FIRST_REFERENCE);
     // Never one already given — under this prefix by any route.
-    while (ref < glnCapacity(prefix) && this.glns.get(glnOf(prefix, ref))) ref += 1;
-    if (ref >= glnCapacity(prefix)) {
+    const top = glnCapacity(prefix) - RESERVED_AT_TOP;
+    while (ref < top && this.glns.get(glnOf(prefix, ref))) ref += 1;
+    if (ref >= top) {
       this.logger.warn(`no GLNs left under SeeBuyGet's prefix ${prefix}: ${place.name} waits for a larger one`);
       return undefined;
     }
@@ -111,6 +122,17 @@ export class OurGlnBook {
     this.glns.set(given.gln, given);
     this.next.set(prefix, { next: ref + 1 });
     return given;
+  }
+
+  /**
+   * 2026-11-09 — the GRAI of one of our bags: SeeBuyGet's prefix, the asset type kept for bags (the last number under the
+   * prefix), the bag's own code as its serial. Nothing without the prefix on the server.
+   */
+  graiForBag(code: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+    const prefix = this.prefix(env);
+    if (!prefix) return undefined;
+    // A code GS1 cannot take as a serial (not capitals, digits and dashes, or longer than 16) gets none: never a stand-in.
+    return /^[A-Z0-9-]{1,16}$/.test(code) ? graiOf(prefix, bagAssetType(prefix), code) : undefined;
   }
 
   retire(gln: string, why: 'moved' | 'gone', now: number): void {

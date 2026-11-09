@@ -580,6 +580,12 @@ export type ToteStatus = 'free' | 'filling' | 'available' | 'claimed' | 'in_tran
 export class Tote {
   toteId: string; // the laminated QR payload
   code: string; // human-readable bag code
+  /**
+   * 2026-11-09 — ITS GRAI (GS1 application identifier 8003), under SeeBuyGet's own prefix: the asset type kept for bags, its
+   * code as the serial. Given once, when the prefix is on the server, and kept — it is printed on the bag's tag, so a later
+   * change of prefix never changes it. Absent until given.
+   */
+  grai?: string;
   status: ToteStatus;
   locationId: string; // where the bag is now (mdpId | agentDid | bus:<badge>)
   destinationNodeId?: string; // next hop this bag is committed to (a PUDO did or an MDP id)

@@ -8,6 +8,8 @@ export const words: Record<string, string> = {
   "abbr.sscc.name": "Msimbo wa mfululizo wa kifurushi cha usafirishaji",
   "abbr.gln.name": "Nambari ya Kimataifa ya Mahali",
   "abbr.gln.about": "Nambari ya GS1 yenye tarakimu 13 inayotaja kampuni, au mojawapo ya maeneo yake: ghala, gati, uwanja. Gati la kupokea huisoma ili kujua bidhaa ni za nani na zinakwenda wapi.",
+  "abbr.grai.name": "Kitambulisho cha Kimataifa cha Mali Inayorudishwa",
+  "abbr.grai.about": "Nambari ya GS1 ya kitu kimoja kinachotumika tena kinachosafiri na kurudi — hapa, mmoja wa mifuko ya SeeBuyGet: ni kitu cha aina gani, na ni kipi hasa. Inakaa na mfuko maisha yake yote; kinachobebwa na mfuko safarini kina nambari zake.",
   "abbr.gsin.name": "Nambari ya Kimataifa ya Utambulisho wa Usafirishaji",
   "abbr.gsin.about": "Nambari ya GS1 yenye tarakimu 17 kwa usafirishaji mmoja mzima: kila kifurushi kinachotumwa pamoja. Forodha huikubali kama kumbukumbu ya usafirishaji, na haitolewi kamwe kwa usafirishaji mwingine.",
   "abbr.sscc.about": "Nambari ya GS1 ya kifurushi kimoja kilicho safarini, inayochapishwa kama msimbo pau kwenye lebo yake. Kila kichanganuzi kinaisoma, na hakuna vifurushi viwili vinavyoshiriki nambari moja.",

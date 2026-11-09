@@ -105,6 +105,41 @@ export function glnCapacity(prefix: string): number {
   return 10 ** Math.max(0, 12 - prefix.length);
 }
 
+/**
+ * 2026-11-09 — A GLOBAL RETURNABLE ASSET IDENTIFIER (GRAI, application identifier 8003): one reusable thing that travels and
+ * comes back — for us, a bag. A filler 0, the company prefix and the asset type (12 digits together), the check digit, then
+ * the one asset's serial, up to 16 characters. The asset type says what kind of thing it is; the serial, which one. Its
+ * owner's to give, under its own prefix: our bags under SeeBuyGet's.
+ */
+export function graiOf(prefix: string, assetType: number, serial: string): string {
+  if (!cleanPrefix(prefix) || cleanPrefix(prefix) !== prefix) throw new Error('not a GS1 company prefix');
+  const room = 12 - prefix.length;
+  if (!Number.isInteger(assetType) || assetType < 0 || assetType >= 10 ** room) throw new Error('asset type out of range');
+  if (!GRAI_SERIAL.test(serial)) throw new Error('a GRAI serial is 1 to 16 capital letters, digits and dashes');
+  const body = `0${prefix}${room ? String(assetType).padStart(room, '0') : ''}`;
+  return `${body}${gs1CheckDigit(body)}${serial}`;
+}
+
+/** What our GRAI serials may be: what a bag's own code is made of, all inside GS1's character set 82. */
+const GRAI_SERIAL = /^[A-Z0-9-]{1,16}$/;
+
+/** Is this a GRAI: a 0, 12 digits and their check digit, then a serial. */
+export function isGrai(s: string | undefined | null): boolean {
+  return typeof s === 'string' && /^0\d{13}/.test(s) && gs1CheckDigit(s.slice(0, 13)) === Number(s[13]) && GRAI_SERIAL.test(s.slice(14));
+}
+
+/** A GRAI in any form a scanner or a person hands over: `]C18003…`, `(8003)…`, `8003…`, or bare. */
+export function graiFromScan(raw: string | undefined | null): string | undefined {
+  const s = String(raw ?? '').replace(/^\]C1/, '').replace(/[\s\u001d]/g, '').replace(/^\(8003\)/, '');
+  const grai = /^80030\d{13}/.test(s) ? s.slice(4) : s;
+  return isGrai(grai) ? grai : undefined;
+}
+
+/** The GRAI as GS1 writes it for a person. */
+export function graiHumanReadable(grai: string): string {
+  return `(8003) ${grai}`;
+}
+
 /** Why a GLN was refused, in words a person can act on. */
 export function glnRefusal(problem: GlnProblem): string {
   if (problem === 'digits') return 'A GLN is 13 digits';
@@ -194,6 +229,8 @@ const CODE128 = [
 
 const START_C = 105;
 const FNC1 = 102;
+/** In subset C, the switch to subset B: what letters are written in. */
+const CODE_B = 100;
 const STOP = 106;
 
 /** For the tests: the symbol table, so its shape (11 modules each, all distinct) can be asserted. */
@@ -203,17 +240,20 @@ export const CODE128_PATTERNS: readonly string[] = CODE128;
  * The symbol values of a GS1-128 barcode for an all-digit element string (an even count of digits, as `00` + an SSCC
  * is): Start C, FNC1 (which is what makes Code 128 a GS1-128), the digits two at a time, the check symbol, the stop.
  */
-export function gs1_128Values(elementDigits: string): number[] {
+export function gs1_128Values(elementDigits: string, tail = ''): number[] {
   if (!/^\d+$/.test(elementDigits) || elementDigits.length % 2 !== 0) throw new Error('GS1-128 here takes an even count of digits');
+  // 2026-11-09 — a last element string's letters (a GRAI's serial) after the digits, in subset B: nothing follows it.
+  if (tail && !/^[ -~]+$/.test(tail)) throw new Error('GS1-128 here takes printable characters after the digits');
   const data = [FNC1];
   for (let i = 0; i < elementDigits.length; i += 2) data.push(Number(elementDigits.slice(i, i + 2)));
+  if (tail) data.push(CODE_B, ...[...tail].map((c) => c.charCodeAt(0) - 32));
   const check = data.reduce((sum, v, i) => sum + v * (i + 1), START_C) % 103;
   return [START_C, ...data, check, STOP];
 }
 
 /** The bar and space widths, in modules, starting with a bar: what is drawn. */
-export function gs1_128Widths(elementDigits: string): number[] {
-  return gs1_128Values(elementDigits).flatMap((v) => [...CODE128[v]].map(Number));
+export function gs1_128Widths(elementDigits: string, tail = ''): number[] {
+  return gs1_128Values(elementDigits, tail).flatMap((v) => [...CODE128[v]].map(Number));
 }
 
 /**
@@ -221,8 +261,8 @@ export function gs1_128Widths(elementDigits: string): number[] {
  * `moduleWidth` and `height` are in the caller's units. At 0.5 mm a module — inside GS1's 0.495–1.016 mm range for a
  * logistics label — an SSCC is 88 mm wide with its quiet zones, which fits a 100 mm label.
  */
-export function gs1_128SvgGroup(elementDigits: string, x: number, y: number, moduleWidth: number, height: number): string {
-  const widths = gs1_128Widths(elementDigits);
+export function gs1_128SvgGroup(elementDigits: string, x: number, y: number, moduleWidth: number, height: number, tail = ''): string {
+  const widths = gs1_128Widths(elementDigits, tail);
   let at = x + 10 * moduleWidth;
   const bars: string[] = [];
   widths.forEach((w, i) => {
@@ -234,8 +274,8 @@ export function gs1_128SvgGroup(elementDigits: string, x: number, y: number, mod
 }
 
 /** The full width the barcode needs, quiet zones included, in the same units as `moduleWidth`. */
-export function gs1_128Width(elementDigits: string, moduleWidth: number): number {
-  return (gs1_128Widths(elementDigits).reduce((a, b) => a + b, 0) + 20) * moduleWidth;
+export function gs1_128Width(elementDigits: string, moduleWidth: number, tail = ''): number {
+  return (gs1_128Widths(elementDigits, tail).reduce((a, b) => a + b, 0) + 20) * moduleWidth;
 }
 
 const round = (n: number) => Math.round(n * 1000) / 1000;

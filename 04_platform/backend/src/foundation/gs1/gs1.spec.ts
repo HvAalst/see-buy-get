@@ -1,6 +1,40 @@
+import { graiFromScan, graiHumanReadable, graiOf, isGrai } from './gs1';
 import { CODE128_PATTERNS, cleanGln, cleanPrefix, glnProblem, gs1CheckDigit, gsinCapacity, gsinFromScan, gsinHumanReadable, gsinOf, isGsin, gs1_128SvgGroup, gs1_128Values, gs1_128Width, gs1_128Widths, isSscc, serialCapacity, ssccFromScan, ssccHumanReadable, ssccOf, ssccSpaced } from './gs1';
 
 describe('GS1 — the global code on a package', () => {
+  describe('the GRAI (2026-11-09)', () => {
+    it('is a 0, the prefix and the asset type, their check digit, then the serial', () => {
+      const g = graiOf('8712345', 99_999, 'BAG-007');
+      expect(g.slice(0, 13)).toBe('0871234599999');
+      expect(g[13]).toBe(String(gs1CheckDigit('0871234599999')));
+      expect(g.slice(14)).toBe('BAG-007');
+      expect(isGrai(g)).toBe(true);
+      expect(isGrai(`${g.slice(0, 13)}${(Number(g[13]) + 1) % 10}BAG-007`)).toBe(false);
+      expect(graiOf('871234567890', 0, 'BAG-1')).toBe(`0871234567890${gs1CheckDigit('0871234567890')}BAG-1`);
+      expect(() => graiOf('8712345', 100_000, 'BAG-1')).toThrow(/asset type out of range/);
+      expect(() => graiOf('8712345', 1, 'bag-1')).toThrow(/GRAI serial/);
+      expect(() => graiOf('8712345', 1, 'BAG-12345678901234')).toThrow(/GRAI serial/);
+      expect(graiHumanReadable(g)).toBe(`(8003) ${g}`);
+    });
+
+    it('is read in any form a scanner hands over — and an SSCC or a GLN is not one', () => {
+      const g = graiOf('8712345', 99_999, 'BAG-007');
+      for (const scan of [g, `(8003)${g}`, `(8003) ${g}`, `8003${g}`, `]C18003${g}`]) expect([scan, graiFromScan(scan)]).toEqual([scan, g]);
+      expect(graiFromScan(ssccOf('8712345', 3, 99))).toBeUndefined();
+      expect(graiFromScan('8712345000011')).toBeUndefined();
+      expect(graiFromScan('BAG-007')).toBeUndefined();
+      expect(graiFromScan(undefined)).toBeUndefined();
+    });
+
+    it('goes into a GS1-128 barcode: its digits in subset C, its serial in subset B, one check symbol over all', () => {
+      // Start C, FNC1, "80", Code B, "A", "1", the check (105 + 102·1 + 80·2 + 100·3 + 33·4 + 17·5 = 884; 884 mod 103 = 60), stop.
+      expect(gs1_128Values('80', 'A1')).toEqual([105, 102, 80, 100, 33, 17, 60, 106]);
+      expect(gs1_128Values('8003')).toEqual(gs1_128Values('8003', ''));
+      expect(gs1_128Width('80', 1, 'A1')).toBe(gs1_128Width('80', 1) + 3 * 11);
+      expect(() => gs1_128Values('80', 'é')).toThrow(/printable/);
+    });
+  });
+
   describe('the GSIN (2026-11-09)', () => {
     it('is the prefix, the extension digit and the serial, then the check digit: 17 digits — GS1’s own example', () => {
       expect(gsinOf('0614141', 1, 23456789)).toBe('06141411234567890'); // GS1 General Specifications' example GSIN

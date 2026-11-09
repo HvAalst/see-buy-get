@@ -32,6 +32,9 @@ describe('a label for a thermal printer', () => {
     const symbol = gs1_128Width(`00${sscc}`, 4) - 80;
     expect(zplGs1_128(113, 0.5, 28, `00${sscc}`)).toBe(`^BY4^FO${Math.round((800 - symbol) / 2)},904^BCN,224,N,N,N^FD>;>800${sscc}^FS`);
     expect(() => zplGs1_128(113, 0.5, 28, '123')).toThrow(/even run of digits/);
+    // 2026-11-09 — a GRAI's serial after its digits, in subset B; nothing a printer would obey.
+    expect(zplGs1_128(58, 0.33, 13, '800308712345999996', 'BAG-007')).toMatch(/\^FD>;>8800308712345999996>6BAG-007\^FS$/);
+    expect(() => zplGs1_128(58, 0.33, 13, '8003', 'BAG^XZ')).toThrow(/capitals, digits and dashes/);
   });
 });
 

@@ -1,4 +1,6 @@
-import { glnOf, glnProblem } from '../../foundation/gs1/gs1';
+import { glnOf, glnProblem, graiOf } from '../../foundation/gs1/gs1';
+import { bagTagSvg, bagTagZpl } from './bag-tag';
+import { ToteService } from './tote.service';
 import { OurGlnBook, OurGlnSweeper } from './our-gln.service';
 import type { AgentService } from './agent.service';
 import type { MdpService } from './mdp.service';
@@ -76,7 +78,7 @@ describe('our places’ GLNs, under SeeBuyGet’s own prefix', () => {
     // Asked again: nothing new, nobody told twice.
     expect(sweeper.sweep(NOW + 60_000, env)).toBe(0);
     expect(told).toHaveLength(3);
-    expect(book.status(env)).toEqual({ prefix: PREFIX, used: 3, capacity: 99_999, live: 3 });
+    expect(book.status(env)).toEqual({ prefix: PREFIX, used: 3, capacity: 99_998, live: 3 });
   });
 
   it('a pin corrected nearby keeps its number; a place that moved gets a new one, the old retired for good', () => {
@@ -126,6 +128,55 @@ describe('our places’ GLNs, under SeeBuyGet’s own prefix', () => {
     shop.status = 'DRAFT';
     sweeper.sweep(NOW + 1, env);
     expect(book.of('shop', 'shop-a')).toBe(glnOf(PREFIX, 1));
+  });
+
+  it('never gives a place the last number: it is the asset type of our bags', () => {
+    const { book } = world([], []);
+    const place = { kind: 'shop' as const, id: 'a', name: 'A', location: { lat: 0, lng: 0 } };
+    const p = '87123456789'; // 11 digits: references 0–9, 0 kept for SeeBuyGet, 9 for the bags
+    for (let i = 1; i <= 8; i += 1) expect(book.give(p, { ...place, id: `s${i}` }, NOW)!.gln).toBe(glnOf(p, i));
+    expect(book.give(p, { ...place, id: 's9' }, NOW)).toBeUndefined();
+    expect(book.graiForBag('BAG-001', { SBG_GS1_PREFIX: p } as NodeJS.ProcessEnv)).toBe(graiOf(p, 9, 'BAG-001'));
+  });
+
+  it('gives every bag its GRAI under the prefix — its code the serial — kept once given; a bag is found by it', () => {
+    const totes = new ToteService();
+    const a = totes.register('hub-1');
+    const odd = totes.register('hub-1');
+    (odd as { code: string }).code = 'bag 9'; // a code GS1 cannot take: no GRAI, and the sweep goes on
+    const { book } = world([], []);
+    const sweeper = new OurGlnSweeper(book, { list: () => [] } as unknown as AgentService, { list: () => [], isApproved: () => false } as unknown as MdpService, undefined, totes);
+    sweeper.sweep(NOW, {} as NodeJS.ProcessEnv);
+    expect(totes.requireById(a.toteId).grai).toBeUndefined();
+    sweeper.sweep(NOW, env);
+    const grai = graiOf(PREFIX, 99_999, a.code);
+    expect(totes.requireById(a.toteId).grai).toBe(grai);
+    expect(totes.requireById(odd.toteId).grai).toBeUndefined();
+    // Found by its GRAI as a scanner hands it over.
+    expect(totes.requireByCode(`(8003) ${grai}`).toteId).toBe(a.toteId);
+    expect(totes.requireByCode(`]C18003${grai}`).toteId).toBe(a.toteId);
+    // Another prefix later: the bag keeps the GRAI printed on its tag.
+    sweeper.sweep(NOW, { SBG_GS1_PREFIX: '8799999' } as NodeJS.ProcessEnv);
+    expect(totes.requireById(a.toteId).grai).toBe(grai);
+    expect(totes.giveGrai(a.toteId, graiOf('8799999', 99_999, a.code)).grai).toBe(grai);
+  });
+
+  it('prints the bag’s tag: our QR and its code — and its GRAI in words and as a GS1-128 barcode once it has one', () => {
+    const grai = graiOf(PREFIX, 99_999, 'BAG-007');
+    const plain = bagTagSvg({ code: 'BAG-007' });
+    expect(plain).toContain('>BAG-007<');
+    expect(plain).not.toContain('GRAI');
+    expect(plain).toContain('height="52mm"');
+    const tagged = bagTagSvg({ code: 'BAG-007', grai });
+    expect(tagged).toContain('RETURNABLE ASSET (GRAI)');
+    expect(tagged).toContain(`>(8003) ${grai}<`);
+    expect(tagged).toContain('height="80mm"');
+    expect((tagged.match(/<rect x=/g) ?? []).length).toBeGreaterThan(40); // the barcode's bars
+    const zpl = bagTagZpl({ code: 'BAG-007', grai });
+    expect(zpl).toContain('^FDQA,sbg:tote:BAG-007^FS');
+    expect(zpl).toContain(`>;>88003${grai.slice(0, 14)}>6BAG-007^FS`);
+    expect(zpl).toContain(`^FD(8003) ${grai}^FS`);
+    expect(bagTagZpl({ code: 'BAG-007' })).not.toContain('8003');
   });
 
   it('stops when the prefix holds no more, and says so', () => {

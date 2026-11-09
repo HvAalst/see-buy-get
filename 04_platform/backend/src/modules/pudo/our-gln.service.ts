@@ -3,6 +3,7 @@ import { AgentService } from './agent.service';
 import { haversineKm } from './geo';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
+import { ToteService } from './tote.service';
 import { GLN_MOVED_KM, OurGlnBook, type OurGln, type OurPlaceKind } from './our-gln.book';
 import type { Agent, GeoPoint } from './pudo.types';
 
@@ -26,6 +27,8 @@ export class OurGlnSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly agents: AgentService,
     private readonly mdps: MdpService,
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-09 — our bags, each given its GRAI under the same prefix.
+    @Optional() private readonly totes?: ToteService,
   ) {}
 
   onModuleInit(): void {
@@ -66,6 +69,11 @@ export class OurGlnSweeper implements OnModuleInit, OnModuleDestroy {
     // A place gone from the network: its number is retired, never given to another.
     const present = new Set(places.map((p) => `${p.kind}:${p.id}`));
     for (const g of this.book.all()) if (!g.retiredAt && !present.has(`${g.kind}:${g.id}`) && !this.stillThere(g)) this.book.retire(g.gln, 'gone', now);
+    // 2026-11-09 — every bag without its GRAI gets it: printed on its tag from then on.
+    if (this.totes) for (const t of this.totes.list()) if (!t.grai) {
+      const grai = this.book.graiForBag(t.code, env);
+      if (grai) this.totes.giveGrai(t.toteId, grai);
+    }
     let given = 0;
     for (const p of places) {
       const live = this.book.liveOf(p.kind, p.id);

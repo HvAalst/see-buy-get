@@ -132,6 +132,9 @@ export function createMdpApi(sbg: SbgClient) {
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
 
+    /** 2026-11-09 — a bag's tag to print: our QR, its code, and its GRAI once SeeBuyGet's GS1 prefix is set. */
+    bagTag: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}/tag', { params: { path: { code } } })),
+
     /** Publish this hub's per-parcel sort fee (open data). */
     setPrice: (mdpId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/mdps/{id}/pricing', { params: { path: { id: mdpId } }, body: { price } })),

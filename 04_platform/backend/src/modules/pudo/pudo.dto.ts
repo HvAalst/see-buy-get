@@ -3110,6 +3110,14 @@ export class SiteLoadingDto {
 }
 
 /** 2026-11-09 — a place's Global Location Number (13 digits, from GS1); `null` or empty clears it. */
+/** 2026-11-09 — a bag's tag: its code, its GRAI once SeeBuyGet's prefix is set, and the tag to print and for a thermal printer. */
+export class BagTagView {
+  @ApiProperty() code!: string;
+  @ApiPropertyOptional({ description: 'Its GRAI (GS1 AI 8003) under SeeBuyGet’s prefix; absent while the server has none' }) grai?: string;
+  @ApiProperty({ description: 'The tag as SVG, 100 mm wide' }) svg!: string;
+  @ApiProperty({ description: 'The tag for a thermal label printer (ZPL)' }) zpl!: string;
+}
+
 /** 2026-11-09 — SeeBuyGet's own GS1 prefix as the server has it, and the location numbers given under it. */
 export class OurGs1StatusView {
   @ApiPropertyOptional({ description: 'SeeBuyGet’s GS1 company prefix; absent where the server has none set' }) prefix?: string;

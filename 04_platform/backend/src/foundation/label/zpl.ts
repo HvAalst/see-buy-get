@@ -59,13 +59,15 @@ export function zplQr(xMm: number, yMm: number, magnification: number, data: str
  * `moduleMm` a bar module and `heightMm` tall, its top at `yMm`. Subset C from the start (>;) and FNC1 first (>8) — what
  * makes it GS1-128 rather than plain Code 128, the same symbol the printed labels draw (gs1.ts).
  */
-export function zplGs1_128(yMm: number, moduleMm: number, heightMm: number, elementDigits: string): string {
+export function zplGs1_128(yMm: number, moduleMm: number, heightMm: number, elementDigits: string, tail = ''): string {
   if (!/^\d+$/.test(elementDigits) || elementDigits.length % 2) throw new Error('GS1-128 here takes an even run of digits');
+  // 2026-11-09 — a GRAI's serial after the digits, in subset B (>6): capitals, digits and dashes only, nothing a printer obeys.
+  if (tail && !/^[A-Z0-9-]+$/.test(tail)) throw new Error('GS1-128 here takes capitals, digits and dashes after the digits');
   const module = Math.max(1, dots(moduleMm));
   // gs1_128Width counts ten modules of quiet space each side; the field starts at the first bar.
-  const symbol = gs1_128Width(elementDigits, module) - 20 * module;
+  const symbol = gs1_128Width(elementDigits, module, tail) - 20 * module;
   const left = Math.max(0, Math.round((dots(LABEL_W_MM) - symbol) / 2));
-  return `^BY${module}^FO${left},${dots(yMm)}^BCN,${dots(heightMm)},N,N,N^FD>;>8${elementDigits}^FS`;
+  return `^BY${module}^FO${left},${dots(yMm)}^BCN,${dots(heightMm)},N,N,N^FD>;>8${elementDigits}${tail ? `>6${tail}` : ''}^FS`;
 }
 
 /** One label: 100 × 150 mm at 203 dpi, its fields in UTF-8, printed once. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { checkScan, graiOfScan } from './scan';
 import { gsinOfScan, isLoadLabel, kindLabel, loadLookupOf, parcelSsccOf, parseScan, ssccOfScan } from './scan';
 
 /** Built the way the backend prints them (foundation/gs1 ssccOf): 4 + 6161234 + serial 7 + check digit. */
@@ -23,6 +24,17 @@ describe('a load’s codes, met in any scan box (round 19)', () => {
     expect(loadLookupOf('T-0A1B2C3D4E', false)).toBeNull();
     expect(loadLookupOf('T-0A1B2C3D4E', true)).toBe('T-0A1B2C3D4E');
     expect(loadLookupOf('PUD-123456', true)).toBeNull();
+  });
+
+  it('reads a bag’s GRAI in every form, and a bag box takes it as the bag (2026-11-09)', () => {
+    const GRAI = '08712345999995BAG-007';
+    for (const scan of [GRAI, `(8003)${GRAI}`, `(8003) ${GRAI}`, `8003${GRAI}`, `]C18003${GRAI}`]) expect([scan, graiOfScan(scan)]).toEqual([scan, GRAI]);
+    expect(graiOfScan('08712345999996BAG-007')).toBeNull();
+    expect(graiOfScan('BAG-007')).toBeNull();
+    expect(checkScan(`8003${GRAI}`, 'tote')).toEqual({ value: GRAI, mismatch: false, scannedKind: 'tote' });
+    expect(checkScan('sbg:tote:BAG-007', 'tote').value).toBe('BAG-007');
+    // Another box is not given a bag's number as its own.
+    expect(checkScan(`8003${GRAI}`, 'parcel').value).toBe(`8003${GRAI}`);
   });
 
   it('reads a shipment’s GSIN in every form, and looks the load up by it in any box (2026-11-09)', () => {

@@ -220,6 +220,10 @@ export const enMdp = {
   'mdp.newtote.printLaminate': 'Print and laminate this',
   'mdp.newtote.qrLabel': 'Bag {code} as a scannable code',
   'mdp.newtote.printTag': 'Print this bag tag',
+  'mdp.newtote.thermalTag': 'For a thermal label printer',
+  'mdp.newtote.tagTitle': 'Bag tag',
+  'mdp.newtote.againTitle': 'Print the tag of a bag you have',
+  'mdp.newtote.againLede': 'Scan or type the bag’s code. Once SeeBuyGet has its GS1 company prefix, every tag carries the bag’s GRAI: print it again and put it in the bag’s pocket.',
   'mdp.newtote.aloudDone': 'Tote registered. Print and laminate the code {code}.',
   'mdp.newtote.aloudIdle': 'Tap register a tote to add a fresh bag to the pool.',
 

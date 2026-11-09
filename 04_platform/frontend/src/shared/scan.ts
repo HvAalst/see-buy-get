@@ -58,6 +58,11 @@ export interface ScanCheck {
  * endpoint is the final authority on whether the id is real.
  */
 export function checkScan(raw: string, expected: ScanKind): ScanCheck {
+  // 2026-11-09 — a bag's GRAI (GS1 AI 8003) off its tag's barcode: the bag, by the number the server keeps for it.
+  if (expected === 'tote') {
+    const grai = graiOfScan(raw);
+    if (grai) return { value: grai, mismatch: false, scannedKind: 'tote' };
+  }
   const { kind, value } = parseScan(raw);
   if (kind === null || kind === expected) return { value: value || null, mismatch: false, scannedKind: kind };
   return { value: null, mismatch: true, scannedKind: kind };
@@ -94,6 +99,19 @@ function gs1CheckDigit(digits: string): number {
   let sum = 0;
   for (let i = 0; i < digits.length; i++) sum += (digits.charCodeAt(digits.length - 1 - i) - 48) * (i % 2 === 0 ? 3 : 1);
   return (10 - (sum % 10)) % 10;
+}
+
+/**
+ * 2026-11-09 — a bag's GRAI (GS1 application identifier 8003), as a scanner or a person hands it over: `8003` + the number,
+ * `(8003) …`, with a scanner's `]C1` in front, or bare — or null. A 0, 12 digits and their check digit, then the serial.
+ */
+export function graiOfScan(raw: string | null | undefined): string | null {
+  const s = String(raw ?? '')
+    .replace(/^\]C1/, '')
+    .replace(/[\s\u001d]/g, '')
+    .replace(/^\(8003\)/, '');
+  const grai = /^80030\d{13}/.test(s) ? s.slice(4) : s;
+  return /^0\d{13}[A-Z0-9-]{1,16}$/.test(grai) && gs1CheckDigit(grai.slice(0, 13)) === Number(grai[13]) ? grai : null;
 }
 
 /**

@@ -19767,6 +19767,35 @@
         }
       }
     },
+    "/v1/sbg/totes/{code}/tag": {
+      "get": {
+        "operationId": "Sbg.bagTag",
+        "summary": "",
+        "description": "2026-11-09 — A BAG'S TAG, to print and laminate: our QR and its code, and its GRAI as GS1 writes it and as a GS1-128\nbarcode once SeeBuyGet's prefix is on the server — given here if the bag has none yet, and kept. For the page and for\na thermal printer. The trades that handle bags, and staff, as the bag itself is read.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BagTagView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/totes/{code}/assign": {
       "post": {
         "operationId": "Sbg.assignTote",
@@ -62423,6 +62452,9 @@
           "code": {
             "type": "string"
           },
+          "grai": {
+            "type": "string"
+          },
           "status": {
             "type": "object"
           },
@@ -64053,6 +64085,31 @@
           "name",
           "zones",
           "location"
+        ]
+      },
+      "BagTagView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "grai": {
+            "type": "string",
+            "description": "Its GRAI (GS1 AI 8003) under SeeBuyGet’s prefix; absent while the server has none"
+          },
+          "svg": {
+            "type": "string",
+            "description": "The tag as SVG, 100 mm wide"
+          },
+          "zpl": {
+            "type": "string",
+            "description": "The tag for a thermal label printer (ZPL)"
+          }
+        },
+        "required": [
+          "code",
+          "svg",
+          "zpl"
         ]
       },
       "AssignToteDto": {
