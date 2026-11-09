@@ -219,6 +219,7 @@ export function homeSummary(unsorted: number, filling: number, t: Translate): st
 }
 
 export function sortSummary(queue: number, last: SortView | null, t: Translate): string {
+  if (last?.counterSlot) return t('mdp.logic.sortCounter', { id: last.parcelId, slot: last.counterSlot, count: queue });
   if (last) return t('mdp.logic.sortPlace', { id: last.parcelId, bag: last.toteCode, count: queue });
   if (queue === 0) return t('mdp.logic.sortEmpty');
   return queue === 1 ? t('mdp.logic.sortQueuedOne', { count: queue }) : t('mdp.logic.sortQueuedMany', { count: queue });

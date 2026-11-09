@@ -108,6 +108,13 @@ export function createMdpApi(sbg: SbgClient) {
     setSpace: (mdpId: string, body: { bagPlaces: number; sortPerDay: number }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } }, body })),
 
+    /** 2026-11-09 — what the hub does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */
+    counter: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/counter', { params: { path: { id: mdpId } } })),
+
+    /** Its owner chooses: sort only, or sort and hand out — the first time with the counter's shelf and fee. */
+    setCounter: (mdpId: string, body: { mode: 'sort' | 'sort_and_hand_out'; rows?: number; cols?: number; pricePerParcel?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/counter', { params: { path: { id: mdpId } }, body })),
+
     /** 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, those it added, and zones near it to add. */
     zonesServed: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/zones-served', { params: { path: { id: mdpId } } })),
 

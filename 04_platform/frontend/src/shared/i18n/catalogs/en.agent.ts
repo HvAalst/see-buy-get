@@ -32,6 +32,7 @@ export const enAgent = {
   'agent.done': 'Done',
   'agent.zone': 'Zone {zone}',
   // 2026-11-08 — the zone the shop's pin lies in, on its country's map, and its price group in the country's own words.
+  'agent.hubCounter': 'Your hub’s counter: hand parcels you take in to the hub’s floor — they are sorted there, no bag. Parcels for collection are put on your shelf from the floor.',
   'agent.gln': 'Location number GLN {gln}',
   'agent.priceZone': 'Zone {zone} · {group}',
   'agent.scanPlaceholder': 'Scan or type the code',

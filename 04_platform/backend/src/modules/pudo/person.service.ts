@@ -211,6 +211,14 @@ export class PersonService {
     return person;
   }
 
+  /** 2026-11-09 — a role given to the person behind a number already known by its hash (a hub's counter, from its owner's sign-in). */
+  attachRoleByPhoneHash(phoneHash: string, role: PersonRole, entityDid: string): void {
+    const person = this.persons.get(phoneHash);
+    if (!person || person.roles.some((r) => r.role === role && r.entityDid === entityDid)) return;
+    person.roles.push({ role, entityDid, status: 'active', linkedAt: new Date().toISOString() });
+    this.save(person);
+  }
+
   // --- self-managed profile (S29): a display name + an avatar ---
 
   /**

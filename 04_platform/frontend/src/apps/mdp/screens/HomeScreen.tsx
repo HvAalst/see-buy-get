@@ -15,6 +15,7 @@ import { HubReachCard } from './HubReachCard';
 import { CarriersCard } from './CarriersCard';
 import { HubSpaceCard } from './HubSpaceCard';
 import { ZonesServedCard } from './ZonesServedCard';
+import { HubCounterCard } from './HubCounterCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -215,6 +216,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           {hub.gln ? <p class="hubzone"><Abbreviated text={t('mdp.home.gln', { gln: hub.gln })} /></p> : null}
         </Card>
       ) : null}
+
+      {/* 2026-11-09 — what it does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */}
+      <HubCounterCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} currency={hub?.currency} />
 
       {/* 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, and zones near it its owner adds. */}
       <ZonesServedCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />

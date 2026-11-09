@@ -123,6 +123,16 @@ export interface SortView {
   toteCode: string;
   toteId: string;
   fillPct: number;
+  /** 2026-11-09 — for this hub's own counter: put on its shelf by hand, in this slot; no bag (toteCode empty). */
+  counterSlot?: string;
+}
+
+/** 2026-11-09 — what a hub does (backend HubCounterView): sort only, or sort and hand out at its counter. */
+export interface HubCounterView {
+  mdpId: string;
+  mode: 'sort' | 'sort_and_hand_out';
+  hoursSet: boolean;
+  counter?: { did: string; shopName: string; open: boolean; pricePerParcel: number; currency: string; rows: number; cols: number; status: string; signIn?: string };
 }
 
 export interface DropView {

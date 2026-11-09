@@ -118,6 +118,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
             <p class="shophead__meta">{agent ? (agent.priceZone ? t('agent.priceZone', { zone: agent.priceZone.name, group: agent.priceZone.groupName }) : t('agent.zone', { zone: agent.zone })) : ''}</p>
             {/* 2026-11-09 — its GS1 location number, given by SeeBuyGet: tap the letters to learn what it is. */}
             {agent?.gln ? <p class="shophead__meta"><Abbreviated text={t('agent.gln', { gln: agent.gln })} /></p> : null}
+            {/* 2026-11-09 — a hub's counter: what goes to and comes from the hub's floor goes by hand. */}
+            {agent?.hubCounterOf ? <p class="shophead__meta">{t('agent.hubCounter')}</p> : null}
             <Pill tone={open ? 'ok' : 'idle'} dot>{open ? t('agent.open') : t('agent.closed')}</Pill>
           </div>
         </div>

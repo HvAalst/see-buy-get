@@ -2157,6 +2157,7 @@ export const words: Record<string, string> = {
   "tower.network.fleets.systemCounts": "Mfumo wake: {delivered} zimefika · {waiting} zinasubiri · {givenUp} zimeachwa.",
   "tower.network.fleets.systemPositions": "Inatuma mahali magari yake yalipo.",
   "tower.network.gln": "GLN {gln}",
+  "tower.network.handsOut": "hupanga na kukabidhi",
   "tower.network.gs1.none": "Bado hakuna kiambishi cha kampuni cha GS1 cha SeeBuyGet kwenye seva: vituo na maduka ya kuchukulia hupata nambari zao za mahali (GLN) mara mmiliki atakapokiweka kwenye mipangilio ya seva (SBG_GS1_PREFIX).",
   "tower.network.gs1.set": "Kiambishi cha kampuni cha GS1 cha SeeBuyGet {prefix}: {used, plural, one {nambari # ya mahali (GLN) imetolewa} other {nambari # za mahali (GLN) zimetolewa}} kati ya {capacity}, {live} zinatumika. Kila kituo na duka la kuchukulia lililoidhinishwa lina moja; mahali panapohama hupata mpya.",
   "tower.network.gs1.full": "Kiambishi cha kampuni cha GS1 cha SeeBuyGet {prefix} hakina nambari za mahali (GLN) zilizobaki: zote {used} zimetolewa. Vituo na maduka mapya ya kuchukulia yanasubiri kiambishi kikubwa zaidi kutoka GS1.",

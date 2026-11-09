@@ -3783,6 +3783,45 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * 2026-11-09 — FROM A HUB'S OWN COUNTER TO ITS FLOOR, BY HAND (the owner: "Sort and hand out"): a parcel taken in at the
+   * counter crosses to the hub when the hub sorts it — no bag, no driver, the same building. Only a parcel the counter holds
+   * and has not bagged.
+   */
+  takeAcrossFromCounter(parcelId: string, hub: { mdpId: string; name: string }, counterDid: string, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
+    if (parcel.status !== 'At_PUDO' || custodianOf(parcel)?.holderId !== counterDid) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${hub.name}’s counter`);
+    if (parcel.toteId) throw new GlosError('INVALID_STATE', `${parcelId} is in a bag at the counter: take it out of the bag first — between the counter and the floor nothing goes in a bag`);
+    const step: Step = { at: new Date(now).toISOString() };
+    parcel.status = 'At_MDP';
+    parcel.atMdpId = hub.mdpId;
+    this.handTo(parcel, 'hub', hub.name, 'handed across from its own counter', step);
+    this.scan(parcel, 'At_MDP', hub.name, 'handed across from its own counter', step);
+    this.routeKeeper?.arrived(parcel, hub.mdpId, hub.name);
+    this.parcels.set(parcel.parcelId, parcel);
+    return parcel;
+  }
+
+  /**
+   * 2026-11-09 — FROM A HUB'S FLOOR TO ITS OWN COUNTER, BY HAND: sorted for the hub's counter, the parcel is put on the
+   * counter's shelf there and then — carried across, then received as any shop receives it (its slot first, its code live).
+   */
+  acrossToCounter(parcelId: string, hub: { mdpId: string; name: string }, counterDid: string, now: number = Date.now()): { parcelId: string; status: string; binSlot: string } {
+    const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not on ${hub.name}’s floor`);
+    if (!this.shelfTakes(counterDid, [parcelId])) throw new GlosError('SHELF_FULL', `The counter’s shelf has no room for ${parcelId}: hand over parcels waiting there, or add a row in the Shop app, then sort it again`);
+    const step: Step = { at: new Date(now).toISOString() };
+    parcel.status = 'On_Bus';
+    this.handTo(parcel, 'hub', hub.name, 'carried across to its own counter', step);
+    this.scan(parcel, 'On_Bus', hub.name, 'carried across to its own counter', step);
+    this.parcels.set(parcel.parcelId, parcel);
+    return parcel.direction === 'inbound' ? this.shelve(parcelId, counterDid) : this.arrive(parcelId, counterDid);
+  }
+
+  /**
    * Hand the parcel to somebody: close whoever was holding it, open a leg for whoever now is.
    *
    * One door for every transfer, so the chain cannot grow a gap the day a new path is added — a gap being

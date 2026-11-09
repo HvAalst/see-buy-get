@@ -41,7 +41,14 @@ export function SortScreen({ state, actions }: SortScreenProps) {
       {/* …or going to its store's own door as a load: kept aside, handed to that load's driver by their pass. */}
       <HandoverCard state={state} actions={actions} />
 
-      {last ? (
+      {last?.counterSlot ? (
+        // 2026-11-09 — for this hub's own counter: onto its shelf by hand, no bag.
+        <section class={`place place--${swatchIndex(last.nextDestination.id)}`} aria-live="polite">
+          <p class="place__k">{t('mdp.sort.toCounter')}</p>
+          <p class="place__bag">{last.counterSlot}</p>
+          <p class="place__meta">{t('mdp.sort.toCounterMeta', { id: last.parcelId })}</p>
+        </section>
+      ) : last ? (
         <section class={`place place--${swatchIndex(last.nextDestination.id)}`} aria-live="polite">
           <p class="place__k">{t('mdp.sort.placeInBag')}</p>
           <p class="place__bag">{last.toteCode}</p>

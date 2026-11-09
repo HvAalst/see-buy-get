@@ -16,6 +16,7 @@ export const words: Record<string, string> = {
   "agent.tryAgain": "Jaribu tena",
   "agent.cancel": "Ghairi",
   "agent.done": "Imekamilika",
+  "agent.hubCounter": "Kaunta ya kituo chako: kabidhi vifurushi unavyopokea kwa sakafu ya kituo — hupangwa huko, bila mfuko. Vifurushi vya kuchukuliwa huwekwa kwenye rafu yako kutoka sakafuni.",
   "agent.gln": "Nambari ya mahali GLN {gln}",
   "agent.zone": "Kanda {zone}",
   "agent.scanPlaceholder": "Changanua au andika msimbo",

@@ -1854,6 +1854,14 @@ export class CatchmentAssignDto {
   @IsBoolean() serve!: boolean;
 }
 
+/** 2026-11-09 — what a hub does: sort only, or sort and hand out — the first time with its counter's shelf and fee. */
+export class HubCounterDto {
+  @IsIn(['sort', 'sort_and_hand_out']) mode!: 'sort' | 'sort_and_hand_out';
+  @IsOptional() @IsInt() @Min(1) @Max(50) rows?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(50) cols?: number;
+  @IsOptional() @IsNumber() @Min(0) pricePerParcel?: number;
+}
+
 /** 2026-11-09 — a hub adds a zone to the ones it serves, or stops serving one it added. */
 export class HubZoneServeDto {
   @IsBoolean() serve!: boolean;

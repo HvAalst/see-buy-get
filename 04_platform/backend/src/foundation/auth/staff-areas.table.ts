@@ -37,6 +37,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-09 — the zones a hub serves: read by staff, changed by the hub alone.
   'GET sbg/mdps/:id/zones-served': 'support',
   'POST sbg/mdps/:id/zones-served/:code': 'none',
+  // 2026-11-09 — what a hub does (sort only, or sort and hand out): read by staff, chosen by the hub alone.
+  'GET sbg/mdps/:id/counter': 'support',
+  'POST sbg/mdps/:id/counter': 'none',
   'GET sbg/mdps/:id/carriers': 'support',
   'PUT sbg/mdps/:id/carriers': 'none',
   'GET sbg/mdps/:id/carrier-moves': 'support',

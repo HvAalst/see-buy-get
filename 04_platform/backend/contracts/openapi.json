@@ -7607,6 +7607,72 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/counter": {
+      "get": {
+        "operationId": "HubZones.counter",
+        "summary": "",
+        "description": "2026-11-09 — what the hub does: sort only, or sort and hand out at its counter (a shop worked in the Shop app).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCounterView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "HubZones.setCounter",
+        "summary": "",
+        "description": "Its owner chooses: sort only, or sort and hand out — the first time with the counter's shelf and fee.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubCounterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCounterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/zones-served": {
       "get": {
         "operationId": "HubZones.read",
@@ -50196,6 +50262,61 @@
           "sortPerDay"
         ]
       },
+      "HubCounterLine": {
+        "type": "object",
+        "properties": {
+          "signIn": {
+            "type": "string"
+          }
+        }
+      },
+      "HubCounterView": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sort",
+              "sort_and_hand_out"
+            ]
+          },
+          "counter": {
+            "$ref": "#/components/schemas/HubCounterLine"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "HubCounterDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sort",
+              "sort_and_hand_out"
+            ]
+          },
+          "rows": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "cols": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "pricePerParcel": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
       "HubZoneLine": {
         "type": "object",
         "properties": {
@@ -51799,6 +51920,14 @@
           },
           "closedAt": {
             "type": "string"
+          },
+          "hubCounterOf": {
+            "type": "string",
+            "description": "2026-11-09 — A HUB'S COUNTER (the owner: \"Sort and hand out\"): the hub whose counter this shop is, at its own address.\nIts parcels cross to the hub's floor by hand, never in a bag; parcels for it are put on its shelf from the floor."
+          },
+          "counterStopped": {
+            "type": "boolean",
+            "description": "2026-11-09 — its hub sorts only now: the counter stays closed until the hub chooses \"Sort and hand out\" again."
           },
           "openingHours": {
             "type": "object"
@@ -63084,6 +63213,23 @@
             "type": "number",
             "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
           },
+          "counter": {
+            "type": "object",
+            "properties": {
+              "agentDid": {
+                "required": true,
+                "type": "string"
+              },
+              "openedAt": {
+                "required": true,
+                "type": "string"
+              },
+              "stoppedAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "spaceSaidAt": {
             "type": "string",
             "description": "When its owner last said them."
@@ -63096,7 +63242,8 @@
           "zones",
           "location",
           "pricePerParcel",
-          "createdAt"
+          "createdAt",
+          "counter"
         ]
       },
       "VehicleDocuments": {

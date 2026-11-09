@@ -21,7 +21,7 @@ import { Geocoder, GEOCODER } from './geocoder';
 import { countryOfSite, requireCountryCode } from './country';
 import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
-import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
+import { Agent, AgentRequirements, AgentStatus, GeoPoint, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
 import { licenceDay, licenceStopped, requireLicenceDate, shopLicenceStanding, LICENCE_GRACE_DAYS, type ShopLicenceStanding } from './shop-licence';
 
@@ -264,6 +264,76 @@ export class AgentService {
     return agent;
   }
 
+  /**
+   * 2026-11-09 — A HUB'S COUNTER (the owner: "Sort and hand out"; "Shop app at the hub"): a shop at the hub's own address,
+   * approved on the hub's papers — no second check — and worked in the Shop app with every rule a shop keeps. Its shelf,
+   * its fee and its hours are the hub owner's word; its float, like any shop's. Its name is the hub's.
+   */
+  openHubCounter(
+    hub: { mdpId: string; name: string; country: string; zone: string; location: GeoPoint; address?: string; papers?: { licenceRef: string; photoRefs: string[]; submittedAt: string } },
+    input: { shelf: ShelfConfig; openingHours: WeeklyHours; pricePerParcel: number },
+    by: string,
+    now: number = Date.now(),
+  ): Agent {
+    if (!this.presence.can(hub.country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${hub.country} yet, so a counter cannot open there`);
+    if (!(input.pricePerParcel >= 0)) throw new GlosError('AMOUNT_INVALID', 'Say what your counter charges for a parcel: it cannot be below nothing');
+    // A counter is a shop: its shelf and its hours are held to a shop's least. The rest of a shop's checks were the hub's.
+    const requirements: AgentRequirements = { androidVersion: MIN_ANDROID_VERSION, reliablePower: true, tradingLicence: `hub ${hub.mdpId}`, criminalRecordClear: true };
+    const unmet = this.unmetRequirements({ shelf: input.shelf, openingHours: input.openingHours, requirements });
+    if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Your counter needs: ${unmet.join('; ')}`);
+    const entity = this.entities.forJurisdiction(hub.country);
+    const did = this.dids.generate(`pudo:hub:${hub.mdpId}`, { role: 'pudo-agent' }).id;
+    const { vaultRef } = this.vault.store({ fullName: hub.name }, { region: 'local' });
+    this.core.upsert({ did, vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: hub.zone, hubCounterOf: hub.mdpId, by } });
+    const at = new Date(now).toISOString();
+    const agent: Agent = {
+      agentId: `agt_${randomBytes(8).toString('hex')}`,
+      did,
+      vaultRef,
+      shopName: hub.name,
+      zone: hub.zone,
+      country: hub.country,
+      ...(entity ? { entityId: entity.entityId } : {}),
+      location: { ...hub.location },
+      ...(hub.address ? { physicalAddress: hub.address } : {}),
+      landmark: hub.address || hub.name,
+      openState: 'open',
+      openingHours: input.openingHours,
+      shelf: input.shelf,
+      pricePerParcel: Math.round(input.pricePerParcel * 100) / 100,
+      equipment: ['MAN'],
+      deviceImei: `hub:${hub.mdpId}`,
+      requirements,
+      // Its papers are the hub's, checked when the hub was approved.
+      kyc: { tradingLicenceRef: hub.papers?.licenceRef ?? `hub ${hub.mdpId}`, shopPhotoRefs: [...(hub.papers?.photoRefs ?? [])], submittedAt: hub.papers?.submittedAt ?? at } as KycDocuments,
+      equipmentDepositPaid: false,
+      status: 'APPROVED_UNFUNDED',
+      hubCounterOf: hub.mdpId,
+      lastPingAt: at,
+      createdAt: at,
+    };
+    this.wallet.provision(did, { jurisdiction: 'US' });
+    this.agents.set(did, agent);
+    // Where we hold no money for it, there is no float to fund: it opens at once, as an approved shop there does.
+    return this.balance(did) === null ? this.refreshLock(did) : agent;
+  }
+
+  /** 2026-11-09 — its hub sorts only again: the counter closes, its shelf's buyers told as when any shop closes. */
+  stopHubCounter(did: string): Agent {
+    const agent = this.require(did);
+    agent.counterStopped = true;
+    this.agents.set(did, agent);
+    return this.setAvailability(did, false);
+  }
+
+  /** 2026-11-09 — its hub hands out again: the counter opens. */
+  reopenHubCounter(did: string): Agent {
+    const agent = this.require(did);
+    delete agent.counterStopped;
+    this.agents.set(did, agent);
+    return this.setAvailability(did, true);
+  }
+
   /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING (18.5). */
   submitKyc(did: string, documents: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }): Agent {
     const agent = this.require(did);
@@ -454,6 +524,8 @@ export class AgentService {
   /** Agent marks the shop open or temporarily closed (Risk #30 mitigation). */
   setAvailability(did: string, open: boolean): Agent {
     const agent = this.require(did);
+    // 2026-11-09 — a hub's counter whose hub sorts only: opened again from the Hub app, never from the counter.
+    if (open && agent.counterStopped) throw new GlosError('INVALID_STATE', `This is ${agent.shopName}’s counter, and the hub sorts only now: its owner chooses “Sort and hand out” in the Hub app to open it again`);
     const was = agent.openState;
     agent.openState = open ? 'open' : 'closed';
     // 2026-11-09 — when it closed, kept: opening again gives the time it was closed back to the buyers of its shelf (Q2).

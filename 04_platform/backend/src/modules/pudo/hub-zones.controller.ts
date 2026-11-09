@@ -6,8 +6,9 @@ import { auditActor } from '../../foundation/auth/acting';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { CatchmentService, HubZonesView } from './catchment.service';
+import { HubCounterService, HubCounterView } from './hub-counter.service';
 import { MdpService } from './mdp.service';
-import { HubZoneServeDto } from './pudo.dto';
+import { HubCounterDto, HubZoneServeDto } from './pudo.dto';
 
 /**
  * 2026-11-09 — THE ZONES A HUB SERVES, from its own app (a net of hubs; the owner: "Own zone + hub adds"). The zone its
@@ -20,7 +21,28 @@ export class HubZonesController {
   constructor(
     private readonly mdps: MdpService,
     private readonly catchments: CatchmentService,
+    private readonly counters: HubCounterService,
   ) {}
+
+  /** 2026-11-09 — what the hub does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */
+  @Roles('mdp', 'operator')
+  @Get('mdps/:id/counter')
+  @AtTheCounter()
+  counter(@Param('id') id: string, @Actor() actor: IntrospectionResult): HubCounterView {
+    const hub = this.mdps.require(id); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== hub.did)) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+    return this.counters.view(id);
+  }
+
+  /** Its owner chooses: sort only, or sort and hand out — the first time with the counter's shelf and fee. */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/counter')
+  setCounter(@Param('id') id: string, @Body() dto: HubCounterDto, @Actor() actor: IntrospectionResult): HubCounterView {
+    const hub = this.mdps.require(id); // 404 if unknown
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A hub chooses whether it hands out, signed in as the hub: staff change nothing in its name');
+    if (!actor?.did || actor.did !== hub.did) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+    return dto.mode === 'sort' ? this.counters.sortOnly(id) : this.counters.handOut(id, { rows: dto.rows, cols: dto.cols, pricePerParcel: dto.pricePerParcel }, auditActor(actor));
+  }
 
   @Roles('mdp', 'operator')
   @Get('mdps/:id/zones-served')

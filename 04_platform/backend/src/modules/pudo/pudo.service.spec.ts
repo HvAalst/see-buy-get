@@ -2365,6 +2365,70 @@ describe('PUDO Light', () => {
       return { N, S, shop, far, hub, northHub, corridor, take, rider, toHub };
     };
 
+    /**
+     * 2026-11-09 — A HUB THAT SORTS AND HANDS OUT (the owner: "Only Sort vs Sort and Hand Out"; "Shop app at the hub"): its
+     * counter is a shop at its own address. Between the two, parcels go by hand — never in a bag, never by a driver.
+     */
+    const counterOf = (hub: ReturnType<typeof mdps.register>, zone: string) => {
+      const counter = agents.openHubCounter({ mdpId: hub.mdpId, name: hub.name, country: 'KE', zone, location: hub.location }, { shelf: { rows: 3, cols: 3 }, openingHours: uniformHours(), pricePerParcel: 30 }, 'Hub owner');
+      mdps.setCounter(hub.mdpId, { agentDid: counter.did, openedAt: new Date().toISOString() });
+      gate.topUp(counter.did, 50);
+      return agents.get(counter.did);
+    };
+
+    it('a hub’s counter: a shop at the hub, approved on the hub’s papers, priced by its own fee, offered beside the shops', () => {
+      const { S, hub } = world('CT1');
+      const counter = counterOf(hub, S);
+      expect(counter).toMatchObject({ shopName: hub.name, hubCounterOf: hub.mdpId, pricePerParcel: 30, openState: 'open', location: hub.location });
+      expect(['APPROVED_UNFUNDED', 'ACTIVE']).toContain(counter.status);
+      // A counter is held to a shop's least shelf and hours.
+      expect(() => agents.openHubCounter({ mdpId: hub.mdpId, name: hub.name, country: 'KE', zone: S, location: hub.location }, { shelf: { rows: 1, cols: 1 }, openingHours: uniformHours(), pricePerParcel: 30 }, 'H')).toThrow(/Your counter needs: shelf must have/);
+      // Its hub sorts only again: closed, and opened only from the hub.
+      agents.stopHubCounter(counter.did);
+      expect(agents.get(counter.did).openState).toBe('closed');
+      expect(() => agents.setAvailability(counter.did, true)).toThrow(/the hub sorts only now/);
+      agents.reopenHubCounter(counter.did);
+      expect(agents.get(counter.did).openState).toBe('open');
+    });
+
+    it('a parcel for the hub’s counter is put on its shelf as the hub sorts it — by hand, no bag, no driver', () => {
+      const { S, shop, hub, toHub } = world('CT2');
+      const counter = counterOf(hub, S);
+      parcels.accept({ agentDid: shop.did, parcelId: 'CT2-1', size: 'S', destZone: S, destPudoDid: counter.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = mdps.openShopBag(shop.did, S);
+      mdps.fillShopBag(bag.code, shop.did, 'CT2-1');
+      toHub(bag.code, hub.mdpId);
+      const sorted = mdps.sortParcel(hub.mdpId, 'CT2-1');
+      expect(sorted).toMatchObject({ nextDestination: { type: 'pudo', id: counter.did }, toteCode: '', counterSlot: expect.any(String) });
+      const p = parcels.get('CT2-1');
+      expect(p).toMatchObject({ status: 'Ready_For_Pickup', destAgentDid: counter.did, binSlot: sorted.counterSlot });
+      expect(p.toteId).toBeUndefined();
+      // The hub held it, and carried it across: on its timeline; the counter holds it now.
+      expect(p.scans.map((x) => x.note)).toContain('carried across to its own counter');
+      expect(p.custody!.at(-1)).toMatchObject({ holderKind: 'shop', holderId: counter.did, note: 'arrived at the collection point' });
+      // No bag was opened at the hub for its own counter.
+      expect(totes.list({ locationId: hub.mdpId }).some((t) => t.destinationNodeId === counter.did)).toBe(false);
+    });
+
+    it('a parcel taken in at the counter crosses to the hub’s floor as the hub sorts it; the counter fills no bag', () => {
+      const { S, hub } = world('CT3');
+      const counter = counterOf(hub, S);
+      const other = onboardAgent('CT3 Other', S, 50);
+      parcels.accept({ agentDid: counter.did, parcelId: 'CT3-1', size: 'S', destZone: S, destPudoDid: other.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(counter.did) } as never);
+      expect(parcels.get('CT3-1').status).toBe('At_PUDO');
+      expect(() => mdps.openShopBag(counter.did, S)).toThrow(/This is .*’s counter: hand its parcels to the hub’s floor/);
+      const sorted = mdps.sortParcel(hub.mdpId, 'CT3-1');
+      expect(sorted.nextDestination).toMatchObject({ type: 'pudo', id: other.did });
+      expect(sorted.toteCode).not.toBe('');
+      const p = parcels.get('CT3-1');
+      expect(p).toMatchObject({ status: 'At_MDP', atMdpId: hub.mdpId });
+      expect(p.custody!.some((c) => c.note === 'handed across from its own counter')).toBe(true);
+      // Another hub's floor cannot take it across: it is not that hub's counter.
+      parcels.accept({ agentDid: counter.did, parcelId: 'CT3-2', size: 'S', destZone: S, destPudoDid: other.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(counter.did) } as never);
+      const elsewhere = mdps.register({ name: 'CT3 Elsewhere', zones: [S], location: { lat: -1.3, lng: 36.9 } }, { approvedBy: 'staff' });
+      expect(() => mdps.sortParcel(elsewhere.mdpId, 'CT3-2')).toThrow(/must be At_MDP to sort/);
+    });
+
     it('is taken in with its plan, stop by stop: where it is, and where it goes next', () => {
       const { shop, far, hub, take } = world('MU1');
       take('MU1-A');

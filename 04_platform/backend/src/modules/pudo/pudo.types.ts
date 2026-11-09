@@ -101,6 +101,13 @@ export class Agent {
   openState: OpenState; // agent-controlled open / temporarily-closed
   /** 2026-11-09 — when it said "Close for now": the time it was closed is given back to its shelf's buyers when it opens. */
   closedAt?: string;
+  /**
+   * 2026-11-09 — A HUB'S COUNTER (the owner: "Sort and hand out"): the hub whose counter this shop is, at its own address.
+   * Its parcels cross to the hub's floor by hand, never in a bag; parcels for it are put on its shelf from the floor.
+   */
+  hubCounterOf?: string;
+  /** 2026-11-09 — its hub sorts only now: the counter stays closed until the hub chooses "Sort and hand out" again. */
+  counterStopped?: boolean;
   openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
   shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
   /**
@@ -511,6 +518,11 @@ export class Mdp {
   bagPlaces?: number;
   /** 2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them. */
   sortPerDay?: number;
+  /**
+   * 2026-11-09 — "SORT AND HAND OUT" (the owner: "The hub decides that. Only Sort vs Sort and Hand Out"): its counter, a shop
+   * at its own address worked in the Shop app; absent while it has only ever sorted. Stopped: it sorts only again.
+   */
+  counter?: { agentDid: string; openedAt: string; stoppedAt?: string };
   /** When its owner last said them. */
   spaceSaidAt?: string;
 }

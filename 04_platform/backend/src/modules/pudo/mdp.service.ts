@@ -13,7 +13,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { AgentService } from './agent.service';
-import { ParcelService } from './parcel.service';
+import { custodianOf, ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
 import { toteCapacityOf } from './fleet.config';
 import { FleetService } from './fleet.service';
@@ -733,6 +733,7 @@ export class MdpService {
    * rest, or the hub the route runs through.
    */
   openShopBag(agentDid: string, destZone: string): Tote {
+    this.refuseCounterBag(agentDid);
     this.agents.get(agentDid); // 404 for an unknown shop
     if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
     // 2026-11-05 — a route through a hub: the bag plan's next hop is the hub's id. Addressed to it as a hub's bag is
@@ -841,6 +842,7 @@ export class MdpService {
    * only checks that everything EXPECTED is in the bag, never that everything in the bag BELONGS.
    */
   fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string, said?: OffPlanSaid): { tote: Tote; fillPct: number } {
+    this.refuseCounterBag(agentDid);
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
     if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it is closed`);
@@ -1234,8 +1236,12 @@ export class MdpService {
    * Sort one parcel at an MDP: compute its next destination, find/open the destination bag, drop it
    * in. Returns exactly what the worker's screen shows — the next destination + the bag code to use.
    */
-  sortParcel(mdpId: string, parcelId: string, now: number = Date.now()): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
+  sortParcel(mdpId: string, parcelId: string, now: number = Date.now()): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number; counterSlot?: string } {
     const mdp = this.working(mdpId);
+    // 2026-11-09 — a parcel taken in at this hub's own counter crosses to the floor as it is sorted: by hand, no bag.
+    const counterDid = mdp.counter?.agentDid;
+    const atCounter = counterDid ? this.parcels.get(parcelId) : undefined;
+    if (counterDid && atCounter?.status === 'At_PUDO' && custodianOf(atCounter)?.holderId === counterDid) this.parcels.takeAcrossFromCounter(parcelId, mdp, counterDid, now);
     const parcel = this.parcels.get(parcelId);
     // Called off at this hub by its store (2026-10-27): the box still wears its old label. Told which label to put on it, and
     // nothing is sorted under the old one.
@@ -1270,6 +1276,18 @@ export class MdpService {
     if (next.type === 'pudo' && next.id === parcel.destAgentDid && this.shopChoice?.beforeBag?.(parcelId, now)) {
       const moved = this.parcels.get(parcelId);
       next = this.routeKeeper?.sortTarget(moved, mdpId) ?? this.nextHop(mdp, moved.destZone, moved.destAgentDid!, now);
+    }
+
+    // 2026-11-09 — for this hub's own counter: onto its shelf there and then, by hand — sorted and paid as any parcel here.
+    if (counterDid && next.type === 'pudo' && next.id === counterDid) {
+      const hub = this.require(mdpId);
+      const sortPay = this.sortPayOf(hub, parcel);
+      const put = this.parcels.acrossToCounter(parcelId, hub, counterDid, now);
+      if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, this.entityIdOrNone(hub), parcel.sellerEntityId);
+      this.parcels.notePaid(this.parcels.get(parcelId), { type: 'mdp', id: mdpId, label: hub.name }, sortPay, this.currencyOf(hub), now);
+      void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: '' }, { source: 'pudo' }).catch(() => undefined);
+      this.noteSorted(hub, now);
+      return { parcelId, nextDestination: next, toteCode: '', toteId: '', fillPct: 0, counterSlot: put.binSlot };
     }
 
     // Find a filling bag already bound to that next hop with room AND cargo-compatible with this parcel, else
@@ -1316,6 +1334,21 @@ export class MdpService {
   /** 2026-11-09 — a net of hubs: which hub a pin goes to (the nearest of its zone's hubs with room), and whether a hub serves it. */
   useCatchments(lookups: { hubForPoint: (country: string, point: GeoPoint, now: number) => string | undefined; serves: (mdpId: string, country: string, point: GeoPoint, now: number) => boolean }): void {
     this.catchments = lookups;
+  }
+
+  /** 2026-11-09 — a hub's own counter fills no bags: its parcels cross to the hub's floor by hand, and are sorted there. */
+  private refuseCounterBag(agentDid: string): void {
+    const counter = this.agents.list().find((a) => a.did === agentDid);
+    if (counter?.hubCounterOf) throw new GlosError('INVALID_STATE', `This is ${counter.shopName}’s counter: hand its parcels to the hub’s floor — they are sorted there, and no bag is needed between the counter and the floor`);
+  }
+
+  /** 2026-11-09 — "Sort and hand out": its counter, kept on the hub; stopped when it sorts only again. */
+  setCounter(mdpId: string, counter: Mdp['counter']): Mdp {
+    const mdp = this.require(mdpId);
+    if (counter) mdp.counter = counter;
+    else delete mdp.counter;
+    this.mdps.set(mdpId, mdp);
+    return mdp;
   }
 
   /** 2026-11-09 — whether a hub can take one more bag: one that never said its space always can (spaceOf). */

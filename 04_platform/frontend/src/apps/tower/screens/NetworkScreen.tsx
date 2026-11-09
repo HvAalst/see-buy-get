@@ -277,6 +277,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     {/* 2026-11-02 — its floor against its space: "full — bags wait" where nothing more is sent to it. */}
                     {hubSpaceLine(hub.space, t) ? ` · ${hubSpaceLine(hub.space, t)}` : ''}
                     {hub.gln ? <> · <Abbreviated text={t('tower.network.gln', { gln: hub.gln })} /></> : null}
+                    {hub.counter && !hub.counter.stoppedAt ? ` · ${t('tower.network.handsOut')}` : ''}
                   </span>
                 </div>
                 {filling.length === 0 ? (

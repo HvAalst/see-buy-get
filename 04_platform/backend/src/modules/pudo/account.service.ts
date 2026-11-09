@@ -816,6 +816,44 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /**
+   * 2026-11-09 — A HUB'S COUNTER SIGNS IN TO THE SHOP APP (the owner: "Shop app at the hub"): the hub owner's email, with the
+   * same password, is kept as a second kind beside the hub's — linked at once, the owner having asked from the hub's own
+   * signed-in app. Nothing where the hub has no email account (one registered by staff). Refused where the email already
+   * signs in to that kind.
+   */
+  /** 2026-11-09 — the email an account signs in with, by the DID it acts for: a hub's counter shows its owner which. */
+  emailOfDid(did: string): string | undefined {
+    return [...this.accounts.values()].find((a) => a.did === did && !a.linkPending)?.email;
+  }
+
+  /** 2026-11-09 — asked before anything is made: refused where the hub owner's email already signs in to that kind. */
+  assertKindBeside(fromDid: string, role: AccountRole): void {
+    const from = [...this.accounts.values()].find((a) => a.did === fromDid && !a.linkPending);
+    if (from && this.find(from.email, role)) throw new GlosError('DUPLICATE', `${from.email} already signs in to a SeeBuyGet ${PARTY[role]}. The counter needs a Shop app sign-in of its own: ask SeeBuyGet to move that shop to another email first.`, { field: 'email', kind: PARTY[role] });
+  }
+
+  openKindBeside(fromDid: string, role: AccountRole, did: string, now: number = Date.now()): { email: string } | undefined {
+    const from = [...this.accounts.values()].find((a) => a.did === fromDid && !a.linkPending);
+    if (!from) return undefined;
+    if (this.find(from.email, role)) throw new GlosError('DUPLICATE', `${from.email} already signs in to a SeeBuyGet ${PARTY[role]}. The counter needs a Shop app sign-in of its own: ask SeeBuyGet to move that shop to another email first.`, { field: 'email', kind: PARTY[role] });
+    const account: Account = {
+      accountId: `acc_${randomBytes(8).toString('hex')}`,
+      email: from.email,
+      role,
+      salt: from.salt,
+      hash: from.hash,
+      did,
+      ...(from.phoneHash ? { phoneHash: from.phoneHash } : {}),
+      ...(from.codePhone ? { codePhone: from.codePhone } : {}),
+      createdAt: new Date(now).toISOString(),
+      alias: true,
+    };
+    this.accounts.set(storeKeyOf(account), account);
+    if (from.phoneHash) this.persons.attachRoleByPhoneHash(from.phoneHash, ACCOUNT_TO_PERSON_ROLE[role], did);
+    return { email: from.email };
+  }
+
+  /**
    * 2026-11-03 — WHETHER AN ADDRESS SIGNS IN TO ANOTHER KIND OF ACCOUNT ALREADY. Then this one is kept beside it, and signs in
    * once its owner clicked "Yes, it is me" in the email (askYesItIsMe). The same kind twice is refused, saying which.
    */

@@ -181,6 +181,8 @@ export interface HubRow {
   zones?: string[];
   /** 2026-11-09 — the GS1 location number SeeBuyGet gave it; absent until given. */
   gln?: string;
+  /** 2026-11-09 — "Sort and hand out": its counter; stopped when it sorts only again. */
+  counter?: { agentDid: string; openedAt: string; stoppedAt?: string };
   /** 2026-11-02 — what its floor holds against the space its owner said (backend HubSpaceView); staff read it. */
   space?: HubSpaceRow;
 }
