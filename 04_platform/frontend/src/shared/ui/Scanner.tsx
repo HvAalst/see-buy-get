@@ -44,8 +44,10 @@ type Phase = 'starting' | 'scanning' | 'denied' | 'unsupported';
  * The camera scanner — the compendium's "camera opens instantly" for every scan step.
  *
  * Uses the platform BarcodeDetector, which ships on Chromium/Android — the exact "cheap
- * Android" this product targets. Where it is absent (iOS Safari, Firefox) the overlay says
- * so and points back to the keyboard: the field behind is always typeable, so a missing
+ * Android" this product targets. Where it is absent (iOS Safari, Firefox) a reader of our own
+ * is fetched the first time it is needed (zxingDetector.ts, 2026-11-09 — the owner: "implement
+ * the Iphone scan") and reads the same codes. Only where that cannot be had either (offline
+ * before it was ever fetched) the overlay says so and points back to the keyboard: the field behind is always typeable, so a missing
  * camera is a slower path, never a dead end (a WS-UX non-negotiable). A read of the WRONG
  * kind of code fires the red signal and keeps scanning rather than filling the wrong box.
  *
@@ -111,12 +113,21 @@ export function Scanner({ open, expect, title, onResult, onClose }: ScannerProps
     };
 
     const detectorCtor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-    if (!detectorCtor) {
-      setPhase('unsupported');
-      return cleanup;
-    }
 
     (async () => {
+      // 2026-11-09 — no reader in the browser (an iPhone, Firefox): ours, fetched now and kept after. Not to be had
+      // (offline the first time): the keyboard, as before.
+      let fallback: BarcodeDetectorLike | null = null;
+      if (!detectorCtor) {
+        try {
+          const { createFallbackDetector } = await import('./zxingDetector');
+          fallback = createFallbackDetector() as BarcodeDetectorLike;
+        } catch {
+          if (!done) setPhase('unsupported');
+          return;
+        }
+        if (done) return;
+      }
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
@@ -146,8 +157,8 @@ export function Scanner({ open, expect, title, onResult, onClose }: ScannerProps
 
         // Round 19 — and the GS1-128 barcode on a load's package (Code 128), where the phone can read one: an SSCC
         // scanned here finds its load (ScanField). A phone that reads QR only still reads every code we print.
-        const supported = (await detectorCtor.getSupportedFormats?.().catch(() => undefined)) ?? [];
-        const detector = new detectorCtor({ formats: ['qr_code', ...(supported.includes('code_128') ? ['code_128'] : [])] });
+        const supported = detectorCtor ? ((await detectorCtor.getSupportedFormats?.().catch(() => undefined)) ?? []) : [];
+        const detector = fallback ?? new detectorCtor!({ formats: ['qr_code', ...(supported.includes('code_128') ? ['code_128'] : [])] });
         interval = window.setInterval(async () => {
           if (done || !videoRef.current) return;
           let codes: DetectedBarcode[] = [];
@@ -228,9 +239,9 @@ export function Scanner({ open, expect, title, onResult, onClose }: ScannerProps
       {phase === 'denied' || phase === 'unsupported' ? (
         <div class="scanner__fallback" role="alert">
           <Icon name="camera" size={40} class="scanner__fallback-ic" />
-          <p class="scanner__fallback-t">{phase === 'denied' ? 'The camera is blocked' : 'This phone cannot scan'}</p>
+          <p class="scanner__fallback-t">{phase === 'denied' ? 'The camera is blocked' : 'The scanner needs a connection once'}</p>
           <p class="scanner__fallback-s">
-            {phase === 'denied' ? 'Allow the camera, or type the code instead.' : 'Type the code instead — it works the same.'}
+            {phase === 'denied' ? 'Allow the camera, or type the code instead.' : 'With a connection it is fetched and kept, and scans offline after. Type the code for now — it works the same.'}
           </p>
           <button type="button" class="btn btn--primary btn--full" onClick={onClose}>
             <span>Type it instead</span>

@@ -517,6 +517,9 @@ function installablePlugins(): PluginOption[] {
           // — does not pay ~166 KB for it. It is fetched from the network only when the map is opened.
           '**/PlaceMapLeaflet-*.js',
           '**/PlaceMapLeaflet-*.css',
+          // 2026-11-09 — the camera reader for a phone whose browser has none (an iPhone): fetched only there, the first
+          // time it scans, and kept by the rule in runtimeCaching — an Android phone never downloads it.
+          '**/zxingDetector-*.js',
           // 2026-11-02 — the install window's pictures and the shortcuts' icons are fetched by the phone when the app is
           // installed, never by a page: ~400 KB a first visit on a 2G phone would download for nothing.
           'screenshots/**',
@@ -530,9 +533,16 @@ function installablePlugins(): PluginOption[] {
          * visit, whatever the visitor came for: it was 120 files, 2.4 MB — every help article and town page as HTML, every
          * font, the help's words. Those are kept here when they are first opened, and offered from here offline after.
          */
-        ...(IS_ROOT
-          ? {
-              runtimeCaching: [
+        runtimeCaching: [
+          // 2026-11-09 — the camera reader (zxingDetector, left out of the precache above), kept once a phone without a
+          // reader of its own has fetched it: it scans offline from then on. In every app, which each scan.
+          {
+            urlPattern: ({ url }: { url: URL }) => /\/assets\/zxingDetector-[\w-]+\.js$/.test(url.pathname),
+            handler: 'CacheFirst' as const,
+            options: { cacheName: 'sbg-scanner', expiration: { maxEntries: 4, maxAgeSeconds: 180 * 24 * 3600 } },
+          },
+          ...(IS_ROOT
+            ? [
                 {
                   urlPattern: ({ request, url }: { request: Request; url: URL }) => request.mode === 'navigate' && /^\/(help|towns|directory|for|about|terms|privacy|cookies)(\/|$)/.test(url.pathname),
                   handler: 'NetworkFirst' as const,
@@ -543,9 +553,9 @@ function installablePlugins(): PluginOption[] {
                   handler: 'CacheFirst' as const,
                   options: { cacheName: 'sbg-assets', expiration: { maxEntries: 60, maxAgeSeconds: 90 * 24 * 3600 } },
                 },
-              ],
-            }
-          : {}),
+              ]
+            : []),
+        ],
         navigateFallback: `${BASE}index.html`,
         /**
          * Never serve an app shell for an API path — nor, from the root worker (whose scope
