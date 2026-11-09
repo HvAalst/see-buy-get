@@ -27,7 +27,9 @@ export const MAX_AREAS = 20_000;
 export const MAX_CORNERS = 600_000;
 
 /** The fields a boundary file usually names its areas by, tried in this order when the file's own field is not said. */
-const NAME_FIELDS = ['shapeName', 'name', 'NAME', 'Name', 'NAME_EN', 'name_en', 'ADM3_EN', 'ADM2_EN', 'ADM1_EN', 'WARD', 'ward', 'district', 'DISTRICT'];
+// 2026-11-08 — and the Netherlands' statistics office's (CBS, through PDOK): the Netherlands is matched in testing, and a
+// country's company brings in its own country's official file.
+const NAME_FIELDS = ['shapeName', 'name', 'NAME', 'Name', 'NAME_EN', 'name_en', 'ADM3_EN', 'ADM2_EN', 'ADM1_EN', 'WARD', 'ward', 'district', 'DISTRICT', 'statnaam', 'buurtnaam', 'wijknaam', 'gemeentenaam'];
 
 const round5 = (n: number): number => Math.round(n * 1e5) / 1e5;
 

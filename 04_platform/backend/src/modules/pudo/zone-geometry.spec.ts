@@ -33,6 +33,9 @@ describe('the geometry of a country’s zones', () => {
   it('takes the names from the field it is told, else from the usual ones', () => {
     expect(parseAreaFile(file(feature(undefined, [square(1, 1)], 'Polygon', { WARD: 'Kati' })))[0].name).toBe('Kati');
     expect(parseAreaFile(file(feature(undefined, [square(1, 1)], 'Polygon', { label: 'Mji' })), 'label')[0].name).toBe('Mji');
+    // The Dutch statistics office's files name a municipality, a district or a neighbourhood so (2026-11-08).
+    expect(parseAreaFile(file(feature(undefined, [square(1, 1)], 'Polygon', { statcode: 'GM0363', statnaam: 'Amsterdam' })))[0].name).toBe('Amsterdam');
+    expect(parseAreaFile(file(feature(undefined, [square(1, 1)], 'Polygon', { buurtcode: 'BU03630000', buurtnaam: 'Kop Zeedijk', gemeentenaam: 'Amsterdam' })))[0].name).toBe('Kop Zeedijk');
   });
 
   it('refuses what is not a file of named areas — nothing is left out quietly', () => {
