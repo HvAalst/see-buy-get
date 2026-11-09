@@ -1,0 +1,101 @@
+# THE ROAD MAPS, MADE EVERY WEEK (2026-11-08 — zone pricing step 4 and route optimization; the owner: "Same server", and
+# "Since I will match netherlands during testing, make sure optimization would work there as well").
+#
+# The roads of every country in COUNTRIES below, from OpenStreetMap (Geofabrik's extracts): only what a road engine uses
+# — roads, ferries, turn restrictions, barriers — merged into one map, prepared for OSRM (car profile, multi-level
+# Dijkstra) and put in an image beside the API's: ghcr.io/<repository>/roads, tagged with the day and `current`. Made here
+# and never on a laptop: preparing a country's roads takes gigabytes of memory for a while. The server runs it only where
+# its .env says COMPOSE_PROFILES=roads (DEPLOY.md, "Road distances"); every release fetches the newest map.
+#
+# A country is added by adding its Geofabrik name to COUNTRIES (and a check of it below). Nothing else in the code names
+# a country: the API asks for distances between points, wherever they are.
+#
+# Map data © OpenStreetMap contributors, available under the Open Database Licence (ODbL).
+name: Road maps
+
+on:
+  schedule:
+    - cron: '30 1 * * 0' # Sunday 01:30 UTC: a week runs Sunday to Saturday
+  workflow_dispatch:
+
+concurrency:
+  group: roads
+  cancel-in-progress: false
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    env:
+      OSRM: ghcr.io/project-osrm/osrm-backend:v5.27.1
+      # Geofabrik's names for the countries the network routes in: Kenya (operating) and the Netherlands (matched).
+      COUNTRIES: africa/kenya europe/netherlands
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Where the image goes
+        id: names
+        run: |
+          echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: The tool that keeps only the roads
+        run: sudo apt-get update -q && sudo apt-get install -y -q osmium-tool
+
+      - name: Each country's roads (OpenStreetMap, from Geofabrik), merged into one map
+        run: |
+          mkdir -p map work
+          for c in $COUNTRIES; do
+            n="$(basename "$c")"
+            curl -fsSL --retry 3 -o "work/$n.osm.pbf" "https://download.geofabrik.de/$c-latest.osm.pbf"
+            osmium tags-filter "work/$n.osm.pbf" w/highway w/route=ferry r/type=restriction n/barrier -o "work/$n-roads.osm.pbf" --overwrite
+            rm "work/$n.osm.pbf"
+          done
+          osmium merge work/*-roads.osm.pbf -o map/roads.osm.pbf --overwrite
+          rm -rf work
+          ls -l map
+
+      - name: Prepared for OSRM (car, multi-level Dijkstra)
+        run: |
+          docker run --rm -v "$PWD/map:/data" "$OSRM" osrm-extract -p /opt/car.lua /data/roads.osm.pbf
+          docker run --rm -v "$PWD/map:/data" "$OSRM" osrm-partition /data/roads.osrm
+          docker run --rm -v "$PWD/map:/data" "$OSRM" osrm-customize /data/roads.osrm
+          rm map/roads.osm.pbf
+          cp 04_platform/roads/Dockerfile map/Dockerfile
+          du -sh map
+
+      # The map answers before it is shipped: a distance by road inside each country.
+      - name: It answers, in every country
+        run: |
+          docker run -d --name osrm-check -p 5000:5000 -v "$PWD/map:/data" "$OSRM" osrm-routed --algorithm mld /data/roads.osrm
+          ask() { curl -fsS "http://localhost:5000/table/v1/driving/$1?annotations=distance"; }
+          for i in $(seq 1 30); do ask '36.8219,-1.2921;37.0717,-1.0388' > kenya.json 2>/dev/null && break; sleep 2; done
+          ask '4.9041,52.3676;5.1214,52.0907' > netherlands.json
+          cat kenya.json netherlands.json
+          for f in kenya.json netherlands.json; do
+            grep -q '"code":"Ok"' "$f"
+            node -e "const d=require('./$f').distances; if (!(d[0][1] > 10000)) { console.error('$f: no road distance'); process.exit(1); }"
+          done
+          docker rm -f osrm-check
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: The image, with the map inside
+        uses: docker/build-push-action@v7
+        with:
+          context: map
+          push: true
+          tags: |
+            ${{ steps.names.outputs.repo }}/roads:${{ steps.names.outputs.day }}
+            ${{ steps.names.outputs.repo }}/roads:current
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=OSRM with the roads of ${{ env.COUNTRIES }} (OpenStreetMap, ODbL), made ${{ steps.names.outputs.day }}

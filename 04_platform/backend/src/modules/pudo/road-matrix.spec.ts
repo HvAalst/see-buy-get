@@ -1,5 +1,5 @@
 import { HeuristicRouter } from './router';
-import { OsrmRoadMatrix, ROAD_MAX_POINTS, placeKey, readTable, tableUrl } from './road-matrix';
+import { OsrmRoadMatrix, ROAD_MAX_POINTS, ZONE_SNAP_M, placeKey, readGrid, readTable, tableUrl } from './road-matrix';
 
 /**
  * ROAD DISTANCES FROM A ROUTING SERVER. The request and the answer below are the protocol's own shapes — the answer
@@ -243,6 +243,65 @@ describe('road distances for a plan', () => {
       matrix.fetcher = async () => Promise.reject(new TypeError('fetch failed'));
       expect(await matrix.check(yard, kitengela, t0)).toMatchObject({ ok: false, why: 'the routing server could not be reached' });
     });
+  });
+
+  it('asks every place to every other in blocks the server takes — all or nothing (a price card’s zones, 2026-11-08)', async () => {
+    process.env.GLOS_ROUTER_URL = 'http://osrm:5000';
+    process.env.GLOS_ROUTER_MAX_POINTS = '4'; // blocks of two places from, two to
+    const places = [0, 1, 2, 3, 4].map((i) => ({ lat: -1 - i / 10, lng: 36 + i / 10 }));
+    // The server's answer to a block: metres from each source to each destination, i.e. 1000 × (10·from + to).
+    matrix.fetcher = async (url) => {
+      asked.push({ url, headers: {} });
+      const coords = new URL(url).pathname.split('/').pop()!.split(';').map((c) => c.split(',').map(Number));
+      const q = new URL(url).searchParams;
+      const at = (k: number) => places.findIndex((p) => Math.abs(p.lng - coords[k][0]) < 1e-6 && Math.abs(p.lat - coords[k][1]) < 1e-6);
+      const from = q.get('sources')!.split(';').map((k) => at(Number(k)));
+      const to = q.get('destinations')!.split(';').map((k) => at(Number(k)));
+      return { ok: true, status: 200, json: async () => ({ code: 'Ok', distances: from.map((f) => to.map((t) => (f === t ? 0 : 1000 * (10 * f + t)))) }) };
+    };
+    const got = await matrix.allPairs(places);
+    expect('km' in got && got.km[1][3]).toBe(13);
+    expect('km' in got && got.km[4][0]).toBe(40);
+    expect('km' in got && got.km[2][2]).toBe(0);
+    // Five places in blocks of two: three blocks each way, nine tables, none of more than four places.
+    expect(asked).toHaveLength(9);
+    expect(asked.every((a) => new URL(a.url).pathname.split('/').pop()!.split(';').length <= 4)).toBe(true);
+    // One block not answered: nothing at all, and why.
+    let n = 0;
+    const answer = matrix.fetcher;
+    matrix.fetcher = async (url, init) => (++n === 5 ? { ok: false, status: 502, json: async () => ({}) } : answer(url, init));
+    expect(await matrix.allPairs(places)).toEqual({ why: 'the routing server answered 502' });
+    // A zone's centre 12 km off any road is still measured, from the nearest one (a park, a lake); 30 km off, it is not.
+    const offRoad = (metres: number) => async (url: string) => {
+      const q = new URL(url).searchParams;
+      const from = q.get('sources')!.split(';');
+      const to = q.get('destinations')!.split(';');
+      return { ok: true, status: 200, json: async () => ({ code: 'Ok', distances: from.map(() => to.map(() => 7000)), sources: from.map((_, k) => ({ distance: k === 0 ? metres : 5 })), destinations: to.map(() => ({ distance: 5 })) }) };
+    };
+    matrix.fetcher = offRoad(12_000);
+    const parked = await matrix.allPairs(places.slice(0, 2));
+    expect('km' in parked && parked.km[0][1]).toBe(7);
+    matrix.fetcher = offRoad(30_000);
+    const lost = await matrix.allPairs(places.slice(0, 2));
+    expect('km' in lost && lost.km[0][1]).toBeNull();
+    delete process.env.GLOS_ROUTER_URL;
+    expect(await matrix.allPairs(places)).toEqual({ why: 'no routing server is configured' });
+  });
+
+  it('a place far from every road on its map is not measured along some other road — another country, open water (2026-11-08)', async () => {
+    process.env.GLOS_ROUTER_URL = 'http://osrm:5000';
+    // Asked in key order: Mlolongo, the yard, Kitengela. Kitengela, here, the engine had to move 15 km to reach a road.
+    answering({ ...REAL, sources: [{ distance: 3 }, { distance: 4 }, { distance: 15000 }], destinations: [{ distance: 3 }, { distance: 4 }, { distance: 15000 }] });
+    const d = await matrix.between([yard, kitengela, mlolongo]);
+    expect(d.source).toBe('roads');
+    expect(d.km(yard, mlolongo)).toBe(9.429);
+    expect(d.km(yard, kitengela)).toBe(estimate.roadKm(yard, kitengela));
+    expect(d.km(kitengela, mlolongo)).toBe(estimate.roadKm(kitengela, mlolongo));
+    expect(d.gaps).toBe(4);
+    // A zone's centre may lie well off a road: up to 25 km, measured from the nearest one.
+    const grid = { code: 'Ok', distances: [[0, 5000], [6000, 0]], sources: [{ distance: 12000 }, { distance: 1 }], destinations: [{ distance: 12000 }, { distance: 1 }] };
+    expect(readGrid(grid, 2, 2)).toEqual([[null, null], [null, 0]]);
+    expect(readGrid(grid, 2, 2, ZONE_SNAP_M)).toEqual([[0, 5000], [6000, 0]]);
   });
 
   it('reads a table strictly: it is a table or it is not', () => {

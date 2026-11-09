@@ -106,6 +106,23 @@ export interface StoredPriceCard extends PriceCardTerms {
   effectiveFrom?: string;
   withdrawnAt?: string;
   withdrawnBy?: string;
+  /**
+   * 2026-11-08 — HOW IT MEASURES THE KM BETWEEN TWO ZONES (zone pricing, step 4), fixed when it is made ready: by road,
+   * from the routing server, kept beside the card — or estimated, the straight line times the road factor — or still
+   * being measured (it is not approved until that is done). A card from before reads as estimated.
+   */
+  distances?: 'estimate' | 'roads' | 'measuring';
+  /** Why a card meant to measure by road kept the estimate. */
+  distancesWhy?: string;
+}
+
+/** 2026-11-08 — the road km between every two zones of one card, as the routing server measured them when it was made ready. */
+export interface StoredCardRoads {
+  /** The zones, in the order the table is kept. */
+  zones: string[];
+  /** km between zone i and zone j (i < j), the shorter way of the two, row by row; null where the map knows no road. */
+  km: Array<number | null>;
+  at: string;
 }
 
 export interface PriceCardSettings {
@@ -156,6 +173,9 @@ export class PriceCardView {
   createdAt: string;
   createdBy: string;
   @ApiPropertyOptional() readyBy?: string;
+  /** How it measures the km between two zones: by road, estimated, or still being measured. */
+  @ApiPropertyOptional({ enum: ['estimate', 'roads', 'measuring'] }) distances?: 'estimate' | 'roads' | 'measuring';
+  @ApiPropertyOptional() distancesWhy?: string;
   @ApiPropertyOptional() filedRef?: string;
   @ApiPropertyOptional() filedBy?: string;
   @ApiPropertyOptional() clearedRef?: string;

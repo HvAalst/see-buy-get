@@ -47,6 +47,16 @@ export const ROAD_MAX_POINTS = 100;
 const KEEP_MS = 10 * 60_000;
 const KEEP_TABLES = 40;
 
+/**
+ * 2026-11-08 — A PLACE THE ENGINE HAD TO MOVE FURTHER THAN THIS TO REACH A ROAD IS NOT ON ITS MAP (the Netherlands matched
+ * beside Kenya: one engine, the roads of several countries). A point in a country the map does not carry is moved to the
+ * nearest road it does — another country's, hundreds of km away — and a distance along it would be a lie. That place's
+ * legs are estimated instead, and counted as gaps.
+ */
+export const MAX_SNAP_M = 2000;
+/** A zone's centre may lie well off any road (a park, a lake) and is still measured from the nearest one. */
+export const ZONE_SNAP_M = 25_000;
+
 /** A place, to five decimals — about a metre. Two orders for the same door are one place. */
 export const placeKey = (p: GeoPoint) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
 
@@ -61,11 +71,19 @@ export function tableUrl(base: string, profile: string, points: GeoPoint[]): str
  * code, a table of the wrong size, a distance that is not a number — is not a table, and is not half-used.
  */
 export function readTable(body: unknown, n: number): Array<Array<number | null>> | undefined {
-  const b = body as { code?: unknown; distances?: unknown } | null;
-  if (!b || b.code !== 'Ok' || !Array.isArray(b.distances) || b.distances.length !== n) return undefined;
+  return readGrid(body, n, n);
+}
+
+/**
+ * The answer to a table of some places FROM and others TO (sources, destinations): `rows` rows of `cols` distances. A
+ * place the engine moved further than `maxSnapM` to reach a road (its waypoint's `distance`) has no distances: null.
+ */
+export function readGrid(body: unknown, rowsWanted: number, cols: number, maxSnapM: number = MAX_SNAP_M): Array<Array<number | null>> | undefined {
+  const b = body as { code?: unknown; distances?: unknown; sources?: unknown; destinations?: unknown } | null;
+  if (!b || b.code !== 'Ok' || !Array.isArray(b.distances) || b.distances.length !== rowsWanted) return undefined;
   const rows: Array<Array<number | null>> = [];
   for (const row of b.distances as unknown[]) {
-    if (!Array.isArray(row) || row.length !== n) return undefined;
+    if (!Array.isArray(row) || row.length !== cols) return undefined;
     const cells: Array<number | null> = [];
     for (const cell of row as unknown[]) {
       if (cell === null) cells.push(null);
@@ -73,6 +91,13 @@ export function readTable(body: unknown, n: number): Array<Array<number | null>>
       else return undefined;
     }
     rows.push(cells);
+  }
+  const moved = (list: unknown, i: number): boolean => {
+    const w = Array.isArray(list) ? (list[i] as { distance?: unknown } | undefined) : undefined;
+    return typeof w?.distance === 'number' && w.distance > maxSnapM;
+  };
+  for (let r = 0; r < rows.length; r += 1) {
+    for (let c = 0; c < cols; c += 1) if (moved(b.sources, r) || moved(b.destinations, c)) rows[r][c] = null;
   }
   return rows;
 }
@@ -184,6 +209,43 @@ export class OsrmRoadMatrix implements RoadMatrix {
         return metres === null ? this.estimate.roadKm(a, b) : metres / 1000;
       },
     };
+  }
+
+  /**
+   * 2026-11-08 — EVERY PLACE TO EVERY OTHER, HOWEVER MANY (a price card's zones, zone pricing step 4). Asked in blocks the
+   * server takes — some places from, others to, in one table each — and ALL OR NOTHING: a card's distances are one
+   * measure, never half by road and half estimated. In km, null where the map knows no road. Never kept here: a card
+   * asks once, when it is made ready, and keeps the answer itself.
+   */
+  async allPairs(points: GeoPoint[]): Promise<{ km: Array<Array<number | null>> } | { why: string }> {
+    const base = this.base();
+    if (!base) return { why: 'no routing server is configured' };
+    const block = Math.max(1, Math.floor(this.most() / 2));
+    const grid: Array<Array<number | null>> = points.map(() => points.map(() => null));
+    for (let i = 0; i < points.length; i += block) {
+      for (let j = 0; j < points.length; j += block) {
+        const from = points.slice(i, i + block);
+        const to = points.slice(j, j + block);
+        const got = await this.askGrid(base, from, to);
+        if ('why' in got) return got;
+        got.table.forEach((row, r) => row.forEach((metres, c) => (grid[i + r][j + c] = metres === null ? null : metres / 1000)));
+      }
+    }
+    return { km: grid };
+  }
+
+  private async askGrid(base: string, from: GeoPoint[], to: GeoPoint[]): Promise<{ table: Array<Array<number | null>> } | { why: string }> {
+    const url = `${tableUrl(base, this.profile(), [...from, ...to])}&sources=${from.map((_, k) => k).join(';')}&destinations=${to.map((_, k) => from.length + k).join(';')}`;
+    try {
+      const res = await this.fetcher(url, { signal: AbortSignal.timeout(ROAD_TIMEOUT_MS), headers: { accept: 'application/json' } });
+      if (!res.ok) return { why: `the routing server answered ${res.status}` };
+      const read = readGrid(await res.json(), from.length, to.length, ZONE_SNAP_M);
+      return read ? { table: read } : { why: NOT_A_TABLE };
+    } catch (e) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === 'SyntaxError') return { why: NOT_A_TABLE };
+      return { why: name === 'TimeoutError' || name === 'AbortError' ? 'the routing server did not answer in time' : 'the routing server could not be reached' };
+    }
   }
 
   /** One table request, and what came of it: the distances, or why there are none — in words a plan can carry. */

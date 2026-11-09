@@ -320,6 +320,36 @@ server's address), set `REGISTRY` (e.g. a DigitalOcean Container Registry, `regi
 `TAG`, then `docker compose build && docker compose push` there, and `docker compose pull && docker compose up -d`
 on the Droplet. On an Apple-silicon Mac, build with `DOCKER_DEFAULT_PLATFORM=linux/amd64` (Droplets are x86).
 
+### Road distances
+
+Prices by zone, drivers' pay per km and arrival times read distances from `GLOS_ROUTER_URL` where it is set, and
+estimate them (the straight line × 1.35) where it is not. Since 2026-11-08 the stack can run its own routing engine:
+OSRM with the roads of the countries the network routes in — Kenya and the Netherlands to start — from OpenStreetMap
+(map data © OpenStreetMap contributors, ODbL). Its map is made every Sunday by the GitHub workflow **Road maps**
+(`.github/workflows/roads.yml`, where the countries are listed) into the image `roads`, beside the API's; every
+release fetches the newest. A place more than 2 km from any road it knows (a country not on the map) is estimated, never
+measured along some other country's roads.
+
+To switch it on:
+
+1. On GitHub: **Actions → Road maps → Run workflow**, once, and wait for it to finish (about half an hour) — or wait
+   for Sunday.
+2. On the server: `free -m` — the engine needs about 3 GB of memory for Kenya and the Netherlands (it is capped at
+   `ROADS_MEMORY`, 3g). Short of that, resize the Droplet first.
+3. In `/opt/seebuyget/.env`, add the two lines:
+
+   ```
+   COMPOSE_PROFILES=roads
+   GLOS_ROUTER_URL=http://osrm:5000
+   ```
+
+4. The next release starts it — or, at once: `cd /opt/seebuyget && docker compose up -d osrm api`.
+
+The console's **Connections** screen says whether the routing server answers, and what became of the last time it was asked. A price card made ready while it answers keeps
+the road distances between its zones, frozen with the card; a card already approved keeps the distances it was approved
+with. To switch it off, take the two lines out and `docker compose up -d --remove-orphans api`: everything goes back to
+the estimate.
+
 ### Backups
 
 The two volumes are the business. Turn on Droplet backups (or volume snapshots), and keep a copy off the server too —

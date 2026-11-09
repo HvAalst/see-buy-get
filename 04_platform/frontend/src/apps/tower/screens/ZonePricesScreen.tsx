@@ -157,6 +157,8 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
           ) : (
             <ConsoleFold title={t('tower.prices.card', { version: card.version })} hint={t(statusKey(card.status))} defaultOpen>
               <p class="chint">{t('tower.prices.onMap', { version: card.zoneMapVersion, currency: card.currency })}</p>
+              {/* 2026-11-08 — how it measures the km between two zones, fixed when it is made ready (step 4). */}
+              {card.distances ? <p class="chint">{t(card.distances === 'roads' ? 'tower.prices.distances.roads' : card.distances === 'measuring' ? 'tower.prices.distances.measuring' : 'tower.prices.distances.estimate')}{card.distancesWhy ? ' ' + t('tower.prices.distances.why', { why: card.distancesWhy }) : ''}</p> : null}
               {card.problems.length ? (
                 <div class="cerr">
                   <b>{t('tower.prices.problems')}</b>

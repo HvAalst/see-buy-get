@@ -87,6 +87,7 @@ describe('a fleet’s plan for a day', () => {
   let heuristic: Router;
   let fleetSvc: FleetService;
   let bus: EventBus;
+  let presence: PresenceService;
   let seq = 0;
   const settle = async () => {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
@@ -120,6 +121,7 @@ describe('a fleet’s plan for a day', () => {
     managers = moduleRef.get(FleetManagerService);
     fleetSvc = moduleRef.get(FleetService);
     bus = moduleRef.get(EventBus);
+    presence = moduleRef.get(PresenceService);
     plans = new FleetPlanService(dispatch, vehicles, drivers, managers, moduleRef.get<Router>(ROUTER_TOKEN), fleetSvc, moduleRef.get(EventBus));
     plans.onModuleInit();
     heuristic = moduleRef.get<Router>(ROUTER_TOKEN);
@@ -791,6 +793,48 @@ describe('a fleet’s plan for a day', () => {
       // Asked once, about the depot, the yard and the two doors that have a point — and about nothing else.
       expect(asked).toHaveLength(1);
       expect(new Set(asked[0].map(key))).toEqual(new Set([depot, yard, site(1), site(4)].map(key)));
+    });
+
+    it('plans a fleet in the Netherlands, where we only match, on the roads too — on Amsterdam’s clock (the owner, 2026-11-08)', async () => {
+      presence.set({ jurisdiction: 'NL', level: 'matched' });
+      seq += 1;
+      const amsterdam = { lat: 52.37, lng: 4.9 };
+      const m = managers.register({
+        companyName: 'Polder Transport', jurisdiction: 'NL', contactPhone: `+3161000${seq}0`, ownerFullName: 'P P', ownerNationalId: `MGR-NL-${seq}`, location: amsterdam,
+        requirements: { businessRegistrationNo: `KVK-${seq}`, transportOperatorLicence: `NIWO-${seq}`, taxId: `NL-BTW-${seq}` },
+      } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+      managers.decideKyc(m.did, true);
+      managers.recordBond(m.did);
+      const fleet = managers.get(m.did);
+      aTruck(fleet.did, 'NL-08-TT', 8000);
+      seq += 1;
+      const d = drivers.register({
+        displayName: `Bestuurder ${seq}`, fullName: `B ${seq}`, nationalId: `ID-NL-${seq}`, mobile: `+3161230${seq}00`,
+        licenceClasses: ['truck'], licenceNumber: `L-NL-${seq}`, licenceExpiresAt: new Date(Date.now() + 365 * DAY).toISOString(), criminalRecordClear: true, managerDid: fleet.did,
+      });
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      // Its own day: Amsterdam's, which nobody had to choose.
+      expect(managers.zoneOf(fleet.did)).toBe('Europe/Amsterdam');
+      const day = clockAt(Date.now() + DAY, 'Europe/Amsterdam').day;
+      const rotterdam = { lat: 51.92, lng: 4.48 };
+      for (const [n, at] of [[1, { lat: 52.09, lng: 5.12 }], [2, { lat: 52.16, lng: 4.49 }]] as const) {
+        dispatch.registerFreight({
+          description: `Tegels ${n}`, pickupLocation: rotterdam, pickupLabel: 'Haven Rotterdam', destLabel: `Bouwplaats ${n}`, destLocation: at,
+          weightKg: 2500, packaging: 'palletised', postedByDid: fleet.did, postedByName: 'Sanne', contract: contractOf(fleet), deliverOn: day, orderRef: `NL-${n}`,
+        });
+      }
+      // A routing server whose Dutch roads are what the estimate says (a Dutch day is longer than a Nairobi round of 10 km).
+      const asked: Place[][] = [];
+      const asIs: RoadMatrix = { between: async (points) => (asked.push(points), { source: 'roads', km: (a, b) => heuristic.roadKm(a, b) }) };
+      const plan = await withRoads(asIs).proposeRouted(fleet.did, { day });
+      expect(plan.distances).toEqual({ source: 'roads' });
+      expect(plan.timeZone).toBe('Europe/Amsterdam');
+      expect(plan.unplanned).toEqual([]);
+      expect(plan.totals).toMatchObject({ orders: 2, planned: 2, trucksUsed: 1 });
+      // The routing server was asked about the Dutch places, and nothing else.
+      expect(new Set(asked[0].map(key))).toEqual(new Set([amsterdam, rotterdam, { lat: 52.09, lng: 5.12 }, { lat: 52.16, lng: 4.49 }].map(key)));
     });
 
     it('is the estimate when the routing server gives nothing — and the plan says why', async () => {

@@ -3378,6 +3378,11 @@ export const enTowerPrices = {
   'tower.prices.started': 'A draft card is open.',
   'tower.prices.card': 'Card {version}',
   'tower.prices.onMap': 'On zone map {version}, in {currency}.',
+  // 2026-11-08 — how a card measures the km between two zones, fixed when it is made ready (zone pricing, step 4).
+  'tower.prices.distances.roads': 'Distances by road, measured when it was made ready (map data © OpenStreetMap contributors), and kept with the card.',
+  'tower.prices.distances.estimate': 'Distances estimated: the straight line between the zones’ centres times 1.35.',
+  'tower.prices.distances.measuring': 'The road distances between its zones are being measured: it can be approved in a minute.',
+  'tower.prices.distances.why': '({why})',
   'tower.prices.problems': 'Still to do before it can go on:',
   'tower.prices.bands': 'Bands: how far apart two zones are',
   'tower.prices.bandsLede': 'A pair of zones falls in the first band both its zones between and its km fit, the further of the two. The last band takes every pair further than the one before.',

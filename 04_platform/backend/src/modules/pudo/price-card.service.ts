@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -7,6 +7,7 @@ import { BAG_CAPACITY_UNITS, MEDIUM_KG, ROAD_CIRCUITY_FACTOR, SIZE_WEIGHT_KG } f
 import type { ParcelSize } from './pudo.types';
 import { ZoneMapService } from './zone-map.service';
 import { haversineKm } from './geo';
+import { OsrmRoadMatrix } from './road-matrix';
 import type {
   EndCharge,
   PriceBand,
@@ -15,6 +16,7 @@ import type {
   PriceCardView,
   PriceCardsView,
   PriceCostCell,
+  StoredCardRoads,
   StoredPriceCard,
   StoredPriceCards,
   ZonePrice,
@@ -60,11 +62,25 @@ const r2 = (n: number): number => Math.round(n * 100) / 100;
 @Injectable()
 export class PriceCardService {
   private readonly store = new PersistentMap<string, StoredPriceCards>('pudo-price-cards');
+  /** 2026-11-08 — each card's road km between its zones, keyed entityId#version: written once, when it is measured. */
+  private readonly roadKm = new PersistentMap<string, StoredCardRoads>('pudo-price-card-roads');
+  /** The same, read: a zone's place in the table, kept once a card is first priced. */
+  private readonly roadIndex = new Map<string, Map<string, number>>();
+  /** Cards being measured now. */
+  private readonly measuring = new Map<string, Promise<void>>();
+  private readonly logger = new Logger(PriceCardService.name);
 
   constructor(
     private readonly entities: EntityService,
     private readonly zones: ZoneMapService,
+    // 2026-11-08 — the routing server, where one is set: a card made ready keeps the road km between its zones (step 4).
+    @Optional() private readonly roads?: OsrmRoadMatrix,
   ) {}
+
+  /** Every card being measured, measured. */
+  async settled(): Promise<void> {
+    await Promise.all([...this.measuring.values()]);
+  }
 
   /* --------------------------------------------------------------- reading -- */
 
@@ -177,9 +193,72 @@ export class PriceCardService {
     // centres times the road factor, as the network has always estimated a road — never whatever router is wired in that day.
     // A card approved on one measure is charged on that measure: switching real road distances on must not re-band a card
     // already approved. Real road km come to a card of their own, frozen when it is made ready, once a routing server runs.
-    const km = from.code === to.code ? 0 : r2(haversineKm(from.centre, to.centre) * ROAD_CIRCUITY_FACTOR);
+    const km = from.code === to.code ? 0 : r2(this.roadKmOf(entityId, card, from.code, to.code) ?? haversineKm(from.centre, to.centre) * ROAD_CIRCUITY_FACTOR);
     const band = pair ? card.bands.find((b) => b.key === pair.band) ?? this.bandOf(card.bands, crossing.zonesCrossed, km) : this.bandOf(card.bands, crossing.zonesCrossed, km);
     return { band, zonesCrossed: crossing.zonesCrossed, km };
+  }
+
+  /** A card measured by road: the km between two of its zones as measured, or nothing (estimate it) where the map knows no road. */
+  private roadKmOf(entityId: string, card: StoredPriceCard, a: string, b: string): number | undefined {
+    if (card.distances !== 'roads') return undefined;
+    const key = `${entityId}#${card.version}`;
+    const table = this.roadKm.get(key);
+    if (!table) return undefined;
+    let index = this.roadIndex.get(key);
+    if (!index) {
+      index = new Map(table.zones.map((z, i) => [z, i]));
+      this.roadIndex.set(key, index);
+    }
+    const i = index.get(a);
+    const j = index.get(b);
+    if (i == null || j == null || i === j) return undefined;
+    const [lo, hi] = i < j ? [i, j] : [j, i];
+    const n = table.zones.length;
+    const km = table.km[lo * n - (lo * (lo + 1)) / 2 + (hi - lo - 1)];
+    return km == null ? undefined : km;
+  }
+
+  /**
+   * 2026-11-08 — MEASURE A CARD'S ROADS (step 4): every zone of its map to every other, from the routing server, kept beside
+   * the card. All or nothing: a server that cannot answer leaves the card estimated, with why — said in the change log.
+   */
+  private async measureRoads(entityId: string, version: number): Promise<void> {
+    const s0 = this.store.get(entityId);
+    const card0 = s0?.cards.find((c) => c.version === version);
+    if (!card0 || !this.roads) return;
+    const { zones } = this.zones.publishedZones(entityId, card0.zoneMapVersion);
+    let got: { km: Array<Array<number | null>> } | { why: string };
+    try {
+      got = await this.roads.allPairs(zones.map((z) => z.centre));
+    } catch (e) {
+      got = { why: (e as Error).message || 'the routing server could not be asked' };
+    }
+    const s = this.store.get(entityId);
+    const card = s?.cards.find((c) => c.version === version);
+    if (!s || !card || card.distances !== 'measuring') return;
+    const name = { name: 'SeeBuyGet', id: 'system' };
+    if ('why' in got) {
+      Object.assign(card, { distances: 'estimate', distancesWhy: got.why });
+      this.save(s);
+      this.note(entityId, name, `price card ${version}: road distances being measured`, `price card ${version}: estimated distances — ${got.why}`);
+      this.logger.warn(`Price card ${version} of ${entityId} keeps estimated distances: ${got.why}`);
+      return;
+    }
+    const km: Array<number | null> = [];
+    for (let i = 0; i < zones.length; i += 1) {
+      for (let j = i + 1; j < zones.length; j += 1) {
+        const ab = got.km[i][j];
+        const ba = got.km[j][i];
+        const shorter = ab == null ? ba : ba == null ? ab : Math.min(ab, ba);
+        km.push(shorter == null ? null : Math.round(shorter * 10) / 10);
+      }
+    }
+    this.roadKm.set(`${entityId}#${version}`, { zones: zones.map((z) => z.code), km, at: new Date().toISOString() });
+    this.roadIndex.delete(`${entityId}#${version}`);
+    Object.assign(card, { distances: 'roads' });
+    delete card.distancesWhy;
+    this.save(s);
+    this.note(entityId, name, `price card ${version}: road distances being measured`, `price card ${version}: road distances between its ${zones.length} zones measured`);
   }
 
   /**
@@ -268,8 +347,14 @@ export class PriceCardService {
     if (!draft) throw new GlosError('INVALID_STATE', 'There is no draft card');
     const problems = this.problems(entityId, draft);
     if (problems.length) throw new GlosError('INVALID_STATE', `It cannot be made ready yet: ${problems[0]}`, { problems });
-    Object.assign(draft, { status: 'ready', readyAt: new Date(now).toISOString(), readyBy: by.name, readyById: by.id });
+    const byRoad = Boolean(this.roads?.configured());
+    Object.assign(draft, { status: 'ready', readyAt: new Date(now).toISOString(), readyBy: by.name, readyById: by.id, distances: byRoad ? 'measuring' : 'estimate' });
     this.save(s);
+    if (byRoad) {
+      const key = `${entityId}#${draft.version}`;
+      const job = this.measureRoads(entityId, draft.version).finally(() => this.measuring.delete(key));
+      this.measuring.set(key, job);
+    }
     this.note(entityId, by, `price card ${draft.version} (draft)`, `price card ${draft.version}: ready${s.settings.filingRequired ? ', to be filed with the regulator' : ', for a second person to approve'}`);
     return this.overview(entityId, now);
   }
@@ -308,6 +393,7 @@ export class PriceCardService {
     const waiting = s.settings.filingRequired ? 'cleared' : 'ready';
     if (card.status !== waiting) throw new GlosError('INVALID_STATE', s.settings.filingRequired ? 'A card is approved once the regulator has cleared it' : 'Only a ready card is approved');
     if (card.readyById === by.id) throw new GlosError('FORBIDDEN', 'A second person approves it: not the one who made it ready');
+    if (card.distances === 'measuring') throw new GlosError('INVALID_STATE', 'The road distances between its zones are still being measured: try again in a minute');
     const earliest = now + s.settings.noticeDays * DAY;
     const at = from ? Date.parse(from) : earliest;
     if (!Number.isFinite(at)) throw new GlosError('VALIDATION_FAILED', 'The date it starts from is not a date', { field: 'from' });
@@ -496,6 +582,8 @@ export class PriceCardService {
       createdAt: c.createdAt,
       createdBy: c.createdBy,
       ...(c.readyBy ? { readyBy: c.readyBy } : {}),
+      ...(c.distances ? { distances: c.distances } : {}),
+      ...(c.distancesWhy ? { distancesWhy: c.distancesWhy } : {}),
       ...(c.filedRef ? { filedRef: c.filedRef, filedBy: c.filedBy } : {}),
       ...(c.clearedRef ? { clearedRef: c.clearedRef, clearedBy: c.clearedBy } : {}),
       ...(c.approvedBy ? { approvedBy: c.approvedBy, approvedAt: c.approvedAt } : {}),

@@ -81,6 +81,19 @@ services:
       api:
         condition: service_healthy
 
+  # ROAD DISTANCES (2026-11-08 — zone pricing step 4 and route optimization; the owner: "Same server"). OSRM with the
+  # roads of every country the network routes in (Kenya and the Netherlands to start) from OpenStreetMap, the map made
+  # every week by the GitHub pipeline (.github/workflows/roads.yml) and carried in this image. Started only where .env
+  # says COMPOSE_PROFILES=roads, asked only where it says GLOS_ROUTER_URL=http://osrm:5000 (DEPLOY.md, "Road
+  # distances"). Capped in memory: a map too big for the server stops this container, never the database. Reached only
+  # inside the stack: no port leaves the server.
+  osrm:
+    profiles: ["roads"]
+    image: ${REGISTRY:-seebuyget}/roads:${ROADS_TAG:-current}
+    restart: unless-stopped
+    mem_limit: ${ROADS_MEMORY:-3g}
+    stop_grace_period: 5s
+
 volumes:
   api-data:
   db-data:

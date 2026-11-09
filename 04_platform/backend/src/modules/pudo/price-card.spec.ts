@@ -9,6 +9,7 @@ import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
 import type { PriceCardTerms } from './price-card.types';
 import { haversineKm } from './geo';
+import type { OsrmRoadMatrix } from './road-matrix';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 
 /** Five areas in a row, a tenth of a degree each (about 11 km), west to east: A B C D E. */
@@ -107,6 +108,47 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     // The same pair named on the card: Near.
     cards.saveDraft('sbg-ke', { ...filled(draftTerms()), pairs: [{ a: code.E, b: code.A, band: 'near' }] }, NJERI);
     expect(cards.price('sbg-ke', { from: code.A, to: code.E, kg: 1 })).toMatchObject({ band: 'near', amount: 490 });
+  });
+
+  it('made ready while a routing server answers, it keeps the road km between its zones — not approved while they are measured; a server that cannot answer leaves it estimated, with why (step 4)', async () => {
+    publishRow();
+    // A routing server whose road from zone i to zone j is 100 + 7i + 3j km — not the same both ways; the shorter is kept.
+    const answers: Array<{ km: Array<Array<number | null>> } | { why: string }> = [];
+    const roads = { configured: () => true, allPairs: async (pts: unknown[]) => answers.shift() ?? { km: pts.map((_, i) => pts.map((_x, j) => (i === j ? 0 : 100 + 7 * i + 3 * j))) } } as unknown as OsrmRoadMatrix;
+    const at = (c: string) => zones.publishedZones('sbg-ke', 1).zones.findIndex((z) => z.code === c);
+    const road = (a: string, b: string) => 100 + 7 * Math.min(at(a), at(b)) + 3 * Math.max(at(a), at(b));
+    const byRoad = new PriceCardService(entities, zones, roads);
+    byRoad.setSettings('sbg-ke', { noticeDays: 0 }, NJERI);
+    byRoad.startDraft('sbg-ke', undefined, NJERI);
+    byRoad.saveDraft('sbg-ke', filled(byRoad.overview('sbg-ke').pending[0] as unknown as PriceCardTerms), NJERI);
+    // Next door by the estimate: Local.
+    expect(byRoad.price('sbg-ke', { from: code.A, to: code.B, kg: 1 })).toMatchObject({ band: 'local' });
+    byRoad.ready('sbg-ke', NJERI);
+    expect(byRoad.overview('sbg-ke').pending[0].distances).toBe('measuring');
+    expect(() => byRoad.approve('sbg-ke', 1, undefined, OTIENO)).toThrow(/still being measured/);
+    await byRoad.settled();
+    expect(byRoad.overview('sbg-ke').pending[0].distances).toBe('roads');
+    // Over 100 km by road: Regional, though no zone lies between them — each pair at its own distance, either way round.
+    expect(byRoad.price('sbg-ke', { from: code.A, to: code.B, kg: 1 })).toMatchObject({ band: 'regional', km: road(code.A, code.B), zonesCrossed: 0 });
+    expect(byRoad.price('sbg-ke', { from: code.E, to: code.C, kg: 1 }).km).toBe(road(code.C, code.E));
+    expect(road(code.C, code.E)).not.toBe(road(code.A, code.B));
+    byRoad.approve('sbg-ke', 1, undefined, OTIENO);
+    expect(byRoad.inForceFor('KE')?.card.distances).toBe('roads');
+    // The next card: the server cannot answer — estimated, with why, and approvable.
+    answers.push({ why: 'the routing server could not be reached' });
+    byRoad.startDraft('sbg-ke', undefined, NJERI);
+    byRoad.ready('sbg-ke', NJERI);
+    await byRoad.settled();
+    const second = byRoad.overview('sbg-ke').pending.find((c) => c.version === 2)!;
+    expect(second).toMatchObject({ distances: 'estimate', distancesWhy: 'the routing server could not be reached' });
+    expect(byRoad.price('sbg-ke', { from: code.A, to: code.B, kg: 1 }, 2)).toMatchObject({ band: 'local' });
+    // The card in force still prices by the roads it was approved with.
+    expect(byRoad.price('sbg-ke', { from: code.A, to: code.B, kg: 1 }, 1)).toMatchObject({ band: 'regional' });
+    // No routing server: estimated from the start.
+    cards.startDraft('sbg-ke', undefined, NJERI);
+    cards.saveDraft('sbg-ke', filled(draftTerms()), NJERI);
+    cards.ready('sbg-ke', NJERI);
+    expect(cards.overview('sbg-ke').pending.find((c) => c.status === 'ready')?.distances).toBe('estimate');
   });
 
   it('measures the km between two zones by the estimate — the straight line between their centres times the road factor — and nothing wired in beside it (step 4)', () => {

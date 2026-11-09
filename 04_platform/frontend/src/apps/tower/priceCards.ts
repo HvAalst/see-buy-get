@@ -69,6 +69,9 @@ export interface PriceCardView extends PriceCardTerms {
   createdAt: string;
   createdBy: string;
   readyBy?: string;
+  /** 2026-11-08 — how it measures the km between two zones: by road, estimated, or still being measured (step 4). */
+  distances?: 'estimate' | 'roads' | 'measuring';
+  distancesWhy?: string;
   filedRef?: string;
   filedBy?: string;
   clearedRef?: string;

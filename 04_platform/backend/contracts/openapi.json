@@ -58952,6 +58952,18 @@
           "readyBy": {
             "type": "string"
           },
+          "distances": {
+            "type": "string",
+            "description": "How it measures the km between two zones: by road, estimated, or still being measured.",
+            "enum": [
+              "estimate",
+              "roads",
+              "measuring"
+            ]
+          },
+          "distancesWhy": {
+            "type": "string"
+          },
           "filedRef": {
             "type": "string"
           },

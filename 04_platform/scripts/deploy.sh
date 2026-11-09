@@ -242,6 +242,13 @@ fi
 # stopped. One already here is kept: up() never pulls, so a release never changes the database's version by itself.
 images="$(docker compose config --images)" || die "Compose could not read docker-compose.yml with this .env: look at the output above"
 for image in $images; do
+  # The road map (2026-11-08): ours, remade every week — fetched fresh each release, where .env switches it on. Never
+  # built here: a server that has none is told how to make one, before anything is stopped.
+  if [[ "$image" == "$IMAGE_REPO/roads:"* ]]; then
+    say "Fetching this week's road map"
+    docker pull --quiet "$image" || [[ -n "$(image_id "$image")" ]] || die "COMPOSE_PROFILES in .env asks for the road map, and $image has not been made yet: run the 'Road maps' workflow on GitHub once (Actions), or take 'roads' out of COMPOSE_PROFILES (DEPLOY.md, 'Road distances')"
+    continue
+  fi
   if [[ "$image" == "$API:"* || "$image" == "$WEB:"* || -n "$(image_id "$image")" ]]; then continue; fi
   say "Fetching $image, which runs beside the release"
   docker pull --quiet "$image" || die "could not fetch $image, which the stack runs beside the release"
