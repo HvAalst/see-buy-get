@@ -1,5 +1,6 @@
 import type { ZoneProposal } from './types';
 import { KE_PROPOSAL } from './ke';
+import { NL_PROPOSAL } from './nl';
 
 export type { ZoneProposal } from './types';
 
@@ -10,6 +11,8 @@ export type { ZoneProposal } from './types';
  */
 const PROPOSALS: Record<string, ZoneProposal> = {
   KE: KE_PROPOSAL,
+  // 2026-11-09 — the Netherlands, where SeeBuyGet is tested (the owner: "wire in the map for the Netherlands").
+  NL: NL_PROPOSAL,
 };
 
 export function proposalFor(country: string | undefined): ZoneProposal | undefined {

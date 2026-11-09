@@ -252,13 +252,14 @@ describe('a country’s zones (zone pricing, step 1)', () => {
 
 describe('the first map proposed for a country — Kenya’s, for Kenya’s company alone (2026-11-08)', () => {
   let zones: ZoneMapService;
+  let entities: EntityService;
   const none = { list: () => [], countryOf: () => 'KE' };
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [EntityService, DidService, LedgerService, EventBus, { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter }],
     }).compile();
-    const entities = moduleRef.get(EntityService);
+    entities = moduleRef.get(EntityService);
     entities.seed();
     zones = new ZoneMapService(entities, none as never, none as never);
   });
@@ -285,6 +286,29 @@ describe('the first map proposed for a country — Kenya’s, for Kenya’s comp
     expect(zones.zoneAt('KE', { lat: 3.1191, lng: 35.5973 })).toMatchObject({ name: 'Turkana Central', group: 'remote' });
     // Still Kenya's alone: an Ethiopian pin finds nothing, even where Kenya keeps a zone.
     expect(zones.zoneAt('ET', { lat: -1.2864, lng: 36.8172 })).toBeUndefined();
+  });
+
+  it('the Netherlands has its own (2026-11-09): its 342 municipalities, a zone for each city, island and region’s rest — Kenya’s never offered there, nor the Dutch one in Kenya', () => {
+    entities.createCompany({ kind: 'sister', jurisdiction: 'NL', name: 'SeeBuyGet Nederland' }, 'Owner');
+    const nl = zones.setup('sbg-nl').proposal!;
+    expect(nl).toMatchObject({ level: 'municipalities', areas: 342, zones: 87, licence: 'CC BY 4.0' });
+    expect(nl.attribution).toMatch(/CBS/);
+    expect(zones.setup('sbg-ke').proposal).toMatchObject({ level: 'wards' });
+    const s = zones.startFromProposal('sbg-nl', 'Sanne B.');
+    expect(s.draft!.areas).toMatchObject({ count: 342, level: 'municipalities' });
+    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(342);
+    expect(s.draft!.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
+    zones.publish('sbg-nl', undefined, 'Sanne B.');
+    // Prepared while the company is a draft; it places pins once the company is switched on.
+    expect(zones.zoneAt('NL', { lat: 52.3728, lng: 4.8936 })).toBeUndefined();
+    entities.activate('sbg-nl', 'Owner');
+    expect(zones.zoneAt('NL', { lat: 52.3728, lng: 4.8936 })).toMatchObject({ name: 'Amsterdam', group: 'urban' });
+    expect(zones.zoneAt('NL', { lat: 51.9244, lng: 4.4777 })).toMatchObject({ name: 'Rotterdam', group: 'urban' });
+    expect(zones.zoneAt('NL', { lat: 53.0546, lng: 4.7972 })).toMatchObject({ name: 'Texel', group: 'remote' });
+    expect(zones.zoneAt('NL', { lat: 52.7858, lng: 6.8976 })).toMatchObject({ name: 'Emmen', group: 'rural' });
+    expect(zones.zoneAt('NL', { lat: 51.9725, lng: 6.7194 })).toMatchObject({ name: 'Achterhoek', group: 'rural' });
+    // Still the Netherlands' alone: a Kenyan pin in Amsterdam finds nothing.
+    expect(zones.zoneAt('KE', { lat: 52.3728, lng: 4.8936 })).toBeUndefined();
   });
 
   it('a proposed group the company has taken away starts in its middle group; refused over an open draft', () => {
