@@ -10,6 +10,8 @@ export const enAbbr = {
   'abbr.gs1.about': 'It gives each company a number of its own, its company prefix, from which the company makes the barcodes on its products and packages — read by any scanner in the world.',
   'abbr.sscc.name': 'Serial Shipping Container Code',
   'abbr.sscc.about': 'A GS1 number for one package on its way, printed as a barcode on its label. Every scanner reads it, and no two packages share one.',
+  'abbr.gln.name': 'Global Location Number',
+  'abbr.gln.about': 'A GS1 number of 13 digits naming a company, or one of its places: a warehouse, a dock, a yard. A receiving dock reads it to know whose goods it is and where they are going.',
   'abbr.kraPin.name': 'Kenya Revenue Authority Personal Identification Number',
   'abbr.kraPin.about': 'The tax number Kenya’s revenue authority gives a person or a company. It goes on every tax invoice.',
   'abbr.kra.name': 'Kenya Revenue Authority',

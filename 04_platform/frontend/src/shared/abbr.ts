@@ -16,6 +16,8 @@ import type { MessageKey } from './i18n';
 export const ABBREVIATIONS = [
   'GS1',
   'SSCC',
+  // A company or one of its places, by GS1's number (2026-11-09).
+  'GLN',
   'KRA PIN',
   'KRA',
   'eTIMS',

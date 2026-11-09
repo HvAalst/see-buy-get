@@ -133,6 +133,8 @@ export class BusinessView {
   @ApiProperty({ type: BusinessMemberView }) you: BusinessMemberView;
   /** Its GS1 company prefix, when it gave one: its packages then carry SSCCs beside our code. */
   @ApiPropertyOptional({ type: BusinessGs1View }) gs1?: BusinessGs1View;
+  /** 2026-11-09 — its Global Location Number, from GS1, when it gave one. */
+  @ApiPropertyOptional() gln?: string;
 }
 
 /** One line of "your businesses": the ones you are in, and the ones you are invited to. */

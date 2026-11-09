@@ -19,6 +19,8 @@ export class BusinessClient {
   @ApiPropertyOptional() contactName?: string;
   @ApiPropertyOptional() contactPhone?: string;
   @ApiPropertyOptional() contactEmail?: string;
+  /** 2026-11-09 — its Global Location Number, from GS1, as the expeditor entered it. */
+  @ApiPropertyOptional() gln?: string;
   @ApiProperty() createdBy: string;
   @ApiProperty() createdAt: string;
   /** Kept, not deleted: a load sent for them in March still names them. */
@@ -37,8 +39,10 @@ export class ClientRef {
   @ApiProperty() name: string;
   @ApiPropertyOptional() country?: string;
   @ApiPropertyOptional() address?: string;
+  /** 2026-11-09 — its GLN as it was when the load was made. */
+  @ApiPropertyOptional() gln?: string;
 }
 
 export function clientRefOf(c: BusinessClient): ClientRef {
-  return { clientId: c.clientId, name: c.name, ...(c.country ? { country: c.country } : {}), ...(c.address ? { address: c.address } : {}) };
+  return { clientId: c.clientId, name: c.name, ...(c.country ? { country: c.country } : {}), ...(c.address ? { address: c.address } : {}), ...(c.gln ? { gln: c.gln } : {}) };
 }

@@ -247,7 +247,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       sender,
       ...(agent ? { agent } : {}),
       consignee: this.consigneeOf(f),
-      delivery: { place: f.destLabel, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.deliveredAt ? { at: f.deliveredAt } : {}) },
+      delivery: { place: f.destLabel, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.deliveredAt ? { at: f.deliveredAt } : {}), ...(f.receiver?.siteGln ? { gln: f.receiver.siteGln } : {}) },
       takingOver: { place: f.pickupLabel, ...(f.pickupCountry ? { country: countryName(f.pickupCountry) } : {}), ...(f.pickedUpAt ? { at: f.pickedUpAt } : {}) },
       documents,
       goods: {
@@ -399,7 +399,7 @@ export class ConsignmentNoteService implements OnModuleInit {
 
   private senderOf(f: Freight): NoteParty {
     // B4 — sent by an expeditor for a client: the CLIENT is the sender. The expeditor is named as their agent.
-    if (f.onBehalfOf) return { name: f.onBehalfOf.name, ...(f.onBehalfOf.address ? { address: f.onBehalfOf.address } : {}), ...(f.onBehalfOf.country ? { country: countryName(f.onBehalfOf.country) } : {}) };
+    if (f.onBehalfOf) return { name: f.onBehalfOf.name, ...(f.onBehalfOf.address ? { address: f.onBehalfOf.address } : {}), ...(f.onBehalfOf.country ? { country: countryName(f.onBehalfOf.country) } : {}), ...(f.onBehalfOf.gln ? { gln: f.onBehalfOf.gln } : {}) };
     // A CONTAINER's road leg: the importer is the sender. Asked first, because such a leg carries no
     // shipper DID at all and would otherwise fall through to the placeholder at the bottom.
     const parties = f.externalOrderId ? this.imports.noteParties(f.externalOrderId) : null;
@@ -413,7 +413,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (did) {
       // B2 — a customer's business that posted its own load is the sender, by its registered name.
       const business = this.entities?.byDid(did);
-      if (business?.kind === 'business') return { name: business.name, ...(business.business?.address ? { address: business.business.address } : {}), ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did };
+      if (business?.kind === 'business') return { name: business.name, ...(business.business?.address ? { address: business.business.address } : {}), ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did, ...(business.business?.gln ? { gln: business.business.gln } : {}) };
       // P1b — an order the FLEET uploaded under a contract: the sender is the shipper the contract names. The fleet
       // that typed it in is the carrier, never the sender of its own customer's goods.
       if (f.contract) return { name: f.contract.shipperName };
@@ -438,7 +438,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     }
     // Inbound, reading A: addressed by the receiver's own code — the business and its place, as the supplier was shown them.
     if (f.receiver) {
-      return { name: f.receiver.name, address: `${f.receiver.siteName}, by its receiving code${f.receiverRef ? ` — their order ${f.receiverRef}` : ''}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
+      return { name: f.receiver.name, address: `${f.receiver.siteName}, by its receiving code${f.receiverRef ? ` — their order ${f.receiverRef}` : ''}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.receiver.gln ? { gln: f.receiver.gln } : {}) };
     }
     // Named by the sender when it posted the load (box 2): who receives the goods, at the place of delivery.
     if (f.consignee) return { name: f.consignee.name, address: f.consignee.address ?? `At ${f.destLabel}; address not given by the sender`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
@@ -595,7 +595,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   htmlFor(n: ConsignmentNote): string {
     const e = escapeHtml;
     const party = (p: NoteParty | undefined, extra?: string) =>
-      p ? `<b>${e(p.name)}</b>${p.address ? `<br>${e(p.address)}` : '<br><span class="empty">Address not recorded</span>'}${p.country ? `<br>${e(p.country)}` : ''}${extra ? `<br>${extra}` : ''}${p.did ? `<br><span class="did">${e(p.did)}</span>` : ''}` : '<span class="empty">—</span>';
+      p ? `<b>${e(p.name)}</b>${p.address ? `<br>${e(p.address)}` : '<br><span class="empty">Address not recorded</span>'}${p.country ? `<br>${e(p.country)}` : ''}${p.gln ? `<br>GLN ${e(p.gln)}` : ''}${extra ? `<br>${extra}` : ''}${p.did ? `<br><span class="did">${e(p.did)}</span>` : ''}` : '<span class="empty">—</span>';
     const list = (xs: string[]) => (xs.length ? xs.map((x) => `<div>${e(x)}</div>`).join('') : '<span class="empty">None</span>');
     const box = (no: number | string, label: string, body: string, cls = '') => `<div class="box ${cls}"><div class="box__h"><span class="no">${no}</span>${e(label)}</div><div class="box__b">${body}</div></div>`;
     const conf = (c: ConsignmentNote['confirmations']['sender'] | undefined, missing: string) =>
@@ -655,7 +655,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(16, 'Carrier (name, address, country)', party(n.carrier, carrierExtra) || '')}
   ${box(2, 'Consignee (name, address, country)', party(n.consignee))}
   ${box(17, 'Successive carriers', n.successive?.length ? n.successive.map((s) => party(s, [s.driverName ? `Driver: ${e(s.driverName)}` : '', s.plate ? `Vehicle: ${e(s.plate)}${s.vehicleClass ? ` (${e(s.vehicleClass)})` : ''}` : '', s.takenOverAt ? `Took the goods over ${e(when(s.takenOverAt))}` : 'Has not yet taken the goods over', s.via ? `Passed on by ${e(s.via)}` : '', s.cover ? e(s.cover) : ''].filter(Boolean).join('<br>'))).join('<hr>') : '<span class="empty">None</span>')}
-  ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
+  ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.gln ? `<br>GLN ${e(n.delivery.gln)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
   ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}
   ${box(19, 'Special agreements', (n.agreements?.length ? list(n.agreements) : '') + (n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : n.agreements?.length ? '' : '<span class="empty">None</span>'))}

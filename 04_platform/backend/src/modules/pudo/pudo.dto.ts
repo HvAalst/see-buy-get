@@ -3109,6 +3109,11 @@ export class SiteLoadingDto {
   @ApiPropertyOptional({ type: Number, nullable: true }) @IsOptional() @IsInt() @Min(1) @Max(50) bays?: number | null;
 }
 
+/** 2026-11-09 — a place's Global Location Number (13 digits, from GS1); `null` or empty clears it. */
+export class SiteGlnDto {
+  @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(24) @ApiPropertyOptional({ type: String, nullable: true }) gln!: string | null;
+}
+
 /** Save a place this company will choose again — a port it collects from, or somewhere it delivers. */
 export class DeclareSiteDto {
   @IsOptional() @IsString() entityId?: string;

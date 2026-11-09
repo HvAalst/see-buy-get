@@ -1,6 +1,31 @@
-import { CODE128_PATTERNS, cleanPrefix, gs1CheckDigit, gs1_128SvgGroup, gs1_128Values, gs1_128Width, gs1_128Widths, isSscc, serialCapacity, ssccFromScan, ssccHumanReadable, ssccOf, ssccSpaced } from './gs1';
+import { CODE128_PATTERNS, cleanGln, cleanPrefix, glnProblem, gs1CheckDigit, gs1_128SvgGroup, gs1_128Values, gs1_128Width, gs1_128Widths, isSscc, serialCapacity, ssccFromScan, ssccHumanReadable, ssccOf, ssccSpaced } from './gs1';
 
 describe('GS1 — the global code on a package', () => {
+  describe('the GLN (2026-11-09)', () => {
+    const gln = (body: string) => `${body}${gs1CheckDigit(body)}`;
+    it('is 13 digits whose last is the check digit — spaces and dashes as typed dropped', () => {
+      expect(gln('871234567890')).toHaveLength(13);
+      expect(glnProblem(gln('871234567890'))).toBeUndefined();
+      expect(cleanGln(` ${gln('871234567890').slice(0, 7)}-${gln('871234567890').slice(7)} `)).toBe(gln('871234567890'));
+      expect(glnProblem(gln('061414100001'))).toBeUndefined(); // GS1 US — a leading 0 is a country, not padding
+      expect(glnProblem('87123456789')).toBe('digits');
+      expect(glnProblem('87123456789012')).toBe('digits');
+      expect(glnProblem(undefined)).toBe('digits');
+      const good = gln('616123456789');
+      expect(glnProblem(`${good.slice(0, 12)}${(Number(good[12]) + 1) % 10}`)).toBe('check');
+      expect(cleanGln(`${good.slice(0, 12)}${(Number(good[12]) + 1) % 10}`)).toBeUndefined();
+    });
+
+    it('refuses the ranges GS1 keeps for something other than locations', () => {
+      for (const body of ['021234567890', '029999999999', '041234567890', '051234567890', '201234567890', '299999999999', '951234567890', '952234567890', '961234567890', '977123456789', '978123456789', '979123456789', '980123456789', '991234567890']) {
+        expect([body, glnProblem(gln(body))]).toEqual([body, 'range']);
+      }
+      for (const body of ['011234567890', '031234567890', '061234567890', '191234567890', '300123456789', '871234567890', '950123456789', '953123456789', '959123456789', '970123456789', '976123456789']) {
+        expect([body, glnProblem(gln(body))]).toEqual([body, undefined]);
+      }
+    });
+  });
+
   describe('the check digit', () => {
     it('is the published one for GTINs and for the SSCCs in the GS1 specifications', () => {
       expect(gs1CheckDigit('400638133393')).toBe(1); // GTIN-13 4006381333931

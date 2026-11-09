@@ -12167,6 +12167,53 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/sites/{siteId}/gln": {
+      "post": {
+        "operationId": "Sbg.setSiteGln",
+        "summary": "",
+        "description": "2026-11-09 — A place's Global Location Number, from GS1: printed as the place on its notes and as the ship-to on the\nlabels of goods sent there. The company's alone to change: staff read it, and change none of it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteGlnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/road-leg": {
       "post": {
         "operationId": "Sbg.mintImportRoadLeg",
@@ -57097,6 +57144,16 @@
           }
         }
       },
+      "SiteGlnDto": {
+        "type": "object",
+        "properties": {
+          "gln": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 24
+          }
+        }
+      },
       "MintRoadLegDto": {
         "type": "object",
         "properties": {
@@ -65035,6 +65092,10 @@
           },
           "address": {
             "type": "string"
+          },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — its GLN as it was when the load was made."
           }
         },
         "required": [
@@ -65082,6 +65143,13 @@
             "description": "The business's name, and the place's: what the supplier was shown, and what goes on the note."
           },
           "siteName": {
+            "type": "string"
+          },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — the business's GLN and its place's, as they were when the load was posted: on the note and the labels."
+          },
+          "siteGln": {
             "type": "string"
           }
         },
@@ -76090,6 +76158,10 @@
                 "$ref": "#/components/schemas/BusinessGs1View"
               }
             ]
+          },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — its Global Location Number, from GS1, when it gave one."
           }
         },
         "required": [
@@ -76226,6 +76298,12 @@
               ]
             }
           },
+          "gln": {
+            "type": "string",
+            "nullable": true,
+            "description": "2026-11-09 — its Global Location Number (13 digits, from GS1). `null` or empty: it has none.",
+            "maxLength": 24
+          },
           "name": {
             "type": "string",
             "maxLength": 120
@@ -76287,6 +76365,11 @@
             "type": "string",
             "maxLength": 120
           },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — the client's Global Location Number, from GS1, where it has one: it is the sender on the notes.",
+            "maxLength": 24
+          },
           "country": {
             "type": "string",
             "maxLength": 2
@@ -76340,6 +76423,10 @@
           "contactEmail": {
             "type": "string"
           },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — its Global Location Number, from GS1, as the expeditor entered it."
+          },
           "createdBy": {
             "type": "string"
           },
@@ -76376,6 +76463,11 @@
           "name": {
             "type": "string",
             "maxLength": 120
+          },
+          "gln": {
+            "type": "string",
+            "description": "2026-11-09 — its GLN; empty: it has none.",
+            "maxLength": 24
           },
           "country": {
             "type": "string",
@@ -76621,6 +76713,10 @@
           "companyPrefix": {
             "type": "string",
             "description": "The prefix they were given under."
+          },
+          "shipToGln": {
+            "type": "string",
+            "description": "2026-11-09 — the ship-to GLN (AI 410) the labels carry as a barcode: the place's, or the receiver's own."
           }
         },
         "required": [

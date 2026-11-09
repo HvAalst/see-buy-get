@@ -99,7 +99,8 @@ export class LoadPostingService {
     const site = this.sites?.byReceivingCode(code);
     const entity = site ? this.entities?.find(site.entityId) : undefined;
     if (!site || !entity) throw new GlosError('INVALID_INPUT', `No receiving point has the code “${code.trim()}”. Check it with the business you are sending to: it gave you the code.`, { field: 'receivingPoint' });
-    return { receiver: { entityId: entity.entityId, siteId: site.siteId, name: entity.name, siteName: site.name }, name: entity.name, siteName: site.name, location: site.location };
+    const glns = { ...(entity.business?.gln ? { gln: entity.business.gln } : {}), ...(site.gln ? { siteGln: site.gln } : {}) };
+    return { receiver: { entityId: entity.entityId, siteId: site.siteId, name: entity.name, siteName: site.name, ...glns }, name: entity.name, siteName: site.name, location: site.location };
   }
 
   /** The client an expeditor sends for — one of its own, or nobody's. */

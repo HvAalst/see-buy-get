@@ -18,6 +18,8 @@ export interface NoteParty {
   country?: string;
   /** The network identity behind the name, for the parties' own systems. Never a phone or an email. */
   did?: string;
+  /** 2026-11-09 — its Global Location Number, from GS1, where it gave one. */
+  gln?: string;
 }
 
 export interface NoteConfirmation {
@@ -58,7 +60,8 @@ export interface ConsignmentNote {
   /** Box 2 */
   consignee: NoteParty;
   /** Box 3 — place of delivery. */
-  delivery: { place: string; country?: string; at?: string };
+  /** 2026-11-09 — `gln`: the place's GLN, where the receiver gave one for it. */
+  delivery: { place: string; country?: string; at?: string; gln?: string };
   /** Box 4 — place and date of taking over. */
   takingOver: { place: string; country?: string; at?: string };
   /** Box 5 — documents attached. */

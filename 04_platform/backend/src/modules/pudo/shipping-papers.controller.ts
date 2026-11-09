@@ -55,7 +55,15 @@ export class ShippingPapersController {
       ...(f.packages ? { packages: f.packages } : {}),
       codes: issued?.codes ?? [],
       ...(issued ? { companyPrefix: issued.companyPrefix } : {}),
+      ...this.shipToOf(f),
     };
+  }
+
+  /** 2026-11-09 — the ship-to GLN on the labels: the place it is delivered to, where the receiver gave one, else the receiver's. */
+  private shipToOf(f: Freight): { shipToGln?: string } {
+    const note = this.notes.noteFor(f.freightId);
+    const gln = note.delivery.gln ?? note.consignee.gln;
+    return gln ? { shipToGln: gln } : {};
   }
 
   /** The labels as a printable page: one 100 × 150 mm label a package. */
@@ -92,8 +100,10 @@ export class ShippingPapersController {
       description: f.description,
       ...(f.trackingKey ? { trackingKey: f.trackingKey } : {}),
       ...(note.trackingUrl ? { trackingUrl: note.trackingUrl } : {}),
-      from: { name: note.sender.name, place: f.pickupLabel, ...(note.takingOver.country ? { country: note.takingOver.country } : {}) },
-      to: { name: note.consignee.name, place: f.destLabel, ...(note.delivery.country ? { country: note.delivery.country } : {}) },
+      from: { name: note.sender.name, place: f.pickupLabel, ...(note.takingOver.country ? { country: note.takingOver.country } : {}), ...(note.sender.gln ? { gln: note.sender.gln } : {}) },
+      to: { name: note.consignee.name, place: f.destLabel, ...(note.delivery.country ? { country: note.delivery.country } : {}), ...(note.consignee.gln ? { gln: note.consignee.gln } : {}) },
+      // 2026-11-09 — the ship-to (AI 410): the place's GLN where the receiver gave one, else the receiver's own.
+      ...this.shipToOf(f),
       ...(f.packages ? { packages: f.packages } : {}),
       codes: issued?.codes ?? [],
       ...(issued ? { companyPrefixLength: issued.companyPrefix.length } : {}),

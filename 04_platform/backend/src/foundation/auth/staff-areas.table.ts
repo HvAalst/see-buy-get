@@ -782,6 +782,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/entities/:entityId/price-cards/:version/withdraw': 'admin',
   'POST sbg/entities/:entityId/sites': 'support',
   'POST sbg/entities/:entityId/sites/:siteId/loading': 'none',
+  'POST sbg/entities/:entityId/sites/:siteId/gln': 'none',
   'POST sbg/entities/:entityId/tax': 'admin',
   'POST sbg/entities/:entityId/top-up-fee': 'admin',
   'POST sbg/field-observations': 'admin',

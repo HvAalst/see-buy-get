@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
+import { cleanGln, glnProblem, glnRefusal } from '../../foundation/gs1/gs1';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { BusinessClient } from './business-client.types';
@@ -14,6 +15,14 @@ export const MAX_CLIENTS = 2000;
  * Every read and write is scoped to the business that keeps it. Another business asking for a client id that is not
  * in its own book is told there is no such client — the same answer as for one that never existed.
  */
+/** A GLN as typed, checked: its 13 digits, nothing for empty, refused in words otherwise. */
+function glnOf(raw: string | undefined): string | undefined {
+  if (!raw || !raw.trim()) return undefined;
+  const gln = cleanGln(raw);
+  if (!gln) throw new GlosError('VALIDATION_FAILED', glnRefusal(glnProblem(raw)!), { field: 'gln' });
+  return gln;
+}
+
 @Injectable()
 export class BusinessClientService {
   private readonly clients = new PersistentMap<string, BusinessClient>('business-clients');
@@ -32,8 +41,9 @@ export class BusinessClientService {
     return c;
   }
 
-  add(entityId: string, input: Partial<Pick<BusinessClient, 'name' | 'country' | 'address' | 'contactName' | 'contactPhone' | 'contactEmail'>>, by: string, now = Date.now()): BusinessClient {
+  add(entityId: string, input: Partial<Pick<BusinessClient, 'name' | 'country' | 'address' | 'contactName' | 'contactPhone' | 'contactEmail' | 'gln'>>, by: string, now = Date.now()): BusinessClient {
     const name = input.name?.trim();
+    const gln = glnOf(input.gln);
     if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the client’s name — it goes on the consignment note as the sender', { field: 'name' });
     const country = this.country(input.country);
     if (this.list(entityId).some((c) => c.name.toLowerCase() === name.toLowerCase() && (c.country ?? '') === (country ?? ''))) {
@@ -46,6 +56,7 @@ export class BusinessClientService {
       name: name.slice(0, 120),
       ...(country ? { country } : {}),
       ...this.contact(input),
+      ...(gln ? { gln } : {}),
       createdBy: by,
       createdAt: new Date(now).toISOString(),
     };
@@ -53,9 +64,15 @@ export class BusinessClientService {
     return client;
   }
 
-  update(entityId: string, clientId: string, patch: Partial<Pick<BusinessClient, 'name' | 'country' | 'address' | 'contactName' | 'contactPhone' | 'contactEmail'>>): BusinessClient {
+  update(entityId: string, clientId: string, patch: Partial<Pick<BusinessClient, 'name' | 'country' | 'address' | 'contactName' | 'contactPhone' | 'contactEmail' | 'gln'>>): BusinessClient {
     const c = this.clients.get(clientId);
     if (!c || c.entityId !== entityId) throw new GlosError('NOT_FOUND', 'No such client in your book');
+    // 2026-11-09 — its GLN, checked before anything is changed; empty clears it.
+    const gln = patch.gln !== undefined ? glnOf(patch.gln) : undefined;
+    if (patch.gln !== undefined) {
+      if (gln) c.gln = gln;
+      else delete c.gln;
+    }
     if (patch.name !== undefined) {
       const name = patch.name.trim();
       if (!name) throw new GlosError('FIELD_REQUIRED', 'A client needs a name', { field: 'name' });

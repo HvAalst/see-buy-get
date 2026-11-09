@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { checkAddress, formatAddress, type AddressParts } from '../../foundation/countries/address-format';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
+import { cleanGln, glnProblem, glnRefusal } from '../../foundation/gs1/gs1';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -173,6 +174,7 @@ export class BusinessService {
       ...(p.taxNo ? { taxNo: p.taxNo } : {}),
       ...(p.address ? { address: p.address } : {}),
       ...(p.address && p.addressParts ? { addressParts: p.addressParts } : {}),
+      ...(p.gln ? { gln: p.gln } : {}),
       check: {
         state: p.verification.state,
         ...(p.verification.askedAt ? { askedAt: p.verification.askedAt } : {}),
@@ -210,10 +212,18 @@ export class BusinessService {
    * a verified "Acme Ltd" renamed to something else is not something anybody verified. Its public address, once issued,
    * does not move (a handle never follows a rename).
    */
-  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: string[] }): Entity {
+  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: string[]; gln?: string | null }): Entity {
     this.requireOwner(acting);
     const entity = acting.entity;
     const p = entity.business!;
+    // 2026-11-09 — ITS GLN, checked before anything is written: the shape GS1 gives one, and no other business here using
+    // it — two companies printing one number would send a warehouse's goods to the wrong one.
+    const glnTyped = patch.gln === undefined ? undefined : (patch.gln ?? '').trim();
+    const gln = glnTyped === undefined ? undefined : glnTyped ? cleanGln(glnTyped) : null;
+    if (glnTyped && !gln) throw new GlosError('VALIDATION_FAILED', glnRefusal(glnProblem(glnTyped)!), { field: 'gln' });
+    if (gln && this.entities.businesses().some((b) => b.entityId !== entity.entityId && b.business?.gln === gln)) {
+      throw new GlosError('CONFLICT', `Another business on SeeBuyGet gives GLN ${gln} as its own. Check the number; if it is yours, tell us through Help.`, { field: 'gln' });
+    }
     const name = patch.name !== undefined ? patch.name.trim() : undefined;
     if (name !== undefined && !name) throw new GlosError('FIELD_REQUIRED', 'A business needs its name', { field: 'name' });
     const registrationNo = patch.registrationNo !== undefined ? patch.registrationNo.trim() : undefined;
@@ -229,6 +239,7 @@ export class BusinessService {
       // Where it is: not something staff checked, so changing it leaves the check as it stands.
       ...(address !== undefined ? { address: address?.trim().slice(0, 600) || undefined, addressParts: parts } : {}),
       ...(patch.activities !== undefined ? { activities: cleanActivities(patch.activities) } : {}),
+      ...(gln !== undefined ? { gln: gln ?? undefined } : {}),
       ...(identityChanged && p.verification.state !== 'unverified' ? { verification: { state: 'unverified' as const } } : {}),
     };
     return this.entities.updateBusiness(entity.entityId, { ...(name !== undefined ? { name } : {}), profile }, acting.member.name);

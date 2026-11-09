@@ -535,6 +535,9 @@ export class InboundReceiver {
   /** The business's name, and the place's: what the supplier was shown, and what goes on the note. */
   name: string;
   siteName: string;
+  /** 2026-11-09 — the business's GLN and its place's, as they were when the load was posted: on the note and the labels. */
+  gln?: string;
+  siteGln?: string;
 }
 
 /**

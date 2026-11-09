@@ -39,6 +39,8 @@ export class UpdateBusinessDto {
    */
   @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => AddressPartsDto) @ApiPropertyOptional({ type: () => AddressPartsDto, nullable: true }) addressParts?: AddressPartsDto | null;
   @IsOptional() @ApiPropertyOptional({ enum: BUSINESS_ACTIVITIES, isArray: true }) @IsArray() @ArrayMaxSize(BUSINESS_ACTIVITIES.length) @IsString({ each: true }) activities?: string[];
+  /** 2026-11-09 — its Global Location Number (13 digits, from GS1). `null` or empty: it has none. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(24) @ApiPropertyOptional({ nullable: true }) gln?: string | null;
 }
 
 /** The business's GS1 company prefix, and the extension digit it sets aside for labels printed here. */
@@ -62,6 +64,8 @@ export class MemberRoleDto {
 /** B4 — a client in an expeditor's book. */
 export class BusinessClientDto {
   @IsString() @MaxLength(120) name!: string;
+  /** 2026-11-09 — the client's Global Location Number, from GS1, where it has one: it is the sender on the notes. */
+  @IsOptional() @IsString() @MaxLength(24) gln?: string;
   @IsOptional() @IsString() @MaxLength(2) country?: string;
   @IsOptional() @IsString() @MaxLength(200) address?: string;
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;
@@ -71,6 +75,8 @@ export class BusinessClientDto {
 
 export class UpdateBusinessClientDto {
   @IsOptional() @IsString() @MaxLength(120) name?: string;
+  /** 2026-11-09 — its GLN; empty: it has none. */
+  @IsOptional() @IsString() @MaxLength(24) gln?: string;
   @IsOptional() @IsString() @MaxLength(2) country?: string;
   @IsOptional() @IsString() @MaxLength(200) address?: string;
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;

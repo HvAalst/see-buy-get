@@ -9,6 +9,7 @@ import { baysOf, DAY_NAME, loadsLine, WEEK, weekForm, type SiteWeek, type WeekFo
 import type { BusinessActions } from '../useBusinessApp';
 import { ACTIVITY_LABEL, ACTIVITY_SUB } from './ChooseScreen';
 import { Gs1Panel } from './Gs1Panel';
+import { GlnField } from './GlnField';
 import { SystemPanel } from './SystemPanel';
 import { KeysPanel } from './KeysPanel';
 import { DirectoryPanel } from './DirectoryPanel';
@@ -64,6 +65,14 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
     setKeepsHours(Boolean(s.loading?.hours));
     setWeek(weekForm(s.loading?.hours as SiteWeek | undefined));
     setPlaceError(null);
+  };
+  /** 2026-11-09 — a place's GLN, given or cleared; the list read again. */
+  const saveGln = async (siteId: string, gln: string | null) => {
+    if (!client) return { error: null };
+    const api = client.api as never as { setSiteGln: (entityId: string, siteId: string, gln: string | null) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }> };
+    const r = await api.setSiteGln(business.entityId, siteId, gln);
+    if (!r.error) void loadSites();
+    return r;
   };
   const saveLoading = async (siteId: string) => {
     if (!client) return;
@@ -256,6 +265,8 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                   <span class="crow__sub">{s.from === 'pin' ? t('tower.sites.fromPin') : t('tower.sites.fromAddress', { address: s.address ?? '' })}</span>
                   {/* WHEN GOODS ARE LOADED HERE: a place of its own only, and its own word — read by its carriers' plans. */}
                   {s.kind === 'delivery' ? <span class="crow__sub">{loadsLine({ loadingBays: s.loading?.bays, hours: s.loading?.hours as SiteWeek | undefined }, t) ?? t('business.places.noLoading')}</span> : null}
+                  {/* 2026-11-09 — the place's GLN: printed as the place on notes, and the ship-to on labels of goods sent here. */}
+                  <GlnField id={`place-gln-${s.siteId}`} value={s.gln} may={works && Boolean(client)} none={t('business.places.gln.none')} setKey="business.places.gln.set" hint={t('business.places.gln.hint')} onSave={(gln) => saveGln(s.siteId, gln)} onSaved={(said) => actions.say(said)} />
                   {loadingOf === s.siteId ? (
                     <div style="margin-top:10px">
                       <span class="chint">{t('business.places.loadingHint')}</span>

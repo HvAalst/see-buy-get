@@ -66,6 +66,8 @@ export interface BusinessProfile {
   address?: string;
   /** The same address in its country's parts, where it was given that way (2026-11-01); `address` is its printed line. */
   addressParts?: AddressParts;
+  /** 2026-11-09 — its Global Location Number, from GS1, where it has one: on its consignment notes and package labels. */
+  gln?: string;
   createdBy: string;
   createdByPersonDid: string;
   verification: BusinessVerification;

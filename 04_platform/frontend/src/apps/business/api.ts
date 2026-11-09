@@ -121,6 +121,8 @@ export interface BusinessView {
   you: MemberRow;
   /** Its GS1 company prefix, when it gave one: its packages then carry SSCCs beside our code. */
   gs1?: Gs1View;
+  /** 2026-11-09 — its Global Location Number, from GS1, when it gave one. */
+  gln?: string;
 }
 
 export interface BusinessSession {
@@ -187,6 +189,8 @@ export interface Client {
   archivedAt?: string;
   /** Round 20 — the client's own GS1 prefix, entered by the forwarder. */
   gs1?: Gs1View;
+  /** 2026-11-09 — the client's GLN, entered by the forwarder: it is the sender on the notes. */
+  gln?: string;
 }
 export interface ClientRef {
   clientId: string;
@@ -391,7 +395,7 @@ export interface BusinessClient {
   bookingQuote(departureId: string, bookingId: string): Promise<Result<{ quote: QuoteView | null }>>;
   recordBookingQuote(departureId: string, bookingId: string, body: { amount?: number; currency?: string; reference?: string; note?: string }): Promise<Result<QuoteView>>;
   me(): Promise<Result<BusinessView>>;
-  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
+  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: BusinessActivity[]; gln?: string | null }): Promise<Result<BusinessView>>;
   /** The parts an address in this country has, for the form (2026-11-01). */
   addressFormat(country: string): Promise<Result<AddressFormat>>;
   /** Every country, by its name. */
@@ -404,6 +408,8 @@ export interface BusinessClient {
   clients(archived?: boolean): Promise<Result<{ items: Client[] }>>;
   addClient(input: Omit<Client, 'clientId' | 'createdBy' | 'createdAt' | 'archivedAt'>): Promise<Result<Client>>;
   archiveClient(clientId: string, archived: boolean): Promise<Result<Client>>;
+  /** 2026-11-09 — a client's record changed: its GLN (empty clears it). */
+  updateClient(clientId: string, patch: { gln?: string }): Promise<Result<Client>>;
   /** Round 20 — the client's own GS1 prefix (owner only): its loads' packages are coded under it. */
   setClientGs1(clientId: string, companyPrefix: string, extensionDigit: number): Promise<Result<Client>>;
   clearClientGs1(clientId: string): Promise<Result<Client>>;
@@ -494,6 +500,7 @@ export function createBusinessClient(): BusinessClient {
     askForCheck: () => call((c) => c.POST('/v1/sbg/business/me/check' as never, {} as never) as never),
     clients: (archived) => call((c) => c.GET('/v1/sbg/business/me/clients' as never, { params: { query: archived ? { archived: 'true' } : {} } } as never) as never),
     addClient: (input) => call((c) => c.POST('/v1/sbg/business/me/clients' as never, { body: input } as never) as never),
+    updateClient: (clientId, patch) => call((c) => c.PATCH(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}` as never, { body: patch } as never) as never),
     archiveClient: (clientId, archived) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/archive` as never, { body: { archived } } as never) as never),
     setClientGs1: (clientId, companyPrefix, extensionDigit) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearClientGs1: (clientId) => call((c) => c.DELETE(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, {} as never) as never),

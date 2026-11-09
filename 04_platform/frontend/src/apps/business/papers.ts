@@ -18,6 +18,8 @@ export interface PackageLabels {
   packages?: number;
   codes: string[];
   companyPrefix?: string;
+  /** 2026-11-09 — the ship-to GLN the labels carry as a barcode. */
+  shipToGln?: string;
 }
 
 export interface InvoiceParty {

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { cleanGln, glnProblem, glnRefusal } from '../../foundation/gs1/gs1';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'node:crypto';
 import { GeoPoint } from './pudo.types';
@@ -46,6 +47,12 @@ export interface Site {
    * Absent: it does not receive here through SeeBuyGet. See SiteService.openReceiving.
    */
   receiving?: { code: string; since: string; by: string };
+  /**
+   * 2026-11-09 — THE PLACE'S GLOBAL LOCATION NUMBER, from GS1, where it has one: the company's own for its own places, the
+   * port's or the yard's for theirs, as the company knows it. Printed as the place on its notes, and as the ship-to on
+   * the labels of the goods sent there.
+   */
+  gln?: string;
 }
 
 /** Letters and digits nobody mistakes for one another on a phone or a delivery note: no I, L, O, 0 or 1. */
@@ -155,6 +162,24 @@ export class SiteService {
       createdBy: by,
       createdAt: new Date(now).toISOString(),
     };
+    this.sites.set(site.siteId, site);
+    return site;
+  }
+
+  /**
+   * 2026-11-09 — A PLACE'S GLN, set or cleared (null or empty). Checked before anything is written: its shape, and not
+   * already another of this company's places — one number, one place. Another company may know the same port by it.
+   */
+  setGln(entityId: string, siteId: string, raw: string | null, by: string, now = Date.now()): Site {
+    const site = this.require(entityId, siteId);
+    const gln = raw && raw.trim() ? cleanGln(raw) : undefined;
+    if (raw && raw.trim() && !gln) throw new GlosError('VALIDATION_FAILED', glnRefusal(glnProblem(raw)!), { field: 'gln' });
+    const twin = gln ? this.list(entityId).find((s) => s.siteId !== siteId && s.gln === gln) : undefined;
+    if (twin) throw new GlosError('CONFLICT', `Your place “${twin.name}” already has GLN ${gln}: one number names one place`, { field: 'gln' });
+    if (gln) site.gln = gln;
+    else delete site.gln;
+    void by;
+    void now;
     this.sites.set(site.siteId, site);
     return site;
   }

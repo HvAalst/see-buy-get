@@ -1,8 +1,8 @@
-import { isSscc, ssccOf } from '../../foundation/gs1/gs1';
+import { gs1CheckDigit, gs1_128SvgGroup, gs1_128Width, isSscc, ssccOf } from '../../foundation/gs1/gs1';
 import { Entity } from '../../foundation/entity/entity.types';
 import { CommercialInvoiceService, InvoiceInput, cleanHsCode, crossesBorder, hsDisplay } from './commercial-invoice.service';
 import { Freight } from './dispatch.types';
-import { packageLabelsHtml } from './package-labels';
+import { packageLabelsHtml, packageLabelsZpl } from './package-labels';
 import { ShipperCodesService, vendorCoder, vendorOfCoder, whereGs1IsSet } from './shipper-codes.service';
 
 const business = (over: Partial<Entity> = {}): Entity => ({ entityId: 'biz-jenga', did: 'did:glos:biz-jenga', kind: 'business', name: 'Jenga Bricks Ltd', jurisdiction: 'KE', business: { activities: ['shipper'], registrationNo: 'PVT-1', taxNo: 'P051234567X', createdBy: 'Achieng', createdByPersonDid: 'did:p', verification: { state: 'verified' } }, createdAt: '2026-10-01T00:00:00Z', ...over }) as unknown as Entity;
@@ -220,6 +220,31 @@ describe('the package labels', () => {
     expect(html).toContain('@page { size: 100mm 150mm; margin: 0; }');
     // The papers are said once, on the package the pouch is on.
     expect((html.match(/In the pouch/g) ?? []).length).toBe(1);
+  });
+
+  it('carries the sender’s and receiver’s GLNs, and the ship-to as its own barcode above a shorter SSCC — both on the label (2026-11-09)', () => {
+    const gln = (body: string) => `${body}${gs1CheckDigit(body)}`;
+    const from = gln('871111111111');
+    const to = gln('871222222222');
+    const shipTo = gln('871333333333');
+    const sscc = ssccOf('6161234', 3, 0);
+    const html = packageLabelsHtml({ ...base, from: { ...base.from, gln: from }, to: { ...base.to, gln: to }, shipToGln: shipTo, packages: 1, codes: [sscc], companyPrefixLength: 7 });
+    expect(html).toContain(`GLN ${from}`);
+    expect(html).toContain(`GLN ${to}`);
+    const at = (digits: string, y: number, h: number) => gs1_128SvgGroup(digits, (100 - gs1_128Width(digits, 0.5)) / 2, y, 0.5, h);
+    // The ship-to's bars, 12 mm from 95 mm; the SSCC's 22 mm from 119.5 mm — ending above its line at 146 mm.
+    expect(html).toContain(at(`410${shipTo}`, 95, 12));
+    expect(html).toContain(at(`00${sscc}`, 119.5, 22));
+    expect(html).toContain(`(410) ${shipTo}`);
+    // With no SSCC, the ship-to's bars are the tall ones; with no ship-to, the label as it always was.
+    expect(packageLabelsHtml({ ...base, shipToGln: shipTo, codes: [] })).toContain(at(`410${shipTo}`, 95, 36));
+    const plain = packageLabelsHtml({ ...base, packages: 1, codes: [sscc], companyPrefixLength: 7 });
+    expect(plain).toContain(at(`00${sscc}`, 113, 28));
+    expect(plain).not.toContain('SHIP TO');
+    // The thermal printer gets the same two barcodes.
+    const zpl = packageLabelsZpl({ ...base, shipToGln: shipTo, packages: 1, codes: [sscc], companyPrefixLength: 7 });
+    expect(zpl).toContain(`>;>8410${shipTo}`);
+    expect(zpl).toContain(`>;>800${sscc}`);
   });
 
   it('is ours alone without a shipper’s GS1 codes, and one label for a load whose packages were not counted', () => {

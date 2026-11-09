@@ -624,6 +624,10 @@ export function createOperatorApi(sbg: SbgClient) {
     setSiteLoading: (entityId: string, siteId: string, body: { hours?: Record<string, { open: string; close: string } | null> | null; bays?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites/{siteId}/loading', { params: { path: { entityId, siteId } }, body: body as never } as never)),
 
+    /** 2026-11-09 — a place's GLN, from GS1; null clears it. The company's own: staff are refused. */
+    setSiteGln: (entityId: string, siteId: string, gln: string | null) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites/{siteId}/gln', { params: { path: { entityId, siteId } }, body: { gln } as never } as never)),
+
     /** Save one. A dropped pin or an address to resolve — never both, because the toggle is the answer. */
     declareSite: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites', { params: { path: { entityId } }, body: body as never })),

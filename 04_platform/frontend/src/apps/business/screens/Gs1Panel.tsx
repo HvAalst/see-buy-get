@@ -7,6 +7,7 @@ import { PREFIX_TAKEN, disputeLine, maySendLicence, mayTakeBack, stillWorthShowi
 import { cleanPrefix, gs1Line } from '../papers';
 import type { BusinessActions } from '../useBusinessApp';
 import { ConsolePick } from '../../tower/ConsolePick';
+import { GlnField } from './GlnField';
 
 /**
  * THE BUSINESS'S GS1 COMPANY PREFIX — what puts the global barcode on its packages beside our code.
@@ -141,6 +142,24 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
       {disputes.map((d) => (
         <DisputeLine key={d.disputeId} d={d} client={client} owner={owner} onChanged={() => void loadDisputes()} />
       ))}
+      {/* 2026-11-09 — its Global Location Number: who it is, on its notes and labels. */}
+      <div style="margin-top:16px">
+        <span class="cfield__label">{t('business.gln.label')}</span>
+        <GlnField
+          id="biz-gln"
+          value={business.gln}
+          may={owner && Boolean(client)}
+          none={t('business.gln.none')}
+          setKey="business.gln.set"
+          lede={t('business.gln.lede')}
+          onSave={async (gln) => {
+            const r = await client!.update({ gln });
+            if (r.data) actions.setBusiness(r.data);
+            return r;
+          }}
+          onSaved={(said) => actions.say(said)}
+        />
+      </div>
     </section>
   );
 }

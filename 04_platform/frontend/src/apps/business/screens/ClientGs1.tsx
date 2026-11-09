@@ -6,6 +6,7 @@ import { PREFIX_TAKEN } from '../gs1Dispute';
 import { cleanPrefix, gs1Line } from '../papers';
 import { ClaimPrefix } from './Gs1Panel';
 import { ConsolePick } from '../../tower/ConsolePick';
+import { GlnField } from './GlnField';
 
 /**
  * Round 20 — A CLIENT'S OWN GS1 PREFIX ("A client's own GS1 prefix"; "The forwarder, on the client's record").
@@ -125,6 +126,24 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
           {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         </>
       )}
+      {/* 2026-11-09 — the client's Global Location Number: the sender's on the loads sent for them. */}
+      <div style="margin-top:16px">
+        <span class="cfield__label">{t('business.gln.label')}</span>
+        <GlnField
+          id={`client-gln-${row.clientId}`}
+          value={row.gln}
+          may={owner && Boolean(client)}
+          none={t('business.clients.gln.none', { name: row.name })}
+          setKey="business.clients.gln.set"
+          lede={t('business.clients.gln.lede', { name: row.name })}
+          onSave={async (gln) => {
+            const r = await client!.updateClient(row.clientId, { gln: gln ?? '' });
+            if (r.data) onRow(r.data);
+            return r;
+          }}
+          onSaved={setSaid}
+        />
+      </div>
     </section>
   );
 }

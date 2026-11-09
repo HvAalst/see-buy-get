@@ -62,6 +62,39 @@ export function isSscc(s: string | undefined | null): boolean {
   return typeof s === 'string' && /^\d{18}$/.test(s) && gs1CheckDigit(s.slice(0, 17)) === Number(s[17]);
 }
 
+/**
+ * 2026-11-09 — A GLOBAL LOCATION NUMBER (GLN): 13 digits naming a company or one of its places, the last the check digit.
+ * Like a prefix, it is GS1's to give and the holder's to use — we check its shape, never whose it is. Refused: a number
+ * from a range GS1 keeps for something else (restricted circulation 020–029, 040–049 and 200–299; coupons 050–059 and
+ * 981–999; general manager numbers and demonstrations 951–952; GTIN-8 offices 960–969; ISSN 977; ISBN 978–979; refund
+ * receipts 980).
+ */
+export type GlnProblem = 'digits' | 'check' | 'range';
+
+const GLN_NOT_FROM = [[20, 29], [40, 59], [200, 299], [951, 952], [960, 969], [977, 999]] as const;
+
+export function glnProblem(raw: string | undefined | null): GlnProblem | undefined {
+  const digits = String(raw ?? '').replace(/[\s-]/g, '');
+  if (!/^\d{13}$/.test(digits)) return 'digits';
+  if (gs1CheckDigit(digits.slice(0, 12)) !== Number(digits[12])) return 'check';
+  // The first three digits say the range: "020" is 20.
+  const three = Number(digits.slice(0, 3));
+  if (GLN_NOT_FROM.some(([lo, hi]) => three >= lo && three <= hi)) return 'range';
+  return undefined;
+}
+
+/** The 13 digits of a GLN as typed — spaces and dashes dropped — or nothing when it is not one. */
+export function cleanGln(raw: string | undefined | null): string | undefined {
+  return glnProblem(raw) ? undefined : String(raw).replace(/[\s-]/g, '');
+}
+
+/** Why a GLN was refused, in words a person can act on. */
+export function glnRefusal(problem: GlnProblem): string {
+  if (problem === 'digits') return 'A GLN is 13 digits';
+  if (problem === 'check') return 'That GLN’s last digit does not match the rest: check it against your GS1 papers';
+  return 'That number is from a range GS1 keeps for something other than locations: it is not a GLN';
+}
+
 /** The line printed under the barcode, the way GS1 writes it: the application identifier in brackets, then the data. */
 export function ssccHumanReadable(sscc: string): string {
   return `(00) ${sscc}`;
