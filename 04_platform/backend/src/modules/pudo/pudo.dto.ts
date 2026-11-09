@@ -3110,6 +3110,15 @@ export class SiteLoadingDto {
 }
 
 /** 2026-11-09 — a place's Global Location Number (13 digits, from GS1); `null` or empty clears it. */
+/** 2026-11-09 — SeeBuyGet's own GS1 prefix as the server has it, and the location numbers given under it. */
+export class OurGs1StatusView {
+  @ApiPropertyOptional({ description: 'SeeBuyGet’s GS1 company prefix; absent where the server has none set' }) prefix?: string;
+  @ApiProperty({ description: 'Location numbers (GLN) given under it, retired ones included: never given again' }) used!: number;
+  @ApiProperty({ description: 'How many it holds (0 without a prefix)' }) capacity!: number;
+  @ApiProperty({ description: 'Places numbered now' }) live!: number;
+  @ApiPropertyOptional({ description: 'No numbers left: new places wait' }) full?: boolean;
+}
+
 export class SiteGlnDto {
   @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(24) @ApiPropertyOptional({ type: String, nullable: true }) gln!: string | null;
 }

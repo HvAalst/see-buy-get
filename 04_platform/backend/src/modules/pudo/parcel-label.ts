@@ -10,7 +10,7 @@ import type { Parcel } from './pudo.types';
  * Round 29 — a store's parcel with its SSCC (the store's GS1 prefix) carries GS1's part at the foot, as a business's
  * package label does: the code as a person reads it, and as the printer's own GS1-128.
  */
-export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'customs' | 'trackingKey' | 'direction' | 'sscc'>, created: string, destShop?: string, prefixLength = 7): string {
+export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'customs' | 'trackingKey' | 'direction' | 'sscc'>, created: string, destShop?: string, prefixLength = 7, destGln?: string): string {
   const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const qrPayload = `sbg:parcel:${parcel.parcelId}`;
   const f: string[] = [];
@@ -25,6 +25,8 @@ export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'c
   f.push(zplText(46, 42, 3, `Created ${created}`));
   // A parcel crossing a border carries its papers: said where the counter and the border post look first (round 13).
   if (parcel.customs) f.push(zplText(46, 49, 3, 'Customs papers in the pouch'));
+  // 2026-11-09 — the collection point's GS1 location number, given by SeeBuyGet.
+  if (destGln) f.push(zplText(46, 55.5, 3, `To GLN ${destGln}`));
   f.push(zplBox(0, 59.75, 100, 0.5));
   f.push(zplText(4, 67, 2.6, 'PARCEL'));
   f.push(zplText(4, 76, 6, cut(parcel.parcelId, 24), { wide: true }));

@@ -2406,6 +2406,10 @@ export const enTowerNetwork = {
   'tower.network.fleets.systemNone': 'No system of its own set up.',
   'tower.network.fleets.systemCounts': 'Its system: {delivered} arrived · {waiting} waiting · {givenUp} given up.',
   'tower.network.fleets.systemPositions': 'Sends where its vehicles are.',
+  'tower.network.gln': 'GLN {gln}',
+  'tower.network.gs1.none': 'No GS1 company prefix of SeeBuyGet’s own on the server yet: hubs and collection points get their location numbers (GLN) once the owner sets it in the server’s settings (SBG_GS1_PREFIX).',
+  'tower.network.gs1.set': 'SeeBuyGet’s GS1 company prefix {prefix}: {used, plural, one {# location number (GLN) given} other {# location numbers (GLN) given}} of {capacity}, {live} in use. Each approved hub and collection point has one; a place that moves gets a new one.',
+  'tower.network.gs1.full': 'SeeBuyGet’s GS1 company prefix {prefix} has no location numbers (GLN) left: all {used} are given. New hubs and collection points wait for a larger prefix from GS1.',
   'tower.network.bagsOnRoad': '{n, plural, one {# bag} other {# bags}} on the road',
   'tower.network.freeBags': '{n} empty bags on hand',
   // 2026-11-02 — a hub's space, as its owner said it: what its floor holds now, and when it is full.

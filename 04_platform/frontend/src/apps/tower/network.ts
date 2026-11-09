@@ -32,6 +32,8 @@ export interface AgentRow {
   freeSlots?: number;
   lastPingAt?: string;
   rating?: { average?: number; count?: number };
+  /** 2026-11-09 — the GS1 location number SeeBuyGet gave its collection point; absent until given. */
+  gln?: string;
   /** The pin the shop dropped. Absent on a shop that never dropped one — which is a real state, not a
    *  missing field, and it keeps that shop off the map while leaving it in the list. */
   location?: { lat: number; lng: number };
@@ -177,6 +179,8 @@ export interface HubRow {
   mdpId: string;
   name?: string;
   zones?: string[];
+  /** 2026-11-09 — the GS1 location number SeeBuyGet gave it; absent until given. */
+  gln?: string;
   /** 2026-11-02 — what its floor holds against the space its owner said (backend HubSpaceView); staff read it. */
   space?: HubSpaceRow;
 }

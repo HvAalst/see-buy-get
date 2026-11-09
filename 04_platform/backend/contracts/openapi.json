@@ -15157,6 +15157,26 @@
         }
       }
     },
+    "/v1/sbg/gs1/ours": {
+      "get": {
+        "operationId": "Sbg.ourGs1",
+        "summary": "",
+        "description": "2026-11-09 — SEEBUYGET'S OWN GS1 PREFIX, as the server has it (the owner writes it in the server's settings; staff read\nit and change nothing): how many location numbers are given under it and how many it holds. Without it, no place is\nnumbered — and the console says so.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OurGs1StatusView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/take-in-terms": {
       "get": {
         "operationId": "Sbg.takeInTerms",
@@ -59958,6 +59978,36 @@
             ]
           }
         }
+      },
+      "OurGs1StatusView": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "description": "SeeBuyGet’s GS1 company prefix; absent where the server has none set"
+          },
+          "used": {
+            "type": "number",
+            "description": "Location numbers (GLN) given under it, retired ones included: never given again"
+          },
+          "capacity": {
+            "type": "number",
+            "description": "How many it holds (0 without a prefix)"
+          },
+          "live": {
+            "type": "number",
+            "description": "Places numbered now"
+          },
+          "full": {
+            "type": "boolean",
+            "description": "No numbers left: new places wait"
+          }
+        },
+        "required": [
+          "used",
+          "capacity",
+          "live"
+        ]
       },
       "TopUpDto": {
         "type": "object",

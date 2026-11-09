@@ -111,6 +111,7 @@ import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
 import { CountryNoticeService } from './country-notice.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { VehicleCareService } from './vehicle-care.service';
+import { OurGlnBook } from './our-gln.book';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
 import { Gs1DisputeService, type Gs1Business } from './gs1-dispute.service';
 import { OpenGs1DisputeDto, SendGs1LicenceDto, type Gs1DisputeView } from './gs1-dispute.types';
@@ -164,7 +165,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -378,6 +379,8 @@ export class SbgController {
     @Optional() private readonly counterPrices?: CounterPriceService,
     // 2026-11-08 — price against planned cost per pair of zones, a week at a time (zone pricing, step 4).
     @Optional() private readonly priceReports?: PriceReportService,
+    // 2026-11-09 — the GLNs SeeBuyGet gave its hubs and collection points, under its own GS1 prefix.
+    @Optional() private readonly ourGlns?: OurGlnBook,
     // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
     @Optional() private readonly catchments?: CatchmentService,
   ) {}
@@ -3369,7 +3372,7 @@ export class SbgController {
     if (actor?.role !== 'operator') return this.agents.list().map((a) => this.shopCard(a));
     // Beside each float, what one parcel costs at that shop's own company and the money both are in: a float is thin
     // or not against THAT, and a console that measured every shop against one figure of its own could not say.
-    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), ...this.shopMoney(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did) }));
+    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), ...this.shopMoney(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did), ...this.glnOf('shop', a.did) }));
   }
 
   @Roles('agent', 'operator')
@@ -3381,7 +3384,25 @@ export class SbgController {
     // Round 40 — and where its trading licence stands, so the home screen says it before the counter refuses anything.
     // 2026-11-08 — and the zone it stands in, on its country's map in force (absent where the country keeps none yet).
     const priceZone = this.zones?.zoneOfShop(a);
-    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did), licenceStanding: this.agents.licenceStandingOf(did), ...(priceZone ? { priceZone } : {}) };
+    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did), licenceStanding: this.agents.licenceStandingOf(did), ...(priceZone ? { priceZone } : {}), ...this.glnOf('shop', did) };
+  }
+
+  /** 2026-11-09 — the GLN SeeBuyGet gave one of its places, where it has one: `{ gln }` or nothing. */
+  private glnOf(kind: 'shop' | 'hub', id: string): { gln?: string } {
+    const gln = this.ourGlns?.of(kind, id);
+    return gln ? { gln } : {};
+  }
+
+  /**
+   * 2026-11-09 — SEEBUYGET'S OWN GS1 PREFIX, as the server has it (the owner writes it in the server's settings; staff read
+   * it and change nothing): how many location numbers are given under it and how many it holds. Without it, no place is
+   * numbered — and the console says so.
+   */
+  @Roles('operator')
+  @Get('gs1/ours')
+  ourGs1(): OurGs1StatusView {
+    const s = this.ourGlns?.status() ?? { used: 0, capacity: 0, live: 0 };
+    return s;
   }
 
   /** The money a shop's float is in, and what one parcel costs it there: its own company's (amounts.ts). */
@@ -4943,6 +4964,8 @@ export class SbgController {
       location: a.location,
       landmark: a.landmark,
       openState: a.openState,
+      // 2026-11-09 — its GS1 location number, given by SeeBuyGet: for whoever addresses goods to this collection point.
+      ...this.glnOf('shop', a.did),
       // False: no NEW parcel can name this shop, as the place to hand in or to collect. It still hands out what it
       // holds — so it stays on the map for whoever is collecting — and a picker simply does not offer it.
       // Round 40 — nor while its trading licence has lapsed past the grace: the one rule, asked of the service.
@@ -5691,9 +5714,9 @@ export class SbgController {
       if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) {
         // 2026-11-08 — the zone it stands in, on its country's map in force.
         const priceZone = this.zones?.zoneOfHub(m);
-        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}) };
+        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}), ...this.glnOf('hub', m.mdpId) };
       }
-      return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency };
+      return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency, ...this.glnOf('hub', m.mdpId) };
     });
   }
 

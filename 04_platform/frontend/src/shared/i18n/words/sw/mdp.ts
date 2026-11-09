@@ -55,6 +55,7 @@ export const words: Record<string, string> = {
   "mdp.home.noBagsYet": "Bado hakuna mifuko ya mahali pa kwenda. Panga vifurushi ili uanze mmoja.",
   "mdp.home.loadBag": "Pakia mfuko",
   "mdp.home.newTote": "Mfuko mpya",
+  "mdp.home.gln": "Nambari yake ya mahali: GLN {gln}. Biashara zinaweza kutuma bidhaa kwa kituo hiki kwa nambari hii.",
   "mdp.home.whereHub": "Kituo hiki kiko wapi",
   "mdp.home.hubWordsAloud": "Maneno matatu ya kituo hiki ni: {words}.",
   "mdp.home.sayWords": "Sema maneno matatu",

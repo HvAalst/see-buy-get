@@ -72,6 +72,8 @@ const KIND_ICON: Record<string, IconName> = {
   parcel_shop_closed: 'home',
   parcel_shop_open: 'home',
   shop_found_shut: 'warning',
+  // 2026-11-09 — SeeBuyGet gave a shop's collection point or a hub its GS1 location number.
+  place_gln: 'home',
   // A defect on a vehicle: reported to the office, decided to the driver.
   vehicle_defect: 'warning',
   vehicle_service: 'warning',

@@ -37,6 +37,7 @@ import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './address
 import { handedAt, whenSeen, type Step } from './observed-at';
 import { FINDING_WORDS, type UnitHold } from './tamper.types';
 import { parcelLabelZpl } from './parcel-label';
+import { OurGlnBook } from './our-gln.book';
 import { ShipperCodesService, vendorCoder } from './shipper-codes.service';
 import { DropOffHoldService } from './drop-off-hold.service';
 import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
@@ -792,6 +793,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly fx?: FxService,
     // 2026-11-05 — the places held at drop-off shops for bookings (pre-drop-off). Optional for the specs.
     @Optional() private readonly holds?: DropOffHoldService,
+    // 2026-11-09 — the GLN SeeBuyGet gave the collection point a parcel goes to: printed on its label.
+    @Optional() private readonly ourGlns?: OurGlnBook,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -3323,6 +3326,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private label(parcel: Parcel, destShop?: string): PhygitalLabel {
     const qrPayload = `sbg:parcel:${parcel.parcelId}`;
+    // 2026-11-09 — the collection point's GS1 location number, as it is when the label is made: printed, so kept with it.
+    const gln = parcel.destAgentDid ? this.ourGlns?.of('shop', parcel.destAgentDid) : undefined;
     const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
     // Round 29 — a store's parcel with its SSCC: the label grows by the GS1 part, as a business's package label carries it.
     const h = parcel.sscc ? 290 : 180;
@@ -3342,6 +3347,7 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`,
       `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`,
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
+      ...(gln ? [`<text x="308" y="171" font-family="monospace" font-size="8" fill="#4A5261" text-anchor="end">To GLN ${gln}</text>`] : []),
       ...(parcel.sscc ? this.ssccSvg(parcel.parcelId, parcel.sscc) : []),
       `</svg>`,
     ].join('');
@@ -3385,7 +3391,8 @@ export class ParcelService implements OnApplicationBootstrap {
   labelZplFor(parcelId: string): string {
     const parcel = this.require(parcelId);
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
-    return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop, this.codes?.codesFor(parcel.parcelId)?.companyPrefix.length);
+    const gln = parcel.destAgentDid ? this.ourGlns?.of('shop', parcel.destAgentDid) : undefined;
+    return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop, this.codes?.codesFor(parcel.parcelId)?.companyPrefix.length, gln);
   }
 
   /** A parcel this shop took in at its counter — the only parcels whose label it prints. Another's reads as not there. */

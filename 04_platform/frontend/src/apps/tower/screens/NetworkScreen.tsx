@@ -6,6 +6,7 @@ import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
 import { PlanVsActualFold } from './PlanVsActualFold';
+import { OurGs1Line } from './OurGs1Line';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
@@ -181,6 +182,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
         title={t('tower.network.shopsTitle')}
         hint={coverageLine(state.coverage ?? undefined, t)}
       >
+        {/* 2026-11-09 — SeeBuyGet's own GS1 prefix: the location numbers its collection points and hubs carry. */}
+        <OurGs1Line client={actions.client()} />
 
         {/* Where the shops actually are. A shop with no pin on it is not missing from the network — it
             simply never dropped one, so it stays in the table below and out of here. */}
@@ -217,6 +220,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                   <tr key={row.did} class={pinned === row.did ? 'is-open' : undefined}>
                     <td>
                       <div class="ctbl__strong">{row.shopName ?? t('tower.network.unnamedShop')}</div>
+                      {row.gln ? <div class="ctbl__sub"><Abbreviated text={t('tower.network.gln', { gln: row.gln })} /></div> : null}
                     </td>
                     <td>
                       <span class="ctbl__lbl">{t('tower.network.col.zone')}</span>
@@ -272,6 +276,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     {(hub.zones ?? []).join(', ') || '—'} · {t('tower.network.freeBags', { n: free })}
                     {/* 2026-11-02 — its floor against its space: "full — bags wait" where nothing more is sent to it. */}
                     {hubSpaceLine(hub.space, t) ? ` · ${hubSpaceLine(hub.space, t)}` : ''}
+                    {hub.gln ? <> · <Abbreviated text={t('tower.network.gln', { gln: hub.gln })} /></> : null}
                   </span>
                 </div>
                 {filling.length === 0 ? (

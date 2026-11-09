@@ -4,6 +4,7 @@ import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../
 import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
 import { formatDate, useT } from '../../../shared/i18n';
 import { PlaceView } from '../../../shared/ui/PlaceView';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { PeopleSheet } from '../../agent/screens/PeopleSheet';
@@ -209,6 +210,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
             aloudLabel={t('mdp.home.sayWords')}
           />
           {hub.priceZone ? <p class="hubzone">{t('mdp.home.priceZone', { zone: hub.priceZone.name, group: hub.priceZone.groupName })}</p> : null}
+          {/* 2026-11-09 — its GS1 location number, given by SeeBuyGet: what businesses can address goods to it by. */}
+          {hub.gln ? <p class="hubzone"><Abbreviated text={t('mdp.home.gln', { gln: hub.gln })} /></p> : null}
         </Card>
       ) : null}
 

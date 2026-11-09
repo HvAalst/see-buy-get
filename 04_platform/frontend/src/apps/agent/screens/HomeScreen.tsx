@@ -3,6 +3,7 @@ import { agentConfig } from '../api';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PlaceWords, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName, PhoneField } from '../../../shared/ui';
 import { capLine, type CustodyCapView } from '../../../shared/custodyCap';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, licenceNotice, licenceReady, money, papersReady, papersStep } from '../logic';
@@ -115,6 +116,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           <div class="shophead__body">
             <h1 class="shophead__name">{agent?.shopName ?? '…'}</h1>
             <p class="shophead__meta">{agent ? (agent.priceZone ? t('agent.priceZone', { zone: agent.priceZone.name, group: agent.priceZone.groupName }) : t('agent.zone', { zone: agent.zone })) : ''}</p>
+            {/* 2026-11-09 — its GS1 location number, given by SeeBuyGet: tap the letters to learn what it is. */}
+            {agent?.gln ? <p class="shophead__meta"><Abbreviated text={t('agent.gln', { gln: agent.gln })} /></p> : null}
             <Pill tone={open ? 'ok' : 'idle'} dot>{open ? t('agent.open') : t('agent.closed')}</Pill>
           </div>
         </div>

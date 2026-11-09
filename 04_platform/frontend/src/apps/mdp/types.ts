@@ -17,6 +17,8 @@ export interface MdpView {
   zones: string[];
   /** 2026-11-08 — the zone its pin lies in, on its country's map in force; absent where the country keeps none yet. */
   priceZone?: { code: string; name: string; group: string; groupName: string; version: number };
+  /** 2026-11-09 — the GS1 location number SeeBuyGet gave this hub, under its own prefix; absent until given. */
+  gln?: string;
   location?: { lat: number; lng: number };
   pricePerParcel: number;
   /** The country it stands in. Absent on a hub registered before hubs said one: the network's home country. */

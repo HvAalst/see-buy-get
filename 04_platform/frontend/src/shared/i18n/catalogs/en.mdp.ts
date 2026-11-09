@@ -67,6 +67,7 @@ export const enMdp = {
   'mdp.home.newTote': 'New tote',
   'mdp.home.whereHub': 'Where this hub is',
   // 2026-11-08 — the zone the hub's pin lies in, on its country's map, and its price group in the country's own words.
+  'mdp.home.gln': 'Its location number: GLN {gln}. Businesses can address goods to this hub by it.',
   'mdp.home.priceZone': 'It stands in zone {zone} · {group}',
   'mdp.home.hubWordsAloud': 'This hub\'s three words are: {words}.',
   'mdp.home.sayWords': 'Say the three words',

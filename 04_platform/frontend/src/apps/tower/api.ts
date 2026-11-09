@@ -182,6 +182,26 @@ export function resetTwoStep(client: TowerClient, operatorId: string): Promise<R
   return client.client.sbg.request((raw) => raw.POST(`/v1/sbg/operators/${encodeURIComponent(operatorId)}/two-step/reset` as never, {} as never) as never) as Promise<Result<StaffRow>>;
 }
 
+/** 2026-11-09 — SeeBuyGet's own GS1 prefix as the server has it, and the location numbers (GLN) given under it. */
+export interface OurGs1Status {
+  prefix?: string;
+  used: number;
+  capacity: number;
+  live: number;
+  full?: boolean;
+}
+
+export function ourGs1(client: TowerClient): Promise<Result<OurGs1Status>> {
+  return client.client.sbg.request((raw) => raw.GET('/v1/sbg/gs1/ours' as never, {} as never) as never) as Promise<Result<OurGs1Status>>;
+}
+
+/** What the console says of our prefix: not set, how many numbers are used of how many, or none left. */
+export function ourGs1Line(s: OurGs1Status | null, t: (key: 'tower.network.gs1.none' | 'tower.network.gs1.set' | 'tower.network.gs1.full', vars?: Record<string, string | number>) => string): string {
+  if (!s) return '';
+  if (!s.prefix) return t('tower.network.gs1.none');
+  return t(s.full ? 'tower.network.gs1.full' : 'tower.network.gs1.set', { prefix: s.prefix, used: s.used, capacity: s.capacity, live: s.live });
+}
+
 /** A member of network staff changes their own password, proven with the current one. */
 export function changeStaffPassword(email: string, password: string, newPassword: string): Promise<Result<{ ok: true }>> {
   return publicRequest<{ ok: true }>(towerConfig(), '/v1/sbg/operators/password', { body: { email, password, newPassword } });

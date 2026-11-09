@@ -395,6 +395,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/market-pulse': 'any',
   'GET sbg/market/lane-carriers': 'any',
   'GET sbg/mdps': 'any',
+  // 2026-11-09 — SeeBuyGet's own GS1 prefix as the server has it, and the location numbers given under it: read by any role.
+  'GET sbg/gs1/ours': 'any',
   'GET sbg/media': 'any',
   'GET sbg/media/:id': 'any',
   'GET sbg/module-info': 'any',

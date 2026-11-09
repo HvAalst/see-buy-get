@@ -97,6 +97,8 @@ export const NOTIFICATION_KINDS = [
   'parcel_shop_open',
   /** 2026-11-06 — to a shop: a driver found its door shut. */
   'shop_found_shut',
+  /** 2026-11-09 — to a shop or a hub: SeeBuyGet gave its place a GS1 location number (GLN), or a new one after it moved. */
+  'place_gln',
   /** 2026-11-05 — parcels taken on ahead: to the shop, who takes them; to the driver, that the bag is theirs (or went to everyone). */
   'pickup_ahead',
   'message',

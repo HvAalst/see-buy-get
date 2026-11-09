@@ -16,6 +16,7 @@ export const words: Record<string, string> = {
   "agent.tryAgain": "Jaribu tena",
   "agent.cancel": "Ghairi",
   "agent.done": "Imekamilika",
+  "agent.gln": "Nambari ya mahali GLN {gln}",
   "agent.zone": "Kanda {zone}",
   "agent.scanPlaceholder": "Changanua au andika msimbo",
   "agent.saveRating": "Hifadhi ukadiriaji",

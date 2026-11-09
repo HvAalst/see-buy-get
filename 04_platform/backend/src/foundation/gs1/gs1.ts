@@ -88,6 +88,23 @@ export function cleanGln(raw: string | undefined | null): string | undefined {
   return glnProblem(raw) ? undefined : String(raw).replace(/[\s-]/g, '');
 }
 
+/**
+ * 2026-11-09 — A GLN WE GIVE, under SeeBuyGet's own prefix: the prefix, the location reference padded to 12 digits, then the
+ * check digit. Only ever under a prefix GS1 licensed to the one giving it (the owner: "we should get our own GS1 prefix").
+ */
+export function glnOf(prefix: string, reference: number): string {
+  if (!cleanPrefix(prefix) || cleanPrefix(prefix) !== prefix) throw new Error('not a GS1 company prefix');
+  const room = 12 - prefix.length;
+  if (!Number.isInteger(reference) || reference < 0 || reference >= 10 ** room) throw new Error('location reference out of range');
+  const body = `${prefix}${room ? String(reference).padStart(room, '0') : ''}`;
+  return `${body}${gs1CheckDigit(body)}`;
+}
+
+/** How many GLNs one prefix holds: 10^(12 − prefix length). A 12-digit prefix holds one, its own. */
+export function glnCapacity(prefix: string): number {
+  return 10 ** Math.max(0, 12 - prefix.length);
+}
+
 /** Why a GLN was refused, in words a person can act on. */
 export function glnRefusal(problem: GlnProblem): string {
   if (problem === 'digits') return 'A GLN is 13 digits';
