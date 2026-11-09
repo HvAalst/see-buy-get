@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { cleanPrefix, serialCapacity, ssccOf } from '../../foundation/gs1/gs1';
+import { cleanPrefix, gsinCapacity, gsinOf, serialCapacity, ssccOf } from '../../foundation/gs1/gs1';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 
@@ -38,6 +38,8 @@ export interface PackageCodes {
   companyPrefix: string;
   codes: string[];
   issuedAt: string;
+  /** 2026-11-09 — the load's one GSIN (AI 402): the whole shipment, every package of it. Not given a store's parcel. */
+  gsin?: string;
   /** Round 29 — a store's parcel, keyed by its parcel id: one SSCC, the parcel's own. Not a load's package. */
   parcel?: true;
 }
@@ -94,6 +96,8 @@ export class ShipperCodesService {
   private readonly serials = new PersistentMap<string, { next: number }>('shipper-gs1-serials');
   private readonly issued = new PersistentMap<string, PackageCodes>('package-codes');
   private readonly owners = new PersistentMap<string, PrefixOwners>('gs1-prefix-owners');
+  /** 2026-11-09 — the next GSIN serial under each prefix and digit, keyed `prefix|extension digit`: never given twice. */
+  private readonly gsinSerials = new PersistentMap<string, { next: number }>('shipper-gsin-serials');
 
   of(entityId: string | undefined): ShipperGs1 | undefined {
     return entityId ? this.settings.get(entityId) : undefined;
@@ -175,7 +179,13 @@ export class ShipperCodesService {
    * fail, or label some packages and not others. Nothing to say for a business without a prefix.
    */
   assertCanIssue(entityId: string | undefined, packages: number | undefined): void {
-    if (!entityId || !packages) return;
+    if (!entityId) return;
+    // 2026-11-09 — every load under a prefix has its GSIN: none left, refused before it is posted, as its packages are.
+    const s = this.settings.get(entityId);
+    if (s && this.gsinNext(s) >= gsinCapacity(s.companyPrefix)) {
+      throw new GlosError('INVALID_STATE', `No GS1 shipment numbers (GSIN) are left under extension digit ${s.extensionDigit} of your prefix. Choose another extension digit in ${whereGs1IsSet(entityId)}.`, { field: 'packages' });
+    }
+    if (!packages) return;
     if (packages > MAX_LABELLED_PACKAGES) throw new GlosError('VALIDATION_FAILED', `Up to ${MAX_LABELLED_PACKAGES} packages are labelled one by one on a load`, { field: 'packages' });
     const left = this.left(entityId);
     if (left !== undefined && packages > left) {
@@ -188,16 +198,25 @@ export class ShipperCodesService {
    * Give a load's packages their codes, once. The same codes again on a second call; nothing for a business without a
    * prefix or a load without a number of packages.
    */
-  issue(freightId: string, entityId: string | undefined, packages: number | undefined, now: number = Date.now()): PackageCodes | undefined {
+  issue(freightId: string, entityId: string | undefined, packages: number | undefined, now: number = Date.now(), opts: { gsin?: boolean } = {}): PackageCodes | undefined {
     const already = this.issued.get(freightId);
     if (already) return already;
     const s = this.of(entityId);
-    if (!s || !packages || packages < 1) return undefined;
-    this.assertCanIssue(s.entityId, packages);
+    // 2026-11-09 — a load under a prefix has its GSIN whether or not its packages were counted; a store's parcel has none.
+    const withGsin = opts.gsin !== false;
+    const count = packages && packages >= 1 ? packages : 0;
+    if (!s || (!count && !withGsin)) return undefined;
+    this.assertCanIssue(s.entityId, count || undefined);
     const first = this.nextUnder(s.companyPrefix, s.extensionDigit);
-    const codes = Array.from({ length: packages }, (_, i) => ssccOf(s.companyPrefix, s.extensionDigit, first + i));
-    this.serials.set(serialKey(s), { next: first + packages });
-    const kept: PackageCodes = { freightId, entityId: s.entityId, companyPrefix: s.companyPrefix, codes, issuedAt: new Date(now).toISOString() };
+    const codes = Array.from({ length: count }, (_, i) => ssccOf(s.companyPrefix, s.extensionDigit, first + i));
+    if (count) this.serials.set(serialKey(s), { next: first + count });
+    let gsin: string | undefined;
+    if (withGsin) {
+      const next = this.gsinNext(s);
+      gsin = gsinOf(s.companyPrefix, s.extensionDigit, next);
+      this.gsinSerials.set(`${s.companyPrefix}|${s.extensionDigit}`, { next: next + 1 });
+    }
+    const kept: PackageCodes = { freightId, entityId: s.entityId, companyPrefix: s.companyPrefix, codes, ...(gsin ? { gsin } : {}), issuedAt: new Date(now).toISOString() };
     this.issued.set(freightId, kept);
     return kept;
   }
@@ -209,7 +228,7 @@ export class ShipperCodesService {
   issueForParcel(parcelId: string, vendorId: string, now: number = Date.now()): string | undefined {
     const already = this.issued.get(parcelId);
     if (already) return already.codes[0];
-    const kept = this.issue(parcelId, vendorCoder(vendorId), 1, now);
+    const kept = this.issue(parcelId, vendorCoder(vendorId), 1, now, { gsin: false });
     if (!kept) return undefined;
     this.issued.set(parcelId, { ...kept, parcel: true });
     return kept.codes[0];
@@ -222,6 +241,12 @@ export class ShipperCodesService {
   /** The load a package's SSCC belongs to — what a scan of the global barcode is answered with. */
   freightOfSscc(sscc: string): string | undefined {
     return this.packageOf(sscc)?.freightId;
+  }
+
+  /** 2026-11-09 — the load a GSIN was given to: what a scan of the shipment's number is answered with. */
+  freightOfGsin(gsin: string): string | undefined {
+    for (const p of this.issued.values()) if (!p.parcel && p.gsin === gsin) return p.freightId;
+    return undefined;
   }
 
   /** Round 32 — the store parcel an SSCC was given to, if it was a store parcel's: never a load's package. */
@@ -239,6 +264,11 @@ export class ShipperCodesService {
       if (i >= 0) return { freightId: p.freightId, no: i + 1, of: p.codes.length };
     }
     return undefined;
+  }
+
+  /** 2026-11-09 — the next GSIN serial under a business's prefix and digit: shared by every business using that pair. */
+  private gsinNext(s: ShipperGs1): number {
+    return this.gsinSerials.get(`${s.companyPrefix}|${s.extensionDigit}`)?.next ?? 0;
   }
 
   /** The next serial under a prefix and digit: past the highest any business was given there. */

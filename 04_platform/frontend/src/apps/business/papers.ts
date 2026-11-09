@@ -20,6 +20,8 @@ export interface PackageLabels {
   companyPrefix?: string;
   /** 2026-11-09 — the ship-to GLN the labels carry as a barcode. */
   shipToGln?: string;
+  /** 2026-11-09 — the load's GSIN, on every label and on its note. */
+  gsin?: string;
 }
 
 export interface InvoiceParty {

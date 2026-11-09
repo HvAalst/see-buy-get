@@ -81,6 +81,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
             </span>
             {labels ? <span class="crow__sub"><Abbreviated text={labelsLine(labels, Boolean(business.gs1), t)} /></span> : null}
             {labels?.shipToGln ? <span class="crow__sub"><Abbreviated text={t('business.papers.shipTo', { gln: labels.shipToGln })} /></span> : null}
+            {labels?.gsin ? <span class="crow__sub"><Abbreviated text={t('business.papers.gsin', { gsin: labels.gsin })} /></span> : null}
             <span class="crow__sub">{t('business.papers.printHint')}</span>
           </span>
           <span class="crow__tail">

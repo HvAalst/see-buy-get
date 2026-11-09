@@ -115,6 +115,46 @@ export function ssccFromScan(raw: string | undefined | null): string | undefined
   return isSscc(digits) ? digits : undefined;
 }
 
+/**
+ * 2026-11-09 — A GLOBAL SHIPMENT IDENTIFICATION NUMBER (GSIN, application identifier 402): one number for a whole shipment —
+ * every package a shipper hands over together under one despatch — 17 digits: the company prefix, the shipper's reference
+ * and the check digit. The shipper's to give, under its own prefix, like an SSCC; customs accept it as the shipment's
+ * Unique Consignment Reference (the World Customs Organization's UCR), so it must never name a second shipment.
+ *
+ * Here the reference begins with the extension digit the shipper set aside for us — so a GSIN we give is never also one
+ * its own systems give — and carries on with our serial: prefix, digit, serial, check.
+ */
+export function gsinOf(prefix: string, extension: number, serial: number): string {
+  if (!cleanPrefix(prefix) || cleanPrefix(prefix) !== prefix) throw new Error('not a GS1 company prefix');
+  if (!Number.isInteger(extension) || extension < 0 || extension > 9) throw new Error('an extension digit is 0 to 9');
+  const room = 15 - prefix.length;
+  if (!Number.isInteger(serial) || serial < 0 || serial >= 10 ** room) throw new Error('serial out of range');
+  const body = `${prefix}${extension}${String(serial).padStart(room, '0')}`;
+  return `${body}${gs1CheckDigit(body)}`;
+}
+
+/** How many GSINs one prefix and extension digit hold: 10^(15 − prefix length). */
+export function gsinCapacity(prefix: string): number {
+  return 10 ** (15 - prefix.length);
+}
+
+/** Is this a GSIN: 17 digits whose last is the check digit of the rest. */
+export function isGsin(s: string | undefined | null): boolean {
+  return typeof s === 'string' && /^\d{17}$/.test(s) && gs1CheckDigit(s.slice(0, 16)) === Number(s[16]);
+}
+
+/** A GSIN in any form a scanner or a person hands over: `]C1402…`, `(402)…`, `402…`, or bare. */
+export function gsinFromScan(raw: string | undefined | null): string | undefined {
+  const s = String(raw ?? '').replace(/^\]C1/, '').replace(/[\s\u001d-]/g, '').replace(/^\(402\)/, '');
+  const digits = /^402\d{17}$/.test(s) ? s.slice(3) : s;
+  return isGsin(digits) ? digits : undefined;
+}
+
+/** The GSIN as GS1 writes it for a person: its application identifier in brackets, then the number. */
+export function gsinHumanReadable(gsin: string): string {
+  return `(402) ${gsin}`;
+}
+
 /* ------------------------------------------------------------------ GS1-128 (Code 128) -- */
 
 /**

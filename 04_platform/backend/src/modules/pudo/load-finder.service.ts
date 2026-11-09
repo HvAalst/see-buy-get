@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { ssccFromScan } from '../../foundation/gs1/gs1';
+import { gsinFromScan, ssccFromScan } from '../../foundation/gs1/gs1';
 import { GlosError } from '../../foundation/http/glos-error';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DispatchService } from './dispatch.service';
@@ -21,7 +21,7 @@ import { MdpService } from './mdp.service';
  */
 
 /** What a scan names: a package by its SSCC, a load by its tracking key, or by its own code. */
-export type LoadRef = { sscc: string } | { trackingKey: string } | { code: string };
+export type LoadRef = { sscc: string } | { gsin: string } | { trackingKey: string } | { code: string };
 
 /**
  * Read a scan as a load's code, or as nothing. An SSCC in any form a scanner hands over (`]C1`, `00`, `(00)`, bare); the
@@ -31,6 +31,9 @@ export function loadRefOf(raw: string | undefined | null): LoadRef | undefined {
   const text = String(raw ?? '').trim();
   const sscc = ssccFromScan(text);
   if (sscc) return { sscc };
+  // 2026-11-09 — the whole shipment's number (AI 402), scanned or typed.
+  const gsin = gsinFromScan(text);
+  if (gsin) return { gsin };
   const fromUrl = /[?&]track=([^&#\s]+)/i.exec(text)?.[1];
   const key = (fromUrl ? safeDecode(fromUrl) : text).toUpperCase();
   if (/^T-[0-9A-F]{6,}$/.test(key)) return { trackingKey: key };
@@ -130,6 +133,8 @@ export class LoadFinderService {
       const found = this.codes.packageOf(ref.sscc);
       freightId = found?.freightId;
       if (found) pkg = { no: found.no, of: found.of, sscc: ref.sscc };
+    } else if ('gsin' in ref) {
+      freightId = this.codes.freightOfGsin(ref.gsin);
     } else if ('trackingKey' in ref) {
       freightId = this.dispatch.freightByTrackingKey(ref.trackingKey)?.freightId;
     } else {

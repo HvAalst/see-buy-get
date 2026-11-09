@@ -18,6 +18,8 @@ export const ABBREVIATIONS = [
   'SSCC',
   // A company or one of its places, by GS1's number (2026-11-09).
   'GLN',
+  // A whole shipment, by GS1's number (2026-11-09).
+  'GSIN',
   'KRA PIN',
   'KRA',
   'eTIMS',

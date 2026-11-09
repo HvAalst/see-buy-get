@@ -1433,6 +1433,7 @@ export const words: Record<string, string> = {
   "business.places.gln.none": "Hakuna GLN kwa mahali hapa.",
   "business.places.gln.set": "Toa GLN yake",
   "business.places.gln.hint": "GLN ya mahali hapa: yako kwa maeneo yako, ya bandari au ya uwanja kwa maeneo yao. Bidhaa zinazotumwa hapa huibeba kama msimbopau wa mahali pa kupelekwa kwenye lebo zao.",
+  "business.papers.gsin": "GSIN ya usafirishaji mzima, kwenye kila lebo na kwenye hati ya usafirishaji: {gsin}. Wape forodha kama kumbukumbu ya usafirishaji.",
   "business.papers.shipTo": "Kila lebo pia inabeba GLN ya mahali pa kupelekwa {gln} kama msimbopau.",
   "business.gs1.title": "Misimbopau ya GS1 kwenye vipande vyako",
   "business.gs1.lede": "Ukiwa na kiambishi awali cha kampuni cha GS1, kila kipande cha mzigo unaotangaza hupata SSCC yake, inayochapishwa kama msimbo pau wa GS1-128 kando ya msimbo wetu: kile ambacho ghala linalopokea huchanganua kuingiza kwenye mfumo wake. Bila kiambishi hicho, lebo zako hubeba msimbo wetu pekee.",

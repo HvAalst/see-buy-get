@@ -5,6 +5,7 @@ import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
+import { gsinHumanReadable } from '../../foundation/gs1/gs1';
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { MailService } from '../../foundation/mail/mail.service';
 import { appUrl, helpUrl } from '../../foundation/mail/mail.templates';
@@ -243,6 +244,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       freightId: f.freightId,
       code: f.code,
       trackingKey: f.trackingKey,
+      ...(this.codes?.codesFor(f.freightId)?.gsin ? { gsin: this.codes.codesFor(f.freightId)!.gsin } : {}),
       status: f.status,
       sender,
       ...(agent ? { agent } : {}),
@@ -648,7 +650,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     <p class="sub paper">Original for: ☐ the sender &nbsp; ☐ the goods &nbsp; ☐ the carrier</p>
     <p class="sub"><span class="status">${e(n.status.replace('_', ' '))}</span></p>
   </div>
-  <div class="num">${e(n.number)}<small>Load ${e(n.code)}${n.trackingKey ? ` · Tracking ${e(n.trackingKey)}` : ''}</small>${qr}</div>
+  <div class="num">${e(n.number)}<small>Load ${e(n.code)}${n.trackingKey ? ` · Tracking ${e(n.trackingKey)}` : ''}${n.gsin ? ` · Shipment GSIN ${e(gsinHumanReadable(n.gsin))}` : ''}</small>${qr}</div>
 </header>
 <div class="grid">
   ${box(1, 'Sender (name, address, country)', party(n.sender) + (n.agent ? `<br><span class="how">Booked by ${e(n.agent.name)} as agent for the sender</span>` : ''))}

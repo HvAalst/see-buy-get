@@ -49,6 +49,8 @@ export interface ConsignmentNote {
   freightId: string;
   code: string;
   trackingKey?: string;
+  /** 2026-11-09 — the shipment's GSIN, given under the shipper's GS1 prefix: its Unique Consignment Reference for customs. */
+  gsin?: string;
   status: string;
   /** Box 1 */
   sender: NoteParty;

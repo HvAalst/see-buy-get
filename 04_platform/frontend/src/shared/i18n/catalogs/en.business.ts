@@ -1487,6 +1487,7 @@ export const enBusiness = {
   'business.places.gln.none': 'No GLN for this place.',
   'business.places.gln.set': 'Give its GLN',
   'business.places.gln.hint': 'The place’s own GLN: yours for your own places, the port’s or the yard’s for theirs. Goods sent here carry it as the ship-to barcode on their labels.',
+  'business.papers.gsin': 'The whole shipment’s GSIN, on every label and on the consignment note: {gsin}. Give it to customs as the shipment’s reference.',
   'business.papers.shipTo': 'Each label also carries the ship-to GLN {gln} as a barcode.',
   'business.gs1.title': 'GS1 barcodes on your packages',
   'business.gs1.lede': 'With a GS1 company prefix, each package of a load you post gets its own SSCC, printed as a GS1-128 barcode beside our code: what a receiving warehouse scans into its own system. Without one, your labels carry our code alone.',

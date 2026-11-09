@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLoadLabel, kindLabel, loadLookupOf, parcelSsccOf, parseScan, ssccOfScan } from './scan';
+import { gsinOfScan, isLoadLabel, kindLabel, loadLookupOf, parcelSsccOf, parseScan, ssccOfScan } from './scan';
 
 /** Built the way the backend prints them (foundation/gs1 ssccOf): 4 + 6161234 + serial 7 + check digit. */
 const SSCC = '461612340000000074';
@@ -23,6 +23,15 @@ describe('a load’s codes, met in any scan box (round 19)', () => {
     expect(loadLookupOf('T-0A1B2C3D4E', false)).toBeNull();
     expect(loadLookupOf('T-0A1B2C3D4E', true)).toBe('T-0A1B2C3D4E');
     expect(loadLookupOf('PUD-123456', true)).toBeNull();
+  });
+
+  it('reads a shipment’s GSIN in every form, and looks the load up by it in any box (2026-11-09)', () => {
+    const GSIN = '06141411234567890'; // GS1's own example
+    for (const scan of [GSIN, `(402)${GSIN}`, `(402) ${GSIN}`, `402${GSIN}`, `]C1402${GSIN}`]) expect([scan, gsinOfScan(scan)]).toEqual([scan, GSIN]);
+    expect(gsinOfScan('06141411234567891')).toBeNull();
+    expect(gsinOfScan(SSCC)).toBeNull();
+    expect(loadLookupOf(`(402) ${GSIN}`, false)).toBe(`(402) ${GSIN}`);
+    expect(loadLookupOf('06141411234567891', true)).toBeNull();
   });
 
   it('a parcel box still reads our own codes as before; a load label has a name', () => {

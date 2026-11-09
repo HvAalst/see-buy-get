@@ -1,4 +1,4 @@
-import { gs1CheckDigit, gs1_128SvgGroup, gs1_128Width, isSscc, ssccOf } from '../../foundation/gs1/gs1';
+import { gs1CheckDigit, gs1_128SvgGroup, gs1_128Width, gsinOf, isGsin, isSscc, ssccOf } from '../../foundation/gs1/gs1';
 import { Entity } from '../../foundation/entity/entity.types';
 import { CommercialInvoiceService, InvoiceInput, cleanHsCode, crossesBorder, hsDisplay } from './commercial-invoice.service';
 import { Freight } from './dispatch.types';
@@ -80,11 +80,45 @@ describe('a shipper’s own GS1 codes', () => {
     expect(codes.issue('frt_more', 'biz', 1)!.codes[0]).toBe(ssccOf('616123456789', 8, 0));
   });
 
-  it('gives nothing to a business without a prefix, or to a load without a number of packages', () => {
+  it('gives nothing to a business without a prefix; a load without a number of packages its GSIN alone', () => {
     const codes = new ShipperCodesService();
     expect(codes.issue('frt_1', 'biz', 3)).toBeUndefined();
     codes.set('biz', { companyPrefix: '6161234', extensionDigit: 0 }, 'Achieng');
-    expect(codes.issue('frt_1', 'biz', undefined)).toBeUndefined();
+    expect(codes.issue('frt_1', 'biz', undefined)).toMatchObject({ codes: [], gsin: gsinOf('6161234', 0, 0) });
+  });
+
+  it('gives every load under a prefix its one GSIN — the next each time, never twice, kept with the load (2026-11-09)', () => {
+    const codes = new ShipperCodesService();
+    codes.set('biz', { companyPrefix: '6161234', extensionDigit: 4 }, 'Achieng');
+    const first = codes.issue('frt_a', 'biz', 2)!;
+    expect(first.gsin).toBe(gsinOf('6161234', 4, 0));
+    expect(isGsin(first.gsin)).toBe(true);
+    expect(first.codes).toHaveLength(2);
+    // Asked again: the same, not a new one.
+    expect(codes.issue('frt_a', 'biz', 2)!.gsin).toBe(first.gsin);
+    expect(codes.issue('frt_b', 'biz', 1)!.gsin).toBe(gsinOf('6161234', 4, 1));
+    expect(codes.freightOfGsin(first.gsin!)).toBe('frt_a');
+    expect(codes.freightOfGsin(gsinOf('6161234', 4, 9))).toBeUndefined();
+    // Under another digit of the same prefix (another business), its own run — never one of the first's.
+    codes.set('other', { companyPrefix: '6161234', extensionDigit: 5 }, 'Bekele');
+    expect(codes.issue('frt_c', 'other', 1)!.gsin).toBe(gsinOf('6161234', 5, 0));
+    // The business goes back to digit 4 after a while: it carries on past every GSIN already given there.
+    codes.set('biz', { companyPrefix: '6161234', extensionDigit: 6 }, 'Achieng');
+    codes.set('biz', { companyPrefix: '6161234', extensionDigit: 4 }, 'Achieng');
+    expect(codes.issue('frt_d', 'biz', undefined)!.gsin).toBe(gsinOf('6161234', 4, 2));
+    // A store's parcel is not a shipment of loads: its SSCC alone.
+    codes.set(vendorCoder('v1'), { companyPrefix: '6169999', extensionDigit: 1 }, 'Store');
+    codes.issueForParcel('par_1', 'v1');
+    expect(codes.codesFor('par_1')!.gsin).toBeUndefined();
+  });
+
+  it('refuses a load before it is posted when no GSIN is left under the prefix and digit (2026-11-09)', () => {
+    const codes = new ShipperCodesService();
+    codes.set('biz', { companyPrefix: '616123456789', extensionDigit: 2 }, 'Achieng'); // room for 1,000
+    for (let i = 0; i < 1000; i += 1) codes.issue(`frt_${i}`, 'biz', undefined);
+    expect(codes.codesFor('frt_999')!.gsin).toBe(gsinOf('616123456789', 2, 999));
+    expect(() => codes.assertCanIssue('biz', undefined)).toThrow(/No GS1 shipment numbers \(GSIN\) are left under extension digit 2/);
+    expect(() => codes.issue('frt_1000', 'biz', undefined)).toThrow(/No GS1 shipment numbers/);
   });
 
   it('gives a store’s parcel its one SSCC under the store’s own key — once, never a business’s digit, never a load’s package (round 29)', () => {
@@ -245,6 +279,24 @@ describe('the package labels', () => {
     const zpl = packageLabelsZpl({ ...base, shipToGln: shipTo, packages: 1, codes: [sscc], companyPrefixLength: 7 });
     expect(zpl).toContain(`>;>8410${shipTo}`);
     expect(zpl).toContain(`>;>800${sscc}`);
+  });
+
+  it('prints the shipment’s GSIN on every label: beside the ship-to, else beside the SSCC, else on a row of its own (2026-11-09)', () => {
+    const gsin = gsinOf('6161234', 3, 7);
+    const sscc = ssccOf('6161234', 3, 0);
+    const shipTo = `871333333333${gs1CheckDigit('871333333333')}`;
+    const line = `GSIN (402) ${gsin}`;
+    const both = packageLabelsHtml({ ...base, gsin, shipToGln: shipTo, packages: 2, codes: [sscc, ssccOf('6161234', 3, 1)], companyPrefixLength: 7 });
+    expect(both.match(new RegExp(line.replace(/[()]/g, '\\$&'), 'g'))).toHaveLength(2);
+    expect(both).toContain(`<text x="96" y="93.5" font-size="2.8" fill="#555" font-family="monospace" text-anchor="end">${line}</text>`);
+    expect(packageLabelsHtml({ ...base, gsin, packages: 1, codes: [sscc], companyPrefixLength: 7 })).toContain(`<text x="96" y="104" font-size="2.8" fill="#555" font-family="monospace" text-anchor="end">${line}</text>`);
+    const alone = packageLabelsHtml({ ...base, gsin, codes: [] });
+    expect(alone).toContain('SHIPMENT (GSIN)');
+    expect(alone).toContain(`>(402) ${gsin}<`);
+    expect(packageLabelsHtml({ ...base, codes: [] })).not.toContain('GSIN');
+    // The thermal printer says it too.
+    expect(packageLabelsZpl({ ...base, gsin, packages: 1, codes: [sscc], companyPrefixLength: 7 })).toContain(`^FD${line}^FS`);
+    expect(packageLabelsZpl({ ...base, gsin, codes: [] })).toContain(`^FD(402) ${gsin}^FS`);
   });
 
   it('is ours alone without a shipper’s GS1 codes, and one label for a load whose packages were not counted', () => {

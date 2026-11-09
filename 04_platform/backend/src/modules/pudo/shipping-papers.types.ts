@@ -9,6 +9,8 @@ export class PackageLabelsView {
   codes: string[];
   /** The prefix they were given under. */
   companyPrefix?: string;
+  /** 2026-11-09 — the load's GSIN (AI 402), printed on every label: the whole shipment's number. */
+  gsin?: string;
   /** 2026-11-09 — the ship-to GLN (AI 410) the labels carry as a barcode: the place's, or the receiver's own. */
   shipToGln?: string;
 }

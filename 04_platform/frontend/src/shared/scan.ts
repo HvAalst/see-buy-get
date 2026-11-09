@@ -111,6 +111,19 @@ export function ssccOfScan(raw: string | null | undefined): string | null {
 }
 
 /**
+ * 2026-11-09 — a whole shipment's GSIN (GS1 application identifier 402), as a scanner or a person hands it over: the bare
+ * 17 digits, `402` + 17, `(402) …`, with a scanner's `]C1` in front — or null. Its check digit must hold.
+ */
+export function gsinOfScan(raw: string | null | undefined): string | null {
+  const s = String(raw ?? '')
+    .replace(/^\]C1/, '')
+    .replace(/[\s\u001d-]/g, '')
+    .replace(/^\(402\)/, '');
+  const digits = /^402\d{17}$/.test(s) ? s.slice(3) : s;
+  return /^\d{17}$/.test(digits) && gs1CheckDigit(digits.slice(0, 16)) === Number(digits[16]) ? digits : null;
+}
+
+/**
  * A load's own code: the QR on our label (its tracking address), a bare tracking key, or the load's code typed off the
  * label (`FRT-12`). A tracking key is shared in shape with a parcel's, so only a box that looks for LOADS reads one.
  */
@@ -128,8 +141,8 @@ export function parcelSsccOf(raw: string, expect: ScanKind): string | null {
   return expect === 'parcel' ? ssccOfScan(raw) : null;
 }
 
-/** What a box should look a load up by: an SSCC in any box; a load's label too in a box that looks for loads. */
+/** What a box should look a load up by: an SSCC or a GSIN in any box; a load's label too in a box that looks for loads. */
 export function loadLookupOf(raw: string, loads: boolean): string | null {
-  if (ssccOfScan(raw)) return raw.trim();
+  if (ssccOfScan(raw) || gsinOfScan(raw)) return raw.trim();
   return loads && isLoadLabel(raw) ? raw.trim() : null;
 }

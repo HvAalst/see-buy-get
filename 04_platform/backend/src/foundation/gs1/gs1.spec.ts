@@ -1,6 +1,33 @@
-import { CODE128_PATTERNS, cleanGln, cleanPrefix, glnProblem, gs1CheckDigit, gs1_128SvgGroup, gs1_128Values, gs1_128Width, gs1_128Widths, isSscc, serialCapacity, ssccFromScan, ssccHumanReadable, ssccOf, ssccSpaced } from './gs1';
+import { CODE128_PATTERNS, cleanGln, cleanPrefix, glnProblem, gs1CheckDigit, gsinCapacity, gsinFromScan, gsinHumanReadable, gsinOf, isGsin, gs1_128SvgGroup, gs1_128Values, gs1_128Width, gs1_128Widths, isSscc, serialCapacity, ssccFromScan, ssccHumanReadable, ssccOf, ssccSpaced } from './gs1';
 
 describe('GS1 — the global code on a package', () => {
+  describe('the GSIN (2026-11-09)', () => {
+    it('is the prefix, the extension digit and the serial, then the check digit: 17 digits — GS1’s own example', () => {
+      expect(gsinOf('0614141', 1, 23456789)).toBe('06141411234567890'); // GS1 General Specifications' example GSIN
+      const g = gsinOf('616123456789', 7, 42);
+      expect(g).toHaveLength(17);
+      expect(g.slice(0, 12)).toBe('616123456789');
+      expect(g[12]).toBe('7');
+      expect(g.slice(13, 16)).toBe('042');
+      expect(isGsin(g)).toBe(true);
+      expect(isGsin(`${g.slice(0, 16)}${(Number(g[16]) + 1) % 10}`)).toBe(false);
+      expect(gsinCapacity('616123456789')).toBe(1000);
+      expect(gsinCapacity('6161234')).toBe(100_000_000);
+      expect(() => gsinOf('616123456789', 7, 1000)).toThrow(/serial out of range/);
+      expect(() => gsinOf('6161', 7, 1)).toThrow(/not a GS1 company prefix/);
+      expect(gsinHumanReadable(g)).toBe(`(402) ${g}`);
+    });
+
+    it('is read in any form a scanner or a person hands over — and an SSCC or a GLN is not one', () => {
+      const g = gsinOf('6161234', 3, 99);
+      for (const scan of [g, `(402)${g}`, `(402) ${g}`, `402${g}`, `]C1402${g}`, `${g.slice(0, 7)} ${g.slice(7)}`]) expect([scan, gsinFromScan(scan)]).toEqual([scan, g]);
+      expect(gsinFromScan(ssccOf('6161234', 3, 99))).toBeUndefined();
+      expect(gsinFromScan(`${g.slice(0, 16)}${(Number(g[16]) + 1) % 10}`)).toBeUndefined();
+      expect(gsinFromScan('8712345678906')).toBeUndefined();
+      expect(gsinFromScan(undefined)).toBeUndefined();
+    });
+  });
+
   describe('the GLN (2026-11-09)', () => {
     const gln = (body: string) => `${body}${gs1CheckDigit(body)}`;
     it('is 13 digits whose last is the check digit — spaces and dashes as typed dropped', () => {

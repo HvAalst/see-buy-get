@@ -55,6 +55,7 @@ export class ShippingPapersController {
       ...(f.packages ? { packages: f.packages } : {}),
       codes: issued?.codes ?? [],
       ...(issued ? { companyPrefix: issued.companyPrefix } : {}),
+      ...(issued?.gsin ? { gsin: issued.gsin } : {}),
       ...this.shipToOf(f),
     };
   }
@@ -107,6 +108,7 @@ export class ShippingPapersController {
       ...(f.packages ? { packages: f.packages } : {}),
       codes: issued?.codes ?? [],
       ...(issued ? { companyPrefixLength: issued.companyPrefix.length } : {}),
+      ...(issued?.gsin ? { gsin: issued.gsin } : {}),
       grossKg: f.weightKg,
       marks: [f.fragile ? 'Fragile' : '', band ? `Keep ${band.minC} °C to ${band.maxC} °C` : '', note.goods.dangerous ? 'Dangerous goods' : ''].filter(Boolean),
       ...(invoice ? { papers: `In the pouch: commercial invoice ${invoice.number}, ${invoice.copies} copies` } : {}),

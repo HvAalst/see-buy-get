@@ -76714,6 +76714,10 @@
             "type": "string",
             "description": "The prefix they were given under."
           },
+          "gsin": {
+            "type": "string",
+            "description": "2026-11-09 — the load's GSIN (AI 402), printed on every label: the whole shipment's number."
+          },
           "shipToGln": {
             "type": "string",
             "description": "2026-11-09 — the ship-to GLN (AI 410) the labels carry as a barcode: the place's, or the receiver's own."

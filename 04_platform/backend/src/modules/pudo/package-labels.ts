@@ -1,4 +1,4 @@
-import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
+import { gs1_128SvgGroup, gs1_128Width, gsinHumanReadable, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { zplBox, zplGs1_128, zplLabel, zplQr, zplText } from '../../foundation/label/zpl';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
@@ -27,6 +27,8 @@ export interface PackageLabelInput {
   to: { name: string; place: string; country?: string; gln?: string };
   /** 2026-11-09 — where it is delivered, by GLN (AI 410): a barcode of its own above the SSCC. */
   shipToGln?: string;
+  /** 2026-11-09 — the whole shipment's GSIN (AI 402): the same on every package's label, in words. */
+  gsin?: string;
   /** The number of packages; absent, one label for the whole load. */
   packages?: number;
   /** One SSCC a package, in package order, when the shipper's GS1 prefix gave them. */
@@ -113,6 +115,15 @@ function labelSvg(input: PackageLabelInput, no: number, count: number): string {
     parts.push(gs1_128SvgGroup(digits, left, L.sscc.bars, MODULE, L.sscc.height));
     parts.push(t(W / 2, 146, 3.6, e(ssccHumanReadable(sscc)), 'font-family="monospace" text-anchor="middle"'));
   }
+  // The shipment's GSIN, in words: on the ship-to's row, else the SSCC's, else a row of its own.
+  const g = gsinPlace(input, sscc, L);
+  if (g && input.gsin) {
+    if (g.own) {
+      parts.push(`<line x1="0" y1="98" x2="${W}" y2="98" stroke="#111" stroke-width="0.5"/>`);
+      parts.push(t(4, 104, 2.8, 'SHIPMENT (GSIN)', 'fill="#555" letter-spacing="0.3"'));
+      parts.push(t(4, 110.5, 4.4, e(gsinHumanReadable(input.gsin)), 'font-family="monospace" font-weight="700"'));
+    } else parts.push(t(W - 4, g.y, 2.8, `GSIN ${e(gsinHumanReadable(input.gsin))}`, 'fill="#555" font-family="monospace" text-anchor="end"'));
+  }
   return `<svg class="label" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm" font-family="Arial, Helvetica, sans-serif" fill="#111" role="img" aria-label="Package ${no} of ${count}, load ${e(input.loadCode)}${sscc ? `, SSCC ${sscc}` : ''}">${parts.join('')}</svg>`;
 }
 
@@ -169,6 +180,14 @@ function labelZpl(input: PackageLabelInput, no: number, count: number): string {
     // Centred as the printed label centres it: the printer's font is about 0.6 of its height a character wide.
     f.push(zplText((W - readable.length * 3.6 * 0.6) / 2, 146, 3.6, readable));
   }
+  const g = gsinPlace(input, sscc, L);
+  if (g && input.gsin) {
+    if (g.own) {
+      f.push(zplBox(0, 97.75, W, 0.5));
+      f.push(zplText(4, 104, 2.8, 'SHIPMENT (GSIN)'));
+      f.push(zplText(4, 110.5, 4.4, gsinHumanReadable(input.gsin)));
+    } else f.push(zplText(W - 4, g.y, 2.8, `GSIN ${gsinHumanReadable(input.gsin)}`, { right: true }));
+  }
   return zplLabel(f);
 }
 
@@ -195,6 +214,14 @@ function layoutOf(input: PackageLabelInput, sscc: string | undefined) {
     shipTo: { line: 89.5, bars: 95, height: sscc ? 12 : 36 },
     sscc: { line: 112, title: 116.5, text: 117, textSize: 4.4, textRight: true, bars: 119.5, height: 22 },
   };
+}
+
+/** Where the GSIN goes: right of the ship-to's title, else right of the SSCC's, else its own row where the SSCC would be. */
+function gsinPlace(input: PackageLabelInput, sscc: string | undefined, L: ReturnType<typeof layoutOf>): { y: number; own?: false } | { own: true } | undefined {
+  if (!input.gsin) return undefined;
+  if (L.shipTo && input.shipToGln) return { y: L.shipTo.line + 4 };
+  if (sscc) return { y: L.sscc.title };
+  return { own: true };
 }
 
 function placeLine(p: { place: string; country?: string }): string {
