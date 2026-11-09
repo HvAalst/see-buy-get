@@ -621,41 +621,64 @@ function CatchmentsFold({ entityId, writer, actions }: { entityId: string; write
           <thead>
             <tr>
               <th>{t('tower.zones.col.zone')}</th>
-              <th>{t('tower.catchments.col.hub')}</th>
-              <th>{t('tower.catchments.col.km')}</th>
+              <th>{t('tower.catchments.col.hubs')}</th>
             </tr>
           </thead>
           <tbody>
-            {view.zones.map((z) => (
-              <tr key={z.code}>
-                <td class="ctbl__strong">
-                  <span class="ctbl__lbl">{t('tower.zones.col.zone')}</span>
-                  {z.name} <span class="ctbl__sub">{z.code}</span>
-                  {z.proposed ? <span class="chint twr-zoneevidence">{t('tower.catchments.isProposed')}</span> : null}
-                  {z.inherited ? <span class="chint twr-zoneevidence">{t('tower.catchments.isInherited')}</span> : null}
-                </td>
-                <td>
-                  <span class="ctbl__lbl">{t('tower.catchments.col.hub')}</span>
-                  {writer && client ? (
-                    <ConsolePick
-                      label={t('tower.catchments.col.hub')}
-                      value={z.mdpId ?? ''}
-                      onChange={(mdpId) => mdpId !== (z.mdpId ?? '') && void act(() => client.api.assignCatchment(entityId, z.code, mdpId || undefined), t('tower.catchments.assigned', { zone: z.name }))}
-                      bare
-                      small
-                      disabled={busy}
-                      options={[{ value: '', label: t('tower.catchments.none') }, ...view.hubs.map((h) => ({ value: h.mdpId, label: h.name }))]}
-                    />
-                  ) : (
-                    (z.hubName ?? t('tower.catchments.none'))
-                  )}
-                </td>
-                <td class="ctbl__num">
-                  <span class="ctbl__lbl">{t('tower.catchments.col.km')}</span>
-                  {z.km != null ? t('tower.catchments.km', { km: z.km.toLocaleString() }) : '—'}
-                </td>
-              </tr>
-            ))}
+            {view.zones.map((z) => {
+              const nameOf = (id: string) => view.hubs.find((h) => h.mdpId === id)?.name ?? id;
+              const addable = view.hubs.filter((h) => !z.hubs.some((x) => x.mdpId === h.mdpId));
+              return (
+                <tr key={z.code}>
+                  <td class="ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.zones.col.zone')}</span>
+                    {z.name} <span class="ctbl__sub">{z.code}</span>
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.catchments.col.hubs')}</span>
+                    {z.hubs.length ? (
+                      <ul class="twr-zonehubs">
+                        {z.hubs.map((h) => (
+                          <li key={h.mdpId}>
+                            <span class="ctbl__strong">{h.hubName}</span>{' '}
+                            <span class="ctbl__sub">
+                              {h.km != null ? `${t('tower.catchments.km', { km: h.km.toLocaleString() })} · ` : ''}
+                              {t(`tower.catchments.how.${h.how}` as never)}
+                            </span>
+                            {writer && client ? (
+                              <button
+                                type="button"
+                                class="cbtn cbtn--ghost cbtn--sm"
+                                disabled={busy}
+                                aria-label={t('tower.catchments.takeAway', { hub: h.hubName, zone: z.name })}
+                                onClick={() => void act(() => client.api.assignCatchment(entityId, z.code, h.mdpId, false), t('tower.catchments.takenAway', { hub: h.hubName, zone: z.name }))}
+                              >
+                                {t('tower.catchments.takeAwayShort')}
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span class="chint">{t('tower.catchments.none')}</span>
+                    )}
+                    {z.taken.length ? <p class="chint twr-zoneevidence">{t('tower.catchments.taken', { hubs: z.taken.map(nameOf).join(', ') })}</p> : null}
+                    {writer && client && addable.length ? (
+                      <ConsolePick
+                        label={t('tower.catchments.add')}
+                        value=""
+                        placeholder={t('tower.catchments.add')}
+                        onChange={(mdpId) => mdpId && void act(() => client.api.assignCatchment(entityId, z.code, mdpId, true), t('tower.catchments.added', { hub: nameOf(mdpId), zone: z.name }))}
+                        bare
+                        small
+                        disabled={busy}
+                        options={addable.map((h) => ({ value: h.mdpId, label: h.name }))}
+                      />
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : null}

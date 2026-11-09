@@ -905,6 +905,20 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+/* 2026-11-09 — a net of hubs: each zone's hubs, one a line, with its distance and how it came to serve. */
+.twr-zonehubs {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.twr-zonehubs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
 .twr-zoneevidence {
   display: block;
   margin-top: 4px;

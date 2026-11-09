@@ -723,7 +723,13 @@ export class RoutingService {
     // (MdpService.nextHop): the hubs collapse when they are shared. It was routed — and priced — through the zone's first hub
     // as well, a stop it does not need; and with every hand-over now keeping a parcel to its plan, it would have been driven
     // there (movement unification).
-    const destMdp = servedBy(this.agents.countryOf(dest), dest.location) ?? (originMdp?.zones.includes(dest.zone) ? originMdp : this.mdps.mdpForZone(dest.zone));
+    // 2026-11-09 — a net of hubs: a first hub that is one of the destination zone's hubs takes it straight to the shop; else
+    // the nearest of that zone's hubs to the shop, with room.
+    const destCountry = this.agents.countryOf(dest);
+    const destMdp =
+      (originMdp && this.catchments?.serves(originMdp.mdpId, destCountry, dest.location) ? originMdp : undefined) ??
+      servedBy(destCountry, dest.location) ??
+      (originMdp?.zones.includes(dest.zone) ? originMdp : this.mdps.mdpForZone(dest.zone));
     if (originMdp && origin.type !== 'mdp') route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, country: this.mdps.countryOf(originMdp), location: originMdp.location });
     if (destMdp && destMdp.mdpId !== originMdp?.mdpId) route.push({ type: 'mdp', id: destMdp.mdpId, label: destMdp.name, zone: dest.zone, country: this.mdps.countryOf(destMdp), location: destMdp.location });
     route.push({ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone, country: this.agents.countryOf(dest), location: dest.location });

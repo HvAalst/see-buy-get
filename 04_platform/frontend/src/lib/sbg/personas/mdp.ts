@@ -108,6 +108,13 @@ export function createMdpApi(sbg: SbgClient) {
     setSpace: (mdpId: string, body: { bagPlaces: number; sortPerDay: number }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } }, body })),
 
+    /** 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, those it added, and zones near it to add. */
+    zonesServed: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/zones-served', { params: { path: { id: mdpId } } })),
+
+    /** Its owner adds a zone near it, or stops serving one. */
+    serveZone: (mdpId: string, code: string, serve: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/zones-served/{code}', { params: { path: { id: mdpId, code } }, body: { serve } })),
+
     /** What the hub moves bags on between hubs (D11): its kinds, each with what it holds, worked out by the server. */
     carriers: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/carriers', { params: { path: { id: mdpId } } })),
 

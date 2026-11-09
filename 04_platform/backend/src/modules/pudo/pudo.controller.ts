@@ -3020,12 +3020,12 @@ export class SbgController {
     return this.catchmentsOf().propose(entityId, auditActor(actor));
   }
 
-  /** A zone given a hub, or none. */
+  /** 2026-11-09 — a net of hubs: a hub added to a zone, or taken away from it (the zone it stands in too). */
   @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/catchments/:code')
   assignCatchment(@Param('entityId') entityId: string, @Param('code') code: string, @Body() dto: CatchmentAssignDto, @Actor() actor: IntrospectionResult): CatchmentsView {
     this.requireReach(actor, entityId);
-    return this.catchmentsOf().assign(entityId, code, dto.mdpId || undefined, auditActor(actor));
+    return this.catchmentsOf().setServing(entityId, code, dto.mdpId, dto.serve, auditActor(actor));
   }
 
   private catchmentsOf(): CatchmentService {

@@ -50,15 +50,15 @@ export function toggleFlag(flags: readonly ZoneFlag[] | undefined, flag: ZoneFla
 }
 
 /** 2026-11-09 — which hub serves each zone of the map in force (the catchments-and-runs plan, Part A). */
+export type ServingHow = 'stands' | 'added' | 'hub' | 'proposed' | 'inherited';
+/** 2026-11-09 — a net of hubs: every hub that serves a zone, nearest first, and how it came to. */
 export interface CatchmentZone {
   code: string;
   name: string;
   group: string;
-  mdpId?: string;
-  hubName?: string;
-  proposed?: boolean;
-  inherited?: boolean;
-  km?: number;
+  hubs: Array<{ mdpId: string; hubName: string; how: ServingHow; km?: number }>;
+  /** Hubs staff took away from it. */
+  taken: string[];
 }
 export interface Catchments {
   entityId: string;

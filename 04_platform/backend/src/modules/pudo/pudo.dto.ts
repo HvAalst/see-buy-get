@@ -1848,8 +1848,15 @@ export class ZoneChangeDto {
 }
 
 /** 2026-11-09 — the hub that serves a zone (none: routed as before, by the area name). */
+/** 2026-11-09 — a net of hubs: a hub added to a zone (serve) or taken away from it. */
 export class CatchmentAssignDto {
-  @IsOptional() @IsString() @MaxLength(80) mdpId?: string;
+  @IsString() @MaxLength(80) mdpId!: string;
+  @IsBoolean() serve!: boolean;
+}
+
+/** 2026-11-09 — a hub adds a zone to the ones it serves, or stops serving one it added. */
+export class HubZoneServeDto {
+  @IsBoolean() serve!: boolean;
 }
 
 export class ZoneMergeDto {

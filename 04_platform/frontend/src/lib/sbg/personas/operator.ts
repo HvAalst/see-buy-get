@@ -165,8 +165,9 @@ export function createOperatorApi(sbg: SbgClient) {
     /** 2026-11-09 — which hub serves each zone of the map in force (the catchments-and-runs plan, Part A). */
     catchments: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/catchments', { params: { path: { entityId } } })),
     proposeCatchments: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/propose', { params: { path: { entityId } } })),
-    assignCatchment: (entityId: string, code: string, mdpId?: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/{code}', { params: { path: { entityId, code } }, body: mdpId ? { mdpId } : {} })),
+    /** 2026-11-09 — a net of hubs: a hub added to a zone (serve) or taken away from it. */
+    assignCatchment: (entityId: string, code: string, mdpId: string, serve: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/{code}', { params: { path: { entityId, code } }, body: { mdpId, serve } })),
     changeZone: (entityId: string, code: string, body: { name?: string; group?: string; flags?: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/zones/{code}', { params: { path: { entityId, code } }, body })),
     mergeZones: (entityId: string, codes: string[], name?: string) =>

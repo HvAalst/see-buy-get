@@ -1308,18 +1308,28 @@ export class MdpService {
    * 2026-11-09 — WHICH HUB SERVES A PIN, where its country has said (hub catchments, the catchments-and-runs plan, Part A).
    * Given by CatchmentService when it starts, so the two never need each other to be built.
    */
-  private catchmentOf?: (country: string, point: GeoPoint, now: number) => string | undefined;
+  private catchments?: {
+    hubForPoint: (country: string, point: GeoPoint, now: number) => string | undefined;
+    serves: (mdpId: string, country: string, point: GeoPoint, now: number) => boolean;
+  };
 
-  useCatchments(resolve: (country: string, point: GeoPoint, now: number) => string | undefined): void {
-    this.catchmentOf = resolve;
+  /** 2026-11-09 — a net of hubs: which hub a pin goes to (the nearest of its zone's hubs with room), and whether a hub serves it. */
+  useCatchments(lookups: { hubForPoint: (country: string, point: GeoPoint, now: number) => string | undefined; serves: (mdpId: string, country: string, point: GeoPoint, now: number) => boolean }): void {
+    this.catchments = lookups;
+  }
+
+  /** 2026-11-09 — whether a hub can take one more bag: one that never said its space always can (spaceOf). */
+  hasRoom(mdp: Mdp, now: number = Date.now()): boolean {
+    return !(this.declaresSpace(mdp) && this.spaceOf(mdp, now).noRoom);
   }
 
   nextHop(mdp: Mdp, destZone: string, destAgentDid: string, now: number = Date.now()): NextHop {
-    // 2026-11-09 — the hub that serves the destination shop's zone, where its country has said: this hub hands it to the
-    // shop, any other hub is where it goes next. The area name typed at sign-up only where no catchment answers.
+    // 2026-11-09 — a net of hubs: a hub that serves the destination shop's zone hands it to the shop; any other hub sends it
+    // to the nearest of that zone's hubs with room. The area name typed at sign-up only where no catchment answers.
     const shop = destAgentDid ? this.agents.list().find((a) => a.did === destAgentDid) : undefined;
-    const servedBy = shop && this.catchmentOf ? this.catchmentOf(this.agents.countryOf(shop), shop.location, now) : undefined;
-    if (shop && servedBy === mdp.mdpId) return { type: 'pudo', id: shop.did, label: shop.shopName, zone: destZone };
+    const country = shop ? this.agents.countryOf(shop) : undefined;
+    if (shop && country && this.catchments?.serves(mdp.mdpId, country, shop.location, now)) return { type: 'pudo', id: shop.did, label: shop.shopName, zone: destZone };
+    const servedBy = shop && country && this.catchments ? this.catchments.hubForPoint(country, shop.location, now) : undefined;
     const byZone = servedBy ? this.list().find((m) => m.mdpId === servedBy) : undefined;
     if (byZone) return { type: 'mdp', id: byZone.mdpId, label: byZone.name, zone: destZone };
     if (mdp.zones.includes(destZone)) {

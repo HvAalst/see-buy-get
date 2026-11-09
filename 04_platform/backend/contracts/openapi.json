@@ -7607,6 +7607,78 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/zones-served": {
+      "get": {
+        "operationId": "HubZones.read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubZonesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/zones-served/{code}": {
+      "post": {
+        "operationId": "HubZones.serve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubZoneServeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubZonesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/carriers": {
       "get": {
         "operationId": "HubCarrier.read",
@@ -13868,7 +13940,7 @@
       "post": {
         "operationId": "Sbg.assignCatchment",
         "summary": "",
-        "description": "A zone given a hub, or none.",
+        "description": "2026-11-09 — a net of hubs: a hub added to a zone, or taken away from it (the zone it stands in too).",
         "parameters": [
           {
             "name": "entityId",
@@ -50124,6 +50196,69 @@
           "sortPerDay"
         ]
       },
+      "HubZoneLine": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number"
+          },
+          "how": {
+            "type": "string",
+            "enum": [
+              "stands",
+              "added",
+              "hub",
+              "proposed",
+              "inherited"
+            ]
+          }
+        }
+      },
+      "HubZonesView": {
+        "type": "object",
+        "properties": {
+          "mapVersion": {
+            "type": "number"
+          },
+          "standsIn": {
+            "$ref": "#/components/schemas/HubZoneLine"
+          },
+          "serves": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubZoneLine"
+            }
+          },
+          "taken": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubZoneLine"
+            }
+          },
+          "nearby": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubZoneLine"
+            }
+          }
+        },
+        "required": [
+          "serves",
+          "taken",
+          "nearby"
+        ]
+      },
+      "HubZoneServeDto": {
+        "type": "object",
+        "properties": {
+          "serve": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "serve"
+        ]
+      },
       "HubCarrierView": {
         "type": "object",
         "properties": {
@@ -58968,25 +59103,47 @@
           "attribution"
         ]
       },
-      "CatchmentZoneView": {
+      "CatchmentHubOfZone": {
         "type": "object",
         "properties": {
-          "mdpId": {
-            "type": "string"
-          },
-          "hubName": {
-            "type": "string"
-          },
-          "proposed": {
-            "type": "boolean"
-          },
-          "inherited": {
-            "type": "boolean"
+          "how": {
+            "type": "string",
+            "enum": [
+              "stands",
+              "added",
+              "hub",
+              "proposed",
+              "inherited"
+            ]
           },
           "km": {
             "type": "number"
           }
-        }
+        },
+        "required": [
+          "how"
+        ]
+      },
+      "CatchmentZoneView": {
+        "type": "object",
+        "properties": {
+          "hubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatchmentHubOfZone"
+            }
+          },
+          "taken": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "hubs",
+          "taken"
+        ]
       },
       "CatchmentHubView": {
         "type": "object",
@@ -59022,8 +59179,15 @@
           "mdpId": {
             "type": "string",
             "maxLength": 80
+          },
+          "serve": {
+            "type": "boolean"
           }
-        }
+        },
+        "required": [
+          "mdpId",
+          "serve"
+        ]
       },
       "PriceReportRow": {
         "type": "object",

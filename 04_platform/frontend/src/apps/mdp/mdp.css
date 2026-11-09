@@ -456,6 +456,21 @@
 }
 
 /* 2026-11-08 — the zone the hub’s pin lies in, on its country’s map, under its place words. */
+/* 2026-11-09 — the zones a hub serves, one a line: its name and distance, the owner's button at the end. */
+.hubzones {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.hubzones li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .hubzone {
   margin: 10px 0 0;
   color: var(--tx2);

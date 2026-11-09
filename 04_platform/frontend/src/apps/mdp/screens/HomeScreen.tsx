@@ -14,6 +14,7 @@ import type { SbgClient } from '../../../lib/sbg';
 import { HubReachCard } from './HubReachCard';
 import { CarriersCard } from './CarriersCard';
 import { HubSpaceCard } from './HubSpaceCard';
+import { ZonesServedCard } from './ZonesServedCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -214,6 +215,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           {hub.gln ? <p class="hubzone"><Abbreviated text={t('mdp.home.gln', { gln: hub.gln })} /></p> : null}
         </Card>
       ) : null}
+
+      {/* 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, and zones near it its owner adds. */}
+      <ZonesServedCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
 
       {/* When the hub is open and how to reach it: what drivers and stores working with it see; its owner writes it. */}
       <HubReachCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />

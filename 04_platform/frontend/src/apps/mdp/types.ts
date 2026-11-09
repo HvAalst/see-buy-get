@@ -137,6 +137,23 @@ export interface LoadView {
   moved: string[];
 }
 
+/** 2026-11-09 — a zone, as the hub reads it on its own screen (backend HubZoneLine). */
+export interface HubZoneLine {
+  code: string;
+  name: string;
+  km?: number;
+  how?: 'stands' | 'added' | 'hub' | 'proposed' | 'inherited';
+}
+/** 2026-11-09 — what a hub serves (backend HubZonesView): absent mapVersion where its country keeps no zones yet. */
+export interface HubZonesView {
+  mdpId: string;
+  mapVersion?: number;
+  standsIn?: HubZoneLine;
+  serves: HubZoneLine[];
+  taken: HubZoneLine[];
+  nearby: HubZoneLine[];
+}
+
 export interface NewToteView {
   toteId: string;
   code: string;

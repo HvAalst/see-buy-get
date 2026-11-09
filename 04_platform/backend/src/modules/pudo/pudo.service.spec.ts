@@ -13900,26 +13900,38 @@ it('a parcel priced from the card keeps what carrying it was planned to cost —
       const hops = () => routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).hops.map((h) => h.id);
       expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
       expect(mdps.nextHop(mdps.require(hubWest.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'pudo', id: east.did });
-      // Kenya's zones published, and each zone given its own hub: the West zone the west hub, the East zone the east hub.
+      // Kenya's zones published: each hub serves the zone it stands in, by itself (a net of hubs, 2026-11-09).
       zoneMaps.importAreas('sbg-ke', { geojson: TWO, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
       zoneMaps.publish('sbg-ke', undefined, 'N');
-      catchments.propose('sbg-ke', 'N');
       expect(catchments.hubForPoint('KE', east.location)).toBe(hubEast.mdpId);
       expect(hops()).toEqual([west.did, hubWest.mdpId, hubEast.mdpId, east.did]);
       // Sorted at the west hub with no plan to follow: on to the east hub; at the east hub: to the shop.
       expect(mdps.nextHop(mdps.require(hubWest.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'mdp', id: hubEast.mdpId });
       expect(mdps.nextHop(mdps.require(hubEast.mdpId), 'MidTown', east.did)).toMatchObject({ type: 'pudo', id: east.did });
-      // The west zone given the east hub, though by name the west hub comes first: the journey starts there.
+      // The west hub taken away from the west zone, and the east hub added to it: the journey starts at the east hub, which
+      // serves the destination too — one hub.
       const westCode = zoneMaps.zoneAt('KE', west.location)!.code;
-      catchments.assign('sbg-ke', westCode, hubEast.mdpId, 'N');
+      catchments.setServing('sbg-ke', westCode, hubWest.mdpId, false, 'N');
+      catchments.setServing('sbg-ke', westCode, hubEast.mdpId, true, 'N');
       expect(hops()).toEqual([west.did, hubEast.mdpId, east.did]);
-      catchments.assign('sbg-ke', westCode, hubWest.mdpId, 'N');
+      // Given back: the west zone has two hubs now, and the west shop goes to the nearer, the west hub.
+      catchments.setServing('sbg-ke', westCode, hubWest.mdpId, true, 'N');
+      expect(hops()).toEqual([west.did, hubWest.mdpId, hubEast.mdpId, east.did]);
+      // …unless the west hub's floor is full: then the nearest with room, the east hub — and on to the shop from there.
+      mdps.setSpace(hubWest.mdpId, { bagPlaces: 1, sortPerDay: 50 });
+      const fill = totes.register(hubWest.mdpId);
+      totes.assign(fill.code, hubEast.mdpId, 'East');
+      expect(mdps.hasRoom(mdps.require(hubWest.mdpId))).toBe(false);
+      expect(hops()).toEqual([west.did, hubEast.mdpId, east.did]);
+      totes.empty(fill.code, hubWest.mdpId);
+      catchments.setServing('sbg-ke', westCode, hubEast.mdpId, false, 'N');
       // Both shops in one hub's zones: one hub, as before.
       const eastCode = zoneMaps.zoneAt('KE', east.location)!.code;
-      catchments.assign('sbg-ke', eastCode, hubWest.mdpId, 'N');
+      catchments.setServing('sbg-ke', eastCode, hubWest.mdpId, true, 'N');
       expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
       // A zone left without a hub: by name, as before.
-      catchments.assign('sbg-ke', eastCode, undefined, 'N');
+      catchments.setServing('sbg-ke', eastCode, hubWest.mdpId, false, 'N');
+      catchments.setServing('sbg-ke', eastCode, hubEast.mdpId, false, 'N');
       expect(hops()).toEqual([west.did, hubWest.mdpId, east.did]);
     });
 
