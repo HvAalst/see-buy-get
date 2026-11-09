@@ -93,7 +93,7 @@ export const enMdp = {
   'mdp.counter.signIn': 'Open the Shop app and sign in with {email} and your hub’s password.',
   'mdp.counter.float': 'Top up your counter’s float in the Shop app before it takes parcels in, as any shop does.',
   'mdp.counter.closed': 'Your counter is closed: what is on its shelf is still collected there. Choose “Sort and hand out” to open it again.',
-  'mdp.counter.hoursFirst': 'Say your hub’s opening hours first, under “When and how to reach your hub”: your counter opens on them.',
+  'mdp.counter.hoursFirst': 'Say your hub’s opening hours first, under “Opening hours and how to reach you”: your counter opens on them.',
   'mdp.counter.ownerDecides': 'The hub’s owner decides whether it hands out.',
   'mdp.counter.toSortOnly': 'Sort only',
   'mdp.counter.toHandOut': 'Sort and hand out',

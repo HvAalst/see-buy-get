@@ -1,0 +1,25 @@
+// Nederlands — version 1, written in for en.site-hours.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "fleet.sites.opens": "Opent",
+  "fleet.sites.closes": "Sluit",
+  "fleet.sites.dayName.mon": "Maandag",
+  "fleet.sites.dayName.tue": "Dinsdag",
+  "fleet.sites.dayName.wed": "Woensdag",
+  "fleet.sites.dayName.thu": "Donderdag",
+  "fleet.sites.dayName.fri": "Vrijdag",
+  "fleet.sites.dayName.sat": "Zaterdag",
+  "fleet.sites.dayName.sun": "Zondag",
+  "fleet.sites.day.mon": "ma",
+  "fleet.sites.day.tue": "di",
+  "fleet.sites.day.wed": "wo",
+  "fleet.sites.day.thu": "do",
+  "fleet.sites.day.fri": "vr",
+  "fleet.sites.day.sat": "za",
+  "fleet.sites.day.sun": "zo",
+  "fleet.sites.dayRun": "{from}–{to}",
+  "fleet.sites.openRun": "{days} {hours}",
+  "fleet.sites.closedRun": "{days} gesloten",
+  "fleet.sites.baysCount": "{n, plural, one {# laadplek} other {# laadplekken}}",
+  "fleet.sites.loadsLine": "Laden: {what}",
+};

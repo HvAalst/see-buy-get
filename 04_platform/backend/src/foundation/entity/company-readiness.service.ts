@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ApiProperty } from '@nestjs/swagger';
 import { catalogueEntry } from '../countries/catalogue';
+import { appsSpeak, languageName, mainLanguageOf } from '../countries/app-languages';
 import { CompanyDocumentService } from './company-documents.service';
 import { lapsesAt } from './company-record.types';
 import { EntityService } from './entity.service';
@@ -78,6 +79,14 @@ export class CompanyReadinessService {
     for (const policy of record.insurance) {
       const inDate = lapsesAt(policy.expiresAt) > now;
       add(`insurance:${policy.policyNumber}`, inDate && verified('insurance_policy', policy.policyNumber), `Policy ${policy.policyNumber}: in date, and its paper verified by a second person`);
+    }
+
+    // 2026-11-09 — THE APPS IN THE COUNTRY'S LANGUAGE (the owner: "when we draft a company; the language should be wired in"):
+    // its main language, every screen written in it, before a company of ours switches the country on. English is written.
+    const language = isSister ? mainLanguageOf(entity.jurisdiction) : undefined;
+    if (language && language !== 'en') {
+      const country = catalogueEntry(entity.jurisdiction)?.name ?? entity.jurisdiction ?? 'its country';
+      add(`language:${language}`, appsSpeak(language), `The apps written in ${languageName(language)}, the main language of ${country}: every screen, so people there use SeeBuyGet in their own language`);
     }
 
     // CA8 — what the country itself requires of anybody operating there.

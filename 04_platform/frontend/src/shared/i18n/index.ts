@@ -5,6 +5,7 @@ import { firstGuess } from '../phone/dial';
 import { en, type MessageKey, type Messages } from './catalogs/en';
 import { sw } from './catalogs/sw';
 import { am } from './catalogs/am';
+import { nl } from './catalogs/nl';
 import { fr } from './catalogs/fr';
 import { ar } from './catalogs/ar';
 
@@ -22,7 +23,7 @@ export function addEnglish(more: Partial<Messages>): void {
   Object.assign(english, more);
 }
 
-const CATALOGS: Record<Locale, Partial<Messages>> = { en: english, sw, am, fr, ar };
+const CATALOGS: Record<Locale, Partial<Messages>> = { en: english, sw, am, nl, fr, ar };
 
 /*
  * 2026-11-03 — THE OTHER LANGUAGES, FETCHED WHEN THEY ARE CHOSEN (the owner: "write the translation in and write a separate

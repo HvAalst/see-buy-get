@@ -12,7 +12,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
  * ("kept"). Every change is kept in the phrase's history, so no wording is ever lost, the first included; the apps lay a
  * country's version 2 over version 1 for the people there.
  */
-export const REVIEW_LOCALES = ['sw', 'am', 'fr', 'ar'] as const;
+export const REVIEW_LOCALES = ['sw', 'am', 'nl', 'fr', 'ar'] as const;
 export type ReviewLocale = (typeof REVIEW_LOCALES)[number];
 
 export interface WordReviewStep {

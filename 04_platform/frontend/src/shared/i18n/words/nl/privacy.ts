@@ -1,0 +1,28 @@
+// Nederlands — version 1, written in for en.privacy.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "pages.notice.write": "Schrijf ons over je gegevens",
+  "pages.notice.version": "Versie {number}, gepubliceerd op {date}",
+  "pages.notice.changed": "Wat er in deze versie is veranderd: {note}",
+  "pages.notice.earlier": "Eerdere versies",
+  "pages.notice.earlierNone": "Dit is de eerste versie.",
+  "pages.notice.readVersion": "Lees versie {number}",
+  "pages.notice.reading": "Je leest versie {number}, van {date}. Dit is niet meer de huidige versie.",
+  "pages.notice.current": "Lees de huidige versie",
+  "pages.notice.loading": "Laden…",
+  "pages.notice.unavailable": "Deze pagina kon nu niet worden geladen. Je hebt verbinding nodig: probeer het zo nog eens.",
+  "pages.notice.countriesTitle": "Wat een land toevoegt",
+  "pages.notice.countriesLede": "Waar de wet van een land meer vraagt, heeft dat land ook een eigen tekst. Daar gelden beide.",
+  "pages.notice.forCountry": "Wat {country} toevoegt aan de algemene tekst. In {country} gelden beide.",
+  "pages.notice.general": "Lees de algemene tekst",
+  "pages.notice.noneForCountry": "{country} heeft hier geen eigen tekst: de algemene tekst geldt daar, net als overal.",
+  "pages.terms.metaTitle": "Gebruiksvoorwaarden — SeeBuyGet",
+  "pages.terms.metaDescription": "De overeenkomst tussen jou en SeeBuyGet: met wie je een overeenkomst sluit, je account, wat SeeBuyGet wel en niet doet, en hoe deze voorwaarden veranderen.",
+  "pages.terms.title": "Gebruiksvoorwaarden",
+  "pages.privacy.metaTitle": "Je gegevens bij SeeBuyGet — wat wordt bewaard, wie het ziet, hoe lang",
+  "pages.privacy.metaDescription": "Wat SeeBuyGet bewaart om een pakket te vervoeren, hoe het wordt beschermd, wie het kan zien, welke andere bedrijven het verwerken, hoe lang het wordt bewaard en wat je kunt doen.",
+  "pages.privacy.title": "Je gegevens bij SeeBuyGet",
+  "pages.cookies.metaTitle": "Cookies bij SeeBuyGet — geen geplaatst, en wat er op je telefoon wordt bewaard",
+  "pages.cookies.metaDescription": "SeeBuyGet plaatst geen cookies en gebruikt geen tracking. Wat de apps in plaats daarvan in je browser bewaren, waarom, wat er blijft staan na het uitloggen en hoe je het verwijdert.",
+  "pages.cookies.title": "Cookies",
+};

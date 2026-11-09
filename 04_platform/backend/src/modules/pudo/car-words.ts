@@ -58,7 +58,7 @@ export const CAR_WORDS: Record<'en', CarWords> & Partial<Record<string, Partial<
 };
 
 /** The app's languages (frontend/src/shared/i18n/locales.ts). A language outside them is kept as English. */
-export const CAR_LANGS = ['en', 'sw', 'am', 'fr', 'ar'] as const;
+export const CAR_LANGS = ['en', 'sw', 'am', 'nl', 'fr', 'ar'] as const;
 export const carLangOf = (lang: unknown): string => (typeof lang === 'string' && (CAR_LANGS as readonly string[]).includes(lang) ? lang : 'en');
 
 /** The words in this language, each one falling back to English where it is not translated — as the app's catalogs do. */

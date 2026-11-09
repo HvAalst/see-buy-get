@@ -76,6 +76,12 @@ describe('reading a sheet of orders', () => {
       expect(r.orders[0].destLocation).toBeUndefined();
     });
 
+    it('reads the consignment note’s columns by the names the Dutch help gives them (2026-11-09)', () => {
+      const r = readOrderSheet('Ordernummer;Omschrijving;Gewicht;Adres;Datum;Geadresseerde;UN-nummer;Klasse;Juiste vervoersnaam;Verpakkingsgroep;Douane-instructies\nNL-8;Accu’s;20;Dorpsstraat 2;06-10-2026;Garage De Wit;UN3480;9;Lithium-ionbatterijen;II;Uitvoer via Rotterdam', TODAY);
+      expect(r.columns).toMatchObject({ consignee: 'Geadresseerde', unNumber: 'UN-nummer', hazardClass: 'Klasse', shippingName: 'Juiste vervoersnaam', packingGroup: 'Verpakkingsgroep', customs: 'Douane-instructies' });
+      expect(r.ignored).toEqual([]);
+    });
+
     it('refuses a sheet with a needed column missing, and says which in words', () => {
       const r = readOrderSheet('Order number,Goods,Deliver to\nA1,Sand,Site', TODAY);
       expect(r.refusal).toMatch(/no column for the weight, the delivery date/);

@@ -520,6 +520,8 @@ function installablePlugins(): PluginOption[] {
           // 2026-11-09 — the camera reader for a phone whose browser has none (an iPhone): fetched only there, the first
           // time it scans, and kept by the rule in runtimeCaching — an Android phone never downloads it.
           '**/zxingDetector-*.js',
+          // 2026-11-09 — the apps' words in each language: fetched when that language is chosen, kept by the rule below.
+          '**/words-*.js',
           // 2026-11-02 — the install window's pictures and the shortcuts' icons are fetched by the phone when the app is
           // installed, never by a page: ~400 KB a first visit on a 2G phone would download for nothing.
           'screenshots/**',
@@ -540,6 +542,13 @@ function installablePlugins(): PluginOption[] {
             urlPattern: ({ url }: { url: URL }) => /\/assets\/zxingDetector-[\w-]+\.js$/.test(url.pathname),
             handler: 'CacheFirst' as const,
             options: { cacheName: 'sbg-scanner', expiration: { maxEntries: 4, maxAgeSeconds: 180 * 24 * 3600 } },
+          },
+          // 2026-11-09 — the words of the language its reader chose (left out of the precache above): kept once fetched, so
+          // the app speaks it offline from then on. Code, never a read.
+          {
+            urlPattern: ({ url }: { url: URL }) => /\/assets\/words-[\w-]+\.js$/.test(url.pathname),
+            handler: 'CacheFirst' as const,
+            options: { cacheName: 'sbg-words', expiration: { maxEntries: 120, maxAgeSeconds: 365 * 24 * 3600 } },
           },
           ...(IS_ROOT
             ? [
@@ -621,7 +630,18 @@ export default defineConfig({
        * of our own makes the plugin leave chunking alone, on every machine. The modulepreload polyfill keeps the chunk
        * the plugin gave it. scripts/check-start.mjs checks the built page after every build.
        */
-      ...(APP_ID === 'home' ? { output: { manualChunks: (id: string) => (id.includes('vite/modulepreload-polyfill') ? 'index' : undefined) } } : {}),
+      output: {
+        ...(APP_ID === 'home' ? { manualChunks: (id: string) => (id.includes('vite/modulepreload-polyfill') ? 'index' : undefined) } : {}),
+        /*
+         * 2026-11-09 — A LANGUAGE'S WORDS, NAMED FOR IT (words/<locale>/<catalogue>.ts → words-<locale>-<catalogue>-…js): so
+         * the precache can leave them out and the phone fetches only the language its reader chooses (the rule below keeps
+         * it). Every language was downloaded by every phone before — Kiswahili onto a Dutch phone, Dutch onto a Kenyan one.
+         */
+        chunkFileNames: (chunk: { facadeModuleId?: string | null }) => {
+          const m = /\/i18n\/words\/([a-z]{2,3})\/([\w-]+)\.ts$/.exec((chunk.facadeModuleId ?? '').replace(/\\/g, '/'));
+          return m ? `assets/words-${m[1]}-${m[2]}-[hash].js` : 'assets/[name]-[hash].js';
+        },
+      },
     },
   },
 

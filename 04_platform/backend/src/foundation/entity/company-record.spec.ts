@@ -168,6 +168,18 @@ describe('a company, recorded properly', () => {
       expect(() => entities.requireTransacting(partner.entityId)).toThrow(/partner company/);
       expect(readiness.readinessOf(partner.entityId).items.some((i) => i.key === 'bank_account')).toBe(false);
     });
+
+    it('asks for the apps in the country’s main language before a company of ours switches it on (2026-11-09)', () => {
+      const nl = entities.createCompany({ kind: 'sister', jurisdiction: 'NL', name: 'SeeBuyGet Nederland B.V.' }, 'Amina');
+      expect(readiness.readinessOf(nl.entityId).items.find((i) => i.key === 'language:nl')).toMatchObject({ met: true, label: expect.stringMatching(/^The apps written in Dutch, the main language of /) });
+      const de = entities.createCompany({ kind: 'sister', jurisdiction: 'DE', name: 'SeeBuyGet Deutschland GmbH' }, 'Amina');
+      expect(readiness.readinessOf(de.entityId).items.find((i) => i.key === 'language:de')).toMatchObject({ met: false, label: expect.stringContaining('German') });
+      // English is the apps' own: nothing to ask. Nor of a partner, whose apps are not ours to speak.
+      const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
+      expect(readiness.readinessOf(zm.entityId).items.some((i) => i.key.startsWith('language:'))).toBe(false);
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'FR', name: 'Fret Paris' }, 'Amina');
+      expect(readiness.readinessOf(partner.entityId).items.some((i) => i.key.startsWith('language:'))).toBe(false);
+    });
   });
 
   describe('CA5 — a lapsed paper switches off what it supported', () => {

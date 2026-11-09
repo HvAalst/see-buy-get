@@ -79,11 +79,12 @@ describe('what its service worker keeps', () => {
     expect(caches.length).toBe(1);
     const at = caches[0].index ?? 0;
     const block = config.slice(at, config.indexOf('navigateFallback:', at));
-    // 2026-11-09 — every app keeps one thing once fetched: the camera reader for a phone without one (zxingDetector) —
-    // code, never a read, never data.
+    // 2026-11-09 — every app keeps two things once fetched: the camera reader for a phone without one (zxingDetector) and
+    // the words of the language its reader chose (words-…) — code, never a read, never data.
     const everyApp = block.slice(0, block.indexOf('...(IS_ROOT'));
-    expect([...everyApp.matchAll(/urlPattern:/g)]).toHaveLength(1);
+    expect([...everyApp.matchAll(/urlPattern:/g)]).toHaveLength(2);
     expect(everyApp).toMatch(/\/\\\/assets\\\/zxingDetector-\[\\w-\]\+\\\.js\$\//);
+    expect(everyApp).toMatch(/\/\\\/assets\\\/words-\[\\w-\]\+\\\.js\$\//);
     expect(everyApp).not.toMatch(/v1|navigate/);
     // …and the rest inside the front page's own branch, and that front page is not the Business app.
     expect(block).toMatch(/\.\.\.\(IS_ROOT\s*\?\s*\[/);

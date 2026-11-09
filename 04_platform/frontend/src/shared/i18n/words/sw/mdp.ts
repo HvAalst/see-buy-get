@@ -79,7 +79,7 @@ export const words: Record<string, string> = {
   "mdp.counter.signIn": "Fungua programu ya Duka na uingie kwa {email} na nenosiri la kituo chako.",
   "mdp.counter.float": "Weka pesa kwenye akiba ya kaunta yako katika programu ya Duka kabla haijapokea vifurushi, kama duka lolote.",
   "mdp.counter.closed": "Kaunta yako imefungwa: kilicho kwenye rafu yake bado kinachukuliwa hapo. Chagua “Panga na ukabidhi” kuifungua tena.",
-  "mdp.counter.hoursFirst": "Kwanza sema saa za kufungua za kituo chako, chini ya “Lini na jinsi ya kufikia kituo chako”: kaunta yako hufunguliwa kwa saa hizo.",
+  "mdp.counter.hoursFirst": "Kwanza sema saa za kufungua za kituo chako, chini ya “Saa za kufungua na jinsi ya kukufikia”: kaunta yako hufunguliwa kwa saa hizo.",
   "mdp.counter.ownerDecides": "Mmiliki wa kituo ndiye anaamua kama kinakabidhi.",
   "mdp.counter.toSortOnly": "Panga tu",
   "mdp.counter.toHandOut": "Panga na ukabidhi",

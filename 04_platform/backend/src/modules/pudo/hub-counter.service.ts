@@ -91,7 +91,7 @@ export class HubCounterService {
     }
     // Everything that can say no, before anything is made.
     const hours = this.hoursOf(mdpId);
-    if (!hours) throw new GlosError('INVALID_STATE', 'Say your hub’s opening hours first, under “When and how to reach your hub”: your counter opens on them');
+    if (!hours) throw new GlosError('INVALID_STATE', 'Say your hub’s opening hours first, under “Opening hours and how to reach you”: your counter opens on them');
     const rows = Math.floor(Number(input.rows));
     const cols = Math.floor(Number(input.cols));
     if (!(rows >= 1 && rows <= 50 && cols >= 1 && cols <= 50)) throw new GlosError('VALIDATION_FAILED', 'Say your counter’s shelf: rows and columns, 1 to 50 each', { field: 'rows' });

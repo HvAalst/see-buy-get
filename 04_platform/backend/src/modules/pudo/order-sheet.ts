@@ -42,9 +42,10 @@ const ALIASES: Record<SheetField, string[]> = {
   consignee: ['consignee', 'recipient', 'receivingcompany', 'ontvanger', 'geadresseerde'],
   unNumber: ['un', 'unnumber', 'unno', 'unnr', 'unnummer'],
   hazardClass: ['class', 'hazardclass', 'adrclass', 'dgclass', 'klasse'],
-  shippingName: ['shippingname', 'propershippingname', 'psn'],
+  shippingName: ['shippingname', 'propershippingname', 'psn', 'juistevervoersnaam', 'vervoersnaam'],
   packingGroup: ['packinggroup', 'pg', 'verpakkingsgroep'],
-  customs: ['customs', 'customsinstructions', 'douane'],
+  // 2026-11-09 — and as the Dutch help names them: Douane-instructies, Juiste vervoersnaam.
+  customs: ['customs', 'customsinstructions', 'douane', 'douaneinstructies'],
 };
 
 /** The columns a sheet must have, whatever they are called. */

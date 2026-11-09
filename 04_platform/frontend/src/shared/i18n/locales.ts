@@ -3,7 +3,7 @@
  * fallback); the rest translate incrementally, so a missing key never breaks a screen — it just shows English.
  * Arabic is right-to-left, which flips the document `dir` (per-component CSS logical-property polish follows).
  */
-export const LOCALES = ['en', 'sw', 'am', 'fr', 'ar'] as const;
+export const LOCALES = ['en', 'sw', 'am', 'nl', 'fr', 'ar'] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = 'en';
@@ -17,6 +17,7 @@ export const LOCALE_ENDONYMS: Record<Locale, string> = {
   en: 'English',
   sw: 'Kiswahili',
   am: 'አማርኛ',
+  nl: 'Nederlands',
   fr: 'Français',
   ar: 'العربية',
 };
@@ -32,6 +33,8 @@ export const isLocale = (v: string | null | undefined): v is Locale => !!v && (L
 const SPOKEN_IN: Record<Exclude<Locale, 'en'>, readonly string[]> = {
   sw: ['KE', 'TZ', 'UG', 'RW', 'BI', 'CD'],
   am: ['ET'],
+  // 2026-11-09 — Dutch: the Netherlands, Belgium (Flanders), Suriname, Aruba, Curaçao and Sint Maarten.
+  nl: ['NL', 'BE', 'SR', 'AW', 'CW', 'SX'],
   fr: ['FR', 'BE', 'CH', 'LU', 'MC', 'CA', 'CD', 'CG', 'CM', 'CI', 'SN', 'ML', 'BF', 'NE', 'TD', 'GN', 'BJ', 'TG', 'GA', 'MG', 'RW', 'BI', 'DJ', 'KM', 'CF', 'SC', 'HT'],
   ar: ['EG', 'SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'JO', 'LB', 'SY', 'IQ', 'YE', 'SD', 'LY', 'TN', 'DZ', 'MA', 'MR', 'SO', 'DJ', 'KM', 'PS', 'TD'],
 };

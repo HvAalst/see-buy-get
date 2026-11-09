@@ -23,7 +23,8 @@ describe('the parcel account where SeeBuyGet holds no money yet', () => {
 
 describe('the languages offered in a country', () => {
   it('offers English everywhere, and a language at once only where it counts', () => {
-    expect(localesOfCountry('NL')).toEqual(['en']);
+    // 2026-11-09 — the Netherlands speaks Dutch now that the apps are written in it (Kiswahili is still never offered there).
+    expect(localesOfCountry('NL')).toEqual(['en', 'nl']);
     expect(localesOfCountry('KE')).toEqual(['en', 'sw']);
     expect(localesOfCountry('ET')).toEqual(['en', 'am']);
     expect(localesOfCountry(undefined)).toEqual(['en']);
