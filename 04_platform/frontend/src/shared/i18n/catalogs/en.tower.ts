@@ -1358,6 +1358,7 @@ export const enTowerCompanies = {
   'tower.changes.what.custodyCaps': 'Custody cap for the new',
   'tower.changes.what.zones': 'Zones',
   'tower.changes.what.prices': 'Prices by zone',
+  'tower.changes.what.catchments': 'Which hub serves each zone',
   'tower.sealRules.title': 'Seals',
   'tower.sealRules.current': 'Required now on: {where}',
   'tower.sealRules.currentNone': 'No seal required — the default',
@@ -3355,6 +3356,21 @@ export const enTowerZones = {
 /** Prices by zone (2026-11-08 — zone pricing, step 2): a country's price card, its life, and a price tried on it. */
 export const enTowerPrices = {
   'tower.nav.zoneprices': 'Prices by zone',
+  // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
+  'tower.catchments.title': 'Which hub serves each zone',
+  'tower.catchments.hint': '{hubs, plural, one {# hub} other {# hubs}} · {unserved, plural, =0 {every zone served} one {# zone without a hub} other {# zones without a hub}}',
+  'tower.catchments.lede': 'Each zone of the map in force belongs to one hub: parcels to and from its shops go through that hub. A zone without a hub is routed as before, by the area name its shops typed. A zone merged or split since keeps the hub of the zone it was made from until you choose its own.',
+  'tower.catchments.hubLine': '{hub}: {n, plural, =0 {no zone} one {# zone} other {# zones}}',
+  'tower.catchments.noHubs': 'This country has no approved hub yet.',
+  'tower.catchments.propose': '{n, plural, one {Give # zone the nearest hub by road} other {Give # zones the nearest hub by road}}',
+  'tower.catchments.proposed': 'Every zone without a hub has the nearest one by road — check them, and change any.',
+  'tower.catchments.assigned': 'The hub of {zone} is saved.',
+  'tower.catchments.col.hub': 'Hub',
+  'tower.catchments.col.km': 'From its hub',
+  'tower.catchments.km': '{km} km',
+  'tower.catchments.none': 'No hub',
+  'tower.catchments.isProposed': 'Proposed: the nearest hub by road',
+  'tower.catchments.isInherited': 'Kept from the zone it was made from',
   // 2026-11-09 — a zone's marks (zone pricing, step 1).
   'tower.zones.flagsLabel': 'What it is marked as',
   'tower.zones.flag.island': 'Island',

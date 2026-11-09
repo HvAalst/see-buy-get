@@ -364,6 +364,13 @@ export class ZoneMapService {
     throw new GlosError('INVALID_STATE', end === 'to' ? `We do not deliver in ${zone.name} yet: choose a shop in another zone` : `We do not collect in ${zone.name} yet: hand it in at a shop in another zone`, { field: end === 'to' ? 'destination' : 'origin', zone: zone.code });
   }
 
+  /** 2026-11-09 — the codes a zone of the map in force was made from (merged or split since): what carries its hub over. */
+  lineageOf(entityId: string, code: string, at: number = Date.now()): string[] {
+    const s = this.setups.get(entityId);
+    const map = s ? this.inForceOf(s, at) : undefined;
+    return [...(map?.zones.find((z) => z.code === code)?.from ?? [])];
+  }
+
   /** 2026-11-09 — a delivery to a door in a zone its company delivers no doors in: refused by name, its shops offered instead. */
   refuseNoDoor(country: string | undefined, point: GeoPoint | undefined, at: number = Date.now()): void {
     const zone = this.zoneAt(country, point, at);

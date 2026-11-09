@@ -49,6 +49,26 @@ export function toggleFlag(flags: readonly ZoneFlag[] | undefined, flag: ZoneFla
   return ZONE_FLAGS.filter((f) => on.has(f));
 }
 
+/** 2026-11-09 — which hub serves each zone of the map in force (the catchments-and-runs plan, Part A). */
+export interface CatchmentZone {
+  code: string;
+  name: string;
+  group: string;
+  mdpId?: string;
+  hubName?: string;
+  proposed?: boolean;
+  inherited?: boolean;
+  km?: number;
+}
+export interface Catchments {
+  entityId: string;
+  country: string;
+  mapVersion?: number;
+  zones: CatchmentZone[];
+  hubs: Array<{ mdpId: string; name: string; zones: number }>;
+  unserved: number;
+}
+
 export type ZoneMapStatus = 'draft' | 'scheduled' | 'in_force' | 'past';
 
 export interface ZoneMap {

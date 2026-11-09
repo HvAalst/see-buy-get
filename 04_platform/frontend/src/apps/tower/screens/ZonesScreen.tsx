@@ -20,6 +20,7 @@ import {
   ZONE_FLAGS,
   zonesHint,
   type AreaForm,
+  type Catchments,
   type ZoneFlag,
   type ZoneAreaShape,
   type ZoneRow,
@@ -258,6 +259,8 @@ export function ZonesScreen({ state, actions }: { state: TowerState; actions: To
           ) : null}
 
           {writer ? <ImportFold setup={setup} busy={busy === 'import'} onSend={(form) => client && run('import', () => client.api.importZoneAreas(entityId, { geojson: form.text, source: form.source.trim(), licence: form.licence.trim(), attribution: form.attribution.trim(), ...(form.level.trim() ? { level: form.level.trim() } : {}), ...(form.nameField.trim() ? { nameField: form.nameField.trim() } : {}) }), t('tower.zones.import.sent'), { shapes: true })} /> : null}
+
+          {setup.inForce ? <CatchmentsFold entityId={entityId} writer={writer} actions={actions} /> : null}
 
           <VersionsFold setup={setup} />
         </>
@@ -552,6 +555,110 @@ function ImportFold({ setup, busy, onSend }: { setup: ZoneSetup; busy: boolean; 
           </button>
         </div>
       </fieldset>
+    </ConsoleFold>
+  );
+}
+
+/**
+ * WHICH HUB SERVES EACH ZONE (2026-11-09 — the catchments-and-runs plan, Part A, D1): each zone of the map in force with its
+ * hub — proposed as the nearest by road, or chosen by a person — and the zones no hub serves yet, which are routed as before.
+ */
+function CatchmentsFold({ entityId, writer, actions }: { entityId: string; writer: boolean; actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [view, setView] = useState<Catchments | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const take = (r: { error?: { detail?: string; title?: string } | null; data?: unknown }, message?: string) => {
+    if (r.error) {
+      setProblem(r.error.detail || r.error.title || '');
+      return;
+    }
+    setProblem(null);
+    setView(r.data as unknown as Catchments);
+    if (message) setSaid(message);
+  };
+  useEffect(() => {
+    if (!client) return;
+    let live = true;
+    void client.api.catchments(entityId).then((r) => live && take(r as never));
+    return () => {
+      live = false;
+    };
+  }, [client, entityId]);
+  const act = async (write: () => Promise<unknown>, message: string) => {
+    setBusy(true);
+    setSaid(null);
+    take((await write()) as never, message);
+    setBusy(false);
+  };
+  return (
+    <ConsoleFold title={t('tower.catchments.title')} hint={view ? t('tower.catchments.hint', { hubs: view.hubs.length, unserved: view.unserved }) : ''}>
+      <p class="chint">{t('tower.catchments.lede')}</p>
+      {problem ? (
+        <p class="cerr">
+          <Abbreviated text={problem} />
+        </p>
+      ) : null}
+      {said ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {said}
+        </p>
+      ) : null}
+      {view && view.hubs.length ? <p class="chint">{view.hubs.map((h) => t('tower.catchments.hubLine', { hub: h.name, n: h.zones })).join(' · ')}</p> : null}
+      {view && !view.hubs.length ? <p class="cons__empty">{t('tower.catchments.noHubs')}</p> : null}
+      {writer && client && view && view.hubs.length && view.unserved ? (
+        <div class="twr-zonepublish">
+          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void act(() => client.api.proposeCatchments(entityId), t('tower.catchments.proposed'))}>
+            {t('tower.catchments.propose', { n: view.unserved })}
+          </button>
+        </div>
+      ) : null}
+      {view && view.zones.length ? (
+        <table class="ctbl ctbl--stack">
+          <thead>
+            <tr>
+              <th>{t('tower.zones.col.zone')}</th>
+              <th>{t('tower.catchments.col.hub')}</th>
+              <th>{t('tower.catchments.col.km')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.zones.map((z) => (
+              <tr key={z.code}>
+                <td class="ctbl__strong">
+                  <span class="ctbl__lbl">{t('tower.zones.col.zone')}</span>
+                  {z.name} <span class="ctbl__sub">{z.code}</span>
+                  {z.proposed ? <span class="chint twr-zoneevidence">{t('tower.catchments.isProposed')}</span> : null}
+                  {z.inherited ? <span class="chint twr-zoneevidence">{t('tower.catchments.isInherited')}</span> : null}
+                </td>
+                <td>
+                  <span class="ctbl__lbl">{t('tower.catchments.col.hub')}</span>
+                  {writer && client ? (
+                    <ConsolePick
+                      label={t('tower.catchments.col.hub')}
+                      value={z.mdpId ?? ''}
+                      onChange={(mdpId) => mdpId !== (z.mdpId ?? '') && void act(() => client.api.assignCatchment(entityId, z.code, mdpId || undefined), t('tower.catchments.assigned', { zone: z.name }))}
+                      bare
+                      small
+                      disabled={busy}
+                      options={[{ value: '', label: t('tower.catchments.none') }, ...view.hubs.map((h) => ({ value: h.mdpId, label: h.name }))]}
+                    />
+                  ) : (
+                    (z.hubName ?? t('tower.catchments.none'))
+                  )}
+                </td>
+                <td class="ctbl__num">
+                  <span class="ctbl__lbl">{t('tower.catchments.col.km')}</span>
+                  {z.km != null ? t('tower.catchments.km', { km: z.km.toLocaleString() }) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
     </ConsoleFold>
   );
 }

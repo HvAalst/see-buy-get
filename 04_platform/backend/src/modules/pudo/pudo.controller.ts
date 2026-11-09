@@ -164,7 +164,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -198,6 +198,7 @@ import { PriceCardService, type Doer } from './price-card.service';
 import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
 import { PriceReportService, PriceReportView } from './price-report.service';
+import { CatchmentService, CatchmentsView } from './catchment.service';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
@@ -377,6 +378,8 @@ export class SbgController {
     @Optional() private readonly counterPrices?: CounterPriceService,
     // 2026-11-08 — price against planned cost per pair of zones, a week at a time (zone pricing, step 4).
     @Optional() private readonly priceReports?: PriceReportService,
+    // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
+    @Optional() private readonly catchments?: CatchmentService,
   ) {}
 
   /**
@@ -2982,6 +2985,37 @@ export class SbgController {
   startEntityZoneProposal(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ZoneSetupView {
     this.requireReach(actor, entityId);
     return this.zonesOf().startFromProposal(entityId, auditActor(actor));
+  }
+
+  /* --- 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A, D1): its company, or staff. --- */
+
+  /** Each zone of the map in force with its hub, the country's hubs, and how many zones no hub serves yet. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/catchments')
+  entityCatchments(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): CatchmentsView {
+    this.requireReach(actor, entityId);
+    return this.catchmentsOf().view(entityId);
+  }
+
+  /** Every zone without a hub given the nearest of the country's hubs by road: a proposal until a person keeps it. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/catchments/propose')
+  proposeCatchments(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): CatchmentsView {
+    this.requireReach(actor, entityId);
+    return this.catchmentsOf().propose(entityId, auditActor(actor));
+  }
+
+  /** A zone given a hub, or none. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/catchments/:code')
+  assignCatchment(@Param('entityId') entityId: string, @Param('code') code: string, @Body() dto: CatchmentAssignDto, @Actor() actor: IntrospectionResult): CatchmentsView {
+    this.requireReach(actor, entityId);
+    return this.catchmentsOf().assign(entityId, code, dto.mdpId || undefined, auditActor(actor));
+  }
+
+  private catchmentsOf(): CatchmentService {
+    if (!this.catchments) throw new GlosError('INVALID_STATE', 'Catchments are not available here');
+    return this.catchments;
   }
 
   /* --- 2026-11-08 — a country's price card (zone pricing, step 2): its company's own administrators, or staff. --- */

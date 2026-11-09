@@ -1847,6 +1847,11 @@ export class ZoneChangeDto {
   @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) flags?: string[];
 }
 
+/** 2026-11-09 — the hub that serves a zone (none: routed as before, by the area name). */
+export class CatchmentAssignDto {
+  @IsOptional() @IsString() @MaxLength(80) mdpId?: string;
+}
+
 export class ZoneMergeDto {
   @IsArray() @ArrayMinSize(2) @ArrayMaxSize(20000) @IsString({ each: true }) codes!: string[];
   @IsOptional() @IsString() @MaxLength(80) name?: string;

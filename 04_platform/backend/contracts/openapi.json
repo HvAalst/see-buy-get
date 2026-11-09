@@ -13761,6 +13761,109 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/catchments": {
+      "get": {
+        "operationId": "Sbg.entityCatchments",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatchmentsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/catchments/propose": {
+      "post": {
+        "operationId": "Sbg.proposeCatchments",
+        "summary": "",
+        "description": "Every zone without a hub given the nearest of the country's hubs by road: a proposal until a person keeps it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatchmentsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/catchments/{code}": {
+      "post": {
+        "operationId": "Sbg.assignCatchment",
+        "summary": "",
+        "description": "A zone given a hub, or none.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatchmentAssignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatchmentsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/price-cards/report": {
       "get": {
         "operationId": "Sbg.entityPriceReport",
@@ -57408,6 +57511,7 @@
               "custodyCaps",
               "zones",
               "prices",
+              "catchments",
               "created",
               "record",
               "activated",
@@ -58754,6 +58858,63 @@
           "licence",
           "attribution"
         ]
+      },
+      "CatchmentZoneView": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          },
+          "proposed": {
+            "type": "boolean"
+          },
+          "inherited": {
+            "type": "boolean"
+          },
+          "km": {
+            "type": "number"
+          }
+        }
+      },
+      "CatchmentHubView": {
+        "type": "object",
+        "properties": {}
+      },
+      "CatchmentsView": {
+        "type": "object",
+        "properties": {
+          "mapVersion": {
+            "type": "number"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatchmentZoneView"
+            }
+          },
+          "hubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatchmentHubView"
+            }
+          }
+        },
+        "required": [
+          "zones",
+          "hubs"
+        ]
+      },
+      "CatchmentAssignDto": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
       },
       "PriceReportRow": {
         "type": "object",
