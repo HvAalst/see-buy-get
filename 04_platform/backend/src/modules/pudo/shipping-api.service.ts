@@ -20,6 +20,7 @@ import { parcelCurrency } from './parcel.service';
 import { Agent, ParcelSize } from './pudo.types';
 import { Geocoder, GEOCODER } from './geocoder';
 import { Router, ROUTER } from './router';
+import { ZoneMapService } from './zone-map.service';
 
 /** A resolved end of a journey: the point, and — when an address was typed — how it was found. */
 interface Resolved {
@@ -66,7 +67,10 @@ export interface QuoteEndpoint {
 export interface QuotedPoint {
   pointId: string;
   name: string;
+  /** Its area: the price zone it stands in where its country keeps zones (2026-11-09), else the area name it typed. */
   area: string;
+  /** The zone’s code on its country’s map, where it has one. */
+  areaCode?: string;
   country: string;
   landmark?: string;
   location?: { lat: number; lng: number };
@@ -217,7 +221,26 @@ export class ShippingApiService {
     @Optional() private readonly invoices?: ParcelInvoiceService,
     // Called off at a hub, brought back at the store's cost (2026-10-27). Optional for the specs that build this by hand.
     @Optional() private readonly callOffs?: CallOffService,
+    // 2026-11-09 — a shop's area is its price zone where its country keeps one (the owner, D3: "immediately").
+    @Optional() private readonly zones?: ZoneMapService,
   ) {}
+
+  /**
+   * 2026-11-09 — A SHOP'S AREA, AS THE API SPEAKS IT (the catchments-and-runs plan, D3: "immediately, there are no test
+   * stores besides what's in my control"): the price zone its pin lies in, on its country's map in force — its name, and
+   * its code beside it; where the country keeps no zones yet, the area name the shop typed at sign-up, as before.
+   */
+  private areaOf(a: Agent): { name: string; code?: string } {
+    const zone = this.zones?.zoneAt(this.agents.countryOf(a), a.location);
+    return zone ? { name: zone.name, code: zone.code } : { name: a.zone };
+  }
+
+  /** Whether a shop stands in the area a caller named: the zone's name or code, or — no zones there yet — the typed name. */
+  private inArea(a: Agent, area: string): boolean {
+    const mine = this.areaOf(a);
+    const asked = area.trim().toLowerCase();
+    return mine.name.toLowerCase() === asked || (mine.code != null && mine.code.toLowerCase() === asked);
+  }
 
   /**
    * Round 30 — A PHOTO OF WHAT IS IN THE BOX, from a store's own system (the user: "It sends the photo too"). Kept as
@@ -695,7 +718,7 @@ export class ShippingApiService {
       if (!this.agents.takesNew(a)) continue; // an area with no shop anyone can collect at is not an area we serve
       const country = this.agents.countryOf(a);
       const set = byCountry.get(country) ?? new Set<string>();
-      set.add(a.zone);
+      set.add(this.areaOf(a).name);
       byCountry.set(country, set);
     }
     return [...byCountry.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([country, areas]) => ({ country, areas: [...areas].sort() }));
@@ -727,7 +750,7 @@ export class ShippingApiService {
     const area = where.area.trim();
     const candidates = this.agents
       .list()
-      .filter((a) => this.agents.takesNew(a) && this.agents.countryOf(a) === country && a.zone.toLowerCase() === area.toLowerCase());
+      .filter((a) => this.agents.takesNew(a) && this.agents.countryOf(a) === country && this.inArea(a, area));
     if (!candidates.length) throw new GlosError('NOT_FOUND', `We have no collection point in ${area}, ${country} yet`);
     // The one with the most room, then by name so the same ask gives the same answer twice. Nothing is
     // reserved by choosing it — this is where they WOULD hand in or collect. A BOOKING holds a place at the shop it is
@@ -780,7 +803,7 @@ export class ShippingApiService {
     const wanted = country ? requireCountryCode(country) : undefined;
     return this.agents
       .list()
-      .some((a) => this.agents.takesNew(a) && a.zone.toLowerCase() === area.trim().toLowerCase() && (!wanted || this.agents.countryOf(a) === wanted));
+      .some((a) => this.agents.takesNew(a) && this.inArea(a, area) && (!wanted || this.agents.countryOf(a) === wanted));
   }
 
   private point(resolved: Resolved): QuotedPoint {
@@ -788,7 +811,8 @@ export class ShippingApiService {
     return {
       pointId: a.did,
       name: a.shopName,
-      area: a.zone,
+      area: this.areaOf(a).name,
+      ...(this.areaOf(a).code ? { areaCode: this.areaOf(a).code } : {}),
       country: this.agents.countryOf(a),
       landmark: a.landmark,
       location: a.location,

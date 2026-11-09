@@ -8,6 +8,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { ShippingApiService, type MintInput } from './shipping-api.service';
+import { ZoneMapService } from './zone-map.service';
 import { CallOffService } from './call-off.service';
 import { ParcelInvoiceService } from './parcel-invoice.service';
 import { QuoteBookService } from './quote-book.service';
@@ -78,6 +79,7 @@ describe('the public shipping quote', () => {
   let parcels: ParcelService;
   let quoteBook: QuoteBookService;
   let mdps: MdpService;
+  let zones: ZoneMapService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -96,6 +98,7 @@ describe('the public shipping quote', () => {
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, PresenceService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService, QuoteBookService,
+        ZoneMapService, // 2026-11-09 — a shop's area is its price zone where its country keeps zones (D3)
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -109,6 +112,7 @@ describe('the public shipping quote', () => {
     corridors = moduleRef.get(CorridorService);
     shipping = moduleRef.get(ShippingApiService);
     controller = moduleRef.get(ShippingApiController);
+    zones = moduleRef.get(ZoneMapService);
     gate = moduleRef.get(WalletGateService);
     vendors = moduleRef.get(VendorService);
     apiKeys = moduleRef.get(ApiKeyService);
@@ -714,6 +718,26 @@ describe('the public shipping quote', () => {
       expect(made.paid).toBe(false);
       expect(made.label).toBeUndefined();
     });
+  });
+
+  it('where its country keeps zones, an area is the price zone a shop stands in — by its name or its code; elsewhere the name it typed (D3, 2026-11-09)', () => {
+    const { to } = domesticPair();
+    shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+    const square = (c: { lat: number; lng: number }) => [[c.lng - 0.05, c.lat - 0.05], [c.lng + 0.05, c.lat - 0.05], [c.lng + 0.05, c.lat + 0.05], [c.lng - 0.05, c.lat + 0.05], [c.lng - 0.05, c.lat - 0.05]];
+    const file = JSON.stringify({ type: 'FeatureCollection', features: [['Nairobi City', NAIROBI], ['Kisumu Central', KISUMU]].map(([name, c]) => ({ type: 'Feature', properties: { shapeName: name }, geometry: { type: 'Polygon', coordinates: [square(c as { lat: number; lng: number })] } })) });
+    const ke = 'sbg-ke';
+    zones.importAreas(ke, { geojson: file, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+    zones.publish(ke, undefined, 'N');
+    expect(controller.areas()).toEqual([
+      { country: 'ET', areas: ['AddisAbaba'] },
+      { country: 'KE', areas: ['Kisumu Central', 'Nairobi City'] },
+    ]);
+    const kisumu = zones.zoneAt('KE', KISUMU)!.code;
+    const q = shipping.quote({ from: { country: 'KE', area: 'nairobi city' }, to: { country: 'KE', area: 'Kisumu Central' }, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2 });
+    expect(q.to).toMatchObject({ pointId: to.did, area: 'Kisumu Central', areaCode: kisumu });
+    expect(shipping.quote({ from: { country: 'KE', area: 'Nairobi City' }, to: { country: 'KE', area: kisumu }, size: 'M' }).to.pointId).toBe(to.did);
+    // The name the shop typed is no longer its area there: one way of naming a place per country.
+    expect(() => shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' })).toThrow(/no collection point in Nairobi/);
   });
 
   it('lists the countries and areas a picker is built from, and no half-signed-up shop', () => {
