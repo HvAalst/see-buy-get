@@ -32,6 +32,8 @@ export interface RouterConnection {
   profile: string;
   maxPoints: number;
   last?: RouterAsk;
+  /** 2026-11-09 — the network's shops and hubs measured by road, every one to every other: how many, and when. */
+  table?: { places: number; at: string };
 }
 export type AdviserFailure = 'not_configured' | 'busy' | 'unreachable' | 'declined';
 export interface AdviserConnection {

@@ -21,6 +21,7 @@ import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
+import { RoadRouter } from './road-router';
 import { WalletGateService, agentLedgerSummaryOf } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { DamageReportService, MAX_NOTES, fingerprintOf, termsSentence, unsignedNote } from './damage-report.service';
@@ -155,6 +156,7 @@ describe('PUDO Light', () => {
   let priceCards: PriceCardService;
   let counterPrices: CounterPriceService;
   let priceReports: PriceReportService;
+  let roadRouter: RoadRouter;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let mdps: MdpService;
@@ -240,7 +242,8 @@ describe('PUDO Light', () => {
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
-        HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
+        // 2026-11-09 — the router the app runs on: by road between the network's places once measured, the estimate until then.
+        HeuristicRouter, RoadRouter, { provide: ROUTER, useExisting: RoadRouter },
       ],
       controllers: [SbgController, IdentityController],
     }).compile();
@@ -273,6 +276,7 @@ describe('PUDO Light', () => {
     priceCards = moduleRef.get(PriceCardService);
     counterPrices = moduleRef.get(CounterPriceService);
     priceReports = moduleRef.get(PriceReportService);
+    roadRouter = moduleRef.get(RoadRouter);
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -13635,6 +13639,28 @@ it('a parcel priced from the card keeps what carrying it was planned to cost —
       const lastWeek = new Date(Date.parse(`${report.week}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10);
       expect(priceReports.weekOf('sbg-ke', lastWeek).rows).toEqual([]);
       expect(() => priceReports.weekOf('sbg-ke', 'soon')).toThrow(/YYYY-MM-DD/);
+    });
+
+    it('a journey between two of the network’s shops is measured by road once they are — its legs, its arrival, what carrying it is planned to cost (step 4)', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      twoRates();
+      const estimated = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      // The routing server says the road between them is 31.4 km one way and 29.9 km back.
+      roadRouter.load([west.location, east.location], new Float64Array([0, 31.4, 29.9, 0]), new Date().toISOString());
+      const byRoad = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(byRoad.totalKm).toBe(31.4);
+      expect(byRoad.totalKm).not.toBe(estimated.totalKm);
+      expect(routing.quoteShipment(east.did, west.did, 'M', undefined, { kg: 2 }).totalKm).toBe(29.9);
+      // Priced by the road where no card prices it: the cheapest carrier's rate over the road's km.
+      expect(byRoad.locked.transport).toBe(Math.round(31.4 * byRoad.perKm.min * byRoad.transportFactor * 100) / 100);
+      // And on a card: the card's price, unmoved; only what carrying it is planned to cost follows the road.
+      cardInForce();
+      const carded = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(carded.zone?.amount).toBe(80);
+      // The card measures its own km, between its zones’ centres, never along the network’s road table.
+      expect(carded.zone?.km).not.toBe(31.4);
+      expect(carded.zone?.plannedCost).toBeGreaterThanOrEqual(Math.round(31.4 * carded.perKm.min * carded.transportFactor * 100) / 100);
     });
 
     it('anybody may ask which price zone a place is in — and a place no country keeps zones for has none', () => {

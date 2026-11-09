@@ -83971,6 +83971,21 @@
           "places"
         ]
       },
+      "RoadTableView": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "places",
+          "at"
+        ]
+      },
       "RouterConnection": {
         "type": "object",
         "properties": {
@@ -83984,6 +83999,14 @@
           },
           "last": {
             "$ref": "#/components/schemas/RouterAsk"
+          },
+          "table": {
+            "description": "The network's shops and hubs measured by road, every one to every other: absent until they have been.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoadTableView"
+              }
+            ]
           },
           "configured": {
             "type": "boolean"

@@ -35,6 +35,12 @@ export class RouterAsk {
   @ApiPropertyOptional() why?: string;
 }
 
+/** 2026-11-09 — the network's places measured by road: how many, and when (the road table, zone pricing step 4). */
+export class RoadTableView {
+  places: number;
+  at: string;
+}
+
 export class RouterConnection {
   configured: boolean;
   /** The host of the address that is set. Never the address itself. */
@@ -45,6 +51,8 @@ export class RouterConnection {
   /** The most places one request carries; a day with more is planned on estimates. */
   maxPoints: number;
   @ApiPropertyOptional({ type: RouterAsk }) last?: RouterAsk;
+  /** The network's shops and hubs measured by road, every one to every other: absent until they have been. */
+  @ApiPropertyOptional({ type: RoadTableView }) table?: RoadTableView;
 }
 
 /** What became of the last time an office asked the adviser. */

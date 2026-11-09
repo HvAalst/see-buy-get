@@ -1,4 +1,4 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Optional, Post } from '@nestjs/common';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { MailService } from '../../foundation/mail/mail.service';
 import { SmsService } from '../../foundation/sms/sms.service';
@@ -10,6 +10,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { NotificationService } from './notification.service';
 import { PlanAdviserService } from './plan-adviser.service';
 import { OsrmRoadMatrix } from './road-matrix';
+import { RoadRouter } from './road-router';
 import { haversineKm } from './geo';
 
 /** When this server started: what it remembers of its connections is since then. */
@@ -39,12 +40,15 @@ export class ConnectionsController {
     private readonly mail: MailService,
     private readonly notifications: NotificationService,
     private readonly sms: SmsService,
+    // 2026-11-09 — the network's places measured by road (zone pricing step 4): how many, and when.
+    @Optional() private readonly roadTable?: RoadRouter,
   ) {}
 
   @Roles('operator')
   @Get()
   view(): ConnectionsView {
-    return { router: this.roads.status(), adviser: this.adviser.connection(), mail: this.mail.connection(), push: this.notifications.connection(), sms: this.sms.connection(), sandbox: isSandbox(), reviewCode: reviewCodeState(), standInCodes: standInState(), since: SINCE };
+    const table = this.roadTable?.state();
+    return { router: { ...this.roads.status(), ...(table ? { table } : {}) }, adviser: this.adviser.connection(), mail: this.mail.connection(), push: this.notifications.connection(), sms: this.sms.connection(), sandbox: isSandbox(), reviewCode: reviewCodeState(), standInCodes: standInState(), since: SINCE };
   }
 
   /**

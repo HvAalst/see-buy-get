@@ -85,6 +85,13 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
                 <dt class="cons__factk">{t('tower.conn.fact.most')}</dt>
                 <dd class="cons__factv">{t('tower.conn.fact.mostValue', { n: view.router.maxPoints })}</dd>
               </div>
+              {/* 2026-11-09 — the network's places measured by road, so a journey's legs and arrival times are (zone pricing step 4). */}
+              {view.router.configured ? (
+                <div class="cons__fact">
+                  <dt class="cons__factk">{t('tower.conn.fact.table')}</dt>
+                  <dd class="cons__factv">{view.router.table ? t('tower.conn.fact.tableValue', { n: view.router.table.places, when: momentWords(view.router.table.at) }) : t('tower.conn.fact.tableNone')}</dd>
+                </div>
+              ) : null}
             </dl>
             {view.router.configured ? (
               <>

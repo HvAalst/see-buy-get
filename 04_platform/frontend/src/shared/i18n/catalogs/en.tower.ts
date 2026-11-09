@@ -1899,6 +1899,10 @@ export const enTowerQueues = {
   'tower.conn.fact.profile': 'Profile asked for',
   'tower.conn.fact.most': 'Most places in one request',
   'tower.conn.fact.mostValue': '{n} \u2014 a day with more is planned on estimates',
+  // 2026-11-09 \u2014 the network's places measured by road (zone pricing step 4).
+  'tower.conn.fact.table': 'Shops and hubs by road',
+  'tower.conn.fact.tableValue': '{n, plural, one {# place} other {# places}}, every one to every other \u2014 measured {when}',
+  'tower.conn.fact.tableNone': 'Not measured yet: journeys, arrival times and bag pay use the estimate until they are',
   'tower.conn.check.cta': 'Check it now',
   'tower.conn.check.asking': 'Asking\u2026',
   'tower.conn.check.what': 'A check asks for the road distance between a fleet\u2019s depot and a place a little way off it. Nothing is kept from it.',

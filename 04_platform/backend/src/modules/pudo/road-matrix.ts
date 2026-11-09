@@ -217,7 +217,7 @@ export class OsrmRoadMatrix implements RoadMatrix {
    * measure, never half by road and half estimated. In km, null where the map knows no road. Never kept here: a card
    * asks once, when it is made ready, and keeps the answer itself.
    */
-  async allPairs(points: GeoPoint[]): Promise<{ km: Array<Array<number | null>> } | { why: string }> {
+  async allPairs(points: GeoPoint[], maxSnapM: number = ZONE_SNAP_M): Promise<{ km: Array<Array<number | null>> } | { why: string }> {
     const base = this.base();
     if (!base) return { why: 'no routing server is configured' };
     const block = Math.max(1, Math.floor(this.most() / 2));
@@ -226,7 +226,7 @@ export class OsrmRoadMatrix implements RoadMatrix {
       for (let j = 0; j < points.length; j += block) {
         const from = points.slice(i, i + block);
         const to = points.slice(j, j + block);
-        const got = await this.askGrid(base, from, to);
+        const got = await this.askGrid(base, from, to, maxSnapM);
         if ('why' in got) return got;
         got.table.forEach((row, r) => row.forEach((metres, c) => (grid[i + r][j + c] = metres === null ? null : metres / 1000)));
       }
@@ -234,12 +234,12 @@ export class OsrmRoadMatrix implements RoadMatrix {
     return { km: grid };
   }
 
-  private async askGrid(base: string, from: GeoPoint[], to: GeoPoint[]): Promise<{ table: Array<Array<number | null>> } | { why: string }> {
+  private async askGrid(base: string, from: GeoPoint[], to: GeoPoint[], maxSnapM: number): Promise<{ table: Array<Array<number | null>> } | { why: string }> {
     const url = `${tableUrl(base, this.profile(), [...from, ...to])}&sources=${from.map((_, k) => k).join(';')}&destinations=${to.map((_, k) => from.length + k).join(';')}`;
     try {
       const res = await this.fetcher(url, { signal: AbortSignal.timeout(ROAD_TIMEOUT_MS), headers: { accept: 'application/json' } });
       if (!res.ok) return { why: `the routing server answered ${res.status}` };
-      const read = readGrid(await res.json(), from.length, to.length, ZONE_SNAP_M);
+      const read = readGrid(await res.json(), from.length, to.length, maxSnapM);
       return read ? { table: read } : { why: NOT_A_TABLE };
     } catch (e) {
       const name = (e as { name?: string } | null)?.name;
