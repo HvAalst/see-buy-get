@@ -1518,6 +1518,10 @@ describe('PUDO Light', () => {
   });
 
   it('a second “Not now” from the same driver to the same bag is “not today”: not asked again until the next day, on the clock of the bag’s country (the owner, Q4, 2026-11-09)', () => {
+    // A Nairobi morning, whatever the hour the tests run at: the hours below must stay inside one Nairobi day. The clock
+    // runs on from there; only the date and time are set, never the timers.
+    jest.useFakeTimers({ now: Date.parse('2026-11-09T05:00:00Z'), advanceTimers: true, doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance'] });
+    try {
     const HOUR_MS = 3_600_000;
     // The day, on the country's clock: 21:30 UTC is already the next day in Nairobi, still the same in Amsterdam (winter).
     expect(dayInCountry(Date.parse('2026-11-09T21:30:00Z'), 'KE')).toBe('2026-11-10');
@@ -1560,6 +1564,9 @@ describe('PUDO Light', () => {
     expect(chainNow().steps.at(-1)).toMatchObject({ driverDid: only.did, round: 3 });
     // Staff may still choose them: the second “Not now” stops only the tries SeeBuyGet makes.
     expect(notes.some((n) => /offered again every hour/.test(n))).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('a bag of a Bags_Waiting case with no chain is offered by itself — the nearest driver first, down the list, every hour (the owner, Q5, 2026-11-09)', () => {
