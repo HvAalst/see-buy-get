@@ -95,6 +95,10 @@
   .steps .mark { margin-top: 6px; }
   .t { font-weight: 600; font-size: 15px; }
   .d { color: var(--muted); font-size: 14px; margin-top: 3px; }
+  /* 2026-11-09 — a row's numbered steps, one paragraph each: every act on its own line to tick off. */
+  .d p { margin: 10px 0 0; line-height: 1.5; }
+  .d p:first-child { margin-top: 0; }
+  .d .n { color: var(--ink); font-weight: 700; }
   .ref { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); margin-top: 6px; word-break: break-word; }
   .state { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 6px; }
   .s-ship { color: var(--ship); } .s-now { color: var(--now); }
@@ -1201,6 +1205,37 @@ const KEY = { shipped: 'ship', 'in progress': 'now', next: 'next', gap: 'gap', '
 
 function stateKey(s) { return s === 'shipped' ? 'ship' : s === 'in progress' ? 'now' : s; }
 
+/**
+ * 2026-11-09 — A ROW'S NUMBERED STEPS, EACH ITS OWN PARAGRAPH (the owner: "Put every act for me in its own paragraph"). A
+ * text that numbers its steps (1), (2), (3)… in order is drawn as one paragraph a step — what comes before the first its own
+ * paragraph too — the number and a heading in capitals ("SHARE:") in bold. Only a run counting up from (1) is split, so a
+ * number in brackets inside a sentence stays where it is. A text without steps is drawn as before.
+ */
+function fillSteps(el, text) {
+  const cuts = [];
+  const re = /(^|\s)\((\d+)\)\s/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (Number(m[2]) === cuts.length + 1) cuts.push(m.index + m[1].length);
+  }
+  if (cuts.length < 2) { el.textContent = text; return; }
+  const parts = [];
+  if (cuts[0] > 0) parts.push(text.slice(0, cuts[0]).trim());
+  cuts.forEach((at, i) => parts.push(text.slice(at, cuts[i + 1] ?? text.length).trim()));
+  for (const part of parts) {
+    const p = document.createElement('p');
+    const head = /^(\(\d+\))\s+(?:([A-Z][A-Z0-9 ’'&/-]*[A-Z0-9]):\s)?/.exec(part);
+    if (head) {
+      const n = document.createElement('span'); n.className = 'n';
+      n.textContent = head[1] + ' ' + (head[2] ? head[2] + ': ' : '');
+      p.append(n, part.slice(head[0].length));
+    } else {
+      p.textContent = part;
+    }
+    el.append(p);
+  }
+}
+
 // ONE renderer for a stated item, used by the tracks and by the open list. Two loops drawing the same row
 // is how a state ends up visible in one place and invisible in the other — which is the defect this page
 // itself had: every foundations entry carried a state and not one of them was ever drawn.
@@ -1212,7 +1247,7 @@ function itemLi(item, counts) {
   mark.className = 'dot mark d-' + k;
   const body = document.createElement('div');
   const t = document.createElement('div'); t.className = 't'; t.textContent = item.t;
-  const d = document.createElement('div'); d.className = 'd'; d.textContent = item.d;
+  const d = document.createElement('div'); d.className = 'd'; fillSteps(d, item.d);
   const st = document.createElement('div'); st.className = 'state s-' + k; st.textContent = LABEL[k];
   body.append(t, d, st);
   if (item.ref && item.ref !== '—') {
