@@ -17,6 +17,7 @@ import { PersonDoorService } from '../src/modules/pudo/person-door.service';
 import { PersonService } from '../src/modules/pudo/person.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { AddressSearchService } from '../src/modules/pudo/geocoder';
+import { ZoneMapService } from '../src/modules/pudo/zone-map.service';
 import { shopPhotoOver } from './content-photo';
 import { declared } from './declared';
 import { AGREED } from './agreed';
@@ -181,6 +182,27 @@ describe('a person’s own door, paid first by mobile money, over the wire', () 
       expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(0, 2);
     }
     expect(app.get(BooksService).balances(app.get(EntityService).requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
+  });
+
+  it('a door in a zone its company delivers no doors in is refused, by name — the shop offered instead (zone flags, 2026-11-09)', async () => {
+    const { sender, backId, shop } = await goodsComingBack();
+    // Kenya’s company keeps one zone round the door, marked no door delivery, published from now.
+    const zones = app.get(ZoneMapService);
+    const square = [[36.84, -1.29], [36.88, -1.29], [36.88, -1.25], [36.84, -1.25], [36.84, -1.29]];
+    const entityId = app.get(EntityService).requireForJurisdiction('KE').entityId;
+    zones.importAreas(entityId, { geojson: JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: { shapeName: 'Gatehouse' }, geometry: { type: 'Polygon', coordinates: [square] } }] }), source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+    zones.changeZone(entityId, zones.setup(entityId).draft!.zones[0].code, { flags: ['noDoor'] }, 'N');
+    zones.publish(entityId, undefined, 'N');
+    const said = (await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body;
+    expect(said).toEqual({ outcome: 'no', why: `We do not deliver to doors in Gatehouse: have it collected at a shop there. Collect it at ${shop.name} instead.` });
+    const refused = await http().post(`/v1/sbg/identity/parcels/${backId}/door`).set(sender).send({ ...near, label: 'Gate 1', maxSpend: 900, phone: '+254712345678' });
+    expect(refused.status).toBe(400);
+    expect(app.get(ParcelService).get(backId).doorHold).toBeUndefined();
+    // Taken off again, on a new map: the doors of the tests after this one are delivered.
+    zones.startDraft(entityId, 'N');
+    zones.changeZone(entityId, zones.setup(entityId).draft!.zones[0].code, { flags: [] }, 'N');
+    zones.publish(entityId, undefined, 'N');
+    expect((await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body).toMatchObject({ outcome: 'door' });
   });
 
   it('a door in another country is refused, as the map service reads the pin; where it cannot say, no further than 100 km', async () => {

@@ -15,9 +15,12 @@ import {
   groupName,
   groupsProblem,
   publishFrom,
+  toggleFlag,
   workingMap,
+  ZONE_FLAGS,
   zonesHint,
   type AreaForm,
+  type ZoneFlag,
   type ZoneAreaShape,
   type ZoneRow,
   type ZoneSetup,
@@ -215,6 +218,7 @@ export function ZonesScreen({ state, actions }: { state: TowerState; actions: To
 
             {setup.outside.length ? <p class="cerr">{t('tower.zones.outside', { names: setup.outside.join(', ') })}</p> : null}
 
+            {map && editable ? <p class="chint">{t('tower.zones.flagsHint')}</p> : null}
             {map ? (
               <ZoneTable
                 zones={map.zones}
@@ -234,6 +238,7 @@ export function ZonesScreen({ state, actions }: { state: TowerState; actions: To
                 }
                 onGroup={(z, group) => client && run(`group:${z.code}`, () => client.api.changeZone(entityId, z.code, { group }), t('tower.zones.regrouped', { zone: z.name, group: groupName(groups, group) }))}
                 onRename={(z, name) => client && run(`name:${z.code}`, () => client.api.changeZone(entityId, z.code, { name }), t('tower.zones.renamed'))}
+                onFlags={(z, flags) => client && run(`flags:${z.code}`, () => client.api.changeZone(entityId, z.code, { flags }), t('tower.zones.flagged', { zone: z.name }))}
                 onMerge={(name) => client && run('merge', () => client.api.mergeZones(entityId, [...chosenZones], name), t('tower.zones.merged'), { shapes: true })}
               />
             ) : null}
@@ -360,6 +365,7 @@ function ZoneTable({
   onChoose,
   onGroup,
   onRename,
+  onFlags,
   onMerge,
 }: {
   zones: ZoneRow[];
@@ -372,6 +378,7 @@ function ZoneTable({
   onChoose: (code: string) => void;
   onGroup: (z: ZoneRow, group: string) => void;
   onRename: (z: ZoneRow, name: string) => void;
+  onFlags: (z: ZoneRow, flags: ZoneFlag[]) => void;
   onMerge: (name?: string) => void;
 }) {
   const t = useT();
@@ -421,6 +428,18 @@ function ZoneTable({
                   </>
                 )}
                 {z.evidence?.length ? <span class="chint twr-zoneevidence">{t('tower.zones.evidence')} {z.evidence.join(' · ')}</span> : null}
+                {/* 2026-11-09 — its marks: an island, no door delivery, not served — set on a draft, said on every map. */}
+                {editable ? (
+                  <span class="twr-zonerowacts" role="group" aria-label={t('tower.zones.flagsLabel')}>
+                    {ZONE_FLAGS.map((f) => (
+                      <button key={f} type="button" class="cbtn cbtn--ghost cbtn--sm" aria-pressed={Boolean(z.flags?.includes(f))} disabled={busy !== null} onClick={() => onFlags(z, toggleFlag(z.flags, f))}>
+                        {t(`tower.zones.flag.${f}` as const)}
+                      </button>
+                    ))}
+                  </span>
+                ) : z.flags?.length ? (
+                  <span class="chint twr-zoneevidence">{z.flags.map((f) => t(`tower.zones.flag.${f}` as const)).join(' · ')}</span>
+                ) : null}
                 <span class="twr-zonerowacts">
                   <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-pressed={focus === z.code} onClick={() => onFocus(z.code)}>
                     {t('tower.zones.show')}

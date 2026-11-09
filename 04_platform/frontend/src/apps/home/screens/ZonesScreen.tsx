@@ -89,6 +89,9 @@ export function ZonesScreen() {
         said.answer.zone ? (
           <Card label={t('home.zones.answerLabel')}>
             <p class="t-body">{t('home.zones.inZone', { where: said.where, zone: said.answer.zone.name, group: said.answer.zone.groupName, country: countryName(said.answer.country ?? '') })}</p>
+            {/* 2026-11-09 — what its company marked it as. */}
+            {said.answer.zone.flags?.includes('island') ? <p class="hint">{t('home.zones.island')}</p> : null}
+            {said.answer.zone.flags?.includes('notServed') ? <p class="hint">{t('home.zones.notServed')}</p> : said.answer.zone.flags?.includes('noDoor') ? <p class="hint">{t('home.zones.noDoor')}</p> : null}
           </Card>
         ) : (
           <Note tone="info" icon="pin" title={t('home.zones.none', { where: said.where })} detail="" />

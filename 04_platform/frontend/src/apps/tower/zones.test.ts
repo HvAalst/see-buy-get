@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { UPLOAD_LIMITS } from '../../shared/upload';
-import { EMPTY_AREA_FORM, areaFormProblem, decodePolygon, decodeRing, groupColour, groupName, groupsProblem, publishFrom, workingMap, zonesHint, type ZoneSetup } from './zones';
+import { EMPTY_AREA_FORM, areaFormProblem, decodePolygon, decodeRing, groupColour, groupName, groupsProblem, publishFrom, toggleFlag, workingMap, zonesHint, type ZoneSetup } from './zones';
 
 const GROUPS = [
   { key: 'urban', name: 'Urban' },
@@ -10,6 +10,15 @@ const GROUPS = [
 ];
 const MAP = { version: 1, status: 'in_force' as const, createdAt: '', createdBy: '', areas: { setId: 's', source: '', licence: '', attribution: '', level: '', count: 1, importedAt: '', importedBy: '' }, zones: [] };
 const setup = (over: Partial<ZoneSetup> = {}): ZoneSetup => ({ entityId: 'x', country: 'XX', groups: GROUPS, scheduled: [], versions: [], outside: [], ...over });
+
+describe('a zone’s marks in the console (2026-11-09)', () => {
+  it('turns one mark on or off and keeps them in one order, whatever order they were turned on in', () => {
+    expect(toggleFlag(undefined, 'notServed')).toEqual(['notServed']);
+    expect(toggleFlag(['notServed'], 'island')).toEqual(['island', 'notServed']);
+    expect(toggleFlag(['island', 'notServed'], 'island')).toEqual(['notServed']);
+    expect(toggleFlag(['noDoor'], 'noDoor')).toEqual([]);
+  });
+});
 
 describe('a country’s zones in the console (2026-11-08)', () => {
   it('reads the shapes the server sends: the encoding’s own worked example, latitude first', () => {

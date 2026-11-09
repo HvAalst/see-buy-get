@@ -10,7 +10,7 @@ import { MdpService } from './mdp.service';
 import type { Agent, GeoPoint, Mdp } from './pudo.types';
 import { AreaFileProblem, AreaIndex, boxOf, decodePolygon, encodePolygon, measure, parseAreaFile, type Shape } from './zone-geometry';
 import { proposalFor } from './zone-proposals';
-import type { PlaceZone, StoredArea, StoredAreaSet, StoredZone, StoredZoneMap, StoredZoneSetup, ZoneAreaSetView, ZoneGroup, ZoneMapSummary, ZoneMapView, ZoneSetupView, ZoneShapesView, ZoneView } from './zone-map.types';
+import { ZONE_FLAGS, type PlaceZone, type StoredArea, type StoredAreaSet, type StoredZone, type StoredZoneMap, type StoredZoneSetup, type ZoneAreaSetView, type ZoneFlag, type ZoneGroup, type ZoneMapSummary, type ZoneMapView, type ZoneSetupView, type ZoneShapesView, type ZoneView } from './zone-map.types';
 
 /** What every country starts from: three groups, in plain English, for the country to rename in its own words. */
 export const DEFAULT_ZONE_GROUPS: ZoneGroup[] = [
@@ -19,6 +19,8 @@ export const DEFAULT_ZONE_GROUPS: ZoneGroup[] = [
   { key: 'remote', name: 'Remote' },
 ];
 export const MAX_ZONE_GROUPS = 8;
+/** A flag in the change log's words. */
+const FLAG_WORDS: Record<ZoneFlag, string> = { island: 'an island', noDoor: 'no door delivery', notServed: 'not served' };
 /** How far ahead a map may be published: a year, so a date mistyped by a decade is refused rather than kept. */
 const MAX_AHEAD_MS = 366 * 24 * 3_600_000;
 
@@ -107,7 +109,7 @@ export class ZoneMapService {
     if (!map) return undefined;
     const zone = this.zoneOfPoint(company.entityId, map, point);
     if (!zone) return undefined;
-    return { code: zone.code, name: zone.name, group: zone.group, groupName: s.groups.find((g) => g.key === zone.group)?.name ?? zone.group, version: map.version };
+    return { code: zone.code, name: zone.name, group: zone.group, groupName: s.groups.find((g) => g.key === zone.group)?.name ?? zone.group, version: map.version, ...(zone.flags?.length ? { flags: [...zone.flags] } : {}) };
   }
 
   /**
@@ -352,8 +354,25 @@ export class ZoneMapService {
     return this.setup(entityId, now);
   }
 
-  /** A zone of the draft renamed, or put in another group. */
-  changeZone(entityId: string, code: string, change: { name?: string; group?: string }, by: string, now: number = Date.now()): ZoneSetupView {
+  /**
+   * 2026-11-09 — A NEW PARCEL REFUSED TO OR FROM A ZONE ITS COMPANY DOES NOT SERVE, on the country's map in force: said by
+   * name, before anything is written. A journey re-planned for a parcel already sold is never asked: it must come back.
+   */
+  refuseUnserved(country: string | undefined, point: GeoPoint | undefined, end: 'from' | 'to', at: number = Date.now()): void {
+    const zone = this.zoneAt(country, point, at);
+    if (!zone?.flags?.includes('notServed')) return;
+    throw new GlosError('INVALID_STATE', end === 'to' ? `We do not deliver in ${zone.name} yet: choose a shop in another zone` : `We do not collect in ${zone.name} yet: hand it in at a shop in another zone`, { field: end === 'to' ? 'destination' : 'origin', zone: zone.code });
+  }
+
+  /** 2026-11-09 — a delivery to a door in a zone its company delivers no doors in: refused by name, its shops offered instead. */
+  refuseNoDoor(country: string | undefined, point: GeoPoint | undefined, at: number = Date.now()): void {
+    const zone = this.zoneAt(country, point, at);
+    if (zone?.flags?.includes('notServed')) throw new GlosError('INVALID_STATE', `We do not deliver in ${zone.name} yet`, { field: 'location', zone: zone.code });
+    if (zone?.flags?.includes('noDoor')) throw new GlosError('INVALID_STATE', `We do not deliver to doors in ${zone.name}: have it collected at a shop there`, { field: 'location', zone: zone.code });
+  }
+
+  /** A zone of the draft renamed, put in another group, or marked (an island, no door delivery, not served). */
+  changeZone(entityId: string, code: string, change: { name?: string; group?: string; flags?: string[] }, by: string, now: number = Date.now()): ZoneSetupView {
     const company = this.company(entityId);
     const s = this.stored(company);
     const draft = this.draftOf(s);
@@ -362,13 +381,20 @@ export class ZoneMapService {
     if (!name) throw new GlosError('VALIDATION_FAILED', 'A zone needs a name', { field: 'name' });
     const group = change.group ?? zone.group;
     if (!s.groups.some((g) => g.key === group)) throw new GlosError('VALIDATION_FAILED', `There is no group ${group}`, { field: 'group' });
-    if (name === zone.name && group === zone.group) return this.setup(entityId, now);
+    const unknown = (change.flags ?? []).find((f) => !(ZONE_FLAGS as readonly string[]).includes(f));
+    if (unknown) throw new GlosError('VALIDATION_FAILED', `A zone is marked an island, no door delivery or not served — not ${unknown}`, { field: 'flags' });
+    const flags = change.flags ? ZONE_FLAGS.filter((f) => change.flags!.includes(f)) : [...(zone.flags ?? [])];
+    const sameFlags = flags.join() === (zone.flags ?? []).join();
+    if (name === zone.name && group === zone.group && sameFlags) return this.setup(entityId, now);
     const groupName = (key: string) => s.groups.find((g) => g.key === key)?.name ?? key;
-    const before = `${zone.code} ${zone.name} · ${groupName(zone.group)}`;
+    const marks = (f: readonly string[]) => (f.length ? ` · ${f.map((x) => FLAG_WORDS[x as ZoneFlag]).join(', ')}` : '');
+    const before = `${zone.code} ${zone.name} · ${groupName(zone.group)}${marks(zone.flags ?? [])}`;
     zone.name = name;
     zone.group = group;
+    if (flags.length) zone.flags = flags;
+    else delete zone.flags;
     this.save(s);
-    this.note(entityId, by, before, `${zone.code} ${name} · ${groupName(group)}`);
+    this.note(entityId, by, before, `${zone.code} ${name} · ${groupName(group)}${marks(flags)}`);
     return this.setup(entityId, now);
   }
 
@@ -598,6 +624,7 @@ export class ZoneMapService {
         ...(counted ? { shops: c?.shops ?? 0, hubs: c?.hubs ?? 0 } : {}),
         ...(z.from?.length ? { from: z.from } : {}),
         ...(z.evidence?.length ? { evidence: z.evidence } : {}),
+        ...(z.flags?.length ? { flags: [...z.flags] } : {}),
       };
     });
     const areas: ZoneAreaSetView = { setId: set.setId, source: set.source, licence: set.licence, attribution: set.attribution, level: set.level, count: set.areas.length, importedAt: set.importedAt, importedBy: set.importedBy };

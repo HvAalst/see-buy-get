@@ -58438,6 +58438,18 @@
               "type": "string"
             }
           },
+          "flags": {
+            "type": "array",
+            "description": "What its company marked it as: an island, no door delivery, not served.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "island",
+                "noDoor",
+                "notServed"
+              ]
+            }
+          },
           "code": {
             "type": "string"
           },
@@ -59506,6 +59518,13 @@
           "group": {
             "type": "string",
             "maxLength": 20
+          },
+          "flags": {
+            "description": "2026-11-09 — what the zone is marked as: island, noDoor, notServed (all of them said each time; none clears them).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

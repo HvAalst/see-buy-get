@@ -491,7 +491,7 @@ export class CallOffService implements OnModuleInit {
     const measured = p.dimensionsCm ? measuredFactor({ ...p.dimensionsCm, kg: p.weightKg }) : undefined;
     let quote: ShipmentQuote;
     try {
-      quote = this.routing.quoteShipmentFrom(this.routing.hubEnd(hub.mdpId), shop.did, p.size, seller, measured, { kg: p.weightKg, fragile: p.fragile, dims: p.dimensionsCm });
+      quote = this.routing.quoteShipmentFrom(this.routing.hubEnd(hub.mdpId), shop.did, p.size, seller, measured, { kg: p.weightKg, fragile: p.fragile, dims: p.dimensionsCm, replan: true });
     } catch (e) {
       if (e instanceof GlosError) return { why: `It cannot be brought back from ${hub.name}: ${e.message}` };
       throw e;

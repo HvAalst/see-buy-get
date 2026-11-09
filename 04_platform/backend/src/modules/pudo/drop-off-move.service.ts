@@ -109,7 +109,7 @@ export class DropOffMoveService {
   private quoteFor(parcel: Parcel, toAgentDid: string): ShipmentQuote {
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'This parcel has no shop it is collected at');
     const measured = parcel.dimensionsCm ? measuredFactor({ ...parcel.dimensionsCm, kg: parcel.weightKg }) : undefined;
-    return this.routing.quoteShipment(toAgentDid, parcel.destAgentDid, parcel.size, measured, { kg: parcel.weightKg, fragile: parcel.fragile, dims: parcel.dimensionsCm });
+    return this.routing.quoteShipment(toAgentDid, parcel.destAgentDid, parcel.size, measured, { kg: parcel.weightKg, fragile: parcel.fragile, dims: parcel.dimensionsCm, replan: true });
   }
 
   private frame(parcel: Parcel, toDid: string, toName: string): Pick<MoveView, 'parcelId' | 'from' | 'to' | 'pays'> {

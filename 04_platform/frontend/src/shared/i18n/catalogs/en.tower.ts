@@ -3355,6 +3355,13 @@ export const enTowerZones = {
 /** Prices by zone (2026-11-08 — zone pricing, step 2): a country's price card, its life, and a price tried on it. */
 export const enTowerPrices = {
   'tower.nav.zoneprices': 'Prices by zone',
+  // 2026-11-09 — a zone's marks (zone pricing, step 1).
+  'tower.zones.flagsLabel': 'What it is marked as',
+  'tower.zones.flag.island': 'Island',
+  'tower.zones.flag.noDoor': 'No door delivery',
+  'tower.zones.flag.notServed': 'Not served',
+  'tower.zones.flagged': 'The marks of {zone} are saved.',
+  'tower.zones.flagsHint': 'Not served: no new parcel to or from it — one already on its way still comes back. No door delivery: parcels there are collected at its shops. Island: said beside its name. Each takes effect when the map is published.',
   'tower.prices.title': 'Prices by zone',
   'tower.prices.lede': 'Your country’s price card: what a parcel costs between two of your zones, by how far apart they are and what it weighs, with a charge for each group’s ends and your surcharges. The two shops’ own fees, our fee and the tax are added to it, as today. A card is approved by a second person and is in force from a date at least your notice ahead. Until a card is in force, prices are worked out as before.',
   'tower.prices.loading': 'Loading the price card…',

@@ -16,6 +16,8 @@ import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetService } from '../src/modules/pudo/fleet.service';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
 import { BusinessDoorService } from '../src/modules/pudo/business-door.service';
+import { ZoneMapService } from '../src/modules/pudo/zone-map.service';
+import { EntityService as Companies } from '../src/foundation/entity/entity.service';
 import { NotificationDispatcher } from '../src/modules/pudo/notification-dispatcher.service';
 import { UnclaimedService } from '../src/modules/pudo/unclaimed.service';
 import { WalletGateService } from '../src/modules/pudo/wallet-gate.service';
@@ -144,6 +146,18 @@ describe('a business’s parcel delivered to its own place', () => {
     expect(priced.door).toMatchObject({ via: `Kisumu BPO ${tag}`, viaDid: kisumu.did });
     expect(priced.door.suggestedMax).toBeGreaterThan(0);
     const most = priced.door.suggestedMax + 50;
+    // 2026-11-09 — a place in a zone Kenya’s company delivers no doors in: refused by name; lifted, priced again.
+    const zones = app.get(ZoneMapService);
+    const ke = app.get(Companies).requireForJurisdiction('KE').entityId;
+    const square = [[34.73, -0.12], [34.77, -0.12], [34.77, -0.08], [34.73, -0.08], [34.73, -0.12]];
+    zones.importAreas(ke, { geojson: JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: { shapeName: 'Milimani' }, geometry: { type: 'Polygon', coordinates: [square] } }] }), source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+    zones.changeZone(ke, zones.setup(ke).draft!.zones[0].code, { flags: ['noDoor'] }, 'N');
+    zones.publish(ke, undefined, 'N');
+    expect((await http().get('/v1/sbg/business/me/parcels/price').query({ origin: nairobi, toPlace: clinic, l: 30, w: 20, h: 10, kg: 2 }).set(biz.token).expect(400)).body.detail).toMatch(/^We do not deliver to doors in Milimani/);
+    zones.startDraft(ke, 'N');
+    zones.changeZone(ke, zones.setup(ke).draft!.zones[0].code, { flags: [] }, 'N');
+    zones.publish(ke, undefined, 'N');
+    await http().get('/v1/sbg/business/me/parcels/price').query({ origin: nairobi, toPlace: clinic, l: 30, w: 20, h: 10, kg: 2 }).set(biz.token).expect(200);
     const parcel = async (more: Record<string, unknown>) => ({ originPudoDid: nairobi, receiverMobile: '+254744000555', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2, contentPhotoRef: await photo(), ...more });
     const send = (body: Record<string, unknown>) => http().post('/v1/sbg/business/me/parcels').set(biz.token).send(body);
 

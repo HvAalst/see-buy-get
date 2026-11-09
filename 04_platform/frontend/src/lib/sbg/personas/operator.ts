@@ -162,7 +162,7 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/groups', { params: { path: { entityId } }, body: { groups } })),
     startZoneDraft: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
     discardZoneDraft: (entityId: string) => sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
-    changeZone: (entityId: string, code: string, body: { name?: string; group?: string }) =>
+    changeZone: (entityId: string, code: string, body: { name?: string; group?: string; flags?: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/zones/{code}', { params: { path: { entityId, code } }, body })),
     mergeZones: (entityId: string, codes: string[], name?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/zones/draft/merge', { params: { path: { entityId } }, body: { codes, ...(name ? { name } : {}) } })),

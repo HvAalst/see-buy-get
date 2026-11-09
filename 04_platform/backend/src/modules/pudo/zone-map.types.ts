@@ -44,6 +44,14 @@ export interface StoredArea {
   centre: { lat: number; lng: number };
 }
 
+/**
+ * 2026-11-09 — WHAT A COUNTRY'S COMPANY MAY MARK A ZONE AS (the plan: "marks flags such as island, no door delivery, or not
+ * served"). An island is said wherever the zone is; a zone NOT SERVED takes no new parcel to or from a place in it — one
+ * already on its way still comes back; a zone with NO DOOR DELIVERY takes no delivery to a door — its shops still serve it.
+ */
+export const ZONE_FLAGS = ['island', 'noDoor', 'notServed'] as const;
+export type ZoneFlag = (typeof ZONE_FLAGS)[number];
+
 export interface StoredZone {
   code: string;
   name: string;
@@ -54,6 +62,8 @@ export interface StoredZone {
   from?: string[];
   /** Why its group was proposed, where somebody proposed it (a first map made from open data). */
   evidence?: string[];
+  /** What its company marked it as. */
+  flags?: ZoneFlag[];
 }
 
 export interface StoredZoneMap {
@@ -115,6 +125,9 @@ export class ZoneView {
   from?: string[];
   @ApiPropertyOptional({ type: [String] })
   evidence?: string[];
+  /** What its company marked it as: an island, no door delivery, not served. */
+  @ApiPropertyOptional({ enum: ZONE_FLAGS, isArray: true })
+  flags?: ZoneFlag[];
 }
 
 export class ZoneMapView {
@@ -204,4 +217,6 @@ export class PlaceZone {
   group: string;
   groupName: string;
   version: number;
+  @ApiPropertyOptional({ enum: ZONE_FLAGS, isArray: true })
+  flags?: ZoneFlag[];
 }

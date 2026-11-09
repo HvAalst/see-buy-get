@@ -641,7 +641,7 @@ export function geocode(q: string, countries: string[] = []): Promise<Result<Geo
 /** 2026-11-08 — which price zone a point is in (zone pricing): nothing where no country keeps zones there. */
 export interface ZoneAnswer {
   country?: string;
-  zone?: { code: string; name: string; groupName: string; version: number };
+  zone?: { code: string; name: string; groupName: string; version: number; flags?: Array<'island' | 'noDoor' | 'notServed'> };
 }
 
 export function zoneAt(lat: number, lng: number): Promise<Result<ZoneAnswer>> {

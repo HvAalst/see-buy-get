@@ -101,6 +101,40 @@ describe('a country’s zones (zone pricing, step 1)', () => {
     expect(() => zones.changeZone('sbg-ke', 'Z9999', { name: 'x' }, 'N')).toThrow(/There is no zone Z9999/);
   });
 
+  it('marks a zone an island, no door delivery or not served — said in the change log, cleared by marking nothing; nothing else is a mark (2026-11-09)', () => {
+    zones.importAreas('sbg-ke', AREAS, 'N');
+    const code = codeOf('South-east');
+    const s = zones.changeZone('sbg-ke', code, { flags: ['notServed', 'island'] }, 'Njeri W.');
+    // Kept in one order, whatever order they were said in.
+    expect(s.draft!.zones.find((z) => z.code === code)!.flags).toEqual(['island', 'notServed']);
+    expect(entities.changes('sbg-ke')[0]).toMatchObject({ from: `${code} South-east · Rural`, to: `${code} South-east · Rural · an island, not served` });
+    // A rename keeps the marks.
+    zones.changeZone('sbg-ke', code, { name: 'Islands' }, 'N');
+    expect(zones.setup('sbg-ke').draft!.zones.find((z) => z.code === code)!.flags).toEqual(['island', 'notServed']);
+    expect(() => zones.changeZone('sbg-ke', code, { flags: ['volcano'] }, 'N')).toThrow(/not volcano/);
+    zones.changeZone('sbg-ke', code, { flags: [] }, 'N');
+    expect(zones.setup('sbg-ke').draft!.zones.find((z) => z.code === code)!.flags).toBeUndefined();
+  });
+
+  it('refuses a new parcel to or from a zone not served, and a door where none is delivered — by name; an unmarked zone and a pin in none pass', () => {
+    zones.importAreas('sbg-ke', AREAS, 'N');
+    zones.changeZone('sbg-ke', codeOf('South-east'), { flags: ['notServed'] }, 'N');
+    zones.changeZone('sbg-ke', codeOf('South-west'), { flags: ['noDoor', 'island'] }, 'N');
+    // A draft refuses nothing: only the map in force does.
+    expect(() => zones.refuseUnserved('KE', IN.se, 'to')).not.toThrow();
+    zones.publish('sbg-ke', undefined, 'N');
+    expect(zones.zoneAt('KE', IN.sw)).toMatchObject({ name: 'South-west', flags: ['island', 'noDoor'] });
+    expect(() => zones.refuseUnserved('KE', IN.se, 'to')).toThrow(/We do not deliver in South-east yet/);
+    expect(() => zones.refuseUnserved('KE', IN.se, 'from')).toThrow(/We do not collect in South-east yet/);
+    // No door delivery is not unserved: its shops serve it.
+    expect(() => zones.refuseUnserved('KE', IN.sw, 'to')).not.toThrow();
+    expect(() => zones.refuseNoDoor('KE', IN.sw)).toThrow(/We do not deliver to doors in South-west/);
+    expect(() => zones.refuseNoDoor('KE', IN.se)).toThrow(/We do not deliver in South-east yet/);
+    expect(() => zones.refuseNoDoor('KE', IN.nw)).not.toThrow();
+    expect(() => zones.refuseUnserved('KE', { lat: 5, lng: 40 }, 'to')).not.toThrow();
+    expect(() => zones.refuseUnserved('ET', IN.se, 'to')).not.toThrow();
+  });
+
   it('makes two zones one, keeping the first one’s code; the other code is never used again', () => {
     zones.importAreas('sbg-ke', AREAS, 'N');
     const [nw, ne] = [codeOf('North-west'), codeOf('North-east')];

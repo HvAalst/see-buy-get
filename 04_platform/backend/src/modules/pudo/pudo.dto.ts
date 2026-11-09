@@ -1843,6 +1843,8 @@ export class ZoneGroupsDto {
 export class ZoneChangeDto {
   @IsOptional() @IsString() @MaxLength(80) name?: string;
   @IsOptional() @IsString() @MaxLength(20) group?: string;
+  /** 2026-11-09 — what the zone is marked as: island, noDoor, notServed (all of them said each time; none clears them). */
+  @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) flags?: string[];
 }
 
 export class ZoneMergeDto {

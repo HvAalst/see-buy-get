@@ -13663,6 +13663,28 @@ it('a parcel priced from the card keeps what carrying it was planned to cost —
       expect(carded.zone?.plannedCost).toBeGreaterThanOrEqual(Math.round(31.4 * carded.perKm.min * carded.transportFactor * 100) / 100);
     });
 
+    it('a zone its company does not serve takes no new parcel, from any channel or the counter — and a parcel already sold still comes back (2026-11-09)', () => {
+      const west = shopAt('ZP West', { lat: -1.25, lng: 36.65 }, 500);
+      const east = shopAt('ZP East', { lat: -1.25, lng: 36.75 });
+      zoneMaps.importAreas('sbg-ke', { geojson: TWO, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+      const eastCode = zoneMaps.setup('sbg-ke').draft!.zones.find((z) => z.name === 'East')!.code;
+      zoneMaps.changeZone('sbg-ke', eastCode, { flags: ['notServed'] }, 'N');
+      zoneMaps.publish('sbg-ke', undefined, 'N');
+      // No card is needed: the zone map in force says it.
+      expect(() => routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 })).toThrow(/We do not deliver in East yet/);
+      expect(() => routing.quoteShipment(east.did, west.did, 'M', undefined, { kg: 2 })).toThrow(/We do not collect in East yet/);
+      expect(() => controller.quote(west.did, east.did)).toThrow(/We do not deliver in East yet/);
+      const asShop = { active: true, role: 'agent', did: west.did } as never;
+      expect(() => controller.accept({ agentDid: west.did, parcelId: 'QR-NS-1', destPudoDid: east.did, destZone: 'MidTown', size: 'M', senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: photoBy(west.did) } as never, asShop)).toThrow(/We do not deliver in East yet/);
+      expect(parcels.list().some((p) => p.parcelId === 'QR-NS-1')).toBe(false);
+      // A journey re-planned for a parcel already on its way is never refused: it must come back.
+      expect(routing.quoteShipment(east.did, west.did, 'M', undefined, { kg: 2, replan: true }).totalKm).toBeGreaterThan(0);
+      // The rest of the country is served as before; and anybody looking the place up is told.
+      expect(routing.quoteShipment(west.did, west.did, 'M', undefined, { kg: 2 }).totalKm).toBe(0);
+      expect(controller.zoneAtPoint('-1.25', '36.75').zone?.flags).toEqual(['notServed']);
+      expect(controller.zoneAtPoint('-1.25', '36.65').zone?.flags).toBeUndefined();
+    });
+
     it('anybody may ask which price zone a place is in — and a place no country keeps zones for has none', () => {
       expect(controller.zoneAtPoint('-1.25', '36.65')).toEqual({});
       cardInForce();

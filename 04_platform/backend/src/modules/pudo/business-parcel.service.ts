@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { ZoneMapService } from './zone-map.service';
 import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -117,6 +118,8 @@ export class BusinessParcelService {
     private readonly dispatch: DispatchService,
     private readonly doors: BusinessDoorService,
     @Optional() private readonly moves?: DropOffMoveService,
+    // 2026-11-09 — a zone its company delivers no doors in, or does not serve (zone flags).
+    @Optional() private readonly zones?: ZoneMapService,
   ) {}
 
   /* ------------------------------------------------------------------ the account -- */
@@ -277,6 +280,8 @@ export class BusinessParcelService {
   private doorTo(who: ParcelActor, siteId: string): { site: { siteId: string; name: string; location: { lat: number; lng: number } }; shop: Agent } {
     const site = this.sites.require(who.entity.entityId, siteId);
     if (!OWN_PLACES.includes(site.kind)) throw new GlosError('INVALID_INPUT', `${site.name} is a port or a clearing place, not one of your own: choose a place of yours`, { field: 'toOwnPlace.siteId' });
+    // 2026-11-09 — a place in a zone its company delivers no doors in (or does not serve): said by name, before anything else.
+    this.zones?.refuseNoDoor(who.entity.jurisdiction, site.location);
     const shop = this.nearestShop(site.location);
     if (!shop) throw new GlosError('INVALID_STATE', `No shop of ours is within ${COLLECT_NEAR_KM} km of ${site.name}, so no driver can bring it there yet: choose a shop to collect it at`, { field: 'toOwnPlace.siteId' });
     return { site: { siteId: site.siteId, name: site.name, location: site.location }, shop };

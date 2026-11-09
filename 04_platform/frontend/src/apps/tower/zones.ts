@@ -33,6 +33,20 @@ export interface ZoneRow {
   hubs?: number;
   from?: string[];
   evidence?: string[];
+  /** 2026-11-09 — what its company marked it as. */
+  flags?: ZoneFlag[];
+}
+
+/** 2026-11-09 — the marks a zone may carry (the plan: island, no door delivery, not served), in the order they are kept. */
+export const ZONE_FLAGS = ['island', 'noDoor', 'notServed'] as const;
+export type ZoneFlag = (typeof ZONE_FLAGS)[number];
+
+/** A zone's marks with one turned on or off, in the order they are kept. */
+export function toggleFlag(flags: readonly ZoneFlag[] | undefined, flag: ZoneFlag): ZoneFlag[] {
+  const on = new Set(flags ?? []);
+  if (on.has(flag)) on.delete(flag);
+  else on.add(flag);
+  return ZONE_FLAGS.filter((f) => on.has(f));
 }
 
 export type ZoneMapStatus = 'draft' | 'scheduled' | 'in_force' | 'past';

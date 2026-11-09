@@ -3566,6 +3566,13 @@ export class SbgController {
     const agentDid = actingDid(actor, dto.agentDid);
     // 2026-11-05 — collected at this same shop: priced by its route, one stop (the shop's fee once, no transport), as a
     // Send parcel is — the counter collects that price in cash.
+    // 2026-11-09 — a walk-up to or from a zone its company does not serve: refused by name, whatever prices it.
+    const counter = this.agents.get(agentDid);
+    this.zones?.refuseUnserved(this.agents.countryOf(counter), counter.location, 'from');
+    if (dto.destPudoDid && dto.destPudoDid !== agentDid) {
+      const dest = this.agents.get(dto.destPudoDid);
+      this.zones?.refuseUnserved(this.agents.countryOf(dest), dest.location, 'to');
+    }
     const sameShopQuote = dto.destPudoDid && dto.destPudoDid === agentDid ? this.sameShopQuote(agentDid, dto) : undefined;
     // 2026-11-08 — and where its country's price card is in force, a walk-up to another shop is priced from the card too: the
     // counter collects that price in cash, as for a booking. Elsewhere it is the flat price it always was.
@@ -4820,13 +4827,13 @@ export class SbgController {
   @UseGuards(RateLimitGuard)
   @RateLimit(60, 15 * 60)
   @Get('zones/at')
-  zoneAtPoint(@Query('lat') lat?: string, @Query('lng') lng?: string): { country?: string; zone?: { code: string; name: string; groupName: string; version: number } } {
+  zoneAtPoint(@Query('lat') lat?: string, @Query('lng') lng?: string): { country?: string; zone?: { code: string; name: string; groupName: string; version: number; flags?: string[] } } {
     const point = { lat: Number(lat), lng: Number(lng) };
     if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
       throw new GlosError('VALIDATION_FAILED', 'Give a place as lat and lng', { field: 'lat' });
     }
     const found = this.zones?.zoneAnywhere(point);
-    return found ? { country: found.country, zone: { code: found.zone.code, name: found.zone.name, groupName: found.zone.groupName, version: found.zone.version } } : {};
+    return found ? { country: found.country, zone: { code: found.zone.code, name: found.zone.name, groupName: found.zone.groupName, version: found.zone.version, ...(found.zone.flags?.length ? { flags: found.zone.flags } : {}) } } : {};
   }
 
   @Public()

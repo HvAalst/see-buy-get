@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { ZoneMapService } from './zone-map.service';
 import { randomBytes } from 'crypto';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -83,6 +84,8 @@ export class PersonDoorService implements OnModuleInit {
     @Optional() private readonly events?: EventBus,
     // Which country a door's pin is in (the user, 2026-10-27: "Look up the pin's country").
     @Optional() private readonly places?: AddressSearchService,
+    // 2026-11-09 — a zone its company delivers no doors in, or does not serve (zone flags).
+    @Optional() private readonly zones?: ZoneMapService,
   ) {}
 
   onModuleInit(): void {
@@ -646,9 +649,16 @@ export class PersonDoorService implements OnModuleInit {
     const country = await this.places?.countryAt({ lat: Number(to.lat), lng: Number(to.lng) });
     if (country) {
       const home = String(end.country ?? '').toUpperCase();
-      return country === home ? undefined : `Your door is in ${countryName(country)}, and ${hubName} is in ${countryName(home)}: a driver brings it only within ${countryName(home)}. Collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.`;
+      if (country !== home) return `Your door is in ${countryName(country)}, and ${hubName} is in ${countryName(home)}: a driver brings it only within ${countryName(home)}. Collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.`;
+      // Where the map service says the country, the country is the limit; where it cannot say, the distance is.
+    } else if (haversineKm(end.location, { lat: Number(to.lat), lng: Number(to.lng) }) > DOOR_MAX_KM) return `A door delivery goes no further than ${DOOR_MAX_KM} km from ${hubName}: collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.`;
+    // 2026-11-09 — a zone its company delivers no doors in (or does not serve): said by name, the shop offered instead.
+    try {
+      this.zones?.refuseNoDoor(end.country, { lat: Number(to.lat), lng: Number(to.lng) });
+    } catch (e) {
+      return `${(e as Error).message}. Collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.`;
     }
-    return haversineKm(end.location, { lat: Number(to.lat), lng: Number(to.lng) }) > DOOR_MAX_KM ? `A door delivery goes no further than ${DOOR_MAX_KM} km from ${hubName}: collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.` : undefined;
+    return undefined;
   }
 
   /** The network's company in the country the hub is in, and its money: what sells the carriage. */

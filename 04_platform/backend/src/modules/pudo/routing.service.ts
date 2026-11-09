@@ -36,6 +36,11 @@ export interface QuoteCarriers {
   consumer?: boolean;
   /** 2026-11-08 — the moment it is priced at (ms): when a take-in kept with no signal was made, so the card in force then prices it. */
   at?: number;
+  /**
+   * 2026-11-09 — a journey re-planned for a parcel already sold (a return, a call-off, a move): never refused for a zone its
+   * company has since marked not served — the parcel is on its way and must come back.
+   */
+  replan?: boolean;
 }
 
 export interface NodePick {
@@ -368,6 +373,13 @@ export class RoutingService {
     // P2b/P4 — every hop, before a single fee is resolved, so a refusal names the country and not a float.
     // A HUB is registered only where a sister stands, so it must be where we can bill. A SHOP need only be
     // allowed to take goods in: where no sister stands behind it, its leg is bought by the seller.
+    // 2026-11-09 — a new parcel to or from a zone its company does not serve: refused by name, before anything is priced.
+    if (!carriers.replan && plan.hops.length) {
+      const first = plan.hops[0];
+      const last = plan.hops[plan.hops.length - 1];
+      this.zoneMaps?.refuseUnserved(first.country, first.location, 'from', carriers.at ?? Date.now());
+      this.zoneMaps?.refuseUnserved(last.country, last.location, 'to', carriers.at ?? Date.now());
+    }
     for (const h of plan.hops) {
       if (h.type === 'mdp') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'merchantOfRecord');
       if (h.type === 'pudo') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'takeIn');
