@@ -160,3 +160,12 @@ export function firstScreen(group: NavGroup): Screen {
 export function activeGroupKey(groups: NavGroup[], screen: Screen): NavGroup['key'] | null {
   return groups.find((g) => g.screens.includes(screen))?.key ?? groups[0]?.key ?? null;
 }
+
+/**
+ * 2026-11-09 — WHO IS OFFERED THE COMPANIES: network staff always — the first company of a country is created there, and it
+ * was offered only once two companies existed, so a server with the group alone could create none (the owner: "'the
+ * companies' doesn't have the option"). A company's own login, only where there are others to set beside it (the group's).
+ */
+export function offersCompanies(isOperator: boolean, companies: number): boolean {
+  return isOperator || companies > 1;
+}

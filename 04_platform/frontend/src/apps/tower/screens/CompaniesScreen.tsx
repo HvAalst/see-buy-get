@@ -57,6 +57,10 @@ export function CompaniesScreen({ state, actions }: { state: TowerState; actions
       ) : null}
       {state.queueError ? <p class="cerr"><Abbreviated text={state.queueError} /></p> : null}
 
+      {/* 2026-11-09 — first, and open while the group has no company yet: creating one is the whole of the first visit
+          (it sat shut below the cards, on a screen offered only once two companies existed). */}
+      {isOperator ? <CreateCompany state={state} actions={actions} first={!(state.entities ?? []).some((e) => e.kind !== 'group')} /> : null}
+
       <Expiring state={state} actions={actions} own={!isOperator} />
 
       {rows === null ? (
@@ -69,7 +73,6 @@ export function CompaniesScreen({ state, actions }: { state: TowerState; actions
         </div>
       )}
 
-      {isOperator ? <CreateCompany state={state} actions={actions} /> : null}
     </>
   );
 }
@@ -100,16 +103,17 @@ function Expiring({ state, actions, own }: { state: TowerState; actions: TowerAc
 }
 
 /** CA3/CA7 — a company of ours, or a local partner, created as a draft from the catalogue. */
-function CreateCompany({ state, actions }: { state: TowerState; actions: TowerActions }) {
+function CreateCompany({ state, actions, first }: { state: TowerState; actions: TowerActions; first: boolean }) {
   const t = useT();
   const [form, setForm] = useState<{ kind: 'sister' | 'partner'; jurisdiction: string; name: string }>({ kind: 'sister', jurisdiction: '', name: '' });
   const catalogue = state.catalogue ?? [];
   const blocker = companyCreateBlocker(form, catalogue, state.entities ?? []);
 
   return (
-    // Shut: creating a company is rare, and the cards above are what this screen is read for. What is typed is kept
-    // while the headline is shut, since the form's state lives here rather than inside the fold.
-    <ConsoleFold title={t('tower.companies.createTitle')} hint={createCompanyHint(state.entities ?? [], t)}>
+    // Shut once a company exists: creating one is rare after that, and the cards below are what this screen is read for.
+    // Open on the first visit, when there is none. What is typed is kept while the headline is shut, since the form's
+    // state lives here rather than inside the fold.
+    <ConsoleFold title={t('tower.companies.createTitle')} hint={createCompanyHint(state.entities ?? [], t)} defaultOpen={first}>
       <p class="chint" style="margin:8px 0">
         {t('tower.companies.createLede')}
       </p>

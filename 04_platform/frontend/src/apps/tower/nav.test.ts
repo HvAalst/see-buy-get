@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
+import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, offersCompanies, opensSheet } from './nav';
 import type { Screen } from './useTowerApp';
 
 const ALL: Screen[] = ['network', 'pilot', 'stores', 'market', 'movers', 'depots', 'messages', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support', 'money', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'settings', 'connections', 'staffreads', 'documents', 'languages', 'zones', 'zoneprices'];
@@ -34,6 +35,17 @@ describe('every screen has exactly one home', () => {
 });
 
 describe('what a caller is offered', () => {
+  it('offers network staff the companies always — the first company is created there; a company login only beside others (2026-11-09)', () => {
+    // A server with the group alone: staff must still reach “Create a company”.
+    expect(offersCompanies(true, 1)).toBe(true);
+    expect(offersCompanies(true, 0)).toBe(true);
+    expect(offersCompanies(false, 1)).toBe(false);
+    expect(offersCompanies(false, 3)).toBe(true);
+    // …and the menu asks it.
+    const app = readFileSync('src/apps/tower/app.tsx', 'utf8');
+    expect(app).toContain("...(offersCompanies(isOperator, state.entities?.length ?? 0) ? (['companies'] as Screen[]) : []),");
+  });
+
   it('gives network staff all four groups', () => {
     expect(groupsFor(ALL).map((g) => g.key)).toEqual(['overview', 'waiting', 'money', 'setup']);
   });

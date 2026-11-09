@@ -53,7 +53,7 @@ import { ConsoleMenu } from './ConsoleMenu';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { joiningWaiting } from './fleets';
-import { groupsFor } from './nav';
+import { groupsFor, offersCompanies } from './nav';
 import { PilotScreen } from './screens/PilotScreen';
 import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
@@ -163,7 +163,6 @@ export function App() {
    * groups rather than four, two of them empty.
    */
   const isOperator = state.who?.mode === 'operator';
-  const manyCompanies = (state.entities?.length ?? 0) > 1;
   // Round 38 — a member of staff is offered the screens of the roles they hold (staffRoles.ts); the setup key, all.
   const staffRoles = isOperator ? state.who?.roles : undefined;
   const available: Screen[] = ([
@@ -180,7 +179,9 @@ export function App() {
      * keep — an operator picks a company from a list, an administrator IS one.
      */
     ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks', 'messages', 'documents', 'languages'] as Screen[]) : []),
-    ...(manyCompanies ? (['companies'] as Screen[]) : []),
+    // 2026-11-09 — staff always: the first company is created there (it was offered only once two existed, so on a
+    // server with the group alone nobody could create one — the owner: "'the companies' doesn't have the option").
+    ...(offersCompanies(isOperator, state.entities?.length ?? 0) ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
     'company',
