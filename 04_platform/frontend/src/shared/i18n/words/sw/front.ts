@@ -103,6 +103,7 @@ export const words: Record<string, string> = {
   "front.foot.terms": "Masharti ya matumizi",
   "front.foot.write": "Tuandikie",
   "front.foot.directory": "Saraka ya usafirishaji",
+  "front.foot.zones": "Kanda za bei",
   "front.foot.data": "Jinsi tunavyoshughulikia data yako",
   "front.foot.cookies": "Vidakuzi",
   "front.foot.line": "SeeBuyGet — vifurushi kupitia maduka ya mtaani",

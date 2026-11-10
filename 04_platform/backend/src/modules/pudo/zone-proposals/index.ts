@@ -1,4 +1,5 @@
 import type { ZoneProposal } from './types';
+import { ET_PROPOSAL } from './et';
 import { KE_PROPOSAL } from './ke';
 import { NL_PROPOSAL } from './nl';
 
@@ -13,6 +14,8 @@ const PROPOSALS: Record<string, ZoneProposal> = {
   KE: KE_PROPOSAL,
   // 2026-11-09 — the Netherlands, where SeeBuyGet is tested (the owner: "wire in the map for the Netherlands").
   NL: NL_PROPOSAL,
+  // 2026-11-10 — Ethiopia, for its draft company (the owner: "set up a draft for both Kenya and Ethiopia").
+  ET: ET_PROPOSAL,
 };
 
 export function proposalFor(country: string | undefined): ZoneProposal | undefined {

@@ -269,8 +269,28 @@ describe('the first map proposed for a country — Kenya’s, for Kenya’s comp
     expect(ke).toMatchObject({ level: 'wards', areas: 1452 });
     expect(ke.zones).toBeGreaterThan(250);
     expect(ke.attribution).toMatch(/geoBoundaries/);
-    expect(zones.setup('sbg-et').proposal).toBeUndefined();
-    expect(() => zones.startFromProposal('sbg-et', 'N')).toThrow(/No map is proposed for SeeBuyGet Ethiopia/);
+    // A country with no map of its own is offered none — never another country's.
+    entities.createCompany({ kind: 'sister', jurisdiction: 'UG', name: 'SeeBuyGet Uganda' }, 'Owner');
+    expect(zones.setup('sbg-ug').proposal).toBeUndefined();
+    expect(() => zones.startFromProposal('sbg-ug', 'N')).toThrow(/No map is proposed for SeeBuyGet Uganda/);
+  });
+
+  it('Ethiopia has its own (2026-11-10): its 690 woredas, Addis Ababa one zone, a zone for each town and each administrative zone’s rest; remote only with a source', () => {
+    const et = zones.setup('sbg-et').proposal!;
+    expect(et).toMatchObject({ level: 'woredas', areas: 690, zones: 85 });
+    expect(et.attribution).toMatch(/Code for Ethiopia/);
+    expect(et.licence).toMatch(/ODbL/);
+    const s = zones.startFromProposal('sbg-et', 'Hanna T.');
+    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(690);
+    expect(s.draft!.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
+    expect(s.draft!.zones.filter((z) => z.group === 'remote').every((z) => z.evidence!.some((e) => /\(.*20\d\d\)/.test(e)))).toBe(true); // each remote zone cites a dated source
+    zones.publish('sbg-et', undefined, 'Hanna T.');
+    expect(zones.zoneAt('ET', { lat: 9.03, lng: 38.74 })).toMatchObject({ name: 'Addis Ababa', group: 'urban' });
+    expect(zones.zoneAt('ET', { lat: 8.54, lng: 39.27 })).toMatchObject({ name: 'Adama', group: 'urban' });
+    expect(zones.zoneAt('ET', { lat: 3.53, lng: 39.05 })).toMatchObject({ name: 'Borena', group: 'remote' });
+    // Still Ethiopia's alone: a Kenyan pin finds nothing in it, and Kenya is offered its own.
+    expect(zones.zoneAt('KE', { lat: 9.03, lng: 38.74 })).toBeUndefined();
+    expect(zones.setup('sbg-ke').proposal).toMatchObject({ level: 'wards' });
   });
 
   it('opens as a draft: every ward in one zone, each zone with its proposed group and the evidence for it; published, pins find their zones', () => {
