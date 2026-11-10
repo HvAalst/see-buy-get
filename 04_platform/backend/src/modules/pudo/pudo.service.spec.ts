@@ -169,6 +169,7 @@ describe('PUDO Light', () => {
   let drivers: DriverService;
   let fleet: FleetService;
   let dispatch: DispatchService;
+  let notes: ConsignmentNoteService;
   let marketPulse: MarketPulseService;
   let marketStore: MarketPulseStore;
   let controller: SbgController;
@@ -291,6 +292,7 @@ describe('PUDO Light', () => {
     drivers = moduleRef.get(DriverService);
     fleet = moduleRef.get(FleetService);
     dispatch = moduleRef.get(DispatchService);
+    notes = moduleRef.get(ConsignmentNoteService);
     marketPulse = moduleRef.get(MarketPulseService);
     marketStore = moduleRef.get(MarketPulseStore);
     controller = moduleRef.get(SbgController);
@@ -12121,6 +12123,35 @@ describe('PUDO Light', () => {
     expect(after.weightKg).toBe(100);
     const listed: any[] = controller.listConsignments(owner.did, undefined as never, { role: 'operator' } as never) as never;
     expect(listed.some((l) => l.code === lot.code)).toBe(true);
+  });
+
+  it('a co-op lot is a load like any: the cooperative its sender, the receiver it named, sent when it chooses (2026-11-09)', () => {
+    const owner = onboardAgent('Coop Sender', 'NorthTown', 50);
+    const other = onboardAgent('Other Coop', 'NorthTown', 50);
+    // Who receives it there: named when the lot is opened — a name with its address, never an address alone.
+    expect(() => consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000, consignee: { address: 'Gate 3' } })).toThrow(/Say who receives the lot there/);
+    const lot = consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000, consignee: { name: 'Merkato Grain Traders', address: 'Gate 3, Merkato' } });
+    expect(lot.consignee).toEqual({ name: 'Merkato Grain Traders', address: 'Gate 3, Merkato' });
+    // Nothing in it: nothing to send.
+    expect(() => consignments.sendNow(lot.code)).toThrow(/Nothing is deposited in LOT-\d+ yet/);
+    consignments.deposit(lot.code, 'farmer-A', 2400);
+    // Another cooperative cannot send it; its own does — before it is full or has waited its time.
+    expect(() => controller.sendConsignment(lot.code, { role: 'agent', did: other.did } as never)).toThrow(/not yours/);
+    const sent: any = controller.sendConsignment(lot.code, { role: 'agent', did: owner.did } as never);
+    expect(sent).toMatchObject({ status: 'posted', postedBecause: 'sent', freightId: expect.any(String) });
+    expect(() => consignments.sendNow(lot.code)).toThrow(/posted as a load already/);
+    // Its load: posted by the cooperative, so the note names it as the sender (box 1) and the receiver it named (box 2).
+    const load = dispatch.requireFreightPublic(sent.freightId);
+    expect(load).toMatchObject({ postedByDid: owner.did, consignee: { name: 'Merkato Grain Traders', address: 'Gate 3, Merkato' }, weightKg: 2400 });
+    expect(load.shipperDid).toBeUndefined(); // still settled between the cooperative and its carrier, nothing billed through us
+    const note = notes.build(load);
+    expect(note.sender.name).toBe('Coop Sender');
+    expect(note.sender.name).not.toBe('Sender not recorded');
+    expect(note.consignee).toMatchObject({ name: 'Merkato Grain Traders', address: 'Gate 3, Merkato' });
+    // A lot that fills says so; one that waited says so.
+    const full = consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 100 });
+    consignments.deposit(full.code, 'farmer-B', 150);
+    expect(consignments.requireByCode(full.code).postedBecause).toBe('full');
   });
 
   it('F3: a co-op lot is collected where the CROP is, not at the counter that owns it', () => {

@@ -2068,7 +2068,7 @@ export function useAgentApp() {
   /** F3 — open a consolidation lot for a durable dry commodity. `destLocation` is the pin the shop placed (or
    *  the geocoder found and they accepted): without one the eventual haul prices off a name we may not know. */
   const openConsignment = useCallback(
-    async (input: { natureCode: string; pickupLabel?: string; pickupLocation?: GeoPoint; destLabel: string; destLocation?: GeoPoint; targetKg: number; maxSpend?: number }) => {
+    async (input: { natureCode: string; pickupLabel?: string; pickupLocation?: GeoPoint; destLabel: string; destLocation?: GeoPoint; targetKg: number; maxSpend?: number; consigneeName?: string; consigneeAddress?: string }) => {
       if (!client || !did || !input.destLabel.trim() || !(input.targetKg > 0)) return;
       await run('open-consignment', async () => {
         const r = await client.api.openConsignment({
@@ -2081,10 +2081,27 @@ export function useAgentApp() {
           destLocation: input.destLocation,
           targetKg: input.targetKg,
           maxSpend: input.maxSpend,
+          ...(input.consigneeName?.trim() ? { consigneeName: input.consigneeName.trim() } : {}),
+          ...(input.consigneeAddress?.trim() ? { consigneeAddress: input.consigneeAddress.trim() } : {}),
         });
         if (r.error) return fail(r.error);
         buzz();
         pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.lotOpened'), detail: t('agent.toast.lotOpenedDetail') });
+        await loadConsignments();
+      });
+    },
+    [client, did, run, fail, pushToast, loadConsignments],
+  );
+
+  /** 2026-11-09 — the lot sent as a load now, by the cooperative: posted as a full lot is, its note made out the same way. */
+  const sendConsignment = useCallback(
+    async (code: string) => {
+      if (!client || !did) return;
+      await run(`send-${code}`, async () => {
+        const r = await client.api.sendConsignment(code);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.toast.lotSent'), detail: t('agent.toast.lotSentDetail', { code }) });
         await loadConsignments();
       });
     },
@@ -2882,6 +2899,7 @@ export function useAgentApp() {
       loadConsignments,
       openConsignment,
       depositConsignment,
+      sendConsignment,
       setIntakePhoto,
       retryPreview,
       submitIntake,

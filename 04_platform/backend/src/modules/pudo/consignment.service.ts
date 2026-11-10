@@ -56,6 +56,7 @@ export class ConsignmentService {
       targetKg: number;
       maxSpend?: number;
       dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
+      consignee?: { name?: string; address?: string };
     },
     now: number = Date.now(),
   ): Consignment {
@@ -70,6 +71,10 @@ export class ConsignmentService {
     const dangerous = dangerousGoodsGap(natureCode, input.dangerousGoods);
     if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
     const dangerousGoods = (DANGEROUS_GOODS_NATURES as readonly string[]).includes(natureCode) ? input.dangerousGoods : undefined;
+    // 2026-11-09 — who receives it there, for the note's box 2: a name, and its address where it is not the place itself.
+    const consigneeName = input.consignee?.name?.trim();
+    const consigneeAddress = input.consignee?.address?.trim();
+    if (consigneeAddress && !consigneeName) throw new GlosError('FIELD_REQUIRED', 'Say who receives the lot there, with the address', { field: 'consigneeName' });
 
     this.seq += 1;
     const lot: Consignment = {
@@ -77,6 +82,7 @@ export class ConsignmentService {
       code: `LOT-${String(this.seq).padStart(3, '0')}`,
       status: 'open',
       ownerDid: input.ownerDid,
+      ...(consigneeName ? { consignee: { name: consigneeName.slice(0, 120), ...(consigneeAddress ? { address: consigneeAddress.slice(0, 240) } : {}) } } : {}),
       natureCode,
       pickupLabel: input.pickupLabel,
       pickupLocation: input.pickupLocation,
@@ -110,7 +116,7 @@ export class ConsignmentService {
     lot.deposits.push({ memberRef: memberRef.trim(), weightKg: Math.round(weightKg * 100) / 100, at: new Date(now).toISOString() });
     lot.weightKg = Math.round((lot.weightKg + weightKg) * 100) / 100;
     this.lots.set(lot.consignmentId, lot);
-    if (this.isFull(lot)) this.post(lot, now); // full → straight to the marketplace
+    if (this.isFull(lot)) this.post(lot, now, 'full'); // full → straight to the marketplace
     return lot;
   }
 
@@ -130,7 +136,7 @@ export class ConsignmentService {
       // because an open lot with weight has had a deposit.
       const aged = lot.filledAt != null && now > new Date(lot.filledAt).getTime() + CONSIGNMENT_MAX_WAIT_H * 3_600_000;
       if (this.isFull(lot) || aged) {
-        this.post(lot, now);
+        this.post(lot, now, this.isFull(lot) ? 'full' : 'aged');
         posted.push(lot.consignmentId);
       }
     }
@@ -142,7 +148,18 @@ export class ConsignmentService {
    * freight settles 'unpaid' (the cooperative pays the haul off-platform); an optional cash cap rides as
    * maxSpend. Loose durable commodity → bulk (a tipper/hopper self-loads; no handling equipment required).
    */
-  private post(lot: Consignment, now: number): Consignment {
+  /**
+   * 2026-11-09 — SENT AS A LOAD NOW, by its cooperative (the owner: "the cooperative lots"): before it is full or has waited
+   * its time — a truck is free, the market is today. Posted exactly as a full lot is, its note made out the same way.
+   */
+  sendNow(code: string, now: number = Date.now()): Consignment {
+    const lot = this.requireByCode(code);
+    if (lot.status !== 'open') throw new GlosError('INVALID_STATE', `${lot.code} was posted as a load already`);
+    if (!(lot.weightKg > 0)) throw new GlosError('INVALID_STATE', `Nothing is deposited in ${lot.code} yet: a lot with no kilos has nothing to send`);
+    return this.post(lot, now, 'sent');
+  }
+
+  private post(lot: Consignment, now: number, because: NonNullable<Consignment['postedBecause']>): Consignment {
     if (lot.status !== 'open') return lot;
     const freight = this.dispatch.registerFreight(
       {
@@ -160,11 +177,16 @@ export class ConsignmentService {
         packaging: 'bagged',
         maxSpend: lot.maxSpend,
         ...(lot.dangerousGoods ? { dangerousGoods: lot.dangerousGoods } : {}),
+        // 2026-11-09 — the cooperative is the sender (box 1), as a shop booking freight at its counter is: it posted the load
+        // and answers for it. Still no shipperDid, so nothing is billed through us — the haul is settled between the parties.
+        postedByDid: lot.ownerDid,
+        ...(lot.consignee ? { consignee: lot.consignee } : {}),
         // shipperDid intentionally omitted — off-platform cash settlement (the F2 model): no wallet is billed.
       },
       now,
     );
     lot.status = 'posted';
+    lot.postedBecause = because;
     lot.postedAt = new Date(now).toISOString();
     lot.freightId = freight.freightId;
     this.lots.set(lot.consignmentId, lot);

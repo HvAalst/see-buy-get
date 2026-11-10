@@ -104,8 +104,11 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
   const dest = usePlaceEnd('', null);
   const [target, setTarget] = useState('');
   const [cap, setCap] = useState('');
+  // 2026-11-09 — who receives it there: the consignment note's box 2.
+  const [receiver, setReceiver] = useState('');
+  const [receiverAt, setReceiverAt] = useState('');
   const targetKg = Number(target);
-  const ready = pickup.label.trim().length > 0 && pickup.pin !== null && dest.label.trim().length > 0 && dest.pin !== null && targetKg > 0;
+  const ready = pickup.label.trim().length > 0 && pickup.pin !== null && dest.label.trim().length > 0 && dest.pin !== null && targetKg > 0 && !(receiverAt.trim() && !receiver.trim());
   return (
     <Card label={t('agent.consignments.openLot')}>
       <div class="field">
@@ -163,6 +166,21 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
         </div>
       </div>
       <p class="card__note">{t('agent.consignments.capNote')}</p>
+      <div class="dims" style="margin-top:12px">
+        <div class="field">
+          <label class="field__label" for="lot-receiver">
+            {t('agent.consignments.receiverLabel')}
+          </label>
+          <input id="lot-receiver" class="input" value={receiver} onInput={(e) => setReceiver(e.currentTarget.value)} placeholder={t('agent.consignments.receiverPh')} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="lot-receiver-at">
+            {t('agent.consignments.receiverAtLabel')}
+          </label>
+          <input id="lot-receiver-at" class="input" value={receiverAt} onInput={(e) => setReceiverAt(e.currentTarget.value)} placeholder={t('agent.consignments.receiverAtPh')} />
+        </div>
+      </div>
+      <p class="card__note">{t('agent.consignments.receiverNote')}</p>
       <div class="scr__cta">
         <Button
           disabled={!ready}
@@ -177,7 +195,11 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
               destLocation: dest.pin ?? undefined,
               targetKg,
               maxSpend: cap.trim() && capN > 0 ? capN : undefined,
+              consigneeName: receiver,
+              consigneeAddress: receiverAt,
             });
+            setReceiver('');
+            setReceiverAt('');
             pickup.reset(shopName, shopAt); // back to the shop's own site for the next lot
             dest.reset('', null);
             setTarget('');
@@ -209,6 +231,12 @@ function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentSt
         <span>{t('agent.consignments.to')}</span>
         <b>{lot.destLabel}</b>
       </div>
+      {lot.consignee ? (
+        <div class="kv">
+          <span>{t('agent.consignments.receiver')}</span>
+          <b>{lot.consignee.address ? `${lot.consignee.name} · ${lot.consignee.address}` : lot.consignee.name}</b>
+        </div>
+      ) : null}
       <div class="kv">
         <span>{t('agent.consignments.pooled')}</span>
         <b>{`${prog.label} (${prog.pct}%)`}</b>
@@ -216,7 +244,7 @@ function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentSt
       {lot.deposits.length ? <p class="card__note">{lot.deposits.length === 1 ? t('agent.consignments.depositsOne', { count: lot.deposits.length }) : t('agent.consignments.depositsMany', { count: lot.deposits.length })}</p> : null}
 
       {posted ? (
-        <Note tone="ok" icon="truck" title={t('agent.consignments.postedTitle')} detail={t('agent.consignments.postedDetail')} />
+        <Note tone="ok" icon="truck" title={t(lot.postedBecause === 'sent' ? 'agent.consignments.sentTitle' : 'agent.consignments.postedTitle')} detail={t('agent.consignments.postedDetail')} />
       ) : (
         <>
           <div class="dims" style="margin-top:12px">
@@ -246,6 +274,15 @@ function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentSt
           >
             {t('agent.consignments.addDeposit')}
           </Button>
+          {/* 2026-11-09 — sent now, before it is full or has waited its time: a truck is free, the market is today. */}
+          {lot.weightKg > 0 ? (
+            <div style="margin-top:12px">
+              <p class="card__note">{t('agent.consignments.sendNowNote', { kg: lot.weightKg })}</p>
+              <Button variant="outline" chevron={false} busy={state.busy === `send-${lot.code}`} onClick={() => void actions.sendConsignment(lot.code)}>
+                {t('agent.consignments.sendNow')}
+              </Button>
+            </div>
+          ) : null}
         </>
       )}
     </Card>

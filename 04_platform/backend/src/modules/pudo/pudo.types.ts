@@ -751,6 +751,10 @@ export class Consignment {
   maxSpend?: number; // optional cash budget cap for the eventual haul (→ the freight's maxSpend)
   /** 2026-11-03 — CMR box 9 of the load it becomes: a lot of dangerous goods carries their UN number, name and class. */
   dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
+  /** 2026-11-09 — CMR box 2 of the load it becomes: who receives the lot where it goes (the owner: "the cooperative lots"). */
+  consignee?: { name: string; address?: string };
+  /** 2026-11-09 — why it was posted: full, waited long enough, or sent by its cooperative when it chose. */
+  postedBecause?: 'full' | 'aged' | 'sent';
   openedAt: string;
   filledAt?: string; // when the FIRST deposit arrived — drives the aged-out publish (like a tote's filledAt); undefined until then
   postedAt?: string;

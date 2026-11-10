@@ -219,7 +219,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // bags
         'POST sbg/totes/:code/assign', 'POST sbg/totes/:code/fill', 'POST sbg/totes/:code/load', 'POST sbg/totes/:code/release', 'GET sbg/totes/:code', 'GET sbg/totes/:code/tag',
         'POST sbg/agents/:did/totes', 'POST sbg/agents/:did/totes/:code/fill', 'POST sbg/agents/:did/totes/:code/seal', 'POST sbg/agents/:did/receive-bag',
-        'POST sbg/consignments', 'POST sbg/consignments/:code/deposit', 'GET sbg/consignments',
+        'POST sbg/consignments', 'POST sbg/consignments/:code/deposit', 'POST sbg/consignments/:code/send', 'GET sbg/consignments',
         // the papers of a load booked at the counter, printed there
         'GET sbg/dispatch/freight/:id/consignment-note', 'GET sbg/dispatch/freight/:id/consignment-note.html',
         'GET sbg/dispatch/freight/:id/commercial-invoice', 'GET sbg/dispatch/freight/:id/commercial-invoice.html',

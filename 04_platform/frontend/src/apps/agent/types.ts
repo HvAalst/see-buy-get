@@ -293,6 +293,10 @@ export interface ConsignmentView {
   weightKg: number;
   deposits: Array<{ memberRef: string; weightKg: number; at: string }>;
   maxSpend?: number;
+  /** 2026-11-09 — who receives it where it goes (the note's box 2). */
+  consignee?: { name: string; address?: string };
+  /** 2026-11-09 — why it was posted: full, waited long enough, or sent by the cooperative. */
+  postedBecause?: 'full' | 'aged' | 'sent';
   openedAt: string;
   postedAt?: string;
   freightId?: string;

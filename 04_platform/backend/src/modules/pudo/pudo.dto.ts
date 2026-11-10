@@ -3306,6 +3306,9 @@ export class OpenConsignmentDto {
   @IsOptional() @IsNumber() @Min(0) maxSpend?: number; // optional cash budget cap for the eventual haul (0 = no cap)
   /** 2026-11-03 — CMR box 9: a lot of dangerous goods (a pesticide, a fertiliser classed so) gives them, or is refused. */
   @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
+  /** 2026-11-09 — CMR box 2: who receives the lot where it goes, and their address where it is not the place itself. */
+  @IsOptional() @IsString() @MaxLength(120) consigneeName?: string;
+  @IsOptional() @IsString() @MaxLength(240) consigneeAddress?: string;
 }
 
 /** F3 — a member deposit (kg) into a consolidation lot. memberRef is a free label (thin attribution). */

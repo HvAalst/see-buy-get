@@ -266,7 +266,13 @@ export function createAgentApi(sbg: SbgClient) {
       destLocation?: { lat: number; lng: number };
       targetKg: number;
       maxSpend?: number;
+      /** 2026-11-09 — who receives the lot there (the note's box 2), and their address where it is not the place itself. */
+      consigneeName?: string;
+      consigneeAddress?: string;
     }) => sbg.request((c) => c.POST('/v1/sbg/consignments', { body })),
+
+    /** 2026-11-09 — the lot sent as a load now, before it is full or has waited its time. */
+    sendConsignment: (code: string) => sbg.request((c) => c.POST('/v1/sbg/consignments/{code}/send', { params: { path: { code } } })),
 
     /** F3 — record a member deposit (kg) into a lot; the lot auto-posts as one bulk freight once it fills. */
     depositConsignment: (code: string, body: { memberRef: string; weightKg: number }) =>

@@ -25658,6 +25658,35 @@
         }
       }
     },
+    "/v1/sbg/consignments/{code}/send": {
+      "post": {
+        "operationId": "Sbg.sendConsignment",
+        "summary": "",
+        "description": "2026-11-09 — a lot sent as a load now, by its cooperative: posted as a full lot is (owner-scoped).",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/consignments/{code}/deposit": {
       "post": {
         "operationId": "Sbg.depositConsignment",
@@ -72436,6 +72465,15 @@
           },
           "dangerousGoods": {
             "$ref": "#/components/schemas/FreightDangerousDto"
+          },
+          "consigneeName": {
+            "type": "string",
+            "description": "2026-11-09 — CMR box 2: who receives the lot where it goes, and their address where it is not the place itself.",
+            "maxLength": 120
+          },
+          "consigneeAddress": {
+            "type": "string",
+            "maxLength": 240
           }
         },
         "required": [
@@ -72528,6 +72566,23 @@
               }
             }
           },
+          "consignee": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "address": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "postedBecause": {
+            "type": "object",
+            "description": "2026-11-09 — why it was posted: full, waited long enough, or sent by its cooperative when it chose."
+          },
           "openedAt": {
             "type": "string"
           },
@@ -72554,6 +72609,7 @@
           "weightKg",
           "deposits",
           "dangerousGoods",
+          "consignee",
           "openedAt"
         ]
       },

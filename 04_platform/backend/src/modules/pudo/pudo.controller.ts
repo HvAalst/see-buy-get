@@ -8217,7 +8217,18 @@ export class SbgController {
       targetKg: dto.targetKg,
       maxSpend: dto.maxSpend,
       dangerousGoods: dto.dangerousGoods,
+      ...(dto.consigneeName || dto.consigneeAddress ? { consignee: { name: dto.consigneeName, address: dto.consigneeAddress } } : {}),
     });
+  }
+
+  /** 2026-11-09 — a lot sent as a load now, by its cooperative: posted as a full lot is (owner-scoped). */
+  @Roles('agent', 'operator')
+  @Post('consignments/:code/send')
+  @AtTheCounter()
+  sendConsignment(@Param('code') code: string, @Actor() actor: IntrospectionResult) {
+    const lot = this.consignments.requireByCode(code); // 404 unknown
+    this.assertAgentOwner(lot.ownerDid, actor);
+    return this.consignments.sendNow(code);
   }
 
   /** F3 — record a member deposit into a lot (auto-posts the freight the moment the lot fills). Owner-scoped

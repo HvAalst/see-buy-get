@@ -684,6 +684,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/consignment-notes/destination/test': 'none',
   'POST sbg/consignments': 'support',
   'POST sbg/consignments/:code/deposit': 'support',
+  'POST sbg/consignments/:code/send': 'support',
   'POST sbg/consignments/publish-ready': 'support',
   'POST sbg/contract/company/papers/report': 'none',
   'POST sbg/conversations': 'none',
