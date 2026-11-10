@@ -103,6 +103,7 @@ export const words: Record<string, string> = {
   "front.foot.terms": "የአጠቃቀም ውሎች",
   "front.foot.write": "ይጻፉልን",
   "front.foot.directory": "የሎጂስቲክስ ማውጫ",
+  "front.foot.zones": "የዋጋ ዞኖች",
   "front.foot.data": "መረጃዎን እንዴት እንደምንይዝ",
   "front.foot.cookies": "ኩኪዎች",
   "front.foot.line": "SeeBuyGet — ጥቅሎች በሰፈር ሱቆች በኩል",
