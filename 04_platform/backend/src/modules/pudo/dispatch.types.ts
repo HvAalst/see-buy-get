@@ -11,6 +11,7 @@ import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';
 import { BorderAdvice } from './border-rules.types';
+import { HandoverPosition } from './handover-position';
 import { LoadArrival, LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
 import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
 import { UnitHold } from './tamper.types';
@@ -209,6 +210,8 @@ export class FreightDeliveryAttempt {
   note?: string;
   at: string;
   by?: string;
+  /** 2026-11-10 — where the driver's phone was at the door, and how far from the place of delivery. */
+  @ApiPropertyOptional({ type: HandoverPosition }) position?: HandoverPosition;
 }
 
 /**
@@ -480,6 +483,8 @@ export class ProofOfDelivery {
   at: string;
   @ApiPropertyOptional() by?: string;
   @ApiPropertyOptional({ type: [ReceivingException] }) exceptions?: ReceivingException[];
+  /** 2026-11-10 — where the driver's phone was when the goods were handed over, and how far from the place of delivery. */
+  @ApiPropertyOptional({ type: HandoverPosition }) position?: HandoverPosition;
 }
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
@@ -940,7 +945,8 @@ export class Freight {
   @ApiPropertyOptional() driverPayee?: { payeeDid: string; entityId: string };
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.
-  loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string };
+  /** 2026-11-10 — `position`: where the driver's phone was when the goods were taken over, and how far from the pickup. */
+  loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string; position?: HandoverPosition };
   // Round 40 — the 7-point inspection at pickup of a container or closed body leaving for a border: each point with its photograph.
   @ApiPropertyOptional({ type: LoadInspection }) inspection?: LoadInspection;
   unloadReport?: { confirmed: string[]; at: string; by?: string };

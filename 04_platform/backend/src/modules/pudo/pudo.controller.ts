@@ -188,6 +188,7 @@ import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
+import { phoneAtHandover } from './handover-position';
 import { AddressSearchService, GEOCODER, Geocoder } from './geocoder';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
@@ -5805,7 +5806,7 @@ export class SbgController {
       const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
       if (!own) throw new GlosError('FORBIDDEN', 'Only a driver with a badge can take a bag');
       if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw new GlosError('FORBIDDEN', 'A driver takes a bag onto their own badge');
-      return this.mdps.loadBag(code, own, dto.observedAt, { driverDid: actor.did!, name: actor.actorName || this.drivers.get(actor.did!).displayName, reading: dto.take });
+      return this.mdps.loadBag(code, own, dto.observedAt, { driverDid: actor.did!, name: actor.actorName || this.drivers.get(actor.did!).displayName, reading: dto.take, ...phoneAtHandover(actor, dto.position) });
     }
     if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
     return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId), dto.observedAt);
@@ -7848,14 +7849,14 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/pickup')
   freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.pickupFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations, seals: dto.seals, observedAt: dto.observedAt, inspection: dto.inspection, ...(dto.countedPieces !== undefined ? { countedPieces: dto.countedPieces } : {}) });
+    return this.dispatch.pickupFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations, seals: dto.seals, observedAt: dto.observedAt, inspection: dto.inspection, ...(dto.countedPieces !== undefined ? { countedPieces: dto.countedPieces } : {}), ...phoneAtHandover(actor, dto.position) });
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}) });
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...phoneAtHandover(actor, dto.position) });
   }
 
   /**
@@ -7928,7 +7929,7 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/delivery-failed')
   freightDeliveryFailed(@Param('id') id: string, @Body() dto: FreightDeliveryFailedDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.failDelivery(id, actingDid(actor, dto.driverDid), { outcome: dto.outcome, note: dto.note });
+    return this.dispatch.failDelivery(id, actingDid(actor, dto.driverDid), { outcome: dto.outcome, note: dto.note, ...phoneAtHandover(actor, dto.position) });
   }
 
   /**

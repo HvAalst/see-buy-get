@@ -63,9 +63,10 @@ export interface ConsignmentNote {
   consignee: NoteParty;
   /** Box 3 — place of delivery. */
   /** 2026-11-09 — `gln`: the place's GLN, where the receiver gave one for it. */
-  delivery: { place: string; country?: string; at?: string; gln?: string };
+  /** 2026-11-10 — `position`: where the driver's phone was at the handover, in words (handover-position.ts). */
+  delivery: { place: string; country?: string; at?: string; gln?: string; position?: string };
   /** Box 4 — place and date of taking over. */
-  takingOver: { place: string; country?: string; at?: string };
+  takingOver: { place: string; country?: string; at?: string; position?: string };
   /** Box 5 — documents attached. */
   documents: string[];
   /** Boxes 6–12 — the goods. */

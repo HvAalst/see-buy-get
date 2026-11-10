@@ -45,6 +45,6 @@ export class BagClosureController {
   take(@Param('code') code: string, @Body() dto: TakeBagDto, @Actor() actor: IntrospectionResult) {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A bag is read by the driver carrying it');
     if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in as the driver carrying this bag');
-    return this.mdps.takeBag(code, actor.did, actor.actorName || this.drivers.get(actor.did).displayName, { sealNumber: dto.sealNumber, photoRef: dto.photoRef, asClosed: dto.asClosed }, dto.observedAt);
+    return this.mdps.takeBag(code, actor.did, actor.actorName || this.drivers.get(actor.did).displayName, { sealNumber: dto.sealNumber, photoRef: dto.photoRef, asClosed: dto.asClosed }, dto.observedAt, dto.position ?? { none: true });
   }
 }

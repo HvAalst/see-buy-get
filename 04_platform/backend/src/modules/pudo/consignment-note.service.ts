@@ -5,6 +5,7 @@ import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
+import { positionWords } from './handover-position';
 import { gsinHumanReadable } from '../../foundation/gs1/gs1';
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -224,7 +225,13 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Round 35 — each exception under the tamper protocol, where and when, and its release by operations.
     reservations.push(...(this.dispatch.tamperOnNote?.(f.freightId) ?? []));
     const carriage = this.carriageOf(f, opts.consignee);
-    const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
+    const attempts = (f.deliveryAttempts ?? []).map((a) => {
+      const where = positionWords(a.position, a.at, 'the place of delivery');
+      return `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}${where ? `. ${where}` : ''}`;
+    });
+    // 2026-11-10 — where the driver's phone was at each handover, said where its place is.
+    const takenWhere = positionWords(f.loadSafety?.position, f.pickedUpAt);
+    const handedWhere = positionWords(f.proofOfDelivery?.position, f.deliveredAt);
     const claim = f.claim
       ? {
           line: `Claim by the ${this.dispatch.claimantOf?.(f).party === 'receiver' ? 'receiver' : 'sender'} ${when(f.claim.raisedAt)} — goods ${f.claim.kind === 'damaged' ? 'damaged' : f.claim.kind === 'short' ? 'short' : 'not received'}: ${f.claim.description}`,
@@ -249,8 +256,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       sender,
       ...(agent ? { agent } : {}),
       consignee: this.consigneeOf(f),
-      delivery: { place: f.destLabel, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.deliveredAt ? { at: f.deliveredAt } : {}), ...(f.receiver?.siteGln ? { gln: f.receiver.siteGln } : {}) },
-      takingOver: { place: f.pickupLabel, ...(f.pickupCountry ? { country: countryName(f.pickupCountry) } : {}), ...(f.pickedUpAt ? { at: f.pickedUpAt } : {}) },
+      delivery: { place: f.destLabel, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}), ...(f.deliveredAt ? { at: f.deliveredAt } : {}), ...(f.receiver?.siteGln ? { gln: f.receiver.siteGln } : {}), ...(handedWhere ? { position: handedWhere } : {}) },
+      takingOver: { place: f.pickupLabel, ...(f.pickupCountry ? { country: countryName(f.pickupCountry) } : {}), ...(f.pickedUpAt ? { at: f.pickedUpAt } : {}), ...(takenWhere ? { position: takenWhere } : {}) },
       documents,
       goods: {
         description: f.description,
@@ -657,9 +664,9 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(16, 'Carrier (name, address, country)', party(n.carrier, carrierExtra) || '')}
   ${box(2, 'Consignee (name, address, country)', party(n.consignee))}
   ${box(17, 'Successive carriers', n.successive?.length ? n.successive.map((s) => party(s, [s.driverName ? `Driver: ${e(s.driverName)}` : '', s.plate ? `Vehicle: ${e(s.plate)}${s.vehicleClass ? ` (${e(s.vehicleClass)})` : ''}` : '', s.takenOverAt ? `Took the goods over ${e(when(s.takenOverAt))}` : 'Has not yet taken the goods over', s.via ? `Passed on by ${e(s.via)}` : '', s.cover ? e(s.cover) : ''].filter(Boolean).join('<br>'))).join('<hr>') : '<span class="empty">None</span>')}
-  ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.gln ? `<br>GLN ${e(n.delivery.gln)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
+  ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.gln ? `<br>GLN ${e(n.delivery.gln)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}${n.delivery.position ? `<br><small>${e(n.delivery.position)}</small>` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
-  ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}
+  ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}${n.takingOver.position ? `<br><small>${e(n.takingOver.position)}</small>` : ''}`)}
   ${box(19, 'Special agreements', (n.agreements?.length ? list(n.agreements) : '') + (n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : n.agreements?.length ? '' : '<span class="empty">None</span>'))}
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}

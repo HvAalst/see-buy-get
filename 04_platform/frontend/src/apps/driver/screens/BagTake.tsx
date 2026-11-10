@@ -62,6 +62,8 @@ export function BagTakeFields({ claim, take, actions, busy, onReport }: { claim:
         onReport={() => onReport()}
         disabled={busy}
       />
+      {/* 2026-11-10 — where the phone is goes with the photo and the time, as at a load's pickup. */}
+      <p class="hint">{t('driver.loads.positionKept')}</p>
       {wrong ? (
         <>
           <Note tone="warn" icon="warning" title={t('common.bag.mismatchTitle')} detail={t('common.bag.mismatchBody')} />

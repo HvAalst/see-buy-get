@@ -26,6 +26,67 @@ const DEFAULT_MIN_MS = 60_000;
 const DEFAULT_MIN_KM = 0.2;
 
 /**
+ * 2026-11-10 — WHERE THE PHONE WAS AT A HANDOVER: the reading sent beside a load's pickup or delivery, a door where it
+ * could not be delivered, or a bag taken on its seal — or that there was none. The photo itself goes stripped of its
+ * hidden data, so the position is read here, at the moment of the act, never out of the picture.
+ */
+export type HandoverFix = { lat: number; lng: number; accuracyM?: number; fixAt?: string } | { none: true };
+
+/** A reading this fresh is the phone's position at the act: the shift's own watch usually has one. */
+export const HANDOVER_FIX_FRESH_MS = 30_000;
+
+/** The latest reading the phone gave anywhere in this app, with how sure it was and when. */
+let lastFix: { lat: number; lng: number; accuracyM?: number; ms: number } | null = null;
+
+function remember(pos: GeolocationPosition): void {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  lastFix = { lat, lng, ...(Number.isFinite(accuracy) ? { accuracyM: Math.round(accuracy) } : {}), ms: Number.isFinite(pos.timestamp) ? pos.timestamp : Date.now() };
+}
+
+/** As sent: rounded to about a metre, the reading's own time. */
+function asFix(f: { lat: number; lng: number; accuracyM?: number; ms: number }): HandoverFix {
+  const r = (n: number) => Math.round(n * 1e6) / 1e6;
+  return { lat: r(f.lat), lng: r(f.lng), ...(f.accuracyM !== undefined ? { accuracyM: f.accuracyM } : {}), fixAt: new Date(f.ms).toISOString() };
+}
+
+/**
+ * The phone's position for a handover: the shift's latest reading if it is fresh, else asked now, waiting no longer than
+ * `timeoutMs`. Never fails: no position is an answer (`{ none: true }`), and the handover goes ahead with it.
+ */
+export async function handoverFix(timeoutMs = 6_000, now: () => number = Date.now): Promise<HandoverFix> {
+  if (lastFix && now() - lastFix.ms <= HANDOVER_FIX_FRESH_MS) return asFix(lastFix);
+  if (!canLocate()) return { none: true };
+  const got = await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (!settled) {
+        settled = true;
+        resolve(ok);
+      }
+    };
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          remember(pos);
+          done(true);
+        },
+        () => done(false),
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: HANDOVER_FIX_FRESH_MS },
+      );
+    } catch {
+      done(false);
+    }
+  });
+  return got && lastFix ? asFix(lastFix) : { none: true };
+}
+
+/** For tests: forget the last reading. */
+export function forgetFix(): void {
+  lastFix = null;
+}
+
+/**
  * Decide whether a new fix is worth reporting. Pure, so the throttle is testable without a browser: the
  * expensive half of this feature is the judgement, not the plumbing.
  */
@@ -85,7 +146,10 @@ export function currentPosition(timeoutMs = 10_000): Promise<GeoPoint | null> {
     };
     try {
       navigator.geolocation.getCurrentPosition(
-        (pos) => done({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => {
+          remember(pos);
+          done({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
         () => done(null),
         { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 30_000 },
       );
@@ -107,6 +171,7 @@ export function watchPosition(onFix: (p: GeoPoint) => void, opts: WatchOptions =
   try {
     id = navigator.geolocation.watchPosition(
       (pos) => {
+        remember(pos); // every reading, reported or not: a handover asks for the freshest
         const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const now = Date.now();
         if (!shouldReport(next, last, now, opts)) return;

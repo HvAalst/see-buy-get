@@ -93,6 +93,7 @@ export const DOCUMENT_SEEDS: Record<DocumentKind, { title: string; body: string;
       '- When you sign up, SeeBuyGet keeps which versions of its terms of use, of this page and of the cookie statement you agreed to — the general ones, and your country’s own where it has any — and when, and again each time you agree to a new version.',
       '- The notices in your SeeBuyGet app — a parcel’s steps, word about your account, a new version of these pages — are kept with your account.',
       '- During a shift, SeeBuyGet keeps a driver’s latest position, each new one replacing the last.',
+      '- At a load’s pickup and delivery, at a door where it could not be delivered, and when a driver takes a bag of parcels, SeeBuyGet keeps where the driver’s phone was at that moment and how sure the phone was of it, with the photo and the time. The consignment note shows the sender, the carrier and the receiver how far that was from the place written on it. It is kept as long as the load’s or the bag’s other proof.',
       '- For freight, SeeBuyGet keeps the consignment note: the sender, the consignee, the goods, the seals and who received them.',
       '- When you write to SeeBuyGet, it keeps your email address and your message, to answer you.',
       '- A conversation between two parties in a SeeBuyGet app is kept as it was written: nothing in it is edited or deleted.',

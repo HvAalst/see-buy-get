@@ -559,6 +559,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   label={t('driver.loads.securePhotoAria')}
                   disabled={busy}
                 />
+                {/* 2026-11-10 — where the phone is goes with the photo and the time: said, so it is never a surprise. */}
+                <p class="hint">{t('driver.loads.positionKept')}</p>
               </div>
               <InspectionSection claim={claim} looks={looks} setLooks={setLooks} actions={actions} busy={busy} onReport={() => onTamper({ claim, finding: 'inspection_failed' })} />
               <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} onReport={(s, numberRead) => onTamper({ claim, finding: 'seal_not_as_written', seal: { sealId: s.sealId, no: s.no, numberRead } })} />
@@ -605,6 +607,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   label={t('driver.loads.podPhotoAria')}
                   disabled={busy}
                 />
+                <p class="hint">{t('driver.loads.positionKept')}</p>
               </div>
               {/* 2026-11-01 — handed in at an airline's cargo terminal: the handler's receipt, by its number. */}
               {shed?.side === 'acceptance' ? (

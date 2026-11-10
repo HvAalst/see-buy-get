@@ -48329,6 +48329,29 @@
           "at"
         ]
       },
+      "HandoverPosition": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "accuracyM": {
+            "type": "number"
+          },
+          "fixAt": {
+            "type": "string"
+          },
+          "metresFromPlace": {
+            "type": "number"
+          },
+          "none": {
+            "type": "boolean"
+          }
+        }
+      },
       "FreightDeliveryAttempt": {
         "type": "object",
         "properties": {
@@ -48338,6 +48361,14 @@
               "absent",
               "refused",
               "unreachable"
+            ]
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was at the door, and how far from the place of delivery.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPosition"
+              }
             ]
           },
           "note": {
@@ -64467,6 +64498,29 @@
           "destinationLabel"
         ]
       },
+      "HandoverPositionDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "accuracyM": {
+            "type": "number"
+          },
+          "fixAt": {
+            "type": "string"
+          },
+          "none": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          }
+        }
+      },
       "LoadBagDto": {
         "type": "object",
         "properties": {
@@ -64483,6 +64537,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/BagReceiptDto"
+              }
+            ]
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPositionDto"
               }
             ]
           }
@@ -64984,6 +65046,14 @@
             "items": {
               "$ref": "#/components/schemas/ReceivingException"
             }
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was when the goods were handed over, and how far from the place of delivery.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPosition"
+              }
+            ]
           },
           "receiverName": {
             "type": "string"
@@ -66948,6 +67018,10 @@
               "by": {
                 "required": false,
                 "type": "string"
+              },
+              "position": {
+                "required": false,
+                "$ref": "#/components/schemas/HandoverPosition"
               }
             }
           },
@@ -72140,6 +72214,14 @@
             "items": {
               "$ref": "#/components/schemas/InspectionPointDto"
             }
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPositionDto"
+              }
+            ]
           }
         }
       },
@@ -72209,6 +72291,14 @@
           "note": {
             "type": "string",
             "maxLength": 500
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPositionDto"
+              }
+            ]
           }
         },
         "required": [
@@ -80943,6 +81033,14 @@
           },
           "observedAt": {
             "type": "string"
+          },
+          "position": {
+            "description": "2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HandoverPositionDto"
+              }
+            ]
           }
         }
       },

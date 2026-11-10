@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
+import { type HandoverPositionDto, positionAtAct } from './handover-position';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { type BagClosure, type BagClosureKind, type BagParty, MAX_BAG_SEAL } from './bag-closure.types';
@@ -114,13 +115,15 @@ export class BagClosureService {
    * the bag is received nowhere until they have. The same reading by the same driver again (a phone sending what it kept
    * with no signal) is the one already made.
    */
-  checkTake(tote: Tote, by: BagParty, driverDid: string, input: BagReadingInput | undefined): (step: Step) => void {
+  checkTake(tote: Tote, by: BagParty, driverDid: string, input: BagReadingInput | undefined, where?: { position: HandoverPositionDto; place?: { lat: number; lng: number } }): (step: Step) => void {
     const closure = this.current(tote);
     if (!closure) throw new GlosError('BAG_NOT_CLOSED', `Bag ${tote.code} is not closed: the shop or hub closes it before you take it`);
     if (closure.taken?.by.did === driverDid) return () => undefined;
     const { photoRef, numberRead, reported, link } = this.read(tote, closure, driverDid, input, 'take');
     return (step) => {
-      const taken = { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) };
+      // 2026-11-10 — where the driver's phone was as they took it, and how far from the shop or hub it stood at: in the anchor too.
+      const position = where ? positionAtAct(where.position, where.place, step.at) : undefined;
+      const taken = { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}), ...(position ? { position } : {}) };
       const takenTxId = this.ledger?.anchor({ c: closure.closureId, taken }).txId;
       this.closures.set(closure.closureId, { ...closure, taken, ...(takenTxId ? { takenTxId } : {}) });
       this.media.adopt(photoRef, driverDid, link, 'seal');

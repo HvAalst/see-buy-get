@@ -78,7 +78,7 @@ import { ContactCardService } from './contact-card.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
-import { DispatchService, driverJobRowOf, driverJobsToCsv, fleetJobsToCsv, lockedCurrencyOf } from './dispatch.service';
+import { custodyAnchorOf, DispatchService, driverJobRowOf, driverJobsToCsv, fleetJobsToCsv, lockedCurrencyOf } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { MarketPulseService } from './market-pulse.service';
@@ -170,6 +170,7 @@ describe('PUDO Light', () => {
   let fleet: FleetService;
   let dispatch: DispatchService;
   let notes: ConsignmentNoteService;
+  let bagClosures: BagClosureService;
   let marketPulse: MarketPulseService;
   let marketStore: MarketPulseStore;
   let controller: SbgController;
@@ -293,6 +294,7 @@ describe('PUDO Light', () => {
     fleet = moduleRef.get(FleetService);
     dispatch = moduleRef.get(DispatchService);
     notes = moduleRef.get(ConsignmentNoteService);
+    bagClosures = moduleRef.get(BagClosureService);
     marketPulse = moduleRef.get(MarketPulseService);
     marketStore = moduleRef.get(MarketPulseStore);
     controller = moduleRef.get(SbgController);
@@ -7313,8 +7315,16 @@ describe('PUDO Light', () => {
       // Round 37 — taken on its seal: the driver photographs it as they take it, as it was closed.
       expect(() => controller.loadBag(two, {} as never, asDriver(other.d.did))).toThrow(/Photograph the bag as you take it/);
       expect(totes.byCodeMaybe(two)!.status).not.toBe('in_transit');
-      controller.loadBag(two, { take: { photoRef: photoBy(other.d.did), asClosed: true } } as never, asDriver(other.d.did));
+      // 2026-11-10 — and where the driver's phone was, measured from the shop the bag stood at.
+      const at = { lat: origin.location!.lat + 0.0009, lng: origin.location!.lng };
+      controller.loadBag(two, { take: { photoRef: photoBy(other.d.did), asClosed: true }, position: { ...at, accuracyM: 8 } } as never, asDriver(other.d.did));
       expect(totes.byCodeMaybe(two)!.carriedBy).toBe(other.d.did);
+      const taken = bagClosures.current(totes.byCodeMaybe(two)!)!.taken!;
+      expect(taken.position).toMatchObject({ accuracyM: 8, metresFromPlace: 100 });
+      // …and a bag a counter loaded onto them, read later: where the phone was — or, as here, that it gave none.
+      expect(bagClosures.current(totes.byCodeMaybe(one)!)!.taken).toBeUndefined();
+      mdps.takeBag(one, d.did, 'Test', { photoRef: photoBy(d.did), asClosed: true }, undefined, { none: true });
+      expect(bagClosures.current(totes.byCodeMaybe(one)!)!.taken!.position).toEqual({ none: true });
     });
 
     it('lets only a driver say what is on the road — staff pass the door and are refused inside', () => {
@@ -10675,6 +10685,46 @@ describe('PUDO Light', () => {
     expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(requiredUnloadKeys()));
     // A match (nobody billed): the gate stamps the report, and the network pays nothing (2026-10-27).
     expect(done.driverPaid).toBeFalsy();
+  });
+
+  it('the phone’s position at a handover is kept with the photo and the time, with how far from the place — never refused for (2026-11-10)', () => {
+    const asDriver = (did: string) => ({ active: true, role: 'driver', did }) as never;
+    const pickup = { lat: -1.84, lng: 36.34 };
+    const dest = { lat: -1.8445, lng: 36.34 };
+    const d = coupleTipper('GP', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Store', destLocation: dest, weightKg: 200, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    // Taken over 40 m from the pickup, the phone sure to 12 m: kept beside the photo, and anchored with it.
+    const fixAt = new Date().toISOString();
+    const moved = controller.freightPickup(f.freightId, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did), position: { lat: -1.84036, lng: 36.34, accuracyM: 12, fixAt } } as never, asDriver(d.did));
+    expect(moved.loadSafety?.position).toEqual({ lat: -1.84036, lng: 36.34, accuracyM: 12, fixAt, metresFromPlace: 40 });
+    expect(custodyAnchorOf(moved, 'picked_up')).toMatchObject({ pos: [-1.84036, 36.34, 12, fixAt] });
+    // At the door, nobody there — and the phone gave nothing: written down as nothing, the attempt kept all the same.
+    const tried = controller.freightDeliveryFailed(f.freightId, { outcome: 'absent' } as never, asDriver(d.did));
+    expect(tried.deliveryAttempts?.[0].position).toEqual({ none: true });
+    // Handed over 2.5 km from the place on the note: said, never refused.
+    const done = controller.freightDeliver(f.freightId, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.did), position: { lat: -1.822, lng: 36.34, accuracyM: 30 } } as never, asDriver(d.did));
+    expect(done.status).toBe('delivered');
+    expect(done.proofOfDelivery?.position?.metresFromPlace).toBe(2502);
+    expect(custodyAnchorOf(done, 'delivered')).toMatchObject({ pos: [-1.822, 36.34, 30, null] });
+    // The note says it where its place is: box 4, box 3, and the attempt in box 18.
+    const note = notes.build(dispatch.requireFreightPublic(f.freightId));
+    expect(note.takingOver.position).toBe('The driver’s phone was 40 m from this place (accurate to 12 m)');
+    expect(note.delivery.position).toBe('The driver’s phone was 2.5 km from this place (accurate to 30 m)');
+    expect(note.attempts[0]).toMatch(/nobody to receive the goods\. The driver’s phone gave no position$/);
+    expect(notes.htmlFor(note)).toContain('The driver’s phone was 40 m from this place');
+  });
+
+  it('staff acting for a driver say nothing of a phone: no position is kept (2026-11-10)', () => {
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_gps', scopes: ['*'] } as never;
+    const pickup = { lat: -1.85, lng: 36.35 };
+    const d = coupleTipper('GS', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Store', destLocation: pickup, weightKg: 200, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    const moved = controller.freightPickup(f.freightId, { driverDid: d.did, confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did), position: { lat: 1, lng: 1 } } as never, staff);
+    expect(moved.status).toBe('in_transit');
+    expect(moved.loadSafety?.position).toBeUndefined();
+    expect(notes.build(dispatch.requireFreightPublic(f.freightId)).takingOver.position).toBeUndefined();
   });
 
   it('S33: a claimed freight carries its cargo model + the exact checklists to the driver', () => {

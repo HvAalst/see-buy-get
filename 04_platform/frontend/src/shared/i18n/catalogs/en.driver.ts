@@ -415,6 +415,7 @@ export const enDriver = {
   'driver.loads.receiverPlaceholder': 'Name of the person at the gate',
   'driver.loads.podPhotoLabel': 'Photo of the goods as delivered',
   'driver.loads.podPhotoAria': 'Take a photo of the goods where you put them down',
+  'driver.loads.positionKept': 'Your phone’s position is kept with this photo and the time, to show where it happened. No position? It goes ahead all the same.',
   'driver.loads.remarksLabel': 'Did the receiver note anything? (optional)',
   'driver.loads.remarksHint': 'Their words go on the consignment note as the receiver’s remarks.',
   'driver.loads.addReceiver': 'Type the name of the person who received the goods.',

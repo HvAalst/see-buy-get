@@ -337,6 +337,7 @@ export const words: Record<string, string> = {
   "driver.loads.receiverPlaceholder": "Naam van de persoon bij het hek",
   "driver.loads.podPhotoLabel": "Foto van de goederen zoals afgeleverd",
   "driver.loads.podPhotoAria": "Maak een foto van de goederen waar je ze hebt neergezet",
+  "driver.loads.positionKept": "De positie van je telefoon wordt bij deze foto en het tijdstip bewaard, om te laten zien waar het gebeurde. Geen positie? Het gaat toch door.",
   "driver.loads.remarksLabel": "Heeft de ontvanger iets opgemerkt? (optioneel)",
   "driver.loads.remarksHint": "Hun woorden komen op de vrachtbrief als opmerkingen van de ontvanger.",
   "driver.loads.addReceiver": "Typ de naam van de persoon die de goederen heeft ontvangen.",

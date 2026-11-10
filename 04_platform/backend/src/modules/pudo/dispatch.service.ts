@@ -24,6 +24,7 @@ import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { GeoPoint, Tote, ToteHaul } from './pudo.types';
 import { haversineKm } from './geo';
+import { type HandoverPositionDto, positionAnchor, positionAtAct } from './handover-position';
 import { DriverService, idUnseen } from './driver.service';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
@@ -390,9 +391,11 @@ export interface TamperHooks {
 
 /** What is anchored of a load changing hands, worked out from the load as kept: a field changed later no longer matches. */
 export function custodyAnchorOf(f: Freight, step: 'picked_up' | 'delivered'): Record<string, unknown> {
+  // 2026-11-10 — the phone's position goes into the same anchor as the photo: the two are one record of one moment.
+  const pos = positionAnchor(step === 'picked_up' ? f.loadSafety?.position : f.proofOfDelivery?.position);
   return step === 'picked_up'
-    ? { f: f.freightId, st: step, at: f.pickedUpAt, by: f.loadSafety?.by, photo: f.loadSafety?.securementPhotoRef, ...(f.inspection ? { insp: f.inspection.points.map((p) => p.photoRef) } : {}) }
-    : { f: f.freightId, st: step, at: f.deliveredAt, by: f.proofOfDelivery?.by, receiver: f.proofOfDelivery?.receiverName, photo: f.proofOfDelivery?.photoRef };
+    ? { f: f.freightId, st: step, at: f.pickedUpAt, by: f.loadSafety?.by, photo: f.loadSafety?.securementPhotoRef, ...(f.inspection ? { insp: f.inspection.points.map((p) => p.photoRef) } : {}), ...(pos !== undefined ? { pos } : {}) }
+    : { f: f.freightId, st: step, at: f.deliveredAt, by: f.proofOfDelivery?.by, receiver: f.proofOfDelivery?.receiverName, photo: f.proofOfDelivery?.photoRef, ...(pos !== undefined ? { pos } : {}) };
 }
 
 /** A load held by an authority (load-detention.service.ts), as dispatch reads it. */
@@ -3307,7 +3310,7 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string; inspection?: InspectionInput[]; countedPieces?: number }, now: number = Date.now()): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string; inspection?: InspectionInput[]; countedPieces?: number; position?: HandoverPositionDto }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
@@ -3366,7 +3369,9 @@ export class DispatchService {
     if (taken.receivedAt) f.pickupReceivedAt = taken.receivedAt;
     else delete f.pickupReceivedAt;
     keepSeals?.(f.pickedUpAt);
-    f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
+    // 2026-11-10 — where the driver's phone was, beside the photo; how far from the pickup. Asked of the driver's own app only.
+    const takenWhere = check?.position ? positionAtAct(check.position, f.pickupLocation, f.pickedUpAt) : undefined;
+    f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid, ...(takenWhere ? { position: takenWhere } : {}) };
     if (asked && inspection) f.inspection = { kind: asked, points: inspection, at: f.pickedUpAt, ...(driverDid ? { by: driverDid } : {}) };
     else delete f.inspection;
     // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
@@ -3404,7 +3409,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string; terminalReceipt?: string }, now: number = Date.now()): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string; terminalReceipt?: string; position?: HandoverPositionDto }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -3455,7 +3460,9 @@ export class DispatchService {
     // Never both: damaged goods found, and "intact" confirmed. The record says what was found.
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])].filter((k) => !(exceptions.some((x) => x.kind === 'damaged') && k === 'intact')), at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
-    f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), ...(exceptions.length ? { exceptions } : {}), at: f.deliveredAt, by: driverDid };
+    // 2026-11-10 — where the driver's phone was at the handover, beside the photo; how far from the place of delivery.
+    const handedWhere = check?.position ? positionAtAct(check.position, f.destLocation, f.deliveredAt) : undefined;
+    f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), ...(exceptions.length ? { exceptions } : {}), at: f.deliveredAt, by: driverDid, ...(handedWhere ? { position: handedWhere } : {}) };
     this.anchorCustody(f, 'delivered');
     // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
@@ -3530,14 +3537,16 @@ export class DispatchService {
    * answer for — and the attempt is written down and told to the sender, who is the one who can do something
    * about it (ring the receiver, name another door, take it back). Box 24 of the note lists every attempt.
    */
-  failDelivery(freightId: string, driverDid: string | undefined, input: { outcome: DeliveryFailure; note?: string }, now: number = Date.now()): Freight {
+  failDelivery(freightId: string, driverDid: string | undefined, input: { outcome: DeliveryFailure; note?: string; position?: HandoverPositionDto }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     if (!DELIVERY_FAILURES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what happened at the door: absent, refused or unreachable');
     const note = input.note?.trim();
     const at = new Date(now).toISOString();
-    f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid }];
+    // 2026-11-10 — the door the driver stood at: where their phone was, and how far from the place of delivery.
+    const atDoor = input.position ? positionAtAct(input.position, f.destLocation, at) : undefined;
+    f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid, ...(atDoor ? { position: atDoor } : {}) }];
     // REFUSED (the user, 2026-10-27): the sender decides what happens to the goods, within REFUSAL_DECIDE_H hours — the first
     // refusal starts the clock, and a second at the same door does not restart it.
     if (input.outcome === 'refused' && !f.refusal) f.refusal = { at, ...(driverDid ? { by: driverDid } : {}), ...(note ? { note: note.slice(0, 500) } : {}), decideBy: new Date(now + REFUSAL_DECIDE_H * 3_600_000).toISOString() };

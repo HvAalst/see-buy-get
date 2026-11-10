@@ -1,4 +1,6 @@
-import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { HandoverPosition, HandoverPositionDto } from './handover-position';
 
 /**
  * A BAG CLOSED ON OUR OWN SEAL, AND RECEIVED BY IT (round 36; the user, 2026-10-20, on the ISO 28000 check: "Receiving on
@@ -37,6 +39,8 @@ export interface BagReceipt {
   /** Received as it was closed — or, after a report released by operations, as it was found. */
   asClosed: boolean;
   asFound?: boolean;
+  /** 2026-11-10 — a driver taking it: where their phone was, and how far from the shop or hub it stood at. */
+  position?: HandoverPosition;
 }
 
 /** One closing of one bag, kept after the bag is emptied and used again. The number is never on the bag itself. */
@@ -84,6 +88,8 @@ export class BagReceiptDto {
 /** Round 37 — a driver reading the bag they carry, after a hub loaded it onto them by their pass. */
 export class TakeBagDto extends BagReceiptDto {
   @IsOptional() @IsDateString() observedAt?: string;
+  /** 2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for. */
+  @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;
 }
 
 /** Closing a bag at the shop or hub where it stands (a shop's own bag is closed with "Close the bag"). */

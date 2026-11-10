@@ -15,6 +15,7 @@ import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
+import { HandoverPositionDto } from './handover-position';
 import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
@@ -1668,6 +1669,8 @@ export class LoadBagDto {
   @IsOptional() @IsDateString() observedAt?: string;
   /** Round 37 — a driver loading it themselves: the number read off its seal, a photograph, as it was closed. */
   @IsOptional() @ValidateNested() @Type(() => BagReceiptDto) take?: BagReceiptDto;
+  /** 2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for. */
+  @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;
 }
 
 export class DropBagDto {
@@ -3252,6 +3255,8 @@ export class FreightActionDto {
   @IsOptional() @IsDateString() observedAt?: string;
   /** Round 40 — at pickup of a container or closed body leaving for a border: the seven points, each with its photograph. */
   @IsOptional() @IsArray() @ArrayMaxSize(7) @ValidateNested({ each: true }) @Type(() => InspectionPointDto) inspection?: InspectionPointDto[];
+  /** 2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for. */
+  @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;
 }
 
 /** FP3b — the driver stood at the door and could not hand over. */
@@ -3259,6 +3264,8 @@ export class FreightDeliveryFailedDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsIn(['absent', 'refused', 'unreachable']) outcome!: 'absent' | 'refused' | 'unreachable';
   @IsOptional() @IsString() @MaxLength(500) note?: string;
+  /** 2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for. */
+  @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;
 }
 
 /**

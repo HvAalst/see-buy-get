@@ -28,6 +28,7 @@ import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
+import type { HandoverPositionDto } from './handover-position';
 import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
 import { clockAt, clocksOfCountry } from './fleet-clock';
@@ -978,12 +979,20 @@ export class MdpService {
    * Round 37 — A DRIVER READS THE BAG THEY CARRY, after a hub or shop scanned their pass to load it: the number off the
    * seal, a photograph, as it was closed. Until they have, nobody receives it (BagClosureService.checkReceipt).
    */
-  takeBag(code: string, driverDid: string, name: string | undefined, reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, observedAt?: string): { code: string; taken: true } {
+  /** 2026-11-10 — the pin of the hub or shop a bag stands at, to measure a driver's phone from. A store's dock: none. */
+  private pinOfPlace(locationId: string): { lat: number; lng: number } | undefined {
+    const hub = this.mdps.get(locationId);
+    if (hub?.location) return hub.location;
+    return this.agents.find(locationId)?.location ?? undefined;
+  }
+
+  takeBag(code: string, driverDid: string, name: string | undefined, reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, observedAt?: string, position?: HandoverPositionDto): { code: string; taken: true } {
     const bag = this.totes.requireByCode(code);
     if (bag.status !== 'in_transit' || bag.carriedBy !== driverDid) throw new GlosError('NOT_FOUND', 'No bag you carry has that code');
     const HELD = bag.held;
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
-    const keep = this.closures.checkTake(bag, { did: driverDid, name: name?.trim() || 'the driver', place: 'the driver' }, driverDid, reading);
+    // Read once it is on the vehicle: no place to measure from, only where the phone was.
+    const keep = this.closures.checkTake(bag, { did: driverDid, name: name?.trim() || 'the driver', place: 'the driver' }, driverDid, reading, position ? { position } : undefined);
     keep(handedAt(observedAt, Date.now(), [bag.availableAt, bag.sealedAt]));
     return { code, taken: true };
   }
@@ -1019,7 +1028,7 @@ export class MdpService {
   /** Scan a bag onto a bus — one scan moves the whole tote and every parcel in it to On_Bus.
    * When the badge resolves to a registered fleet vehicle, the bag must fit that vehicle's limits
    * (a bike/motorcycle feeder takes ≤ its capacity and no fragile items). Unknown badges pass through. */
-  loadBag(code: string, driverBadgeId: string, observedAt?: string, take?: { driverDid: string; name?: string; reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined }): { tote: Tote; moved: string[] } {
+  loadBag(code: string, driverBadgeId: string, observedAt?: string, take?: { driverDid: string; name?: string; reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined; position?: HandoverPositionDto }): { tote: Tote; moved: string[] } {
     const pending = this.totes.requireByCode(code);
     this.workingWhereBagIs(pending.locationId);
     // Round 35 — a bag moves whole: one held parcel in it and it does not move, refused before anything is written.
@@ -1109,7 +1118,8 @@ export class MdpService {
     }
     // Round 37 — a driver loading it themselves takes it on its seal: read, photographed, as it was closed. Checked last,
     // after every other refusal and before anything is written; kept once it is on the vehicle.
-    const keepTake = take ? this.closures.checkTake(pending, { did: take.driverDid, name: take.name?.trim() || 'the driver', place: 'the driver' }, take.driverDid, take.reading) : undefined;
+    // 2026-11-10 — and where the driver's phone was, measured from the hub or shop the bag stands at.
+    const keepTake = take ? this.closures.checkTake(pending, { did: take.driverDid, name: take.name?.trim() || 'the driver', place: 'the driver' }, take.driverDid, take.reading, take.position ? { position: take.position, place: this.pinOfPlace(pending.locationId) } : undefined) : undefined;
     // Loaded when it was loaded (round 23), never before the bag was filled, published or sealed.
     const after = [pending.filledAt, pending.availableAt, pending.sealedAt];
     const offHubFloor = this.mdps.has(pending.locationId); // read before the load moves it onto the vehicle

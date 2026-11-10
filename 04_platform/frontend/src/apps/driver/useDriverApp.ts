@@ -41,7 +41,7 @@ import type { DepartureView } from './types';
 import type { SaidPassage } from './passage';
 import { boardOriginPin, cardReader, cardWords, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
-import { askEvery, currentPosition, watchPosition } from '../../shared/position';
+import { askEvery, currentPosition, handoverFix, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
@@ -1784,7 +1784,8 @@ export function useDriverApp() {
     async (ref: string, take?: { sealNumber?: string; photoRef: string; asClosed: boolean }) => {
       if (!client || !state.driver?.badgeId) return;
       await run(`load:${ref}`, async () => {
-        const r = await client.api.loadBag(ref, state.driver!.badgeId!, take);
+        // 2026-11-10 — where the phone is as the bag is taken: kept with its photo; never refused for.
+        const r = await client.api.loadBag(ref, state.driver!.badgeId!, take, take ? await handoverFix() : undefined);
         if (r.error) return fail(r.error);
         buzz();
         const moved = narrow<LoadBagView>(r.data)?.moved?.length ?? 0;
@@ -1809,7 +1810,7 @@ export function useDriverApp() {
       if (!client) return false;
       let ok = false;
       await run(`take:${ref}`, async () => {
-        const r = await client.api.takeBag(ref, body);
+        const r = await client.api.takeBag(ref, { ...body, position: await handoverFix() });
         if (r.error) {
           if (!isOffline(r.error)) await refresh();
           return fail(r.error);
@@ -1929,7 +1930,8 @@ export function useDriverApp() {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
-        const r = await client.api.pickupFreight(ref, did, check);
+        // 2026-11-10 — where the phone is as the goods are taken over: kept with the photo and the time; never refused for.
+        const r = await client.api.pickupFreight(ref, did, { ...check, position: await handoverFix() });
         if (r.error) {
           // Reconcile FIRST, then report (mirror answerOffer): if the job moved on elsewhere the stale
           // 'Pick up' row would loop the same 400 on every re-tap — a refresh flips it to its true control.
@@ -1952,7 +1954,7 @@ export function useDriverApp() {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
-        const r = await client.api.deliverFreight(ref, did, check);
+        const r = await client.api.deliverFreight(ref, did, { ...check, position: await handoverFix() });
         if (r.error) {
           if (!isOffline(r.error)) await refresh(); // reconcile a moved-on job before showing the error
           return fail(r.error);
@@ -1974,7 +1976,7 @@ export function useDriverApp() {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
-        const r = await client.api.failDelivery(ref, did, input);
+        const r = await client.api.failDelivery(ref, did, { ...input, position: await handoverFix() });
         if (r.error) {
           if (!isOffline(r.error)) await refresh();
           return fail(r.error);

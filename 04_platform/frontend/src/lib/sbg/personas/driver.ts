@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import type { HandoverFix } from '../../../shared/position';
 import { createMediaApi } from './media';
 
 /** The driver jobs + earnings register query (all optional). */
@@ -362,11 +363,11 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** Scan a released bag onto the vehicle. */
     /** Round 37 — taken on its seal: the number read off it, a photograph as taken, as it was closed. */
-    loadBag: (code: string, driverBadgeId: string, take?: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
-      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString(), ...(take ? { take } : {}) } })),
+    loadBag: (code: string, driverBadgeId: string, take?: { sealNumber?: string; photoRef: string; asClosed: boolean }, position?: HandoverFix) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString(), ...(take ? { take } : {}), ...(position ? { position } : {}) } })),
 
     /** Round 37 — a bag a counter loaded onto this driver by their pass: read and photographed afterwards, dated now. */
-    takeBag: (code: string, body: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
+    takeBag: (code: string, body: { sealNumber?: string; photoRef: string; asClosed: boolean; position?: HandoverFix }) =>
       sbg.request((c) => c.POST('/v1/sbg/totes/{code}/take', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
 
     /** 2026-11-06 — a bag on board for a shop that is closed: the open shops near it with room, nearest first. */
@@ -390,18 +391,18 @@ export function createDriverApi(sbg: SbgClient) {
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
-    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }>; countedPieces?: number }) =>
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }>; countedPieces?: number; position?: HandoverFix }) =>
       // Round 22 — dated NOW, when the driver taps: a pickup kept on the phone with no signal keeps the moment it was done.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
-    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string }) =>
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string; position?: HandoverFix }) =>
       // Round 22 — dated when the goods were handed over, not when a signal was found.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
-    failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string }) =>
+    failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string; position?: HandoverFix }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/delivery-failed', { params: { path: { id: freightId } }, body: { driverDid, ...body } })),
 
     /** A load the shipper pays them for directly: they say it was paid, the price agreed (2026-10-27). The shipper sees it. */

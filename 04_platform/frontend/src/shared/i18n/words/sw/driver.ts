@@ -337,6 +337,7 @@ export const words: Record<string, string> = {
   "driver.loads.receiverPlaceholder": "Jina la mtu aliye langoni",
   "driver.loads.podPhotoLabel": "Picha ya bidhaa zilivyofikishwa",
   "driver.loads.podPhotoAria": "Piga picha ya bidhaa mahali ulipoziweka",
+  "driver.loads.positionKept": "Mahali simu yako ilipo huhifadhiwa pamoja na picha hii na saa, kuonyesha ilipofanyika. Hakuna mahali? Inaendelea hata hivyo.",
   "driver.loads.remarksLabel": "Mpokeaji alitoa maoni yoyote? (si lazima)",
   "driver.loads.remarksHint": "Maneno yake yanaandikwa kwenye hati ya mzigo kama maoni ya mpokeaji.",
   "driver.loads.addReceiver": "Andika jina la mtu aliyepokea bidhaa.",
