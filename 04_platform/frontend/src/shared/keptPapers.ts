@@ -40,6 +40,11 @@ export function invoicePaperRef(freightId: string): string {
   return `${freightId}~invoice`;
 }
 
+/** 2026-11-10 — the load's border manifest (Kenya–Ethiopia), kept beside its note and invoice: shown at Moyale, where the signal is worst. */
+export function manifestPaperRef(freightId: string): string {
+  return `${freightId}~manifest`;
+}
+
 export function keepPaper(owner: string, ref: string, html: string, status?: string, now: number = Date.now(), store: Store | null = local()): void {
   if (!store || !owner || !ref || !html) return;
   try {

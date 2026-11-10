@@ -82,6 +82,10 @@ export function createFleetApi(sbg: SbgClient) {
     setVehicleDocuments: (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/documents', { params: { path: { id: vehicleId } }, body: documents as never })),
 
+    /** 2026-11-10 — a driver's passport, for a load across the Moyale border (Kenya–Ethiopia). */
+    recordPassport: (did: string, body: { name: string; number: string; country: string; expiresAt: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/passport', { params: { path: { did } }, body })),
+
     /** FP4 — record a driver's renewed licence: the new expiry date, and the number if it changed. */
     renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),

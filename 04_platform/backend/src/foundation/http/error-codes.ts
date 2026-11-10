@@ -119,6 +119,7 @@ export const ERROR_CODES = {
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },
+  BORDER_MANIFEST_INCOMPLETE: { status: 409, title: 'The border manifest is not complete' },
   RECEIVER_REQUIRED: { status: 400, title: 'Record who received the goods' },
   DELIVERY_PHOTO_REQUIRED: { status: 400, title: 'A photo of the goods as delivered is required' },
   REASON_REQUIRED: { status: 400, title: 'A reason is required' },

@@ -1766,6 +1766,8 @@ export class Claimable {
   invoiceMissing?: boolean;
   /** Round 38 — the load's commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
+  /** 2026-11-10 — between Kenya and Ethiopia: what its border manifest still lacks before pickup (in words), and from pickup on that it is the driver's to show. */
+  borderManifest?: { missing: Array<{ key: string; who: 'shipper' | 'carrier'; words: string }>; toShow: boolean };
   /** Round 38 — a seal the pickup country's company requires on this load, and none written: why, in words. Not to be taken over yet. */
   sealMissing?: string;
   /** Round 40 — this load's container or closed body is inspected at seven points, each photographed, before it is taken over. */

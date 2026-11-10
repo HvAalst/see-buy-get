@@ -2637,6 +2637,11 @@ export class VehicleDocsDto {
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) insuranceExpiresAt?: string;
   @IsOptional() @IsString() inspectionRef?: string;
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) inspectionExpiresAt?: string;
+  /** 2026-11-10 — for a border manifest: where it is registered, its trailer's plate, its COMESA Yellow Card and when that runs out. */
+  @IsOptional() @IsString() @Matches(/^[A-Za-z]{2}$/, { message: 'Say where it is registered, as two letters' }) registrationCountry?: string;
+  @IsOptional() @IsString() @MaxLength(20) trailerPlate?: string;
+  @IsOptional() @IsString() @MaxLength(40) yellowCardNumber?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Say when the Yellow Card runs out, written YYYY-MM-DD' }) yellowCardExpiresAt?: string;
 }
 
 /** FP4 — a renewed driving licence: the new expiry (YYYY-MM-DD), and the number if it changed. */

@@ -1,5 +1,7 @@
 import { useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, Icon, Note, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { Abbreviated } from '../../../shared/ui/Abbr';
+import { MOYALE_COUNTRIES } from '../../../shared/manifestGaps';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import { cash, perKmText } from '../../../shared/money';
@@ -503,13 +505,20 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
  */
 function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
   const t = useT();
-  const [draft, setDraft] = useState<{ insuranceRef: string; insuranceExpiresAt: string; inspectionRef: string; inspectionExpiresAt: string } | null>(null);
+  const [draft, setDraft] = useState<{ insuranceRef: string; insuranceExpiresAt: string; inspectionRef: string; inspectionExpiresAt: string; registrationCountry: string; trailerPlate: string; yellowCardNumber: string; yellowCardExpiresAt: string } | null>(null);
+  const docs = vehicle?.documents as { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string } | undefined;
   const d = draft ?? {
-    insuranceRef: vehicle?.documents?.insuranceRef ?? '',
-    insuranceExpiresAt: (vehicle?.documents?.insuranceExpiresAt ?? '').slice(0, 10),
-    inspectionRef: vehicle?.documents?.inspectionRef ?? '',
-    inspectionExpiresAt: (vehicle?.documents?.inspectionExpiresAt ?? '').slice(0, 10),
+    insuranceRef: docs?.insuranceRef ?? '',
+    insuranceExpiresAt: (docs?.insuranceExpiresAt ?? '').slice(0, 10),
+    inspectionRef: docs?.inspectionRef ?? '',
+    inspectionExpiresAt: (docs?.inspectionExpiresAt ?? '').slice(0, 10),
+    registrationCountry: docs?.registrationCountry ?? '',
+    trailerPlate: docs?.trailerPlate ?? '',
+    yellowCardNumber: docs?.yellowCardNumber ?? '',
+    yellowCardExpiresAt: (docs?.yellowCardExpiresAt ?? '').slice(0, 10),
   };
+  // 2026-11-10 — a fleet in Kenya or Ethiopia records what a load across the Moyale border prints of its vehicle.
+  const moyale = MOYALE_COUNTRIES.includes(state.dashboard?.country ?? '');
   const patch = (p: Partial<typeof d>) => setDraft({ ...d, ...p });
   const close = () => {
     setDraft(null);
@@ -548,9 +557,44 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
         </div>
       </div>
       <p class="hint" style="margin-top:6px">{t('fleet.vehicles.papersHint')}</p>
+      {moyale ? (
+        <>
+          <p class="field__label" style="margin-top:14px">
+            <Abbreviated text={t('fleet.vehicles.borderTitle')} />
+          </p>
+          <div class="grid2">
+            <div class="field">
+              <label class="field__label" for="p-reg-c">
+                {t('fleet.vehicles.regCountry')}
+              </label>
+              <input id="p-reg-c" class="input input--mono" maxLength={2} value={d.registrationCountry} onInput={(e) => patch({ registrationCountry: e.currentTarget.value.toUpperCase() })} spellcheck={false} />
+            </div>
+            <div class="field">
+              <label class="field__label" for="p-trailer">
+                {t('fleet.vehicles.trailerPlate')}
+              </label>
+              <input id="p-trailer" class="input input--mono" maxLength={20} value={d.trailerPlate} onInput={(e) => patch({ trailerPlate: e.currentTarget.value })} spellcheck={false} />
+            </div>
+          </div>
+          <div class="grid2" style="margin-top:12px">
+            <div class="field">
+              <label class="field__label" for="p-yc">
+                <Abbreviated text={t('fleet.vehicles.yellowCard')} />
+              </label>
+              <input id="p-yc" class="input input--mono" maxLength={40} value={d.yellowCardNumber} onInput={(e) => patch({ yellowCardNumber: e.currentTarget.value })} spellcheck={false} />
+            </div>
+            <div class="field">
+              <label class="field__label" for="p-yc-exp">
+                {t('fleet.vehicles.yellowCardExpires')}
+              </label>
+              <input id="p-yc-exp" class="input" type="date" value={d.yellowCardExpiresAt} onInput={(e) => patch({ yellowCardExpiresAt: e.currentTarget.value })} />
+            </div>
+          </div>
+        </>
+      ) : null}
       <Button
         chevron={false}
-        disabled={!draft}
+        disabled={!draft || (moyale && Boolean(d.registrationCountry) && !/^[A-Z]{2}$/.test(d.registrationCountry))}
         busy={vehicle ? state.busy === 'papers:' + vehicle.vehicleId : false}
         onClick={() => {
           if (!vehicle) return;
@@ -559,6 +603,9 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
             insuranceExpiresAt: d.insuranceExpiresAt || undefined,
             inspectionRef: d.inspectionRef.trim() || undefined,
             inspectionExpiresAt: d.inspectionExpiresAt || undefined,
+            ...(moyale
+              ? { registrationCountry: d.registrationCountry || undefined, trailerPlate: d.trailerPlate.trim(), yellowCardNumber: d.yellowCardNumber.trim(), yellowCardExpiresAt: d.yellowCardExpiresAt || undefined }
+              : {}),
           };
           close();
           void actions.setVehiclePapers(vehicle.vehicleId, body);

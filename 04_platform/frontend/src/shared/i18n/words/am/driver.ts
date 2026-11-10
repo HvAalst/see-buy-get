@@ -1133,4 +1133,8 @@ export const words: Record<string, string> = {
   "driver.loads.sealMissingDetail": "{why}። እስኪጻፍ ድረስ ዕቃዎቹን መረከብ አይችሉም፦ ጭነት ላኪውን ይጠይቁ።",
   "driver.loads.invoiceMissingTitle": "የንግድ ደረሰኙ አልተፈረመም",
   "driver.loads.invoiceMissingDetail": "እነዚህ ዕቃዎች ድንበር ይሻገራሉ፣ ጭነት ላኪውም ደረሰኙን አልፈረመም ወይም የራሱ ከእነሱ ጋር እንደሚጓዝ አልተናገረም። እስኪያደርግ ድረስ መረከብ አይችሉም፦ ጭነት ላኪውን ይጠይቁ።",
+  "driver.manifest.missingShort": "የድንበር ማኒፌስት አልተሟላም",
+  "driver.manifest.missingTitle": "የድንበር ማኒፌስቱ አልተሟላም",
+  "driver.manifest.open": "የድንበር ማኒፌስት",
+  "driver.manifest.title": "የድንበር ማኒፌስት — Moyale",
 };

@@ -25,6 +25,11 @@ export const ABBREVIATIONS = [
   'KRA PIN',
   'KRA',
   'eTIMS',
+  // The border manifest at Moyale, Kenya–Ethiopia (2026-11-10): Ethiopia's tax number, the trade bloc of the Yellow Card, each side's customs system.
+  'TIN',
+  'COMESA',
+  'iCMS',
+  'eCMS',
   'VAT',
   'HS code',
   'CMR',

@@ -111,6 +111,8 @@ export function createDriverApi(sbg: SbgClient) {
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** Round 38 — the load's commercial invoice, to show at the border: the driver carrying it across one, from pickup on. */
     freightInvoice: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/commercial-invoice.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
+    /** 2026-11-10 — between Kenya and Ethiopia, from pickup on: the border manifest to show at Moyale and the checkpoints. */
+    freightManifest: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/border-manifest.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
 
     /** Nearby open-data transport rates (the driver sets their own per-km price against the market). */
     vehicleRates: () => sbg.request((c) => c.GET('/v1/sbg/pricing/near', { params: { query: { type: 'vehicle' } } })),

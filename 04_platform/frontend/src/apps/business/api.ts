@@ -5,7 +5,7 @@ import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
 import type { DirectoryListingView } from '../../shared/directoryListing';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
-import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
+import type { BorderManifestStatus, CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { secretBody } from '../../shared/account/unlock';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
@@ -455,6 +455,10 @@ export interface BusinessClient {
   invoicePage(freightId: string): Promise<Result<string>>;
   /** Our own paper invoice travels with the goods — or no longer. */
   ownPaper(freightId: string, travels: boolean): Promise<Result<{ ownPaper: { by: string; at: string } | null }>>;
+  /** 2026-11-10 — between Kenya and Ethiopia: the load's border manifest, its customs numbers, and its page. */
+  borderManifest(freightId: string): Promise<Result<BorderManifestStatus>>;
+  setManifestReferences(freightId: string, body: { exportEntry?: string; importDeclaration?: string; etimsInvoice?: string }): Promise<Result<unknown>>;
+  borderManifestPage(freightId: string): Promise<Result<string>>;
   /** Round 15 — a load's seals: read by everybody in the business; written and taken off by a member who may act, before pickup. */
   seals(freightId: string): Promise<Result<SealsView>>;
   writeSeal(freightId: string, body: Record<string, unknown>): Promise<Result<SealView>>;
@@ -535,6 +539,9 @@ export function createBusinessClient(): BusinessClient {
     writeInvoice: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, { body } as never) as never),
     invoicePage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice.html` as never, { parseAs: 'text' } as never) as never),
     ownPaper: (freightId, travels) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice/own-paper` as never, { body: { travels } } as never) as never),
+    borderManifest: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/border-manifest` as never, {} as never) as never),
+    setManifestReferences: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/border-manifest/references` as never, { body } as never) as never),
+    borderManifestPage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/border-manifest.html` as never, { parseAs: 'text' } as never) as never),
     seals: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, {} as never) as never),
     writeSeal: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, { body } as never) as never),
     removeSeal: (freightId, sealId) => call((c) => c.DELETE(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals/${encodeURIComponent(sealId)}` as never, {} as never) as never),

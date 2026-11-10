@@ -6,6 +6,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { BorderManifestService } from './border-manifest.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import type { ConsignmentNote } from './consignment-note.types';
 import { DepartureNoteService } from './departure-note.service';
@@ -82,6 +83,8 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     // The trail (the ISO 28000 check): each copy's fingerprint anchored in the chain. Optional for the specs.
     @Optional() private readonly ledger?: LedgerService,
+    // 2026-11-10 — a border manifest's fingerprint is checked on the same public page as a note's. Optional for the specs.
+    @Optional() private readonly manifests?: BorderManifestService,
   ) {}
 
   onModuleInit(): void {
@@ -343,6 +346,8 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
       throw new GlosError('INVALID_INPUT', 'Give the fingerprint printed on the note, or the note itself');
     }
     const proof = this.proofs.get(key);
+    const manifest = proof ? undefined : this.manifests?.verify(key);
+    if (manifest) return manifest;
     if (!proof) {
       return {
         known: false,

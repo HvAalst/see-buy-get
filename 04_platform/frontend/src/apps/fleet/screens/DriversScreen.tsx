@@ -10,6 +10,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { PaperSheet, usePaper } from '../../../shared/ui/PaperSheet';
+import { MOYALE_COUNTRIES } from '../../../shared/manifestGaps';
 
 export interface DriversScreenProps {
   state: FleetState;
@@ -38,6 +39,9 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   // FP4 — whose renewed licence is being recorded. Held by id and read off the list each time: a driver who
   // sends a clearer photograph while the sheet is open must not leave it showing the one that was deleted.
   const [licenceDid, setLicenceDid] = useState<string | null>(null);
+  // 2026-11-10 — whose passport is being recorded (a fleet in Kenya or Ethiopia: for a load across the Moyale border).
+  const [passportDid, setPassportDid] = useState<string | null>(null);
+  const moyale = MOYALE_COUNTRIES.includes(state.dashboard?.country ?? '');
   const licenceFor = state.drivers.find((d) => d.did === licenceDid) ?? null;
   const waiting = cardsToRead(state.drivers);
   // Who is being taken off the fleet.
@@ -277,6 +281,11 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     <Button variant="link" full={false} onClick={() => setLicenceDid(d.did)}>
                       {t(d.licenceRenewal ? 'fleet.card.readBtn' : 'fleet.drivers.licenceBtn')}
                     </Button>
+                    {moyale ? (
+                      <Button variant="link" full={false} onClick={() => setPassportDid(d.did)}>
+                        {t('fleet.passport.btn')}
+                      </Button>
+                    ) : null}
                     <Button variant="link" full={false} onClick={() => setRemoving(d)}>
                       {t('fleet.remove.btn')}
                     </Button>
@@ -344,6 +353,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
       </Sheet>
 
       <LicenceSheet driver={licenceFor} onClose={() => setLicenceDid(null)} state={state} actions={actions} />
+      <PassportSheet driver={state.drivers.find((x) => x.did === passportDid) ?? null} onClose={() => setPassportDid(null)} state={state} actions={actions} />
       <RemoveSheet driver={removing} onClose={() => setRemoving(null)} state={state} actions={actions} />
 
       <div class="scr__foot">
@@ -451,6 +461,71 @@ function RemoveSheet({ driver, onClose, state, actions }: { driver: DriverRow | 
  * With no card sent the office records the date from the card in somebody's hand, as it always could, and
  * is told where the date on record came from.
  */
+/**
+ * 2026-11-10 — A DRIVER'S PASSPORT, for a load across the Moyale border between Kenya and Ethiopia: read off the passport in
+ * the driver's hand, as a licence is, and printed on the load's border manifest. A passport that has run out is refused.
+ */
+function PassportSheet({ driver, onClose, state, actions }: { driver: DriverRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [form, setForm] = useState({ name: '', number: '', country: '', expiresAt: '' });
+  const [refused, setRefused] = useState<SbgError | null>(null);
+  useEffect(() => {
+    setForm({ name: driver?.passport?.name ?? '', number: driver?.passport?.number ?? '', country: driver?.passport?.country ?? '', expiresAt: driver?.passport?.expiresAt ?? '' });
+    setRefused(null);
+  }, [driver?.did]);
+  const ready = form.name.trim().length > 1 && /^[A-Za-z0-9]{5,20}$/.test(form.number.trim()) && /^[A-Z]{2}$/.test(form.country) && /^\d{4}-\d{2}-\d{2}$/.test(form.expiresAt);
+  const busy = driver ? state.busy === 'passport:' + driver.did : false;
+  return (
+    <Sheet open={Boolean(driver)} onClose={onClose} title={driver ? t('fleet.passport.title', { name: driver.displayName ?? driver.did }) : ''}>
+      <p class="t-body">{t('fleet.passport.body')}</p>
+      {driver?.passport ? <p class="hint">{t('fleet.passport.current', { number: driver.passport.number, country: driver.passport.country, date: paperDay(driver.passport.expiresAt) })}</p> : null}
+      <div class="field">
+        <label class="field__label" for="pp-name">
+          {t('fleet.passport.name')}
+        </label>
+        <input id="pp-name" class="input" maxLength={120} value={form.name} onInput={(e) => setForm({ ...form, name: e.currentTarget.value })} />
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="field">
+          <label class="field__label" for="pp-num">
+            {t('fleet.passport.number')}
+          </label>
+          <input id="pp-num" class="input input--mono" maxLength={20} value={form.number} onInput={(e) => setForm({ ...form, number: e.currentTarget.value })} spellcheck={false} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="pp-c">
+            {t('fleet.passport.country')}
+          </label>
+          <input id="pp-c" class="input input--mono" maxLength={2} value={form.country} onInput={(e) => setForm({ ...form, country: e.currentTarget.value.toUpperCase() })} spellcheck={false} />
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="pp-exp">
+          {t('fleet.passport.expires')}
+        </label>
+        <input id="pp-exp" class="input" type="date" value={form.expiresAt} onInput={(e) => setForm({ ...form, expiresAt: e.currentTarget.value })} />
+      </div>
+      {refused ? <RefusalNote error={refused} /> : null}
+      <Button
+        chevron={false}
+        disabled={!ready}
+        busy={busy}
+        onClick={async () => {
+          if (!driver || !ready) return;
+          const failed = await actions.recordPassport(driver.did, { name: form.name.trim(), number: form.number.trim(), country: form.country, expiresAt: form.expiresAt });
+          setRefused(failed);
+          if (!failed) onClose();
+        }}
+      >
+        {t('fleet.passport.save')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
+  );
+}
+
 function LicenceSheet({ driver, onClose, state, actions }: { driver: DriverRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
   const t = useT();
   const [number, setNumber] = useState<string | null>(null);

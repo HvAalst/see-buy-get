@@ -90,6 +90,8 @@ export interface DriverRow {
   status: DriverStatus;
   /** `copyRef` is the card the date was read from, when there was one; `recordedAt` is when it was typed. */
   licence?: { classes?: string[]; number?: string; expiresAt?: string; copyRef?: string; recordedAt?: string };
+  /** 2026-11-10 — their passport, for a load across the Moyale border: printed on its manifest. */
+  passport?: { name: string; number: string; country: string; expiresAt: string; recordedAt: string };
   /**
    * THE RENEWED CARD THIS DRIVER SENT, waiting on this office: the photograph, and the date and number they
    * read off it. Their reading is shown beside the photograph and never typed into the record for them.

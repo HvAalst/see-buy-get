@@ -242,7 +242,9 @@ export class VehicleService {
   /** Attach / update documents — re-evaluates the verified (priority) flag. */
   updateDocuments(vehicleId: string, documents: VehicleDocuments): Vehicle {
     const v = this.require(vehicleId);
-    v.documents = { ...v.documents, ...documents };
+    // 2026-11-10 — the border manifest's fields as their papers write them: a country in capitals, a plate as printed.
+    const tidy = { ...documents, ...(documents.registrationCountry ? { registrationCountry: documents.registrationCountry.toUpperCase() } : {}), ...(documents.trailerPlate !== undefined ? { trailerPlate: documents.trailerPlate.trim().toUpperCase() } : {}), ...(documents.yellowCardNumber !== undefined ? { yellowCardNumber: documents.yellowCardNumber.trim() } : {}) };
+    v.documents = { ...v.documents, ...tidy };
     v.verified = Boolean(v.documents.registrationPhotoRef && v.documents.factoryId);
     return v;
   }

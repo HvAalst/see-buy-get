@@ -8,7 +8,8 @@ import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelec
 import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { businessConfig, type BusinessClient, type BusinessView, type PostedLoad } from '../api';
-import { EMPTY_LINE, EXPORT_REASONS, invoiceBody, invoiceForm, invoiceGaps, invoiceTotals, labelsLine, money, type CommercialInvoiceView, type InvoiceForm, type InvoiceGap, type InvoiceLineForm, type PackageLabels } from '../papers';
+import { EMPTY_LINE, EXPORT_REASONS, invoiceBody, invoiceForm, invoiceGaps, invoiceTotals, labelsLine, money, type BorderManifestStatus, type CommercialInvoiceView, type InvoiceForm, type InvoiceGap, type InvoiceLineForm, type PackageLabels } from '../papers';
+import { manifestGapWords } from '../../../shared/manifestGaps';
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
@@ -138,6 +139,9 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
         </div>
       </div>
 
+      {/* 2026-11-10 — between Kenya and Ethiopia: the border manifest at Moyale, and the customs numbers it carries. */}
+      <ManifestPanel client={client} row={row} act={act} print={print} />
+
       {writing && invoice ? (
         <InvoiceEditor
           client={client}
@@ -160,6 +164,110 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <PaperSheet state={paper} look="console" />
     </section>
+  );
+}
+
+/**
+ * 2026-11-10 — THE BORDER MANIFEST AT MOYALE (Kenya–Ethiopia only): what it still lacks and whose that is, the customs numbers
+ * the business or its clearing agent was given, and the page itself. Nothing is drawn for a load elsewhere.
+ */
+function ManifestPanel({ client, row, act, print }: { client: BusinessClient | null; row: PostedLoad; act: boolean; print: (title: string, page: () => Promise<{ data?: string | null; error?: unknown }>) => void }) {
+  const t = useT();
+  const [m, setM] = useState<BorderManifestStatus | null>(null);
+  const [form, setForm] = useState<{ exportEntry: string; importDeclaration: string; etimsInvoice: string } | null>(null);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const read = useCallback(async () => {
+    if (!client) return;
+    const r = await client.borderManifest(row.freightId);
+    setM(r.error ? null : (r.data ?? null));
+  }, [client, row.freightId]);
+  useEffect(() => {
+    setForm(null);
+    setSaid('');
+    void read();
+  }, [read]);
+  if (!m?.required) return null;
+  const fromKenya = m.pair === 'KE>ET';
+  const f = form ?? { exportEntry: m.references?.exportEntry?.number ?? '', importDeclaration: m.references?.importDeclaration?.number ?? '', etimsInvoice: m.references?.etimsInvoice?.number ?? '' };
+  const patch = (p: Partial<typeof f>) => setForm({ ...f, ...p });
+  const save = async () => {
+    if (!client) return;
+    setBusy(true);
+    setError(null);
+    const r = await client.setManifestReferences(row.freightId, { exportEntry: f.exportEntry.trim(), importDeclaration: f.importDeclaration.trim(), ...(fromKenya ? { etimsInvoice: f.etimsInvoice.trim() } : {}) });
+    setBusy(false);
+    if (r.error) return setError(r.error.detail || r.error.title || null);
+    setForm(null);
+    setSaid(t('business.manifest.saved'));
+    await read();
+  };
+  return (
+    <div class="crows" style="margin-top:12px">
+      <div class="crow">
+        <span class="crow__body">
+          <span class="crow__top">
+            <span class="crow__name">{t('business.manifest.title')}</span>
+          </span>
+          <span class={m.complete ? 'crow__sub' : 'crow__sub biz-papers__held'}>{t(m.complete ? 'business.manifest.complete' : 'business.manifest.incomplete')}</span>
+          {m.missing.map((g) => (
+            <span class="crow__sub" key={g.key}>
+              <Abbreviated text={t(!g.blocking ? 'business.manifest.later' : g.who === 'shipper' ? 'business.manifest.yours' : 'business.manifest.carriers', { what: manifestGapWords(g, t) })} />
+            </span>
+          ))}
+          {m.versions ? <span class="crow__sub">{t('business.manifest.copies', { n: m.versions })}</span> : null}
+          <span class="crow__sub">{t('business.manifest.why')}</span>
+        </span>
+        <span class="crow__tail">
+          {!m.withheld ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => print(t('business.manifest.title'), () => client!.borderManifestPage(row.freightId))}>
+              {t('business.manifest.open')}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {act && m.mayWrite ? (
+        <div class="crow">
+          <span class="crow__body">
+            <div class="grid2">
+              <div class="field">
+                <label class="field__label" for={`man-exp-${row.freightId}`}>
+                  <Abbreviated text={t(fromKenya ? 'business.manifest.exportFromKE' : 'business.manifest.exportFromET')} />
+                </label>
+                <input id={`man-exp-${row.freightId}`} class="input input--mono" maxLength={40} value={f.exportEntry} onInput={(e) => patch({ exportEntry: e.currentTarget.value })} spellcheck={false} />
+              </div>
+              <div class="field">
+                <label class="field__label" for={`man-imp-${row.freightId}`}>
+                  <Abbreviated text={t(fromKenya ? 'business.manifest.importIntoET' : 'business.manifest.importIntoKE')} />
+                </label>
+                <input id={`man-imp-${row.freightId}`} class="input input--mono" maxLength={40} value={f.importDeclaration} onInput={(e) => patch({ importDeclaration: e.currentTarget.value })} spellcheck={false} />
+              </div>
+            </div>
+            {fromKenya ? (
+              <div class="field" style="margin-top:8px">
+                <label class="field__label" for={`man-etims-${row.freightId}`}>
+                  <Abbreviated text={t('business.manifest.etims')} />
+                </label>
+                <input id={`man-etims-${row.freightId}`} class="input input--mono" maxLength={40} value={f.etimsInvoice} onInput={(e) => patch({ etimsInvoice: e.currentTarget.value })} spellcheck={false} />
+              </div>
+            ) : null}
+            <span class="crow__sub">{t('business.manifest.refsHint')}</span>
+          </span>
+          <span class="crow__tail">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!form || busy} onClick={() => void save()}>
+              {t('business.manifest.save')}
+            </button>
+          </span>
+        </div>
+      ) : null}
+      {said ? (
+        <p class="chint" role="status">
+          {said}
+        </p>
+      ) : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+    </div>
   );
 }
 

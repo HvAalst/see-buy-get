@@ -906,7 +906,7 @@ export function useFleetApp() {
 
   /** FP4 — record a vehicle's papers. The DATE is the switch: the day after it passes, the vehicle is off the road. */
   const setVehiclePapers = useCallback(
-    async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) => {
+    async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string }) => {
       if (!client) return;
       await run('papers:' + vehicleId, async () => {
         const r = await client.api.setVehicleDocuments(vehicleId, documents);
@@ -1007,6 +1007,25 @@ export function useFleetApp() {
    * Answers the refusal rather than posting it to the screen's error slot: this is saved from a sheet, and
    * an error drawn behind the sheet is an error nobody sees while the button looks like it did nothing.
    */
+  /** 2026-11-10 — a driver's passport, for a load across the Moyale border: refused with the reason, shown on the sheet. */
+  const recordPassport = useCallback(
+    async (did: string, body: { name: string; number: string; country: string; expiresAt: string }): Promise<SbgError | null> => {
+      if (!client) return null;
+      let refused: SbgError | null = null;
+      await run('passport:' + did, async () => {
+        const r = await client.api.recordPassport(did, body);
+        if (r.error) {
+          refused = r.error;
+          return;
+        }
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.passportSaved'), detail: t('fleet.toast.passportSavedDetail') });
+        await refresh();
+      });
+      return refused;
+    },
+    [client, run, pushToast, refresh],
+  );
+
   const renewLicence = useCallback(
     async (did: string, body: { number?: string; expiresAt: string }): Promise<SbgError | null> => {
       if (!client || !body.expiresAt) return null;
@@ -1450,6 +1469,7 @@ export function useFleetApp() {
       swapRunVehicle,
       rosterInstead,
       renewLicence,
+      recordPassport,
       refuseLicence,
       loadDriverCard,
       couple,

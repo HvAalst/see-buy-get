@@ -964,6 +964,10 @@ export const enDriver = {
   // Round 38 — the load's commercial invoice, shown at the border (screens/LoadsScreen.tsx).
   'driver.invoice.open': 'Commercial invoice',
   'driver.invoice.title': 'Commercial invoice — for the border',
+  'driver.manifest.missingShort': 'Border manifest not complete',
+  'driver.manifest.missingTitle': 'The border manifest is not complete',
+  'driver.manifest.open': 'Border manifest',
+  'driver.manifest.title': 'Border manifest — Moyale',
   // Held by the police or customs on the road, and let go (screens/HeldStrip.tsx).
   'driver.held.open': 'Held by police or customs?',
   'driver.held.title': 'Held on the road',

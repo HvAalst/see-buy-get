@@ -9,7 +9,7 @@ import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
 import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
 import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
-import { forgetPapers, invoicePaperRef, keepPaper, keptPaper, needsKeeping } from '../../shared/keptPapers';
+import { forgetPapers, invoicePaperRef, keepPaper, keptPaper, manifestPaperRef, needsKeeping } from '../../shared/keptPapers';
 import type { CustodyCapView } from '../../shared/custodyCap';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
@@ -396,7 +396,9 @@ export function useDriverApp() {
       const mine = claims.filter((c) => c.kind === 'freight' && (c.status === 'claimed' || c.status === 'in_transit'));
       // Round 38 — the invoice of a load carried across a border, kept beside its note; every other copy forgotten.
       const invoices = mine.filter((c) => c.invoiceToShow);
-      forgetPapers(did, [...mine.map((c) => c.ref), ...invoices.map((c) => invoicePaperRef(c.ref))]);
+      // 2026-11-10 — and the border manifest of a load across Moyale, kept beside them.
+      const manifests = mine.filter((c) => c.borderManifest?.toShow);
+      forgetPapers(did, [...mine.map((c) => c.ref), ...invoices.map((c) => invoicePaperRef(c.ref)), ...manifests.map((c) => manifestPaperRef(c.ref))]);
       for (const c of mine) {
         if (!needsKeeping(keptPaper(did, c.ref), c.status)) continue;
         const r = await client.api.freightNote(c.ref);
@@ -408,6 +410,14 @@ export function useDriverApp() {
         const ref = invoicePaperRef(c.ref);
         if (!needsKeeping(keptPaper(did, ref), c.status)) continue;
         const r = await client.api.freightInvoice(c.ref);
+        if (r.error) return;
+        const doc = (r as { data?: unknown }).data;
+        keepPaper(did, ref, typeof doc === 'string' ? doc : String(doc ?? ''), c.status);
+      }
+      for (const c of manifests) {
+        const ref = manifestPaperRef(c.ref);
+        if (!needsKeeping(keptPaper(did, ref), c.status)) continue;
+        const r = await client.api.freightManifest(c.ref);
         if (r.error) return;
         const doc = (r as { data?: unknown }).data;
         keepPaper(did, ref, typeof doc === 'string' ? doc : String(doc ?? ''), c.status);
@@ -2325,6 +2335,7 @@ export function useDriverApp() {
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       freightInvoice: (freightId: string) => client!.api.freightInvoice(freightId),
+      freightManifest: (freightId: string) => client!.api.freightManifest(freightId),
       matchRate,
       submitRoute,
       repeatRoute,

@@ -20,7 +20,8 @@ import { heldLine } from '../../../shared/tamper';
 import { utcMoment } from '../../../shared/refusal';
 import { ShopClosedSheet, shopChoiceLine, type ShopClosedTarget } from './ShopClosedSheet';
 import { LooseParcels } from './LooseParcels';
-import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
+import { invoicePaperRef, keepPaper, keptPaper, manifestPaperRef } from '../../../shared/keptPapers';
+import { manifestGapWords } from '../../../shared/manifestGaps';
 import { BagReportSheet } from '../../../shared/BagSealFields';
 import { receiptBody } from '../../../shared/bagSeal';
 import { BagTakeFields, BagTakeSheet, useBagTake } from './BagTake';
@@ -119,6 +120,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
                   {/* No papers, no loading: said on the card, before the drive to the gate. */}
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
+                  {c.borderManifest?.missing.length ? <span class="load__warn">{t('driver.manifest.missingShort')}</span> : null}
                   {c.sealMissing ? <span class="load__warn">{t('driver.loads.sealMissingShort')}</span> : null}
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
@@ -212,6 +214,10 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     {/* Round 38 — across a border, from pickup on: the invoice the officer asks for, kept on the phone with the note. */}
                     {c.invoiceToShow ? (
                       <DocumentButton label={t('driver.invoice.open')} title={t('driver.invoice.title')} fetch={() => actions.freightInvoice(c.ref)} kept={state.driver?.did ? { get: () => keptPaper(state.driver!.did, invoicePaperRef(c.ref)), put: (html) => keepPaper(state.driver!.did, invoicePaperRef(c.ref), html, c.status) } : undefined} />
+                    ) : null}
+                    {/* 2026-11-10 — between Kenya and Ethiopia, from pickup on: the border manifest for Moyale and the checkpoints. */}
+                    {c.borderManifest?.toShow ? (
+                      <DocumentButton label={t('driver.manifest.open')} title={t('driver.manifest.title')} fetch={() => actions.freightManifest(c.ref)} kept={state.driver?.did ? { get: () => keptPaper(state.driver!.did, manifestPaperRef(c.ref)), put: (html) => keepPaper(state.driver!.did, manifestPaperRef(c.ref), html, c.status) } : undefined} />
                     ) : null}
                   </div>
                   {/* Round 35 — the wrap cut, the load opened: held where it is, operations told. */}
@@ -532,6 +538,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
           {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
+          {/* 2026-11-10 — between Kenya and Ethiopia: the border manifest complete before the goods are taken over, each gap and whose. */}
+          {isPickup && claim.borderManifest?.missing.length ? <Note tone="warn" icon="warning" title={t('driver.manifest.missingTitle')} detail={claim.borderManifest.missing.map((g) => manifestGapWords(g, t)).join(' · ')} /> : null}
           {/* 2026-11-01 — a truck run as a flight: said where the goods change hands. */}
           {claim.truckFlight ? <Note tone="info" icon="info" title={t('driver.air.truckFlightTitle')} detail={claim.truckFlight} /> : null}
           {isPickup && claim.collectAtHub && !claim.collectAtHub.handed ? <Note tone="warn" icon="warning" title={t('driver.loads.collectFirstTitle')} detail={t('driver.loads.collectFirstDetail', { parcel: claim.collectAtHub.parcelId, hub: claim.collectAtHub.hubName })} /> : null}

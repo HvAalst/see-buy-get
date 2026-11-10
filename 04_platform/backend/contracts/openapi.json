@@ -21682,11 +21682,41 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/passport": {
+      "post": {
+        "operationId": "Sbg.recordDriverPassport",
+        "summary": "",
+        "description": "FP4 — the fleet office records a renewed driving licence. The DATE is what puts the driver back on the road\n(papers.ts derives everything from it), so this is the whole of \"renewal\": no flag to clear, no re-vetting.\nThe fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is\nexactly what the date is there to replace.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverPassportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/licence": {
       "post": {
         "operationId": "Sbg.renewDriverLicence",
-        "summary": "",
-        "description": "FP4 — the fleet office records a renewed driving licence. The DATE is what puts the driver back on the road\n(papers.ts derives everything from it), so this is the whole of \"renewal\": no flag to clear, no re-vetting.\nThe fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is\nexactly what the date is there to replace.",
         "parameters": [
           {
             "name": "did",
@@ -31718,6 +31748,135 @@
               "application/json": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/border-manifest": {
+      "get": {
+        "operationId": "BorderManifest.status",
+        "summary": "",
+        "description": "Whether the load needs one, what it still lacks and whose that is, its customs numbers and its frozen copies.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderManifestStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/border-manifest/versions": {
+      "get": {
+        "operationId": "BorderManifest.versions",
+        "summary": "",
+        "description": "The copies frozen so far, each with its fingerprint.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManifestVersionRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/border-manifest.html": {
+      "get": {
+        "operationId": "BorderManifest.page",
+        "summary": "",
+        "description": "The manifest as a printable page: the latest frozen copy, or before pickup a preview that says it is one.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/border-manifest/references": {
+      "post": {
+        "operationId": "BorderManifest.references",
+        "summary": "",
+        "description": "The customs numbers the sender or its clearing agent was given: the export side's before pickup, the import side's\nbefore the post. The business that posted the load, by a member who may act; staff are refused by name, because a\nstaff sign-in passes every role check.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManifestReferencesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestReferences"
                 }
               }
             }
@@ -63328,6 +63487,19 @@
           },
           "inspectionExpiresAt": {
             "type": "string"
+          },
+          "registrationCountry": {
+            "type": "string",
+            "description": "2026-11-10 — for a border manifest (Kenya–Ethiopia): where it is registered (two letters), its trailer's plate, its COMESA Yellow Card."
+          },
+          "trailerPlate": {
+            "type": "string"
+          },
+          "yellowCardNumber": {
+            "type": "string"
+          },
+          "yellowCardExpiresAt": {
+            "type": "string"
           }
         }
       },
@@ -67353,6 +67525,23 @@
           "inspectionExpiresAt": {
             "type": "string",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "registrationCountry": {
+            "type": "string",
+            "description": "2026-11-10 — for a border manifest: where it is registered, its trailer's plate, its COMESA Yellow Card and when that runs out.",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "trailerPlate": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "yellowCardNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "yellowCardExpiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
           }
         }
       },
@@ -67650,6 +67839,38 @@
           "classes"
         ]
       },
+      "DriverPassport": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name as printed on it."
+          },
+          "number": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country that issued it: two letters."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "number",
+          "country",
+          "expiresAt",
+          "recordedAt"
+        ]
+      },
       "LicenceRenewal": {
         "type": "object",
         "properties": {
@@ -67840,6 +68061,14 @@
           },
           "licence": {
             "$ref": "#/components/schemas/DriverLicence"
+          },
+          "passport": {
+            "description": "2026-11-10 — their passport, for a load across the Moyale border (border-manifest).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DriverPassport"
+              }
+            ]
           },
           "licenceRenewal": {
             "description": "A renewed licence sent for checking — see LicenceRenewal. Cleared when it is recorded or refused.",
@@ -68287,6 +68516,41 @@
         "required": [
           "kind",
           "reason"
+        ]
+      },
+      "DriverPassportDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name as printed on the passport: what an officer at the post compares.",
+            "maxLength": 120,
+            "pattern": "/\\S/"
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "/^[A-Za-z0-9]{5,20}$/"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country that issued it: two letters.",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name",
+          "number",
+          "country",
+          "expiresAt"
         ]
       },
       "RenewLicenceDto": {
@@ -77703,6 +77967,185 @@
         "required": [
           "travels"
         ]
+      },
+      "ManifestGap": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "who": {
+            "type": "string",
+            "enum": [
+              "shipper",
+              "carrier"
+            ]
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "Whether the goods wait for it at pickup. The import side's number may follow until the post."
+          },
+          "words": {
+            "type": "string",
+            "description": "The sentence a person acts on."
+          }
+        },
+        "required": [
+          "key",
+          "who",
+          "blocking",
+          "words"
+        ]
+      },
+      "ManifestReference": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who gave it, by name, for which business."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "by",
+          "at"
+        ]
+      },
+      "ManifestReferences": {
+        "type": "object",
+        "properties": {
+          "exportEntry": {
+            "$ref": "#/components/schemas/ManifestReference"
+          },
+          "importDeclaration": {
+            "$ref": "#/components/schemas/ManifestReference"
+          },
+          "etimsInvoice": {
+            "description": "Kenya → Ethiopia: the exporter's eTIMS zero-rated invoice number, which its export entry carries.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ManifestReference"
+              }
+            ]
+          }
+        }
+      },
+      "BorderManifestStatus": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": "boolean",
+            "description": "Whether this load has one: it crosses between Kenya and Ethiopia."
+          },
+          "pair": {
+            "type": "string",
+            "enum": [
+              "KE>ET",
+              "ET>KE"
+            ]
+          },
+          "post": {
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Nothing that holds the goods at pickup is missing."
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestGap"
+            }
+          },
+          "references": {
+            "$ref": "#/components/schemas/ManifestReferences"
+          },
+          "referenceNames": {
+            "type": "object",
+            "properties": {
+              "exportEntry": {
+                "required": true,
+                "type": "string"
+              },
+              "importDeclaration": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "versions": {
+            "type": "number",
+            "description": "Copies frozen so far: at pickup, and at each step after."
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "mayWrite": {
+            "type": "boolean",
+            "description": "Whether the reader may give the references: the business that posted the load, a member who may act."
+          },
+          "withheld": {
+            "type": "boolean",
+            "description": "Not this reader's to read in full (a carrier before pickup): told only whether it is complete."
+          }
+        },
+        "required": [
+          "required",
+          "complete",
+          "missing",
+          "referenceNames",
+          "versions",
+          "mayWrite"
+        ]
+      },
+      "ManifestVersionRow": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "at",
+          "reason",
+          "fingerprint"
+        ]
+      },
+      "ManifestReferencesDto": {
+        "type": "object",
+        "properties": {
+          "exportEntry": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "/^[A-Za-z0-9/\\-. ]*$/"
+          },
+          "importDeclaration": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "/^[A-Za-z0-9/\\-. ]*$/"
+          },
+          "etimsInvoice": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "/^[A-Za-z0-9/\\-. ]*$/"
+          }
+        }
       },
       "BagOfferDto": {
         "type": "object",

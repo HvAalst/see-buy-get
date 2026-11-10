@@ -52,6 +52,8 @@ import { coverFor, DEFAULT_PACKAGING, MARKET_SUPPLY_STALE_MIN, DEFAULT_PRICE_PER
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
+import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
+import { VehicleService } from './vehicle.service';
 import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type PrepaidShipper, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
 import { exceptionViewsOf } from './receiving';
 import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightAirTerminal, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView, InboundReceiver } from './dispatch.types';
@@ -390,6 +392,14 @@ export interface TamperHooks {
 }
 
 /** What is anchored of a load changing hands, worked out from the load as kept: a field changed later no longer matches. */
+/** 2026-11-10 — a border or hub step, as the manifest prints it. */
+function passageWords(p: { kind: string; post?: string; hub?: string }): string {
+  if (p.kind === 'at_border') return `At the border post${p.post ? `: ${p.post}` : ''}`;
+  if (p.kind === 'cleared_border') return `Cleared the border${p.post ? ` at ${p.post}` : ''}`;
+  if (p.kind === 'at_hub') return `At hub${p.hub ? ` ${p.hub}` : ''}`;
+  return p.kind;
+}
+
 export function custodyAnchorOf(f: Freight, step: 'picked_up' | 'delivered'): Record<string, unknown> {
   // 2026-11-10 — the phone's position goes into the same anchor as the photo: the two are one record of one moment.
   const pos = positionAnchor(step === 'picked_up' ? f.loadSafety?.position : f.proofOfDelivery?.position);
@@ -492,7 +502,16 @@ export class DispatchService {
     @Optional() private readonly declarations?: SecurityDeclarationService,
     // A hub at a bag's stop: whether it is open now and how to reach it (the user, 2026-10-26). Optional for the specs.
     @Optional() private readonly hubContacts?: HubContactService,
+    // 2026-11-10 — between Kenya and Ethiopia, the border manifest at Moyale. Optional for the specs; without it nothing is asked.
+    @Optional() private readonly manifests?: BorderManifestService,
+    // The vehicle a load was taken over on, for its manifest. Optional for the specs.
+    @Optional() private readonly vehicleBook?: VehicleService,
   ) {
+    // The manifest reads a load's carrier, seals and steps from here; it never reaches back into dispatch.
+    this.manifests?.useFacts((freightId) => {
+      const f = this.freights.get(freightId);
+      return f ? { freight: f, facts: this.manifestFacts(f) } : undefined;
+    });
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -3328,6 +3347,10 @@ export class DispatchService {
     // 2026-10-18). Asked before anything is written, so the load stays claimed and the driver is told why.
     const noInvoice = this.invoices?.pickupRefusal(f, this.postedByBusiness(f));
     if (noInvoice) throw new GlosError('COMMERCIAL_INVOICE_REQUIRED', noInvoice);
+    // 2026-11-10 — between Kenya and Ethiopia, the border manifest complete first (the owner: "Yes, refuse at pickup"): the
+    // shipper's invoice, tax numbers, HS codes and customs numbers; the vehicle's registration and Yellow Card; the driver's passport.
+    const noManifest = this.manifests?.pickupRefusal(f, this.manifestCarrier(f, driverDid ?? f.claimedBy) ?? {}, now);
+    if (noManifest) throw new GlosError('BORDER_MANIFEST_INCOMPLETE', noManifest);
     // Round 38 — where the country the goods are taken over in requires it, the load leaves sealed ("Each country decides").
     const noSeal = this.sealRefusal(f);
     if (noSeal) throw new GlosError('SEAL_REQUIRED', noSeal);
@@ -3404,6 +3427,8 @@ export class DispatchService {
       }
     }
     this.freights.set(f.freightId, f);
+    // 2026-11-10 — the manifest's first copy, frozen as the goods are taken over: the vehicle and driver now named.
+    this.manifests?.freeze(f.freightId, 'Taken over', now);
     // The goods are on the truck: the moment the sender's original is signed and stops being editable.
     // Published after the write, so nothing downstream reads a load that has not been saved yet.
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
@@ -3468,6 +3493,7 @@ export class DispatchService {
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     for (const ref of exceptions.flatMap((x) => x.photoRefs ?? [])) this.media.adopt(ref, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     this.payTheRoad(f);
+    this.manifests?.freeze(f.freightId, 'Delivered', now);
     // Refused at an earlier attempt, then taken after all: nothing is left for the sender to decide. The attempt stays —
     // unless a PART was refused at this handover (the user, 2026-10-27: "Refusal rules, for the part"): the rest is delivered,
     // and the sender decides what happens to those packages as for goods refused whole; the 48 hours run from the first
@@ -4380,6 +4406,8 @@ export class DispatchService {
       return atPost?.says;
     });
     if (!replayed) atPost?.keep(passage.at, passage.post);
+    // 2026-11-10 — a step at a border or a hub: a new copy of the manifest, with where the load has been.
+    if (!replayed) this.manifests?.freeze(f.freightId, passageWords(passage), now);
     const view = passageView(passage);
     if (!replayed) {
       void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: this.senderDidOf(f), passage: view }, { source: 'pudo' }).catch(() => undefined);
@@ -4817,7 +4845,62 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}) };
+    // 2026-11-10 — between Kenya and Ethiopia: what the border manifest still lacks before pickup, and its page from then on.
+    const borderManifest = this.manifests?.pairOf(f) && (f.status === 'claimed' || f.status === 'in_transit') ? this.manifestCard(f) : undefined;
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(borderManifest ? { borderManifest } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}) };
+  }
+
+  /**
+   * 2026-11-10 — THE VEHICLE AND DRIVER A MANIFEST NAMES: the vehicle the goods were taken over on, else the one the driver is on
+   * shift with; the driver's passport as their fleet office recorded it, with the name printed on it.
+   */
+  manifestCarrier(f: Freight, driverDid: string | undefined = f.carriage?.driverDid ?? f.claimedBy): ManifestCarrier | undefined {
+    if (!driverDid) return undefined;
+    let vehicle: Vehicle | undefined;
+    try {
+      vehicle = f.carriage?.vehicleId && this.vehicleBook ? this.vehicleBook.get(f.carriage.vehicleId) : this.fleet.vehicleForDriver(driverDid);
+    } catch {
+      vehicle = undefined;
+    }
+    let crew: ManifestCarrier['crew'];
+    try {
+      const d = this.drivers.get(driverDid);
+      crew = { name: d.passport?.name ?? d.displayName, ...(d.licence?.number && d.licence.number !== 'n/a' ? { licenceNumber: d.licence.number } : {}), ...(d.passport ? { passport: { number: d.passport.number, country: d.passport.country, expiresAt: d.passport.expiresAt } } : {}) };
+    } catch {
+      crew = undefined;
+    }
+    const docs = vehicle?.documents;
+    return {
+      ...(vehicle
+        ? {
+            vehicle: {
+              plate: vehicle.plate,
+              vehicleClass: vehicle.vehicleClass,
+              ...(docs?.registrationCountry ? { registrationCountry: docs.registrationCountry } : {}),
+              ...(docs?.trailerPlate ? { trailerPlate: docs.trailerPlate } : {}),
+              ...(docs?.yellowCardNumber ? { yellowCard: { number: docs.yellowCardNumber, ...(docs.yellowCardExpiresAt ? { expiresAt: docs.yellowCardExpiresAt } : {}) } } : {}),
+            },
+          }
+        : {}),
+      ...(crew ? { crew } : {}),
+    };
+  }
+
+  /** What a load's manifest reads from its records: its carrier, its seals with their numbers, and where it has been. */
+  private manifestFacts(f: Freight): ManifestFacts {
+    const events: Array<{ at: string; words: string }> = [];
+    if (f.pickedUpAt) events.push({ at: f.pickedUpAt, words: `Taken over at ${f.pickupLabel}` });
+    for (const p of this.passages?.of(f.freightId) ?? []) events.push({ at: p.at, words: passageWords(p) });
+    if (f.deliveredAt) events.push({ at: f.deliveredAt, words: `Delivered at ${f.destLabel}` });
+    events.sort((a, b) => a.at.localeCompare(b.at));
+    return { carrier: this.manifestCarrier(f), seals: f.pickedUpAt ? this.sealsOnNote(f.freightId, true).lines : [], events };
+  }
+
+  /** The driver's card: before pickup what is missing (theirs and the sender's), from pickup on the page to show. */
+  private manifestCard(f: Freight): { missing: Array<{ key: string; who: 'shipper' | 'carrier'; words: string }>; toShow: boolean } {
+    if (f.status === 'in_transit') return { missing: [], toShow: true };
+    const gaps = this.manifests!.gaps(f, this.manifestCarrier(f)).filter((g) => g.blocking);
+    return { missing: gaps.map(({ key, who, words }) => ({ key, who, words })), toShow: false };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

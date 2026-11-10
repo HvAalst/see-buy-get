@@ -1133,4 +1133,8 @@ export const words: Record<string, string> = {
   "driver.loads.sealMissingDetail": "{why}. Huwezi kupokea bidhaa hadi iandikwe: muulize mtumaji wa mzigo.",
   "driver.loads.invoiceMissingTitle": "Ankara ya biashara haijatiwa sahihi",
   "driver.loads.invoiceMissingDetail": "Bidhaa hizi zinavuka mpaka, na mtumaji wa mzigo hajatia sahihi ankara yake wala kusema kwamba ankara yake mwenyewe inasafiri pamoja nazo. Huwezi kuzipokea hadi afanye hivyo: muulize mtumaji wa mzigo.",
+  "driver.manifest.missingShort": "Manifesti ya mpakani haijakamilika",
+  "driver.manifest.missingTitle": "Manifesti ya mpakani haijakamilika",
+  "driver.manifest.open": "Manifesti ya mpakani",
+  "driver.manifest.title": "Manifesti ya mpakani — Moyale",
 };

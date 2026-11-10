@@ -4,6 +4,10 @@ import { exceptionsInWords } from './receiving';
 import { DepartureNoteService } from './departure-note.service';
 import { pdfDataUrl } from '../../foundation/entity/company.test-util';
 import { NoteArchiveService } from './note-archive.service';
+import { BorderManifestService } from './border-manifest.service';
+import { BorderManifestController } from './border-manifest.controller';
+import { CommercialInvoiceService } from './commercial-invoice.service';
+import { LoadPassageService } from './load-passage.service';
 import { NoteBundleService } from './note-bundle.service';
 import { DestinationService } from './destination.service';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
@@ -171,6 +175,11 @@ describe('PUDO Light', () => {
   let dispatch: DispatchService;
   let notes: ConsignmentNoteService;
   let bagClosures: BagClosureService;
+  let manifests: BorderManifestService;
+  let archive: NoteArchiveService;
+  let invoicesOf: CommercialInvoiceService;
+  let businessesOf: BusinessService;
+  const moduleRef_businesses = () => businessesOf;
   let marketPulse: MarketPulseService;
   let marketStore: MarketPulseStore;
   let controller: SbgController;
@@ -236,7 +245,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, DropOffHoldService, PickupAheadService, DropOffMoveService, RoutePlanService, JourneyPlanService, DamageReportService, RoutingService, MdpService, BagClosureService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, TransitAuthorityService, FieldObservationService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, FleetMoveService, FleetOfferService, EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, BorderManifestService, CommercialInvoiceService, LoadPassageService, NoteBundleService, DestinationService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)
         ShopChoiceService, // 2026-11-06 — a bag for a shop that is closed (point 6)
         ZoneMapService, // 2026-11-08 — a country's zones, and its price card (zone pricing)
@@ -295,6 +304,10 @@ describe('PUDO Light', () => {
     dispatch = moduleRef.get(DispatchService);
     notes = moduleRef.get(ConsignmentNoteService);
     bagClosures = moduleRef.get(BagClosureService);
+    manifests = moduleRef.get(BorderManifestService);
+    archive = moduleRef.get(NoteArchiveService);
+    invoicesOf = moduleRef.get(CommercialInvoiceService);
+    businessesOf = moduleRef.get(BusinessService);
     marketPulse = moduleRef.get(MarketPulseService);
     marketStore = moduleRef.get(MarketPulseStore);
     controller = moduleRef.get(SbgController);
@@ -10713,6 +10726,70 @@ describe('PUDO Light', () => {
     expect(note.delivery.position).toBe('The driver’s phone was 2.5 km from this place (accurate to 30 m)');
     expect(note.attempts[0]).toMatch(/nobody to receive the goods\. The driver’s phone gave no position$/);
     expect(notes.htmlFor(note)).toContain('The driver’s phone was 40 m from this place');
+  });
+
+  it('a load between Kenya and Ethiopia leaves only with its border manifest complete — frozen at pickup and at the post, checked on the public page (2026-11-10)', () => {
+    const pickup = { lat: -1.87, lng: 36.37 };
+    const d = coupleTipper('MOY', { min: 0.8, max: 1.5 });
+    const meki = { entityId: 'biz-meki', did: 'did:glos:biz-meki', kind: 'business', name: 'Meki Tea Exporters', jurisdiction: 'KE', business: { activities: ['shipper'], taxNo: 'P051234567X' } } as never;
+    const f = dispatch.registerFreight({ description: 'Black tea, 18 pallets', pickupLocation: pickup, pickupLabel: 'Meki depot', destLabel: 'Hawassa warehouse', destLocation: { lat: 7.06, lng: 38.48 }, weightKg: 900, packaging: 'loose', packages: 18, postedByDid: 'did:glos:biz-meki', pickupCountry: 'KE', destCountry: 'ET' });
+    const store = (dispatch as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, v: Record<string, unknown>): void } }).freights;
+    store.set(f.freightId, { ...store.get(f.freightId), status: 'claimed', claimedBy: d.did, claimedAt: new Date(Date.now() - 60_000).toISOString() });
+    const take = () => dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    const card = () => dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)!;
+    // Nothing yet: refused, every gap said — the sender's and the carrier's — and the driver's card says the same.
+    expect(take).toThrow(/border manifest is not complete: Its commercial invoice.*passport/);
+    expect(card().borderManifest!.missing.map((g) => g.words)).toEqual(expect.arrayContaining([expect.stringMatching(/commercial invoice/), expect.stringMatching(/Kenyan export entry/), expect.stringMatching(/COMESA Yellow Card/), expect.stringMatching(/passport/)]));
+    expect(dispatch.requireFreightPublic(f.freightId).status).toBe('claimed'); // refused before anything was written
+    // The sender: its invoice and its customs numbers. The carrier: the vehicle's papers and the driver's passport.
+    invoicesOf.issue(dispatch.requireFreightPublic(f.freightId), { entity: meki, name: 'Wanjiku' }, { number: 'INV-77', issuedOn: '2026-11-10', importer: { name: 'Hawassa Trading PLC', country: 'ET', taxNo: '0012345678' }, currency: 'USD', reason: 'sale', lines: [{ description: 'Black tea CTC', quantity: 150, netKg: 900, unitValue: 120, originCountry: 'KE', hsCode: '0902.30.00' }], declare: true });
+    manifests.setReferences(dispatch.requireFreightPublic(f.freightId), 'Wanjiku, for Meki Tea Exporters', { exportEntry: '2026KE-EXP-4411', etimsInvoice: 'KRAMW0042026' });
+    expect(take).toThrow(/registered.*Yellow Card.*passport/);
+    const v = fleet.vehicleForDriver(d.did)!;
+    vehicles.updateDocuments(v.vehicleId, { registrationCountry: 'ke', trailerPlate: ' zf 4471 ', yellowCardNumber: 'YC-KE-88231', yellowCardExpiresAt: '2030-06-30' });
+    expect(() => drivers.recordPassport(d.did, { name: 'Joseph Rotich', number: 'AK1234567', country: 'KE', expiresAt: '2020-01-01' })).toThrow(/run out/);
+    drivers.recordPassport(d.did, { name: 'Joseph Kiprop Rotich', number: 'ak1234567', country: 'ke', expiresAt: '2031-01-31' }, Date.now(), 'Fleet office');
+    expect(card().borderManifest).toEqual({ missing: [], toShow: false });
+    // The doors: before pickup a driver is told only whether it is complete; staff never write the sender's numbers.
+    const doors = new BorderManifestController(manifests, notes, moduleRef_businesses());
+    const asDriver = { active: true, role: 'driver', did: d.did } as never;
+    expect(doors.status(f.freightId, asDriver)).toMatchObject({ required: true, complete: true, withheld: true, missing: [] });
+    expect(() => doors.page(f.freightId, asDriver)).toThrow(/driver carrying the load from pickup on/);
+    const staffDoor = { active: true, role: 'operator', sub: 'operator:opr_m', scopes: ['*'] } as never;
+    expect(doors.status(f.freightId, staffDoor)).toMatchObject({ references: { exportEntry: { number: '2026KE-EXP-4411' } } });
+    expect(doors.status(f.freightId, staffDoor).withheld).toBeUndefined();
+    expect(() => doors.references(f.freightId, { exportEntry: 'X1' } as never, staffDoor)).toThrow(/given by the business that sent the goods/);
+    expect(() => doors.references(f.freightId, { exportEntry: 'X1' } as never, asDriver)).toThrow(/given by the business that sent the goods/);
+    // Taken over: the first copy frozen, naming the vehicle and the driver by their papers; the driver's to show from now on.
+    take();
+    expect(card().borderManifest).toEqual({ missing: [], toShow: true });
+    const first = manifests.current(f.freightId)!;
+    expect(first.doc).toMatchObject({ number: `MAN-${f.code}`, version: 1, reason: 'Taken over', vehicle: { plate: v.plate, registrationCountry: 'KE', trailerPlate: 'ZF 4471', yellowCard: { number: 'YC-KE-88231' } }, crew: { name: 'Joseph Kiprop Rotich', passport: { number: 'AK1234567', country: 'KE' } }, references: { exportEntry: '2026KE-EXP-4411' } });
+    expect(first.doc.events).toEqual([{ at: expect.any(String), words: 'Taken over at Meki depot' }]);
+    // At the post: another copy, saying where it has been. The import declaration added: another.
+    dispatch.recordPassage(f.freightId, d.did, { kind: 'at_border', post: 'Moyale' });
+    manifests.setReferences(dispatch.requireFreightPublic(f.freightId), 'Wanjiku, for Meki Tea Exporters', { importDeclaration: 'ECC-2026-99812' });
+    const rows = manifests.versionRows(f.freightId);
+    expect(rows.map((r) => r.reason)).toEqual(['Taken over', 'At the border post: Moyale', 'Customs numbers added by the sender']);
+    expect(manifests.current(f.freightId)!.doc.events.map((e) => e.words)).toEqual(['Taken over at Meki depot', 'At the border post: Moyale']);
+    // Each copy answers on the public check page, as a note's does — and a load elsewhere has none.
+    expect(archive.verify({ sha256: rows[0].fingerprint })).toMatchObject({ known: true, number: `MAN-${f.code}`, seq: 1 });
+    expect(archive.verify({ sha256: 'f'.repeat(64) })).toMatchObject({ known: false });
+    expect(manifests.status(dispatch.requireFreightPublic(f.freightId), { mayWrite: false })).toMatchObject({ required: true, complete: true, versions: 3 });
+    // From pickup on, the driver reads it in full and opens its page.
+    expect(doors.status(f.freightId, asDriver).withheld).toBeUndefined();
+    expect(doors.page(f.freightId, asDriver)).toContain(`MAN-${f.code}`);
+  });
+
+  it('a load between Kenya and Uganda is asked for no border manifest (2026-11-10)', () => {
+    const pickup = { lat: -1.88, lng: 36.38 };
+    const d = coupleTipper('UGA', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'Athi River', destLabel: 'Kampala', destLocation: pickup, weightKg: 900, packaging: 'loose', pickupCountry: 'KE', destCountry: 'UG' });
+    const store = (dispatch as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, v: Record<string, unknown>): void } }).freights;
+    store.set(f.freightId, { ...store.get(f.freightId), status: 'claimed', claimedBy: d.did, claimedAt: new Date(Date.now() - 60_000).toISOString() });
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)!.borderManifest).toBeUndefined();
+    expect(dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) }).status).toBe('in_transit');
+    expect(manifests.versionRows(f.freightId)).toEqual([]);
   });
 
   it('staff acting for a driver say nothing of a phone: no position is kept (2026-11-10)', () => {

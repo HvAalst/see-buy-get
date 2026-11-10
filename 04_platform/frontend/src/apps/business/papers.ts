@@ -200,3 +200,17 @@ export function invoiceBody(form: InvoiceForm): Record<string, unknown> {
 export function money(currency: string, n: number): string {
   return `${currency} ${n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/** 2026-11-10 — a load's border manifest at Moyale (Kenya–Ethiopia only), as the business reads it. */
+export interface BorderManifestStatus {
+  required: boolean;
+  pair?: 'KE>ET' | 'ET>KE';
+  post?: string;
+  complete: boolean;
+  missing: Array<{ key: string; who: 'shipper' | 'carrier'; blocking: boolean; words: string }>;
+  references?: { exportEntry?: { number: string; by: string; at: string }; importDeclaration?: { number: string; by: string; at: string }; etimsInvoice?: { number: string; by: string; at: string } };
+  versions: number;
+  fingerprint?: string;
+  mayWrite: boolean;
+  withheld?: boolean;
+}

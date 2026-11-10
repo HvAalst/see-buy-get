@@ -188,6 +188,8 @@ import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
+import { DriverPassportDto } from './border-manifest.types';
+import type { DriverPassport } from './fleet.types';
 import { phoneAtHandover } from './handover-position';
 import { AddressSearchService, GEOCODER, Geocoder } from './geocoder';
 import { CounterLogInterceptor } from './shop-staff.controller';
@@ -6642,6 +6644,21 @@ export class SbgController {
    * The fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is
    * exactly what the date is there to replace.
    */
+  /**
+   * 2026-11-10 — A DRIVER'S PASSPORT, for a load across the Moyale border between Kenya and Ethiopia: recorded by the fleet the
+   * driver belongs to, or by the network — as a licence is, never by the driver whose own word it would be.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/drivers/:did/passport')
+  recordDriverPassport(@Param('did') did: string, @Body() dto: DriverPassportDto, @Actor() actor: IntrospectionResult): { did: string; passport: DriverPassport } {
+    const driver = this.drivers.get(did);
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
+      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A passport is recorded by your fleet office or the network, never by the driver it belongs to' : 'This driver is not in your fleet');
+    }
+    const kept = this.drivers.recordPassport(did, dto, Date.now(), auditActor(actor, dto.by));
+    return { did, passport: kept.passport! };
+  }
+
   @Roles('fleet_manager', 'operator')
   @Post('fleet/drivers/:did/licence')
   renewDriverLicence(@Param('did') did: string, @Body() dto: RenewLicenceDto, @Actor() actor: IntrospectionResult) {

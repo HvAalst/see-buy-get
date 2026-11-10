@@ -1133,4 +1133,8 @@ export const words: Record<string, string> = {
   "driver.loads.sealMissingDetail": "{why}. Je kunt de goederen pas overnemen als het is opgeschreven: vraag het aan de verlader.",
   "driver.loads.invoiceMissingTitle": "De handelsfactuur is niet ondertekend",
   "driver.loads.invoiceMissingDetail": "Deze goederen gaan over een grens, en de verlader heeft zijn factuur niet ondertekend of gezegd dat er een eigen exemplaar met de goederen meereist. Je kunt ze pas overnemen als dat is gebeurd: vraag het aan de verlader.",
+  "driver.manifest.missingShort": "Grensmanifest niet compleet",
+  "driver.manifest.missingTitle": "Het grensmanifest is niet compleet",
+  "driver.manifest.open": "Grensmanifest",
+  "driver.manifest.title": "Grensmanifest — Moyale",
 };

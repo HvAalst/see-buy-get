@@ -232,6 +232,11 @@ export class VehicleDocuments {
   /** FP4 — the roadworthiness / inspection certificate, enforced the same way. */
   inspectionRef?: string;
   inspectionExpiresAt?: string;
+  /** 2026-11-10 — for a border manifest (Kenya–Ethiopia): where it is registered (two letters), its trailer's plate, its COMESA Yellow Card. */
+  registrationCountry?: string;
+  trailerPlate?: string;
+  yellowCardNumber?: string;
+  yellowCardExpiresAt?: string;
 }
 
 export class Vehicle {
@@ -316,6 +321,18 @@ export class Vehicle {
 
 export type DriverStatus = 'DRAFT' | 'KYC_PENDING' | 'ACTIVE' | 'SUSPENDED';
 export type DriverRegistry = 'light' | 'heavy';
+
+/** 2026-11-10 — a driver's passport, for a load across the Moyale border: recorded by their fleet office or the network, as a licence is. */
+export class DriverPassport {
+  /** The name as printed on it. */
+  name: string;
+  number: string;
+  /** The country that issued it: two letters. */
+  country: string;
+  expiresAt: string;
+  recordedAt: string;
+  by?: string;
+}
 
 /** Driver licence (required + verified for heavy registry; bikes need none). */
 export class DriverLicence {
@@ -500,6 +517,8 @@ export class FleetDriver {
   badgeId?: string; // scannable handover badge — issued on activation
   registry: DriverRegistry; // light (bike/motorcycle) | heavy (everything else)
   licence: DriverLicence;
+  /** 2026-11-10 — their passport, for a load across the Moyale border (border-manifest). */
+  passport?: DriverPassport;
   /** A renewed licence sent for checking — see LicenceRenewal. Cleared when it is recorded or refused. */
   licenceRenewal?: LicenceRenewal;
   /** Why the last renewal they sent was not accepted. Shown to them; cleared when they send another. */

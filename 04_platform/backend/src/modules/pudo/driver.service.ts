@@ -448,6 +448,18 @@ export class DriverService {
    * recording it would take the driver off the road the moment it was saved. A changed number keeps the
    * one-licence-one-driver rule: the old print is released, the new one claimed.
    */
+  /**
+   * 2026-11-10 — A DRIVER'S PASSPORT, for a load across the Moyale border (border-manifest): recorded as a licence is, by
+   * their fleet office or the network, read off the passport in somebody's hand. A passport that has run out is refused.
+   */
+  recordPassport(did: string, input: { name: string; number: string; country: string; expiresAt: string }, now: number = Date.now(), by?: string): FleetDriver {
+    const driver = this.require(did);
+    if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('INVALID_INPUT', 'That passport has run out: record the one in date', { field: 'expiresAt' });
+    driver.passport = { name: input.name.trim(), number: input.number.trim().toUpperCase(), country: input.country.toUpperCase(), expiresAt: input.expiresAt, recordedAt: new Date(now).toISOString(), ...(by ? { by } : {}) };
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
   renewLicence(did: string, input: { number?: string; expiresAt: string }, now: number = Date.now(), by?: string): FleetDriver {
     const driver = this.require(did);
     if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'The expiry date given has already passed — a renewed licence runs into the future');
