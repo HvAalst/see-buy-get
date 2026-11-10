@@ -270,9 +270,28 @@ describe('the first map proposed for a country — Kenya’s, for Kenya’s comp
     expect(ke.zones).toBeGreaterThan(250);
     expect(ke.attribution).toMatch(/geoBoundaries/);
     // A country with no map of its own is offered none — never another country's.
+    entities.createCompany({ kind: 'sister', jurisdiction: 'TZ', name: 'SeeBuyGet Tanzania' }, 'Owner');
+    expect(zones.setup('sbg-tz').proposal).toBeUndefined();
+    expect(() => zones.startFromProposal('sbg-tz', 'N')).toThrow(/No map is proposed for SeeBuyGet Tanzania/);
+  });
+
+  it('Uganda has its own (2026-11-10): its 1,521 sub-counties, Kampala’s five divisions one zone, a zone for each city and town and each district’s rest; remote where Posta prices its far band and on the islands', () => {
     entities.createCompany({ kind: 'sister', jurisdiction: 'UG', name: 'SeeBuyGet Uganda' }, 'Owner');
-    expect(zones.setup('sbg-ug').proposal).toBeUndefined();
-    expect(() => zones.startFromProposal('sbg-ug', 'N')).toThrow(/No map is proposed for SeeBuyGet Uganda/);
+    const ug = zones.setup('sbg-ug').proposal!;
+    expect(ug).toMatchObject({ level: 'sub-counties', areas: 1521, zones: 168 });
+    expect(ug.attribution).toMatch(/UNHCR/);
+    const s = zones.startFromProposal('sbg-ug', 'Grace N.');
+    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(1521);
+    expect(s.draft!.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
+    expect(s.draft!.zones.filter((z) => z.group === 'remote').every((z) => z.evidence!.some((e) => /\(.*\)/.test(e)))).toBe(true); // each remote zone cites its source
+    zones.publish('sbg-ug', undefined, 'Grace N.');
+    entities.activate('sbg-ug', 'Owner');
+    expect(zones.zoneAt('UG', { lat: 0.3136, lng: 32.5811 })).toMatchObject({ name: 'Kampala', group: 'urban' });
+    expect(zones.zoneAt('UG', { lat: 0.4233, lng: 33.2039 })).toMatchObject({ name: 'Jinja', group: 'urban' });
+    expect(zones.zoneAt('UG', { lat: -0.3214, lng: 32.2919 })).toMatchObject({ name: 'Kalangala', group: 'remote' });
+    expect(zones.zoneAt('UG', { lat: 3.52, lng: 34.12 })).toMatchObject({ name: 'Kaabong', group: 'remote' });
+    // Uganda's alone: a Kenyan pin in Kampala finds nothing in it.
+    expect(zones.zoneAt('KE', { lat: 0.3136, lng: 32.5811 })).toBeUndefined();
   });
 
   it('Ethiopia has its own (2026-11-10): its 690 woredas, Addis Ababa one zone, a zone for each town and each administrative zone’s rest; remote only with a source', () => {
