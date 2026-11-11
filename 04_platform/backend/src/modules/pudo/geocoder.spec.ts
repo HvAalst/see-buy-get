@@ -59,11 +59,20 @@ describe('geo gazetteer (G1)', () => {
       // The box widened north when Ethiopia was added: the gazetteer's job is to cover where we actually
       // run, and it grows one country at a time as the sisters do. A coordinate outside it is a typo — the
       // failure this catches is a transposed lat/lng or a decimal point in the wrong place, not a border.
+      // 2026-11-11 — each place now says its country, so the box is the country's own: a typo lands outside it.
+      const BOX: Record<string, { lat: [number, number]; lng: [number, number] }> = {
+        KE: { lat: [-5, 5], lng: [33.5, 42] }, // Mombasa to Moyale, Bungoma to Garissa
+        ET: { lat: [3, 15], lng: [33, 48] }, // Moyale to Mekelle, Gambela to Dire Dawa
+        UG: { lat: [-1.5, 4.3], lng: [29.5, 35] }, // Kabale to Kitgum, Kasese to Moroto
+        NL: { lat: [50.7, 53.6], lng: [3.3, 7.3] }, // Maastricht to Groningen
+      };
       for (const e of GAZETTEER) {
-        expect(e.location.lat).toBeGreaterThanOrEqual(-5); // south of Mombasa
-        expect(e.location.lat).toBeLessThanOrEqual(15); // north of Mekelle
-        expect(e.location.lng).toBeGreaterThanOrEqual(33.5); // west of Bungoma
-        expect(e.location.lng).toBeLessThanOrEqual(43); // east of Dire Dawa
+        const box = BOX[e.country];
+        expect(box).toBeDefined();
+        expect(e.location.lat).toBeGreaterThanOrEqual(box.lat[0]);
+        expect(e.location.lat).toBeLessThanOrEqual(box.lat[1]);
+        expect(e.location.lng).toBeGreaterThanOrEqual(box.lng[0]);
+        expect(e.location.lng).toBeLessThanOrEqual(box.lng[1]);
       }
     });
 

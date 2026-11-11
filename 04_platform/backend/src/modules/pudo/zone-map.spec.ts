@@ -294,13 +294,13 @@ describe('the first map proposed for a country — Kenya’s, for Kenya’s comp
     expect(zones.zoneAt('KE', { lat: 0.3136, lng: 32.5811 })).toBeUndefined();
   });
 
-  it('Ethiopia has its own (2026-11-10): its 690 woredas, Addis Ababa one zone, a zone for each town and each administrative zone’s rest; remote only with a source', () => {
+  it('Ethiopia has its own (2026-11-10; the 2023 boundaries since 11-11): its 1,148 woredas, Addis Ababa one zone, a zone for each town and each administrative zone’s rest; remote only with a source', () => {
     const et = zones.setup('sbg-et').proposal!;
-    expect(et).toMatchObject({ level: 'woredas', areas: 690, zones: 85 });
-    expect(et.attribution).toMatch(/Code for Ethiopia/);
-    expect(et.licence).toMatch(/ODbL/);
+    expect(et).toMatchObject({ level: 'woredas', areas: 1148, zones: 114, licence: 'CC BY-IGO' });
+    expect(et.attribution).toMatch(/OCHA/);
+    expect(et.source).toMatch(/August 2023/);
     const s = zones.startFromProposal('sbg-et', 'Hanna T.');
-    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(690);
+    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(1148);
     expect(s.draft!.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
     expect(s.draft!.zones.filter((z) => z.group === 'remote').every((z) => z.evidence!.some((e) => /\(.*20\d\d\)/.test(e)))).toBe(true); // each remote zone cites a dated source
     zones.publish('sbg-et', undefined, 'Hanna T.');

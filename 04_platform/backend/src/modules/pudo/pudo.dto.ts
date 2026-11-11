@@ -2642,6 +2642,10 @@ export class VehicleDocsDto {
   @IsOptional() @IsString() @MaxLength(20) trailerPlate?: string;
   @IsOptional() @IsString() @MaxLength(40) yellowCardNumber?: string;
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Say when the Yellow Card runs out, written YYYY-MM-DD' }) yellowCardExpiresAt?: string;
+  /** 2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control (C28 transit goods, C40 other goods). */
+  @IsOptional() @IsIn(['C28', 'C40']) customsLicenceKind?: 'C28' | 'C40';
+  @IsOptional() @IsString() @MaxLength(40) customsLicenceNumber?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Say when the customs licence runs out, written YYYY-MM-DD' }) customsLicenceExpiresAt?: string;
 }
 
 /** FP4 — a renewed driving licence: the new expiry (YYYY-MM-DD), and the number if it changed. */

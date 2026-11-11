@@ -292,6 +292,8 @@ export const OBLIGATIONS: Record<string, LocalObligation[]> = {
   KE: [
     { key: 'e_invoicing', name: 'eTIMS electronic tax invoicing', authority: 'Kenya Revenue Authority' },
     { key: 'data_protection_registration', name: 'Registration as a data controller and processor', authority: 'Office of the Data Protection Commissioner' },
+    // 2026-11-11 — anybody providing courier services in Kenya holds a licence for it; which class is legal.html L40.
+    { key: 'courier_licence', name: 'Licence to provide courier services', authority: 'Communications Authority of Kenya' },
   ],
   TZ: [
     { key: 'e_invoicing', name: 'Electronic fiscal device (EFD/VFD) receipting', authority: 'Tanzania Revenue Authority' },
@@ -300,6 +302,8 @@ export const OBLIGATIONS: Record<string, LocalObligation[]> = {
   UG: [
     { key: 'e_invoicing', name: 'EFRIS electronic invoicing', authority: 'Uganda Revenue Authority' },
     { key: 'data_protection_registration', name: 'Registration as a data collector and processor', authority: 'Personal Data Protection Office' },
+    // 2026-11-11 — postal and courier services in Uganda are licensed by its communications regulator.
+    { key: 'courier_licence', name: 'Licence to provide postal and courier services', authority: 'Uganda Communications Commission' },
   ],
   RW: [
     { key: 'e_invoicing', name: 'Electronic billing machine (EBM) invoicing', authority: 'Rwanda Revenue Authority' },
@@ -311,7 +315,18 @@ export const OBLIGATIONS: Record<string, LocalObligation[]> = {
   ],
   ET: [
     { key: 'e_invoicing', name: 'Sales registration machine and electronic invoicing', authority: 'Ministry of Revenues' },
+    // Personal Data Protection Proclamation No. 1321/2024, art. 33: before processing (the Authority had not yet opened registration in July 2026).
     { key: 'data_protection_registration', name: 'Registration as a data controller', authority: 'Ethiopian Communications Authority' },
+    // 2026-11-11 — Communications Service Proclamation No. 1148/2019: a courier service licence, national or international, renewed yearly.
+    { key: 'courier_licence', name: 'Courier service licence (national, or international express mail and courier)', authority: 'Ethiopian Communications Authority' },
+  ],
+  // 2026-11-11 — THE NETHERLANDS' OWN, in place of a generic data-protection registration it has not asked since 25 May 2018.
+  // The Chamber of Commerce and the beneficial owners are on the record already (registration number, owners, certificate).
+  NL: [
+    // Postwet 2009 art. 41: whoever OFFERS the collection, sorting or delivery of addressed parcels (up to 20 kg; 30 kg coming in) registers.
+    { key: 'postal_registration', name: 'Registration as a postal carrier (postvervoerbedrijf)', authority: 'Autoriteit Consument & Markt (ACM)' },
+    // GDPR art. 37: a data protection officer, reported on the AP's form — likely required for a network that follows its drivers' positions (L48).
+    { key: 'data_protection_registration', name: 'Data protection officer appointed and reported', authority: 'Autoriteit Persoonsgegevens' },
   ],
   DE: [
     { key: 'e_invoicing', name: 'E-Rechnung — receiving and issuing structured invoices (XRechnung / ZUGFeRD)' },

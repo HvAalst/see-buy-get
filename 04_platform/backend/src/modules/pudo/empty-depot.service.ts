@@ -182,7 +182,7 @@ export class EmptyDepotService {
          *
          * Absent entirely where the name resolves to nothing, rather than a pin on the capital.
          */
-        const named = d.location ? undefined : lookupPlace(`${d.placeLabel}, ${d.country}`) ?? lookupPlace(d.placeLabel);
+        const named = d.location ? undefined : lookupPlace(`${d.placeLabel}, ${d.country}`, [d.country]) ?? lookupPlace(d.placeLabel, [d.country]);
         const where = d.location ?? named?.entry.location;
         return {
           ...d,

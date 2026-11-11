@@ -1,43 +1,68 @@
-// ETHIOPIA ONLY — the proposed first zone map for Ethiopia's company (2026-11-10): writes src/modules/pudo/zone-proposals/et.ts.
+// ETHIOPIA ONLY — the proposed first zone map for Ethiopia's company: writes src/modules/pudo/zone-proposals/et.ts.
 // Run by hand, never by the pipeline, after `nest build` (it reads the server's own geometry from dist). First download,
-// into an empty folder of their own (data, never code), geoBoundaries gbOpen ETH (https://www.geoboundaries.org/api/current/gbOpen/ETH/ADM1/ …):
-//   eth-ADM1.geojson  regions   (CC BY 4.0)
-//   eth-ADM2.geojson  zones     (ODbL 1.0)
-//   eth-ADM3.geojson  woredas   (ODbL 1.0)
-// then: node scripts/zone-proposal-et.cjs <that folder>
-// The boundaries are of 2016 (Open Africa / Code for Ethiopia): before Sidama, South West, South and Central Ethiopia
-// regions. The company imports newer ones when it has them; a zone is whole areas, so nothing here is cut.
+// into an empty folder of their own (data, never code), OCHA's Common Operational Dataset for Ethiopia's boundaries
+// (HDX, cod-ab-eth, v04: boundaries of August 2023, reviewed December 2025; CC BY-IGO) and unzip it:
+//   https://data.humdata.org/dataset/cb58fa1f-687d-4cac-81a7-655ab1efb2d0/resource/0518da1b-42d1-4624-ad64-768cb69f9d40/download/eth_admin_boundaries.geojson.zip
+// then: node --max-old-space-size=2048 scripts/zone-proposal-et.cjs <that folder>
+// 2026-11-11 — moved from geoBoundaries' 2016 woredas (690, before Sidama, South West, South and Central Ethiopia) to
+// these: 1,148 woredas in 15 regions, each carrying its zone's and region's names. The file is drawn at full detail; each
+// shape is simplified to SIMPLIFY_DEG first (about 300 m), as a pin finds its zone to the woreda, not to the metre.
 const fs = require('fs');
 const path = require('path');
 const G = require('../dist/modules/pudo/zone-geometry.js');
 const DATA = process.argv[2];
-if (!DATA) throw new Error('usage: node scripts/zone-proposal-et.cjs <folder with eth-ADM1/2/3.geojson>');
+if (!DATA) throw new Error('usage: node scripts/zone-proposal-et.cjs <folder with eth_admin3.geojson>');
 const OUT = path.join(__dirname, '../src/modules/pudo/zone-proposals/et.ts');
-const read = (l) => G.parseAreaFile(fs.readFileSync(path.join(DATA, `eth-${l}.geojson`), 'utf8'), 'shapeName');
+const SIMPLIFY_DEG = Number(process.argv[3] ?? 0.003);
 
-const woredas = read('ADM3');
-const zonesAdm = read('ADM2');
-const regions = read('ADM1');
-console.log('woredas', woredas.length, 'zones', zonesAdm.length, 'regions', regions.length);
-
-const holder = (list, point) => {
-  const inside = list.find((a) => G.contains(a.shape, point));
-  if (inside) return inside.name;
-  let best;
-  for (const a of list) {
-    const d = G.distanceKm(a.shape, point);
-    if (!best || d < best.d) best = { name: a.name, d };
+/** Douglas–Peucker on one ring, kept closed and never below four points. */
+function simplify(ring, tol) {
+  if (!tol || ring.length < 5) return ring;
+  const keep = new Uint8Array(ring.length);
+  keep[0] = keep[ring.length - 1] = 1;
+  // A closed ring starts and ends on one point, so the line between them has no length: split it at its farthest point first.
+  let far = 0;
+  let farD = -1;
+  for (let i = 1; i < ring.length - 1; i++) {
+    const d = Math.hypot(ring[i][0] - ring[0][0], ring[i][1] - ring[0][1]);
+    if (d > farD) { farD = d; far = i; }
   }
-  return best.name;
-};
-// geoBoundaries names Addis Ababa's one zone "Region 14".
-const ZONE_NAME = { 'Region 14': 'Addis Ababa' };
+  keep[far] = 1;
+  const stack = [[0, far], [far, ring.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    let max = 0;
+    let at = -1;
+    const [ax, ay] = ring[a];
+    const [bx, by] = ring[b];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1e-12;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs(dy * ring[i][0] - dx * ring[i][1] + bx * ay - by * ax) / len;
+      if (d > max) { max = d; at = i; }
+    }
+    if (max > tol && at > 0) { keep[at] = 1; stack.push([a, at], [at, b]); }
+  }
+  const out = ring.filter((_, i) => keep[i]);
+  return out.length >= 4 ? out : ring;
+}
+const raw = JSON.parse(fs.readFileSync(path.join(DATA, 'eth_admin3.geojson'), 'utf8'));
+for (const f of raw.features) {
+  const g = f.geometry;
+  if (g.type === 'Polygon') g.coordinates = g.coordinates.map((r) => simplify(r, SIMPLIFY_DEG));
+  else if (g.type === 'MultiPolygon') g.coordinates = g.coordinates.map((p) => p.map((r) => simplify(r, SIMPLIFY_DEG)));
+}
+const woredas = G.parseAreaFile(JSON.stringify(raw), 'adm3_name');
+const props = raw.features.map((f) => f.properties);
+console.log('woredas', woredas.length);
+
 const areas = woredas.map((w, i) => {
   const m = G.measure(w.shape);
-  const adm2 = holder(zonesAdm, m.centre);
-  return { i, name: w.name, shape: w.shape, centre: m.centre, region: holder(regions, m.centre), zone: ZONE_NAME[adm2] ?? adm2 };
+  // Addis Ababa is a city administration: its sub-cities one zone, whatever its zone level is called.
+  return { i, name: w.name, shape: w.shape, centre: m.centre, region: props[i].adm1_name, zone: props[i].adm1_name === 'Addis Ababa' ? 'Addis Ababa' : props[i].adm2_name };
 });
-// Fifteen woreda names stand twice (Moyale, Gursum, Kersa …): each is named with its zone, so a list can tell them apart.
+// A name that stands more than once is named with its zone, so a list can tell them apart (none does in v04).
 const seen = new Map();
 for (const a of areas) seen.set(a.name, (seen.get(a.name) ?? 0) + 1);
 for (const a of areas) if (seen.get(a.name) > 1) a.name = `${a.name} (${a.zone})`;
@@ -130,10 +155,11 @@ for (const probe of ['Addis Ababa', 'Adama', 'Hawassa', 'Bahir Dar', 'Mekelle', 
 const encoded = areas.map((a) => ({ name: a.name, polygons: a.shape.map(G.encodePolygon) }));
 const body = `/**
  * ETHIOPIA ONLY — the first zone map proposed to SeeBuyGet's Ethiopian company (2026-11-10; the owner: "set up a draft for
- * both Kenya and Ethiopia"). Generated by backend/scripts/zone-proposal-et.cjs from geoBoundaries (gbOpen; 2016 boundaries,
- * Open Africa / Code for Ethiopia): Ethiopia's ${areas.length.toLocaleString('en')} woredas as the areas; Addis Ababa one zone; a zone for each of the
- * towns SeeBuyGet's map knows (geo-gazetteer.ts) and for the rest of each administrative zone; remote only where a source says
- * a place is dearer to serve. Ethiopia's company starts from it, or not, and changes it.
+ * both Kenya and Ethiopia"; 2026-11-11 moved to the 2023 boundaries). Generated by backend/scripts/zone-proposal-et.cjs from
+ * OCHA's Common Operational Dataset (HDX cod-ab-eth v04: August 2023, with Sidama, South West, South and Central Ethiopia):
+ * Ethiopia's ${areas.length.toLocaleString('en')} woredas as the areas, simplified to about 300 m; Addis Ababa one zone; a zone for each of the towns
+ * SeeBuyGet's map knows (geo-gazetteer.ts) and for the rest of each administrative zone; remote only where a source says a
+ * place is dearer to serve. Ethiopia's company starts from it, or not, and changes it.
  * Nothing here is read for any other country (zone-proposals/index.ts).
  */
 import type { ZoneProposal } from './types';
@@ -141,9 +167,9 @@ import type { ZoneProposal } from './types';
 export const ET_PROPOSAL: ZoneProposal = {
   country: 'ET',
   label: 'Ethiopia’s ${areas.length.toLocaleString('en')} woredas: a zone for each town and each administrative zone',
-  source: 'geoBoundaries (gbOpen): Ethiopia’s woredas, zones and regions as they were in 2016',
-  licence: 'Woredas and zones ODbL 1.0; regions CC BY 4.0',
-  attribution: 'Open Africa, Code for Ethiopia — via geoBoundaries',
+  source: 'OCHA Common Operational Dataset for Ethiopia (HDX, v04): woredas, zones and regions as of August 2023',
+  licence: 'CC BY-IGO',
+  attribution: 'OCHA, Ethiopian Statistics Service (CSA) and the regional Bureaus of Finance (BoFED) — via HDX',
   level: 'woredas',
   areas: ${JSON.stringify(encoded)},
   zones: ${JSON.stringify(out.map(({ name, group, areas, evidence }) => ({ name, group, areas, evidence })))},

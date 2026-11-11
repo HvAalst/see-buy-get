@@ -63500,6 +63500,16 @@
           },
           "yellowCardExpiresAt": {
             "type": "string"
+          },
+          "customsLicenceKind": {
+            "type": "object",
+            "description": "2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control — C28 for transit goods, C40 for others."
+          },
+          "customsLicenceNumber": {
+            "type": "string"
+          },
+          "customsLicenceExpiresAt": {
+            "type": "string"
           }
         }
       },
@@ -67540,6 +67550,22 @@
             "maxLength": 40
           },
           "yellowCardExpiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "customsLicenceKind": {
+            "type": "string",
+            "description": "2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control (C28 transit goods, C40 other goods).",
+            "enum": [
+              "C28",
+              "C40"
+            ]
+          },
+          "customsLicenceNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "customsLicenceExpiresAt": {
             "type": "string",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
           }

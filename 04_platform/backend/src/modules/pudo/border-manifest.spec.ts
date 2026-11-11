@@ -111,6 +111,12 @@ describe('the border manifest at Moyale (2026-11-10)', () => {
     for (const s of ['Border manifest — commercial consignment', 'የድንበር ጭነት ዝርዝር', 'Moyale One-Stop Border Post', 'KRA PIN P051234567X', 'TIN 0012345678', '09023000', 'Kenyan export entry (iCMS)', 'COMESA Yellow Card', 'AK1234567', `?note=${v.fingerprint}`, 'the customs declarations are the declarant’s own']) expect(html).toContain(s);
     expect(html).toContain('<svg viewBox="0 0 120 120"');
     expect(html).toContain('Not given yet'); // the import declaration, before the post
+    // 2026-11-11 — a Kenyan vehicle's KRA customs licence, printed where its fleet gave one; never asked for at pickup (L43).
+    expect(html).not.toContain('KRA customs licence');
+    const licensed = manifests.build(f, { ...facts, carrier: { ...ready, vehicle: { ...ready.vehicle!, customsLicence: { kind: 'C40', number: 'C40/2026/0193', expiresAt: '2027-06-30' } } } }, 'Taken over', 2);
+    expect(manifests.htmlFor(licensed)).toContain('KRA customs licence (C40)');
+    expect(manifests.htmlFor(licensed)).toContain('C40/2026/0193, until 2027-06-30');
+    expect(manifests.gaps(f, ready).some((g) => /customs licence/i.test(g.words))).toBe(false);
     // Escaped: a description is text, never markup.
     const evil = manifests.build({ ...f, description: '<script>x</script>' }, facts, 'Taken over', 3);
     expect(manifests.htmlFor(evil)).not.toContain('<script>x');

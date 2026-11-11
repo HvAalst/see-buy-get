@@ -28,7 +28,8 @@ export interface GeocodeResult {
  * path await — a documented deployment choice, not a sandbox concern.
  */
 export interface Geocoder {
-  geocode(query: string): GeocodeResult;
+  /** `countries` — where the address is, as far as the caller knows (ISO 3166 alpha-2): a place elsewhere is no answer. */
+  geocode(query: string, countries?: readonly string[]): GeocodeResult;
 }
 
 export const GEOCODER = Symbol('GEOCODER');
@@ -42,9 +43,9 @@ export const GEOCODER = Symbol('GEOCODER');
  */
 @Injectable()
 export class GazetteerGeocoder implements Geocoder {
-  geocode(query: string): GeocodeResult {
+  geocode(query: string, countries?: readonly string[]): GeocodeResult {
     const q = query?.trim() ?? '';
-    const match = q ? lookupPlace(q) : null;
+    const match = q ? lookupPlace(q, countries) : null;
     if (match) {
       return { location: match.entry.location, confidence: match.kind === 'exact' ? 'exact' : 'approx', matched: match.entry.name };
     }
@@ -113,10 +114,11 @@ export class AddressSearchService {
   async search(query: string, countries: string[] = [], now: number = Date.now()): Promise<GeocodeResult | null> {
     const q = query.trim();
     if (!q) return null;
-    const known = this.offlineHit(q);
+    const codes = [...new Set(countries.map((c) => c.trim().toLowerCase()).filter((c) => /^[a-z]{2}$/.test(c)))].sort();
+    // 2026-11-11 — what the offline list knows, kept to the same countries as the outside service is asked.
+    const known = this.offlineHit(q, codes);
     const base = this.base();
     if (!base) return known;
-    const codes = [...new Set(countries.map((c) => c.trim().toLowerCase()).filter((c) => /^[a-z]{2}$/.test(c)))].sort();
     const id = `${codes.join(',')}|${q.toLowerCase()}`;
     const kept = this.kept.get(id);
     if (kept && now - kept.at < KEEP_MS) return kept.found ?? known;
@@ -153,8 +155,8 @@ export class AddressSearchService {
   }
 
   /** The gazetteer's answer when it is a real place — never its stand-in for a name it does not know. */
-  private offlineHit(q: string): GeocodeResult | null {
-    const hit = this.offline.geocode(q);
+  private offlineHit(q: string, codes: string[] = []): GeocodeResult | null {
+    const hit = this.offline.geocode(q, codes.map((c) => c.toUpperCase()));
     return hit.confidence === 'fallback' ? null : hit;
   }
 

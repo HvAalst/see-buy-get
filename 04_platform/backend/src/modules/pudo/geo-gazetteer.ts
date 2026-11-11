@@ -18,9 +18,17 @@ export interface GazetteerEntry {
   aliases?: string[];
   /** A broad container (a whole city) — a more specific place inside it wins when both are named. */
   broad?: boolean;
+  /**
+   * 2026-11-11 — THE COUNTRY IT IS IN (ISO 3166 alpha-2). Names cross borders — a Busia on each side of Kenya and Uganda, a
+   * Moyale on each side of Kenya and Ethiopia — so a lookup that knows the reader's country keeps to it.
+   */
+  country: string;
 }
 
-export const GAZETTEER: GazetteerEntry[] = [
+/** As each country's list writes a place: its country is the list's. */
+type PlaceEntry = Omit<GazetteerEntry, 'country'>;
+
+const KENYA: PlaceEntry[] = [
   // --- Nairobi + neighbourhoods ---
   { name: 'Nairobi', location: { lat: -1.2864, lng: 36.8172 }, aliases: ['nairobi cbd', 'cbd', 'nairobi city', 'biashara street', 'city centre'], broad: true },
   { name: 'Westlands', location: { lat: -1.2673, lng: 36.8065 } },
@@ -75,7 +83,9 @@ export const GAZETTEER: GazetteerEntry[] = [
   { name: 'Kitui', location: { lat: -1.3745, lng: 38.0106 } },
   { name: 'Lamu', location: { lat: -2.2717, lng: 40.902 } },
   { name: 'Moyale', location: { lat: 3.5231, lng: 39.0553 }, aliases: ['moyale border'] },
+];
 
+const ETHIOPIA: PlaceEntry[] = [
   // --- Ethiopia: the second country the network operates in ---
   // Added when a buyer could first TYPE where they are rather than pick an area from a list. A gazetteer
   // that only knows one country is not a limitation of the geocoder, it is a limitation of the answer:
@@ -99,6 +109,81 @@ export const GAZETTEER: GazetteerEntry[] = [
   { name: 'Dessie', location: { lat: 11.133, lng: 39.633 } },
   { name: 'Debre Birhan', location: { lat: 9.68, lng: 39.53 } },
 ];
+
+const UGANDA: PlaceEntry[] = [
+  // --- Uganda (2026-11-11): its cities and large towns, at their centres (Wikipedia's coordinates). Busia is left out: a
+  // town of that name stands across the border in Kenya, and an address naming it must never be placed in the wrong country.
+  { name: "Kampala", location: { lat: 0.3136, lng: 32.5811 }, aliases: ["kla","kampala city"], broad: true },
+  { name: "Entebbe", location: { lat: 0.05, lng: 32.46 } },
+  { name: "Wakiso", location: { lat: 0.3981, lng: 32.4781 } },
+  { name: "Nansana", location: { lat: 0.3639, lng: 32.5286 } },
+  { name: "Kira", location: { lat: 0.3972, lng: 32.6389 }, aliases: ["kira town"] },
+  { name: "Makindye-Ssabagabo", location: { lat: 0.2428, lng: 32.56 }, aliases: ["ssabagabo","sabagabo"] },
+  { name: "Mukono", location: { lat: 0.3533, lng: 32.7553 } },
+  { name: "Njeru", location: { lat: 0.4311, lng: 33.1478 } },
+  { name: "Lugazi", location: { lat: 0.3833, lng: 32.9242 } },
+  { name: "Jinja", location: { lat: 0.4233, lng: 33.2039 } },
+  { name: "Iganga", location: { lat: 0.615, lng: 33.485 } },
+  { name: "Tororo", location: { lat: 0.6928, lng: 34.1811 } },
+  { name: "Mbale", location: { lat: 1.0806, lng: 34.175 } },
+  { name: "Soroti", location: { lat: 1.715, lng: 33.6111 } },
+  { name: "Lira", location: { lat: 2.2472, lng: 32.9 } },
+  { name: "Gulu", location: { lat: 2.7817, lng: 32.2992 } },
+  { name: "Kitgum", location: { lat: 3.2889, lng: 32.8778 } },
+  { name: "Arua", location: { lat: 3.0353, lng: 30.9108 } },
+  { name: "Hoima", location: { lat: 1.4319, lng: 31.3525 } },
+  { name: "Masindi", location: { lat: 1.6836, lng: 31.7222 } },
+  { name: "Nakasongola", location: { lat: 1.315, lng: 32.465 } },
+  { name: "Mityana", location: { lat: 0.4006, lng: 32.0422 } },
+  { name: "Mubende", location: { lat: 0.5575, lng: 31.395 } },
+  { name: "Fort Portal", location: { lat: 0.6544, lng: 30.2744 }, aliases: ["fortportal","fort-portal"] },
+  { name: "Kasese", location: { lat: 0.1867, lng: 30.0881 } },
+  { name: "Mbarara", location: { lat: -0.6133, lng: 30.6583 } },
+  { name: "Masaka", location: { lat: -0.3411, lng: 31.7361 } },
+  { name: "Kabale", location: { lat: -1.25, lng: 29.99 } },
+  { name: "Moroto", location: { lat: 2.53, lng: 34.67 } },
+];
+
+const NETHERLANDS: PlaceEntry[] = [
+  // --- The Netherlands (2026-11-11), where SeeBuyGet is tested: its large cities and the logistics towns loads run between.
+  { name: "Amsterdam", location: { lat: 52.3728, lng: 4.8936 }, broad: true },
+  { name: "Rotterdam", location: { lat: 51.9225, lng: 4.4792 }, broad: true },
+  { name: "Den Haag", location: { lat: 52.0705, lng: 4.3007 }, aliases: ["the hague","s gravenhage","den haag centrum"], broad: true },
+  { name: "Utrecht", location: { lat: 52.0907, lng: 5.1214 }, broad: true },
+  { name: "Eindhoven", location: { lat: 51.4416, lng: 5.4697 } },
+  { name: "Groningen", location: { lat: 53.2194, lng: 6.5665 } },
+  { name: "Tilburg", location: { lat: 51.5555, lng: 5.0913 } },
+  { name: "Almere", location: { lat: 52.3508, lng: 5.2647 } },
+  { name: "Breda", location: { lat: 51.5719, lng: 4.7683 } },
+  { name: "Nijmegen", location: { lat: 51.8426, lng: 5.8546 } },
+  { name: "Apeldoorn", location: { lat: 52.2112, lng: 5.9699 } },
+  { name: "Haarlem", location: { lat: 52.3874, lng: 4.6462 } },
+  { name: "Arnhem", location: { lat: 51.9851, lng: 5.8987 } },
+  { name: "Enschede", location: { lat: 52.2215, lng: 6.8937 } },
+  { name: "Amersfoort", location: { lat: 52.1561, lng: 5.3878 } },
+  { name: "Zaandam", location: { lat: 52.442, lng: 4.8292 }, aliases: ["zaanstad"] },
+  { name: "'s-Hertogenbosch", location: { lat: 51.6978, lng: 5.3037 }, aliases: ["den bosch","hertogenbosch"] },
+  { name: "Zwolle", location: { lat: 52.5168, lng: 6.083 } },
+  { name: "Leiden", location: { lat: 52.1601, lng: 4.497 } },
+  { name: "Maastricht", location: { lat: 50.8514, lng: 5.691 } },
+  { name: "Dordrecht", location: { lat: 51.8133, lng: 4.6901 } },
+  { name: "Leeuwarden", location: { lat: 53.2012, lng: 5.7999 } },
+  { name: "Hoofddorp", location: { lat: 52.3061, lng: 4.6907 }, aliases: ["haarlemmermeer"] },
+  { name: "Schiphol", location: { lat: 52.3105, lng: 4.7683 }, aliases: ["schiphol airport"] },
+  { name: "Venlo", location: { lat: 51.3704, lng: 6.1724 } },
+  { name: "Moerdijk", location: { lat: 51.701, lng: 4.626 } },
+  { name: "Waalwijk", location: { lat: 51.6826, lng: 5.0703 } },
+];
+
+const inCountry = (country: string, list: PlaceEntry[]): GazetteerEntry[] => list.map((e) => ({ ...e, country }));
+
+export const GAZETTEER: GazetteerEntry[] = [...inCountry('KE', KENYA), ...inCountry('ET', ETHIOPIA), ...inCountry('UG', UGANDA), ...inCountry('NL', NETHERLANDS)];
+
+/** The places of the countries given (ISO 3166 alpha-2), or every place where none is. */
+function placesIn(countries?: readonly (string | undefined)[]): GazetteerEntry[] {
+  const codes = (countries ?? []).filter((c): c is string => Boolean(c)).map((c) => c.toUpperCase());
+  return codes.length ? GAZETTEER.filter((e) => codes.includes(e.country)) : GAZETTEER;
+}
 
 /** Normalise a query for matching: lowercase, strip punctuation to spaces, collapse whitespace. */
 export function normalizePlace(q: string): string {
@@ -160,12 +245,12 @@ function followedByRoadWord(q: string, pos: number, name: string): boolean {
  *      container ("Karen, Nairobi" → Karen). If only the broad container survives, use it ("Mombasa
  *      Road, Nairobi" → Nairobi). Returns null if nothing matches.
  */
-export function lookupPlace(query: string): GazetteerMatch | null {
+export function lookupPlace(query: string, countries?: readonly (string | undefined)[]): GazetteerMatch | null {
   const q = normalizePlace(query);
   if (!q) return null;
 
   const flat: Array<{ name: string; entry: GazetteerEntry; broad: boolean }> = [];
-  for (const entry of GAZETTEER) {
+  for (const entry of placesIn(countries)) {
     flat.push({ name: normalizePlace(entry.name), entry, broad: entry.broad ?? false });
     for (const a of entry.aliases ?? []) flat.push({ name: normalizePlace(a), entry, broad: entry.broad ?? false });
   }
@@ -205,22 +290,26 @@ export function lookupPlace(query: string): GazetteerMatch | null {
  * market names where a load is without publishing where it is — so a lane end plotted from this is
  * accurate to the place and deliberately inaccurate to the load. Anything reading it has to say so.
  */
-export function nearestPlaceAt(point: GeoPoint, withinKm = 60): { name: string; km: number; location: GeoPoint } | null {
-  const found = nearestPlace(point, withinKm);
-  if (!found) return null;
-  const entry = GAZETTEER.find((e) => e.name === found.name);
-  return entry ? { ...found, location: entry.location } : null;
+export function nearestPlaceAt(point: GeoPoint, withinKm = 60, country?: string): { name: string; km: number; location: GeoPoint } | null {
+  const found = nearestEntry(point, withinKm, country);
+  return found ? { name: found.name, km: found.km, location: found.location } : null;
 }
 
-export function nearestPlace(point: GeoPoint, withinKm = 60): { name: string; km: number } | null {
-  let best: { name: string; km: number; broad: boolean } | null = null;
-  for (const entry of GAZETTEER) {
+/** `country` — the point's country, where the caller knows it: a place across a border is never its name. */
+export function nearestPlace(point: GeoPoint, withinKm = 60, country?: string): { name: string; km: number } | null {
+  const found = nearestEntry(point, withinKm, country);
+  return found ? { name: found.name, km: found.km } : null;
+}
+
+function nearestEntry(point: GeoPoint, withinKm: number, country?: string): { name: string; km: number; location: GeoPoint } | null {
+  let best: { name: string; km: number; broad: boolean; location: GeoPoint } | null = null;
+  for (const entry of placesIn(country ? [country] : undefined)) {
     const km = haversineKm(point, entry.location);
     if (km > withinKm) continue;
     const broad = entry.broad ?? false;
     // Nearest wins, and an equally-near BROAD container beats the neighbourhood inside it: at the same
     // distance "Nairobi" is the safer word to publish than the estate, and coarser is the whole point here.
-    if (!best || km < best.km || (km === best.km && broad && !best.broad)) best = { name: entry.name, km, broad };
+    if (!best || km < best.km || (km === best.km && broad && !best.broad)) best = { name: entry.name, km, broad, location: entry.location };
   }
-  return best ? { name: best.name, km: best.km } : null;
+  return best ? { name: best.name, km: best.km, location: best.location } : null;
 }

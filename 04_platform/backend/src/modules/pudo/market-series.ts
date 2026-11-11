@@ -358,7 +358,7 @@ export function carriersOn(
 
   for (const f of freights) {
     if (!f.claimedAt || !inWindow(f.claimedAt, window.from, window.to)) continue;
-    if (placeAt(f.pickupLocation).name !== from || placeAt(f.destLocation).name !== to) continue;
+    if (placeAt(f.pickupLocation, f.pickupCountry).name !== from || placeAt(f.destLocation, f.destCountry).name !== to) continue;
     claimedLoads += 1;
     const took = f.claimedBy;
     if (!took) {
@@ -388,9 +388,9 @@ export function carriersOn(
 }
 
 /** The coarse name AND the gazetteer's coordinate for it, in one lookup. */
-function placeAt(point?: { lat: number; lng: number }): { name: string; at?: { lat: number; lng: number } } {
+function placeAt(point?: { lat: number; lng: number }, country?: string): { name: string; at?: { lat: number; lng: number } } {
   if (!point) return { name: UNKNOWN_PLACE };
-  const found = nearestPlaceAt(point);
+  const found = nearestPlaceAt(point, 60, country);
   return found ? { name: found.name, at: found.location } : { name: UNKNOWN_PLACE };
 }
 
@@ -426,8 +426,8 @@ export function lanesOf(freights: Freight[], window: { from: number; to: number 
   };
 
   for (const f of freights) {
-    const from = placeAt(f.pickupLocation);
-    const to = placeAt(f.destLocation);
+    const from = placeAt(f.pickupLocation, f.pickupCountry);
+    const to = placeAt(f.destLocation, f.destCountry);
     if (inWindow(f.createdAt, window.from, window.to)) row(from, to).postedLoads += 1;
     if (f.claimedAt && inWindow(f.claimedAt, window.from, window.to)) row(from, to).claimedLoads += 1;
     if (inWindow(f.createdAt, window.from - span, window.from - 1)) row(from, to).priorPostedLoads += 1;

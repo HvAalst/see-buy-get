@@ -75,9 +75,9 @@ const HOUR_MS = 3_600_000;
 /** A lane end we cannot name honestly — the never-infer rule, as the market series applies it. */
 const UNKNOWN_PLACE = 'unknown';
 
-function placeName(point?: { lat: number; lng: number }): string {
+function placeName(point?: { lat: number; lng: number }, country?: string): string {
   if (!point) return UNKNOWN_PLACE;
-  return nearestPlace(point)?.name ?? UNKNOWN_PLACE;
+  return nearestPlace(point, 60, country)?.name ?? UNKNOWN_PLACE;
 }
 
 /** Add one load's outcome into a slice, creating it on first sight. */
@@ -196,7 +196,7 @@ function mobilisationWhere(freights: Freight[], holdsIt: (f: Freight) => boolean
     }
 
     const outcome = { handedBack: wasHandedBack, delivered: wasDelivered };
-    tally(lanes, `${placeName(f.pickupLocation)} → ${placeName(f.destLocation)}`, outcome);
+    tally(lanes, `${placeName(f.pickupLocation, f.pickupCountry)} → ${placeName(f.destLocation, f.destCountry)}`, outcome);
     tally(classes, f.cargoClass || 'unknown', outcome);
   }
 

@@ -109,7 +109,7 @@ export interface ManifestDocument {
   namedPlace?: string;
   invoice?: { number: string; issuedOn: string; fingerprint: string };
   references: { exportEntry?: string; importDeclaration?: string; etimsInvoice?: string };
-  vehicle?: { plate: string; vehicleClass: string; registrationCountry?: string; trailerPlate?: string; yellowCard?: { number: string; expiresAt?: string } };
+  vehicle?: { plate: string; vehicleClass: string; registrationCountry?: string; trailerPlate?: string; yellowCard?: { number: string; expiresAt?: string }; customsLicence?: { kind: 'C28' | 'C40'; number: string; expiresAt?: string } };
   crew?: { name: string; licenceNumber?: string; passport?: { number: string; country: string; expiresAt: string } };
   seals: string[];
   events: Array<{ at: string; words: string }>;

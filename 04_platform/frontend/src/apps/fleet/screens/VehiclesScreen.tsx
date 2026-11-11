@@ -505,8 +505,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
  */
 function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
   const t = useT();
-  const [draft, setDraft] = useState<{ insuranceRef: string; insuranceExpiresAt: string; inspectionRef: string; inspectionExpiresAt: string; registrationCountry: string; trailerPlate: string; yellowCardNumber: string; yellowCardExpiresAt: string } | null>(null);
-  const docs = vehicle?.documents as { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string } | undefined;
+  const [draft, setDraft] = useState<{ insuranceRef: string; insuranceExpiresAt: string; inspectionRef: string; inspectionExpiresAt: string; registrationCountry: string; trailerPlate: string; yellowCardNumber: string; yellowCardExpiresAt: string; customsLicenceKind: '' | 'C28' | 'C40'; customsLicenceNumber: string; customsLicenceExpiresAt: string } | null>(null);
+  const docs = vehicle?.documents as { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string; customsLicenceKind?: 'C28' | 'C40'; customsLicenceNumber?: string; customsLicenceExpiresAt?: string } | undefined;
   const d = draft ?? {
     insuranceRef: docs?.insuranceRef ?? '',
     insuranceExpiresAt: (docs?.insuranceExpiresAt ?? '').slice(0, 10),
@@ -516,7 +516,12 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
     trailerPlate: docs?.trailerPlate ?? '',
     yellowCardNumber: docs?.yellowCardNumber ?? '',
     yellowCardExpiresAt: (docs?.yellowCardExpiresAt ?? '').slice(0, 10),
+    customsLicenceKind: docs?.customsLicenceKind ?? '',
+    customsLicenceNumber: docs?.customsLicenceNumber ?? '',
+    customsLicenceExpiresAt: (docs?.customsLicenceExpiresAt ?? '').slice(0, 10),
   };
+  // 2026-11-11 — Kenya's own: KRA's licence for a vehicle carrying goods under customs control.
+  const kenya = state.dashboard?.country === 'KE';
   // 2026-11-10 — a fleet in Kenya or Ethiopia records what a load across the Moyale border prints of its vehicle.
   const moyale = MOYALE_COUNTRIES.includes(state.dashboard?.country ?? '');
   const patch = (p: Partial<typeof d>) => setDraft({ ...d, ...p });
@@ -590,6 +595,34 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
               <input id="p-yc-exp" class="input" type="date" value={d.yellowCardExpiresAt} onInput={(e) => patch({ yellowCardExpiresAt: e.currentTarget.value })} />
             </div>
           </div>
+          {kenya ? (
+            <>
+              <div class="grid2" style="margin-top:12px">
+                <div class="field">
+                  <label class="field__label" for="p-cl-kind">
+                    <Abbreviated text={t('fleet.vehicles.customsLicence')} />
+                  </label>
+                  <select id="p-cl-kind" class="input" value={d.customsLicenceKind} onChange={(e) => patch({ customsLicenceKind: e.currentTarget.value as '' | 'C28' | 'C40' })}>
+                    <option value="">{t('fleet.vehicles.customsLicenceNone')}</option>
+                    <option value="C28">{t('fleet.vehicles.customsLicenceC28')}</option>
+                    <option value="C40">{t('fleet.vehicles.customsLicenceC40')}</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="p-cl-num">
+                    {t('fleet.vehicles.customsLicenceNumber')}
+                  </label>
+                  <input id="p-cl-num" class="input input--mono" maxLength={40} value={d.customsLicenceNumber} onInput={(e) => patch({ customsLicenceNumber: e.currentTarget.value })} spellcheck={false} disabled={!d.customsLicenceKind} />
+                </div>
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label class="field__label" for="p-cl-exp">
+                  {t('fleet.vehicles.customsLicenceExpires')}
+                </label>
+                <input id="p-cl-exp" class="input" type="date" value={d.customsLicenceExpiresAt} onInput={(e) => patch({ customsLicenceExpiresAt: e.currentTarget.value })} disabled={!d.customsLicenceKind} />
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
       <Button
@@ -605,6 +638,9 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
             inspectionExpiresAt: d.inspectionExpiresAt || undefined,
             ...(moyale
               ? { registrationCountry: d.registrationCountry || undefined, trailerPlate: d.trailerPlate.trim(), yellowCardNumber: d.yellowCardNumber.trim(), yellowCardExpiresAt: d.yellowCardExpiresAt || undefined }
+              : {}),
+            ...(kenya && d.customsLicenceKind && d.customsLicenceNumber.trim()
+              ? { customsLicenceKind: d.customsLicenceKind, customsLicenceNumber: d.customsLicenceNumber.trim(), customsLicenceExpiresAt: d.customsLicenceExpiresAt || undefined }
               : {}),
           };
           close();

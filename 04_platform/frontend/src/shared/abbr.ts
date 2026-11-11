@@ -30,6 +30,9 @@ export const ABBREVIATIONS = [
   'COMESA',
   'iCMS',
   'eCMS',
+  // Kenya's licences for a vehicle carrying goods under customs control (2026-11-11).
+  'C28',
+  'C40',
   'VAT',
   'HS code',
   'CMR',

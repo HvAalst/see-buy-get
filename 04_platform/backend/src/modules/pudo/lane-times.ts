@@ -48,8 +48,8 @@ export function groupOf(f: Pick<Freight, 'carriage' | 'carriedBy'>): VehicleGrou
 
 /** The lanes a load runs on: its town pair where both ends are named, and its country pair where both are known. */
 export function lanesOf(f: Pick<Freight, 'pickupLocation' | 'destLocation' | 'pickupCountry' | 'destCountry'>): { towns?: string; countries?: string } {
-  const from = nearestPlace(f.pickupLocation)?.name;
-  const to = f.destLocation ? nearestPlace(f.destLocation)?.name : undefined;
+  const from = nearestPlace(f.pickupLocation, 60, f.pickupCountry)?.name;
+  const to = f.destLocation ? nearestPlace(f.destLocation, 60, f.destCountry)?.name : undefined;
   const a = f.pickupCountry?.toUpperCase();
   const b = f.destCountry?.toUpperCase();
   return {

@@ -906,7 +906,7 @@ export function useFleetApp() {
 
   /** FP4 — record a vehicle's papers. The DATE is the switch: the day after it passes, the vehicle is off the road. */
   const setVehiclePapers = useCallback(
-    async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string }) => {
+    async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string; registrationCountry?: string; trailerPlate?: string; yellowCardNumber?: string; yellowCardExpiresAt?: string; customsLicenceKind?: 'C28' | 'C40'; customsLicenceNumber?: string; customsLicenceExpiresAt?: string }) => {
       if (!client) return;
       await run('papers:' + vehicleId, async () => {
         const r = await client.api.setVehicleDocuments(vehicleId, documents);

@@ -1766,8 +1766,8 @@ export class DispatchService {
           })
         : undefined;
       rows.push({
-        area: nearestPlace(f.pickupLocation)?.name,
-        destArea: f.destLocation ? nearestPlace(f.destLocation)?.name : undefined,
+        area: nearestPlace(f.pickupLocation, 60, f.pickupCountry)?.name,
+        destArea: f.destLocation ? nearestPlace(f.destLocation, 60, f.destCountry)?.name : undefined,
         pickupAbout: coarsePoint(f.pickupLocation),
         weightKg: f.weightKg,
         cargoClass: f.cargoClass,
@@ -4879,6 +4879,7 @@ export class DispatchService {
               ...(docs?.registrationCountry ? { registrationCountry: docs.registrationCountry } : {}),
               ...(docs?.trailerPlate ? { trailerPlate: docs.trailerPlate } : {}),
               ...(docs?.yellowCardNumber ? { yellowCard: { number: docs.yellowCardNumber, ...(docs.yellowCardExpiresAt ? { expiresAt: docs.yellowCardExpiresAt } : {}) } } : {}),
+              ...(docs?.customsLicenceKind && docs.customsLicenceNumber ? { customsLicence: { kind: docs.customsLicenceKind, number: docs.customsLicenceNumber, ...(docs.customsLicenceExpiresAt ? { expiresAt: docs.customsLicenceExpiresAt } : {}) } } : {}),
             },
           }
         : {}),

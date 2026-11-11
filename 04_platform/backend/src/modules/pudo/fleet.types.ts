@@ -237,6 +237,10 @@ export class VehicleDocuments {
   trailerPlate?: string;
   yellowCardNumber?: string;
   yellowCardExpiresAt?: string;
+  /** 2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control — C28 for transit goods, C40 for others. */
+  customsLicenceKind?: 'C28' | 'C40';
+  customsLicenceNumber?: string;
+  customsLicenceExpiresAt?: string;
 }
 
 export class Vehicle {
