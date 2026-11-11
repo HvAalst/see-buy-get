@@ -5,6 +5,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { haversineKm } from './geo';
+import { hubIsDown } from './hub-down.types';
 import { MdpService } from './mdp.service';
 import type { GeoPoint, Mdp } from './pudo.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
@@ -285,7 +286,10 @@ export class CatchmentService implements OnModuleInit {
     if (!company || company.kind !== 'sister') return [];
     const hubs = this.hubsOf(company);
     const byId = new Map(hubs.map((h) => [h.mdpId, h]));
-    return this.servingOf(company.entityId, this.stored(company.entityId), code, byId, this.standingIn(company, hubs, now), now).map((h) => h.mdpId);
+    // 2026-11-11 — a hub that is down serves no zone while it is: shown on Zones still, sent nothing.
+    return this.servingOf(company.entityId, this.stored(company.entityId), code, byId, this.standingIn(company, hubs, now), now)
+      .map((h) => h.mdpId)
+      .filter((id) => !hubIsDown(byId.get(id)?.down, now));
   }
 
   /**

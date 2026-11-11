@@ -29,6 +29,8 @@ import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
 import type { HandoverPositionDto } from './handover-position';
+import { haversineKm } from './geo';
+import { hubIsDown, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, type HubDownReason } from './hub-down.types';
 import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
 import { clockAt, clocksOfCountry } from './fleet-clock';
@@ -535,8 +537,9 @@ export class MdpService {
   }
 
   /** The hubs that may work and serve every one of these zones, in the order they joined. */
-  private hubsServing(zones: string[]): Mdp[] {
-    return [...this.mdps.values()].filter((m) => zones.every((z) => m.zones.includes(z)) && this.isApproved(m) && !this.notOpenYet(m));
+  private hubsServing(zones: string[], now: number = Date.now()): Mdp[] {
+    // 2026-11-11 — never a hub that is down: nothing is sent to it until it is open again.
+    return [...this.mdps.values()].filter((m) => zones.every((z) => m.zones.includes(z)) && this.isApproved(m) && !this.notOpenYet(m) && !this.isDown(m, now));
   }
 
   /**
@@ -546,7 +549,10 @@ export class MdpService {
    * always has room (spaceOf).
    */
   private withRoom(hubs: Mdp[], now: number): Mdp | undefined {
-    const room = hubs.map((h) => ({ h, s: this.declaresSpace(h) ? this.spaceOf(h, now) : undefined })).filter(({ s }) => !s?.noRoom);
+    const room = hubs
+      .filter((h) => !this.isDown(h, now)) // a hub that is down has no room for anything
+      .map((h) => ({ h, s: this.declaresSpace(h) ? this.spaceOf(h, now) : undefined }))
+      .filter(({ s }) => !s?.noRoom);
     return (room.find(({ s }) => !s?.dayFull) ?? room[0])?.h;
   }
 
@@ -565,12 +571,12 @@ export class MdpService {
     let areas: string[];
     if (addressed) {
       areas = [...new Set(tote.parcels.map((p) => this.destZoneOf(p)).filter((z): z is string => Boolean(z)))];
-      const others = areas.length ? this.hubsServing(areas).filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== tote.locationId) : [];
+      const others = areas.length ? this.hubsServing(areas, now).filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== tote.locationId) : [];
       current = addressed;
       candidates = [addressed, ...others];
     } else {
       if (this.agents.find(id)) return undefined; // a shop: the last mile, no hub's floor on it
-      const serving = this.hubsServing([id]);
+      const serving = this.hubsServing([id], now);
       if (!serving.length) return undefined;
       current = serving.find((h) => h.mdpId === tote.toHubId) ?? serving[0];
       candidates = [current, ...serving.filter((h) => h.mdpId !== current.mdpId)];
@@ -589,7 +595,7 @@ export class MdpService {
   }
 
   /** Keep the hub a bag was placed at: a hub's bag readdressed to it, a zone's bag given it. */
-  private keepPlace(tote: Tote, hub: Mdp, zoneBag: boolean): void {
+  private keepPlace(tote: Tote, hub: Mdp, zoneBag: boolean, reason: 'room' | 'hub_down' = 'room'): void {
     const moved = zoneBag ? tote.toHubId !== hub.mdpId : tote.destinationNodeId !== hub.mdpId;
     if (zoneBag) {
       if (tote.toHubId !== hub.mdpId) this.totes.pointTo(tote.code, { toHubId: hub.mdpId });
@@ -603,7 +609,7 @@ export class MdpService {
     if (!moved) return;
     for (const parcelId of tote.parcels) {
       try {
-        this.routeKeeper?.redirect(this.parcels.get(parcelId), hub.mdpId, 'room', 'system');
+        this.routeKeeper?.redirect(this.parcels.get(parcelId), hub.mdpId, reason, 'system');
       } catch {
         // a parcel the bag lists and the store does not: nothing to plan
       }
@@ -705,7 +711,7 @@ export class MdpService {
   mdpForZone(zone: string, now: number = Date.now()): Mdp | undefined {
     // Only a hub that may work: one not yet approved is chosen for nothing, so nothing is routed to it — nor one in a
     // country not open yet, whose floor opens the day it does.
-    const serving = this.hubsServing([zone]);
+    const serving = this.hubsServing([zone], now);
     if (serving.length < 2) return serving[0];
     return this.withRoom(serving, now) ?? serving[0];
   }
@@ -1353,6 +1359,125 @@ export class MdpService {
   }
 
   /** 2026-11-09 — "Sort and hand out": its counter, kept on the hub; stopped when it sorts only again. */
+  /** A hub by its id, or nothing (where a caller only asks whether a place is a hub). */
+  find(mdpId: string): Mdp | undefined {
+    return this.mdps.get(mdpId);
+  }
+
+  /** 2026-11-11 — down now: said so, and not past the time it was said to open again. */
+  isDown(mdp: Mdp, now: number = Date.now()): boolean {
+    return hubIsDown(mdp.down, now);
+  }
+
+  /**
+   * 2026-11-11 — A HUB DOWN (ISO 28000 gap 12; the owner: "build it now"). The hub — or staff, when it cannot be reached —
+   * says it is down, why, and until when if it knows. From then: nothing new is sent to it (every way a hub is chosen asks
+   * isDown); the bags going to it that are offered, claimed or on a vehicle are sent to another approved hub serving where
+   * their parcels go, each parcel's plan made again with why ("hub_down"); a bag on a vehicle already pays its driver the
+   * extra leg, as the network's cost; bags standing at it are offered to nobody until it opens. None can take a bag: it
+   * waits where it is, and whoever holds it is told. Asked before anything is written; kept with the hub.
+   */
+  markDown(mdpId: string, input: { reason: HubDownReason; note?: string; until?: string }, by: { name: string; role: 'hub' | 'staff' }, now: number = Date.now()): { hub: Mdp; redirected: string[]; waiting: string[] } {
+    const hub = this.require(mdpId);
+    if (!this.isApproved(hub)) throw this.notApproved(hub);
+    if (!(HUB_DOWN_REASONS as readonly string[]).includes(input.reason)) throw new GlosError('INVALID_INPUT', 'Say why the hub is down', { field: 'reason' });
+    const until = input.until ? Date.parse(input.until) : undefined;
+    if (until !== undefined && (!Number.isFinite(until) || until <= now)) throw new GlosError('INVALID_INPUT', 'When it opens again is still to come', { field: 'until' });
+    if (until !== undefined && until > now + HUB_DOWN_MAX_DAYS * 86_400_000) throw new GlosError('INVALID_INPUT', `A hub is said to be down for ${HUB_DOWN_MAX_DAYS} days at most: say it again when that runs out`, { field: 'until' });
+    const note = input.note?.trim().slice(0, 200);
+    hub.down = { since: new Date(now).toISOString(), ...(until !== undefined ? { until: new Date(until).toISOString() } : {}), reason: input.reason, ...(note ? { note } : {}), by: by.name, byRole: by.role };
+    this.mdps.set(mdpId, hub);
+    const redirected: string[] = [];
+    const waiting: string[] = [];
+    for (const tote of this.totes.list()) {
+      const goesHere = tote.destinationNodeId === mdpId || tote.toHubId === mdpId;
+      if (!goesHere || tote.locationId === mdpId) continue;
+      if (tote.status !== 'available' && tote.status !== 'claimed' && tote.status !== 'in_transit') continue; // a bag still filling is placed when it is offered
+      let placed = this.placeBag(tote, now);
+      // Claimed or on a vehicle, and no hub serving its zones can take it: the nearest hub open in the country, rather than
+      // a driver arriving at a closed door — that hub sorts it on.
+      if (placed && !placed.goes && tote.status !== 'available') {
+        const nearest = this.nearestOpenHub(hub, now);
+        if (nearest) placed = { goes: true, hub: nearest, zoneBag: tote.destinationNodeId !== mdpId };
+      }
+      if (placed?.goes) {
+        const onBoard = tote.status === 'in_transit' && Boolean(tote.carriedBy);
+        // The extra leg, the network's cost — never the reason a hub cannot be said down: a money question with no answer
+        // leaves the bag redirected and the leg unpaid, said so on the bag.
+        let paid = false;
+        if (onBoard) {
+          try {
+            paid = Boolean(this.gate.payBagLoad(tote.carriedBy!));
+          } catch {
+            paid = false;
+          }
+        }
+        const entry = { at: new Date(now).toISOString(), fromId: hub.mdpId, fromName: hub.name, toId: placed.hub.mdpId, toName: placed.hub.name, reason: 'hub_down' as const, ...(paid ? { paidExtra: true } : {}) };
+        this.totes.redirectTo(tote.code, placed.zoneBag ? { toHubId: placed.hub.mdpId } : { destinationNodeId: placed.hub.mdpId, destinationLabel: placed.hub.name }, entry);
+        for (const parcelId of tote.parcels) {
+          try {
+            this.routeKeeper?.redirect(this.parcels.get(parcelId), placed.hub.mdpId, 'hub_down', 'system');
+          } catch {
+            // a parcel the bag lists and the store does not: nothing to plan
+          }
+        }
+        this.tellRedirect(this.totes.requireByCode(tote.code), hub, placed.hub, paid);
+        redirected.push(tote.code);
+      } else if (placed && !tote.waitsForRoom && tote.status === 'available') {
+        const since = new Date(now).toISOString();
+        this.totes.markWaiting(tote.code, { hubId: hub.mdpId, hubName: hub.name, since });
+        this.tellHolder(tote, 'waits', hub, placed.areas, since);
+        waiting.push(tote.code);
+      }
+    }
+    // Said by staff: the hub is told, so it knows why nothing comes to it.
+    if (by.role === 'staff' && this.notifications) {
+      void this.notifications
+        .notify(hub.did, { kind: 'hub_space', title: `${hub.name} is marked down`, body: `SeeBuyGet staff marked your hub down: ${HUB_DOWN_WORDS[input.reason]}${note ? ` — ${note}` : ''}. Nothing is sent to it until it is open again: say so in the Hub app when it is.`, link: '/', tag: `hub-down:${hub.mdpId}:${hub.down.since}`, data: { mdpId: hub.mdpId } })
+        .catch(() => undefined);
+    }
+    void this.events.publish(GlosEvent.Pudo.HubDown, { mdpId: hub.mdpId, name: hub.name, reason: input.reason, until: hub.down.until, byRole: by.role, redirected: redirected.length }, { source: 'pudo' }).catch(() => undefined);
+    return { hub, redirected, waiting };
+  }
+
+  /** 2026-11-11 — open again: bags are sent to it as before, and the bags held for room go on by themselves. */
+  markUp(mdpId: string, by: string, now: number = Date.now()): Mdp {
+    const hub = this.require(mdpId);
+    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down`);
+    delete hub.down;
+    this.mdps.set(mdpId, hub);
+    this.letWaitingGo(now);
+    void this.events.publish(GlosEvent.Pudo.HubUp, { mdpId: hub.mdpId, name: hub.name, by }, { source: 'pudo' }).catch(() => undefined);
+    return hub;
+  }
+
+  /** 2026-11-11 — the nearest other hub that may work in the same country, the first with room — by distance as the crow flies. */
+  private nearestOpenHub(from: Mdp, now: number): Mdp | undefined {
+    const country = this.countryOf(from);
+    const open = [...this.mdps.values()]
+      .filter((m) => m.mdpId !== from.mdpId && this.isApproved(m) && !this.notOpenYet(m) && !this.isDown(m, now) && this.countryOf(m) === country && m.location)
+      .sort((a, b) => haversineKm(from.location, a.location) - haversineKm(from.location, b.location));
+    return this.withRoom(open, now) ?? open[0];
+  }
+
+  /** The driver carrying a bag, or the shop or hub holding it, told where it goes now that its hub is down. */
+  private tellRedirect(tote: Tote, from: Mdp, to: Mdp, paid: boolean): void {
+    if (!this.notifications) return;
+    const holder = tote.status === 'available' ? (this.mdps.get(tote.locationId)?.did ?? tote.locationId) : (tote.carriedBy ?? tote.claimedBy);
+    if (!holder) return;
+    const why = from.down ? HUB_DOWN_WORDS[from.down.reason] : 'closed';
+    void this.notifications
+      .notify(holder, {
+        kind: 'hub_space',
+        title: `Bag ${tote.code} goes to ${to.name} now`,
+        body: `${from.name} is down (${why}): take bag ${tote.code} to ${to.name} instead.${paid ? ' The extra leg is paid, as the network’s cost.' : ''}`,
+        link: tote.status === 'available' ? '/' : '/?go=loads',
+        tag: `hub-down:${tote.code}:${to.mdpId}`,
+        data: { code: tote.code, from: from.mdpId, to: to.mdpId },
+      })
+      .catch(() => undefined);
+  }
+
   setCounter(mdpId: string, counter: Mdp['counter']): Mdp {
     const mdp = this.require(mdpId);
     if (counter) mdp.counter = counter;
@@ -1363,6 +1488,7 @@ export class MdpService {
 
   /** 2026-11-09 — whether a hub can take one more bag: one that never said its space always can (spaceOf). */
   hasRoom(mdp: Mdp, now: number = Date.now()): boolean {
+    if (this.isDown(mdp, now)) return false;
     return !(this.declaresSpace(mdp) && this.spaceOf(mdp, now).noRoom);
   }
 

@@ -195,6 +195,22 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /**
+   * 2026-11-11 — SENT TO ANOTHER HUB BY THE NETWORK, the one it went to being down: claimed or on a vehicle as well — where it
+   * goes is fixed for everybody else, not for the network that fixed it. Kept, with why.
+   */
+  redirectTo(code: string, to: { destinationNodeId: string; destinationLabel: string } | { toHubId: string }, entry: NonNullable<Tote['redirects']>[number]): Tote {
+    const tote = this.requireByCode(code);
+    if ('toHubId' in to) tote.toHubId = to.toHubId;
+    else {
+      if (tote.destinationNodeId && tote.destinationNodeId !== to.destinationNodeId && !tote.packedFor) tote.packedFor = tote.destinationNodeId;
+      tote.destinationNodeId = to.destinationNodeId;
+      tote.destinationLabel = to.destinationLabel;
+    }
+    tote.redirects = [...(tote.redirects ?? []), entry];
+    return this.save(tote);
+  }
+
   markWaiting(code: string, wait: Tote['waitsForRoom']): Tote {
     const tote = this.requireByCode(code);
     tote.waitsForRoom = wait;

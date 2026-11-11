@@ -189,6 +189,7 @@ import { DockService } from './dock.service';
 import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
 import { DriverPassportDto } from './border-manifest.types';
+import { HubDownDto, HubDownUpDto } from './hub-down.types';
 import type { DriverPassport } from './fleet.types';
 import { phoneAtHandover } from './handover-position';
 import { AddressSearchService, GEOCODER, Geocoder } from './geocoder';
@@ -5812,6 +5813,28 @@ export class SbgController {
     }
     if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
     return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId), dto.observedAt);
+  }
+
+  /**
+   * 2026-11-11 — A HUB DOWN (ISO 28000 gap 12): its owner says so from the Hub app — or staff, when it cannot be reached.
+   * Nothing is sent to it from then; bags on their way go to another hub serving their zones; the extra leg is the network's.
+   */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/down')
+  hubDown(@Param('id') id: string, @Body() dto: HubDownDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator') this.assertMdpActs(id, actor);
+    const by = { name: auditActor(actor, dto.by) ?? (actor?.role === 'operator' ? 'SeeBuyGet staff' : 'The hub'), role: actor?.role === 'operator' ? ('staff' as const) : ('hub' as const) };
+    const done = this.mdps.markDown(id, { reason: dto.reason, note: dto.note, until: dto.until }, by);
+    return { mdpId: id, down: done.hub.down, redirected: done.redirected, waiting: done.waiting };
+  }
+
+  /** 2026-11-11 — open again: bags are sent to it as before. The hub, or staff. */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/up')
+  hubUp(@Param('id') id: string, @Body() dto: HubDownUpDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator') this.assertMdpActs(id, actor);
+    const hub = this.mdps.markUp(id, auditActor(actor, dto.by) ?? 'The hub');
+    return { mdpId: id, down: hub.down ?? null };
   }
 
   /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */

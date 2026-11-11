@@ -16,6 +16,7 @@ import { CarriersCard } from './CarriersCard';
 import { HubSpaceCard } from './HubSpaceCard';
 import { ZonesServedCard } from './ZonesServedCard';
 import { HubCounterCard } from './HubCounterCard';
+import { HubDownCard } from './HubDownCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -218,6 +219,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       ) : null}
 
       {/* 2026-11-09 — what it does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */}
+      {/* 2026-11-11 — a hub down (ISO 28000 gap 12): said here, and open again here. */}
+      <HubDownCard sbg={sbg ?? null} hub={hub} staff={Boolean(state.staff)} onChanged={() => void actions.refresh()} />
       <HubCounterCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} currency={hub?.currency} />
 
       {/* 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, and zones near it its owner adds. */}

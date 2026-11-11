@@ -20046,6 +20046,70 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/down": {
+      "post": {
+        "operationId": "Sbg.hubDown",
+        "summary": "",
+        "description": "2026-11-11 — A HUB DOWN (ISO 28000 gap 12): its owner says so from the Hub app — or staff, when it cannot be reached.\nNothing is sent to it from then; bags on their way go to another hub serving their zones; the extra leg is the network's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubDownDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/up": {
+      "post": {
+        "operationId": "Sbg.hubUp",
+        "summary": "",
+        "description": "2026-11-11 — open again: bags are sent to it as before. The hub, or staff.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubDownUpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/drop-bag": {
       "post": {
         "operationId": "Sbg.dropBag",
@@ -62883,6 +62947,44 @@
           "since"
         ]
       },
+      "ToteRedirect": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "fromId": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "toId": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "hub_down"
+            ]
+          },
+          "paidExtra": {
+            "type": "boolean",
+            "description": "On a vehicle already: the driver was paid the extra leg, as the network's cost."
+          }
+        },
+        "required": [
+          "at",
+          "fromId",
+          "fromName",
+          "toId",
+          "toName",
+          "reason"
+        ]
+      },
       "ToteHaulPart": {
         "type": "object",
         "properties": {
@@ -62994,6 +63096,13 @@
                 "$ref": "#/components/schemas/ToteWait"
               }
             ]
+          },
+          "redirects": {
+            "description": "2026-11-11 — sent to another hub by the network because the one it went to was down: each time, kept.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToteRedirect"
+            }
           },
           "offeredWideAt": {
             "type": "string",
@@ -63374,6 +63483,49 @@
           "state"
         ]
       },
+      "HubDown": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string",
+            "description": "When it opens again, where whoever said it knows: past it, it is open by itself."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "power",
+              "flood",
+              "security",
+              "no_staff",
+              "authority",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who said so, by name."
+          },
+          "byRole": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "staff"
+            ]
+          }
+        },
+        "required": [
+          "since",
+          "reason",
+          "by",
+          "byRole"
+        ]
+      },
       "Mdp": {
         "type": "object",
         "properties": {
@@ -63448,6 +63600,14 @@
                 "type": "string"
               }
             }
+          },
+          "down": {
+            "description": "2026-11-11 — DOWN, as the hub or staff said (ISO 28000 gap 12): nothing is sent to it until it is open again or `until` passes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubDown"
+              }
+            ]
           },
           "spaceSaidAt": {
             "type": "string",
@@ -64729,6 +64889,46 @@
                 "$ref": "#/components/schemas/HandoverPositionDto"
               }
             ]
+          }
+        }
+      },
+      "HubDownDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "power",
+              "flood",
+              "security",
+              "no_staff",
+              "authority",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "until": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who is saying it, for a console on the shared key; a named sign-in's own name wins.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "HubDownUpDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "maxLength": 120
           }
         }
       },

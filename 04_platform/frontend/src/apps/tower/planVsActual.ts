@@ -32,7 +32,7 @@ export function detourWords(lane: Pick<PlanLane, 'detours'>, t: Translate): stri
 }
 
 /** The reasons a parcel went another way, in the console's words: said at the counter, or the network's own. */
-const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged' | 'tower.plan.why.pricedOtherWay' | 'tower.plan.why.doneOffline' | 'tower.plan.why.shopClosed'> = {
+const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull' | 'tower.plan.why.faster' | 'tower.plan.why.other' | 'tower.plan.why.room' | 'tower.plan.why.arrivedElsewhere' | 'tower.plan.why.networkChanged' | 'tower.plan.why.pricedOtherWay' | 'tower.plan.why.doneOffline' | 'tower.plan.why.shopClosed' | 'tower.plan.why.hubDown'> = {
   no_transport: 'tower.plan.why.noTransport',
   hub_full: 'tower.plan.why.hubFull',
   faster: 'tower.plan.why.faster',
@@ -44,6 +44,8 @@ const WHY: Record<string, 'tower.plan.why.noTransport' | 'tower.plan.why.hubFull
   done_offline: 'tower.plan.why.doneOffline',
   // 2026-11-06 — its pickup shop closed: the shop its buyers' choosing settled on.
   shop_closed: 'tower.plan.why.shopClosed',
+  // 2026-11-11 — the hub it went to was down: the network sent it to another for its zone (ISO 28000 gap 12).
+  hub_down: 'tower.plan.why.hubDown',
   // Read on one parcel's way (the Support screen); a lane does not count it — a price is not a step it took.
   priced_other_way: 'tower.plan.why.pricedOtherWay',
 };

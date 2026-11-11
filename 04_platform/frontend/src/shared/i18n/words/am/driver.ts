@@ -834,6 +834,8 @@ export const words: Record<string, string> = {
   "driver.loads.heldShort": "ተይዟል — ኦፕሬሽን ክፍሉ ተነግሮታል",
   "driver.invoice.open": "የንግድ ደረሰኝ",
   "driver.invoice.title": "የንግድ ደረሰኝ — ለድንበሩ",
+  "driver.loads.redirected": "{from} ተዘግቷል፦ ይህን ከረጢት በምትኩ ወደ {to} ይውሰዱ።",
+  "driver.loads.redirectedPaid": "ተጨማሪው ጉዞ እንደ አውታረ መረቡ ወጪ ይከፈላል።",
   "driver.held.open": "በፖሊስ ወይም በጉምሩክ ተይዘዋል?",
   "driver.held.title": "በመንገድ ላይ ተይዟል",
   "driver.held.body": "{ref}ን ማን እንደያዘ ይናገሩ፦ የSeeBuyGet ኦፕሬሽን ክፍል፣ ጭነት ላኪውና የተሽከርካሪ ድርጅትዎ ቢሮ ወዲያውኑ ይነገራቸዋል። ሲለቀቁ እንደገና ይናገሩ።",

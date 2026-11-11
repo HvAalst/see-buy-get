@@ -30,6 +30,10 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST(`/v1/sbg/flag-cases/${encodeURIComponent(caseId)}/${act}` as never, { body } as never) as never),
     /** Evidence that lasts: the fingerprints kept and whether their chain is whole; which server writes the store. */
     evidence: () => sbg.request((c) => c.GET('/v1/sbg/evidence' as never, {} as never) as never),
+    /** 2026-11-11 — a hub down, said by staff when it cannot be reached; and open again. */
+    hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down', { params: { path: { id: mdpId } }, body })),
+    hubUp: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/up', { params: { path: { id: mdpId } }, body: {} })),
     /** The pilot, week by week: the week so far, every frozen week, and the compendium's targets. */
     pilot: () => sbg.request((c) => c.GET('/v1/sbg/pilot' as never, {} as never) as never),
     /** A company's tax invoices (KRA eTIMS, Kenya only): the newest first, in one state or all, and where they go. */

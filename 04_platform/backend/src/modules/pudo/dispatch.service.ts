@@ -1362,6 +1362,10 @@ export class DispatchService {
     // …and room in the hold for one more BAG. Kilos are not the binding constraint on a line-haul: a driver
     // claiming from a coffee table could reserve twenty bags of letters against a weight limit they never
     // reach, and arrive at a bus whose boot holds twelve.
+    if (offer.kind === 'tote') {
+      const at = this.totes.byCodeMaybe(offer.ref)?.locationId;
+      if (at && this.atHubDown(at)) throw new GlosError('INVALID_STATE', `${this.mdps.find(at)?.name ?? 'Its hub'} is down: its bags wait there until it opens again`);
+    }
     if (offer.kind === 'tote' && this.remainingTotes(offer.driverDid) < 1) {
       throw new GlosError('CAPACITY_EXCEEDED', `Your ${vehicle.vehicleClass} is carrying all ${this.toteCapacityOf(vehicle)} bag(s) it holds — deliver one before taking another`);
     }
@@ -3106,6 +3110,7 @@ export class DispatchService {
     if (!vehicle) return 'They are no longer on a vehicle';
     const tote = this.totes.requireByCode(code);
     if (tote.status !== 'available') return `The bag is ${tote.status}`;
+    if (this.atHubDown(tote.locationId)) return 'Its hub is down';
     if (tote.weightKg > this.remainingCapacity(driverDid)) return `It weighs ${tote.weightKg} kg, more than their vehicle has left`;
     if (this.remainingTotes(driverDid) < 1) return 'Their vehicle has no bag place left';
     const need = this.loadRequirements('tote', code);
@@ -4685,6 +4690,8 @@ export class DispatchService {
     const totes = this.totes
       .list({ status: 'available' })
       .filter((t) => !t.waitsForRoom)
+      // 2026-11-11 — never a bag standing at a hub that is down: nobody is there to hand it over.
+      .filter((t) => !this.atHubDown(t.locationId))
       .map((t) => this.wrapTote(t.code))
       .filter((c): c is Claimable => c != null);
     // 'available' loads, PLUS a scheduled load the shipper lets drivers reserve ahead of its date (early claim).
@@ -4704,6 +4711,12 @@ export class DispatchService {
 
   registerShopChoiceView(fn: (code: string, holder?: string) => Pick<Claimable, 'destShop' | 'shopChoice'> | undefined): void {
     this.shopChoiceView = fn;
+  }
+
+  /** 2026-11-11 — a hub that is down, where a bag stands. */
+  private atHubDown(locationId: string): boolean {
+    const hub = this.mdps.find(locationId);
+    return Boolean(hub && this.mdps.isDown(hub));
   }
 
   private wrapTote(code: string, holder?: string): Claimable | null {
@@ -4732,6 +4745,8 @@ export class DispatchService {
       pickupLabel: place.label,
       ...this.hubStop('pickupHub', t.locationId),
       destLabel: t.destinationLabel || 'destination',
+      // 2026-11-11 — sent to another hub because the one it went to is down: said on the card, with the extra leg paid.
+      ...(t.redirects?.length && (t.status === 'claimed' || t.status === 'in_transit') ? { redirected: { fromName: t.redirects[t.redirects.length - 1].fromName, toName: t.redirects[t.redirects.length - 1].toName, paidExtra: Boolean(t.redirects[t.redirects.length - 1].paidExtra) } } : {}),
       // The hub chosen for a zone's bag when it was offered (2026-11-02), else its address.
       ...this.hubStop('destHub', t.toHubId ?? t.destinationNodeId),
       // Absent when the destination cannot be placed — never a guess, because a coordinate is about to be

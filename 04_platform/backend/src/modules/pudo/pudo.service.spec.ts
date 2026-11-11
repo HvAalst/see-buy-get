@@ -2742,6 +2742,86 @@ describe('PUDO Light', () => {
       expect(p.plan!.hops.map((h) => h.id)).toEqual([shop.did, away.mdpId, far.did]);
     });
 
+    it('a hub down (ISO 28000 gap 12): nothing is sent to it, bags on their way go to another hub for their zone with why, the extra leg paid, and it opens again (2026-11-11)', () => {
+      seq += 1;
+      const N = `HD${seq}North`;
+      const S = `HD${seq}South`;
+      const shop = onboardAgent('HD Shop', N, 50);
+      const far = onboardAgent('HD Far', S, 50);
+      const ONLY = `HD${seq}Only`;
+      const first = mdps.register({ name: 'HD First Sort', zones: [N, S, ONLY], location: { lat: -1.22, lng: 36.82 } }, { approvedBy: 'staff' });
+      const second = mdps.register({ name: 'HD Second Sort', zones: [N, S], location: { lat: -1.23, lng: 36.83 } }, { approvedBy: 'staff' });
+      const asHub = (h: { did: string }) => ({ active: true, role: 'mdp', did: h.did, actorName: 'Floor lead' }) as never;
+      const staff = { active: true, role: 'operator', sub: 'operator:opr_hd', actorName: 'Amina', scopes: ['*'] } as never;
+      for (const id of ['HD-A', 'HD-B']) parcels.accept({ agentDid: shop.did, parcelId: `${id}-${seq}`, size: 'S', destZone: S, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      // A bag offered to drivers, and one on a vehicle, both going to the first hub.
+      const offered = totes.register(shop.did);
+      mdps.assignTote(offered.code, first.mdpId, first.name);
+      mdps.fillShopBag(offered.code, shop.did, `HD-A-${seq}`);
+      totes.requireByCode(offered.code).status = 'available';
+      const onBoard = totes.register(shop.did);
+      mdps.assignTote(onBoard.code, first.mdpId, first.name);
+      mdps.fillShopBag(onBoard.code, shop.did, `HD-B-${seq}`);
+      Object.assign(totes.requireByCode(onBoard.code), { status: 'in_transit', carriedBy: 'did:glos:hd-driver', locationId: 'bus:HD-BADGE' });
+      const standing = mdps.registerTote(first.mdpId);
+      mdps.assignTote(standing.code, first.mdpId, first.name);
+      totes.requireByCode(standing.code).status = 'available';
+      expect(mdps.mdpForZone(ONLY)?.mdpId).toBe(first.mdpId);
+      // Another hub's people cannot say it; its own can, and staff can when it cannot be reached.
+      expect(() => controller.hubDown(first.mdpId, { reason: 'power' } as never, asHub(second))).toThrow();
+      expect(() => controller.hubDown(first.mdpId, { reason: 'power', until: '2020-01-01T00:00:00Z' } as never, asHub(first))).toThrow(/still to come/);
+      const paid = jest.spyOn(gate, 'payBagLoad');
+      const said: any = controller.hubDown(first.mdpId, { reason: 'power', note: 'Transformer blown' } as never, asHub(first));
+      expect(said.down).toMatchObject({ reason: 'power', note: 'Transformer blown', by: 'Floor lead', byRole: 'hub' });
+      expect(said.redirected.sort()).toEqual([offered.code, onBoard.code].sort());
+      expect(totes.requireByCode(standing.code).destinationNodeId).toBe(first.mdpId);
+      expect(totes.requireByCode(standing.code).redirects).toBeUndefined();
+      expect(said.waiting).toEqual([]);
+      expect(totes.requireByCode(standing.code).waitsForRoom).toBeFalsy();
+      // Both go to the second hub now, each parcel's plan made again with why; the one on board pays its driver the extra leg.
+      for (const code of [offered.code, onBoard.code]) {
+        const t = totes.requireByCode(code);
+        expect(t.destinationNodeId).toBe(second.mdpId);
+        expect(t.redirects?.[0]).toMatchObject({ fromId: first.mdpId, toId: second.mdpId, reason: 'hub_down' });
+      }
+      expect(paid).toHaveBeenCalledWith('did:glos:hd-driver');
+      expect(paid).toHaveBeenCalledTimes(1);
+      expect(parcels.get(`HD-B-${seq}`).plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'hub_down', planned: first.mdpId, took: second.mdpId })]);
+      // Nothing new is sent to it: the zone's hub is the second, the first serves nothing while it is down.
+      expect(mdps.mdpForZone(S)?.mdpId).toBe(second.mdpId);
+      expect(mdps.mdpForZone(ONLY)).toBeUndefined();
+      // A plan whose next stop is the down hub is not sorted there; open again, it is.
+      const keeper = (parcels as any).routeKeeper as { sortTarget: (p: unknown, at: string) => { id: string } | undefined };
+      const planned = { destZone: S, plan: { at: 0, hops: [{ type: 'mdp', id: second.mdpId, label: second.name, zone: S }, { type: 'mdp', id: first.mdpId, label: first.name, zone: S }] } };
+      expect(keeper.sortTarget(planned, second.mdpId)).toBeUndefined();
+      expect(catchments.hubsFor('KE', 'none-such')).toEqual([]);
+      expect(mdps.hasRoom(mdps.require(first.mdpId))).toBe(false);
+      // A bag standing at the down hub is offered to no driver.
+      const atHub = mdps.registerTote(first.mdpId);
+      mdps.assignTote(atHub.code, 'Elsewhere', 'Elsewhere');
+      totes.requireByCode(atHub.code).status = 'available';
+      // A driver on a vehicle with room is still not given it.
+      const rider = drivers.register({ displayName: `HD Rider ${seq}`, fullName: `HD Rider ${seq}`, nationalId: `HD-${seq}`, mobile: `+25477200${seq}`, licenceClasses: ['bike'] });
+      fleet.couple(rider.did, vehicles.register({ plate: `HD-${seq}`, vehicleClass: 'bike', ownerName: 'HD' }).vehicleId);
+      expect(dispatch.claimBagFor(atHub.code, rider.did)).toBe('Its hub is down');
+      const offers = () => ((dispatch as any).availableLoads() as Array<{ kind: string; ref: string }>).filter((l) => l.kind === 'tote').map((l) => l.ref);
+      expect(offers()).not.toContain(atHub.code);
+      // Open again: it is chosen as before.
+      expect(() => controller.hubUp(first.mdpId, {} as never, asHub(second))).toThrow();
+      controller.hubUp(first.mdpId, {} as never, staff);
+      expect(mdps.require(first.mdpId).down).toBeUndefined();
+      expect(mdps.hasRoom(mdps.require(first.mdpId))).toBe(true);
+      expect(offers()).toContain(atHub.code);
+      expect(keeper.sortTarget(planned, second.mdpId)?.id).toBe(first.mdpId);
+      expect(mdps.mdpForZone(ONLY)?.mdpId).toBe(first.mdpId);
+      expect(() => controller.hubUp(first.mdpId, {} as never, staff)).toThrow(/not marked down/);
+      // Said down until a time: past it, it is open by itself.
+      mdps.markDown(first.mdpId, { reason: 'flood', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Amina', role: 'staff' });
+      expect(mdps.isDown(mdps.require(first.mdpId))).toBe(true);
+      expect(mdps.isDown(mdps.require(first.mdpId), Date.now() + 2 * 3_600_000)).toBe(false);
+      paid.mockRestore();
+    });
+
     it('goes straight to its shop from a first hub that serves the shop’s area too — planned, priced and sorted so', () => {
       // The south hub joined first, then a north hub serving both areas. The route ran north hub → south hub → shop, priced
       // with both hubs, while the north hub's own rule takes it straight to the shop; kept to that plan, it would have been

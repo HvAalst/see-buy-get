@@ -1,6 +1,7 @@
 // PUDO Light domain (Compendium Ch 12–19). The emerging-market Tier 1/2 on-ramp. Reuses the GLOS
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
+import type { HubDown, ToteRedirect } from './hub-down.types';
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import type { OffPlanReason, OffPlanStep } from './route-plan.types';
 import { FxRate } from '../../foundation/money/fx.service';
@@ -523,6 +524,8 @@ export class Mdp {
    * at its own address worked in the Shop app; absent while it has only ever sorted. Stopped: it sorts only again.
    */
   counter?: { agentDid: string; openedAt: string; stoppedAt?: string };
+  /** 2026-11-11 — DOWN, as the hub or staff said (ISO 28000 gap 12): nothing is sent to it until it is open again or `until` passes. */
+  down?: HubDown;
   /** When its owner last said them. */
   spaceSaidAt?: string;
 }
@@ -617,6 +620,8 @@ export class Tote {
   packedFor?: string;
   /** 2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait). */
   waitsForRoom?: ToteWait;
+  /** 2026-11-11 — sent to another hub by the network because the one it went to was down: each time, kept. */
+  redirects?: ToteRedirect[];
   /** 2026-11-06 — when, closed and taken by nobody for BAGS_WAITING_H, it was offered to drivers further away. Once. */
   offeredWideAt?: string;
   parcels: string[]; // parcelIds currently in the bag

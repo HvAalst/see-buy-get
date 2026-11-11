@@ -12,6 +12,8 @@ export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 
 export interface MdpView {
   mdpId: string;
+  /** 2026-11-11 — down, as the hub or staff said (ISO 28000 gap 12): nothing is sent to it until it opens again. */
+  down?: { since: string; until?: string; reason: string; note?: string; by: string; byRole: 'hub' | 'staff' };
   did: string;
   name: string;
   zones: string[];

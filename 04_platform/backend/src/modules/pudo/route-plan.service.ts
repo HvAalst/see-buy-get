@@ -291,7 +291,7 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
     if (next.type !== 'mdp') return undefined;
     // A hub on its way is used only while it may work: one no longer approved, or in a country not open, is not sent to.
     const hub = this.hub(next.id);
-    if (!hub || !this.mdps.isApproved(hub) || this.mdps.notOpenYet(hub)) return undefined;
+    if (!hub || !this.mdps.isApproved(hub) || this.mdps.notOpenYet(hub) || this.mdps.isDown(hub)) return undefined;
     return { type: 'mdp', id: hub.mdpId, label: hub.name, zone: parcel.destZone };
   }
 

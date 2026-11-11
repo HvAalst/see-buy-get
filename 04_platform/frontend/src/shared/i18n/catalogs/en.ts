@@ -394,6 +394,13 @@ export const en = {
   'common.weight.inG': 'Weight in grams',
   'common.weight.atLeast': 'At least 10 g — weigh a lighter letter as 10 g.',
   'common.cancel': 'Cancel',
+  // 2026-11-11 — why a hub is down (ISO 28000 gap 12), as the Hub app and the console say it.
+  'common.hubDown.reason.power': 'No power',
+  'common.hubDown.reason.flood': 'Flooding, or the road to it cut',
+  'common.hubDown.reason.security': 'Unsafe to open',
+  'common.hubDown.reason.no_staff': 'Nobody to work it',
+  'common.hubDown.reason.authority': 'Closed by an authority',
+  'common.hubDown.reason.other': 'Something else',
   // 2026-11-10 — what a border manifest at Moyale (Kenya–Ethiopia) still lacks, by its key (shared/manifestGaps.ts).
   'common.manifest.gap.invoice': 'The commercial invoice, written and signed in SeeBuyGet — a paper one of your own is not enough at Moyale',
   'common.manifest.gap.consignor_tax': 'The sender’s tax number on the invoice: a KRA PIN in Kenya, a TIN in Ethiopia',

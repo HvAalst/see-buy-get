@@ -5,9 +5,10 @@ import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
+import { HUB_DOWN_REASONS, HUB_DOWN_WORDS, isDownNow, type HubDownReason } from '../../../shared/hubDown';
 import { PlanVsActualFold } from './PlanVsActualFold';
 import { OurGs1Line } from './OurGs1Line';
-import { useT, type MessageKey } from '../../../shared/i18n';
+import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
   agentState,
@@ -23,6 +24,7 @@ import {
   ratingLabel,
   slotsLabel,
   statusMixRows,
+  type HubRow,
 } from '../network';
 import { amount, floatsLine } from '../queues';
 import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
@@ -40,6 +42,68 @@ import type { TowerActions, TowerState } from '../useTowerApp';
  * always carries its denominator, an alert type carries how long its worst example has been standing,
  * and every "nothing here" says whether it means nothing or means not-yet-read.
  */
+/**
+ * 2026-11-11 — A HUB DOWN, SAID BY STAFF when the hub cannot be reached (ISO 28000 gap 12): why, and a few words; nothing is
+ * sent to it, bags on their way go to other hubs for their zones, the extra leg the network's. The hub is told. Open again.
+ */
+function HubDownStaff({ hub, actions }: { hub: HubRow; actions: TowerActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<HubDownReason | ''>('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const client = actions.client();
+  if (!client) return null;
+  const run = async (call: () => Promise<{ error?: { detail?: string; title?: string } | null }>) => {
+    setBusy(true);
+    const r = await call();
+    setBusy(false);
+    if (r.error) return setError(r.error.detail || r.error.title || null);
+    setError(null);
+    setOpen(false);
+    setReason('');
+    setNote('');
+    await actions.refresh();
+  };
+  if (isDownNow(hub.down)) {
+    return (
+      <div class="twr-hub__acts" style="margin-top:6px">
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client.api.hubUp(hub.mdpId) as never)}>
+          {t('tower.network.openAgain')}
+        </button>
+        {error ? <p class="cerr">{error}</p> : null}
+      </div>
+    );
+  }
+  return (
+    <div class="twr-hub__acts" style="margin-top:6px">
+      {!open ? (
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setOpen(true)}>
+          {t('tower.network.markDown')}
+        </button>
+      ) : (
+        <div class="crow">
+          <span class="crow__body">
+            <span class="chint">{t('tower.network.downHint')}</span>
+            <ConsolePick label={t('tower.network.downReason')} value={reason} onChange={(v) => setReason((v || '') as HubDownReason | '')} options={HUB_DOWN_REASONS.map((r) => ({ value: r, label: t(HUB_DOWN_WORDS[r]) }))} />
+            <input class="cinput" maxLength={200} placeholder={t('tower.network.downNote')} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+          </span>
+          <span class="crow__tail">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!reason || busy} onClick={() => void run(() => client.api.hubDown(hub.mdpId, { reason: reason as HubDownReason, ...(note.trim() ? { note: note.trim() } : {}) }) as never)}>
+              {t('tower.network.downSave')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </button>
+          </span>
+        </div>
+      )}
+      {error ? <p class="cerr">{error}</p> : null}
+    </div>
+  );
+}
+
 export function NetworkScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const d = state.dashboard;
@@ -278,8 +342,11 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     {hubSpaceLine(hub.space, t) ? ` · ${hubSpaceLine(hub.space, t)}` : ''}
                     {hub.gln ? <> · <Abbreviated text={t('tower.network.gln', { gln: hub.gln })} /></> : null}
                     {hub.counter && !hub.counter.stoppedAt ? ` · ${t('tower.network.handsOut')}` : ''}
+                    {/* 2026-11-11 — a hub down (ISO 28000 gap 12): said in red, with why. */}
+                    {isDownNow(hub.down) ? <> · <span class="ctag ctag--warn">{t('tower.network.down', { since: formatDate(hub.down!.since, { dateStyle: 'medium', timeStyle: 'short' }), reason: t(HUB_DOWN_WORDS[hub.down!.reason as HubDownReason] ?? 'common.hubDown.reason.other') })}</span></> : null}
                   </span>
                 </div>
+                <HubDownStaff hub={hub} actions={actions} />
                 {filling.length === 0 ? (
                   <p class="chint">{t('tower.network.noOpenBags')}</p>
                 ) : (

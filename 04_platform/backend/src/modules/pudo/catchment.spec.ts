@@ -121,6 +121,23 @@ describe('a net of hubs: which hubs serve each zone', () => {
     expect(catchments.hubsFor('KE', undefined)).toEqual([]);
   });
 
+  it('a hub that is down serves no zone while it is — shown on Zones still; past the time said, it serves again (2026-11-11)', () => {
+    published();
+    const nearNorthTwo = { lat: -1.19, lng: 36.79 };
+    const north2 = hubs[1] as (typeof hubs)[number] & { down?: { until?: string } };
+    try {
+      north2.down = {};
+      expect(catchments.hubsFor('KE', codeOf('North-west'))).toEqual(['mdp_north']);
+      expect(catchments.hubForPoint('KE', nearNorthTwo)).toBe('mdp_north');
+      expect(hubsOf('North-west')).toEqual([['mdp_north', 'stands'], ['mdp_north2', 'stands']]);
+      north2.down = { until: new Date(Date.now() - 60_000).toISOString() };
+      expect(catchments.hubsFor('KE', codeOf('North-west'))).toEqual(['mdp_north', 'mdp_north2']);
+      expect(catchments.hubForPoint('KE', nearNorthTwo)).toBe('mdp_north2');
+    } finally {
+      delete north2.down;
+    }
+  });
+
   it('proposes the nearest hub by road for every zone no hub serves — said to be a proposal, and logged', () => {
     published();
     const v = catchments.propose('sbg-ke', 'Njeri W.');
