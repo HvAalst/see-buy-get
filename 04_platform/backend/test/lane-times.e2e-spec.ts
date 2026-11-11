@@ -74,10 +74,11 @@ describe('the promise learns the road, over the wire', () => {
     expect(before.crossing!.drive).toEqual({ kmh: VEHICLE_SPEED_KMH.truck, basis: 'standard' });
     expect(Date.parse(before.crossing!.expectedAt!)).toBeCloseTo(pickedUpAt + (roadKm / VEHICLE_SPEED_KMH.truck + BORDER_DWELL_H) * H, -4);
 
-    // A fifth that counts: the middle of the five, on Kenya to Uganda.
+    // A fifth that counts: the middle of the five, on Nairobi to Kampala — a town lane since Kampala is a place the network
+    // knows by name (2026-11-11); before, it fell back to the country pair, Kenya to Uganda.
     await finished(32, 6);
     const after = await row();
-    expect(after.crossing!.drive).toEqual({ kmh: 32, basis: 'measured', trips: 5, lane: 'KE → UG', level: 'countries' });
+    expect(after.crossing!.drive).toEqual({ kmh: 32, basis: 'measured', trips: 5, lane: 'Nairobi → Kampala', level: 'towns' });
     expect(Date.parse(after.crossing!.expectedAt!)).toBeCloseTo(pickedUpAt + (roadKm / 32 + BORDER_DWELL_H) * H, -4);
     // The tracking page says the same.
     expect((await http().get(`/v1/sbg/track/${onRoad.trackingKey}`).expect(200)).body.crossing).toMatchObject({ expectedAt: after.crossing!.expectedAt, drive: { basis: 'measured', trips: 5 } });
