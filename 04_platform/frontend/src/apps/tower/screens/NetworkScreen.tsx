@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
-import { HUB_DOWN_REASONS, HUB_DOWN_WORDS, isDownNow, type HubDownReason } from '../../../shared/hubDown';
+import { HUB_DOWN_REASONS, HUB_DOWN_WORDS, isDownNow, unconfirmedPast, type HubDownReason } from '../../../shared/hubDown';
 import { PlanVsActualFold } from './PlanVsActualFold';
 import { OurGs1Line } from './OurGs1Line';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
@@ -51,6 +51,7 @@ function HubDownStaff({ hub, actions }: { hub: HubRow; actions: TowerActions }) 
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<HubDownReason | ''>('');
   const [note, setNote] = useState('');
+  const [until, setUntil] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const client = actions.client();
@@ -64,13 +65,20 @@ function HubDownStaff({ hub, actions }: { hub: HubRow; actions: TowerActions }) 
     setOpen(false);
     setReason('');
     setNote('');
+    setUntil('');
     await actions.refresh();
   };
   if (isDownNow(hub.down)) {
+    const down = hub.down!;
     return (
       <div class="twr-hub__acts" style="margin-top:6px">
+        {down.until ? <p class="chint">{t(unconfirmedPast(down) ? 'tower.network.downUnconfirmed' : 'tower.network.downUntil', { until: formatDate(down.until, { dateStyle: 'medium', timeStyle: 'short' }) })}</p> : null}
+        {down.collectable ? <p class="chint">{t('tower.network.downCollecting')}</p> : null}
         <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client.api.hubUp(hub.mdpId) as never)}>
           {t('tower.network.openAgain')}
+        </button>{' '}
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client.api.hubCollect(hub.mdpId, !down.collectable) as never)}>
+          {down.collectable ? t('tower.network.stopCollect') : t('tower.network.letCollect')}
         </button>
         {error ? <p class="cerr">{error}</p> : null}
       </div>
@@ -87,10 +95,14 @@ function HubDownStaff({ hub, actions }: { hub: HubRow; actions: TowerActions }) 
           <span class="crow__body">
             <span class="chint">{t('tower.network.downHint')}</span>
             <ConsolePick label={t('tower.network.downReason')} value={reason} onChange={(v) => setReason((v || '') as HubDownReason | '')} options={HUB_DOWN_REASONS.map((r) => ({ value: r, label: t(HUB_DOWN_WORDS[r]) }))} />
+            <label class="cfield">
+              <span class="cfield__label">{t('tower.network.downUntilLabel')}</span>
+              <input class="cinput" type="datetime-local" required value={until} onInput={(e) => setUntil(e.currentTarget.value)} />
+            </label>
             <input class="cinput" maxLength={200} placeholder={t('tower.network.downNote')} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
           </span>
           <span class="crow__tail">
-            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!reason || busy} onClick={() => void run(() => client.api.hubDown(hub.mdpId, { reason: reason as HubDownReason, ...(note.trim() ? { note: note.trim() } : {}) }) as never)}>
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!reason || !until || busy} onClick={() => void run(() => client.api.hubDown(hub.mdpId, { reason: reason as HubDownReason, until: new Date(until).toISOString(), ...(note.trim() ? { note: note.trim() } : {}) }) as never)}>
               {t('tower.network.downSave')}
             </button>
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setOpen(false)}>

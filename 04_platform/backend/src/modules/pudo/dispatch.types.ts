@@ -1769,7 +1769,7 @@ export class Claimable {
   /** 2026-11-10 — between Kenya and Ethiopia: what its border manifest still lacks before pickup (in words), and from pickup on that it is the driver's to show. */
   borderManifest?: { missing: Array<{ key: string; who: 'shipper' | 'carrier'; words: string }>; toShow: boolean };
   /** 2026-11-11 — a bag sent to another hub because the one it went to is down; the extra leg paid where it was on board. */
-  redirected?: { fromName: string; toName: string; paidExtra: boolean };
+  redirected?: { fromName: string; toName: string; paidExtra: boolean; extraKm?: number };
   /** Round 38 — a seal the pickup country's company requires on this load, and none written: why, in words. Not to be taken over yet. */
   sealMissing?: string;
   /** Round 40 — this load's container or closed body is inspected at seven points, each photographed, before it is taken over. */

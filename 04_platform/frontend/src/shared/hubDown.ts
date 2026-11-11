@@ -15,7 +15,28 @@ export const HUB_DOWN_WORDS: Readonly<Record<HubDownReason, MessageKey>> = {
   other: 'common.hubDown.reason.other',
 };
 
-/** Down now: said so, and not past the time it was said to open again. */
-export function isDownNow(down: { until?: string } | null | undefined, now = Date.now()): boolean {
-  return Boolean(down && !(down.until && Date.parse(down.until) <= now));
+/** The hub's word on its reopening counts in the last day before the time it gave (the server's HUB_DOWN_CONFIRM_WINDOW_H). */
+export const HUB_DOWN_CONFIRM_WINDOW_H = 24;
+
+type Down = { until?: string; confirmedAt?: string } | null | undefined;
+
+/** Whether the hub said, in the last day before it, that it opens at the time it gave. */
+export function confirmedInTime(down: Down): boolean {
+  if (!down?.until || !down.confirmedAt) return false;
+  return Date.parse(down.confirmedAt) >= Date.parse(down.until) - HUB_DOWN_CONFIRM_WINDOW_H * 3_600_000;
+}
+
+/** Whether it may confirm now: from a day before the time it gave. */
+export function confirmOpen(down: Down, now = Date.now()): boolean {
+  return Boolean(down?.until && now >= Date.parse(down.until) - HUB_DOWN_CONFIRM_WINDOW_H * 3_600_000);
+}
+
+/** Past the time it gave and never confirmed: it stays closed (the owner, 2026-11-11), and staff are told. */
+export function unconfirmedPast(down: Down, now = Date.now()): boolean {
+  return Boolean(down?.until && Date.parse(down.until) <= now && !confirmedInTime(down));
+}
+
+/** Down now: said so, and not past a time it confirmed it opens at. */
+export function isDownNow(down: Down, now = Date.now()): boolean {
+  return Boolean(down && !(down.until && Date.parse(down.until) <= now && confirmedInTime(down)));
 }

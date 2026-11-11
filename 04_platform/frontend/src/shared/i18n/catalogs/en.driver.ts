@@ -966,6 +966,7 @@ export const enDriver = {
   'driver.invoice.title': 'Commercial invoice — for the border',
   'driver.loads.redirected': '{from} is down: take this bag to {to} instead.',
   'driver.loads.redirectedPaid': 'The extra leg is paid, as the network’s cost.',
+  'driver.loads.redirectedKm': 'The extra {km} km are paid, as the network’s cost.',
   'driver.manifest.missingShort': 'Border manifest not complete',
   'driver.manifest.missingTitle': 'The border manifest is not complete',
   'driver.manifest.open': 'Border manifest',

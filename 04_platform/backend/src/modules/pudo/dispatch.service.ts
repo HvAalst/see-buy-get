@@ -4713,10 +4713,10 @@ export class DispatchService {
     this.shopChoiceView = fn;
   }
 
-  /** 2026-11-11 — a hub that is down, where a bag stands. */
+  /** 2026-11-11 — a hub that is down, where a bag stands — unless it opened its door for drivers to collect its bags. */
   private atHubDown(locationId: string): boolean {
     const hub = this.mdps.find(locationId);
-    return Boolean(hub && this.mdps.isDown(hub));
+    return Boolean(hub && this.mdps.isDown(hub) && !hub.down?.collectable);
   }
 
   private wrapTote(code: string, holder?: string): Claimable | null {
@@ -4746,7 +4746,7 @@ export class DispatchService {
       ...this.hubStop('pickupHub', t.locationId),
       destLabel: t.destinationLabel || 'destination',
       // 2026-11-11 — sent to another hub because the one it went to is down: said on the card, with the extra leg paid.
-      ...(t.redirects?.length && (t.status === 'claimed' || t.status === 'in_transit') ? { redirected: { fromName: t.redirects[t.redirects.length - 1].fromName, toName: t.redirects[t.redirects.length - 1].toName, paidExtra: Boolean(t.redirects[t.redirects.length - 1].paidExtra) } } : {}),
+      ...(t.redirects?.length && (t.status === 'claimed' || t.status === 'in_transit') ? { redirected: { fromName: t.redirects[t.redirects.length - 1].fromName, toName: t.redirects[t.redirects.length - 1].toName, paidExtra: Boolean(t.redirects[t.redirects.length - 1].paidExtra), ...(t.redirects[t.redirects.length - 1].extraKm ? { extraKm: t.redirects[t.redirects.length - 1].extraKm } : {}) } } : {}),
       // The hub chosen for a zone's bag when it was offered (2026-11-02), else its address.
       ...this.hubStop('destHub', t.toHubId ?? t.destinationNodeId),
       // Absent when the destination cannot be placed — never a guess, because a coordinate is about to be
@@ -5267,7 +5267,8 @@ export class DispatchService {
    */
   private lockToteHaul(code: string, vehicle: Vehicle): void {
     const haul = this.haulFor(code, this.pricingProfile(vehicle).ratePerKm);
-    if (haul) this.totes.lockHaul(code, { ...haul, lockedAt: new Date().toISOString() });
+    // 2026-11-11 — with where it was claimed from: an extra leg (a hub down) is measured from the trip's start.
+    if (haul) this.totes.lockHaul(code, { ...haul, lockedAt: new Date().toISOString(), fromId: this.totes.byCodeMaybe(code)?.locationId });
   }
 
   /**

@@ -1813,6 +1813,11 @@ export class CustodyCapsDto {
 }
 
 /** Round 38 — where a country's company requires a seal. Both said every time: the whole rule, not a patch. */
+/** 2026-11-09 (D6) — how runs and extra legs are paid in a country: by bag or by km. */
+export class RunPayDto {
+  @IsIn(['bag', 'km']) mode!: 'bag' | 'km';
+}
+
 export class SealRulesDto {
   @IsBoolean() crossBorder!: boolean;
   @IsBoolean() containers!: boolean;

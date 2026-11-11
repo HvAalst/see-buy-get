@@ -577,6 +577,11 @@ export class WalletGateService {
    * `DriverService.payeeOf` for why those are deliberately two different keys.
    */
   /** Scanning a bag aboard is paid at the figure of the company that settles this driver — the one their offer showed. */
+  /** 2026-11-11 — the company that pays this driver (their fleet's, or their own as a courier): whose run pay applies. */
+  payeeEntityOf(driverDid: string): string | undefined {
+    return this.drivers.payeeOrNone(driverDid).entityId;
+  }
+
   payBagLoad(driverDid: string): PudoLedgerEntry | null {
     return this.driverPayout(driverDid, this.drivers.payTermsOf(driverDid).bagLoadPay);
   }

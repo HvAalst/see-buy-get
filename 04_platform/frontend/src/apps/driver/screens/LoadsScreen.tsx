@@ -122,7 +122,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
                   {c.borderManifest?.missing.length ? <span class="load__warn">{t('driver.manifest.missingShort')}</span> : null}
                   {/* 2026-11-11 — its hub is down: where it goes now, and that the extra leg is paid. */}
-                  {c.redirected ? <span class="load__warn">{t('driver.loads.redirected', { from: c.redirected.fromName, to: c.redirected.toName })}{c.redirected.paidExtra ? ` ${t('driver.loads.redirectedPaid')}` : ''}</span> : null}
+                  {c.redirected ? <span class="load__warn">{t('driver.loads.redirected', { from: c.redirected.fromName, to: c.redirected.toName })}{c.redirected.paidExtra ? ` ${c.redirected.extraKm ? t('driver.loads.redirectedKm', { km: c.redirected.extraKm }) : t('driver.loads.redirectedPaid')}` : ''}</span> : null}
                   {c.sealMissing ? <span class="load__warn">{t('driver.loads.sealMissingShort')}</span> : null}
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}

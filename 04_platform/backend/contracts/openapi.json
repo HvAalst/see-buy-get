@@ -14825,6 +14825,56 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/run-pay": {
+      "get": {
+        "operationId": "Sbg.entityRunPay",
+        "summary": "",
+        "description": "2026-11-09 (D6) — how a country's company pays runs and extra legs: by bag or by km. Staff and its own administrators.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.setEntityRunPay",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunPayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -20099,6 +20149,70 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/HubDownUpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/down/reopening": {
+      "post": {
+        "operationId": "Sbg.hubReopening",
+        "summary": "",
+        "description": "2026-11-11 — the hub's word on its reopening (the owner: a daily bell to confirm it): a new time, or that it opens at the\ntime it gave (in the last day before it), or — that time past — that it is open now. The hub, or staff on its word.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubReopeningDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/down/collect": {
+      "post": {
+        "operationId": "Sbg.hubCollect",
+        "summary": "",
+        "description": "2026-11-11 — drivers may come for the bags standing in a hub that is down, or no longer. The hub, or staff.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubCollectDto"
               }
             }
           }
@@ -53649,6 +53763,10 @@
             "type": "object",
             "description": "Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record."
           },
+          "runPay": {
+            "type": "object",
+            "description": "2026-11-09 (D6) — how runs and extra legs are paid here; absent = by bag. Read it through EntityService.runPayFor()."
+          },
           "custodyCaps": {
             "type": "object",
             "properties": {
@@ -58165,6 +58283,7 @@
               "carrierPapers",
               "sealRules",
               "custodyCaps",
+              "runPay",
               "zones",
               "prices",
               "catchments",
@@ -58303,6 +58422,14 @@
               }
             ]
           },
+          "runPay": {
+            "type": "string",
+            "description": "2026-11-09 (D6) — how a run, and an extra leg, is paid here: by bag (each bag's own pay) or by km (km × the driver's rate).",
+            "enum": [
+              "bag",
+              "km"
+            ]
+          },
           "lanes": {
             "description": "The sister's default first, then one row per lane.",
             "type": "array",
@@ -58355,6 +58482,7 @@
           "kind",
           "amounts",
           "custodyCaps",
+          "runPay",
           "lanes",
           "recentChanges",
           "entityId",
@@ -60451,6 +60579,21 @@
         },
         "required": [
           "capped"
+        ]
+      },
+      "RunPayDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "bag",
+              "km"
+            ]
+          }
+        },
+        "required": [
+          "mode"
         ]
       },
       "AvailabilityDto": {
@@ -62974,6 +63117,18 @@
           "paidExtra": {
             "type": "boolean",
             "description": "On a vehicle already: the driver was paid the extra leg, as the network's cost."
+          },
+          "paidAs": {
+            "type": "string",
+            "description": "How it was paid, by the driver's country's run pay (the owner, 2026-11-11): a bag's fee, or the extra km at their rate.",
+            "enum": [
+              "bag",
+              "km"
+            ]
+          },
+          "extraKm": {
+            "type": "number",
+            "description": "By km: how many km the bag's road grew by."
           }
         },
         "required": [
@@ -63039,6 +63194,10 @@
           },
           "lockedAt": {
             "type": "string"
+          },
+          "fromId": {
+            "type": "string",
+            "description": "2026-11-11 — where the bag was claimed from (a shop, a hub, a dock): the trip's start, to measure an extra leg from."
           },
           "parts": {
             "description": "The road already paid to somebody who carried the bag part of the way and then could not — a vehicle broken down\non the road, the bag taken over by another driver (the user, 2026-10-25: \"Split by the road\"). The road is paid\nonce: each of these was paid at the takeover, and whoever arrives with the bag is paid what is left.",
@@ -63483,6 +63642,29 @@
           "state"
         ]
       },
+      "HubDownCollect": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "byRole": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "staff"
+            ]
+          }
+        },
+        "required": [
+          "since",
+          "by",
+          "byRole"
+        ]
+      },
       "HubDown": {
         "type": "object",
         "properties": {
@@ -63491,7 +63673,22 @@
           },
           "until": {
             "type": "string",
-            "description": "When it opens again, where whoever said it knows: past it, it is open by itself."
+            "description": "When it opens again — always said (the owner, 2026-11-11). It opens then only if the hub confirmed it in the day before."
+          },
+          "confirmedAt": {
+            "type": "string",
+            "description": "When the hub last said it opens at `until` — counted only in the day before it (confirmedInTime)."
+          },
+          "askedAt": {
+            "type": "string",
+            "description": "When the daily bell last asked."
+          },
+          "unconfirmedToldAt": {
+            "type": "string",
+            "description": "When it was told it stays closed for not confirming, for this `until`."
+          },
+          "collectable": {
+            "$ref": "#/components/schemas/HubDownCollect"
           },
           "reason": {
             "type": "string",
@@ -64911,7 +65108,8 @@
             "maxLength": 200
           },
           "until": {
-            "type": "string"
+            "type": "string",
+            "description": "When it opens again: mandatory (the owner, 2026-11-11) — a best guess where it is not known, asked again every day."
           },
           "by": {
             "type": "string",
@@ -64920,7 +65118,8 @@
           }
         },
         "required": [
-          "reason"
+          "reason",
+          "until"
         ]
       },
       "HubDownUpDto": {
@@ -64931,6 +65130,33 @@
             "maxLength": 120
           }
         }
+      },
+      "HubReopeningDto": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        }
+      },
+      "HubCollectDto": {
+        "type": "object",
+        "properties": {
+          "collectable": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "collectable"
+        ]
       },
       "DropBagDto": {
         "type": "object",

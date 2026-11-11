@@ -437,6 +437,8 @@ export interface TowerActions {
   saveCustodyCaps(caps: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }): Promise<void>;
   /** Round 38 — where this company requires a seal. */
   saveSealRules(rules: { crossBorder: boolean; containers: boolean }): Promise<void>;
+  /** 2026-11-09 (D6) — how runs and extra legs are paid in this country. */
+  saveRunPay(mode: 'bag' | 'km'): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
   recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceCovers?: 'goods_in_transit' | 'carrier_liability' | 'both' | null; insuranceLimit?: number | null; insuranceCurrency?: string | null }): Promise<boolean>;
   /** Turn down a document a fleet sent, with the reason the fleet is shown. */
@@ -2266,6 +2268,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       saveCustodyCaps: (caps) =>
         saveKnob('custodyCaps', (client, entityId) => client.api.setCustodyCaps(entityId, caps), caps.shop || caps.rider ? t('tower.custodyCaps.saved') : t('tower.custodyCaps.savedNone')),
       // Round 38 — not a lane: its own busy id and its own words, as the carrier papers.
+      saveRunPay: (mode) => saveKnob('runPay', (client, entityId) => client.api.setRunPay(entityId, mode), mode === 'km' ? t('tower.runPay.savedKm') : t('tower.runPay.savedBag')),
       saveSealRules: (rules) =>
         saveKnob(
           'sealRules',

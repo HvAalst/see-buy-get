@@ -632,6 +632,27 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
+  /**
+   * 2026-11-09 (D6; the owner: "both options, decided by individual countries") — HOW A RUN IS PAID HERE: by bag, each bag's
+   * own pay; or by km, the km × the driver's rate. Read first by an extra leg (a hub down, 2026-11-11). By bag where no
+   * company stands, or one that has never said.
+   */
+  runPayFor(entityId?: string): 'bag' | 'km' {
+    const entity = entityId ? this.entities.get(entityId) : undefined;
+    return entity?.runPay === 'km' ? 'km' : 'bag';
+  }
+
+  setRunPay(entityId: string, mode: 'bag' | 'km', by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = this.runPayFor(entityId);
+    if (before === mode) return entity;
+    if (mode === 'km') entity.runPay = 'km';
+    else delete entity.runPay;
+    this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'runPay', from: before === 'km' ? 'by km' : 'by bag', to: mode === 'km' ? 'by km' : 'by bag' });
+    return entity;
+  }
+
   /** Which of a carrier's own papers this sister will not trade without. Empty for one that has never said. */
   carrierPapersFor(entityId: string): ResolvedCarrierPapers {
     return EntityService.resolveCarrierPapers(this.get(entityId));
@@ -1038,6 +1059,7 @@ export class EntityService implements OnApplicationBootstrap {
       amounts: EntityService.amountRows(entity),
       carrierPapers: EntityService.resolveCarrierPapers(entity),
       sealRules: EntityService.resolveSealRules(entity),
+      runPay: entity.runPay === 'km' ? 'km' : 'bag',
       custodyCaps: EntityService.resolveCustodyCaps(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.

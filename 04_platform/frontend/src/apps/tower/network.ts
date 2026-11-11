@@ -184,7 +184,7 @@ export interface HubRow {
   /** 2026-11-09 — "Sort and hand out": its counter; stopped when it sorts only again. */
   counter?: { agentDid: string; openedAt: string; stoppedAt?: string };
   /** 2026-11-11 — down, as the hub or staff said (ISO 28000 gap 12). */
-  down?: { since: string; until?: string; reason: string; note?: string; by: string; byRole: 'hub' | 'staff' };
+  down?: { since: string; until?: string; reason: string; note?: string; by: string; byRole: 'hub' | 'staff'; confirmedAt?: string; collectable?: { since: string; by: string; byRole: 'hub' | 'staff' } };
   /** 2026-11-02 — what its floor holds against the space its owner said (backend HubSpaceView); staff read it. */
   space?: HubSpaceRow;
 }

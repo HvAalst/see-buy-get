@@ -147,6 +147,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
           <TopUpFee pricing={pricing} state={state} actions={actions} />
           <CarrierPapers pricing={pricing} state={state} actions={actions} />
           <SealRules pricing={pricing} state={state} actions={actions} />
+          <RunPay pricing={pricing} state={state} actions={actions} />
           <CustodyCaps pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />
@@ -422,6 +423,43 @@ function CustodyCaps({ pricing, state, actions }: { pricing: EntityPricing; stat
  * cross a border, on container legs. A required seal not written and the load is not taken over; the shipper and the
  * driver are told whose rule it is. Two toggles and a save, the carrier papers' shape beside it.
  */
+/**
+ * 2026-11-09 (D6; the owner: "both options, decided by individual countries") — HOW A RUN IS PAID HERE: by bag, each bag's own
+ * pay; or by km, the km × the driver's rate. Read first by the extra leg of a bag whose hub is down (2026-11-11).
+ */
+function RunPay({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const stored = pricing.runPay ?? 'bag';
+  const [draft, setDraft] = useState(stored);
+  useEffect(() => setDraft(pricing.runPay ?? 'bag'), [pricing]);
+  const busy = state.busyId === 'runPay';
+  const MODES = ['bag', 'km'] as const;
+  return (
+    <ConsoleFold title={t('tower.runPay.title')} hint={t(stored === 'km' ? 'tower.runPay.currentKm' : 'tower.runPay.currentBag')}>
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.runPay.hint')}</p>
+        <div class="twr-knobs__row">
+          <section class="twr-knob">
+            <p class="twr-clear__t">{t('tower.runPay.question')}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              {MODES.map((m) => (
+                <button key={m} type="button" class={`cbtn cbtn--sm ${draft === m ? 'cbtn--primary' : 'cbtn--ghost'}`} aria-pressed={draft === m} disabled={!pricing.editable || busy} onClick={() => setDraft(m)}>
+                  {draft === m ? <Icon name="check" size={14} /> : null}
+                  {t(m === 'km' ? 'tower.runPay.km' : 'tower.runPay.bag')}
+                </button>
+              ))}
+            </div>
+            <p class="chint">{t(draft === 'km' ? 'tower.runPay.effectKm' : 'tower.runPay.effectBag')}</p>
+            <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy || draft === stored} onClick={() => void actions.saveRunPay(draft)}>
+              {t('tower.rates.save')}
+            </button>
+          </section>
+        </div>
+      </div>
+    </ConsoleFold>
+  );
+}
+
 function SealRules({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
   const t = useT();
   const stored = pricing.sealRules ?? { crossBorder: false, containers: false };

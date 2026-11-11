@@ -31,9 +31,13 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Evidence that lasts: the fingerprints kept and whether their chain is whole; which server writes the store. */
     evidence: () => sbg.request((c) => c.GET('/v1/sbg/evidence' as never, {} as never) as never),
     /** 2026-11-11 — a hub down, said by staff when it cannot be reached; and open again. */
-    hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until?: string }) =>
+    hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down', { params: { path: { id: mdpId } }, body })),
     hubUp: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/up', { params: { path: { id: mdpId } }, body: {} })),
+    /** 2026-11-11 — the hub's word on its reopening: a new time, or that it opens at the time it gave (or now, that time past). */
+    hubReopening: (mdpId: string, body: { until?: string }) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down/reopening', { params: { path: { id: mdpId } }, body })),
+    /** …and whether drivers may come for the bags standing in it while it is down. */
+    hubCollect: (mdpId: string, collectable: boolean) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down/collect', { params: { path: { id: mdpId } }, body: { collectable } })),
     /** The pilot, week by week: the week so far, every frozen week, and the compendium's targets. */
     pilot: () => sbg.request((c) => c.GET('/v1/sbg/pilot' as never, {} as never) as never),
     /** A company's tax invoices (KRA eTIMS, Kenya only): the newest first, in one state or all, and where they go. */
@@ -153,6 +157,8 @@ export function createOperatorApi(sbg: SbgClient) {
     setCustodyCaps: (entityId: string, body: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/custody-caps', { params: { path: { entityId } }, body })),
     /** Round 38 — where this company requires a seal on loads taken over in its country. */
+    /** 2026-11-09 (D6) — how runs and extra legs are paid in a country: by bag or by km. */
+    setRunPay: (entityId: string, mode: 'bag' | 'km') => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/run-pay', { params: { path: { entityId } }, body: { mode } })),
     setSealRules: (entityId: string, body: { crossBorder: boolean; containers: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/seal-rules', { params: { path: { entityId } }, body })),
     /* 2026-11-08 — a country's zones (zone pricing, step 1). */

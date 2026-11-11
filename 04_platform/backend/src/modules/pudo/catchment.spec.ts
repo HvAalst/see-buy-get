@@ -121,16 +121,20 @@ describe('a net of hubs: which hubs serve each zone', () => {
     expect(catchments.hubsFor('KE', undefined)).toEqual([]);
   });
 
-  it('a hub that is down serves no zone while it is — shown on Zones still; past the time said, it serves again (2026-11-11)', () => {
+  it('a hub that is down serves no zone while it is — shown on Zones still; past the time it confirmed, it serves again (2026-11-11)', () => {
     published();
     const nearNorthTwo = { lat: -1.19, lng: 36.79 };
-    const north2 = hubs[1] as (typeof hubs)[number] & { down?: { until?: string } };
+    const north2 = hubs[1] as (typeof hubs)[number] & { down?: { until?: string; confirmedAt?: string } };
     try {
       north2.down = {};
       expect(catchments.hubsFor('KE', codeOf('North-west'))).toEqual(['mdp_north']);
       expect(catchments.hubForPoint('KE', nearNorthTwo)).toBe('mdp_north');
       expect(hubsOf('North-west')).toEqual([['mdp_north', 'stands'], ['mdp_north2', 'stands']]);
+      // Past its time, never confirmed: it still serves nothing.
       north2.down = { until: new Date(Date.now() - 60_000).toISOString() };
+      expect(catchments.hubsFor('KE', codeOf('North-west'))).toEqual(['mdp_north']);
+      // Confirmed in the day before: it serves again.
+      north2.down = { until: new Date(Date.now() - 60_000).toISOString(), confirmedAt: new Date(Date.now() - 3_600_000).toISOString() };
       expect(catchments.hubsFor('KE', codeOf('North-west'))).toEqual(['mdp_north', 'mdp_north2']);
       expect(catchments.hubForPoint('KE', nearNorthTwo)).toBe('mdp_north2');
     } finally {

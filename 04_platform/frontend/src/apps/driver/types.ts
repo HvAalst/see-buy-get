@@ -269,7 +269,7 @@ export interface Claimable {
   /** Round 38 — the commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
   /** 2026-11-11 — a bag sent to another hub because the one it went to is down; the extra leg paid where it was on board. */
-  redirected?: { fromName: string; toName: string; paidExtra: boolean };
+  redirected?: { fromName: string; toName: string; paidExtra: boolean; extraKm?: number };
   /** 2026-11-10 — between Kenya and Ethiopia: what the border manifest lacks before pickup, and from pickup on that it is to show. */
   borderManifest?: { missing: Array<{ key: string; who: 'shipper' | 'carrier'; words: string }>; toShow: boolean };
   /** Round 38 — a seal its pickup country's company requires, not written yet: why, in words. Not to be taken over yet. */

@@ -109,10 +109,14 @@ export function createMdpApi(sbg: SbgClient) {
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } }, body })),
 
     /** 2026-11-11 — the hub is down: why, and until when if it knows. Nothing is sent to it from then. */
-    hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until?: string }) =>
+    hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down', { params: { path: { id: mdpId } }, body })),
     /** …and open again. */
     hubUp: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/up', { params: { path: { id: mdpId } }, body: {} })),
+    /** 2026-11-11 — the hub's word on its reopening: a new time, or that it opens at the time it gave (or now, that time past). */
+    hubReopening: (mdpId: string, body: { until?: string }) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down/reopening', { params: { path: { id: mdpId } }, body })),
+    /** …and whether drivers may come for the bags standing in it while it is down. */
+    hubCollect: (mdpId: string, collectable: boolean) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down/collect', { params: { path: { id: mdpId } }, body: { collectable } })),
 
     /** 2026-11-09 — what the hub does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */
     counter: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/counter', { params: { path: { id: mdpId } } })),

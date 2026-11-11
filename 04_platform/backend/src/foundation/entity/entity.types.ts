@@ -487,8 +487,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'runPay', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'runPay' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -623,6 +623,8 @@ export class EntityPricing {
   sealRules: ResolvedSealRules;
   /** Round 38 — the custody cap for new shops and new independent riders here. Company-wide; absent caps nobody. */
   @ApiProperty({ type: ResolvedCustodyCaps }) custodyCaps: ResolvedCustodyCaps;
+  /** 2026-11-09 (D6) — how a run, and an extra leg, is paid here: by bag (each bag's own pay) or by km (km × the driver's rate). */
+  @ApiProperty({ enum: ['bag', 'km'] }) runPay: 'bag' | 'km';
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
@@ -721,6 +723,8 @@ export class Entity {
   carrierPapers?: CarrierPapersRule;
   /** Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record. */
   sealRules?: SealRulesRule;
+  /** 2026-11-09 (D6) — how runs and extra legs are paid here; absent = by bag. Read it through EntityService.runPayFor(). */
+  runPay?: 'bag' | 'km';
   /** Round 38 — the custody cap for new shops and new independent riders. Read it through EntityService.custodyCapsFor(). */
   custodyCaps?: { shop?: CustodyCap; rider?: CustodyCap };
   /** Sisters point at the group they belong to. */

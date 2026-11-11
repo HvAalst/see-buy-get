@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { SecurityDeclarationService } from './security-declaration.service';
@@ -30,7 +30,9 @@ import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
 import type { HandoverPositionDto } from './handover-position';
 import { haversineKm } from './geo';
-import { hubIsDown, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, type HubDownReason } from './hub-down.types';
+import { confirmedInTime, confirmOpen, hubIsDown, HUB_DOWN_CONFIRM_WINDOW_H, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, unconfirmedPast, type HubDownReason } from './hub-down.types';
+import { ROUTER, type Router } from './router';
+import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
 import { clockAt, clocksOfCountry } from './fleet-clock';
@@ -61,6 +63,13 @@ export interface ShopChoiceHooks {
   beforeBag?: (parcelId: string, now: number) => boolean;
 }
 
+/**
+ * 2026-11-11 — how far from its shop a first-leg bag may be sent to a hub serving its parcels' destination instead, when its own
+ * hub cannot take it and no other hub serves the shop's area: twice the leg the driver took on, and at least this. Until each
+ * country confirms its road map of hubs (the next-hub-on-the-road plan), when its own minimum stop distance takes over.
+ */
+const FIRST_LEG_REACH_KM = 25;
+
 @Injectable()
 export class MdpService {
   // Durable: onboarded MDP sort-hubs (a signed-up participant type).
@@ -89,6 +98,8 @@ export class MdpService {
     // 2026-11-02 — a bag held for room at its hub, and let go on, is told to whoever holds it; a hub whose day is full is
     // told so. In the bell, never a text. Optional for the specs that build this by hand.
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-11 — the road, to measure an extra leg by (a hub down, its country paying runs by km). Optional for the specs.
+    @Optional() @Inject(ROUTER) private readonly router?: Router,
   ) {}
 
   /**
@@ -569,7 +580,27 @@ export class MdpService {
     let current: Mdp;
     let candidates: Mdp[];
     let areas: string[];
-    if (addressed) {
+    const fromShop = addressed ? this.leftFromShop(tote) : undefined;
+    if (addressed && fromShop) {
+      // 2026-11-11 — ITS FIRST LEG (the owner's question, "how does the routing logic for hubs work?"): a bag on its way from a
+      // shop to its first hub goes, when that hub cannot take it, to another hub for the SHOP's own area, the nearest to the
+      // shop. A hub serving its parcels' destination only when it is close to the shop too — no farther than twice the leg
+      // the driver took on, or FIRST_LEG_REACH_KM — never the far end of the country.
+      areas = [fromShop.zone];
+      const country = this.agents.countryOf(fromShop);
+      const byPin = this.catchments && fromShop.location ? this.catchments.hubForPoint(country, fromShop.location, now) : undefined;
+      const pinned = byPin && byPin !== addressed.mdpId ? this.mdps.get(byPin) : undefined;
+      const near = (h: Mdp) => (fromShop.location && h.location ? haversineKm(fromShop.location, h.location) : Number.MAX_SAFE_INTEGER);
+      const others = this.hubsServing([fromShop.zone], now)
+        .filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== pinned?.mdpId)
+        .sort((a, b) => near(a) - near(b));
+      const reach = Math.max(2 * near(addressed), FIRST_LEG_REACH_KM);
+      const destZones = [...new Set(tote.parcels.map((p) => this.destZoneOf(p)).filter((z): z is string => Boolean(z)))];
+      const taken = new Set([addressed.mdpId, pinned?.mdpId, ...others.map((h) => h.mdpId)]);
+      const closeEnough = destZones.length ? this.hubsServing(destZones, now).filter((h) => !taken.has(h.mdpId) && near(h) <= reach).sort((a, b) => near(a) - near(b)) : [];
+      current = addressed;
+      candidates = [addressed, ...(pinned ? [pinned] : []), ...others, ...closeEnough];
+    } else if (addressed) {
       areas = [...new Set(tote.parcels.map((p) => this.destZoneOf(p)).filter((z): z is string => Boolean(z)))];
       const others = areas.length ? this.hubsServing(areas, now).filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== tote.locationId) : [];
       current = addressed;
@@ -584,6 +615,13 @@ export class MdpService {
     }
     const hub = this.withRoom(candidates, now);
     return hub ? { goes: true, hub, zoneBag: !addressed } : { goes: false, current, areas };
+  }
+
+  /** 2026-11-11 — the shop a bag left from, standing there or on its way from it (where its road was locked); not a hub's counter. */
+  private leftFromShop(tote: Tote): ReturnType<AgentService['find']> {
+    const from = tote.locationId.startsWith('bus:') ? tote.haul?.fromId : tote.locationId;
+    const shop = from ? this.agents.find(from) : undefined;
+    return shop && !shop.hubCounterOf ? shop : undefined;
   }
 
   private destZoneOf(parcelId: string): string | undefined {
@@ -1381,11 +1419,12 @@ export class MdpService {
     const hub = this.require(mdpId);
     if (!this.isApproved(hub)) throw this.notApproved(hub);
     if (!(HUB_DOWN_REASONS as readonly string[]).includes(input.reason)) throw new GlosError('INVALID_INPUT', 'Say why the hub is down', { field: 'reason' });
-    const until = input.until ? Date.parse(input.until) : undefined;
-    if (until !== undefined && (!Number.isFinite(until) || until <= now)) throw new GlosError('INVALID_INPUT', 'When it opens again is still to come', { field: 'until' });
-    if (until !== undefined && until > now + HUB_DOWN_MAX_DAYS * 86_400_000) throw new GlosError('INVALID_INPUT', `A hub is said to be down for ${HUB_DOWN_MAX_DAYS} days at most: say it again when that runs out`, { field: 'until' });
+    // 2026-11-11 — the owner: "Reopening time should be a mandatory field when closing a hub": a best guess where it is not
+    // known — the hub is asked every day, and confirms on the last.
+    if (!input.until) throw new GlosError('FIELD_REQUIRED', 'Say when the hub opens again — your best guess: you are asked every day, and confirm on the last', { field: 'until' });
+    const until = this.reopeningAt(input.until, now);
     const note = input.note?.trim().slice(0, 200);
-    hub.down = { since: new Date(now).toISOString(), ...(until !== undefined ? { until: new Date(until).toISOString() } : {}), reason: input.reason, ...(note ? { note } : {}), by: by.name, byRole: by.role };
+    hub.down = { since: new Date(now).toISOString(), until: new Date(until).toISOString(), reason: input.reason, ...(note ? { note } : {}), by: by.name, byRole: by.role, askedAt: new Date(now).toISOString() };
     this.mdps.set(mdpId, hub);
     const redirected: string[] = [];
     const waiting: string[] = [];
@@ -1397,22 +1436,18 @@ export class MdpService {
       // Claimed or on a vehicle, and no hub serving its zones can take it: the nearest hub open in the country, rather than
       // a driver arriving at a closed door — that hub sorts it on.
       if (placed && !placed.goes && tote.status !== 'available') {
-        const nearest = this.nearestOpenHub(hub, now);
+        const nearest = this.nearestOpenHub(hub, now, this.leftFromShop(tote)?.location);
         if (nearest) placed = { goes: true, hub: nearest, zoneBag: tote.destinationNodeId !== mdpId };
       }
       if (placed?.goes) {
         const onBoard = tote.status === 'in_transit' && Boolean(tote.carriedBy);
         // The extra leg, the network's cost — never the reason a hub cannot be said down: a money question with no answer
-        // leaves the bag redirected and the leg unpaid, said so on the bag.
-        let paid = false;
-        if (onBoard) {
-          try {
-            paid = Boolean(this.gate.payBagLoad(tote.carriedBy!));
-          } catch {
-            paid = false;
-          }
-        }
-        const entry = { at: new Date(now).toISOString(), fromId: hub.mdpId, fromName: hub.name, toId: placed.hub.mdpId, toName: placed.hub.name, reason: 'hub_down' as const, ...(paid ? { paidExtra: true } : {}) };
+        // leaves the bag redirected and the leg unpaid, said so on the bag. By the driver's country's run pay (the owner,
+        // 2026-11-11): by km, the bag's road grows by the extra km at the rate it was locked at, paid on arrival; by bag, one
+        // more bag's fee now.
+        const extra = onBoard ? this.payExtraLeg(tote, hub, placed.hub) : { paid: false };
+        const paid = extra.paid;
+        const entry = { at: new Date(now).toISOString(), fromId: hub.mdpId, fromName: hub.name, toId: placed.hub.mdpId, toName: placed.hub.name, reason: 'hub_down' as const, ...(paid ? { paidExtra: true, paidAs: extra.as } : {}), ...(extra.km ? { extraKm: extra.km } : {}) };
         this.totes.redirectTo(tote.code, placed.zoneBag ? { toHubId: placed.hub.mdpId } : { destinationNodeId: placed.hub.mdpId, destinationLabel: placed.hub.name }, entry);
         for (const parcelId of tote.parcels) {
           try {
@@ -1421,7 +1456,7 @@ export class MdpService {
             // a parcel the bag lists and the store does not: nothing to plan
           }
         }
-        this.tellRedirect(this.totes.requireByCode(tote.code), hub, placed.hub, paid);
+        this.tellRedirect(this.totes.requireByCode(tote.code), hub, placed.hub, paid, extra.km);
         redirected.push(tote.code);
       } else if (placed && !tote.waitsForRoom && tote.status === 'available') {
         const since = new Date(now).toISOString();
@@ -1451,17 +1486,158 @@ export class MdpService {
     return hub;
   }
 
-  /** 2026-11-11 — the nearest other hub that may work in the same country, the first with room — by distance as the crow flies. */
-  private nearestOpenHub(from: Mdp, now: number): Mdp | undefined {
+  /**
+   * 2026-11-11 — the nearest other hub that may work in the same country, the first with room — by distance as the crow
+   * flies from `near` (the shop a first-leg bag left), else from the hub that is down.
+   */
+  private nearestOpenHub(from: Mdp, now: number, near?: GeoPoint): Mdp | undefined {
     const country = this.countryOf(from);
+    const at = near ?? from.location;
     const open = [...this.mdps.values()]
       .filter((m) => m.mdpId !== from.mdpId && this.isApproved(m) && !this.notOpenYet(m) && !this.isDown(m, now) && this.countryOf(m) === country && m.location)
-      .sort((a, b) => haversineKm(from.location, a.location) - haversineKm(from.location, b.location));
+      .sort((a, b) => haversineKm(at, a.location) - haversineKm(at, b.location));
     return this.withRoom(open, now) ?? open[0];
   }
 
+  /** A reopening time said: to come, and no more than HUB_DOWN_MAX_DAYS away. */
+  private reopeningAt(text: string, now: number): number {
+    const until = Date.parse(text);
+    if (!Number.isFinite(until) || until <= now) throw new GlosError('INVALID_INPUT', 'When it opens again is still to come', { field: 'until' });
+    if (until > now + HUB_DOWN_MAX_DAYS * 86_400_000) throw new GlosError('INVALID_INPUT', `A hub is said to be down for ${HUB_DOWN_MAX_DAYS} days at most: say it again when that runs out`, { field: 'until' });
+    return until;
+  }
+
+  /** Road km between two points: the road engine where it is switched on, else as the crow flies times the usual detour. */
+  private roadKmOf(a: GeoPoint, b: GeoPoint): number {
+    try {
+      if (this.router) return this.router.roadKm(a, b);
+    } catch {
+      // the road engine could not answer: the usual detour
+    }
+    return haversineKm(a, b) * ROAD_CIRCUITY_FACTOR;
+  }
+
+  /**
+   * 2026-11-11 — THE EXTRA LEG OF A BAG ON A VEHICLE, PAID BY ITS DRIVER'S COUNTRY'S RUN PAY (the owner: "By the country's run
+   * pay"). By km: its road grows by how much longer the trip is now — from where it was claimed to the new hub, against to the
+   * old — at the rate and fill it was locked at, paid on arrival with the rest. By bag: one more bag's fee, now.
+   */
+  private payExtraLeg(tote: Tote, from: Mdp, to: Mdp): { paid: boolean; as?: 'bag' | 'km'; km?: number } {
+    // Whose run pay: the company that pays the driver. One not on record pays by bag, as every company does that never said.
+    let as: 'bag' | 'km' = 'bag';
+    try {
+      as = this.entities.runPayFor(this.gate.payeeEntityOf(tote.carriedBy!));
+    } catch {
+      as = 'bag';
+    }
+    try {
+      if (as === 'km' && tote.haul) {
+        const start = tote.haul.fromId ? (this.agents.find(tote.haul.fromId)?.location ?? this.mdps.get(tote.haul.fromId)?.location) : undefined;
+        const origin = start ?? from.location;
+        const km = Math.round(Math.max(0, this.roadKmOf(origin, to.location) - this.roadKmOf(origin, from.location)) * 10) / 10;
+        if (km > 0) this.totes.extendHaul(tote.code, km);
+        return { paid: km > 0, as, ...(km > 0 ? { km } : {}) };
+      }
+      return { paid: Boolean(this.gate.payBagLoad(tote.carriedBy!)), as: 'bag' };
+    } catch {
+      return { paid: false };
+    }
+  }
+
+  /**
+   * 2026-11-11 — THE HUB'S WORD ON ITS REOPENING (the owner: "we need to confirm before it opens whether it actually will be
+   * open through a daily bell"). A new time: kept, and it is the hub's word on that time. No time: it opens at the time it
+   * gave — said in the last day before it — or, that time past, it is open now.
+   */
+  confirmReopening(mdpId: string, input: { until?: string }, by: string, now: number = Date.now()): Mdp {
+    const hub = this.require(mdpId);
+    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down`);
+    if (input.until) {
+      hub.down = { ...hub.down, until: new Date(this.reopeningAt(input.until, now)).toISOString(), confirmedAt: new Date(now).toISOString() };
+      delete hub.down.unconfirmedToldAt;
+      this.mdps.set(mdpId, hub);
+      return hub;
+    }
+    if (hub.down.until && Date.parse(hub.down.until) <= now) return this.markUp(mdpId, by, now);
+    if (!confirmOpen(hub.down, now)) {
+      const from = new Date(Date.parse(hub.down.until!) - HUB_DOWN_CONFIRM_WINDOW_H * 3_600_000).toISOString();
+      throw new GlosError('INVALID_STATE', `Confirm it opens in the last day before it: from ${from.slice(0, 16).replace('T', ' ')} UTC. You are asked then.`, { field: 'until' });
+    }
+    hub.down = { ...hub.down, confirmedAt: new Date(now).toISOString() };
+    this.mdps.set(mdpId, hub);
+    return hub;
+  }
+
+  /**
+   * 2026-11-11 — DRIVERS MAY COME FOR THE BAGS STANDING IN A HUB THAT IS DOWN (the owner: "makes sense"): the hub, or staff
+   * when it said its door opens for them. Its bags are offered to drivers again; its people hand them over, as on any day.
+   */
+  setCollectable(mdpId: string, collectable: boolean, by: { name: string; role: 'hub' | 'staff' }, now: number = Date.now()): Mdp {
+    const hub = this.require(mdpId);
+    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down: its bags go as on any day`);
+    if (collectable) hub.down = { ...hub.down, collectable: { since: new Date(now).toISOString(), by: by.name, byRole: by.role } };
+    else {
+      hub.down = { ...hub.down };
+      delete hub.down.collectable;
+    }
+    this.mdps.set(mdpId, hub);
+    const standing = this.totes.list().filter((t) => t.locationId === mdpId && t.status === 'available').length;
+    if (collectable && by.role === 'staff' && this.notifications) {
+      void this.notifications
+        .notify(hub.did, { kind: 'hub_space', title: `Drivers may come for ${hub.name}’s bags`, body: `SeeBuyGet staff opened your bags to drivers while the hub is down: ${standing} bag${standing === 1 ? '' : 's'} standing there. Hand each over as on any day.`, link: '/', tag: `hub-collect:${hub.mdpId}:${hub.down.collectable!.since}`, data: { mdpId: hub.mdpId } })
+        .catch(() => undefined);
+    }
+    return hub;
+  }
+
+  /**
+   * 2026-11-11 — THE DAILY BELL OF A HUB THAT IS DOWN (HubDownSweeper, every quarter hour). Once a day it is asked: in the
+   * last day before its time, to confirm it opens then; before that, whether the time is still right. Past a time it
+   * confirmed: open, its waiting bags go on. Past a time it never confirmed: it stays closed, told so once — and staff see
+   * it among the flags. Returns what it did, for a test with a fixed clock.
+   */
+  sweepDown(now: number = Date.now()): { asked: string[]; opened: string[]; unconfirmed: string[] } {
+    const out = { asked: [] as string[], opened: [] as string[], unconfirmed: [] as string[] };
+    const today = new Date(now).toISOString().slice(0, 10);
+    for (const hub of [...this.mdps.values()]) {
+      const down = hub.down;
+      if (!down?.until) continue;
+      if (Date.parse(down.until) <= now && confirmedInTime(down)) {
+        this.markUp(hub.mdpId, 'system: it confirmed it opens', now);
+        out.opened.push(hub.mdpId);
+        this.tellHub(hub, `${hub.name} is open again`, `As you confirmed, ${hub.name} is open again: bags are sent to it as before.`, `hub-open:${hub.mdpId}:${down.until}`);
+        continue;
+      }
+      if (unconfirmedPast(down, now)) {
+        if (!down.unconfirmedToldAt) {
+          hub.down = { ...down, unconfirmedToldAt: new Date(now).toISOString() };
+          this.mdps.set(hub.mdpId, hub);
+          out.unconfirmed.push(hub.mdpId);
+          this.tellHub(hub, `${hub.name} stays closed`, `You did not confirm ${hub.name} opens at ${down.until.slice(0, 16).replace('T', ' ')} UTC, so nothing is sent to it. Say it is open in the Hub app when it is — or give a new time.`, `hub-unconfirmed:${hub.mdpId}:${down.until}`);
+        }
+        continue;
+      }
+      if ((down.askedAt ?? '').slice(0, 10) === today) continue;
+      hub.down = { ...down, askedAt: new Date(now).toISOString() };
+      this.mdps.set(hub.mdpId, hub);
+      out.asked.push(hub.mdpId);
+      const at = `${down.until.slice(0, 16).replace('T', ' ')} UTC`;
+      if (confirmOpen(down, now) && !confirmedInTime(down)) {
+        this.tellHub(hub, `Does ${hub.name} open at ${at}?`, `Confirm in the Hub app that ${hub.name} opens at ${at} — or give a new time. Not confirmed, it stays closed and nothing is sent to it.`, `hub-confirm:${hub.mdpId}:${today}`);
+      } else if (!confirmedInTime(down)) {
+        this.tellHub(hub, `${hub.name} is down until ${at}`, `Is ${at} still right? Give a new time in the Hub app if it is not. You are asked to confirm it in the last day before.`, `hub-still:${hub.mdpId}:${today}`);
+      }
+    }
+    return out;
+  }
+
+  private tellHub(hub: Mdp, title: string, body: string, tag: string): void {
+    if (!this.notifications) return;
+    void this.notifications.notify(hub.did, { kind: 'hub_space', title, body, link: '/', tag, data: { mdpId: hub.mdpId } }).catch(() => undefined);
+  }
+
   /** The driver carrying a bag, or the shop or hub holding it, told where it goes now that its hub is down. */
-  private tellRedirect(tote: Tote, from: Mdp, to: Mdp, paid: boolean): void {
+  private tellRedirect(tote: Tote, from: Mdp, to: Mdp, paid: boolean, extraKm?: number): void {
     if (!this.notifications) return;
     const holder = tote.status === 'available' ? (this.mdps.get(tote.locationId)?.did ?? tote.locationId) : (tote.carriedBy ?? tote.claimedBy);
     if (!holder) return;
@@ -1470,7 +1646,7 @@ export class MdpService {
       .notify(holder, {
         kind: 'hub_space',
         title: `Bag ${tote.code} goes to ${to.name} now`,
-        body: `${from.name} is down (${why}): take bag ${tote.code} to ${to.name} instead.${paid ? ' The extra leg is paid, as the network’s cost.' : ''}`,
+        body: `${from.name} is down (${why}): take bag ${tote.code} to ${to.name} instead.${paid ? (extraKm ? ` The extra ${extraKm} km are paid, as the network’s cost.` : ' The extra leg is paid, as the network’s cost.') : ''}`,
         link: tote.status === 'available' ? '/' : '/?go=loads',
         tag: `hub-down:${tote.code}:${to.mdpId}`,
         data: { code: tote.code, from: from.mdpId, to: to.mdpId },

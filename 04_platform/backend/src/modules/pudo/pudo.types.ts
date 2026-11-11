@@ -696,6 +696,8 @@ export class ToteHaul {
    */
   basis: 'measured' | 'unresolved';
   lockedAt: string;
+  /** 2026-11-11 — where the bag was claimed from (a shop, a hub, a dock): the trip's start, to measure an extra leg from. */
+  fromId?: string;
   /**
    * The road already paid to somebody who carried the bag part of the way and then could not — a vehicle broken down
    * on the road, the bag taken over by another driver (the user, 2026-10-25: "Split by the road"). The road is paid

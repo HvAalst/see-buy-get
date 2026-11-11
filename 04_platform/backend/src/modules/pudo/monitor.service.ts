@@ -25,10 +25,11 @@ import { MdpService } from './mdp.service';
 import { FleetService } from './fleet.service';
 import { DriverService } from './driver.service';
 import { ShopChoiceService } from './shop-choice.service';
+import { unconfirmedPast } from './hub-down.types';
 import { AGENT_ONLINE_H, BAGS_WAITING_H, CARGO_AFTER_SHIFT_MIN, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting' | 'Cargo_After_Shift' | 'Shop_Found_Shut';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority' | 'Bags_Waiting' | 'Cargo_After_Shift' | 'Shop_Found_Shut' | 'Hub_Down_Unconfirmed';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -178,6 +179,7 @@ export class MonitorService {
     flags.push(...this.bagsWaiting());
     flags.push(...this.cargoAfterShift());
     flags.push(...this.shopsFoundShut());
+    flags.push(...this.hubsDownUnconfirmed());
     for (const p of this.parcels.list()) {
       if (p.held) flags.push({ type: 'Tamper_Hold', subject: p.parcelId, detail: `parcel${p.sscc ? ` ${p.sscc}` : ''} · ${FINDING_WORDS[p.held.finding]} · ${p.held.where}`, ageHours: Math.round(hoursSince(p.held.since)) });
     }
@@ -261,6 +263,18 @@ export class MonitorService {
       flags.push({ type: 'Cargo_After_Shift', subject: badge ?? did, detail: `${name} ended their day ${hours ? `${hours}h` : `${Math.round(minutes)} min`} ago with ${held}`, ageHours: hours });
     }
     return flags;
+  }
+
+  /** 2026-11-11 — a hub down past the time it said it would open, never confirming it: it stays closed; somebody rings it. */
+  private hubsDownUnconfirmed(now: number = Date.now()): PudoFlag[] {
+    return (this.mdps?.list() ?? [])
+      .filter((h) => unconfirmedPast(h.down, now))
+      .map((h) => ({
+        type: 'Hub_Down_Unconfirmed' as const,
+        subject: h.name,
+        detail: `Said it would open at ${h.down!.until!.slice(0, 16).replace('T', ' ')} UTC and never confirmed: nothing is sent to it until it does — ring the hub`,
+        ageHours: Math.floor(hoursSince(h.down!.until!)),
+      }));
   }
 
   /** 2026-11-06 — a shop a driver found shut in the last day, though it had not said it was closed: one flag per shop. */

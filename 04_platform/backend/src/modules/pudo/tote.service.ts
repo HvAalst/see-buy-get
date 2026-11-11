@@ -244,6 +244,20 @@ export class ToteService {
   }
 
   /**
+   * 2026-11-11 — A BAG'S ROAD GROWN BY AN EXTRA LEG (a hub down; its country pays runs by km): the trip is longer by
+   * `extraKm`, the road re-priced at the rate and fill it was locked at, and whoever arrives with it is paid what is left.
+   */
+  extendHaul(code: string, extraKm: number): Tote {
+    const tote = this.requireByCode(code);
+    if (!tote.haul || !(extraKm > 0)) return tote;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const tripKm = round2(tote.haul.tripKm + extraKm);
+    const parts = tote.haul.parts?.length ? [...tote.haul.parts.slice(0, -1), { ...tote.haul.parts[tote.haul.parts.length - 1], leftKm: round2(tote.haul.parts[tote.haul.parts.length - 1].leftKm + extraKm) }] : tote.haul.parts;
+    tote.haul = { ...tote.haul, tripKm, road: round2(tripKm * Math.max(0, tote.haul.ratePerKm) * tote.haul.units), ...(parts ? { parts } : {}) };
+    return this.save(tote);
+  }
+
+  /**
    * TAKEN OVER ON THE ROAD: a bag with a driver whose vehicle broke down goes on with another (VehicleBreakdownService).
    * A bag on their vehicle is on the other's now; one they had claimed and not yet collected is the other's to collect.
    * The stretch of road the first driver drove, already paid them, is kept on its haul — the rest is paid on arrival.

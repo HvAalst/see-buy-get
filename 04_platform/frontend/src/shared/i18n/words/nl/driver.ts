@@ -836,6 +836,7 @@ export const words: Record<string, string> = {
   "driver.invoice.title": "Handelsfactuur — voor de grens",
   "driver.loads.redirected": "{from} is dicht: breng deze zak in plaats daarvan naar {to}.",
   "driver.loads.redirectedPaid": "De extra rit wordt betaald, als kosten van het netwerk.",
+  "driver.loads.redirectedKm": "De extra {km} km worden betaald, als kosten van het netwerk.",
   "driver.held.open": "Vastgehouden door politie of douane?",
   "driver.held.title": "Onderweg vastgehouden",
   "driver.held.body": "Zeg wie {ref} vasthoudt: SeeBuyGet operations, de verlader en het kantoor van je vervoerder worden meteen ingelicht. Meld het opnieuw als je wordt vrijgelaten.",

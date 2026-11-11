@@ -2771,7 +2771,9 @@ describe('PUDO Light', () => {
       expect(() => controller.hubDown(first.mdpId, { reason: 'power' } as never, asHub(second))).toThrow();
       expect(() => controller.hubDown(first.mdpId, { reason: 'power', until: '2020-01-01T00:00:00Z' } as never, asHub(first))).toThrow(/still to come/);
       const paid = jest.spyOn(gate, 'payBagLoad');
-      const said: any = controller.hubDown(first.mdpId, { reason: 'power', note: 'Transformer blown' } as never, asHub(first));
+      // The reopening time is mandatory (the owner, 2026-11-11).
+      expect(() => controller.hubDown(first.mdpId, { reason: 'power' } as never, asHub(first))).toThrow(/Say when the hub opens again/);
+      const said: any = controller.hubDown(first.mdpId, { reason: 'power', note: 'Transformer blown', until: new Date(Date.now() + 2 * 3_600_000).toISOString() } as never, asHub(first));
       expect(said.down).toMatchObject({ reason: 'power', note: 'Transformer blown', by: 'Floor lead', byRole: 'hub' });
       expect(said.redirected.sort()).toEqual([offered.code, onBoard.code].sort());
       expect(totes.requireByCode(standing.code).destinationNodeId).toBe(first.mdpId);
@@ -2815,11 +2817,148 @@ describe('PUDO Light', () => {
       expect(keeper.sortTarget(planned, second.mdpId)?.id).toBe(first.mdpId);
       expect(mdps.mdpForZone(ONLY)?.mdpId).toBe(first.mdpId);
       expect(() => controller.hubUp(first.mdpId, {} as never, staff)).toThrow(/not marked down/);
-      // Said down until a time: past it, it is open by itself.
+      // Said down until a time: past it, it opens only if the hub confirmed it in the day before.
       mdps.markDown(first.mdpId, { reason: 'flood', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Amina', role: 'staff' });
       expect(mdps.isDown(mdps.require(first.mdpId))).toBe(true);
+      expect(mdps.isDown(mdps.require(first.mdpId), Date.now() + 2 * 3_600_000)).toBe(true);
+      mdps.confirmReopening(first.mdpId, {}, 'Floor lead');
       expect(mdps.isDown(mdps.require(first.mdpId), Date.now() + 2 * 3_600_000)).toBe(false);
+      mdps.markUp(first.mdpId, 'Amina');
       paid.mockRestore();
+    });
+
+    it('a hub down asked every day, confirmed in the last day before it opens — not confirmed, it stays closed and staff see it; drivers may collect its bags (2026-11-11)', () => {
+      seq += 1;
+      const Z = `HR${seq}Zone`;
+      const shop = onboardAgent('HR Shop', Z, 50);
+      const far = onboardAgent('HR Far', Z, 50);
+      const hub = mdps.register({ name: 'HR Hub', zones: [Z], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      const asHub = { active: true, role: 'mdp', did: hub.did, actorName: 'Floor lead' } as never;
+      const t0 = Date.parse('2026-11-12T06:00:00Z');
+      const until = '2026-11-15T06:00:00.000Z';
+      mdps.markDown(hub.mdpId, { reason: 'power', until }, { name: 'Floor lead', role: 'hub' }, t0);
+      // Asked once a day — not the day it said so; not twice in a day.
+      expect(mdps.sweepDown(t0 + 3_600_000).asked).not.toContain(hub.mdpId);
+      expect(mdps.sweepDown(t0 + 24 * 3_600_000).asked).toContain(hub.mdpId);
+      expect(mdps.sweepDown(t0 + 25 * 3_600_000).asked).not.toContain(hub.mdpId);
+      // Confirmed too early: refused, it is asked on the last day.
+      expect(() => mdps.confirmReopening(hub.mdpId, {}, 'Floor lead', t0 + 24 * 3_600_000)).toThrow(/last day before it/);
+      // Not confirmed: past its time it stays closed, told once, and staff see it among the flags.
+      const past = Date.parse(until) + 3_600_000;
+      expect(mdps.isDown(mdps.require(hub.mdpId), past)).toBe(true);
+      expect(mdps.hasRoom(mdps.require(hub.mdpId), past)).toBe(false);
+      const swept = mdps.sweepDown(past);
+      expect(swept.unconfirmed).toEqual([hub.mdpId]);
+      expect(swept.opened).toEqual([]);
+      expect(mdps.sweepDown(past + 60_000).unconfirmed).toEqual([]);
+      jest.useFakeTimers({ now: past, doNotFake: ['nextTick', 'setImmediate'] });
+      try {
+        expect(monitor.flags().filter((f) => f.type === 'Hub_Down_Unconfirmed').map((f) => f.subject)).toContain('HR Hub');
+      } finally {
+        jest.useRealTimers();
+      }
+      // A new time is kept; given more than a day ahead it is not yet its confirmation — confirmed in the last day before it,
+      // it opens then by itself. (The clock pinned: "today" is the test's, never the machine's.)
+      const later = '2026-11-18T06:00:00.000Z';
+      jest.useFakeTimers({ now: past, doNotFake: ['nextTick', 'setImmediate'] });
+      try {
+        controller.hubReopening(hub.mdpId, { until: later } as never, asHub);
+      } finally {
+        jest.useRealTimers();
+      }
+      expect(mdps.require(hub.mdpId).down).toMatchObject({ until: later });
+      expect(mdps.require(hub.mdpId).down?.unconfirmedToldAt).toBeUndefined();
+      expect(mdps.isDown(mdps.require(hub.mdpId), Date.parse(later) + 60_000)).toBe(true);
+      mdps.confirmReopening(hub.mdpId, {}, 'Floor lead', Date.parse(later) - 2 * 3_600_000);
+      expect(mdps.isDown(mdps.require(hub.mdpId), Date.parse(later) + 60_000)).toBe(false);
+      expect(mdps.sweepDown(Date.parse(later) + 60_000).opened).toEqual([hub.mdpId]);
+      expect(mdps.require(hub.mdpId).down).toBeUndefined();
+
+      // Down again: a bag standing in it is offered to nobody — until its door opens for drivers to collect it.
+      mdps.markDown(hub.mdpId, { reason: 'no_staff', until: new Date(Date.now() + 5 * 3_600_000).toISOString() }, { name: 'Floor lead', role: 'hub' });
+      parcels.accept({ agentDid: shop.did, parcelId: `HR-A-${seq}`, size: 'S', destZone: Z, destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const standing = mdps.registerTote(hub.mdpId);
+      mdps.assignTote(standing.code, far.did, 'HR Far');
+      totes.requireByCode(standing.code).status = 'available';
+      const offers = () => ((dispatch as any).availableLoads() as Array<{ kind: string; ref: string }>).filter((l) => l.kind === 'tote').map((l) => l.ref);
+      expect(offers()).not.toContain(standing.code);
+      expect(() => controller.hubCollect(hub.mdpId, { collectable: true } as never, { active: true, role: 'mdp', did: far.did } as never)).toThrow();
+      controller.hubCollect(hub.mdpId, { collectable: true } as never, { active: true, role: 'operator', sub: 'operator:opr_hr', actorName: 'Amina', scopes: ['*'] } as never);
+      expect(mdps.require(hub.mdpId).down?.collectable).toMatchObject({ by: 'Amina', byRole: 'staff' });
+      expect(offers()).toContain(standing.code);
+      controller.hubCollect(hub.mdpId, { collectable: false } as never, asHub);
+      expect(offers()).not.toContain(standing.code);
+      mdps.markUp(hub.mdpId, 'Floor lead');
+      expect(() => mdps.setCollectable(hub.mdpId, true, { name: 'Amina', role: 'staff' })).toThrow(/not marked down/);
+    });
+
+    it('a hub down: a bag that left a shop goes to another hub for the shop’s own area, never to its parcels’ far end; the extra leg by the country’s run pay (2026-11-11)', () => {
+      seq += 1;
+      const HOME = `FL${seq}Home`;
+      const AWAY = `FL${seq}Away`;
+      const shop = onboardAgent('FL Shop', HOME, 50);
+      const away = onboardAgent('FL Away', AWAY, 50);
+      const down = mdps.register({ name: 'FL Home Sort', zones: [HOME], location: { lat: -1.21, lng: 36.81 } }, { approvedBy: 'staff' });
+      const farEnd = mdps.register({ name: 'FL Far End', zones: [AWAY], location: { lat: 0.5, lng: 37.5 } }, { approvedBy: 'staff' });
+      parcels.accept({ agentDid: shop.did, parcelId: `FL-A-${seq}`, size: 'S', destZone: AWAY, destPudoDid: away.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = totes.register(shop.did);
+      mdps.assignTote(bag.code, down.mdpId, down.name);
+      mdps.fillShopBag(bag.code, shop.did, `FL-A-${seq}`);
+      totes.requireByCode(bag.code).status = 'available';
+      // No other hub for the shop's area: it waits at the shop — never sent to the far end that serves its parcels.
+      const first: any = mdps.markDown(down.mdpId, { reason: 'power', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Floor lead', role: 'hub' });
+      expect(first.redirected).toEqual([]);
+      expect(first.waiting).toEqual([bag.code]);
+      expect(totes.requireByCode(bag.code).destinationNodeId).toBe(down.mdpId);
+      mdps.markUp(down.mdpId, 'Floor lead');
+      expect(totes.requireByCode(bag.code).waitsForRoom).toBeFalsy();
+
+      // A second hub for the shop's area, a little further: the bag on its way from the shop goes there; by km, its road grows.
+      const near = mdps.register({ name: 'FL Near Sort', zones: [HOME], location: { lat: -1.3, lng: 36.9 } }, { approvedBy: 'staff' });
+      const rider = drivers.register({ displayName: `FL Rider ${seq}`, fullName: `FL Rider ${seq}`, nationalId: `FL-${seq}`, mobile: `+25477300${seq}`, licenceClasses: ['bike'] });
+      const entityId = gate.payeeEntityOf(rider.did);
+      expect(entityId).toBeTruthy();
+      entities.setRunPay(entityId!, 'km', 'test');
+      try {
+        Object.assign(totes.requireByCode(bag.code), { status: 'in_transit', carriedBy: rider.did, locationId: 'bus:FL-BADGE', haul: { tripKm: 2, ratePerKm: 10, units: 1, road: 20, basis: 'measured', lockedAt: new Date().toISOString(), fromId: shop.did } });
+        const paid = jest.spyOn(gate, 'payBagLoad');
+        const second: any = mdps.markDown(down.mdpId, { reason: 'power', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Floor lead', role: 'hub' });
+        expect(second.redirected).toEqual([bag.code]);
+        const moved = totes.requireByCode(bag.code);
+        expect(moved.destinationNodeId).toBe(near.mdpId);
+        expect(moved.destinationNodeId).not.toBe(farEnd.mdpId);
+        const entry = moved.redirects![moved.redirects!.length - 1];
+        expect(entry).toMatchObject({ toId: near.mdpId, paidExtra: true, paidAs: 'km' });
+        expect(entry.extraKm).toBeGreaterThan(0);
+        expect(moved.haul!.tripKm).toBeCloseTo(2 + entry.extraKm!, 1);
+        expect(moved.haul!.road).toBeCloseTo(moved.haul!.tripKm * 10, 1);
+        expect(paid).not.toHaveBeenCalled();
+        paid.mockRestore();
+        // The driver's card says how far.
+        expect((dispatch as any).wrapTote(bag.code, rider.did)?.redirected).toMatchObject({ toName: 'FL Near Sort', paidExtra: true, extraKm: entry.extraKm });
+        mdps.markUp(down.mdpId, 'Floor lead');
+      } finally {
+        entities.setRunPay(entityId!, 'bag', 'test');
+      }
+
+      // A bag claimed at the shop, no hub for its area and the far end out of reach: the nearest open hub to the SHOP takes
+      // it, rather than the one nearest the hub that is down.
+      seq += 1;
+      const OTHER = `FL${seq}Other`;
+      // In a corner of the map of its own (every other test's hubs stand by the usual test shop, near Nairobi).
+      const downFar = mdps.register({ name: 'FL Down Far', zones: [`FL${seq}Home`], location: { lat: 2.8, lng: 35.9 } }, { approvedBy: 'staff' });
+      const byShop = mdps.register({ name: 'FL By The Shop', zones: [OTHER], location: { lat: 2.51, lng: 35.51 } }, { approvedBy: 'staff' });
+      mdps.register({ name: 'FL By The Down Hub', zones: [OTHER], location: { lat: 2.81, lng: 35.91 } }, { approvedBy: 'staff' });
+      const shop2 = onboardAgent('FL Shop Two', `FL${seq}Home`, 50);
+      agents.setLocation(shop2.did, { lat: 2.5, lng: 35.5 });
+      parcels.accept({ agentDid: shop2.did, parcelId: `FL-B-${seq}`, size: 'S', destZone: AWAY, destPudoDid: away.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop2.did) } as never);
+      const claimed = totes.register(shop2.did);
+      mdps.assignTote(claimed.code, downFar.mdpId, downFar.name);
+      mdps.fillShopBag(claimed.code, shop2.did, `FL-B-${seq}`);
+      Object.assign(totes.requireByCode(claimed.code), { status: 'claimed', claimedBy: rider.did });
+      mdps.markDown(downFar.mdpId, { reason: 'flood', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Floor lead', role: 'hub' });
+      expect(totes.requireByCode(claimed.code).destinationNodeId).toBe(byShop.mdpId);
+      mdps.markUp(downFar.mdpId, 'Floor lead');
     });
 
     it('goes straight to its shop from a first hub that serves the shop’s area too — planned, priced and sorted so', () => {
@@ -6176,6 +6315,8 @@ describe('PUDO Light', () => {
       expect(haul.units).toBe(2); // two mediums = two medium-equivalents, the buyers' own basis
       expect(haul.tripKm).toBeGreaterThan(0);
       expect(haul.road).toBeCloseTo(haul.tripKm * 0.1 * 2, 2);
+      // 2026-11-11 — and where it was claimed from: an extra leg (a hub down) is measured from the trip's start.
+      expect(haul.fromId).toBe(origin.did);
     });
 
     it('pays the road on what each parcel was CHARGED — a measured shoebox by its measurement, not its size tier (2026-10-27)', () => {
