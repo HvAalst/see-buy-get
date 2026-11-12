@@ -205,6 +205,8 @@ import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
 import { PriceReportService, PriceReportView } from './price-report.service';
 import { CatchmentService, CatchmentsView } from './catchment.service';
+import { RoadMapService } from './road-map.service';
+import { RoadMapLinkDto, RoadMapMinKmDto, RoadMapRoleDto, RoadMapView } from './road-map.types';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
 
@@ -388,6 +390,8 @@ export class SbgController {
     @Optional() private readonly ourGlns?: OurGlnBook,
     // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
     @Optional() private readonly catchments?: CatchmentService,
+    // 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 2).
+    @Optional() private readonly roadMaps?: RoadMapService,
   ) {}
 
   /**
@@ -3035,6 +3039,61 @@ export class SbgController {
   private catchmentsOf(): CatchmentService {
     if (!this.catchments) throw new GlosError('INVALID_STATE', 'Catchments are not available here');
     return this.catchments;
+  }
+
+  /* --- 2026-11-12 — a country's road map of hubs (the plan "Hubs on the Road", step 2): its company, or staff. --- */
+
+  /** The system's proposal, the map being looked at, the map in force, and the hubs joined or gone since. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/road-map')
+  entityRoadMap(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().view(entityId);
+  }
+
+  /** The proposal made the map being looked at. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/road-map/propose')
+  proposeRoadMap(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().propose(entityId, auditActor(actor));
+  }
+
+  /** A hub made a stop, or local only. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/road-map/hubs/:mdpId')
+  setRoadMapRole(@Param('entityId') entityId: string, @Param('mdpId') mdpId: string, @Body() dto: RoadMapRoleDto, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().setRole(entityId, mdpId, dto.role, auditActor(actor));
+  }
+
+  /** A road between two stops added, or taken away. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/road-map/links')
+  setRoadMapLink(@Param('entityId') entityId: string, @Body() dto: RoadMapLinkDto, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().setLink(entityId, dto.a, dto.b, dto.on, auditActor(actor));
+  }
+
+  /** The country's minimum distance between two stops (D1). */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/road-map/min-km')
+  setRoadMapMinKm(@Param('entityId') entityId: string, @Body() dto: RoadMapMinKmDto, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().setMinKm(entityId, dto.km, auditActor(actor));
+  }
+
+  /** The map being looked at, put in force. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/road-map/confirm')
+  confirmRoadMap(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): RoadMapView {
+    this.requireReach(actor, entityId);
+    return this.roadMapsOf().confirm(entityId, auditActor(actor));
+  }
+
+  private roadMapsOf(): RoadMapService {
+    if (!this.roadMaps) throw new GlosError('INVALID_STATE', 'The road map of hubs is not available here');
+    return this.roadMaps;
   }
 
   /* --- 2026-11-08 — a country's price card (zone pricing, step 2): its company's own administrators, or staff. --- */

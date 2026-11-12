@@ -7607,6 +7607,35 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/road": {
+      "get": {
+        "operationId": "HubZones.road",
+        "summary": "",
+        "description": "2026-11-12 — its place on the road (the plan \"Hubs on the Road\"): a stop and its neighbours, or the stop that carries it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubRoadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/counter": {
       "get": {
         "operationId": "HubZones.counter",
@@ -14042,6 +14071,216 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatchmentsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map": {
+      "get": {
+        "operationId": "Sbg.entityRoadMap",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map/propose": {
+      "post": {
+        "operationId": "Sbg.proposeRoadMap",
+        "summary": "",
+        "description": "The proposal made the map being looked at.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map/hubs/{mdpId}": {
+      "post": {
+        "operationId": "Sbg.setRoadMapRole",
+        "summary": "",
+        "description": "A hub made a stop, or local only.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mdpId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoadMapRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map/links": {
+      "post": {
+        "operationId": "Sbg.setRoadMapLink",
+        "summary": "",
+        "description": "A road between two stops added, or taken away.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoadMapLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map/min-km": {
+      "post": {
+        "operationId": "Sbg.setRoadMapMinKm",
+        "summary": "",
+        "description": "The country's minimum distance between two stops (D1).",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoadMapMinKmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/road-map/confirm": {
+      "post": {
+        "operationId": "Sbg.confirmRoadMap",
+        "summary": "",
+        "description": "The map being looked at, put in force.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadMapView"
                 }
               }
             }
@@ -50659,6 +50898,64 @@
           "sortPerDay"
         ]
       },
+      "RoadNeighbour": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "km"
+        ]
+      },
+      "HubRoadView": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "local"
+            ]
+          },
+          "via": {
+            "description": "Local only: the stop that carries its through parcels.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoadNeighbour"
+              }
+            ]
+          },
+          "neighbours": {
+            "description": "A stop: its neighbours on the road — one bin towards each, and its own shops.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadNeighbour"
+            }
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "inForce": {
+            "type": "boolean",
+            "description": "Its country's road map is confirmed: through parcels go along it."
+          }
+        },
+        "required": [
+          "neighbours",
+          "mdpId",
+          "inForce"
+        ]
+      },
       "HubCounterLine": {
         "type": "object",
         "properties": {
@@ -58284,6 +58581,7 @@
               "sealRules",
               "custodyCaps",
               "runPay",
+              "roadMap",
               "zones",
               "prices",
               "catchments",
@@ -59727,6 +60025,273 @@
         "required": [
           "mdpId",
           "serve"
+        ]
+      },
+      "RoadMapHub": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "bagPlaces": {
+            "type": "number"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "down": {
+            "type": "boolean",
+            "description": "Down now: left out of the map in force while it is."
+          }
+        },
+        "required": [
+          "location",
+          "mdpId",
+          "name",
+          "down"
+        ]
+      },
+      "RoadStopView": {
+        "type": "object",
+        "properties": {
+          "neighbours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadNeighbour"
+            }
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "neighbours",
+          "mdpId",
+          "name"
+        ]
+      },
+      "RoadLocalView": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "The stop that carries its through parcels: the nearest."
+          },
+          "viaName": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "via",
+          "viaName",
+          "km"
+        ]
+      },
+      "RoadPairView": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          },
+          "b": {
+            "type": "string"
+          },
+          "aName": {
+            "type": "string"
+          },
+          "bName": {
+            "type": "string"
+          },
+          "km": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "aName",
+          "bName",
+          "km"
+        ]
+      },
+      "RoadPlanView": {
+        "type": "object",
+        "properties": {
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadStopView"
+            }
+          },
+          "local": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadLocalView"
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadPairView"
+            }
+          },
+          "tooClose": {
+            "description": "Stops nearer than the minimum distance.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadPairView"
+            }
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "confirmedBy": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string"
+          },
+          "pieces": {
+            "type": "number",
+            "description": "How many pieces it is in: one, or some stops cannot reach the others."
+          },
+          "minKm": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stops",
+          "local",
+          "links",
+          "tooClose",
+          "pieces",
+          "minKm"
+        ]
+      },
+      "RoadMapView": {
+        "type": "object",
+        "properties": {
+          "hubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadMapHub"
+            }
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/RoadPlanView"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/RoadPlanView"
+          },
+          "confirmed": {
+            "$ref": "#/components/schemas/RoadPlanView"
+          },
+          "joined": {
+            "description": "Approved since the map in force was confirmed: carried as local hubs of their nearest stop until staff confirm again.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "left": {
+            "description": "In the map in force, and no longer approved: left out, their neighbours each other's.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "minKm": {
+            "type": "number"
+          },
+          "minKmStart": {
+            "type": "number",
+            "description": "The figure the country starts from."
+          }
+        },
+        "required": [
+          "hubs",
+          "proposal",
+          "joined",
+          "left",
+          "entityId",
+          "country",
+          "minKm",
+          "minKmStart"
+        ]
+      },
+      "RoadMapRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "local"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "RoadMapLinkDto": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "b": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "on"
+        ]
+      },
+      "RoadMapMinKmDto": {
+        "type": "object",
+        "properties": {
+          "km": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "km"
         ]
       },
       "PriceReportRow": {

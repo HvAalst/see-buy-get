@@ -108,6 +108,8 @@ export function createMdpApi(sbg: SbgClient) {
     setSpace: (mdpId: string, body: { bagPlaces: number; sortPerDay: number }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } }, body })),
 
+    /** 2026-11-12 — its place on the road: a stop and its neighbours, or the stop that carries it (the road map of hubs). */
+    road: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/road', { params: { path: { id: mdpId } } })),
     /** 2026-11-11 — the hub is down: why, and until when if it knows. Nothing is sent to it from then. */
     hubDown: (mdpId: string, body: { reason: 'power' | 'flood' | 'security' | 'no_staff' | 'authority' | 'other'; note?: string; until: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/down', { params: { path: { id: mdpId } }, body })),

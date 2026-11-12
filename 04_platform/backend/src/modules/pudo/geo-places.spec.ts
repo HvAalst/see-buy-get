@@ -16,9 +16,12 @@ describe('the places the network knows, by country', () => {
     expect(lookupPlace('Kampala')?.entry.country).toBe('UG');
     expect(lookupPlace("Pettelaarpark 1, 's-Hertogenbosch")?.entry).toMatchObject({ name: "'s-Hertogenbosch", country: 'NL' });
     expect(lookupPlace('Den Bosch', ['NL'])?.entry.name).toBe("'s-Hertogenbosch");
-    // Moyale stands on both sides of the Kenya–Ethiopia border: the list knows Kenya's, and gives it to nobody in Ethiopia.
+    // Moyale stands on both sides of the Kenya–Ethiopia border: each country's own, by the reader's country (2026-11-12).
     expect(lookupPlace('Moyale', ['KE'])?.entry.country).toBe('KE');
-    expect(lookupPlace('Moyale', ['ET'])).toBeNull();
+    expect(lookupPlace('Moyale', ['ET'])?.entry.country).toBe('ET');
+    expect(lookupPlace('Moyale', ['ET'])!.entry.location.lat).toBeGreaterThan(lookupPlace('Moyale', ['KE'])!.entry.location.lat);
+    expect(lookupPlace('Marsabit', ['KE'])?.entry.country).toBe('KE');
+    expect(lookupPlace('Yabelo', ['ET'])?.entry.country).toBe('ET');
     // A Kampala asked of Kenya alone is nothing — never a pin in another country.
     expect(lookupPlace('Kampala', ['KE'])).toBeNull();
   });

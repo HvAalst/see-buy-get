@@ -174,6 +174,14 @@ export function createOperatorApi(sbg: SbgClient) {
     discardZoneDraft: (entityId: string) => sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/zones/draft', { params: { path: { entityId } } })),
     /** 2026-11-09 — which hub serves each zone of the map in force (the catchments-and-runs plan, Part A). */
     catchments: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/catchments', { params: { path: { entityId } } })),
+    /** 2026-11-12 — a country's road map of hubs (the plan "Hubs on the Road", step 2). */
+    roadMap: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/road-map', { params: { path: { entityId } } })),
+    proposeRoadMap: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/propose', { params: { path: { entityId } } })),
+    setRoadMapRole: (entityId: string, mdpId: string, role: 'stop' | 'local') =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/hubs/{mdpId}', { params: { path: { entityId, mdpId } }, body: { role } })),
+    setRoadMapLink: (entityId: string, a: string, b: string, on: boolean) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/links', { params: { path: { entityId } }, body: { a, b, on } })),
+    setRoadMapMinKm: (entityId: string, km: number) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/min-km', { params: { path: { entityId } }, body: { km } })),
+    confirmRoadMap: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/confirm', { params: { path: { entityId } } })),
     proposeCatchments: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/propose', { params: { path: { entityId } } })),
     /** 2026-11-09 — a net of hubs: a hub added to a zone (serve) or taken away from it. */
     assignCatchment: (entityId: string, code: string, mdpId: string, serve: boolean) =>

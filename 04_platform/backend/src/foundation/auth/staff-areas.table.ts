@@ -36,6 +36,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PUT sbg/mdps/:id/space': 'none',
   // 2026-11-09 — the zones a hub serves: read by staff, changed by the hub alone.
   'GET sbg/mdps/:id/zones-served': 'support',
+  'GET sbg/mdps/:id/road': 'support',
   'POST sbg/mdps/:id/zones-served/:code': 'none',
   // 2026-11-09 — what a hub does (sort only, or sort and hand out): read by staff, chosen by the hub alone.
   'GET sbg/mdps/:id/counter': 'support',
@@ -310,6 +311,12 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-08 — a country's price card (zone pricing, step 2).
   'GET sbg/entities/:entityId/price-cards': 'admin',
   'GET sbg/entities/:entityId/catchments': 'admin',
+  'GET sbg/entities/:entityId/road-map': 'admin',
+  'POST sbg/entities/:entityId/road-map/propose': 'admin',
+  'POST sbg/entities/:entityId/road-map/hubs/:mdpId': 'admin',
+  'POST sbg/entities/:entityId/road-map/links': 'admin',
+  'POST sbg/entities/:entityId/road-map/min-km': 'admin',
+  'POST sbg/entities/:entityId/road-map/confirm': 'admin',
   'POST sbg/entities/:entityId/catchments/propose': 'admin',
   'POST sbg/entities/:entityId/catchments/:code': 'admin',
   'GET sbg/entities/:entityId/price-cards/report': 'admin',

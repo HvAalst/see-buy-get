@@ -17,6 +17,7 @@ import { HubSpaceCard } from './HubSpaceCard';
 import { ZonesServedCard } from './ZonesServedCard';
 import { HubCounterCard } from './HubCounterCard';
 import { HubDownCard } from './HubDownCard';
+import { HubRoadCard } from './HubRoadCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -225,6 +226,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
 
       {/* 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, and zones near it its owner adds. */}
       <ZonesServedCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
+      {/* 2026-11-12 — its place on the road, once its country's road map of hubs is confirmed. */}
+      <HubRoadCard sbg={sbg ?? null} mdpId={hub?.mdpId} />
 
       {/* When the hub is open and how to reach it: what drivers and stores working with it see; its owner writes it. */}
       <HubReachCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />

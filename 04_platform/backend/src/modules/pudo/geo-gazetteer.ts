@@ -83,6 +83,8 @@ const KENYA: PlaceEntry[] = [
   { name: 'Kitui', location: { lat: -1.3745, lng: 38.0106 } },
   { name: 'Lamu', location: { lat: -2.2717, lng: 40.902 } },
   { name: 'Moyale', location: { lat: 3.5231, lng: 39.0553 }, aliases: ['moyale border'] },
+  // 2026-11-12 — the main town between Isiolo and Moyale (the road-map plan found it missing): where a hub on that road stands.
+  { name: 'Marsabit', location: { lat: 2.3284, lng: 37.9899 } },
 ];
 
 const ETHIOPIA: PlaceEntry[] = [
@@ -108,6 +110,10 @@ const ETHIOPIA: PlaceEntry[] = [
   { name: 'Jimma', location: { lat: 7.67, lng: 36.83 } },
   { name: 'Dessie', location: { lat: 11.133, lng: 39.633 } },
   { name: 'Debre Birhan', location: { lat: 9.68, lng: 39.53 } },
+  // 2026-11-12 — the Ethiopian side of the Moyale road (the road-map plan): Ethiopia's own Moyale, across the border from
+  // Kenya's — a lookup that knows the reader's country keeps to its own — and Yabelo, on the road north to Hawassa.
+  { name: 'Moyale', location: { lat: 3.5389, lng: 39.0567 } },
+  { name: 'Yabelo', location: { lat: 4.8833, lng: 38.0833 } },
 ];
 
 const UGANDA: PlaceEntry[] = [

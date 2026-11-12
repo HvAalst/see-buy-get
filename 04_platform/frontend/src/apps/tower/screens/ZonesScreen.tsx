@@ -8,6 +8,8 @@ import { ConsoleFold } from '../ConsoleFold';
 import { holds } from '../staffRoles';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { ZoneAreaMap } from './ZoneAreaMap';
+import type { MapLine, MapPin } from './ZoneAreaMapLeaflet';
+import type { components } from '../../../lib/sbg';
 import {
   EMPTY_AREA_FORM,
   areaFormProblem,
@@ -261,6 +263,8 @@ export function ZonesScreen({ state, actions }: { state: TowerState; actions: To
           {writer ? <ImportFold setup={setup} busy={busy === 'import'} onSend={(form) => client && run('import', () => client.api.importZoneAreas(entityId, { geojson: form.text, source: form.source.trim(), licence: form.licence.trim(), attribution: form.attribution.trim(), ...(form.level.trim() ? { level: form.level.trim() } : {}), ...(form.nameField.trim() ? { nameField: form.nameField.trim() } : {}) }), t('tower.zones.import.sent'), { shapes: true })} /> : null}
 
           {setup.inForce ? <CatchmentsFold entityId={entityId} writer={writer} actions={actions} /> : null}
+          {/* 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 2). */}
+          <RoadMapFold entityId={entityId} writer={writer} actions={actions} />
 
           <VersionsFold setup={setup} />
         </>
@@ -681,6 +685,198 @@ function CatchmentsFold({ entityId, writer, actions }: { entityId: string; write
             })}
           </tbody>
         </table>
+      ) : null}
+    </ConsoleFold>
+  );
+}
+
+type RoadMap = components['schemas']['RoadMapView'];
+type RoadPlan = components['schemas']['RoadPlanView'];
+const NO_AREAS: ZoneAreaShape[] = [];
+const NONE_CHOSEN: ReadonlySet<string> = new Set();
+
+/**
+ * 2026-11-12 — A COUNTRY'S ROAD MAP OF HUBS (the plan "Hubs on the Road", step 2; the owner: "sbg staff to check that hubs sit
+ * around strategic locations and not too close to each other"). The system proposes which hubs are stops and which local
+ * only, and which stops are neighbours on the road; staff change what they know better and confirm it. Until it is
+ * confirmed, parcels go as they always have.
+ */
+function RoadMapFold({ entityId, writer, actions }: { entityId: string; writer: boolean; actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [view, setView] = useState<RoadMap | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [minKm, setMinKm] = useState('');
+  const [linkA, setLinkA] = useState('');
+  const [linkB, setLinkB] = useState('');
+  const take = (r: { error?: { detail?: string; title?: string } | null; data?: unknown }, message?: string) => {
+    if (r.error) return setProblem(r.error.detail || r.error.title || '');
+    setProblem(null);
+    const v = r.data as unknown as RoadMap;
+    setView(v);
+    setMinKm(String(v.minKm));
+    if (message) setSaid(message);
+  };
+  useEffect(() => {
+    if (!client) return;
+    let live = true;
+    void client.api.roadMap(entityId).then((r) => live && take(r as never));
+    return () => {
+      live = false;
+    };
+  }, [client, entityId]);
+  const act = async (write: () => Promise<unknown>, message: string) => {
+    setBusy(true);
+    setSaid(null);
+    take((await write()) as never, message);
+    setBusy(false);
+  };
+  const plan: RoadPlan | undefined = view?.draft ?? view?.confirmed ?? view?.proposal;
+  const which = view?.draft ? 'draft' : view?.confirmed ? 'confirmed' : 'proposal';
+  const at = useMemo(() => new Map((view?.hubs ?? []).map((h) => [h.mdpId, h])), [view]);
+  const pins: MapPin[] = useMemo(() => {
+    if (!plan || !view) return [];
+    const stops = new Set(plan.stops.map((s) => s.mdpId));
+    return view.hubs.map((h) => ({ id: h.mdpId, lat: h.location.lat, lng: h.location.lng, label: `${h.name} · ${t(h.down ? 'tower.roadMap.kind.down' : stops.has(h.mdpId) ? 'tower.roadMap.kind.stop' : 'tower.roadMap.kind.local')}`, kind: h.down ? 'down' : stops.has(h.mdpId) ? 'stop' : 'local' }));
+  }, [plan, view, t]);
+  const lines: MapLine[] = useMemo(() => {
+    if (!plan) return [];
+    const p = (id: string) => at.get(id)?.location;
+    const out: MapLine[] = [];
+    for (const l of plan.links) {
+      const [a, b] = [p(l.a), p(l.b)];
+      if (a && b) out.push({ from: [a.lat, a.lng], to: [b.lat, b.lng], kind: 'road' });
+    }
+    for (const l of plan.local) {
+      const [a, b] = [p(l.mdpId), p(l.via)];
+      if (a && b) out.push({ from: [a.lat, a.lng], to: [b.lat, b.lng], kind: 'via' });
+    }
+    return out;
+  }, [plan, at]);
+  const nameOf = (id: string) => at.get(id)?.name ?? id;
+  const hint = view?.confirmed ? t('tower.roadMap.hintConfirmed', { stops: view.confirmed.stops.length, by: view.confirmed.confirmedBy ?? '' }) : t('tower.roadMap.hintNone');
+  return (
+    <ConsoleFold title={t('tower.roadMap.title')} hint={view ? hint : ''}>
+      <p class="chint">{t('tower.roadMap.lede')}</p>
+      {problem ? (
+        <p class="cerr">
+          <Abbreviated text={problem} />
+        </p>
+      ) : null}
+      {said ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {said}
+        </p>
+      ) : null}
+      {view && view.hubs.length < 2 ? <p class="cons__empty">{t('tower.roadMap.fewHubs')}</p> : null}
+      {view && view.hubs.length >= 2 && plan ? (
+        <>
+          <p class="twr-clear__t">{t(`tower.roadMap.which.${which}` as never)}</p>
+          {view.confirmed && (view.joined.length || view.left.length) ? (
+            <p class="chint">{t('tower.roadMap.changedSince', { joined: view.joined.map(nameOf).join(', ') || '—', left: view.left.join(', ') || '—' })}</p>
+          ) : null}
+          {plan.pieces > 1 ? <p class="cerr">{t('tower.roadMap.pieces', { n: plan.pieces })}</p> : null}
+          {plan.tooClose.length ? <p class="chint">{t('tower.roadMap.tooClose', { pairs: plan.tooClose.map((p) => `${p.aName} – ${p.bName} (${Math.round(p.km)} km)`).join(', '), min: plan.minKm })}</p> : null}
+          <div class="twr-zonemap">
+            <ZoneAreaMap areas={NO_AREAS} setId={`road:${entityId}`} fillOf={() => '#ffffff'} labelOf={() => ''} chosen={NONE_CHOSEN} pins={pins} lines={lines} />
+            <p class="chint">{t('tower.roadMap.key')}</p>
+          </div>
+          <table class="ctbl ctbl--stack">
+            <thead>
+              <tr>
+                <th>{t('tower.roadMap.col.stop')}</th>
+                <th>{t('tower.roadMap.col.neighbours')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.stops.map((s) => (
+                <tr key={s.mdpId}>
+                  <td class="ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.roadMap.col.stop')}</span>
+                    {s.name}
+                    {writer && client ? (
+                      <>
+                        {' '}
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.api.setRoadMapRole(entityId, s.mdpId, 'local'), t('tower.roadMap.madeLocal', { hub: s.name }))}>
+                          {t('tower.roadMap.makeLocal')}
+                        </button>
+                      </>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.roadMap.col.neighbours')}</span>
+                    <ul class="twr-zonehubs">
+                      {s.neighbours.map((n) => (
+                        <li key={n.mdpId}>
+                          <span class="ctbl__strong">{n.name}</span> <span class="ctbl__sub">{t('tower.catchments.km', { km: Math.round(n.km).toLocaleString() })}</span>
+                          {writer && client ? (
+                            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-label={t('tower.roadMap.unlinkLabel', { a: s.name, b: n.name })} onClick={() => void act(() => client.api.setRoadMapLink(entityId, s.mdpId, n.mdpId, false), t('tower.roadMap.unlinked', { a: s.name, b: n.name }))}>
+                              {t('tower.roadMap.unlink')}
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {plan.local.length ? (
+            <>
+              <p class="twr-clear__t">{t('tower.roadMap.localTitle')}</p>
+              <ul class="twr-zonehubs">
+                {plan.local.map((l) => (
+                  <li key={l.mdpId}>
+                    <span class="ctbl__strong">{l.name}</span> <span class="ctbl__sub">{t('tower.roadMap.via', { hub: l.viaName, km: Math.round(l.km).toLocaleString() })}</span>
+                    {writer && client ? (
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.api.setRoadMapRole(entityId, l.mdpId, 'stop'), t('tower.roadMap.madeStop', { hub: l.name }))}>
+                        {t('tower.roadMap.makeStop')}
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {writer && client ? (
+            <div class="twr-knobs">
+              <div class="twr-knobs__row">
+                <section class="twr-knob">
+                  <p class="twr-clear__t">{t('tower.roadMap.addRoad')}</p>
+                  <ConsolePick label={t('tower.roadMap.from')} value={linkA} onChange={(v) => setLinkA(v)} small options={plan.stops.map((s) => ({ value: s.mdpId, label: s.name }))} />
+                  <ConsolePick label={t('tower.roadMap.to')} value={linkB} onChange={(v) => setLinkB(v)} small options={plan.stops.filter((s) => s.mdpId !== linkA).map((s) => ({ value: s.mdpId, label: s.name }))} />
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !linkA || !linkB || linkA === linkB} onClick={() => void act(() => client.api.setRoadMapLink(entityId, linkA, linkB, true), t('tower.roadMap.linked', { a: nameOf(linkA), b: nameOf(linkB) }))}>
+                    {t('tower.roadMap.add')}
+                  </button>
+                </section>
+                <section class="twr-knob">
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.roadMap.minKm')}</span>
+                    <input class="cinput" type="number" min={1} max={1000} inputMode="numeric" value={minKm} onInput={(e) => setMinKm(e.currentTarget.value)} />
+                  </label>
+                  <p class="chint">{t('tower.roadMap.minKmHint', { start: view.minKmStart })}</p>
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !Number(minKm) || Number(minKm) === view.minKm} onClick={() => void act(() => client.api.setRoadMapMinKm(entityId, Math.round(Number(minKm))), t('tower.roadMap.minKmSaved', { km: Math.round(Number(minKm)) }))}>
+                    {t('tower.rates.save')}
+                  </button>
+                </section>
+              </div>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.api.proposeRoadMap(entityId), t('tower.roadMap.proposed'))}>
+                  {t(view.draft ? 'tower.roadMap.proposeAgain' : 'tower.roadMap.propose')}
+                </button>
+                {view.draft ? (
+                  <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || plan.pieces > 1} onClick={() => void act(() => client.api.confirmRoadMap(entityId), t('tower.roadMap.confirmed'))}>
+                    {t('tower.roadMap.confirm')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </ConsoleFold>
   );

@@ -16,7 +16,30 @@ export interface ZoneAreaMapProps {
   focusZone?: string;
   /** Tapping an area chooses it, or lets it go. Absent: the map is only read. */
   onPick?: (areaId: string) => void;
+  /** 2026-11-12 — hubs drawn over the areas (the road map of hubs, where hubs are needed). */
+  pins?: MapPin[];
+  /** …and the roads between them, or a local hub to the stop that carries it. */
+  lines?: MapLine[];
 }
+
+/** A hub on the map: a stop (solid), local only (hollow), down (red), or a place a hub is suggested (an orange ring). */
+export interface MapPin {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  kind: 'stop' | 'local' | 'down' | 'suggested';
+}
+
+export interface MapLine {
+  from: [number, number];
+  to: [number, number];
+  kind: 'road' | 'via';
+}
+
+const NAVY = '#1d2a6b';
+const RED = '#c62828';
+const GREY = '#6b7085';
 
 const ORANGE = '#fb6200';
 const EDGE = '#3d4258';
@@ -30,11 +53,12 @@ function escapeHtml(s: string): string {
  * loaded only when the screen opens. Drawn on a canvas: a country's wards are over a thousand shapes. Names come from a
  * boundary file somebody uploaded, so they are escaped before they become a tooltip.
  */
-export function ZoneAreaMapLeaflet({ areas, setId, fillOf, labelOf, chosen, focusZone, onPick }: ZoneAreaMapProps) {
+export function ZoneAreaMapLeaflet({ areas, setId, fillOf, labelOf, chosen, focusZone, onPick, pins, lines }: ZoneAreaMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const shapesRef = useRef(new Map<string, L.Polygon>());
+  const overRef = useRef<L.LayerGroup | null>(null);
   const fittedRef = useRef('');
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
@@ -47,11 +71,13 @@ export function ZoneAreaMapLeaflet({ areas, setId, fillOf, labelOf, chosen, focu
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
+    overRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     return () => {
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      overRef.current = null;
       shapesRef.current.clear();
     };
   }, []);
@@ -82,6 +108,35 @@ export function ZoneAreaMapLeaflet({ areas, setId, fillOf, labelOf, chosen, focu
       fittedRef.current = sig;
     }
   }, [areas, setId, fillOf, labelOf]);
+
+  // 2026-11-12 — hubs and roads over the areas; with no areas, the view is fitted to the hubs.
+  useEffect(() => {
+    const map = mapRef.current;
+    const over = overRef.current;
+    if (!map || !over) return;
+    over.clearLayers();
+    for (const l of lines ?? []) {
+      L.polyline([l.from, l.to], l.kind === 'road' ? { color: NAVY, weight: 3, opacity: 0.8 } : { color: GREY, weight: 1.5, dashArray: '4 4', opacity: 0.9 }).addTo(over);
+    }
+    const bounds = L.latLngBounds([]);
+    for (const p of pins ?? []) {
+      const style =
+        p.kind === 'stop'
+          ? { radius: 7, color: '#ffffff', weight: 2, fillColor: NAVY, fillOpacity: 1 }
+          : p.kind === 'local'
+            ? { radius: 5, color: NAVY, weight: 2, fillColor: '#ffffff', fillOpacity: 1, dashArray: '2 2' }
+            : p.kind === 'down'
+              ? { radius: 6, color: '#ffffff', weight: 2, fillColor: RED, fillOpacity: 1 }
+              : { radius: 12, color: ORANGE, weight: 2.5, fillColor: ORANGE, fillOpacity: 0.12, dashArray: '5 4' };
+      L.circleMarker([p.lat, p.lng], style).bindTooltip(escapeHtml(p.label)).addTo(over);
+      bounds.extend([p.lat, p.lng]);
+    }
+    const sig = `${setId}:pins:${(pins ?? []).length}`;
+    if (!areas.length && bounds.isValid() && fittedRef.current !== sig) {
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 11 });
+      fittedRef.current = sig;
+    }
+  }, [pins, lines, areas.length, setId]);
 
   // What is chosen, drawn over the fills without drawing everything again.
   useEffect(() => {

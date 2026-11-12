@@ -86,6 +86,13 @@ export const enMdp = {
   // ---- Its space (2026-11-02, the owner: "shouldn't a hub also declare its space?") ----
   'mdp.space.title': 'Your floor',
   'mdp.counter.title': 'What your hub does',
+  'mdp.road.title': 'On the road',
+  'mdp.road.stop': 'Your hub is a stop on the road. Your floor sends towards these hubs, and to your own shops:',
+  'mdp.road.towards': 'Towards {hub}',
+  'mdp.road.ownShops': 'Your own shops',
+  'mdp.road.local': 'Your hub is local only: you sort for your own shops, and parcels passing through go by {hub} ({km}).',
+  'mdp.road.km': '{km} km',
+  'mdp.road.byStaff': 'Set by SeeBuyGet staff for your country, from the distances by road.',
   'mdp.down.title': 'If the hub cannot open',
   'mdp.down.lede': 'No power, a flood, nobody to work it: say so, and new bags go to other hubs until it opens again. Bags already on their way are sent on, and their drivers told.',
   'mdp.down.cta': 'Say the hub is down',

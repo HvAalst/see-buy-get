@@ -240,6 +240,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/mdps/:id/space',
         // 2026-11-09 — the zones a hub serves: its floor people read them.
         'GET sbg/mdps/:id/zones-served',
+        'GET sbg/mdps/:id/road',
         // 2026-11-09 — whether the hub sorts only or hands out too: its floor people read it.
         'GET sbg/mdps/:id/counter',
         // 2026-10-27 — a store's parcel called off at the hub: its new label, printed by the floor and put over the old one

@@ -8,6 +8,8 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { CatchmentService, HubZonesView } from './catchment.service';
 import { HubCounterService, HubCounterView } from './hub-counter.service';
 import { MdpService } from './mdp.service';
+import { RoadMapService } from './road-map.service';
+import { HubRoadView } from './road-map.types';
 import { HubCounterDto, HubZoneServeDto } from './pudo.dto';
 
 /**
@@ -22,7 +24,18 @@ export class HubZonesController {
     private readonly mdps: MdpService,
     private readonly catchments: CatchmentService,
     private readonly counters: HubCounterService,
+    private readonly roadMaps: RoadMapService,
   ) {}
+
+  /** 2026-11-12 — its place on the road (the plan "Hubs on the Road"): a stop and its neighbours, or the stop that carries it. */
+  @Roles('mdp', 'operator')
+  @Get('mdps/:id/road')
+  @AtTheCounter()
+  road(@Param('id') id: string, @Actor() actor: IntrospectionResult): HubRoadView {
+    const hub = this.mdps.require(id); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== hub.did)) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+    return this.roadMaps.ofHub(id);
+  }
 
   /** 2026-11-09 — what the hub does: sort only, or sort and hand out at its counter (a shop worked in the Shop app). */
   @Roles('mdp', 'operator')
