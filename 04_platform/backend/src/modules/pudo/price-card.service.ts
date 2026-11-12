@@ -121,6 +121,38 @@ export class PriceCardService {
     return card ? { entityId: company.entityId, card } : undefined;
   }
 
+  /** 2026-11-12 — the weights a contract card is priced at: the country's fixed card in force, else its starting sizes. */
+  fixedStepsFor(entityId: string, at: number = Date.now()): number[] {
+    const s = this.store.get(entityId);
+    const card = s ? this.inForceOf(s, at, 'fixed') : undefined;
+    return [...(card?.steps ?? FIXED_STEPS)];
+  }
+
+  /**
+   * 2026-11-12 — A SENDER'S CONTRACT CARD (the owner's D3), as a fixed card prices it: its own price for each weight, and the
+   * country's fixed card in force for the rest — its size rules and surcharges; no minimum but its own prices.
+   */
+  contractCard(entityId: string, rate: { steps?: number[]; prices?: number[]; perExtraKg?: number }, currency: string, at: number = Date.now()): StoredPriceCard {
+    const s = this.store.get(entityId);
+    const base = (s ? this.inForceOf(s, at, 'fixed') : undefined) ?? { ...this.neutralFixed(), currency };
+    const terms = this.termsOf(base);
+    return {
+      ...terms,
+      kind: 'fixed',
+      bands: [{ key: FIXED_BAND.key, name: 'Contract card', maxZones: null, maxKm: null }],
+      steps: [...(rate.steps ?? [])],
+      table: { [FIXED_BAND.key]: [...(rate.prices ?? [])] },
+      perExtraKg: { [FIXED_BAND.key]: rate.perExtraKg ?? 0 },
+      minimum: 0,
+      version: 0,
+      status: 'approved',
+      zoneMapVersion: 0,
+      currency,
+      createdAt: new Date(at).toISOString(),
+      createdBy: 'contract',
+    };
+  }
+
   /** The kind of card a company's country prices by: its mode — a fixed card, or by factors (the zones card). */
   kindFor(entityId: string): PriceCardKind {
     return this.entities.pricingModeFor(entityId) === 'factors' ? 'zones' : 'fixed';

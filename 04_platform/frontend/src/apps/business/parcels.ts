@@ -21,6 +21,17 @@ export interface ParcelAccount {
   moving: number;
   /** Where drivers collect its parcels: one of its own places (2026-10-29). */
   collection?: ParcelCollection;
+  /** 2026-11-12 — its own rate, agreed with our company (the owner's D3): read here, never changed here. */
+  rate?: { kind: 'card' | 'discount'; steps?: number[]; prices?: number[]; perExtraKg?: number; discountPct?: number; since: string; idle: boolean };
+}
+
+/** 2026-11-12 — the business's own rate in a sentence: its contract card's price for each weight, or its discount. */
+export function rateLine(rate: NonNullable<ParcelAccount['rate']>, company: string, currency: string, t: Translate): string {
+  const line =
+    rate.kind === 'card'
+      ? t('business.parcels.rateCard' as MessageKey, { company, prices: (rate.steps ?? []).map((kg, i) => `${kg} kg ${money(rate.prices?.[i] ?? 0, currency)}`).join(' · ') })
+      : t('business.parcels.rateDiscount' as MessageKey, { company, pct: Math.round((rate.discountPct ?? 0) * 1000) / 10 });
+  return rate.idle ? `${line} ${t('business.parcels.rateIdle' as MessageKey)}` : line;
 }
 
 export interface ParcelCollection {

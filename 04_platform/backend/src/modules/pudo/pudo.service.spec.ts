@@ -37,6 +37,7 @@ import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf,
 import { BagOfferService, dayInCountry } from './bag-offer.service';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
+import { BusinessRateService } from './business-rate.service';
 import { PriceCardService } from './price-card.service';
 import { CounterPriceService } from './counter-price.service';
 import { PriceReportService } from './price-report.service';
@@ -161,6 +162,7 @@ describe('PUDO Light', () => {
   let zoneMaps: ZoneMapService;
   let priceCards: PriceCardService;
   let counterPrices: CounterPriceService;
+  let businessRates: BusinessRateService;
   let priceReports: PriceReportService;
   let roadRouter: RoadRouter;
   let catchments: CatchmentService;
@@ -252,6 +254,7 @@ describe('PUDO Light', () => {
         ShopChoiceService, // 2026-11-06 — a bag for a shop that is closed (point 6)
         ZoneMapService, // 2026-11-08 — a country's zones, and its price card (zone pricing)
         PriceCardService,
+        BusinessRateService, // 2026-11-12 — a large sender's own rate (the owner's D3)
         CounterPriceService, // 2026-11-08 — what a counter keeps to price with no signal (step 3b)
         PriceReportService, // 2026-11-08 — price against planned cost per pair of zones (step 4)
         CatchmentService, // 2026-11-09 — which hub serves each zone (Part A)
@@ -294,6 +297,7 @@ describe('PUDO Light', () => {
     zoneMaps = moduleRef.get(ZoneMapService);
     priceCards = moduleRef.get(PriceCardService);
     counterPrices = moduleRef.get(CounterPriceService);
+    businessRates = moduleRef.get(BusinessRateService);
     priceReports = moduleRef.get(PriceReportService);
     roadRouter = moduleRef.get(RoadRouter);
     catchments = moduleRef.get(CatchmentService);
@@ -14327,6 +14331,43 @@ describe('PUDO Light', () => {
       expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toMatchObject({ band: 'local', amount: 80 });
       entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
       expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toMatchObject({ band: 'all', amount: 150 });
+    });
+
+    it('a large sender’s own rate prices its parcels: its contract card on a fixed card, its discount by factors — only its own, only once approved (the owner’s D3, 2026-11-12)', () => {
+      const west = shopAt('BR West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('BR East', { lat: -1.25, lng: 36.75 });
+      const big = vendors.register({ name: 'BR Big Store' });
+      const small = vendors.register({ name: 'BR Small Store' });
+      const quote = (vendorId?: string) => routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, ...(vendorId ? { vendorId } : {}) });
+      // A fixed card country, no card in force: its contract card prices its parcels — and nobody else's.
+      entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+      businessRates.propose('sbg-ke', { vendorId: big.vendorId, kind: 'card', prices: [60, 90, 150, 240] }, A);
+      expect(quote(big.vendorId).zone).toBeUndefined(); // proposed, not approved: the country's prices
+      businessRates.approve('sbg-ke', big.vendorId, B);
+      const own = quote(big.vendorId);
+      expect(own.zone).toMatchObject({ band: 'all', bandName: 'Contract card', amount: 90 });
+      expect(own.businessRate).toEqual({ kind: 'card' });
+      expect(own.locked.base).toBe(Math.round((90 + west.pricePerParcel + east.pricePerParcel) * 100) / 100);
+      expect(quote(small.vendorId).zone).toBeUndefined();
+      expect(quote(small.vendorId).businessRate).toBeUndefined();
+      expect(quote().businessRate).toBeUndefined();
+      // By factors with a zones card in force: the card prices it; its contract card idles.
+      entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
+      cardInForce();
+      expect(quote(big.vendorId).zone).toMatchObject({ band: 'local', amount: 80 });
+      expect(quote(big.vendorId).businessRate).toBeUndefined();
+      // A discount, approved: 10% off the formula's price; the shops' own fees as they were.
+      businessRates.propose('sbg-ke', { vendorId: big.vendorId, kind: 'discount', discountPct: 0.1 }, A);
+      businessRates.approve('sbg-ke', big.vendorId, B);
+      const off = quote(big.vendorId);
+      expect(off.businessRate).toEqual({ kind: 'discount', discountPct: 0.1 });
+      expect(off.zone).toMatchObject({ amount: 80 });
+      expect(off.locked.transport).toBe(72);
+      expect(off.locked.base).toBe(Math.round((72 + west.pricePerParcel + east.pricePerParcel) * 100) / 100);
+      expect(quote(small.vendorId).locked.transport).toBe(80);
+      // Ended: the country's prices again.
+      businessRates.end('sbg-ke', big.vendorId, A);
+      expect(quote(big.vendorId).locked.transport).toBe(80);
     });
 
     it('rounds a person’s price to the country’s cash step, the tax worked out of it; a business pays it to the cent', () => {

@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ZoneMapService } from './zone-map.service';
+import { BusinessRateService } from './business-rate.service';
 import { DropOffMoveService, MoveView, MovedView } from './drop-off-move.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -120,6 +121,8 @@ export class BusinessParcelService {
     @Optional() private readonly moves?: DropOffMoveService,
     // 2026-11-09 — a zone its company delivers no doors in, or does not serve (zone flags).
     @Optional() private readonly zones?: ZoneMapService,
+    // 2026-11-12 — its own rate (the owner's D3).
+    @Optional() private readonly rates?: BusinessRateService,
   ) {}
 
   /* ------------------------------------------------------------------ the account -- */
@@ -147,6 +150,8 @@ export class BusinessParcelService {
       unpaid: stats.unpaid,
       moving: stats.active,
       ...(v.collection ? { collection: this.collectionOf(v) } : {}),
+      // 2026-11-12 — its own rate, where the country's staff gave it one (the owner's D3): read here, never changed.
+      ...(this.rates?.ownRate(v.vendorId) ? { rate: this.rates.ownRate(v.vendorId) } : {}),
     };
   }
 
@@ -515,8 +520,8 @@ export class BusinessParcelService {
     const dock = origin ? undefined : v.collection;
     if (!origin && !dock) throw new GlosError('INVALID_STATE', 'Choose the place of yours drivers collect from first');
     const quote = dock
-      ? this.routing.quoteShipmentFrom({ type: 'dock', id: v.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(v), location: dock.location }, dest, size, this.vendors.entityIdOf(v), measured, { kg, fragile, dims })
-      : this.routing.quoteShipment(origin!, dest, size, measured, { kg, fragile, dims });
+      ? this.routing.quoteShipmentFrom({ type: 'dock', id: v.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(v), location: dock.location }, dest, size, this.vendors.entityIdOf(v), measured, { kg, fragile, dims, vendorId: v.vendorId })
+      : this.routing.quoteShipment(origin!, dest, size, measured, { kg, fragile, dims, vendorId: v.vendorId });
     return { quote, size };
   }
 

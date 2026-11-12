@@ -104,4 +104,21 @@ describe('a hub’s fees up to its country’s ceiling', () => {
     expect(started.pending[0]).toMatchObject({ kind: 'fixed', zoneMapVersion: 0, bands: [{ key: 'all' }] });
     await http().delete('/v1/sbg/entities/sbg-et/price-cards/draft').set(operator).expect(200);
   });
+
+  /** 2026-11-12 — the owner's D3: "Large senders negotiate" — a sender's own rate, over the wire. */
+  it('the country’s senders’ rates are staff’s to read and propose; a rate is for one of the country’s own senders, within its limits', async () => {
+    const rates = '/v1/sbg/entities/sbg-ke/business-rates';
+    const view = (await http().get(rates).set(operator).expect(200)).body;
+    expect(view).toMatchObject({ entityId: 'sbg-ke', mode: 'fixed', steps: [1, 5, 15, 30] });
+    expect(Array.isArray(view.senders)).toBe(true);
+    const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: 'Rate Hub', zones: ['RATE-1'], location: { lat: -1.33, lng: 36.87 } }).expect(201)).body;
+    const asHub = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
+    declared(app, 'hub', hub.did);
+    await http().get(rates).set(asHub).expect(403);
+    await http().post(rates).set(asHub).send({ vendorId: 'v-anyone', kind: 'discount', discountPct: 0.1 }).expect(403);
+    // At most half off; and only one of the country's own senders.
+    await http().post(rates).set(operator).send({ vendorId: 'v-anyone', kind: 'discount', discountPct: 0.9 }).expect(400);
+    expect((await http().post(rates).set(operator).send({ vendorId: 'v-nobody-here', kind: 'discount', discountPct: 0.1 }).expect(404)).body.detail).toMatch(/not one of this country’s sender accounts/);
+    expect((await http().post(`${rates}/v-nobody-here/approve`).set(operator).expect(400)).body.detail).toMatch(/No rate is waiting/);
+  });
 });

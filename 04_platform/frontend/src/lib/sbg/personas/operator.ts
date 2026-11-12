@@ -219,6 +219,12 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/settings', { params: { path: { entityId } }, body })),
     startPriceCard: (entityId: string, zoneMapVersion?: number, kind?: 'zones' | 'fixed') =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } }, body: { ...(zoneMapVersion ? { zoneMapVersion } : {}), ...(kind ? { kind } : {}) } })),
+    /** 2026-11-12 — the owner's D3: a large sender's own rate — its contract card or its discount; a second person approves. */
+    businessRates: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/business-rates', { params: { path: { entityId } } })),
+    proposeBusinessRate: (entityId: string, body: { vendorId: string; kind: 'card' | 'discount'; prices?: number[]; perExtraKg?: number; discountPct?: number; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/business-rates', { params: { path: { entityId } }, body })),
+    approveBusinessRate: (entityId: string, vendorId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/business-rates/{vendorId}/approve', { params: { path: { entityId, vendorId } } })),
+    endBusinessRate: (entityId: string, vendorId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/business-rates/{vendorId}/end', { params: { path: { entityId, vendorId } } })),
     /** 2026-11-12 — the owner's D3: how parcels are priced in a country — a fixed card, or by factors (the zones card). */
     setPricingMode: (entityId: string, mode: 'fixed' | 'factors') => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/pricing-mode', { params: { path: { entityId } }, body: { mode } })),
     savePriceCard: (entityId: string, terms: unknown) =>

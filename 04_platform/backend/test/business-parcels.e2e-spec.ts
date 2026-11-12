@@ -7,6 +7,7 @@ import { AGREED } from './agreed';
 import { FundingService } from '../src/foundation/funding/funding.service';
 import { VendorService } from '../src/modules/pudo/vendor.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
+import { BusinessRateService } from '../src/modules/pudo/business-rate.service';
 
 /**
  * A BUSINESS'S PARCELS, over the wire (the user, 2026-10-29: "Billed to the business"; "A prepaid balance"). A business
@@ -191,6 +192,21 @@ describe('a business’s parcels, paid from its own balance', () => {
     // No road, so nothing between the cheapest and the dearest carrier: the two prices are one.
     expect(here.locked).toBeGreaterThan(0);
     expect(here.flexible).toBe(here.locked);
+    // 2026-11-12 — ITS OWN RATE (the owner's D3: "Large senders negotiate"): a contract card the country's staff gave it — one
+    // proposed it, a second approved it — prices its parcels, and its account says so; another business pays the country's.
+    const rates = app.get(BusinessRateService);
+    const till = app.get(VendorService).forBusiness(biz.entityId)!;
+    rates.propose('sbg-ke', { vendorId: till.vendorId, kind: 'card', prices: [100, 200, 300, 400] }, { name: 'Njeri W.', id: 'acct-1' });
+    rates.approve('sbg-ke', till.vendorId, { name: 'Otieno K.', id: 'acct-2' });
+    try {
+      const priceAt = (token: { authorization: string }) => http().get('/v1/sbg/business/me/parcels/price').set(token).query({ origin: nairobi, dest: nairobi, l: 30, w: 20, h: 10, kg: 2 }).expect(200).then((r) => r.body);
+      expect((await priceAt(biz.token)).locked).toBeGreaterThan(here.locked);
+      expect((await priceAt(other.token)).locked).toBe(here.locked);
+      expect((await http().get('/v1/sbg/business/me/parcels/account').set(biz.token).expect(200)).body.rate).toMatchObject({ kind: 'card', prices: [100, 200, 300, 400], idle: false });
+      expect((await http().get('/v1/sbg/business/me/parcels/account').set(other.token).expect(200)).body.rate).toBeUndefined();
+    } finally {
+      rates.end('sbg-ke', till.vendorId, { name: 'Njeri W.', id: 'acct-1' });
+    }
     // A pallet goes as a load.
     expect((await send(biz.token, base(await photo(biz.token), { dimensionsCm: { l: 120, w: 100, h: 150 }, weightKg: 600 })).expect(400)).body).toMatchObject({ code: 'CARGO_REQUIRES_DEDICATED', detail: expect.stringMatching(/post it as a load, under Domestic$/) });
     expect((await http().get('/v1/sbg/business/me/parcels/account').set(biz.token).expect(200)).body.sent).toBe(0);

@@ -1,3 +1,4 @@
+import { OwnBusinessRate } from './business-rate.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
@@ -278,6 +279,8 @@ export class BusinessParcelAccountView {
   @ApiProperty() moving!: number;
   /** Where drivers collect its parcels, where it set one of its places for it. */
   @ApiPropertyOptional({ type: () => ParcelCollection }) collection?: ParcelCollection;
+  /** 2026-11-12 — its own rate, where the country's staff gave it one (the owner's D3): a contract card, or a discount. */
+  @ApiPropertyOptional({ type: () => OwnBusinessRate }) rate?: OwnBusinessRate;
 }
 
 /** A shop at one end of a parcel. */

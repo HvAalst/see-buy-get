@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_PARCEL, OWN_PLACE, TO_PLACE, parcelPriceGaps, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
+import { EMPTY_PARCEL, OWN_PLACE, TO_PLACE, parcelPriceGaps, rateLine, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
 
 const t = ((key: string) => key) as never;
 
@@ -79,5 +79,19 @@ describe('a business’s parcels', () => {
     expect(parcelStage({ status: 'Delivered', paid: true })).toBe('collected');
     expect(parcelStage({ status: 'Voided', paid: true })).toBe('called_off');
     expect(parcelStage({ status: 'Lost', paid: true })).toBe('problem');
+  });
+});
+
+describe('its own rate, read in the Business app (the owner’s D3, 2026-11-12)', () => {
+  const words = (key: string, p?: Record<string, string | number>) => `${key}${p ? ' ' + JSON.stringify(p) : ''}`;
+  it('says its contract card weight by weight, or its discount, and when it does not apply', () => {
+    const card = rateLine({ kind: 'card', steps: [1, 5], prices: [60, 90], since: '2026-11-12', idle: false }, 'SeeBuyGet Kenya', 'KES', words as never);
+    expect(card).toContain('business.parcels.rateCard');
+    expect(card).toContain('SeeBuyGet Kenya');
+    expect(card.replace(/[  ]/g, ' ')).toMatch(/1 kg 60\.00 KES · 5 kg 90\.00 KES/);
+    expect(card).not.toContain('rateIdle');
+    const off = rateLine({ kind: 'discount', discountPct: 0.1, since: '2026-11-12', idle: true }, 'SeeBuyGet Kenya', 'KES', words as never);
+    expect(off).toContain('"pct":10');
+    expect(off).toContain('business.parcels.rateIdle');
   });
 });

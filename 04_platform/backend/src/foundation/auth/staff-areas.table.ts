@@ -313,6 +313,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/entities/:entityId/zones/shapes': 'admin',
   // 2026-11-08 — a country's price card (zone pricing, step 2).
   'GET sbg/entities/:entityId/price-cards': 'admin',
+  'GET sbg/entities/:entityId/business-rates': 'money',
   'GET sbg/entities/:entityId/catchments': 'admin',
   'GET sbg/entities/:entityId/road-map': 'admin',
   'GET sbg/entities/:entityId/hub-density': 'admin',
@@ -810,6 +811,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/entities/:entityId/zones/draft/publish': 'admin',
   'POST sbg/entities/:entityId/price-cards/settings': 'admin',
   'POST sbg/entities/:entityId/pricing-mode': 'admin',
+  'POST sbg/entities/:entityId/business-rates': 'money',
+  'POST sbg/entities/:entityId/business-rates/:vendorId/approve': 'money',
+  'POST sbg/entities/:entityId/business-rates/:vendorId/end': 'money',
   'POST sbg/entities/:entityId/price-cards/draft': 'admin',
   'POST sbg/entities/:entityId/price-cards/draft/terms': 'admin',
   'DELETE sbg/entities/:entityId/price-cards/draft': 'admin',

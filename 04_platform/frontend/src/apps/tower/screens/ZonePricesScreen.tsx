@@ -4,6 +4,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ConsolePick } from '../ConsolePick';
 import { ConsoleFold } from '../ConsoleFold';
+import { BusinessRatesFold } from './BusinessRatesFold';
 import { holds } from '../staffRoles';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import type { ZoneSetup } from '../zones';
@@ -129,6 +130,7 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
         <p class="cons__empty">{t('tower.prices.loading')}</p>
       ) : (
         <>
+          <BusinessRatesFold entityId={entityId} actions={actions} />
           <ModeFold view={view} writer={writer} busy={busy === 'mode'} onSave={(mode) => client && run('mode', () => client.api.setPricingMode(entityId, mode), t(mode === 'fixed' ? 'tower.prices.mode.savedFixed' : 'tower.prices.mode.savedFactors'))} />
           <section class="cons__panel twr-zonestatus">
             {view.inForce ? (

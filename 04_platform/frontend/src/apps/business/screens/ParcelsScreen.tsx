@@ -35,6 +35,7 @@ import {
   type NetworkShop,
   type ParcelCollection,
   type ParcelAccount,
+  rateLine,
   type ParcelBookLine,
   type ParcelCallOff,
   type ParcelMove,
@@ -193,6 +194,8 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
           <span class="cons__panelt">{t('business.parcels.moneyTitle')}</span>
         </div>
         <p class="chint">{t('business.parcels.heldBy', { company: account.company?.name ?? '' })}</p>
+        {/* 2026-11-12 — its own rate, agreed with our company (the owner's D3). */}
+        {account.rate ? <p class="chint">{rateLine(account.rate, account.company?.name ?? '', currency, t)}</p> : null}
         {account.waiting ? (
           <p class="cnote" role="status">
             {t(account.waiting.pushed ? 'business.parcels.waitingPushed' : 'business.parcels.waiting', { amount: money(account.waiting.amount, account.waiting.currency), reference: account.waiting.reference })}

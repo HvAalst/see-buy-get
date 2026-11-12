@@ -22,6 +22,7 @@ import { PriceCardService } from './price-card.service';
 import { ZoneMapService } from './zone-map.service';
 import { CatchmentService } from './catchment.service';
 import { RoadMapService } from './road-map.service';
+import { BusinessRateService } from './business-rate.service';
 import type { ZonePrice } from './price-card.types';
 
 /**
@@ -43,6 +44,11 @@ export interface QuoteCarriers {
    * company has since marked not served — the parcel is on its way and must come back.
    */
   replan?: boolean;
+  /**
+   * 2026-11-12 — the sender account it is priced for (a store or a business): where the country's staff gave it a rate of its
+   * own (the owner's D3), its contract card prices it on a fixed card, its discount by factors.
+   */
+  vendorId?: string;
 }
 
 export interface NodePick {
@@ -129,6 +135,8 @@ export interface QuoteNode {
 export type QuoteFx = ParcelFx;
 export interface ShipmentQuote {
   hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string; country: string; location?: GeoPoint }>;
+  /** 2026-11-12 — the sender's own rate that priced it (the owner's D3): its contract card, or its discount. Absent: the country's prices. */
+  businessRate?: { kind: 'card' | 'discount'; discountPct?: number };
   /** 2026-11-08 — where the country's price card priced it: what the card's price was made of. Absent: priced by the route. */
   zone?: ZonePrice;
   nodes: QuoteNode[]; // each stop + its open-data fee (the tail)
@@ -295,6 +303,8 @@ export class RoutingService {
     @Optional() private readonly catchments?: CatchmentService,
     // 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 4): a journey's hubs along the road, where on.
     @Optional() private readonly roadMaps?: RoadMapService,
+    // 2026-11-12 — a large sender's own rate (the owner's D3): its contract card, or its discount.
+    @Optional() private readonly businessRates?: BusinessRateService,
   ) {}
 
   /**
@@ -484,7 +494,14 @@ export class RoutingService {
     // 2026-11-08 — ZONE PRICES (step 3). Where the selling company's country has a price card in force and the whole journey
     // stays in that country, the card prices it, and the two shops' own fees are added as before; the hubs are paid their own
     // fees out of it. Anywhere else — no card, a border crossed, a pin in no zone — the route prices it as it always has.
-    const zoned = this.cardPriceFor(plan, size, sellerId, currency, nodes, carriers);
+    // 2026-11-12 — THE SENDER'S OWN RATE (the owner's D3: "Large senders negotiate"): a contract card prices it while the
+    // country prices by a fixed card; a discount comes off the formula while it prices by factors. Hubs and shops are paid
+    // their own fees as before: the network carries what it gives away.
+    const rate = this.businessRates?.rateFor(sellerId, carriers.vendorId);
+    const mode = this.entities.pricingModeFor(sellerId);
+    const contract = rate?.kind === 'card' && mode === 'fixed' ? rate : undefined;
+    const discount = rate?.kind === 'discount' && mode === 'factors' ? (rate.discountPct ?? 0) : 0;
+    const zoned = this.cardPriceFor(plan, size, sellerId, currency, nodes, carriers, contract);
     const rates = [...used.values()];
     // What the buffer actually came to, in money: the gap between what the buyer is charged for the
     // foreign stops and what the sisters will settle them at. Computed HERE, where both numbers exist,
@@ -515,7 +532,8 @@ export class RoutingService {
     };
     const leg = (rate: number): QuoteLeg => {
       // On a card the price is the card's whatever carrier takes it: the two legs come to the same figure.
-      const t = zoned ? zoned.price.amount : transport(rate);
+      const full = zoned ? zoned.price.amount : transport(rate);
+      const t = discount > 0 ? Math.round(full * (1 - discount) * 100) / 100 : full;
       const base = Math.round(((zoned ? zoned.shopFees : nodeFees) + t) * 100) / 100;
       let total = withPlatformFee(base, feePct);
       // Tax on the WHOLE price including the platform's take, not on the cost base — what is taxed is the
@@ -535,6 +553,7 @@ export class RoutingService {
       totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', ...(measured != null && chargedByOf(measured, carriers.kg) ? { chargedBy: chargedByOf(measured, carriers.kg) } : {}), perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
       ...(zoned ? { zone: { ...zoned.price, plannedCost: plannedCostOf() } } : {}),
+      ...(contract && zoned?.contract ? { businessRate: { kind: 'card' as const } } : discount > 0 ? { businessRate: { kind: 'discount' as const, discountPct: discount } } : {}),
     };
   }
 
@@ -550,11 +569,14 @@ export class RoutingService {
     currency: string,
     nodes: QuoteNode[],
     carriers: QuoteCarriers,
-  ): { price: ZonePrice; shopFees: number; cashStep: number } | undefined {
+    contract?: { steps?: number[]; prices?: number[]; perExtraKg?: number },
+  ): { price: ZonePrice; shopFees: number; cashStep: number; contract?: boolean } | undefined {
     if (!this.priceCards || !plan.hops.length) return undefined;
     const country = this.entities.find(sellerId)?.jurisdiction;
     if (!country || plan.hops.some((h) => (h.country ?? NETWORK_JURISDICTION) !== country)) return undefined;
-    const live = this.priceCards.inForceFor(country, carriers.at ?? Date.now());
+    // 2026-11-12 — a sender's contract card prices its parcels as a fixed card does, card in force or not (the owner's D3).
+    const at = carriers.at ?? Date.now();
+    const live = contract ? { entityId: sellerId, card: this.priceCards.contractCard(sellerId, contract, currency, at) } : this.priceCards.inForceFor(country, at);
     if (!live || live.card.currency !== currency) return undefined;
     const first = plan.hops[0];
     const last = plan.hops[plan.hops.length - 1];
@@ -567,7 +589,7 @@ export class RoutingService {
     const price = this.priceCards.priceOn(live.entityId, live.card, { from: from!, to: to!, kg: carriers.kg ?? SIZE_WEIGHT_KG[size], dims: carriers.dims, fragile: carriers.fragile });
     const shopFee = (h: { type: string; id: string }) => (h.type === 'pudo' ? (nodes.find((n) => n.type === 'pudo' && n.id === h.id)?.fee ?? 0) : 0);
     const shopFees = Math.round((shopFee(first) + (plan.hops.length > 1 ? shopFee(last) : 0)) * 100) / 100;
-    return { price, shopFees, cashStep: live.card.cashStep };
+    return { price, shopFees, cashStep: live.card.cashStep, ...(contract ? { contract: true } : {}) };
   }
 
   /** The money a sister is owed in — from the company, never from a deployment default. */

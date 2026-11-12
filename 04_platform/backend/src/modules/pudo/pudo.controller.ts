@@ -201,6 +201,8 @@ import { offPlanSaid } from './route-plan.types';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
+import { BusinessRateService } from './business-rate.service';
+import { BusinessRateDto, type BusinessRatesView } from './business-rate.types';
 import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
 import { PriceReportService, PriceReportView } from './price-report.service';
@@ -390,6 +392,8 @@ export class SbgController {
     @Optional() private readonly counterPrices?: CounterPriceService,
     // 2026-11-08 — price against planned cost per pair of zones, a week at a time (zone pricing, step 4).
     @Optional() private readonly priceReports?: PriceReportService,
+    // 2026-11-12 — a large sender's own rate (the owner's D3).
+    @Optional() private readonly businessRates?: BusinessRateService,
     // 2026-11-09 — the GLNs SeeBuyGet gave its hubs and collection points, under its own GS1 prefix.
     @Optional() private readonly ourGlns?: OurGlnBook,
     // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
@@ -3201,6 +3205,38 @@ export class SbgController {
     return this.cardsOf().overview(entityId);
   }
 
+  /**
+   * 2026-11-12 — A LARGE SENDER'S OWN RATE (the owner's D3: "Large senders negotiate"): the country's rates, its sender accounts,
+   * and the weights a contract card is priced at. Proposed by staff, approved by a second member of staff, ended by staff.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/business-rates')
+  entityBusinessRates(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): BusinessRatesView {
+    this.requireReach(actor, entityId);
+    return this.ratesOf().view(entityId);
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/business-rates')
+  proposeBusinessRate(@Param('entityId') entityId: string, @Body() dto: BusinessRateDto, @Actor() actor: IntrospectionResult): BusinessRatesView {
+    this.requireReach(actor, entityId);
+    return this.ratesOf().propose(entityId, dto, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/business-rates/:vendorId/approve')
+  approveBusinessRate(@Param('entityId') entityId: string, @Param('vendorId') vendorId: string, @Actor() actor: IntrospectionResult): BusinessRatesView {
+    this.requireReach(actor, entityId);
+    return this.ratesOf().approve(entityId, vendorId, this.doerOf(actor));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/business-rates/:vendorId/end')
+  endBusinessRate(@Param('entityId') entityId: string, @Param('vendorId') vendorId: string, @Actor() actor: IntrospectionResult): BusinessRatesView {
+    this.requireReach(actor, entityId);
+    return this.ratesOf().end(entityId, vendorId, this.doerOf(actor));
+  }
+
   /** Whether its regulator must have each card filed and cleared, and how many days' notice a new card gives. */
   @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/price-cards/settings')
@@ -5246,7 +5282,7 @@ export class SbgController {
     const hubFrom = hub ? this.routing.hubEnd(hub.mdpId) : undefined;
     const dock = dto.originPudoDid || hub ? undefined : this.vendors.requireCollection(dto.vendorId);
     const quote = hubFrom
-      ? this.routing.quoteShipmentFrom(hubFrom, destPudoDid, size, this.vendors.entityIdOf(vendor), measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) })
+      ? this.routing.quoteShipmentFrom(hubFrom, destPudoDid, size, this.vendors.entityIdOf(vendor), measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), vendorId: vendor.vendorId })
       : dock
       ? this.routing.quoteShipmentFrom(
           { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(vendor), location: dock.location },
@@ -5256,7 +5292,7 @@ export class SbgController {
           measured,
           { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) },
         )
-      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}) });
+      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), vendorId: vendor.vendorId });
     // (The hub branch above is the third way a store's parcel starts; see HubArrivalService.)
     // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
     // before the parcel exists; one staying inside a country needs none and is told so.
@@ -8622,6 +8658,11 @@ export class SbgController {
   }
 
   /** Who is acting: the name for the record, and the account, which tells two people apart (never their names). */
+  private ratesOf(): BusinessRateService {
+    if (!this.businessRates) throw new GlosError('NOT_FOUND', 'Senders’ rates are not available on this server');
+    return this.businessRates;
+  }
+
   private doerOf(actor: IntrospectionResult): Doer {
     return { name: auditActor(actor), id: actor?.sub || actor?.did || auditActor(actor) };
   }

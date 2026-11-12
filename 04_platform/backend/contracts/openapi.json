@@ -14604,6 +14604,140 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/business-rates": {
+      "get": {
+        "operationId": "Sbg.entityBusinessRates",
+        "summary": "",
+        "description": "2026-11-12 — A LARGE SENDER'S OWN RATE (the owner's D3: \"Large senders negotiate\"): the country's rates, its sender accounts,\nand the weights a contract card is priced at. Proposed by staff, approved by a second member of staff, ended by staff.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessRatesView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.proposeBusinessRate",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessRateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessRatesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/business-rates/{vendorId}/approve": {
+      "post": {
+        "operationId": "Sbg.approveBusinessRate",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessRatesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/business-rates/{vendorId}/end": {
+      "post": {
+        "operationId": "Sbg.endBusinessRate",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessRatesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/price-cards/settings": {
       "post": {
         "operationId": "Sbg.setEntityPriceCardSettings",
@@ -42315,6 +42449,47 @@
           "since"
         ]
       },
+      "OwnBusinessRate": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "card",
+              "discount"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "perExtraKg": {
+            "type": "number"
+          },
+          "discountPct": {
+            "type": "number"
+          },
+          "since": {
+            "type": "string"
+          },
+          "idle": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "since",
+          "idle"
+        ]
+      },
       "BusinessParcelAccountView": {
         "type": "object",
         "properties": {
@@ -42357,6 +42532,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ParcelCollection"
+              }
+            ]
+          },
+          "rate": {
+            "description": "2026-11-12 — its own rate, where the country's staff gave it one (the owner's D3): a contract card, or a discount.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OwnBusinessRate"
               }
             ]
           }
@@ -58968,6 +59151,7 @@
               "hubList",
               "hubFeeCeiling",
               "pricingMode",
+              "businessRates",
               "zones",
               "prices",
               "catchments",
@@ -61754,6 +61938,186 @@
         },
         "required": [
           "mode"
+        ]
+      },
+      "BusinessRateTerms": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "card",
+              "discount"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "perExtraKg": {
+            "type": "number"
+          },
+          "discountPct": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "proposedBy",
+          "proposedAt"
+        ]
+      },
+      "BusinessRateRow": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "$ref": "#/components/schemas/BusinessRateTerms"
+          },
+          "proposed": {
+            "$ref": "#/components/schemas/BusinessRateTerms"
+          },
+          "idle": {
+            "type": "boolean",
+            "description": "The rate in force prices nothing while the country prices the other way: a card on factors, a discount on a fixed card."
+          },
+          "vendorId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The sender's name: its store's, or its business's."
+          }
+        },
+        "required": [
+          "idle",
+          "vendorId",
+          "name"
+        ]
+      },
+      "BusinessRateSender": {
+        "type": "object",
+        "properties": {
+          "vendorId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendorId",
+          "name"
+        ]
+      },
+      "BusinessRatesView": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "How parcels are priced in the country: a contract card applies on a fixed card, a discount by factors.",
+            "enum": [
+              "fixed",
+              "factors"
+            ]
+          },
+          "steps": {
+            "description": "The weights a new contract card has a price for: the country's fixed card in force, else its starting sizes.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessRateRow"
+            }
+          },
+          "senders": {
+            "description": "The country's sender accounts, to choose from.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessRateSender"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "steps",
+          "rows",
+          "senders",
+          "entityId",
+          "currency"
+        ]
+      },
+      "BusinessRateDto": {
+        "type": "object",
+        "properties": {
+          "vendorId": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "card",
+              "discount"
+            ]
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "perExtraKg": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discountPct": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 0.5
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "vendorId",
+          "kind"
         ]
       },
       "PriceCardSettingsDto": {
