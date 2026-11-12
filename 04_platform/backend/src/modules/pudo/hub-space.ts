@@ -46,7 +46,16 @@ export interface HubFloorBook {
   days?: Record<string, HubDay>;
   /** 2026-11-12 — hours its last parcels stood on its floor before their bag left (arrival times count the median). */
   dwells?: number[];
+  /**
+   * 2026-11-12 — BY DAY, how much it sorted for each far hub (a parcel's last hub, not its next stop), in bag units: a far hub
+   * gets its own bin once that filled a bag on THROUGH_DAYS_FULL of the last THROUGH_DAYS (D4). Kept THROUGH_DAYS.
+   */
+  through?: Record<string, Record<string, number>>;
 }
+
+/** D4 — a far hub's own bin: its parcels filled a bag on this many of the last THROUGH_DAYS days. */
+export const THROUGH_DAYS = 14;
+export const THROUGH_DAYS_FULL = 10;
 
 export interface HubDay {
   sorted: number;

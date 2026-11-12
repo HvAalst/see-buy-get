@@ -23,6 +23,8 @@ export interface MdpView {
   gln?: string;
   location?: { lat: number; lng: number };
   pricePerParcel: number;
+  /** 2026-11-12 — what a whole bag passed on unopened pays it (its own fee, else its country's list figure). */
+  passOnFee?: number;
   /** The country it stands in. Absent on a hub registered before hubs said one: the network's home country. */
   country?: string;
   /** The money the fee is in: the company’s that contracts the hub. Merged in by the controller. */
@@ -142,6 +144,8 @@ export interface DropView {
   emptied: string[];
   /** 2026-11-06 — those its plan did not have coming here, nobody having said why: the stop each was planned to go to. */
   offPlan?: Array<{ parcelId: string; planned: string }>;
+  /** 2026-11-12 — a whole bag for a hub further on: received on its seal, not opened, on its way again. */
+  passedOn?: { code: string; next: string; final: string };
 }
 
 export interface LoadView {

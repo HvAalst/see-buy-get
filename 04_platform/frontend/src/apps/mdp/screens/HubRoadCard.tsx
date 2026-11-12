@@ -40,6 +40,12 @@ export function HubRoadCard({ sbg, mdpId }: { sbg: SbgClient | null; mdpId?: str
             <li>
               <b>{t('mdp.road.ownShops')}</b>
             </li>
+            {/* 2026-11-12 — whole bags for far hubs (step 5): a bin of their own, on the bin towards the next stop's road. */}
+            {view.throughBins.map((b) => (
+              <li key={b.mdpId}>
+                <b>{t('mdp.road.wholeTo', { hub: b.name })}</b> <span class="hint">{t('mdp.road.wholeVia', { hub: b.viaName })}</span>
+              </li>
+            ))}
           </ul>
         </>
       ) : view.via ? (

@@ -257,6 +257,33 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /** 2026-11-12 — a whole bag for a far hub, passed on unopened by the hubs on the way (step 5). */
+  markThrough(code: string, throughTo: string, name: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.throughTo = throughTo;
+    tote.throughToName = name;
+    return this.save(tote);
+  }
+
+  /**
+   * 2026-11-12 — A WHOLE BAG RECEIVED ON ITS SEAL AT A HUB ON THE WAY, AND PASSED ON UNOPENED (step 5): standing on its floor,
+   * still closed, addressed to its next stop and offered at once — its driver's leg over (paid on arrival), the next leg
+   * claimed afresh. Its parcels stay in it.
+   */
+  passOn(code: string, atMdpId: string, nextId: string, nextLabel: string, now: number = Date.now()): Tote {
+    const tote = this.requireByCode(code);
+    tote.status = 'available';
+    tote.locationId = atMdpId;
+    tote.destinationNodeId = nextId;
+    tote.destinationLabel = nextLabel;
+    tote.claimedBy = undefined;
+    tote.carriedBy = undefined;
+    tote.haul = undefined;
+    tote.waitsForRoom = undefined;
+    tote.availableAt = new Date(now).toISOString();
+    return this.save(tote);
+  }
+
   /**
    * TAKEN OVER ON THE ROAD: a bag with a driver whose vehicle broke down goes on with another (VehicleBreakdownService).
    * A bag on their vehicle is on the other's now; one they had claimed and not yet collected is the other's to collect.
@@ -316,6 +343,8 @@ export class ToteService {
     tote.toHubId = undefined;
     tote.packedFor = undefined;
     tote.waitsForRoom = undefined;
+    tote.throughTo = undefined;
+    tote.throughToName = undefined;
     tote.filledAt = undefined;
     tote.filledReceivedAt = undefined;
     tote.availableAt = undefined;
@@ -334,12 +363,14 @@ export class ToteService {
    * decides whether the incoming parcel may JOIN them — so an incompatible parcel skips this bag (the caller
    * opens a fresh one), keeping every tote internally compatible without ToteService knowing about cargo.
    */
-  findFilling(locationId: string, destinationNodeId: string, size: ParcelSize, accepts?: (parcels: string[]) => boolean): Tote | undefined {
+  findFilling(locationId: string, destinationNodeId: string, size: ParcelSize, accepts?: (parcels: string[]) => boolean, throughTo?: string): Tote | undefined {
     return [...this.totes.values()].find(
       (t) =>
         t.status === 'filling' &&
         t.locationId === locationId &&
         t.destinationNodeId === destinationNodeId &&
+        // 2026-11-12 — a whole bag for a far hub and a bag for the next stop never take each other's parcels.
+        (t.throughTo ?? '') === (throughTo ?? '') &&
         this.fits(t, size) &&
         (!accepts || accepts(t.parcels)),
     );

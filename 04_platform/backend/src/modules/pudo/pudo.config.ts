@@ -465,6 +465,8 @@ export const TOTE_LOAD_FEE = 0.5; // paid to the driver who scans a bag onto the
 // What a new hub's own sort fee starts at, per parcel, where its company's list says nothing else. A hub is paid its OWN
 // fee — the one it advertised when the parcel was sold (the user, 2026-10-26: "Its own fee"); this only starts it.
 export const MDP_SORT_FEE = 0.3;
+/** 2026-11-12 — what a hub is paid for a bag it receives on its seal and passes on unopened (D5): a new hub starts here. */
+export const MDP_PASS_ON_FEE = 0.3;
 
 // Agent-eligibility filter (Ch 18.1) + onboarding (18.3).
 export const MIN_SLOTS = 6; // minimum shelf capacity (rows × cols)

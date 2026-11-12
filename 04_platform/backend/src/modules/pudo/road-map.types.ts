@@ -74,6 +74,14 @@ export class RoadMapView {
   @ApiProperty({ type: [String] }) left!: string[];
 }
 
+/** A far hub's own bin: whole bags for it, by the next stop on the road (D4). */
+export class ThroughBin {
+  mdpId!: string;
+  name!: string;
+  via!: string;
+  viaName!: string;
+}
+
 /** A hub's place on the road, for its own screen. */
 export class HubRoadView {
   mdpId!: string;
@@ -86,6 +94,8 @@ export class HubRoadView {
   @ApiPropertyOptional({ type: RoadNeighbour }) via?: RoadNeighbour;
   /** A stop: its neighbours on the road — one bin towards each, and its own shops. */
   @ApiProperty({ type: [RoadNeighbour] }) neighbours!: RoadNeighbour[];
+  /** 2026-11-12 — its bins for far hubs, a whole bag each (D4), with the stop it goes by. */
+  @ApiProperty({ type: [ThroughBin] }) throughBins!: ThroughBin[];
 }
 
 export class RoadMapRoleDto {

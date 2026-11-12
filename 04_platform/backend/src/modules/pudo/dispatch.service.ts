@@ -4746,6 +4746,7 @@ export class DispatchService {
       ...this.hubStop('pickupHub', t.locationId),
       destLabel: t.destinationLabel || 'destination',
       // 2026-11-11 — sent to another hub because the one it went to is down: said on the card, with the extra leg paid.
+      ...(t.throughTo ? { throughTo: t.throughToName ?? t.throughTo } : {}),
       ...(t.redirects?.length && (t.status === 'claimed' || t.status === 'in_transit') ? { redirected: { fromName: t.redirects[t.redirects.length - 1].fromName, toName: t.redirects[t.redirects.length - 1].toName, paidExtra: Boolean(t.redirects[t.redirects.length - 1].paidExtra), ...(t.redirects[t.redirects.length - 1].extraKm ? { extraKm: t.redirects[t.redirects.length - 1].extraKm } : {}) } } : {}),
       // The hub chosen for a zone's bag when it was offered (2026-11-02), else its address.
       ...this.hubStop('destHub', t.toHubId ?? t.destinationNodeId),

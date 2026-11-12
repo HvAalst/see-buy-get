@@ -229,16 +229,16 @@ export class RoadMapService implements OnModuleInit {
   ofHub(mdpId: string, now: number = Date.now()): HubRoadView {
     const hub = this.mdps.require(mdpId);
     const live = this.inForce(this.mdps.countryOf(hub), now);
-    if (!live) return { mdpId, inForce: false, routing: false, neighbours: [] };
+    if (!live) return { mdpId, inForce: false, routing: false, neighbours: [], throughBins: [] };
     const routing = Boolean(this.priceCards?.inForceFor(this.mdps.countryOf(hub), now));
     const name = (id: string) => this.mdps.find(id)?.name ?? id;
     const round = (n: number) => Math.round(n * 10) / 10;
     if (live.plan.stops.includes(mdpId)) {
       const around = [...(adjacency(live.plan.stops, live.plan.links).get(mdpId) ?? [])];
-      return { mdpId, inForce: true, routing, role: 'stop', neighbours: around.map((id) => ({ mdpId: id, name: name(id), km: round(live.km(mdpId, id)) })).sort((a, b) => a.km - b.km) };
+      return { mdpId, inForce: true, routing, role: 'stop', neighbours: around.map((id) => ({ mdpId: id, name: name(id), km: round(live.km(mdpId, id)) })).sort((a, b) => a.km - b.km), throughBins: routing ? this.mdps.throughBinsOf(mdpId, now) : [] };
     }
     const via = stopOf(live.plan, mdpId);
-    return { mdpId, inForce: true, routing, role: 'local', ...(via ? { via: { mdpId: via, name: name(via), km: round(live.km(mdpId, via)) } } : {}), neighbours: [] };
+    return { mdpId, inForce: true, routing, role: 'local', ...(via ? { via: { mdpId: via, name: name(via), km: round(live.km(mdpId, via)) } } : {}), neighbours: [], throughBins: [] };
   }
 
   /* ------------------------------------------------------------------ inside -- */

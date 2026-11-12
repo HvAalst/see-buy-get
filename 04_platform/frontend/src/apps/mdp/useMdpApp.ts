@@ -543,6 +543,12 @@ export function useMdpApp() {
         form: { ...s.form, dropCode: '' },
         drop: offPlan.length ? { offPlan } : {},
       }));
+      // 2026-11-12 — a whole bag for a hub further on: not opened here, on its way again (Hubs on the Road, step 5).
+      if (dropped?.passedOn) {
+        pushToast({ tone: 'ok', icon: 'bag', title: t('mdp.toast.passedOn', { code }), detail: t('mdp.toast.passedOnDetail', { next: dropped.passedOn.next, final: dropped.passedOn.final }) });
+        await refresh();
+        return;
+      }
       pushToast({
         tone: 'ok',
         icon: 'bag',
@@ -863,12 +869,12 @@ export function useMdpApp() {
   );
 
   const setPrice = useCallback(
-    async (price: number) => {
+    async (price: number, passOnFee?: number) => {
       if (!client) return;
       const hub = stateRef.current.hub;
       if (!hub || !(price >= 0)) return;
       await run('price', async () => {
-        const r = await client.api.setPrice(hub.mdpId, price);
+        const r = await client.api.setPrice(hub.mdpId, price, passOnFee);
         if (r.error) return fail(r.error);
         buzz();
         pushToast({ tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: money(price, hub.currency) }) });

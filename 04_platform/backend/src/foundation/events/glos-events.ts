@@ -135,6 +135,7 @@ export const GlosEvent = {
     BagLoaded: 'pudo.bag_loaded', // a tote (with its parcels) scanned onto a bus
     HubDown: 'pudo.hub_down', // 2026-11-11 — a hub said down (ISO 28000 gap 12)
     HubUp: 'pudo.hub_up', // …and open again
+    BagPassedOn: 'pudo.bag_passed_on', // 2026-11-12 — a whole bag passed on unopened at a hub on its way (step 5)
     BagArrivedAtMdp: 'pudo.bag_arrived_at_mdp', // bus drops a bag; MDP empties it
     BagDelivered: 'pudo.bag_delivered', // a tote unloaded at the destination PUDO (parcels shelved/arrived)
     ParcelSorted: 'pudo.parcel_sorted', // a parcel routed into its next-hop bag at an MDP

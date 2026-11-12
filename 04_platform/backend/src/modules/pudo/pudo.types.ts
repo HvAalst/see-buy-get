@@ -520,6 +520,11 @@ export class Mdp {
   /** 2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them. */
   sortPerDay?: number;
   /**
+   * 2026-11-12 — what it is paid for a bag it receives on its seal and passes on unopened (Hubs on the Road, D5): its own word,
+   * as its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf.
+   */
+  passOnFee?: number;
+  /**
    * 2026-11-09 — "SORT AND HAND OUT" (the owner: "The hub decides that. Only Sort vs Sort and Hand Out"): its counter, a shop
    * at its own address worked in the Shop app; absent while it has only ever sorted. Stopped: it sorts only again.
    */
@@ -620,6 +625,9 @@ export class Tote {
   packedFor?: string;
   /** 2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait). */
   waitsForRoom?: ToteWait;
+  /** 2026-11-12 — a WHOLE BAG (Hubs on the Road, step 5): the far hub it is for, passed on unopened by the hubs on the way. */
+  throughTo?: string;
+  throughToName?: string;
   /** 2026-11-11 — sent to another hub by the network because the one it went to was down: each time, kept. */
   redirects?: ToteRedirect[];
   /** 2026-11-06 — when, closed and taken by nobody for BAGS_WAITING_H, it was offered to drivers further away. Once. */
@@ -1185,6 +1193,8 @@ export class Parcel {
   status: ParcelStatus;
   corridorId?: string;
   committedNodeDid?: string; // first-mile node the parcel is committed to
+  /** 2026-11-12 — how many hubs it passed in a whole bag, unopened (Hubs on the Road, step 5; the console's lanes). */
+  passedWhole?: number;
   toteId?: string; // the tote bag currently carrying the parcel (transit / MDP sort)
   atMdpId?: string; // the MDP hub the parcel was dropped at (while At_MDP / awaiting sort)
   driverBadgeId?: string;

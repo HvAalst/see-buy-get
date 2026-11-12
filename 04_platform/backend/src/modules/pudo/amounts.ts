@@ -1,4 +1,4 @@
-import { DEFAULT_PRICE_PER_KM, HANDOVER_FEE, HOLDING_FEE_PER_DAY, LABOUR_FEE, MDP_SORT_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, HANDOVER_FEE, HOLDING_FEE_PER_DAY, LABOUR_FEE, MDP_PASS_ON_FEE, MDP_SORT_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { VEHICLE_SPEC } from './fleet.config';
 import { AMOUNT_KEYS, isAmountKey, type AmountKey } from './amount-keys';
 
@@ -45,6 +45,8 @@ export const DEFAULT_AMOUNTS: Amounts = {
   releaseFee: RELEASE_FEE,
   toteLoadFee: TOTE_LOAD_FEE,
   mdpSortFee: MDP_SORT_FEE,
+  // 2026-11-12 — a whole bag passed on unopened (Hubs on the Road, D5): where a new hub starts; each sets its own.
+  mdpPassOnFee: MDP_PASS_ON_FEE,
   holdingFeePerDay: HOLDING_FEE_PER_DAY,
   freightPerKm: DEFAULT_PRICE_PER_KM,
   freightBaseFee: VEHICLE_SPEC.truck.defaultBaseFee,
@@ -83,6 +85,7 @@ export function amountsLine(amounts: Partial<Record<AmountKey, number | undefine
     releaseFee: 'release pay',
     toteLoadFee: 'bag-loading pay',
     mdpSortFee: 'a new hub’s sorting fee',
+    mdpPassOnFee: 'a new hub’s fee for a bag passed on',
     holdingFeePerDay: 'holding per day',
     freightPerKm: 'freight per km',
     freightBaseFee: 'truck loading fee',

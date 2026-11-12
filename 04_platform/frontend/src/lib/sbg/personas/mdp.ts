@@ -162,8 +162,8 @@ export function createMdpApi(sbg: SbgClient) {
     bagTag: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}/tag', { params: { path: { code } } })),
 
     /** Publish this hub's per-parcel sort fee (open data). */
-    setPrice: (mdpId: string, price: number) =>
-      sbg.request((c) => c.PATCH('/v1/sbg/mdps/{id}/pricing', { params: { path: { id: mdpId } }, body: { price } })),
+    setPrice: (mdpId: string, price: number, passOnFee?: number) =>
+      sbg.request((c) => c.PATCH('/v1/sbg/mdps/{id}/pricing', { params: { path: { id: mdpId } }, body: { price, ...(passOnFee !== undefined ? { passOnFee } : {}) } })),
 
     /** Nearby hubs' sort fees — the benchmark this hub prices against. */
     ratesNear: (at?: { lat: number; lng: number }) =>

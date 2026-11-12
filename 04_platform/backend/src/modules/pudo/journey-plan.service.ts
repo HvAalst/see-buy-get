@@ -24,6 +24,8 @@ export interface PlanLane {
   worst?: { parcelId: string; lateHours: number };
   /** 2026-11-12 — the hubs its latest parcel's plan passed between its ends (along the road map, step 4). */
   hubs?: string[];
+  /** 2026-11-12 — how many of its parcels passed a hub in a whole bag, unopened (step 5). */
+  passedWhole?: number;
   /**
    * 2026-11-06 — WHAT THE WAYS NOT PRICED COST (the owner: "I follow point 1 to 6"): paid at stops its parcels were not
    * priced through, and the priced stops they never used (at the fee they were priced at) — each in its own money, never
@@ -144,7 +146,7 @@ export class JourneyPlanService implements OnModuleInit {
    */
   lanes(sinceDays = 30, now: number = Date.now()): PlanLane[] {
     const since = now - sinceDays * 86_400_000;
-    const byLane = new Map<string, { from: string; to: string; hubs?: { at: number; names: string[] }; rows: Array<{ parcelId: string; onTime: boolean; lateHours: number; routeKept?: boolean; reasons: string[]; detours?: ReturnType<typeof detoursOf> }> }>();
+    const byLane = new Map<string, { from: string; to: string; hubs?: { at: number; names: string[] }; rows: Array<{ parcelId: string; onTime: boolean; lateHours: number; routeKept?: boolean; reasons: string[]; detours?: ReturnType<typeof detoursOf>; whole?: boolean }> }>();
     for (const p of this.parcels.list()) {
       const said = planVsActual(p);
       if (!said || Date.parse(said.readyAt) < since || !p.plan?.hops.length) continue;
@@ -155,7 +157,7 @@ export class JourneyPlanService implements OnModuleInit {
       const passed = p.plan.hops.filter((h) => h.type === 'mdp').map((h) => h.label);
       const readyAt = Date.parse(said.readyAt);
       if (!lane.hubs || readyAt > lane.hubs.at) lane.hubs = { at: readyAt, names: passed };
-      lane.rows.push({ parcelId: p.parcelId, onTime: said.onTime, lateHours: said.lateHours, ...(said.routeKept === undefined ? {} : { routeKept: said.routeKept }), reasons: (p.plan.offPlan ?? []).filter((x) => x.reason !== 'priced_other_way').map((x) => x.reason), detours: detoursOf(p) });
+      lane.rows.push({ ...(p.passedWhole ? { whole: true } : {}), parcelId: p.parcelId, onTime: said.onTime, lateHours: said.lateHours, ...(said.routeKept === undefined ? {} : { routeKept: said.routeKept }), reasons: (p.plan.offPlan ?? []).filter((x) => x.reason !== 'priced_other_way').map((x) => x.reason), detours: detoursOf(p) });
       byLane.set(`${from}>${to}`, lane);
     }
     return [...byLane.values()]
@@ -177,6 +179,7 @@ export class JourneyPlanService implements OnModuleInit {
           ...(worst ? { worst: { parcelId: worst.parcelId, lateHours: worst.lateHours } } : {}),
           ...laneDetours(rows),
           ...(hubs?.names.length ? { hubs: hubs.names } : {}),
+          ...(rows.some((r) => r.whole) ? { passedWhole: rows.filter((r) => r.whole).length } : {}),
         };
       })
       .sort((a, b) => b.late / b.arrived - a.late / a.arrived || b.arrived - a.arrived);

@@ -836,6 +836,7 @@ export const words: Record<string, string> = {
   "driver.invoice.title": "Ankara ya biashara — kwa ajili ya mpakani",
   "driver.loads.redirected": "{from} kimefungwa: peleka mfuko huu {to} badala yake.",
   "driver.loads.redirectedPaid": "Safari ya ziada inalipwa, kama gharama ya mtandao.",
+  "driver.loads.wholeBag": "Mfuko mzima wa {final}: ukabidhi kwa kituo ulichoelekezwa, ukiwa umefungwa — unapitishwa kutoka hapo.",
   "driver.loads.redirectedKm": "Km {km} za ziada zinalipwa, kama gharama ya mtandao.",
   "driver.held.open": "Umezuiliwa na polisi au forodha?",
   "driver.held.title": "Umezuiliwa njiani",

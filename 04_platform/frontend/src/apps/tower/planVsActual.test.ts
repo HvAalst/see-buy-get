@@ -9,6 +9,7 @@ describe('a lane against its plans, as the console says it', () => {
     expect(laneWords(lane(), t)).toEqual({ lane: 'CBD → Kisumu', via: '', onTime: '1 of 3', late: 'usually 6.5 h late', route: '2 of 3', worst: 'P-9, 10 h' });
     // 2026-11-12 — along the road map: the hubs its latest parcel passed.
     expect(laneWords(lane({ hubs: ['Nairobi Hub', 'Nakuru Hub', 'Kisumu Hub'] }), t).via).toBe('via Nairobi Hub → Nakuru Hub → Kisumu Hub');
+    expect(laneWords(lane({ hubs: ['Nairobi Hub'], passedWhole: 3 }), t).via).toBe('via Nairobi Hub · 3 passed hubs in whole bags');
   });
 
   it('says "never late" rather than nought hours, and "not recorded" rather than nought of nought', () => {

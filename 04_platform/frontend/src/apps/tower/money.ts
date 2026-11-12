@@ -205,7 +205,7 @@ export type AmountsForm = Record<AmountKey, string>;
  * handed to a driver, loaded, sorted, shelved, handed over — and last what waiting costs. The server's own order is
  * the order the figures were written in the code, which is nobody's way of thinking about a parcel.
  */
-export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay', 'freightPerKm', 'freightBaseFee'];
+export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'mdpPassOnFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay', 'freightPerKm', 'freightBaseFee'];
 
 /**
  * WHAT THE ROAD STARTS FROM — the last two on the list, under a heading of their own because they are not a parcel's
@@ -288,6 +288,7 @@ export const AMOUNT_LABEL: Record<AmountKey, MessageKey> = {
   handoverFee: 'tower.amounts.k.handoverFee',
   toteLoadFee: 'tower.amounts.k.toteLoadFee',
   mdpSortFee: 'tower.amounts.k.mdpSortFee',
+  mdpPassOnFee: 'tower.amounts.k.mdpPassOnFee',
   shelvingFee: 'tower.amounts.k.shelvingFee',
   releaseFee: 'tower.amounts.k.releaseFee',
   holdingFeePerDay: 'tower.amounts.k.holdingFeePerDay',
@@ -301,6 +302,7 @@ export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
   handoverFee: 'tower.amounts.h.handoverFee',
   toteLoadFee: 'tower.amounts.h.toteLoadFee',
   mdpSortFee: 'tower.amounts.h.mdpSortFee',
+  mdpPassOnFee: 'tower.amounts.h.mdpPassOnFee',
   shelvingFee: 'tower.amounts.h.shelvingFee',
   releaseFee: 'tower.amounts.h.releaseFee',
   holdingFeePerDay: 'tower.amounts.h.holdingFeePerDay',

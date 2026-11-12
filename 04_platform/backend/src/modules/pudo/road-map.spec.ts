@@ -79,6 +79,7 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
       isApproved: (m: { mdpId: string }) => approved.has(m.mdpId),
       countryOf: (m: { country: string }) => m.country,
       isDown: (m: { mdpId: string }) => down.has(m.mdpId),
+      throughBinsOf: () => [],
     };
     const id = (t: Town) => `mdp_${t}`;
 
@@ -96,7 +97,7 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
 
     it('nothing is in force until staff confirm; a proposal, changed and confirmed, is in force — every change logged', () => {
       expect(maps.inForce('KE')).toBeUndefined();
-      expect(maps.ofHub(id('isiolo'))).toEqual({ mdpId: id('isiolo'), inForce: false, routing: false, neighbours: [] });
+      expect(maps.ofHub(id('isiolo'))).toEqual({ mdpId: id('isiolo'), inForce: false, routing: false, neighbours: [], throughBins: [] });
       const v0 = maps.view('sbg-ke');
       expect(v0).toMatchObject({ country: 'KE', minKm: 60, minKmStart: 60, joined: [], left: [] });
       expect(v0.draft).toBeUndefined();

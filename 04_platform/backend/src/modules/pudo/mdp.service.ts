@@ -37,7 +37,8 @@ import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
 import { clockAt, clocksOfCountry } from './fleet-clock';
 import { NotificationService } from './notification.service';
-import { HubDrop, HubFloorBook, spaceProblem, withDay, type HubDay } from './hub-space';
+import { HubDrop, HubFloorBook, spaceProblem, THROUGH_DAYS, THROUGH_DAYS_FULL, withDay, type HubDay } from './hub-space';
+import { BAG_CAPACITY_UNITS, SIZE_UNITS } from './pudo.config';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -382,10 +383,12 @@ export class MdpService {
    * and what it is paid for each (the user, 2026-10-26: "Its own fee"). Parcels already sold keep the fee they were sold
    * at. Written at once — it is money.
    */
-  setPrice(mdpId: string, pricePerParcel: number): Mdp {
-    if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
+  setPrice(mdpId: string, pricePerParcel: number, passOnFee?: number): Mdp {
+    if (pricePerParcel < 0 || (passOnFee !== undefined && passOnFee < 0)) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const mdp = this.require(mdpId);
     mdp.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
+    // 2026-11-12 — and, where said, what a whole bag passed on unopened pays it (D5).
+    if (passOnFee !== undefined) mdp.passOnFee = Math.round(passOnFee * 100) / 100;
     this.mdps.set(mdp.mdpId, mdp);
     return mdp;
   }
@@ -401,6 +404,11 @@ export class MdpService {
    */
   sendAnotherWay(parcel: Parcel, to: string, by: string, said: OffPlanSaid): void {
     this.routeKeeper?.leave(parcel, to, by, said);
+  }
+
+  /** 2026-11-12 — what a whole bag passed on unopened pays this hub (D5): its own fee, else its country's list figure. */
+  passOnFeeOf(mdp: Mdp): number {
+    return mdp.passOnFee ?? this.entities.amountsFor(this.entityIdOrNone(mdp)).mdpPassOnFee;
   }
 
   sortPayOf(mdp: Mdp, parcel: Pick<Parcel, 'stopFees'>): number {
@@ -561,6 +569,49 @@ export class MdpService {
     const sorted = [...d].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  /** 2026-11-12 — the last hub of a parcel's plan: where its journey leaves the hubs for its shop. */
+  private lastHubOf(parcel: Parcel): string | undefined {
+    return [...(parcel.plan?.hops ?? [])].reverse().find((h) => h.type === 'mdp')?.id;
+  }
+
+  /** 2026-11-12 — sorted here for a far hub, in bag units, on this hub's day (D4 reads the last 14). */
+  private noteThrough(mdpId: string, far: string, units: number, now: number): void {
+    const mdp = this.require(mdpId);
+    const day = this.dayOf(mdp, now);
+    const book = this.floors.get(mdpId) ?? { mdpId, drops: [] };
+    const through = { ...(book.through ?? {}) };
+    through[day] = { ...(through[day] ?? {}), [far]: Math.round(((through[day]?.[far] ?? 0) + units) * 100) / 100 };
+    const keep = Object.keys(through).sort().slice(-THROUGH_DAYS);
+    this.floors.set(mdpId, { ...book, through: Object.fromEntries(keep.map((k) => [k, through[k]])) });
+  }
+
+  /**
+   * 2026-11-12 — THIS HUB'S BINS FOR FAR HUBS (D4: "when this hub's parcels for it filled a bag on at least 10 of the last 14
+   * days"): far hubs — not its neighbours on the road — its parcels for which filled a bag on THROUGH_DAYS_FULL of the last
+   * THROUGH_DAYS days, with the next stop a whole bag for each goes by. Nothing where parcels do not go along the road map.
+   */
+  throughBinsOf(mdpId: string, now: number = Date.now()): Array<{ mdpId: string; name: string; via: string; viaName: string }> {
+    if (!this.roadMap) return [];
+    const mdp = this.require(mdpId);
+    const book = this.floors.get(mdpId)?.through ?? {};
+    const days = new Set(Array.from({ length: THROUGH_DAYS }, (_, i) => this.dayOf(mdp, now - i * 86_400_000)));
+    const full = new Map<string, number>();
+    for (const [day, byHub] of Object.entries(book)) {
+      if (!days.has(day)) continue;
+      for (const [far, units] of Object.entries(byHub)) if (units >= BAG_CAPACITY_UNITS) full.set(far, (full.get(far) ?? 0) + 1);
+    }
+    const out: Array<{ mdpId: string; name: string; via: string; viaName: string }> = [];
+    for (const [far, n] of full) {
+      if (n < THROUGH_DAYS_FULL) continue;
+      const via = this.roadMap.nextToward(mdpId, far, now);
+      const farHub = this.mdps.get(far);
+      const viaHub = via ? this.mdps.get(via) : undefined;
+      if (!farHub || !viaHub || via === far || this.isDown(farHub, now)) continue;
+      out.push({ mdpId: far, name: farHub.name, via: viaHub.mdpId, viaName: viaHub.name });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** 2026-11-12 — a day it ran full: a bag held for room on its floor (the hub density map counts them). */
@@ -1274,7 +1325,7 @@ export class MdpService {
    * past its places takes the bag all the same, and says so in red on the hub's start screen (spaceOf.overBy). The bag
    * stands on the floor until its parcels are sorted.
    */
-  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }> } {
+  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }>; passedOn?: { code: string; next: string; final: string } } {
     const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
@@ -1285,6 +1336,10 @@ export class MdpService {
     const keepReceipt = this.closures.checkReceipt(before, { did: mdp.did, name: byName?.trim() || mdp.name, place: mdp.name }, mdp.did, receipt);
     const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
     keepReceipt({ at: new Date().toISOString() });
+    // 2026-11-12 — A WHOLE BAG FOR A HUB FURTHER ON (step 5): received on its seal, as any bag — and not opened. It stands on
+    // this floor addressed to its next stop, offered at once; its driver is paid the leg; this hub is paid its pass-on fee
+    // for the bag (D5); its parcels' plans move on to here.
+    if (before.throughTo && before.throughTo !== mdpId) return this.passOnHere(mdp, before, carrier, byName, now);
     const { parcels } = this.totes.empty(code, mdpId);
     this.payHaul(before, carrier);
     // 2026-11-06 — each kept, and planned on from here; those its plan did not have coming here, nobody having said why, are
@@ -1301,6 +1356,27 @@ export class MdpService {
     // A bag sent to another hub and dropped here instead is no longer on its way there: room may have freed at that one.
     this.letWaitingGo(now);
     return { mdpId, emptied: parcels, ...(offPlan.length ? { offPlan } : {}) };
+  }
+
+  private passOnHere(mdp: Mdp, before: Tote, carrier: string | undefined, byName: string | undefined, now: number): { mdpId: string; emptied: string[]; passedOn: { code: string; next: string; final: string } } {
+    const finalId = before.throughTo!;
+    const final = this.mdps.get(finalId);
+    const nextId = this.roadMap?.nextToward(mdp.mdpId, finalId, now) ?? finalId;
+    const next = this.mdps.get(nextId) ?? final;
+    this.payHaul(before, carrier);
+    for (const parcelId of before.parcels) {
+      try {
+        this.routeKeeper?.arrived(this.parcels.get(parcelId), mdp.mdpId, byName?.trim() || mdp.name);
+        this.parcels.notePassedWhole(parcelId);
+      } catch {
+        // a parcel the bag lists and the store does not
+      }
+    }
+    const tote = this.totes.passOn(before.code, mdp.mdpId, next?.mdpId ?? finalId, next?.name ?? before.throughToName ?? finalId, now);
+    const fee = this.passOnFeeOf(mdp);
+    if (fee > 0) this.gate.passOnLabour(mdp.mdpId, fee, tote.code, this.entityIdOrNone(mdp));
+    void this.events.publish(GlosEvent.Pudo.BagPassedOn, { mdpId: mdp.mdpId, code: tote.code, next: tote.destinationNodeId, final: finalId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
+    return { mdpId: mdp.mdpId, emptied: [], passedOn: { code: tote.code, next: next?.name ?? finalId, final: final?.name ?? before.throughToName ?? finalId } };
   }
 
   /**
@@ -1434,10 +1510,16 @@ export class MdpService {
     // open a fresh one (S31). Passing the compatibility gate to findFilling means an incompatible parcel never
     // co-totes — every bag stays internally compatible, so loadBag can trust the whole bag as one unit.
     const nature = parcel.natureCode ?? 'GEN';
-    let tote = this.totes.findFilling(mdpId, next.id, parcel.size, (parcels) => this.bagAccepts(nature, parcels));
+    // 2026-11-12 — WHOLE BAGS PAST HUBS (step 5; D4): its last hub counted for this hub's far-hub bins; where this hub has a
+    // bin for it, into a whole bag for it — addressed to the next stop, passed on unopened by the hubs on the way.
+    const far = this.lastHubOf(parcel);
+    if (next.type === 'mdp' && far && far !== next.id && far !== mdpId) this.noteThrough(mdpId, far, SIZE_UNITS[parcel.size] ?? 1, now);
+    const through = next.type === 'mdp' && far && far !== next.id && this.throughBinsOf(mdpId, now).some((b) => b.mdpId === far) ? far : undefined;
+    let tote = this.totes.findFilling(mdpId, next.id, parcel.size, (parcels) => this.bagAccepts(nature, parcels), through);
     if (!tote) {
       tote = this.totes.register(mdpId);
       this.totes.assign(tote.code, next.id, next.label);
+      if (through) this.totes.markThrough(tote.code, through, this.mdps.get(through)?.name ?? through);
     }
     this.totes.add(tote.code, parcelId, parcel.size);
     parcel.toteId = tote.toteId; // bag ↔ parcel; stays At_MDP until the bag is loaded onward

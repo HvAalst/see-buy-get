@@ -1074,6 +1074,12 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/** 2026-11-12 — a hub's own fees: each parcel it sorts, and (optionally) each bag it passes on unopened (D5). */
+export class HubPriceDto {
+  @IsNumber() @Min(0) price!: number;
+  @IsOptional() @IsNumber() @Min(0) passOnFee?: number;
+}
+
 /**
  * Mint a merchant API key.
  *
@@ -1479,6 +1485,7 @@ export class EntityAmountsDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) toteLoadFee?: number | null;
   /** Paid to a hub for each parcel it sorts. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) mdpSortFee?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) mdpPassOnFee?: number | null;
   /** What a day of holding a parcel costs once its free time has ended. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) holdingFeePerDay?: number | null;
 }

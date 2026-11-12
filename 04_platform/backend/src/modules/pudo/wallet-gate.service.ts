@@ -642,7 +642,12 @@ export class WalletGateService {
     return this.hubLabour('receiving-labour', mdpId, amount, arrivalId, entityId, sellerEntityId);
   }
 
-  private hubLabour(kind: 'sort-labour' | 'receiving-labour', mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
+  /** 2026-11-12 — a hub's pay for a whole bag it received on its seal and passed on unopened (D5): its own fee, a bag. */
+  passOnLabour(mdpId: string, amount: number, code: string, entityId?: string): PudoLedgerEntry {
+    return this.hubLabour('pass-on-labour', mdpId, amount, code, entityId);
+  }
+
+  private hubLabour(kind: 'sort-labour' | 'receiving-labour' | 'pass-on-labour', mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
     const entryId = entityId
       ? this.books.post({
           entityId,

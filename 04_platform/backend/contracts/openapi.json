@@ -18794,7 +18794,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetPriceDto"
+                "$ref": "#/components/schemas/HubPriceDto"
               }
             }
           }
@@ -51067,6 +51067,29 @@
           "km"
         ]
       },
+      "ThroughBin": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string"
+          },
+          "viaName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "via",
+          "viaName"
+        ]
+      },
       "HubRoadView": {
         "type": "object",
         "properties": {
@@ -51092,6 +51115,13 @@
               "$ref": "#/components/schemas/RoadNeighbour"
             }
           },
+          "throughBins": {
+            "description": "2026-11-12 — its bins for far hubs, a whole bag each (D4), with the stop it goes by.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThroughBin"
+            }
+          },
           "mdpId": {
             "type": "string"
           },
@@ -51106,6 +51136,7 @@
         },
         "required": [
           "neighbours",
+          "throughBins",
           "mdpId",
           "inForce",
           "routing"
@@ -58545,6 +58576,7 @@
               "releaseFee",
               "toteLoadFee",
               "mdpSortFee",
+              "mdpPassOnFee",
               "holdingFeePerDay",
               "freightPerKm",
               "freightBaseFee"
@@ -59570,6 +59602,11 @@
             "type": "number",
             "nullable": true,
             "description": "Paid to a hub for each parcel it sorts.",
+            "minimum": 0
+          },
+          "mdpPassOnFee": {
+            "type": "number",
+            "nullable": true,
             "minimum": 0
           },
           "holdingFeePerDay": {
@@ -62805,6 +62842,9 @@
           "committedNodeDid": {
             "type": "string"
           },
+          "passedWhole": {
+            "type": "number"
+          },
           "toteId": {
             "type": "string"
           },
@@ -64381,6 +64421,13 @@
               }
             ]
           },
+          "throughTo": {
+            "type": "string",
+            "description": "2026-11-12 — a WHOLE BAG (Hubs on the Road, step 5): the far hub it is for, passed on unopened by the hubs on the way."
+          },
+          "throughToName": {
+            "type": "string"
+          },
           "redirects": {
             "description": "2026-11-11 — sent to another hub by the network because the one it went to was down: each time, kept.",
             "type": "array",
@@ -64696,6 +64743,22 @@
           "price"
         ]
       },
+      "HubPriceDto": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "number",
+            "minimum": 0
+          },
+          "passOnFee": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "price"
+        ]
+      },
       "HubPapers": {
         "type": "object",
         "properties": {
@@ -64905,6 +64968,10 @@
           "sortPerDay": {
             "type": "number",
             "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
+          },
+          "passOnFee": {
+            "type": "number",
+            "description": "2026-11-12 — what it is paid for a bag it receives on its seal and passes on unopened (Hubs on the Road, D5): its own word,\nas its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf."
           },
           "counter": {
             "type": "object",

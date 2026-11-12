@@ -247,6 +247,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {state.staff ? null : (
       <Card title={t('mdp.home.yourFee')} aside={<b class="mono">{money(hub?.pricePerParcel, hub?.currency)}</b>}>
         <p class="card__note">{t('mdp.home.feeNote')}</p>
+        {hub?.passOnFee != null ? <p class="card__note">{t('mdp.home.passOnFee', { fee: money(hub.passOnFee, hub.currency) })}</p> : null}
         <div class="btnrow">
           <Button variant="link" full={false} onClick={() => actions.go('rates')}>
             {t('mdp.home.feesNear')}
@@ -283,7 +284,9 @@ function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   const t = useT();
   // A number for the box to edit, not a sum said in words: no money beside it, no thousands separator.
   const [price, setPrice] = useState((Number(state.hub?.pricePerParcel) || 0).toFixed(2));
+  const [passOn, setPassOn] = useState((Number(state.hub?.passOnFee) || 0).toFixed(2));
   const value = Number(price);
+  const passOnValue = Number(passOn);
   return (
     <Sheet open={open} onClose={onClose} title={t('mdp.home.feeSheetTitle')}>
       <p class="t-body">{t('mdp.home.feeSheetBody')}</p>
@@ -302,13 +305,21 @@ function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose:
           onInput={(e) => setPrice(e.currentTarget.value)}
         />
       </div>
+      {/* 2026-11-12 — a whole bag passed on unopened (Hubs on the Road, D5): its own fee for it, beside its sort fee. */}
+      <div class="field">
+        <label class="field__label" for="pass-on-fee">
+          {state.hub?.currency ? t('mdp.home.passOnLabelIn', { currency: state.hub.currency }) : t('mdp.home.passOnLabel')}
+        </label>
+        <input id="pass-on-fee" class="input" type="number" inputMode="decimal" min="0" step="0.05" value={passOn} onInput={(e) => setPassOn(e.currentTarget.value)} />
+        <p class="hint">{t('mdp.home.passOnHint')}</p>
+      </div>
       <Button
         chevron={false}
         busy={state.busy === 'price'}
-        disabled={!(value >= 0)}
+        disabled={!(value >= 0) || !(passOnValue >= 0)}
         onClick={() => {
           onClose();
-          void actions.setPrice(Math.round(value * 100) / 100);
+          void actions.setPrice(Math.round(value * 100) / 100, Math.round(passOnValue * 100) / 100);
         }}
       >
         {t('mdp.home.feeSheetSave')}

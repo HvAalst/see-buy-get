@@ -4130,6 +4130,13 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /** Its plan was changed in place by its keeper: kept. */
+  /** 2026-11-12 — a hub passed it in a whole bag, unopened (step 5): counted for the console's lanes. */
+  notePassedWhole(parcelId: string): void {
+    const p = this.get(parcelId);
+    p.passedWhole = (p.passedWhole ?? 0) + 1;
+    this.notePlan(p);
+  }
+
   notePlan(parcel: Parcel): void {
     this.persist(parcel);
   }

@@ -836,6 +836,7 @@ export const words: Record<string, string> = {
   "driver.invoice.title": "የንግድ ደረሰኝ — ለድንበሩ",
   "driver.loads.redirected": "{from} ተዘግቷል፦ ይህን ከረጢት በምትኩ ወደ {to} ይውሰዱ።",
   "driver.loads.redirectedPaid": "ተጨማሪው ጉዞ እንደ አውታረ መረቡ ወጪ ይከፈላል።",
+  "driver.loads.wholeBag": "ለ{final} ሙሉ ከረጢት፦ ተዘግቶ ለተላከለት ማዕከል ያስረክቡት — ከዚያ ይተላለፋል።",
   "driver.loads.redirectedKm": "ተጨማሪዎቹ {km} ኪ.ሜ እንደ አውታረ መረቡ ወጪ ይከፈላሉ።",
   "driver.held.open": "በፖሊስ ወይም በጉምሩክ ተይዘዋል?",
   "driver.held.title": "በመንገድ ላይ ተይዟል",

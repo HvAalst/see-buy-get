@@ -19,6 +19,8 @@ export interface PlanLane {
   detours?: { parcels: number; paid: Array<{ currency: string; amount: number }>; unused: Array<{ currency: string; amount: number }> };
   /** 2026-11-12 — the hubs its latest parcel passed (along the road map, "Hubs on the Road" step 4). */
   hubs?: string[];
+  /** 2026-11-12 — how many of its parcels passed a hub in a whole bag, unopened (step 5). */
+  passedWhole?: number;
 }
 
 /**
@@ -77,7 +79,7 @@ export function offPlanWords(lane: Pick<PlanLane, 'offPlan' | 'offPlanReasons'>,
 export function laneWords(lane: PlanLane, t: Translate): { lane: string; via: string; onTime: string; late: string; route: string; worst: string } {
   return {
     lane: `${lane.from} → ${lane.to}`,
-    via: lane.hubs?.length ? t('tower.plan.via', { hubs: lane.hubs.join(' → ') }) : '',
+    via: [lane.hubs?.length ? t('tower.plan.via', { hubs: lane.hubs.join(' → ') }) : '', lane.passedWhole ? t('tower.plan.passedWhole', { n: lane.passedWhole }) : ''].filter(Boolean).join(' · '),
     onTime: t('tower.plan.onTime', { on: lane.onTime, n: lane.arrived }),
     late: lane.late ? t('tower.plan.usually', { h: lane.typicalLateHours }) : t('tower.plan.neverLate'),
     route: lane.routeKnown ? t('tower.plan.route', { kept: lane.routeKept, known: lane.routeKnown }) : t('tower.plan.routeUnknown'),

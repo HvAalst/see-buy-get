@@ -2798,6 +2798,93 @@ describe('PUDO Light', () => {
       }
     });
 
+    it('whole bags past hubs: a far hub gets its own bin after 10 full days of 14; its bag is passed on unopened, each hub paid its pass-on fee, opened at the far hub (2026-11-12)', () => {
+      const W = 'WB-West';
+      const E = 'WB-East';
+      const MID = 'WB-Mid';
+      const west = onboardAgent('WB West Shop', W, 50);
+      agents.setLocation(west.did, { lat: -0.45, lng: 39.65 });
+      const east = onboardAgent('WB East Shop', E, 50);
+      agents.setLocation(east.did, { lat: 3.93, lng: 41.85 });
+      const mid = onboardAgent('WB Mid Shop', MID, 50);
+      agents.setLocation(mid.did, { lat: 1.76, lng: 40.07 });
+      const garissa = mdps.register({ name: 'WB Garissa', zones: [W], location: { lat: -0.4536, lng: 39.6401 } }, { approvedBy: 'staff' });
+      const wajir = mdps.register({ name: 'WB Wajir', zones: [MID], location: { lat: 1.75, lng: 40.06 } }, { approvedBy: 'staff' });
+      const elwak = mdps.register({ name: 'WB El Wak', zones: ['WB-North'], location: { lat: 2.8, lng: 40.93 } }, { approvedBy: 'staff' });
+      const mandera = mdps.register({ name: 'WB Mandera', zones: [E], location: { lat: 3.94, lng: 41.86 } }, { approvedBy: 'staff' });
+      roadMaps.propose('sbg-ke', 'N');
+      roadMaps.confirm('sbg-ke', 'N');
+      const spy = jest.spyOn(priceCards, 'inForceFor').mockImplementation((c) => (c === 'KE' ? ({ entityId: 'sbg-ke' } as never) : undefined));
+      const paid = jest.spyOn(gate, 'passOnLabour');
+      try {
+        // Not yet: no bin for Mandera at Garissa. Ten of the last fourteen days with a bag's worth for it: its own bin.
+        expect(mdps.throughBinsOf(garissa.mdpId)).toEqual([]);
+        const days = mdps.daysOf(garissa.mdpId, 14).map((d) => d.day);
+        const floors = (mdps as any).floors;
+        const nine = Object.fromEntries(days.slice(0, 9).map((d) => [d, { [mandera.mdpId]: 10 }]));
+        floors.set(garissa.mdpId, { ...(floors.get(garissa.mdpId) ?? { mdpId: garissa.mdpId, drops: [] }), through: nine });
+        expect(mdps.throughBinsOf(garissa.mdpId)).toEqual([]);
+        floors.set(garissa.mdpId, { ...floors.get(garissa.mdpId), through: { ...nine, [days[9]]: { [mandera.mdpId]: 9.99 } } });
+        expect(mdps.throughBinsOf(garissa.mdpId)).toEqual([]);
+        floors.set(garissa.mdpId, { ...floors.get(garissa.mdpId), through: { ...nine, [days[9]]: { [mandera.mdpId]: 10 } } });
+        expect(mdps.throughBinsOf(garissa.mdpId)).toEqual([{ mdpId: mandera.mdpId, name: 'WB Mandera', via: wajir.mdpId, viaName: 'WB Wajir' }]);
+        expect(roadMaps.ofHub(garissa.mdpId).throughBins).toEqual([expect.objectContaining({ mdpId: mandera.mdpId, viaName: 'WB Wajir' })]);
+        // Never a bin for a neighbour: Wajir is the next stop, its parcels go in the bag towards it.
+        floors.set(garissa.mdpId, { ...floors.get(garissa.mdpId), through: Object.fromEntries(days.slice(0, 10).map((d) => [d, { [mandera.mdpId]: 10, [wajir.mdpId]: 10 }])) });
+        expect(mdps.throughBinsOf(garissa.mdpId).map((b) => b.mdpId)).toEqual([mandera.mdpId]);
+
+        // Two parcels reach Garissa: one for Mandera, one for Wajir's own shop.
+        for (const [id, to, zone] of [['WB-1', east.did, E], ['WB-2', mid.did, MID]] as const) parcels.accept({ agentDid: west.did, parcelId: id, size: 'S', destZone: zone, destPudoDid: to, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(west.did) } as never);
+        const inbound = totes.register(west.did);
+        mdps.assignTote(inbound.code, garissa.mdpId, garissa.name);
+        for (const id of ['WB-1', 'WB-2']) mdps.fillShopBag(inbound.code, west.did, id);
+        mdps.sealShopBag(inbound.code, west.did, { closure: closedBy(west.did) });
+        mdps.loadBag(inbound.code, 'BUS-WB1');
+        mdps.dropBag(garissa.mdpId, inbound.code, receivedAtHub(garissa.mdpId));
+        // Sorted: the parcel for Mandera into a whole bag for Mandera, by Wajir; the parcel for Wajir into Wajir's own bag.
+        const whole = mdps.sortParcel(garissa.mdpId, 'WB-1');
+        const own = mdps.sortParcel(garissa.mdpId, 'WB-2');
+        expect(whole.toteCode).not.toBe(own.toteCode);
+        expect(totes.requireByCode(whole.toteCode)).toMatchObject({ throughTo: mandera.mdpId, throughToName: 'WB Mandera', destinationNodeId: wajir.mdpId });
+        expect(totes.requireByCode(own.toteCode).throughTo).toBeUndefined();
+        expect(totes.requireByCode(own.toteCode).destinationNodeId).toBe(wajir.mdpId);
+        // Sorting counts for the far hub's bin, today: the parcel for Mandera, not the one for the next stop.
+        expect(floors.get(garissa.mdpId).through[days[13]]).toEqual({ [mandera.mdpId]: 0.18 });
+
+        // Carried to Wajir: received on its seal, not opened, addressed on to El Wak and offered; Wajir paid for the bag.
+        const code = whole.toteCode;
+        mdps.closeBag(code, { mdpId: garissa.mdpId }, 'Test', { photoRef: photoBy(garissa.did) });
+        mdps.loadBag(code, 'BUS-WB2');
+        const atWajir = mdps.dropBag(wajir.mdpId, code, receivedAtHub(wajir.mdpId));
+        expect(atWajir).toMatchObject({ emptied: [], passedOn: { code, next: 'WB El Wak', final: 'WB Mandera' } });
+        expect(totes.requireByCode(code)).toMatchObject({ status: 'available', locationId: wajir.mdpId, destinationNodeId: elwak.mdpId, parcels: ['WB-1'] });
+        expect(paid).toHaveBeenCalledWith(wajir.mdpId, 0.3, code, expect.anything());
+        expect(parcels.get('WB-1')).toMatchObject({ passedWhole: 1, status: 'On_Bus' });
+        // Its driver's card on the next leg says it is a whole bag for Mandera.
+        expect((dispatch as any).wrapTote(code)?.throughTo).toBe('WB Mandera');
+        expect(parcels.get('WB-1').plan!.hops[parcels.get('WB-1').plan!.at!].id).toBe(wajir.mdpId);
+        // On to El Wak, its own fee set higher by its owner; then Mandera opens it.
+        mdps.setPrice(elwak.mdpId, 0.3, 1.25);
+        expect(mdps.passOnFeeOf(mdps.require(elwak.mdpId))).toBe(1.25);
+        mdps.loadBag(code, 'BUS-WB3');
+        expect(mdps.dropBag(elwak.mdpId, code, receivedAtHub(elwak.mdpId)).passedOn).toMatchObject({ next: 'WB Mandera' });
+        expect(paid).toHaveBeenLastCalledWith(elwak.mdpId, 1.25, code, expect.anything());
+        expect(totes.requireByCode(code).destinationNodeId).toBe(mandera.mdpId);
+        mdps.loadBag(code, 'BUS-WB4');
+        const atMandera = mdps.dropBag(mandera.mdpId, code, receivedAtHub(mandera.mdpId));
+        expect(atMandera.emptied).toEqual(['WB-1']);
+        expect(atMandera.passedOn).toBeUndefined();
+        expect(totes.requireByCode(code).throughTo).toBeUndefined();
+        expect(parcels.get('WB-1')).toMatchObject({ status: 'At_MDP', atMdpId: mandera.mdpId, passedWhole: 2 });
+        expect(paid).toHaveBeenCalledTimes(2);
+        // The driver's card says it is a whole bag for its far hub.
+        expect(totes.requireByCode(own.toteCode).throughTo).toBeUndefined();
+      } finally {
+        paid.mockRestore();
+        spy.mockRestore();
+      }
+    });
+
     it('a hub keeps its days: parcels sorted, and the days it ran full — its day’s sorting reached, or a bag held for room (2026-11-12)', () => {
       const shop = onboardAgent('HDY Shop', 'HDYNorth', 50);
       const far = onboardAgent('HDY Far', 'HDYSouth', 50);
@@ -13230,7 +13317,7 @@ describe('PUDO Light', () => {
 
     it('starts every company from today’s figures — and nothing changes until somebody sets one', () => {
       // …and what the road starts from (2026-10-25): a vehicle's rate per kilometre and a truck's loading fee.
-      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
+      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.3, mdpPassOnFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
       expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
       // Nobody's company: the starting figures, in no money in particular.
       expect(entities.amountsFor(undefined)).toEqual({ ...DEFAULT_AMOUNTS, currency: undefined });
