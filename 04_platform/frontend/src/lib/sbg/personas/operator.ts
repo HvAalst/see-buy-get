@@ -182,6 +182,12 @@ export function createOperatorApi(sbg: SbgClient) {
     setRoadMapLink: (entityId: string, a: string, b: string, on: boolean) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/links', { params: { path: { entityId } }, body: { a, b, on } })),
     setRoadMapMinKm: (entityId: string, km: number) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/min-km', { params: { path: { entityId } }, body: { km } })),
     confirmRoadMap: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/confirm', { params: { path: { entityId } } })),
+    /** 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3). */
+    hubDensity: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/hub-density', { params: { path: { entityId } } })),
+    setAsideSuggestion: (entityId: string, suggestionId: string, reason: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/aside/{suggestionId}', { params: { path: { entityId, suggestionId } }, body: { reason } })),
+    bringBackSuggestion: (entityId: string, suggestionId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/back/{suggestionId}', { params: { path: { entityId, suggestionId } } })),
+    setDensityReach: (entityId: string, body: { urban: number; rural: number; remote: number }) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/reach', { params: { path: { entityId } }, body })),
     proposeCatchments: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/propose', { params: { path: { entityId } } })),
     /** 2026-11-09 — a net of hubs: a hub added to a zone (serve) or taken away from it. */
     assignCatchment: (entityId: string, code: string, mdpId: string, serve: boolean) =>

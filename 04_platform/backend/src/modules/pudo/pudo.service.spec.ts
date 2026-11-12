@@ -2417,6 +2417,8 @@ describe('PUDO Light', () => {
       toHub(bag.code, hub.mdpId);
       const sorted = mdps.sortParcel(hub.mdpId, 'CT2-1');
       expect(sorted).toMatchObject({ nextDestination: { type: 'pudo', id: counter.did }, toteCode: '', counterSlot: expect.any(String) });
+      // 2026-11-12 — counted in the hub's day (where hubs are needed reads its days).
+      expect(mdps.daysOf(hub.mdpId, 1)[0].sorted).toBe(1);
       const p = parcels.get('CT2-1');
       expect(p).toMatchObject({ status: 'Ready_For_Pickup', destAgentDid: counter.did, binSlot: sorted.counterSlot });
       expect(p.toteId).toBeUndefined();
@@ -2723,6 +2725,26 @@ describe('PUDO Light', () => {
       b.plan!.hops[2] = { type: 'mdp', id: 'mdp_gone', label: 'Gone Sort', zone: b.destZone };
       expect(mdps.sortParcel(northHub!.mdpId, 'MU5-B').nextDestination.id).toBe(hub.mdpId);
       expect(parcels.get('MU5-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'network_changed', planned: 'mdp_gone', took: hub.mdpId })]);
+    });
+
+    it('a hub keeps its days: parcels sorted, and the days it ran full — its day’s sorting reached, or a bag held for room (2026-11-12)', () => {
+      const shop = onboardAgent('HDY Shop', 'HDYNorth', 50);
+      const far = onboardAgent('HDY Far', 'HDYSouth', 50);
+      const hub = mdps.register({ name: 'HDY Sort', zones: ['HDYNorth'], location: { lat: 1.9, lng: 35.1 } }, { approvedBy: 'staff' });
+      expect(mdps.daysOf(hub.mdpId, 14)).toHaveLength(14);
+      expect(mdps.daysOf(hub.mdpId, 14).every((d) => d.sorted === 0 && !d.full)).toBe(true);
+      // Its floor full: one place, a bag standing on it. A shop's bag for it waits — a full day.
+      mdps.setSpace(hub.mdpId, { bagPlaces: 1, sortPerDay: 50 });
+      mdps.assignTote(mdps.registerTote(hub.mdpId).code, 'Elsewhere', 'Elsewhere');
+      parcels.accept({ agentDid: shop.did, parcelId: 'HDY-A', size: 'S', destZone: 'HDYSouth', destPudoDid: far.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);
+      const bag = totes.register(shop.did);
+      mdps.assignTote(bag.code, hub.mdpId, hub.name);
+      mdps.fillShopBag(bag.code, shop.did, 'HDY-A');
+      dispatch.release(bag.code);
+      expect(totes.requireByCode(bag.code).waitsForRoom).toBeTruthy();
+      const today = mdps.daysOf(hub.mdpId, 14).slice(-1)[0];
+      expect(today).toMatchObject({ sorted: 0, full: true });
+      expect(mdps.daysOf(hub.mdpId, 14).filter((d) => d.full)).toHaveLength(1);
     });
 
     it('a bag sent on to another hub for room takes its parcels’ plans with it, and why', () => {

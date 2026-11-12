@@ -922,12 +922,20 @@ export function formatDuration(minutes: number, t: Translate): string {
  * it can be shared, bookmarked, opened in a new tab and followed by a search engine; the app reads it once and
  * takes the visitor to the screen it names.
  */
-export type DeepLink = { join: RoleSpec['id'] } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' | 'zones' } | null;
+export type DeepLink = { join: RoleSpec['id']; near?: { lat: number; lng: number }; place?: string } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' | 'zones' } | null;
 
 export function readDeepLink(search: string): DeepLink {
   const q = new URLSearchParams(search);
   const join = q.get('join');
-  if (join && ROLES.some((r) => r.id === join)) return { join: join as RoleSpec['id'] };
+  if (join && ROLES.some((r) => r.id === join)) {
+    // 2026-11-12 — an invitation from "where hubs are needed": the place a hub is wanted, filled in (D7). Only a point that
+    // reads as one, and a place name of plain length — it came in a link anybody could have changed.
+    const near = /^(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)$/.exec(q.get('near') ?? '');
+    const lat = near ? Number(near[1]) : NaN;
+    const lng = near ? Number(near[2]) : NaN;
+    const place = (q.get('place') ?? '').trim().slice(0, 80);
+    return { join: join as RoleSpec['id'], ...(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { near: { lat, lng } } : {}), ...(place ? { place } : {}) };
+  }
   const go = q.get('go');
   if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles' || go === 'zones') return { go };
   return null;

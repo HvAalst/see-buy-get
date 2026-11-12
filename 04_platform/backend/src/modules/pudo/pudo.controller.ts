@@ -206,6 +206,8 @@ import { CounterPriceService, type CounterPriceRow } from './counter-price.servi
 import { PriceReportService, PriceReportView } from './price-report.service';
 import { CatchmentService, CatchmentsView } from './catchment.service';
 import { RoadMapService } from './road-map.service';
+import { HubDensityService } from './hub-density.service';
+import { DensityAsideDto, DensityReachDto, HubDensityView } from './hub-density.types';
 import { RoadMapLinkDto, RoadMapMinKmDto, RoadMapRoleDto, RoadMapView } from './road-map.types';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
@@ -392,6 +394,8 @@ export class SbgController {
     @Optional() private readonly catchments?: CatchmentService,
     // 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 2).
     @Optional() private readonly roadMaps?: RoadMapService,
+    // 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3).
+    @Optional() private readonly hubDensity?: HubDensityService,
   ) {}
 
   /**
@@ -3089,6 +3093,45 @@ export class SbgController {
   confirmRoadMap(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): RoadMapView {
     this.requireReach(actor, entityId);
     return this.roadMapsOf().confirm(entityId, auditActor(actor));
+  }
+
+  /* --- 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3): its company, or staff. --- */
+
+  /** Coverage, demand and pressure by zone and hub, and what the map suggests, most strongly first. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/hub-density')
+  entityHubDensity(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): HubDensityView {
+    this.requireReach(actor, entityId);
+    return this.hubDensityOf().view(entityId);
+  }
+
+  /** A suggestion set aside, with why. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-density/aside/:suggestionId')
+  setAsideSuggestion(@Param('entityId') entityId: string, @Param('suggestionId') suggestionId: string, @Body() dto: DensityAsideDto, @Actor() actor: IntrospectionResult): HubDensityView {
+    this.requireReach(actor, entityId);
+    return this.hubDensityOf().setAside(entityId, suggestionId, dto.reason, auditActor(actor));
+  }
+
+  /** A suggestion set aside, brought back. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-density/back/:suggestionId')
+  bringBackSuggestion(@Param('entityId') entityId: string, @Param('suggestionId') suggestionId: string, @Actor() actor: IntrospectionResult): HubDensityView {
+    this.requireReach(actor, entityId);
+    return this.hubDensityOf().bringBack(entityId, suggestionId, auditActor(actor));
+  }
+
+  /** How far a zone's shops may be from a hub, by its group (D6). */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-density/reach')
+  setDensityReach(@Param('entityId') entityId: string, @Body() dto: DensityReachDto, @Actor() actor: IntrospectionResult): HubDensityView {
+    this.requireReach(actor, entityId);
+    return this.hubDensityOf().setReach(entityId, dto, auditActor(actor));
+  }
+
+  private hubDensityOf(): HubDensityService {
+    if (!this.hubDensity) throw new GlosError('INVALID_STATE', 'Where hubs are needed is not available here');
+    return this.hubDensity;
   }
 
   private roadMapsOf(): RoadMapService {

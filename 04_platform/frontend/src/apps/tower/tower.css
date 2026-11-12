@@ -919,6 +919,22 @@
   align-items: center;
   gap: 6px;
 }
+/* 2026-11-12 — where hubs are needed: each suggestion, its reason and what staff can do with it. */
+.twr-suggests {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.twr-suggest {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  min-width: 0;
+}
 .twr-zoneevidence {
   display: block;
   margin-top: 4px;

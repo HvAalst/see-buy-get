@@ -29,6 +29,11 @@ describe('the front page', () => {
 
   it('follows a card’s address to its screen, and nothing it does not know', () => {
     expect(readDeepLink('?join=driver')).toEqual({ join: 'driver' });
+    // 2026-11-12 — an invitation from "where hubs are needed": the place filled in; a point that does not read as one is dropped.
+    expect(readDeepLink('?join=mdp&near=2.3284,37.9899&place=Marsabit')).toEqual({ join: 'mdp', near: { lat: 2.3284, lng: 37.9899 }, place: 'Marsabit' });
+    expect(readDeepLink('?join=mdp&near=999,1&place=')).toEqual({ join: 'mdp' });
+    expect(readDeepLink('?join=mdp&near=95,181')).toEqual({ join: 'mdp' });
+    expect(readDeepLink('?join=mdp&near=javascript:1')).toEqual({ join: 'mdp' });
     expect(readDeepLink('?go=market')).toEqual({ go: 'market' });
     // 2026-11-08 — which price zone a place is in (zone pricing): a real address too.
     expect(readDeepLink('?go=zones')).toEqual({ go: 'zones' });

@@ -469,12 +469,17 @@ export function useHomeApp() {
       const url = new URL(location.href);
       url.searchParams.delete('join');
       url.searchParams.delete('go');
+      url.searchParams.delete('near');
+      url.searchParams.delete('place');
       history.replaceState(null, '', url.toString());
     } catch {
       /* a browser that refuses the rewrite still lands on the right screen */
     }
-    if ('join' in link) startJoin(link.join);
-    else go(link.go);
+    if ('join' in link) {
+      startJoin(link.join);
+      // 2026-11-12 — the place a hub is wanted, from an invitation: its pin, and its town as the area (the joiner can change both).
+      if (link.near || link.place) setState((s) => ({ ...s, form: { ...s.form, ...(link.near ? { location: link.near } : {}), ...(link.place ? { zone: link.place } : {}) } }));
+    } else go(link.go);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

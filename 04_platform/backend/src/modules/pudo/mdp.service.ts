@@ -37,7 +37,7 @@ import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
 import { clockAt, clocksOfCountry } from './fleet-clock';
 import { NotificationService } from './notification.service';
-import { HubDrop, HubFloorBook, spaceProblem } from './hub-space';
+import { HubDrop, HubFloorBook, spaceProblem, withDay, type HubDay } from './hub-space';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -528,12 +528,32 @@ export class MdpService {
    * One more parcel sorted here today. The parcel that fills the day's sorting tells the hub, once a day, in its bell: it
    * goes on sorting — nothing is refused — and new bags go to another hub with room today where there is one.
    */
+  /** 2026-11-12 — a day it ran full: a bag held for room on its floor (the hub density map counts them). */
+  private noteFullDay(mdp: Mdp, now: number): void {
+    const day = this.dayOf(mdp, now);
+    const book = this.floors.get(mdp.mdpId) ?? { mdpId: mdp.mdpId, drops: [] };
+    this.floors.set(mdp.mdpId, { ...book, days: withDay(book.days, day, (d) => ({ ...d, full: true })) });
+  }
+
+  /** 2026-11-12 — its last days, day by day (the hub density map): how many it sorted, and the days it ran full. */
+  daysOf(mdpId: string, lastDays: number, now: number = Date.now()): Array<{ day: string } & HubDay> {
+    const mdp = this.require(mdpId);
+    const days = this.floors.get(mdpId)?.days ?? {};
+    const out: Array<{ day: string } & HubDay> = [];
+    for (let i = lastDays - 1; i >= 0; i--) {
+      const day = this.dayOf(mdp, now - i * 86_400_000);
+      out.push({ day, ...(days[day] ?? { sorted: 0 }) });
+    }
+    return out;
+  }
+
   private noteSorted(mdp: Mdp, now: number): void {
     const day = this.dayOf(mdp, now);
     const book = this.floors.get(mdp.mdpId) ?? { mdpId: mdp.mdpId, drops: [] };
     const count = (book.sorted?.day === day ? book.sorted.count : 0) + 1;
     const fills = this.declaresSpace(mdp) && count >= (mdp.sortPerDay ?? 0) && book.dayFullToldOn !== day;
-    this.floors.set(mdp.mdpId, { ...book, sorted: { day, count }, ...(fills ? { dayFullToldOn: day } : {}) });
+    const full = this.declaresSpace(mdp) && count >= (mdp.sortPerDay ?? 0);
+    this.floors.set(mdp.mdpId, { ...book, sorted: { day, count }, ...(fills ? { dayFullToldOn: day } : {}), days: withDay(book.days, day, (d) => ({ sorted: count, ...(d.full || full ? { full: true } : {}) })) });
     if (!fills) return;
     void this.notifications
       ?.notify(mdp.did, {
@@ -669,6 +689,7 @@ export class MdpService {
         const since = new Date(now).toISOString();
         this.totes.markWaiting(code, { hubId: placed.current.mdpId, hubName: placed.current.name, since });
         this.tellHolder(tote, 'waits', placed.current, placed.areas, since);
+        this.noteFullDay(placed.current, now);
       }
       return false;
     }

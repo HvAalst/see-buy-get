@@ -14288,6 +14288,156 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/hub-density": {
+      "get": {
+        "operationId": "Sbg.entityHubDensity",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDensityView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/hub-density/aside/{suggestionId}": {
+      "post": {
+        "operationId": "Sbg.setAsideSuggestion",
+        "summary": "",
+        "description": "A suggestion set aside, with why.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "suggestionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DensityAsideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDensityView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/hub-density/back/{suggestionId}": {
+      "post": {
+        "operationId": "Sbg.bringBackSuggestion",
+        "summary": "",
+        "description": "A suggestion set aside, brought back.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "suggestionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDensityView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/hub-density/reach": {
+      "post": {
+        "operationId": "Sbg.setDensityReach",
+        "summary": "",
+        "description": "How far a zone's shops may be from a hub, by its group (D6).",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DensityReachDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubDensityView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/price-cards/report": {
       "get": {
         "operationId": "Sbg.entityPriceReport",
@@ -58582,6 +58732,7 @@
               "custodyCaps",
               "runPay",
               "roadMap",
+              "hubDensity",
               "zones",
               "prices",
               "catchments",
@@ -60292,6 +60443,410 @@
         },
         "required": [
           "km"
+        ]
+      },
+      "DensityReach": {
+        "type": "object",
+        "properties": {
+          "urban": {
+            "type": "number"
+          },
+          "rural": {
+            "type": "number"
+          },
+          "remote": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "urban",
+          "rural",
+          "remote"
+        ]
+      },
+      "DensityZone": {
+        "type": "object",
+        "properties": {
+          "centre": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "km": {
+            "type": "number",
+            "description": "The farthest of its shops from the nearest hub serving it, by road (its centre where it has no shop)."
+          },
+          "nearestHub": {
+            "type": "string"
+          },
+          "nearestHubName": {
+            "type": "string"
+          },
+          "coverage": {
+            "type": "string",
+            "description": "Near: within its group's reach; far: within twice it; too far: beyond.",
+            "enum": [
+              "near",
+              "far",
+              "too_far"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "shops": {
+            "type": "number",
+            "description": "Shops standing in it."
+          },
+          "sent30": {
+            "type": "number",
+            "description": "Parcels handed in at its shops, and for its shops, in the last 30 days."
+          },
+          "received30": {
+            "type": "number"
+          },
+          "served": {
+            "type": "boolean",
+            "description": "A hub serves it (on the Zones screen)."
+          }
+        },
+        "required": [
+          "centre",
+          "coverage",
+          "code",
+          "name",
+          "group",
+          "shops",
+          "sent30",
+          "received30",
+          "served"
+        ]
+      },
+      "DensityHub": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "role": {
+            "type": "string",
+            "description": "On the road map in force: a stop, or local only.",
+            "enum": [
+              "stop",
+              "local"
+            ]
+          },
+          "sortPerDay": {
+            "type": "number"
+          },
+          "bagPlaces": {
+            "type": "number"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "down": {
+            "type": "boolean"
+          },
+          "fullDays": {
+            "type": "number",
+            "description": "Days of the last 14 it ran full: its day's sorting reached, or a bag held for room."
+          },
+          "sortedPerDay": {
+            "type": "number",
+            "description": "Parcels it sorted a day, over the last 14."
+          },
+          "waiting": {
+            "type": "number",
+            "description": "Bags waiting for room on its floor now."
+          }
+        },
+        "required": [
+          "location",
+          "mdpId",
+          "name",
+          "down",
+          "fullDays",
+          "sortedPerDay",
+          "waiting"
+        ]
+      },
+      "DensityLink": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          },
+          "b": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ]
+      },
+      "SuggestionPlace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A known town, where one is near."
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "SuggestionNumbers": {
+        "type": "object",
+        "properties": {
+          "shops": {
+            "type": "number"
+          },
+          "parcels": {
+            "type": "number"
+          },
+          "km": {
+            "type": "number",
+            "description": "How far by road its shops are from the nearest hub."
+          },
+          "reach": {
+            "type": "number",
+            "description": "How far they may be, by their zone's group."
+          },
+          "fullDays": {
+            "type": "number"
+          },
+          "days": {
+            "type": "number"
+          },
+          "ratio": {
+            "type": "number",
+            "description": "Parcels a day from the zones it serves, against what it says it sorts."
+          },
+          "apart": {
+            "type": "number",
+            "description": "Two hubs apart, by road."
+          },
+          "min": {
+            "type": "number",
+            "description": "The country's minimum distance between two stops."
+          }
+        }
+      },
+      "SuggestionAside": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "reason"
+        ]
+      },
+      "HubSuggestion": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "hub_needed",
+              "extra_hub",
+              "too_close",
+              "road_gap"
+            ]
+          },
+          "place": {
+            "$ref": "#/components/schemas/SuggestionPlace"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "zoneNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hubs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hubNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "numbers": {
+            "$ref": "#/components/schemas/SuggestionNumbers"
+          },
+          "towns": {
+            "description": "A gap on the road: the known towns on the way between the two hubs.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aside": {
+            "$ref": "#/components/schemas/SuggestionAside"
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable while what it is about is: set aside by it."
+          },
+          "score": {
+            "type": "number",
+            "description": "How strongly it is suggested: comes back from being set aside once this doubles."
+          }
+        },
+        "required": [
+          "kind",
+          "place",
+          "zones",
+          "zoneNames",
+          "hubs",
+          "hubNames",
+          "numbers",
+          "towns",
+          "id",
+          "score"
+        ]
+      },
+      "HubDensityView": {
+        "type": "object",
+        "properties": {
+          "mapVersion": {
+            "type": "number",
+            "description": "The zone map in force; absent where the country has none yet."
+          },
+          "reach": {
+            "$ref": "#/components/schemas/DensityReach"
+          },
+          "reachStart": {
+            "$ref": "#/components/schemas/DensityReach"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DensityZone"
+            }
+          },
+          "hubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DensityHub"
+            }
+          },
+          "links": {
+            "description": "Roads between stops: the road map in force, else the one being looked at, else the proposal.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DensityLink"
+            }
+          },
+          "suggestions": {
+            "description": "What it suggests, most strongly first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubSuggestion"
+            }
+          },
+          "setAside": {
+            "description": "Set aside by staff, until 90 days pass or their numbers double.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubSuggestion"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "roadMapInForce": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reach",
+          "reachStart",
+          "zones",
+          "hubs",
+          "links",
+          "suggestions",
+          "setAside",
+          "entityId",
+          "country",
+          "roadMapInForce"
+        ]
+      },
+      "DensityAsideDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "DensityReachDto": {
+        "type": "object",
+        "properties": {
+          "urban": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "rural": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "remote": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "urban",
+          "rural",
+          "remote"
         ]
       },
       "PriceReportRow": {

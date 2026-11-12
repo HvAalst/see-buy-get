@@ -39,6 +39,26 @@ export interface HubFloorBook {
   sorted?: { day: string; count: number };
   /** The day the hub was told its sorting was full — told once a day. */
   dayFullToldOn?: string;
+  /**
+   * 2026-11-12 — DAY BY DAY, the last 30 days of its own clock (the hub density map, "Hubs on the Road" step 3): parcels sorted,
+   * and whether it ran full — its day's sorting reached, or a bag held for room on its floor.
+   */
+  days?: Record<string, HubDay>;
+}
+
+export interface HubDay {
+  sorted: number;
+  full?: boolean;
+}
+
+/** How many days a hub's day-by-day record keeps. */
+export const HUB_DAYS_KEPT = 30;
+
+/** A day's record changed, the oldest days beyond HUB_DAYS_KEPT let go. */
+export function withDay(days: Record<string, HubDay> | undefined, day: string, change: (d: HubDay) => HubDay): Record<string, HubDay> {
+  const next = { ...(days ?? {}), [day]: change(days?.[day] ?? { sorted: 0 }) };
+  const keep = Object.keys(next).sort().slice(-HUB_DAYS_KEPT);
+  return Object.fromEntries(keep.map((k) => [k, next[k]]));
 }
 
 /**
