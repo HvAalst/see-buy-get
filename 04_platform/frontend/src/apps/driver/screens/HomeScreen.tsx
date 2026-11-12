@@ -35,6 +35,7 @@ import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { LoadSpaceSheet } from './LoadSpaceSheet';
+import { TripsCard } from './TripsCard';
 import { IdPhotoCard } from './IdPhotoCard';
 import { CarrierPlaceCard } from './CarrierPlaceCard';
 import { DriverCoverCard } from './DriverCoverCard';
@@ -186,6 +187,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede', { place: stickerPlace(namedClass, t) })} />
 
       <FleetOfferNote state={state} onOpenFleet={onOpenFleet} />
+      {/* 2026-11-12 — a trip's bell tapped off shift: its loads open the moment the shift starts. */}
+      {state.pendingTrip ? <Note tone="info" icon="truck" title={t('driver.trips.pendingTitle', { clock: state.pendingTrip.startTime, from: state.pendingTrip.from.label, to: state.pendingTrip.to.label })} detail={t('driver.trips.pendingBody')} /> : null}
       {removed ? (
         <Note tone="warn" icon="truck" title={t('driver.home.betweenTitle')} detail={`${removedLine(removed, formatDate(removed.at, { day: 'numeric', month: 'short' }), t)} ${removalWords(removed, t, Boolean(state.rideAlone?.offered))}`} />
       ) : null}
@@ -212,6 +215,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       <CarrierPlaceCard state={state} actions={actions} sbg={sbg ?? null} />
       {/* Their own insurance cover: what opens loads whose sender asks for cover (2026-10-28). */}
       <DriverCoverCard state={state} actions={actions} sbg={sbg ?? null} />
+      {/* 2026-11-12 — their saved trips, like an alarm (the owner: "much like an alarm"). */}
+      <TripsCard state={state} actions={actions} onShift={false} />
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}

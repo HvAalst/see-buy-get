@@ -38,6 +38,7 @@ import type {
   VehicleView,
 } from './types';
 import type { DepartureView } from './types';
+import type { SavedTrip } from './trips';
 import type { SaidPassage } from './passage';
 import { boardOriginPin, cardReader, cardWords, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, leftDetail, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
@@ -153,6 +154,10 @@ export interface DriverState {
   boardPlace: CustomPlace;
   /** The crowd-sourced road map around the driver: what other drivers have reported, never a survey. */
   road: RoadConstraint[];
+  /** 2026-11-12 — the driver's saved trips (the owner: "much like an alarm"); null until read. */
+  trips: SavedTrip[] | null;
+  /** A trip whose bell was tapped off shift: run once the shift starts. */
+  pendingTrip: SavedTrip | null;
   roadState: 'idle' | 'loading' | 'error' | 'ready';
   /**
    * CL5 — whether a photograph of an official document may be kept in this country, and the notice the
@@ -256,6 +261,8 @@ const INITIAL: DriverState = {
   boardOrigin: null, // …and from where they are, until they say otherwise
   boardPlace: { ...EMPTY_PLACE },
   road: [],
+  trips: null,
+  pendingTrip: null,
   roadState: 'idle',
   observationNotice: null,
   observations: [],
@@ -1623,6 +1630,121 @@ export function useDriverApp() {
     [client, did, run, fail],
   );
 
+  /* ------------------------------------------------------------ saved trips (2026-11-12) */
+
+  const loadTrips = useCallback(async () => {
+    if (!client || !did) return;
+    const r = await client.api.trips(did);
+    if (!r.error) setState((s) => ({ ...s, trips: narrow<SavedTrip[]>(r.data) ?? [] }));
+  }, [client, did]);
+
+  /** Save a trip — and, where the sheet gave a time back, the trip back. Returns why it did not go, or nothing. */
+  const saveTrips = useCallback(
+    async (bodies: Array<Record<string, unknown>>): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      for (const body of bodies) {
+        const r = await client.api.saveTrip(did, body);
+        if (r.error) {
+          await loadTrips();
+          return r.error;
+        }
+      }
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.tripSaved'), detail: t('driver.toast.tripSavedDetail') });
+      await loadTrips();
+      return null;
+    },
+    [client, did, pushToast, loadTrips],
+  );
+
+  const skipTrip = useCallback(
+    async (trip: SavedTrip, day: string, skip: boolean) => {
+      if (!client || !did) return;
+      await run('trip', async () => {
+        const r = await client.api.skipTrip(did, trip.tripId, day, skip);
+        if (r.error) return fail(r.error);
+        await loadTrips();
+      });
+    },
+    [client, did, run, fail, loadTrips],
+  );
+
+  const pauseTrip = useCallback(
+    async (trip: SavedTrip, paused: boolean) => {
+      if (!client || !did) return;
+      await run('trip', async () => {
+        const r = await client.api.pauseTrip(did, trip.tripId, paused);
+        if (r.error) return fail(r.error);
+        await loadTrips();
+      });
+    },
+    [client, did, run, fail, loadTrips],
+  );
+
+  const removeTrip = useCallback(
+    async (trip: SavedTrip) => {
+      if (!client || !did) return;
+      await run('trip', async () => {
+        const r = await client.api.removeTrip(did, trip.tripId);
+        if (r.error) return fail(r.error);
+        await loadTrips();
+      });
+    },
+    [client, did, run, fail, loadTrips],
+  );
+
+  /**
+   * A TRIP, GONE ON NOW (the owner: "much like an alarm"): its two ends put on the route and its loads asked for — the bell's
+   * one tap. Off shift there is nothing to put them on: held, and run the moment the shift starts.
+   */
+  const goTrip = useCallback(
+    async (trip: SavedTrip) => {
+      if (!stateRef.current.session.active) {
+        setState((s) => ({ ...s, pendingTrip: trip, screen: 'home' }));
+        return;
+      }
+      const end = (e: { label: string; lat: number; lng: number }) => ({ label: e.label, pin: { lat: e.lat, lng: e.lng }, from: 'map' as const });
+      const route: SavedRoute = { from: { lat: trip.from.lat, lng: trip.from.lng }, to: { lat: trip.to.lat, lng: trip.to.lng }, fromLabel: trip.from.label, toLabel: trip.to.label };
+      if (did) saveRoute(did, route);
+      setState((s) => ({ ...s, pendingTrip: null, route, form: { ...s.form, fromId: CUSTOM_PLACE, toId: CUSTOM_PLACE, fromPlace: end(trip.from), toPlace: end(trip.to), ...(trip.minEarn ? { minEarn: String(trip.minEarn) } : {}) } }));
+      if (client && did) void client.api.declareLeg(did, { fromLabel: trip.from.label, from: route.from, toLabel: trip.to.label, to: route.to });
+      await runSuggest(route.from, route.to, trip.minEarn);
+    },
+    [client, did, runSuggest],
+  );
+
+  // The bell's tap (?trip=): the trip read and gone on — held until the driver is signed in and the app has loaded.
+  const linkedTrip = useRef<string | null>(null);
+  const openTripFromLink = useCallback(async () => {
+    const tripId = linkedTrip.current;
+    if (!tripId || !client || !did) return;
+    linkedTrip.current = null;
+    const r = await client.api.trips(did);
+    if (r.error) return;
+    const trips = narrow<SavedTrip[]>(r.data) ?? [];
+    setState((s) => ({ ...s, trips }));
+    const trip = trips.find((x) => x.tripId === tripId);
+    if (trip) await goTrip(trip);
+  }, [client, did, goTrip]);
+  const openTripRef = useRef(openTripFromLink);
+  openTripRef.current = openTripFromLink;
+  useEffect(
+    () =>
+      onLaunch('trip', (id) => {
+        linkedTrip.current = id;
+        void openTripRef.current();
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (client && did && linkedTrip.current) void openTripRef.current();
+  }, [client, did]);
+  // Off shift when the bell was tapped: gone on the moment the shift starts.
+  useEffect(() => {
+    const held = state.pendingTrip;
+    if (state.session.active && held) void goTrip(held);
+  }, [state.session.active]);
+
   const submitRoute = useCallback(async () => {
     // Either end may be a place on the network OR one the driver named and pinned. Both arrive here as the
     // same thing — a label and a point — because that is all a road end has ever been to the matcher.
@@ -2352,6 +2474,12 @@ export function useDriverApp() {
       freightManifest: (freightId: string) => client!.api.freightManifest(freightId),
       matchRate,
       setLoadSpace,
+      loadTrips,
+      saveTrips,
+      skipTrip,
+      pauseTrip,
+      removeTrip,
+      goTrip,
       submitRoute,
       repeatRoute,
       setOfferIndex,

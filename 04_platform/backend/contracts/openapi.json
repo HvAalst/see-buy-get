@@ -26696,11 +26696,237 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/trips": {
+      "get": {
+        "operationId": "Sbg.driverTrips",
+        "summary": "",
+        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.\n\nA ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —\nstamped with a fresh \"located at\" time, so it read as a reading rather than a guess — while the driver\ncould be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the\nphone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a\ndriver about a load they are \"about to drive past\" — past a place they were never at. Where the driver\nis comes only from the phone. With location refused, the map shows no position rather than a made-up one.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedTripView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.saveDriverTrip",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedTripDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/trips/{tripId}": {
+      "patch": {
+        "operationId": "Sbg.updateDriverTrip",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedTripDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.removeDriverTrip",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/trips/{tripId}/skip": {
+      "post": {
+        "operationId": "Sbg.skipDriverTrip",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripSkipDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/trips/{tripId}/pause": {
+      "post": {
+        "operationId": "Sbg.pauseDriverTrip",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripPauseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/suggest-work": {
       "post": {
         "operationId": "Sbg.suggestWork",
-        "summary": "",
-        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.\n\nA ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —\nstamped with a fresh \"located at\" time, so it read as a reading rather than a guess — while the driver\ncould be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the\nphone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a\ndriver about a load they are \"about to drive past\" — past a place they were never at. Where the driver\nis comes only from the phone. With location refused, the map shows no position rather than a made-up one.",
         "parameters": [
           {
             "name": "did",
@@ -75629,6 +75855,215 @@
         "required": [
           "memberRef",
           "weightKg"
+        ]
+      },
+      "TripEnd": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "lat",
+          "lng"
+        ]
+      },
+      "TripRunView": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "The run's day on its own clock, and the time."
+          },
+          "clock": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "description": "The moment it starts."
+          }
+        },
+        "required": [
+          "day",
+          "clock",
+          "at"
+        ]
+      },
+      "SavedTripView": {
+        "type": "object",
+        "properties": {
+          "setBy": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "fleet"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/TripEnd"
+          },
+          "to": {
+            "$ref": "#/components/schemas/TripEnd"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "minEarn": {
+            "type": "number"
+          },
+          "skips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "next": {
+            "description": "The next run, where there is one (paused: none).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripRunView"
+              }
+            ]
+          },
+          "tripId": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "The driver may change it: their own, not their fleet's."
+          }
+        },
+        "required": [
+          "setBy",
+          "from",
+          "to",
+          "days",
+          "skips",
+          "tripId",
+          "startTime",
+          "zone",
+          "paused",
+          "mine"
+        ]
+      },
+      "SavedTripDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "fromLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "fromLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "fromLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "toLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "toLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "toLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "maximum": 6,
+              "minimum": 0
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "/^([01]\\d|2[0-3]):[0-5]\\d$/"
+          },
+          "zone": {
+            "type": "string",
+            "description": "The phone's own clock (Intl), where it says one; else the driver's country's.",
+            "maxLength": 64
+          },
+          "minEarn": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "fromLabel",
+          "fromLat",
+          "fromLng",
+          "toLabel",
+          "toLat",
+          "toLng",
+          "days",
+          "startTime"
+        ]
+      },
+      "TripSkipDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "skip": {
+            "type": "boolean",
+            "description": "False: the day is driven after all."
+          }
+        },
+        "required": [
+          "day"
+        ]
+      },
+      "TripPauseDto": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
         ]
       },
       "SuggestRouteDto": {

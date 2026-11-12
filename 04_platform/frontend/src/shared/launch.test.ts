@@ -107,6 +107,9 @@ describe('where a notice points', () => {
     expect(intentOf('/?chat=cv_1a2b3c')).toEqual({ chat: 'cv_1a2b3c' });
     expect(intentOf('https://x.test/send/?parcel=PUD-1')).toEqual({ parcel: 'PUD-1' });
     expect(intentOf('/?offer=ofr_1')).toEqual({ offer: 'ofr_1' });
+    // 2026-11-12 — a saved trip's bell opens the trip (the Driver app's); nothing a hand-made address slips past it.
+    expect(intentOf('/?trip=trip_ab12cd')).toEqual({ trip: 'trip_ab12cd' });
+    expect(intentOf('/?trip=<script>')).toBeNull();
     expect(intentOf('/?chat=..%2F..%2Fetc')).toBeNull();
     expect(intentOf('/?chat=%3Cscript%3E')).toBeNull();
     expect(intentOf('/')).toBeNull();

@@ -6,6 +6,7 @@ import { vehicleWord } from '../vehicle-words';
 import { MAX_WORK_RADIUS_KM, startFromHere } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 import { RoadSection } from './RoadSection';
+import { SaveTripSheet, TripsCard } from './TripsCard';
 import { CounterSection } from './CounterSection';
 
 export interface RouteScreenProps {
@@ -172,9 +173,20 @@ function useStartHere(state: DriverState, actions: DriverActions, hereLabel: str
   return { fix, ask };
 }
 
+/** A road end as a label and a point: a network place, or one the driver named and pinned — or nothing yet. */
+function endOf(state: DriverState, id: string, place: CustomPlace): { label: string; lat: number; lng: number } | undefined {
+  if (id === CUSTOM_PLACE) return place.pin && place.label.trim() ? { label: place.label.trim(), lat: place.pin.lat, lng: place.pin.lng } : undefined;
+  const n = state.nodes.find((x) => x.id === id);
+  return n ? { label: n.label, lat: n.lat, lng: n.lng } : undefined;
+}
+
 function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { loading: boolean; empty: boolean }) {
   const t = useT();
   const here = useStartHere(state, actions, t('driver.route.hereLabel'));
+  // 2026-11-12 — saved like an alarm (the owner): this route, on chosen days at a time. A fleet's driver: their fleet sets theirs.
+  const [saveOpen, setSaveOpen] = useState(false);
+  const from = endOf(state, state.form.fromId, state.form.fromPlace);
+  const to = endOf(state, state.form.toId, state.form.toPlace);
   return (
     <>
 
@@ -184,6 +196,7 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
         <Note tone="warn" icon="pin" title={t('driver.route.emptyTitle')} detail={t('driver.route.emptyDetail')} />
       ) : null}
 
+      <TripsCard state={state} actions={actions} onShift />
       {here.fix === 'asking' && !state.form.fromId ? <Note tone="info" icon="pin" title={t('driver.route.locating')} /> : null}
       {here.fix === 'off' && !state.form.fromId ? (
         <div>
@@ -291,6 +304,12 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
           {t('driver.repeat', { from: state.route.fromLabel, to: state.route.toLabel })}
         </Button>
       ) : null}
+      {from && to && !state.driver?.managerDid ? (
+        <Button variant="link" full={false} onClick={() => setSaveOpen(true)}>
+          {t('driver.trips.save')}
+        </Button>
+      ) : null}
+      {saveOpen && from && to ? <SaveTripSheet open={saveOpen} onClose={() => setSaveOpen(false)} actions={actions} from={from} to={to} /> : null}
 
       <div class="scr__foot">
         <ReadAloud text={() => t('driver.route.aloud', { vehicle: vehicleWord(state.vehicle?.vehicleClass, t) })} label={t('driver.readAloud')} />

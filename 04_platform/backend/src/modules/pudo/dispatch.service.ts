@@ -914,6 +914,16 @@ export class DispatchService {
 
   /** Suggest the loads sitting along a driver's A→B route, within remaining vehicle capacity. `minEarn` is the
    *  driver's own floor: hide freight paying less than this (their surge-threshold filter). */
+  /**
+   * 2026-11-12 — HOW MANY LOADS ARE ON A ROAD NOW (a saved trip's bell — the owner: "much like an alarm"): the loads a driver
+   * would be offered there, counted for a vehicle where one is known — never offered, nothing held or written.
+   */
+  countAlong(route: { from: { lat: number; lng: number }; to: { lat: number; lng: number } }, vehicle?: Vehicle): number {
+    return this.availableLoads().filter(
+      (load) => this.router.detourKm(route.from, load.pickupLocation, route.to) <= DISPATCH_MAX_DETOUR_KM && this.minutes(route.from, load.pickupLocation) <= DISPATCH_MAX_PICKUP_MIN && (!vehicle || this.vehicleCanCarry(vehicle, load, vehicle.capacityKg)),
+    ).length;
+  }
+
   suggest(driverDid: string, route: RoutePlan, now: number = Date.now(), minEarn?: number): Offer[] {
     if (this.fleet.overHours(driverDid, now)) return []; // FP8 — nothing is offered to a driver who may not take it
     const vehicle = this.fleet.vehicleForDriver(driverDid);

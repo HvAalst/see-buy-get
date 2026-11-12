@@ -202,6 +202,8 @@ import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
 import { BusinessRateService } from './business-rate.service';
+import { SavedTripService } from './saved-trip.service';
+import { SavedTripDto, TripPauseDto, TripSkipDto, type SavedTripView } from './saved-trip.types';
 import { BusinessRateDto, type BusinessRatesView } from './business-rate.types';
 import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
@@ -394,6 +396,8 @@ export class SbgController {
     @Optional() private readonly priceReports?: PriceReportService,
     // 2026-11-12 — a large sender's own rate (the owner's D3).
     @Optional() private readonly businessRates?: BusinessRateService,
+    // 2026-11-12 — a driver's saved trips (the owner: "much like an alarm").
+    @Optional() private readonly savedTrips?: SavedTripService,
     // 2026-11-09 — the GLNs SeeBuyGet gave its hubs and collection points, under its own GS1 prefix.
     @Optional() private readonly ourGlns?: OurGlnBook,
     // 2026-11-09 — which hub serves each zone (the catchments-and-runs plan, Part A).
@@ -8567,6 +8571,53 @@ export class SbgController {
    * driver about a load they are "about to drive past" — past a place they were never at. Where the driver
    * is comes only from the phone. With location refused, the map shows no position rather than a made-up one.
    */
+  /**
+   * 2026-11-12 — A DRIVER'S SAVED TRIPS (the owner: "much like an alarm driving route a to b monday to saturday from 5:30
+   * AM"): their own, and the ones their fleet set — those read here, changed only by the fleet.
+   */
+  @Roles('driver', 'operator')
+  @Get('fleet/drivers/:did/trips')
+  driverTrips(@Param('did') did: string, @Actor() actor: IntrospectionResult): SavedTripView[] {
+    this.assertDriverActs(did, actor);
+    return this.tripsOf().listForDriver(did);
+  }
+
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/trips')
+  saveDriverTrip(@Param('did') did: string, @Body() dto: SavedTripDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    this.assertDriverActs(did, actor);
+    return this.tripsOf().saveForDriver(did, dto);
+  }
+
+  @Roles('driver', 'operator')
+  @Patch('fleet/drivers/:did/trips/:tripId')
+  updateDriverTrip(@Param('did') did: string, @Param('tripId') tripId: string, @Body() dto: SavedTripDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    this.assertDriverActs(did, actor);
+    return this.tripsOf().update(did, tripId, dto);
+  }
+
+  @Roles('driver', 'operator')
+  @Delete('fleet/drivers/:did/trips/:tripId')
+  removeDriverTrip(@Param('did') did: string, @Param('tripId') tripId: string, @Actor() actor: IntrospectionResult): { removed: true } {
+    this.assertDriverActs(did, actor);
+    this.tripsOf().remove(did, tripId);
+    return { removed: true };
+  }
+
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/trips/:tripId/skip')
+  skipDriverTrip(@Param('did') did: string, @Param('tripId') tripId: string, @Body() dto: TripSkipDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    this.assertDriverActs(did, actor);
+    return this.tripsOf().skip(did, tripId, dto.day, dto.skip !== false);
+  }
+
+  @Roles('driver', 'operator')
+  @Post('fleet/drivers/:did/trips/:tripId/pause')
+  pauseDriverTrip(@Param('did') did: string, @Param('tripId') tripId: string, @Body() dto: TripPauseDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    this.assertDriverActs(did, actor);
+    return this.tripsOf().setPaused(did, tripId, dto.paused);
+  }
+
   @Roles('driver', 'operator')
   @Post('fleet/drivers/:did/suggest-work')
   suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto, @Actor() actor: IntrospectionResult) {
@@ -8674,6 +8725,11 @@ export class SbgController {
   }
 
   /** Who is acting: the name for the record, and the account, which tells two people apart (never their names). */
+  private tripsOf(): SavedTripService {
+    if (!this.savedTrips) throw new GlosError('NOT_FOUND', 'Saved trips are not available on this server');
+    return this.savedTrips;
+  }
+
   private ratesOf(): BusinessRateService {
     if (!this.businessRates) throw new GlosError('NOT_FOUND', 'Senders’ rates are not available on this server');
     return this.businessRates;
