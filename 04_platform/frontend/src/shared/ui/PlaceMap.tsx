@@ -87,14 +87,16 @@ export const FRAME_NEAR_KM = 50;
  * all of them either way.
  */
 export function framedPoints({ pins = [], reference, dropped, nearest }: Pick<PlaceMapProps, 'pins' | 'reference' | 'dropped' | 'nearest'>): GeoPoint[] {
-  if (reference && nearest && nearest > 0) {
+  // 2026-11-12 — with no marked place, a dropped pin anchors it: a sign-up framed on the pin and the shops nearest it.
+  const anchor = reference ?? dropped;
+  if (anchor && nearest && nearest > 0) {
     const close = pins
-      .map((pin) => ({ point: pin.point, km: haversineKm(reference, pin.point) }))
+      .map((pin) => ({ point: pin.point, km: haversineKm(anchor, pin.point) }))
       .filter((p) => p.km <= FRAME_NEAR_KM)
       .sort((a, b) => a.km - b.km)
       .slice(0, nearest)
       .map((p) => p.point);
-    return [reference, ...close, ...(dropped ? [dropped] : [])];
+    return [...(reference ? [reference] : []), ...close, ...(dropped ? [dropped] : [])];
   }
   return [...pins.map((p) => p.point), ...(reference ? [reference] : []), ...(dropped ? [dropped] : [])];
 }

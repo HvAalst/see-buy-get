@@ -113,7 +113,7 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
     // Fit the view ONLY when the set of coordinates actually changed — never on a mere reselection or an
     // unrelated re-render — so the user's manual pan/zoom (and a tap-to-zoom) survives.
     // A picker of shops near a marked place frames that place and its nearest shops, not the whole network (`nearest`).
-    const framed: Array<[number, number]> = reference && nearest ? framedPoints({ pins, reference, dropped, nearest }).map((p) => [p.lat, p.lng]) : (points as Array<[number, number]>);
+    const framed: Array<[number, number]> = (reference || dropped) && nearest ? framedPoints({ pins, reference, dropped, nearest }).map((p) => [p.lat, p.lng]) : (points as Array<[number, number]>);
     // Nothing to frame: where it was told to start — and again when that changes (a country chosen), never after a pin.
     const sig = framed.length
       ? framed

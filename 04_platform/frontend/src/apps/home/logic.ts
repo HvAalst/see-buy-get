@@ -165,6 +165,20 @@ export function normalizePhone(phone: string): string {
  * The country somebody signing up is joining in, for where their map starts and which shops it shows: the one chosen,
  * else the one their phone number is from (2026-10-30: a Dutch number was shown Nairobi). Empty: not known yet.
  */
+/**
+ * 2026-11-12 — WHERE THE PHONE IS, AGAINST THE COUNTRY BEING JOINED (the owner: "take my current location"): a position in
+ * another country's zones is abroad, and no pin is dropped there; one in the country, or where no country keeps zones
+ * (nothing can say), is taken.
+ */
+export function fixVerdict(answer: { country?: string } | null | undefined, joining: string): 'here' | 'elsewhere' {
+  return answer?.country && joining && answer.country.toUpperCase() !== joining.toUpperCase() ? 'elsewhere' : 'here';
+}
+
+/** The shops a sign-up's map shows: the country being joined's — a shop with no country said is the network's home's. */
+export function joinPins<T extends { location?: unknown; country?: string }>(points: T[], country: string, home: string): T[] {
+  return points.filter((p) => p.location && (!country || (p.country ?? home).toUpperCase() === country));
+}
+
 export function joiningCountry(form: { country?: string; phone?: string }): string {
   return (form.country || countryOfNumber(form.phone ?? '') || '').toUpperCase();
 }

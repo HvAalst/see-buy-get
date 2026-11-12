@@ -38,5 +38,11 @@ describe('framedPoints', () => {
     expect(framed).not.toContainEqual({ lat: 52.52, lng: 13.405 });
     // Nothing near: the place alone, close up.
     expect(framedPoints({ pins: [pins[4]], reference: westlands, nearest: 3 })).toEqual([westlands]);
+    // 2026-11-12 — with no marked place, a dropped pin anchors it: the pin and its nearest shops, never the whole network.
+    const dropped = framedPoints({ pins, dropped: westlands, nearest: 3 });
+    expect(dropped).toHaveLength(4);
+    expect(dropped[dropped.length - 1]).toEqual(westlands);
+    expect(framedPoints({ pins: [pins[4]], dropped: westlands, nearest: 3 })).toEqual([westlands]);
+    expect(framedPoints({ pins, dropped: westlands })).toHaveLength(pins.length + 1);
   });
 });

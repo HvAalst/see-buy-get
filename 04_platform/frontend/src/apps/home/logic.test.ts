@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  fixVerdict,
+  joinPins,
   EMPTY_JOIN,
   ROLES,
   bodyWords,
@@ -599,5 +601,27 @@ describe('the country somebody signs up in, for their map', () => {
     expect(joiningCountry({ country: 'ug', phone: '+31653000000' })).toBe('UG');
     expect(joiningCountry({ phone: '0712000000' })).toBe('');
     expect(joiningCountry({})).toBe('');
+  });
+});
+
+describe('the sign-up map starts where the phone is (the owner, 2026-11-12: "it should be geo aware")', () => {
+  it('takes a position in the country being joined, or where no country keeps zones; never one in another country', () => {
+    expect(fixVerdict({ country: 'NL' }, 'NL')).toBe('here');
+    expect(fixVerdict({ country: 'nl' }, 'NL')).toBe('here');
+    expect(fixVerdict({}, 'NL')).toBe('here');
+    expect(fixVerdict(null, 'KE')).toBe('here');
+    expect(fixVerdict({ country: 'NL' }, 'KE')).toBe('elsewhere');
+    expect(fixVerdict({ country: 'NL' }, '')).toBe('here');
+  });
+  it('shows the joined country’s shops only — one with no country said is the network’s home’s', () => {
+    const points = [
+      { did: 'a', location: { lat: 52.37, lng: 4.9 }, country: 'NL' },
+      { did: 'b', location: { lat: -1.28, lng: 36.82 } },
+      { did: 'c', location: { lat: -1.3, lng: 36.8 }, country: 'KE' },
+      { did: 'd', country: 'NL' },
+    ];
+    expect(joinPins(points, 'NL', 'KE').map((p) => p.did)).toEqual(['a']);
+    expect(joinPins(points, 'KE', 'KE').map((p) => p.did)).toEqual(['b', 'c']);
+    expect(joinPins(points, '', 'KE').map((p) => p.did)).toEqual(['a', 'b', 'c']);
   });
 });

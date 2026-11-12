@@ -1,22 +1,23 @@
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
-import { useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
 import { AddressFields } from '../../../shared/account/AddressFields';
 import { addressFormatOf } from '../api';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
-import { countryOfNumber } from '../../../shared/phone/dial';
+import { countryOfNumber, HOME_COUNTRY } from '../../../shared/phone/dial';
+import { canLocate, currentPosition } from '../../../shared/position';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
 import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
-import { geocode, homeConfig, myAgreement } from '../api';
+import { geocode, homeConfig, myAgreement, zoneAt } from '../api';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { pageNameFor } from '../../../shared/handle';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { JoinHelp } from './JoinHelp';
 
-import { addressCountry, readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
+import { addressCountry, readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, fixVerdict, joinPins, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -987,6 +988,37 @@ function PagePreview({ name, country }: { name: string; country: string }) {
   return <p class="card__note">{t('home.join.about.page', { page: `${host}/@${page}` })}</p>;
 }
 
+/**
+ * 2026-11-12 — THE MAP STARTS WHERE THE PHONE IS (the owner: "it should be geo aware and take my current location or ask me
+ * to turn on locations"). Asked once as the step opens, unless a pin is down already: there, the pin is dropped where the
+ * phone is (a courier's zone filled in from it where empty); in another country's zones, nothing is dropped and it says so;
+ * refused or not to be had, it says how to turn location on, with a button to ask again. A pin dropped by hand meanwhile wins.
+ */
+type Fix = 'asking' | 'here' | 'elsewhere' | 'off' | 'set';
+function useWhereYouAre(form: HomeState['form'], country: string, courier: boolean, setForm: HomeActions['setForm']): { fix: Fix; ask: () => void } {
+  const [fix, setFix] = useState<Fix>(form.location ? 'set' : 'asking');
+  const latest = useRef(form);
+  latest.current = form;
+  const ask = useCallback(() => {
+    if (!canLocate()) return setFix('off');
+    setFix('asking');
+    void currentPosition(10_000).then(async (point) => {
+      if (!point) return setFix('off');
+      if (latest.current.location) return setFix('set');
+      const r = await zoneAt(point.lat, point.lng);
+      const answer = r.error ? null : (r.data ?? null);
+      if (fixVerdict(answer, country) === 'elsewhere') return setFix('elsewhere');
+      if (latest.current.location) return setFix('set');
+      setForm({ location: point, ...(courier && answer?.zone && !latest.current.zone.trim() ? { zone: answer.zone.name } : {}) });
+      setFix('here');
+    });
+  }, [country, courier, setForm]);
+  useEffect(() => {
+    if (!latest.current.location) ask();
+  }, []);
+  return { fix, ask };
+}
+
 function WhereStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
@@ -998,6 +1030,8 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   // The map opens on the country being joined — the one chosen, else the phone's — and shows that country's shops only.
   const country = joiningCountry(f);
   const start = useCountryStart(country);
+  const here = useWhereYouAre(f, country, role.kind === 'driver', actions.setForm);
+  const countryName = state.countries.find((c) => c.country === country)?.name ?? country;
   const [openShop, setOpenShop] = useState<string | null>(null);
   const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
@@ -1008,13 +1042,26 @@ function WhereStep({ state, actions }: JoinScreenProps) {
 
       <PlaceMap
         label={t('home.join.where.mapLabel')}
-        pins={state.points.filter((p) => p.location && (!country || !p.country || p.country === country)).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+        pins={joinPins(state.points, country, HOME_COUNTRY).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
         selectedId={openShop}
         onPick={setOpenShop}
         onDrop={(location) => actions.setForm({ location })}
         dropped={f.location}
         start={start}
+        nearest={8}
       />
+      {/* 2026-11-12 — where the phone is: found, abroad, or location to turn on (the owner: "or ask me to turn on locations"). */}
+      {here.fix === 'asking' && !f.location ? <Note tone="info" icon="pin" title={t('home.join.where.locating')} /> : null}
+      {here.fix === 'here' && f.location ? <p class="card__note">{t(role.kind === 'driver' ? 'home.join.where.here' : 'home.join.where.herePlace')}</p> : null}
+      {here.fix === 'elsewhere' && !f.location ? <Note tone="warn" icon="pin" title={t('home.join.where.elsewhere', { country: countryName })} /> : null}
+      {here.fix === 'off' && !f.location ? (
+        <div>
+          <Note tone="info" icon="pin" title={t('home.join.where.locOff')} />
+          <Button variant="link" full={false} onClick={here.ask}>
+            {t('home.join.where.locUse')}
+          </Button>
+        </div>
+      ) : null}
 
       {/* The words the pin just set — the map is on screen above them to set it with, so here they follow the pin rather
           than the map-or-words rule the screens that only SHOW a place follow (PlaceView, 2026-11-02). */}
