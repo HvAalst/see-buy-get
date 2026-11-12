@@ -7,9 +7,11 @@ import { DispatchService } from './dispatch.service';
 import { VehicleService } from './vehicle.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
-import { clockAt, clocksOfCountry, isTimeZone } from './fleet-clock';
+import { DepartureService } from './departure.service';
+import { FleetManagerService } from './fleet-manager.service';
+import { clockAt, clocksOfCountry, isTimeZone, minutesOf, momentAt } from './fleet-clock';
 import { dayAfter, daysWords, nextRuns } from './saved-trip';
-import { EVENING_FROM_MIN, MORNING_ENDS_MIN, TRIP_NOTICE_MIN, TRIP_SKIP_DAYS_AHEAD, type SavedTripDto, type SavedTripView, type StoredTrip } from './saved-trip.types';
+import { EVENING_FROM_MIN, MORNING_ENDS_MIN, TRIP_NOTICE_MIN, TRIP_POST_DAYS, TRIP_SKIP_DAYS_AHEAD, type FleetTripDto, type SavedTripDto, type SavedTripView, type StoredTrip } from './saved-trip.types';
 import type { Vehicle } from './fleet.types';
 
 /** How many trips one driver keeps — enough for every run of a working week, there and back. */
@@ -31,7 +33,186 @@ export class SavedTripService {
     private readonly vehicles: VehicleService,
     private readonly fleet: FleetService,
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-12 — a fleet's trips (part 2): its clock, and each run posted as a departure a week ahead.
+    @Optional() private readonly departures?: DepartureService,
+    @Optional() private readonly managers?: FleetManagerService,
   ) {}
+
+  /* ---------------------------------------------------------------- a fleet's trips (part 2) -- */
+
+  /** A fleet's trips, for all its drivers, the next to run first. */
+  listForFleet(managerDid: string, now: number = Date.now()): SavedTripView[] {
+    return [...this.store.values()]
+      .filter((t) => t.setBy === 'fleet' && t.managerDid === managerDid)
+      .map((t) => this.fleetView(t, now))
+      .sort((a, b) => (a.next?.at ?? '9').localeCompare(b.next?.at ?? '9') || a.startTime.localeCompare(b.startTime));
+  }
+
+  /** A fleet sets a trip for one of its drivers, in one of its vehicles; selling space on one of its lines, each run is posted a week ahead. */
+  saveForFleet(managerDid: string, dto: FleetTripDto, now: number = Date.now()): SavedTripView {
+    const own = this.fleetFields(managerDid, dto);
+    if ([...this.store.values()].filter((t) => t.managerDid === managerDid).length >= MAX_TRIPS * 20) throw new GlosError('INVALID_STATE', 'Too many trips: delete ones nobody drives first');
+    const zone = dto.zone && isTimeZone(dto.zone) ? dto.zone : (this.managers?.clockOf(managerDid, now).timeZone ?? 'UTC');
+    const trip: StoredTrip = { tripId: `trip_${randomBytes(6).toString('hex')}`, setBy: 'fleet', managerDid, ...this.fields(dto), ...own, zone, skips: [], createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString() };
+    this.store.set(trip.tripId, trip);
+    this.post(trip, now);
+    return this.fleetView(this.get(trip.tripId), now);
+  }
+
+  updateForFleet(managerDid: string, tripId: string, dto: FleetTripDto, now: number = Date.now()): SavedTripView {
+    const trip = this.fleets(managerDid, tripId);
+    const own = this.fleetFields(managerDid, dto);
+    // A run already posted keeps its departure; what is posted from now follows the trip as changed.
+    Object.assign(trip, this.fields(dto), own, { ...(dto.zone && isTimeZone(dto.zone) ? { zone: dto.zone } : {}), updatedAt: new Date(now).toISOString() });
+    if (!own.sale) delete trip.sale;
+    if (!own.vehicleId) delete trip.vehicleId;
+    this.store.set(tripId, trip);
+    this.post(trip, now);
+    return this.fleetView(this.get(tripId), now);
+  }
+
+  /** A fleet's trip deleted: its runs posted and still unbooked are taken back; one booked stays, said. */
+  removeForFleet(managerDid: string, tripId: string, now: number = Date.now()): { removed: true; kept: number } {
+    const trip = this.fleets(managerDid, tripId);
+    let kept = 0;
+    for (const [day, departureId] of Object.entries(trip.posted ?? {})) {
+      if (day < clockAt(now, trip.zone).day) continue;
+      if (!this.takeBack(trip, departureId)) kept++;
+    }
+    this.store.delete(tripId);
+    return { removed: true, kept };
+  }
+
+  /** The fleet takes one run back (or puts it back): its departure taken back while nothing is booked on it. */
+  skipForFleet(managerDid: string, tripId: string, day: string, skip = true, now: number = Date.now()): SavedTripView {
+    const trip = this.fleets(managerDid, tripId);
+    const posted = trip.posted?.[day];
+    if (skip && posted) {
+      const booked = this.bookedOn(posted);
+      if (booked > 0) throw new GlosError('INVALID_STATE', `${booked} booking${booked === 1 ? '' : 's'} on that run: cancel ${booked === 1 ? 'it' : 'them'} under Runs first`);
+      this.takeBack(trip, posted);
+      delete trip.posted![day];
+    }
+    this.store.set(tripId, trip);
+    this.skipDay(trip, day, skip, now);
+    if (!skip) this.post(trip, now);
+    return this.fleetView(this.get(tripId), now);
+  }
+
+  pauseForFleet(managerDid: string, tripId: string, paused: boolean, now: number = Date.now()): SavedTripView {
+    const trip = this.fleets(managerDid, tripId);
+    if (paused) {
+      trip.paused = true;
+      // Unbooked runs to come are taken back; a booked one stays — it is a promise to a shipper.
+      for (const [day, departureId] of Object.entries(trip.posted ?? {})) {
+        if (day >= clockAt(now, trip.zone).day && this.takeBack(trip, departureId)) delete trip.posted![day];
+      }
+    } else delete trip.paused;
+    trip.updatedAt = new Date(now).toISOString();
+    this.store.set(tripId, trip);
+    if (!paused) this.post(trip, now);
+    return this.fleetView(trip, now);
+  }
+
+  /**
+   * EACH RUN POSTED A WEEK AHEAD (the owner's answer): a fleet's trip selling space, in a vehicle, has every run in the next
+   * seven days on sale as a departure on its line — once. Why one could not be (a line not published, the vehicle off the
+   * road), said on the trip, and tried again at the next sweep.
+   */
+  post(trip: StoredTrip, now: number = Date.now()): number {
+    if (trip.setBy !== 'fleet' || !trip.sale || !trip.vehicleId || !trip.managerDid || !this.departures) return 0;
+    let made = 0;
+    for (const run of nextRuns(trip, now, TRIP_POST_DAYS + 1, TRIP_POST_DAYS)) {
+      if (trip.posted?.[run.day]) continue;
+      try {
+        const d = this.departures.declare({ managerDid: trip.managerDid, corridorId: trip.sale.corridorId, vehicleId: trip.vehicleId, leavesAt: new Date(run.at).toISOString(), ...(trip.sale.capacityKg ? { capacityKg: trip.sale.capacityKg } : {}), basis: trip.sale.basis, amount: trip.sale.amount, note: `Saved trip: ${this.line(trip)}` });
+        trip.posted = { ...(trip.posted ?? {}), [run.day]: d.departureId };
+        delete trip.postError;
+        made++;
+      } catch (err) {
+        trip.postError = (err as Error).message;
+        break;
+      }
+    }
+    this.store.set(trip.tripId, trip);
+    return made;
+  }
+
+  private fleetFields(managerDid: string, dto: FleetTripDto): Pick<StoredTrip, 'driverDid'> & Partial<Pick<StoredTrip, 'vehicleId' | 'sale'>> {
+    const driver = this.drivers.get(dto.driverDid);
+    if (driver.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That driver does not drive for your fleet');
+    if (dto.vehicleId) {
+      const vehicle = this.vehicles.get(dto.vehicleId);
+      if (vehicle.managerDid !== managerDid) throw new GlosError('FORBIDDEN', 'That vehicle is not one of your fleet’s');
+    }
+    if (dto.sell && !dto.vehicleId) throw new GlosError('INVALID_INPUT', 'Space is sold in a vehicle: say which one', { field: 'vehicleId' });
+    return {
+      driverDid: dto.driverDid,
+      ...(dto.vehicleId ? { vehicleId: dto.vehicleId } : {}),
+      ...(dto.sell ? { sale: { corridorId: dto.sell.corridorId, ...(dto.sell.capacityKg ? { capacityKg: Math.round(dto.sell.capacityKg) } : {}), basis: dto.sell.basis, amount: Math.round(dto.sell.amount * 100) / 100 } } : {}),
+    };
+  }
+
+  private fleets(managerDid: string, tripId: string): StoredTrip {
+    const trip = this.get(tripId);
+    if (trip.setBy !== 'fleet' || trip.managerDid !== managerDid) throw new GlosError('NOT_FOUND', 'No such trip');
+    return trip;
+  }
+
+  /** Live bookings on a departure. */
+  private bookedOn(departureId: string): number {
+    try {
+      return this.departures?.require(departureId).bookings.filter((b) => b.status !== 'cancelled').length ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** A posted run taken back while nothing is booked on it. True when it is gone (or was already). */
+  private takeBack(trip: StoredTrip, departureId: string): boolean {
+    if (!this.departures || !trip.managerDid) return true;
+    try {
+      const d = this.departures.require(departureId);
+      if (d.status === 'cancelled') return true;
+      if (d.status !== 'open' || this.bookedOn(departureId) > 0) return false;
+      this.departures.setStatus(departureId, 'cancelled', trip.managerDid, { reason: 'other', note: 'Taken back from a saved trip' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private fleetView(trip: StoredTrip, now: number): SavedTripView {
+    const today = clockAt(now, trip.zone).day;
+    const name = (() => {
+      try {
+        return this.drivers.get(trip.driverDid).displayName;
+      } catch {
+        return undefined;
+      }
+    })();
+    const plate = (() => {
+      try {
+        return trip.vehicleId ? this.vehicles.get(trip.vehicleId).plate : undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+    const posted = Object.entries(trip.posted ?? {})
+      .filter(([day]) => day >= today)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day]) => ({ day, clock: trip.startTime, at: new Date(momentAt(day, minutesOf(trip.startTime) ?? 0, trip.zone)).toISOString() }));
+    return {
+      ...this.view(trip, now),
+      driverDid: trip.driverDid,
+      ...(name ? { driverName: name } : {}),
+      ...(trip.vehicleId ? { vehicleId: trip.vehicleId } : {}),
+      ...(plate ? { plate } : {}),
+      ...(trip.sale ? { sale: trip.sale } : {}),
+      posted,
+      ...(trip.postError ? { postError: trip.postError } : {}),
+    };
+  }
 
   /** A driver's trips: their own and the ones their fleet set, the next to run first. */
   listForDriver(driverDid: string, now: number = Date.now()): SavedTripView[] {
@@ -93,12 +274,17 @@ export class SavedTripService {
   /** One day not driven (or driven after all). A day in the past, or too far ahead, is not one to skip. */
   skip(driverDid: string, tripId: string, day: string, skip = true, now: number = Date.now()): SavedTripView {
     const trip = this.mine(driverDid, tripId);
+    this.skipDay(trip, day, skip, now);
+    return this.view(trip, now);
+  }
+
+  private skipDay(trip: StoredTrip, day: string, skip: boolean, now: number): void {
+    const tripId = trip.tripId;
     const today = clockAt(now, trip.zone).day;
     if (day < today || day > dayAfter(today, TRIP_SKIP_DAYS_AHEAD)) throw new GlosError('INVALID_INPUT', 'Skip a day from today on, at most two months ahead', { field: 'day' });
     trip.skips = skip ? [...new Set([...trip.skips, day])].sort() : trip.skips.filter((d) => d !== day);
     trip.updatedAt = new Date(now).toISOString();
     this.store.set(tripId, trip);
-    return this.view(trip, now);
   }
 
   /**
@@ -108,6 +294,8 @@ export class SavedTripService {
   sweep(now: number = Date.now()): number {
     let sent = 0;
     for (const trip of [...this.store.values()]) {
+      // 2026-11-12 — a fleet's runs a week ahead, on sale (part 2).
+      if (trip.setBy === 'fleet' && trip.sale) this.post(trip, now);
       let changed = false;
       for (const run of nextRuns(trip, now, 2, 2)) {
         const said = trip.noticed?.[run.day] ?? {};

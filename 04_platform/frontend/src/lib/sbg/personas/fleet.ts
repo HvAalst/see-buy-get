@@ -16,6 +16,13 @@ export function createFleetApi(sbg: SbgClient) {
     // S26: real image upload/fetch (vehicle body + trailer + registration photos).
     ...createMediaApi(sbg),
 
+    /** 2026-11-12 — the fleet's trips every week (the owner: "also for a fleet"): set for its drivers, each run posted a week ahead. */
+    trips: () => sbg.request((c) => c.GET('/v1/sbg/fleet/trips', {})),
+    saveTrip: (body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/fleet/trips', { body: body as never })),
+    removeTrip: (tripId: string) => sbg.request((c) => c.DELETE('/v1/sbg/fleet/trips/{tripId}', { params: { path: { tripId } } })),
+    skipTrip: (tripId: string, day: string, skip: boolean) => sbg.request((c) => c.POST('/v1/sbg/fleet/trips/{tripId}/skip', { params: { path: { tripId } }, body: { day, skip } })),
+    pauseTrip: (tripId: string, paused: boolean) => sbg.request((c) => c.POST('/v1/sbg/fleet/trips/{tripId}/pause', { params: { path: { tripId } }, body: { paused } })),
+    geocodePlace: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
     /** FP2 — the consignment note of a load one of the fleet's drivers carried. */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** A haul the shipper pays the fleet for directly: the office says it was paid, the price agreed (2026-10-27). */

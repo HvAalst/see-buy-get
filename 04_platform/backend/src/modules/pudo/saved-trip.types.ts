@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 
 /*
  * 2026-11-12 — A SAVED TRIP, LIKE AN ALARM (the owner: "much like an alarm driving route a to b monday to saturday from 5:30 AM
@@ -11,6 +12,8 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNumber, IsOpti
 
 /** Days of the week as the platform counts them: Sunday 0 to Saturday 6 (a week runs Sunday to Saturday). */
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+/** 2026-11-12 — a fleet's trip posts each run as a departure this many days ahead (the owner's answer: "a week ahead"). */
+export const TRIP_POST_DAYS = 7;
 /** The bell before a run: this many minutes ahead. */
 export const TRIP_NOTICE_MIN = 30;
 /** A run starting before this (minutes into its day) is a morning run: its loads are also said the evening before… */
@@ -22,6 +25,14 @@ export class TripEnd {
   label!: string;
   lat!: number;
   lng!: number;
+}
+
+/** A fleet's trip sells its space: on which of its lines, how much, and at what price — each run a departure. */
+export class TripSale {
+  corridorId!: string;
+  @ApiPropertyOptional() capacityKg?: number;
+  @ApiProperty({ enum: ['per_trip', 'per_km', 'per_kg'] }) basis!: 'per_trip' | 'per_km' | 'per_kg';
+  amount!: number;
 }
 
 export interface StoredTrip {
@@ -46,6 +57,12 @@ export interface StoredTrip {
   updatedAt: string;
   /** The bells sent for a run, by its day — never twice. */
   noticed?: Record<string, { before?: string; evening?: string }>;
+  /** 2026-11-12 — a fleet's trip: the vehicle it goes in, its space for sale, and each run's departure by its day. */
+  vehicleId?: string;
+  sale?: TripSale;
+  posted?: Record<string, string>;
+  /** Why the last run could not be posted (a line not published, the vehicle off the road), said to the fleet. */
+  postError?: string;
 }
 
 export class TripRunView {
@@ -72,6 +89,14 @@ export class SavedTripView {
   @ApiPropertyOptional({ type: TripRunView }) next?: TripRunView;
   /** The driver may change it: their own, not their fleet's. */
   mine!: boolean;
+  /** 2026-11-12 — a fleet's trip, as the fleet reads it: its driver, its vehicle, its space for sale and the runs posted. */
+  @ApiPropertyOptional() driverDid?: string;
+  @ApiPropertyOptional() driverName?: string;
+  @ApiPropertyOptional() vehicleId?: string;
+  @ApiPropertyOptional() plate?: string;
+  @ApiPropertyOptional({ type: TripSale }) sale?: TripSale;
+  @ApiPropertyOptional({ type: [TripRunView] }) posted?: TripRunView[];
+  @ApiPropertyOptional() postError?: string;
 }
 
 /** A trip as the driver (or their fleet) saves it: two named, pinned ends; days; a start time on a clock. */
@@ -103,3 +128,17 @@ export class TripPauseDto {
 export const TRIP_SET_BY = ['driver', 'fleet'] as const;
 export const TRIP_DAY_WORDS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 export const TRIP_SKIP_DAYS_AHEAD = 60;
+
+export class TripSaleDto {
+  @IsString() @MinLength(3) @MaxLength(80) corridorId!: string;
+  @IsOptional() @IsNumber() @Min(1) @Max(100000) capacityKg?: number;
+  @IsIn(['per_trip', 'per_km', 'per_kg']) basis!: 'per_trip' | 'per_km' | 'per_kg';
+  @IsNumber() @Min(0.01) @Max(1e9) amount!: number;
+}
+
+/** A fleet sets a trip for one of its drivers, in one of its vehicles — and, where it sells space, on one of its lines. */
+export class FleetTripDto extends SavedTripDto {
+  @IsString() @MinLength(3) @MaxLength(120) driverDid!: string;
+  @IsOptional() @IsString() @MaxLength(80) vehicleId?: string;
+  @IsOptional() @ValidateNested() @Type(() => TripSaleDto) sell?: TripSaleDto;
+}

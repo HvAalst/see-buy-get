@@ -9,6 +9,7 @@ import { RUN_CANCEL_ORDER, isRouteReason, runCancelLabel, type RunCancelReason }
 import type { SbgError } from '../../../lib/sbg';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
+import { FleetTripsCard } from './FleetTripsCard';
 
 /**
  * F3 — THE OTHER DIRECTION OF THE MARKET.
@@ -37,6 +38,8 @@ export function RunsScreen({ state, actions }: { state: FleetState; actions: Fle
     <div class="scr">
       <h1 class="scr__title">{t('fleet.runs.title')}</h1>
       <Explainer who={state.manager?.did} id="fleet.runs.how" text={t('fleet.runs.lede')} />
+      {/* 2026-11-12 — trips every week (the owner: "as a general option, also for a fleet"). */}
+      <FleetTripsCard state={state} actions={actions} />
 
       {/* First, above everything: nothing else on this screen matters while nobody can buy from it. The
           shipper's board drops these runs silently, so this is the one place the reason is said. (It first

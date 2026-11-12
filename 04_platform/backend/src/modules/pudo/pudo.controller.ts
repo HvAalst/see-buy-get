@@ -203,7 +203,7 @@ import { ZoneMapService } from './zone-map.service';
 import { PriceCardService, type Doer } from './price-card.service';
 import { BusinessRateService } from './business-rate.service';
 import { SavedTripService } from './saved-trip.service';
-import { SavedTripDto, TripPauseDto, TripSkipDto, type SavedTripView } from './saved-trip.types';
+import { FleetTripDto, SavedTripDto, TripPauseDto, TripSkipDto, type SavedTripView } from './saved-trip.types';
 import { BusinessRateDto, type BusinessRatesView } from './business-rate.types';
 import { whenSeen } from './observed-at';
 import { CounterPriceService, type CounterPriceRow } from './counter-price.service';
@@ -8575,6 +8575,46 @@ export class SbgController {
    * 2026-11-12 — A DRIVER'S SAVED TRIPS (the owner: "much like an alarm driving route a to b monday to saturday from 5:30
    * AM"): their own, and the ones their fleet set — those read here, changed only by the fleet.
    */
+  /**
+   * 2026-11-12 — A FLEET'S TRIPS (the owner: "as a general option, also for a fleet"; answers: the fleet sets its drivers'
+   * trips, they see them; selling space, each run is posted as a departure a week ahead, any single run taken back).
+   */
+  @Roles('fleet_manager')
+  @Get('fleet/trips')
+  fleetTrips(@Actor() actor: IntrospectionResult): SavedTripView[] {
+    return this.tripsOf().listForFleet(this.fleetOf(actor));
+  }
+
+  @Roles('fleet_manager')
+  @Post('fleet/trips')
+  saveFleetTrip(@Body() dto: FleetTripDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    return this.tripsOf().saveForFleet(this.fleetOf(actor), dto);
+  }
+
+  @Roles('fleet_manager')
+  @Patch('fleet/trips/:tripId')
+  updateFleetTrip(@Param('tripId') tripId: string, @Body() dto: FleetTripDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    return this.tripsOf().updateForFleet(this.fleetOf(actor), tripId, dto);
+  }
+
+  @Roles('fleet_manager')
+  @Delete('fleet/trips/:tripId')
+  removeFleetTrip(@Param('tripId') tripId: string, @Actor() actor: IntrospectionResult): { removed: true; kept: number } {
+    return this.tripsOf().removeForFleet(this.fleetOf(actor), tripId);
+  }
+
+  @Roles('fleet_manager')
+  @Post('fleet/trips/:tripId/skip')
+  skipFleetTrip(@Param('tripId') tripId: string, @Body() dto: TripSkipDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    return this.tripsOf().skipForFleet(this.fleetOf(actor), tripId, dto.day, dto.skip !== false);
+  }
+
+  @Roles('fleet_manager')
+  @Post('fleet/trips/:tripId/pause')
+  pauseFleetTrip(@Param('tripId') tripId: string, @Body() dto: TripPauseDto, @Actor() actor: IntrospectionResult): SavedTripView {
+    return this.tripsOf().pauseForFleet(this.fleetOf(actor), tripId, dto.paused);
+  }
+
   @Roles('driver', 'operator')
   @Get('fleet/drivers/:did/trips')
   driverTrips(@Param('did') did: string, @Actor() actor: IntrospectionResult): SavedTripView[] {
@@ -8725,6 +8765,13 @@ export class SbgController {
   }
 
   /** Who is acting: the name for the record, and the account, which tells two people apart (never their names). */
+  /** The fleet a fleet manager's token acts for. */
+  private fleetOf(actor: IntrospectionResult): string {
+    const managerDid = actingTenant(actor);
+    if (!managerDid) throw new GlosError('FORBIDDEN', 'Sign in as the fleet');
+    return managerDid;
+  }
+
   private tripsOf(): SavedTripService {
     if (!this.savedTrips) throw new GlosError('NOT_FOUND', 'Saved trips are not available on this server');
     return this.savedTrips;

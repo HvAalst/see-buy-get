@@ -127,3 +127,99 @@ describe('a driver’s saved trips', () => {
     expect(trips.listForDriver('did:own', THU_1300_EAT)).toEqual([]);
   });
 });
+
+describe('a fleet’s trips (part 2): set for its drivers, each run posted a week ahead, any single run taken back', () => {
+  const drivers: Record<string, { managerDid?: string; displayName: string }> = { 'did:amos': { managerDid: 'did:fleet', displayName: 'Amos' }, 'did:else': { managerDid: 'did:other', displayName: 'Else' } };
+  const vehicles: Record<string, { managerDid?: string; plate: string }> = { veh_1: { managerDid: 'did:fleet', plate: 'KDA 001A' }, veh_x: { managerDid: 'did:other', plate: 'KDX 999X' } };
+  let declared: Array<{ leavesAt: string; corridorId: string; capacityKg?: number; basis: string; amount: number }> = [];
+  const departures: Record<string, { status: string; bookings: Array<{ status: string }> }> = {};
+  const called: string[] = [];
+  let failWith: string | null = null;
+  const make = () =>
+    new SavedTripService(
+      { get: (did: string) => drivers[did] ?? (() => { throw new Error('No driver'); })() } as never,
+      { countAlong: () => 2 } as never,
+      { list: () => [], get: (id: string) => vehicles[id] ?? (() => { throw new Error('No vehicle'); })() } as never,
+      { vehicleForDriver: () => undefined } as never,
+      { notify: async () => undefined } as never,
+      {
+        declare: (input: { leavesAt: string; corridorId: string; capacityKg?: number; basis: string; amount: number }) => {
+          if (failWith) throw new Error(failWith);
+          declared.push(input);
+          const id = `dep_${declared.length}`;
+          departures[id] = { status: 'open', bookings: [] };
+          return { departureId: id };
+        },
+        require: (id: string) => departures[id],
+        setStatus: (id: string, status: string) => {
+          called.push(id);
+          departures[id].status = status;
+        },
+      } as never,
+      { clockOf: () => ({ timeZone: 'Africa/Nairobi' }) } as never,
+    );
+  const fleetDto = (over: Record<string, unknown> = {}) => ({ driverDid: 'did:amos', vehicleId: 'veh_1', fromLabel: 'Nairobi', fromLat: -1.286, fromLng: 36.817, toLabel: 'Nakuru', toLat: -0.303, toLng: 36.08, days: [1, 2, 3, 4, 5, 6], startTime: '05:30', sell: { corridorId: 'cor_1', capacityKg: 2000, basis: 'per_kg' as const, amount: 12 }, ...over });
+  beforeEach(() => {
+    declared = [];
+    called.length = 0;
+    failWith = null;
+    for (const k of Object.keys(departures)) delete departures[k];
+  });
+
+  it('sets a trip for its own driver in its own vehicle; never another fleet’s; space is sold in a vehicle', () => {
+    const trips = make();
+    const t = trips.saveForFleet('did:fleet', fleetDto() as never, THU_1300_EAT);
+    expect(t).toMatchObject({ setBy: 'fleet', mine: false, driverDid: 'did:amos', driverName: 'Amos', plate: 'KDA 001A', zone: 'Africa/Nairobi', sale: { corridorId: 'cor_1', capacityKg: 2000, basis: 'per_kg', amount: 12 } });
+    expect(() => trips.saveForFleet('did:fleet', fleetDto({ driverDid: 'did:else' }) as never, THU_1300_EAT)).toThrow(/does not drive for your fleet/);
+    expect(() => trips.saveForFleet('did:fleet', fleetDto({ vehicleId: 'veh_x' }) as never, THU_1300_EAT)).toThrow(/not one of your fleet’s/);
+    expect(() => trips.saveForFleet('did:fleet', fleetDto({ vehicleId: undefined }) as never, THU_1300_EAT)).toThrow(/Space is sold in a vehicle/);
+    // The driver sees it, and cannot change it.
+    expect(trips.listForDriver('did:amos', THU_1300_EAT)[0]).toMatchObject({ setBy: 'fleet', mine: false });
+    expect(() => trips.setPaused('did:amos', t.tripId, true)).toThrow(/Your fleet set this trip/);
+    // Another fleet does not see it.
+    expect(trips.listForFleet('did:other', THU_1300_EAT)).toEqual([]);
+  });
+
+  it('posts each run in the next seven days as a departure, once; a run that cannot be posted is said, and tried again', () => {
+    const trips = make();
+    const t = trips.saveForFleet('did:fleet', fleetDto() as never, THU_1300_EAT);
+    // Fri, Sat, Mon, Tue, Wed, Thu — six runs Mon–Sat in the seven days from Thursday afternoon.
+    expect(declared.map((d) => d.leavesAt.slice(0, 10))).toEqual(['2026-11-13', '2026-11-14', '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19']);
+    expect(declared[0]).toMatchObject({ corridorId: 'cor_1', capacityKg: 2000, basis: 'per_kg', amount: 12, leavesAt: '2026-11-13T02:30:00.000Z' });
+    expect(trips.listForFleet('did:fleet', THU_1300_EAT)[0].posted).toHaveLength(6);
+    expect(trips.post(trips.get(t.tripId), THU_1300_EAT)).toBe(0);
+    // A day on, the next run joins; a line that cannot sell is said on the trip.
+    failWith = 'Nairobi–Nakuru is proposed. Space can only be sold on a published line';
+    expect(trips.post(trips.get(t.tripId), THU_1300_EAT + 24 * H)).toBe(0);
+    expect(trips.listForFleet('did:fleet', THU_1300_EAT + 24 * H)[0].postError).toMatch(/published line/);
+    failWith = null;
+    expect(trips.sweep(THU_1300_EAT + 24 * H)).toBeGreaterThanOrEqual(0);
+    expect(declared.map((d) => d.leavesAt.slice(0, 10))).toContain('2026-11-20');
+    expect(trips.listForFleet('did:fleet', THU_1300_EAT + 24 * H)[0].postError).toBeUndefined();
+    // A trip that sells nothing posts nothing.
+    declared = [];
+    make().saveForFleet('did:fleet', fleetDto({ sell: undefined }) as never, THU_1300_EAT);
+    expect(declared).toEqual([]);
+  });
+
+  it('takes a single run back while nothing is booked on it; a booked one is refused; paused or deleted, the unbooked ones go', () => {
+    const trips = make();
+    const t = trips.saveForFleet('did:fleet', fleetDto() as never, THU_1300_EAT);
+    // Friday's run: nothing booked — taken back and skipped.
+    const fri = trips.skipForFleet('did:fleet', t.tripId, '2026-11-13', true, THU_1300_EAT);
+    expect(called).toEqual(['dep_1']);
+    expect(fri.skips).toEqual(['2026-11-13']);
+    expect(fri.posted!.map((p) => p.day)).not.toContain('2026-11-13');
+    // Saturday's run: a shipper booked — refused, nothing taken back.
+    departures.dep_2.bookings = [{ status: 'booked' }];
+    expect(() => trips.skipForFleet('did:fleet', t.tripId, '2026-11-14', true, THU_1300_EAT)).toThrow(/1 booking on that run: cancel it under Runs first/);
+    expect(called).toEqual(['dep_1']);
+    // Paused: the unbooked runs to come go; the booked one stays.
+    trips.pauseForFleet('did:fleet', t.tripId, true, THU_1300_EAT);
+    expect(called.sort()).toEqual(['dep_1', 'dep_3', 'dep_4', 'dep_5', 'dep_6']);
+    expect(departures.dep_2.status).toBe('open');
+    // Deleted: what is left unbooked goes; the booked run is kept, and counted.
+    expect(trips.removeForFleet('did:fleet', t.tripId, THU_1300_EAT)).toEqual({ removed: true, kept: 1 });
+    expect(() => trips.removeForFleet('did:other', t.tripId, THU_1300_EAT)).toThrow(/No such trip/);
+  });
+});

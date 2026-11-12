@@ -26696,11 +26696,187 @@
         }
       }
     },
+    "/v1/sbg/fleet/trips": {
+      "get": {
+        "operationId": "Sbg.fleetTrips",
+        "summary": "",
+        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.\n\nA ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —\nstamped with a fresh \"located at\" time, so it read as a reading rather than a guess — while the driver\ncould be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the\nphone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a\ndriver about a load they are \"about to drive past\" — past a place they were never at. Where the driver\nis comes only from the phone. With location refused, the map shows no position rather than a made-up one.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedTripView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.saveFleetTrip",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetTripDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/trips/{tripId}": {
+      "patch": {
+        "operationId": "Sbg.updateFleetTrip",
+        "parameters": [
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetTripDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.removeFleetTrip",
+        "parameters": [
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/trips/{tripId}/skip": {
+      "post": {
+        "operationId": "Sbg.skipFleetTrip",
+        "parameters": [
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripSkipDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/trips/{tripId}/pause": {
+      "post": {
+        "operationId": "Sbg.pauseFleetTrip",
+        "parameters": [
+          {
+            "name": "tripId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripPauseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTripView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/trips": {
       "get": {
         "operationId": "Sbg.driverTrips",
-        "summary": "",
-        "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.\n\nA ROUTE IS A PLAN, NOT A POSITION. This used to write A into the live map as where the driver was —\nstamped with a fresh \"located at\" time, so it read as a reading rather than a guess — while the driver\ncould be planning tomorrow's run from home. It did worse than guess: it OVERWROTE the real fix the\nphone reports while on shift (see /locate), and it published DriverMoved, which is what nudges a\ndriver about a load they are \"about to drive past\" — past a place they were never at. Where the driver\nis comes only from the phone. With location refused, the map shows no position rather than a made-up one.",
         "parameters": [
           {
             "name": "did",
@@ -75897,6 +76073,33 @@
           "at"
         ]
       },
+      "TripSale": {
+        "type": "object",
+        "properties": {
+          "capacityKg": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "per_trip",
+              "per_km",
+              "per_kg"
+            ]
+          },
+          "corridorId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "corridorId",
+          "amount"
+        ]
+      },
       "SavedTripView": {
         "type": "object",
         "properties": {
@@ -75939,6 +76142,31 @@
               }
             ]
           },
+          "driverDid": {
+            "type": "string",
+            "description": "2026-11-12 — a fleet's trip, as the fleet reads it: its driver, its vehicle, its space for sale and the runs posted."
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "sale": {
+            "$ref": "#/components/schemas/TripSale"
+          },
+          "posted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TripRunView"
+            }
+          },
+          "postError": {
+            "type": "string"
+          },
           "tripId": {
             "type": "string"
           },
@@ -75967,6 +76195,149 @@
           "zone",
           "paused",
           "mine"
+        ]
+      },
+      "TripSaleDto": {
+        "type": "object",
+        "properties": {
+          "corridorId": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          },
+          "capacityKg": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "per_trip",
+              "per_km",
+              "per_kg"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1000000000
+          }
+        },
+        "required": [
+          "corridorId",
+          "basis",
+          "amount"
+        ]
+      },
+      "FleetTripDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120
+          },
+          "vehicleId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "sell": {
+            "$ref": "#/components/schemas/TripSaleDto"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "fromLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "fromLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "fromLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "toLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "toLat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "toLng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "maximum": 6,
+              "minimum": 0
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "/^([01]\\d|2[0-3]):[0-5]\\d$/"
+          },
+          "zone": {
+            "type": "string",
+            "description": "The phone's own clock (Intl), where it says one; else the driver's country's.",
+            "maxLength": 64
+          },
+          "minEarn": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "driverDid",
+          "fromLabel",
+          "fromLat",
+          "fromLng",
+          "toLabel",
+          "toLat",
+          "toLng",
+          "days",
+          "startTime"
+        ]
+      },
+      "TripSkipDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "skip": {
+            "type": "boolean",
+            "description": "False: the day is driven after all."
+          }
+        },
+        "required": [
+          "day"
+        ]
+      },
+      "TripPauseDto": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
         ]
       },
       "SavedTripDto": {
@@ -76037,33 +76408,6 @@
           "toLng",
           "days",
           "startTime"
-        ]
-      },
-      "TripSkipDto": {
-        "type": "object",
-        "properties": {
-          "day": {
-            "type": "string",
-            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
-          },
-          "skip": {
-            "type": "boolean",
-            "description": "False: the day is driven after all."
-          }
-        },
-        "required": [
-          "day"
-        ]
-      },
-      "TripPauseDto": {
-        "type": "object",
-        "properties": {
-          "paused": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "paused"
         ]
       },
       "SuggestRouteDto": {

@@ -2,6 +2,7 @@ import { energyWord } from '../../shared/vehicleEnergy';
 import { triggerDownload } from '../../shared/download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
+import type { SavedTrip } from '../driver/trips';
 import type { components } from '../../lib/sbg/schema';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MarketSeriesView } from '../../shared/market';
@@ -88,6 +89,8 @@ export interface FleetState {
   corridors: CorridorRow[];
   /** F3 — the departures this fleet has put on its own lines, soonest first. */
   departures: DepartureRow[];
+  /** 2026-11-12 — the fleet's trips every week (the owner: "also for a fleet"); null until read. */
+  trips: SavedTrip[] | null;
   /**
    * The currency this fleet's prices are in, and whether the server had to guess it.
    *
@@ -185,6 +188,7 @@ const INITIAL: FleetState = {
   assignments: [],
   corridors: [],
   departures: [],
+  trips: null,
   runCurrency: 'USD',
   runCurrencyAssumed: true,
   notOffered: [],
@@ -1429,12 +1433,63 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /* ------------------------------------------------------------ trips every week (2026-11-12) */
+
+  const loadTrips = useCallback(async () => {
+    if (!client) return;
+    const r = await client.api.trips();
+    if (!r.error) setState((s) => ({ ...s, trips: narrow<SavedTrip[]>(r.data) ?? [] }));
+  }, [client]);
+
+  const saveTrips = useCallback(
+    async (bodies: Array<Record<string, unknown>>): Promise<SbgError | null> => {
+      if (!client) return null;
+      for (const body of bodies) {
+        const r = await client.api.saveTrip(body);
+        if (r.error) {
+          await loadTrips();
+          return r.error;
+        }
+      }
+      pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.tripSaved'), detail: t('fleet.toast.tripSavedDetail') });
+      await loadTrips();
+      return null;
+    },
+    [client, pushToast, loadTrips],
+  );
+
+  const tripAct = useCallback(
+    async (write: () => Promise<{ error?: SbgError | null }>) => {
+      await run('trip', async () => {
+        const r = await write();
+        if (r.error) return fail(r.error);
+        await loadTrips();
+      });
+    },
+    [run, fail, loadTrips],
+  );
+
+  const geocodePlace = useCallback(
+    async (q: string) => {
+      if (!client || !q.trim()) return null;
+      const r = await client.api.geocodePlace(q.trim());
+      return r.error || !r.data ? null : (r.data as unknown as { location: { lat: number; lng: number }; confidence: 'exact' | 'approx' | 'fallback'; matched?: string });
+    },
+    [client],
+  );
+
   return {
     state,
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
     // is the same one every other app talks to and this app holds no opinion about it.
     sbg: client?.client.sbg ?? null,
     actions: {
+      loadTrips,
+      saveTrips,
+      skipTrip: (tripId: string, day: string, skip: boolean) => (client ? tripAct(() => client.api.skipTrip(tripId, day, skip) as never) : Promise.resolve()),
+      pauseTrip: (tripId: string, paused: boolean) => (client ? tripAct(() => client.api.pauseTrip(tripId, paused) as never) : Promise.resolve()),
+      removeTrip: (tripId: string) => (client ? tripAct(() => client.api.removeTrip(tripId) as never) : Promise.resolve()),
+      geocodePlace,
       refresh,
       refreshMap,
       signIn,
