@@ -2215,6 +2215,7 @@ export const words: Record<string, string> = {
   "tower.cases.kind.Hub_Down_Unconfirmed": "ከሰጠው ጊዜ በኋላ መከፈቱን ሳያረጋግጥ የተዘጋ ማዕከል፦ ወደእሱ ምንም አይላክም",
   "tower.runPay.title": "ጉዞዎች እንዴት እንደሚከፈሉ",
   "tower.roadMap.title": "የማዕከላት የመንገድ ካርታ",
+  "tower.plan.via": "በ{hubs} በኩል",
   "tower.roadMap.lede": "የትኞቹ ማዕከላት በመንገዱ ላይ ማቆሚያዎች እንደሆኑ እና የትኞቹ አካባቢያዊ ብቻ እንደሆኑ፣ እንዲሁም የትኞቹ ማቆሚያዎች ጎረቤቶች እንደሆኑ፦ ማዕከል ወደ ጎረቤቶቹ እና ወደ ራሱ ሱቆች ብቻ ይልካል። ሥርዓቱ ከመንገድ ርቀቶች ያቀርበዋል፤ በተሻለ የሚያውቁትን ይቀይሩ፣ ከዚያ ያረጋግጡ። እስኪረጋገጥ ድረስ ጥቅሎች እንደወትሮው ይሄዳሉ።",
   "tower.roadMap.hintConfirmed": "በሥራ ላይ፦ {stops} ማቆሚያዎች፣ በ{by} የተረጋገጠ",
   "tower.roadMap.hintNone": "አልተረጋገጠም፦ ጥቅሎች እንደወትሮው ይሄዳሉ",

@@ -55,7 +55,10 @@ export function PlanVsActualFold({ client }: { client: { api: unknown } | null }
               const w = laneWords(lane, t);
               return (
                 <tr key={`${lane.from}>${lane.to}`}>
-                  <td class="ctbl__strong">{w.lane}</td>
+                  <td class="ctbl__strong">
+                    {w.lane}
+                    {w.via ? <span class="ctbl__sub"> {w.via}</span> : null}
+                  </td>
                   <td class="ctbl__num">
                     <span class="ctbl__lbl">{t('tower.plan.col.onTime')}</span>
                     {w.onTime}

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -9,7 +9,8 @@ import type { Mdp } from './pudo.types';
 import type { HubRoadView, RoadMapView, RoadPlanView } from './road-map.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 import { ROUTER, type Router } from './router';
-import { adjacency, defaultMinKm, linksFor, nearest, pairOf, piecesOf, proposeRoadPlan, stopOf, tooClose, without, type Km, type RoadPlan } from './road-map';
+import { PriceCardService } from './price-card.service';
+import { adjacency, defaultMinKm, linksFor, nearest, pairOf, pathBetween, piecesOf, proposeRoadPlan, stopOf, tooClose, without, type Km, type RoadPlan } from './road-map';
 
 /** A plan as kept: the stops, the local hubs, the neighbours — and staff's own changes to the neighbours, replayed on a change of stops. */
 interface StoredPlan extends RoadPlan {
@@ -41,14 +42,59 @@ interface StoredRoadMap {
  * differently until a map is confirmed — and then (step 4) only where the country's price card is in force (D3).
  */
 @Injectable()
-export class RoadMapService {
+export class RoadMapService implements OnModuleInit {
   private readonly store = new PersistentMap<string, StoredRoadMap>('pudo-road-maps');
 
   constructor(
     private readonly entities: EntityService,
     private readonly mdps: MdpService,
     @Optional() @Inject(ROUTER) private readonly router?: Router,
+    // 2026-11-12 — D3: parcels go along the road map only where the country's price card is in force (no stop raises a price).
+    @Optional() private readonly priceCards?: PriceCardService,
   ) {}
+
+  /** The hubs sort by the road map too: given its next stop here, so neither needs the other to be built. */
+  onModuleInit(): void {
+    this.mdps.useRoadMap?.({ nextToward: (at, to, now) => this.nextToward(at, to, now) });
+  }
+
+  /**
+   * 2026-11-12 — WHERE PARCELS GO ALONG THE ROAD MAP NOW (step 4): a country whose road map staff confirmed (D2) and whose
+   * price card is in force (D3: the price is the two ends', however many stops). Nothing elsewhere — today's routing stays.
+   */
+  routing(country: string | undefined, now: number = Date.now()): { plan: RoadPlan; km: Km } | undefined {
+    if (!country || !this.priceCards?.inForceFor(country, now)) return undefined;
+    return this.inForce(country, now);
+  }
+
+  /**
+   * The hubs a parcel passes from one hub to another along the road map, both ends included: a local hub goes by its stop;
+   * nothing where the two are in different countries or no road routing is on.
+   */
+  pathFor(fromMdp: string, toMdp: string, now: number = Date.now()): string[] | undefined {
+    const from = this.mdps.find(fromMdp);
+    const to = this.mdps.find(toMdp);
+    if (!from || !to) return undefined;
+    const country = this.mdps.countryOf(from);
+    if (country !== this.mdps.countryOf(to)) return undefined;
+    const live = this.routing(country, now);
+    if (!live) return undefined;
+    const a = stopOf(live.plan, fromMdp);
+    const b = stopOf(live.plan, toMdp);
+    if (!a || !b) return undefined;
+    const path = pathBetween(live.plan, a, b, live.km);
+    if (!path) return undefined;
+    const out: string[] = [];
+    for (const id of [fromMdp, ...path, toMdp]) if (out[out.length - 1] !== id) out.push(id);
+    return out;
+  }
+
+  /** The next hub from `at` towards `to` along the road map — `to` itself where they are neighbours; nothing without road routing. */
+  nextToward(at: string, to: string, now: number = Date.now()): string | undefined {
+    if (at === to) return undefined;
+    const path = this.pathFor(at, to, now);
+    return path && path.length > 1 ? path[1] : undefined;
+  }
 
   view(entityId: string, now: number = Date.now()): RoadMapView {
     const company = this.company(entityId);
@@ -183,15 +229,16 @@ export class RoadMapService {
   ofHub(mdpId: string, now: number = Date.now()): HubRoadView {
     const hub = this.mdps.require(mdpId);
     const live = this.inForce(this.mdps.countryOf(hub), now);
-    if (!live) return { mdpId, inForce: false, neighbours: [] };
+    if (!live) return { mdpId, inForce: false, routing: false, neighbours: [] };
+    const routing = Boolean(this.priceCards?.inForceFor(this.mdps.countryOf(hub), now));
     const name = (id: string) => this.mdps.find(id)?.name ?? id;
     const round = (n: number) => Math.round(n * 10) / 10;
     if (live.plan.stops.includes(mdpId)) {
       const around = [...(adjacency(live.plan.stops, live.plan.links).get(mdpId) ?? [])];
-      return { mdpId, inForce: true, role: 'stop', neighbours: around.map((id) => ({ mdpId: id, name: name(id), km: round(live.km(mdpId, id)) })).sort((a, b) => a.km - b.km) };
+      return { mdpId, inForce: true, routing, role: 'stop', neighbours: around.map((id) => ({ mdpId: id, name: name(id), km: round(live.km(mdpId, id)) })).sort((a, b) => a.km - b.km) };
     }
     const via = stopOf(live.plan, mdpId);
-    return { mdpId, inForce: true, role: 'local', ...(via ? { via: { mdpId: via, name: name(via), km: round(live.km(mdpId, via)) } } : {}), neighbours: [] };
+    return { mdpId, inForce: true, routing, role: 'local', ...(via ? { via: { mdpId: via, name: name(via), km: round(live.km(mdpId, via)) } } : {}), neighbours: [] };
   }
 
   /* ------------------------------------------------------------------ inside -- */

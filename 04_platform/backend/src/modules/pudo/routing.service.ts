@@ -21,6 +21,7 @@ import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
 import { PriceCardService } from './price-card.service';
 import { ZoneMapService } from './zone-map.service';
 import { CatchmentService } from './catchment.service';
+import { RoadMapService } from './road-map.service';
 import type { ZonePrice } from './price-card.types';
 
 /**
@@ -292,6 +293,8 @@ export class RoutingService {
     @Optional() private readonly zoneMaps?: ZoneMapService,
     // 2026-11-09 — which hub serves each zone (hub catchments, Part A): a journey's hubs, where a country has said.
     @Optional() private readonly catchments?: CatchmentService,
+    // 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 4): a journey's hubs along the road, where on.
+    @Optional() private readonly roadMaps?: RoadMapService,
   ) {}
 
   /**
@@ -652,7 +655,9 @@ export class RoutingService {
       const crossesBorder = from.country !== to.country;
       const departAt = cursor;
       const arriveAt = departAt + (transitH + HANDOVER_BUFFER_H + (crossesBorder ? BORDER_DWELL_H : 0)) * 3_600_000;
-      cursor = arriveAt + (to.type === 'mdp' ? HANDOVER_BUFFER_H * 3_600_000 : 0); // sort dwell at a hub
+      // A hub holds a parcel as long as it has been measured to (its last parcels' median), where measured; else the half hour
+      // a sort was always counted (2026-11-12 — the plan's recommendation: each stop as it is measured on that road).
+      cursor = arriveAt + (to.type === 'mdp' ? (this.mdps.dwellHoursOf(to.id) ?? HANDOVER_BUFFER_H) * 3_600_000 : 0);
       return {
         index: i,
         mode: vehicle,
@@ -731,6 +736,14 @@ export class RoutingService {
       servedBy(destCountry, dest.location) ??
       (originMdp?.zones.includes(dest.zone) ? originMdp : this.mdps.mdpForZone(dest.zone));
     if (originMdp && origin.type !== 'mdp') route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, country: this.mdps.countryOf(originMdp), location: originMdp.location });
+    // 2026-11-12 — ALONG THE ROAD MAP (step 4; the owner: "next hub on the road"): between its first hub and its last, every
+    // stop on the way, where the country's road map is confirmed and its price card in force; a stop too near to be worth a
+    // sort was made local only on the map and is not on the way.
+    const along = originMdp && destMdp && destMdp.mdpId !== originMdp.mdpId ? this.roadMaps?.pathFor(originMdp.mdpId, destMdp.mdpId) : undefined;
+    for (const id of along?.slice(1, -1) ?? []) {
+      const hub = this.mdps.require(id);
+      route.push({ type: 'mdp', id: hub.mdpId, label: hub.name, zone: hub.zones[0] ?? dest.zone, country: this.mdps.countryOf(hub), location: hub.location });
+    }
     if (destMdp && destMdp.mdpId !== originMdp?.mdpId) route.push({ type: 'mdp', id: destMdp.mdpId, label: destMdp.name, zone: dest.zone, country: this.mdps.countryOf(destMdp), location: destMdp.location });
     route.push({ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone, country: this.agents.countryOf(dest), location: dest.location });
     return route;

@@ -70,6 +70,10 @@ export interface ShopChoiceHooks {
  */
 const FIRST_LEG_REACH_KM = 25;
 
+/** 2026-11-12 — a hub's measured waits: the last this many parcels, trusted once there are this many. */
+const DWELLS_KEPT = 50;
+const DWELLS_TRUSTED = 5;
+
 @Injectable()
 export class MdpService {
   // Durable: onboarded MDP sort-hubs (a signed-up participant type).
@@ -528,6 +532,37 @@ export class MdpService {
    * One more parcel sorted here today. The parcel that fills the day's sorting tells the hub, once a day, in its bell: it
    * goes on sorting — nothing is refused — and new bags go to another hub with room today where there is one.
    */
+  /**
+   * 2026-11-12 — HOW LONG A HUB HOLDS A PARCEL, MEASURED (the plan's recommendation: "it will count each stop as it is measured
+   * on that road"): from its arrival on the floor to its bag leaving, the last DWELLS_KEPT of them; the median, once there
+   * are DWELLS_TRUSTED. Nothing before: arrival times count the half hour they always did.
+   */
+  private noteDwells(mdpId: string, parcelIds: string[], now: number): void {
+    const hours: number[] = [];
+    for (const id of parcelIds) {
+      try {
+        const scans = this.parcels.get(id).scans ?? [];
+        const arrived = [...scans].reverse().find((s) => s.status === 'At_MDP');
+        const at = arrived ? Date.parse(arrived.at) : NaN;
+        if (Number.isFinite(at) && at <= now) hours.push(Math.round(((now - at) / 3_600_000) * 100) / 100);
+      } catch {
+        // a parcel the bag lists and the store does not
+      }
+    }
+    if (!hours.length) return;
+    const book = this.floors.get(mdpId) ?? { mdpId, drops: [] };
+    this.floors.set(mdpId, { ...book, dwells: [...(book.dwells ?? []), ...hours].slice(-DWELLS_KEPT) });
+  }
+
+  /** The median hours this hub holds a parcel, once measured on enough of them; nothing before. */
+  dwellHoursOf(mdpId: string): number | undefined {
+    const d = this.floors.get(mdpId)?.dwells ?? [];
+    if (d.length < DWELLS_TRUSTED) return undefined;
+    const sorted = [...d].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
   /** 2026-11-12 — a day it ran full: a bag held for room on its floor (the hub density map counts them). */
   private noteFullDay(mdp: Mdp, now: number): void {
     const day = this.dayOf(mdp, now);
@@ -623,8 +658,11 @@ export class MdpService {
     } else if (addressed) {
       areas = [...new Set(tote.parcels.map((p) => this.destZoneOf(p)).filter((z): z is string => Boolean(z)))];
       const others = areas.length ? this.hubsServing(areas, now).filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== tote.locationId) : [];
+      // 2026-11-12 — along the road map (step 4): a hub on the way that cannot take it is passed — the bag goes on to the next
+      // stop towards its parcels' hub, the road map leaving out a hub that is down.
+      const road = this.roadAround(tote, addressed, now);
       current = addressed;
-      candidates = [addressed, ...others];
+      candidates = [addressed, ...(road ? [road] : []), ...others.filter((h) => h.mdpId !== road?.mdpId)];
     } else {
       if (this.agents.find(id)) return undefined; // a shop: the last mile, no hub's floor on it
       const serving = this.hubsServing([id], now);
@@ -635,6 +673,31 @@ export class MdpService {
     }
     const hub = this.withRoom(candidates, now);
     return hub ? { goes: true, hub, zoneBag: !addressed } : { goes: false, current, areas };
+  }
+
+  /**
+   * 2026-11-12 — the next stop on the road for a bag whose hub cannot take it: from the hub it left towards the hub most of
+   * its parcels' plans end at — nothing where parcels do not go along the road map, or the bag is for its last hub.
+   */
+  private roadAround(tote: Tote, addressed: Mdp, now: number): Mdp | undefined {
+    if (!this.roadMap) return undefined;
+    const from = tote.locationId.startsWith('bus:') ? tote.haul?.fromId : tote.locationId;
+    if (!from || !this.mdps.has(from)) return undefined;
+    const ends = new Map<string, number>();
+    for (const id of tote.parcels) {
+      try {
+        const hops = this.parcels.get(id).plan?.hops ?? [];
+        const last = [...hops].reverse().find((h) => h.type === 'mdp');
+        if (last) ends.set(last.id, (ends.get(last.id) ?? 0) + 1);
+      } catch {
+        // a parcel the bag lists and the store does not
+      }
+    }
+    const end = [...ends.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (!end || end === addressed.mdpId) return undefined;
+    const next = this.roadMap.nextToward(from, end, now);
+    const hub = next && next !== addressed.mdpId ? this.mdps.get(next) : undefined;
+    return hub && !this.isDown(hub, now) ? hub : undefined;
   }
 
   /** 2026-11-11 — the shop a bag left from, standing there or on its way from it (where its road was locked); not a hub's counter. */
@@ -1188,6 +1251,8 @@ export class MdpService {
     // Loaded when it was loaded (round 23), never before the bag was filled, published or sealed.
     const after = [pending.filledAt, pending.availableAt, pending.sealedAt];
     const offHubFloor = this.mdps.has(pending.locationId); // read before the load moves it onto the vehicle
+    // 2026-11-12 — how long its parcels stood at this hub, measured as they leave it: arrival times count it (the recommendation).
+    if (offHubFloor) this.noteDwells(pending.locationId, pending.parcels, Date.now());
     const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
     keepTake?.(handedAt(observedAt, Date.now(), after));
     for (const parcelId of tote.parcels) {
@@ -1405,6 +1470,13 @@ export class MdpService {
     hubForPoint: (country: string, point: GeoPoint, now: number) => string | undefined;
     serves: (mdpId: string, country: string, point: GeoPoint, now: number) => boolean;
   };
+
+  /** 2026-11-12 — the road map of hubs: the next hub towards another, along it (given by RoadMapService when it starts). */
+  private roadMap?: { nextToward: (at: string, to: string, now: number) => string | undefined };
+
+  useRoadMap(lookup: { nextToward: (at: string, to: string, now: number) => string | undefined }): void {
+    this.roadMap = lookup;
+  }
 
   /** 2026-11-09 — a net of hubs: which hub a pin goes to (the nearest of its zone's hubs with room), and whether a hub serves it. */
   useCatchments(lookups: { hubForPoint: (country: string, point: GeoPoint, now: number) => string | undefined; serves: (mdpId: string, country: string, point: GeoPoint, now: number) => boolean }): void {
@@ -1697,13 +1769,20 @@ export class MdpService {
     if (shop && country && this.catchments?.serves(mdp.mdpId, country, shop.location, now)) return { type: 'pudo', id: shop.did, label: shop.shopName, zone: destZone };
     const servedBy = shop && country && this.catchments ? this.catchments.hubForPoint(country, shop.location, now) : undefined;
     const byZone = servedBy ? this.list().find((m) => m.mdpId === servedBy) : undefined;
-    if (byZone) return { type: 'mdp', id: byZone.mdpId, label: byZone.name, zone: destZone };
+    if (byZone) return this.towards(mdp, byZone, destZone, now);
     if (mdp.zones.includes(destZone)) {
       const dest = this.agents.get(destAgentDid);
       return { type: 'pudo', id: dest.did, label: dest.shopName, zone: destZone };
     }
     const onward = this.mdpForZone(destZone, now);
     if (!onward) throw new GlosError('INVALID_STATE', `No MDP serves destination zone ${destZone}`);
-    return { type: 'mdp', id: onward.mdpId, label: onward.name, zone: destZone };
+    return this.towards(mdp, onward, destZone, now);
+  }
+
+  /** 2026-11-12 — to a far hub by the next stop on the road map, where parcels go along it (step 4); else straight to it. */
+  private towards(at: Mdp, target: Mdp, destZone: string, now: number): NextHop {
+    const via = this.roadMap?.nextToward(at.mdpId, target.mdpId, now);
+    const hub = via && via !== target.mdpId ? this.mdps.get(via) : undefined;
+    return hub ? { type: 'mdp', id: hub.mdpId, label: hub.name, zone: destZone } : { type: 'mdp', id: target.mdpId, label: target.name, zone: destZone };
   }
 }

@@ -76,6 +76,8 @@ export const words: Record<string, string> = {
   "mdp.road.title": "Op de weg",
   "mdp.road.stop": "Je hub is een stop op de weg. Je vloer stuurt richting deze hubs, en naar je eigen winkels:",
   "mdp.road.towards": "Richting {hub}",
+  "mdp.road.bins": "Je hub is een stop op de weg. De bakken op je vloer: één richting elk van deze hubs, en je eigen winkels.",
+  "mdp.road.notYet": "Pakketten gaan deze weg zodra de prijskaart van je land van kracht is; tot dan gaan ze zoals altijd.",
   "mdp.road.ownShops": "Je eigen winkels",
   "mdp.road.local": "Je hub is alleen lokaal: je sorteert voor je eigen winkels, en doorgaande pakketten gaan via {hub} ({km}).",
   "mdp.road.km": "{km} km",

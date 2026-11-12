@@ -44,6 +44,8 @@ export interface HubFloorBook {
    * and whether it ran full — its day's sorting reached, or a bag held for room on its floor.
    */
   days?: Record<string, HubDay>;
+  /** 2026-11-12 — hours its last parcels stood on its floor before their bag left (arrival times count the median). */
+  dwells?: number[];
 }
 
 export interface HubDay {

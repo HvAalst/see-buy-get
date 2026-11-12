@@ -30,7 +30,7 @@ export function HubRoadCard({ sbg, mdpId }: { sbg: SbgClient | null; mdpId?: str
     <Card title={t('mdp.road.title')}>
       {view.role === 'stop' ? (
         <>
-          <p class="card__note">{t('mdp.road.stop')}</p>
+          <p class="card__note">{t(view.routing ? 'mdp.road.bins' : 'mdp.road.stop')}</p>
           <ul class="hubzones">
             {view.neighbours.map((n) => (
               <li key={n.mdpId}>
@@ -45,6 +45,7 @@ export function HubRoadCard({ sbg, mdpId }: { sbg: SbgClient | null; mdpId?: str
       ) : view.via ? (
         <p class="card__note">{t('mdp.road.local', { hub: view.via.name, km: km(view.via.km) })}</p>
       ) : null}
+      {!view.routing ? <p class="hint">{t('mdp.road.notYet')}</p> : null}
       <p class="hint">{t('mdp.road.byStaff')}</p>
     </Card>
   );

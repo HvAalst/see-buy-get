@@ -2215,6 +2215,7 @@ export const words: Record<string, string> = {
   "tower.cases.kind.Hub_Down_Unconfirmed": "Een dichte hub voorbij de tijd die hij gaf, zonder te bevestigen dat hij opengaat: er wordt niets naartoe gestuurd",
   "tower.runPay.title": "Hoe ritten worden betaald",
   "tower.roadMap.title": "Wegenkaart van hubs",
+  "tower.plan.via": "via {hubs}",
   "tower.roadMap.lede": "Welke hubs stops op de weg zijn en welke alleen lokaal, en welke stops buren zijn: een hub stuurt alleen richting zijn buren en naar zijn eigen winkels. Het systeem stelt het voor op basis van de afstanden over de weg; verander wat je beter weet en bevestig het dan. Tot het bevestigd is, gaan pakketten zoals altijd.",
   "tower.roadMap.hintConfirmed": "Van kracht: {stops} stops, bevestigd door {by}",
   "tower.roadMap.hintNone": "Niet bevestigd: pakketten gaan zoals altijd",

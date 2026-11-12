@@ -96,7 +96,7 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
 
     it('nothing is in force until staff confirm; a proposal, changed and confirmed, is in force — every change logged', () => {
       expect(maps.inForce('KE')).toBeUndefined();
-      expect(maps.ofHub(id('isiolo'))).toEqual({ mdpId: id('isiolo'), inForce: false, neighbours: [] });
+      expect(maps.ofHub(id('isiolo'))).toEqual({ mdpId: id('isiolo'), inForce: false, routing: false, neighbours: [] });
       const v0 = maps.view('sbg-ke');
       expect(v0).toMatchObject({ country: 'KE', minKm: 60, minKmStart: 60, joined: [], left: [] });
       expect(v0.draft).toBeUndefined();
@@ -145,6 +145,28 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
       approved.delete(id('marsabit'));
       expect(maps.view('sbg-ke').left).toEqual([id('marsabit')]);
       expect(maps.inForce('KE')!.plan.stops).not.toContain(id('marsabit'));
+    });
+
+    it('parcels go along it only once a price card is in force (D3): the path between two hubs, and the next stop', () => {
+      let card = false;
+      const priceCards = { inForceFor: (c: string) => (card && c === 'KE' ? { entityId: 'sbg-ke' } : undefined) };
+      const routed = new RoadMapService(entities, { ...mdps, find: mdps.find } as never, router, priceCards as never);
+      routed.propose('sbg-ke', 'Amina');
+      routed.confirm('sbg-ke', 'Amina');
+      expect(routed.routing('KE')).toBeUndefined();
+      expect(routed.pathFor(id('nairobi'), id('moyale'))).toBeUndefined();
+      expect(routed.ofHub(id('isiolo'))).toMatchObject({ inForce: true, routing: false, role: 'stop' });
+      card = true;
+      expect(routed.pathFor(id('nairobi'), id('moyale'))).toEqual([id('nairobi'), id('isiolo'), id('marsabit'), id('moyale')]);
+      expect(routed.nextToward(id('nairobi'), id('moyale'))).toBe(id('isiolo'));
+      expect(routed.nextToward(id('marsabit'), id('moyale'))).toBe(id('moyale'));
+      expect(routed.nextToward(id('moyale'), id('moyale'))).toBeUndefined();
+      // A local hub goes by its stop: Thika to Moyale passes Nairobi first.
+      expect(routed.pathFor(id('thika'), id('moyale'))!.slice(0, 2)).toEqual([id('thika'), id('nairobi')]);
+      expect(routed.ofHub(id('isiolo'))).toMatchObject({ routing: true });
+      // Marsabit down: around it.
+      down.add(id('marsabit'));
+      expect(routed.pathFor(id('nairobi'), id('moyale'))).toEqual([id('nairobi'), id('isiolo'), id('moyale')]);
     });
 
     it('the minimum distance is the country’s own, logged; a company that runs no country has no road map', () => {

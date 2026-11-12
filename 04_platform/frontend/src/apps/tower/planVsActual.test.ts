@@ -6,7 +6,9 @@ const lane = (over: Partial<PlanLane> = {}): PlanLane => ({ from: 'CBD', to: 'Ki
 
 describe('a lane against its plans, as the console says it', () => {
   it('says on time out of how many, how late the late ones usually were, and how many went as planned', () => {
-    expect(laneWords(lane(), t)).toEqual({ lane: 'CBD → Kisumu', onTime: '1 of 3', late: 'usually 6.5 h late', route: '2 of 3', worst: 'P-9, 10 h' });
+    expect(laneWords(lane(), t)).toEqual({ lane: 'CBD → Kisumu', via: '', onTime: '1 of 3', late: 'usually 6.5 h late', route: '2 of 3', worst: 'P-9, 10 h' });
+    // 2026-11-12 — along the road map: the hubs its latest parcel passed.
+    expect(laneWords(lane({ hubs: ['Nairobi Hub', 'Nakuru Hub', 'Kisumu Hub'] }), t).via).toBe('via Nairobi Hub → Nakuru Hub → Kisumu Hub');
   });
 
   it('says "never late" rather than nought hours, and "not recorded" rather than nought of nought', () => {

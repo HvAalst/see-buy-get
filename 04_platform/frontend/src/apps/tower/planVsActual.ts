@@ -17,6 +17,8 @@ export interface PlanLane {
   worst?: { parcelId: string; lateHours: number };
   /** 2026-11-06 — paid at stops its parcels were not priced through, and priced stops never used — each in its own money. */
   detours?: { parcels: number; paid: Array<{ currency: string; amount: number }>; unused: Array<{ currency: string; amount: number }> };
+  /** 2026-11-12 — the hubs its latest parcel passed (along the road map, "Hubs on the Road" step 4). */
+  hubs?: string[];
 }
 
 /**
@@ -72,9 +74,10 @@ export function offPlanWords(lane: Pick<PlanLane, 'offPlan' | 'offPlanReasons'>,
  * "2 of 3 on time", "usually 6.5 h late", "2 of 3 as planned". A lane never late says so rather than "0 h"; a lane whose
  * custody was never recorded says that rather than "0 of 0".
  */
-export function laneWords(lane: PlanLane, t: Translate): { lane: string; onTime: string; late: string; route: string; worst: string } {
+export function laneWords(lane: PlanLane, t: Translate): { lane: string; via: string; onTime: string; late: string; route: string; worst: string } {
   return {
     lane: `${lane.from} → ${lane.to}`,
+    via: lane.hubs?.length ? t('tower.plan.via', { hubs: lane.hubs.join(' → ') }) : '',
     onTime: t('tower.plan.onTime', { on: lane.onTime, n: lane.arrived }),
     late: lane.late ? t('tower.plan.usually', { h: lane.typicalLateHours }) : t('tower.plan.neverLate'),
     route: lane.routeKnown ? t('tower.plan.route', { kept: lane.routeKept, known: lane.routeKnown }) : t('tower.plan.routeUnknown'),

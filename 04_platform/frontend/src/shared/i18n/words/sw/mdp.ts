@@ -76,6 +76,8 @@ export const words: Record<string, string> = {
   "mdp.road.title": "Barabarani",
   "mdp.road.stop": "Kituo chako ni kituo cha kusimama barabarani. Sakafu yako hutuma kuelekea vituo hivi, na kwa maduka yako:",
   "mdp.road.towards": "Kuelekea {hub}",
+  "mdp.road.bins": "Kituo chako ni kituo cha kusimama barabarani. Mapipa kwenye sakafu yako: moja kuelekea kila moja ya vituo hivi, na maduka yako.",
+  "mdp.road.notYet": "Vifurushi vinaenda njia hii mara bei za nchi yako zitakapoanza kutumika; hadi hapo vinaenda kama kawaida.",
   "mdp.road.ownShops": "Maduka yako",
   "mdp.road.local": "Kituo chako ni cha eneo pekee: unapanga kwa maduka yako, na vifurushi vinavyopita vinaenda kupitia {hub} ({km}).",
   "mdp.road.km": "km {km}",

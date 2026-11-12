@@ -2426,6 +2426,7 @@ export const enTowerNetwork = {
   'tower.cases.kind.Hub_Down_Unconfirmed': 'A hub down past the time it gave, never confirming it opens: nothing is sent to it',
   'tower.runPay.title': 'How runs are paid',
   'tower.roadMap.title': 'Road map of hubs',
+  'tower.plan.via': 'via {hubs}',
   'tower.roadMap.lede': 'Which hubs are stops on the road and which are local only, and which stops are neighbours: a hub sends only towards its neighbours and to its own shops. The system proposes it from the distances by road; change what you know better, then confirm it. Until it is confirmed, parcels go as they always have.',
   'tower.roadMap.hintConfirmed': 'In force: {stops} stops, confirmed by {by}',
   'tower.roadMap.hintNone': 'Not confirmed: parcels go as they always have',

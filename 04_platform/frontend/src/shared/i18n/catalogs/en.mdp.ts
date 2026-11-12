@@ -89,6 +89,8 @@ export const enMdp = {
   'mdp.road.title': 'On the road',
   'mdp.road.stop': 'Your hub is a stop on the road. Your floor sends towards these hubs, and to your own shops:',
   'mdp.road.towards': 'Towards {hub}',
+  'mdp.road.bins': 'Your hub is a stop on the road. The bins on your floor: one towards each of these hubs, and your own shops.',
+  'mdp.road.notYet': 'Parcels go this way once your country’s price card is in force; until then they go as they always have.',
   'mdp.road.ownShops': 'Your own shops',
   'mdp.road.local': 'Your hub is local only: you sort for your own shops, and parcels passing through go by {hub} ({km}).',
   'mdp.road.km': '{km} km',

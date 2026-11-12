@@ -41,6 +41,7 @@ import { PriceCardService } from './price-card.service';
 import { CounterPriceService } from './counter-price.service';
 import { PriceReportService } from './price-report.service';
 import { CatchmentService } from './catchment.service';
+import { RoadMapService } from './road-map.service';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { PriceCardTerms } from './price-card.types';
@@ -163,6 +164,7 @@ describe('PUDO Light', () => {
   let priceReports: PriceReportService;
   let roadRouter: RoadRouter;
   let catchments: CatchmentService;
+  let roadMaps: RoadMapService;
   let journeyPlans: JourneyPlanService;
   let shopChoices: ShopChoiceService;
   let unclaimedSvc: UnclaimedService;
@@ -253,6 +255,7 @@ describe('PUDO Light', () => {
         CounterPriceService, // 2026-11-08 — what a counter keeps to price with no signal (step 3b)
         PriceReportService, // 2026-11-08 — price against planned cost per pair of zones (step 4)
         CatchmentService, // 2026-11-09 — which hub serves each zone (Part A)
+        RoadMapService, // 2026-11-12 — the road map of hubs (Hubs on the Road)
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -295,6 +298,8 @@ describe('PUDO Light', () => {
     roadRouter = moduleRef.get(RoadRouter);
     catchments = moduleRef.get(CatchmentService);
     catchments.onModuleInit();
+    roadMaps = moduleRef.get(RoadMapService);
+    roadMaps.onModuleInit();
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
     consignments = moduleRef.get(ConsignmentService);
@@ -2725,6 +2730,72 @@ describe('PUDO Light', () => {
       b.plan!.hops[2] = { type: 'mdp', id: 'mdp_gone', label: 'Gone Sort', zone: b.destZone };
       expect(mdps.sortParcel(northHub!.mdpId, 'MU5-B').nextDestination.id).toBe(hub.mdpId);
       expect(parcels.get('MU5-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'network_changed', planned: 'mdp_gone', took: hub.mdpId })]);
+    });
+
+    it('along the road map: a journey passes every stop on the way, only with a price card in force; the floor sorts towards the next stop; a down stop is passed; arrival times count each hub as measured (2026-11-12)', () => {
+      // Garissa – Wajir – El Wak – Mandera, far from every other test's hubs; shops at each end.
+      const W = 'RW-West';
+      const E = 'RW-East';
+      const west = onboardAgent('RW West Shop', W, 50);
+      agents.setLocation(west.did, { lat: -0.45, lng: 39.65 });
+      const east = onboardAgent('RW East Shop', E, 50);
+      agents.setLocation(east.did, { lat: 3.93, lng: 41.85 });
+      const garissa = mdps.register({ name: 'RW Garissa', zones: [W], location: { lat: -0.4536, lng: 39.6401 } }, { approvedBy: 'staff' });
+      const wajir = mdps.register({ name: 'RW Wajir', zones: ['RW-Mid'], location: { lat: 1.75, lng: 40.06 } }, { approvedBy: 'staff' });
+      const elwak = mdps.register({ name: 'RW El Wak', zones: ['RW-North'], location: { lat: 2.8, lng: 40.93 } }, { approvedBy: 'staff' });
+      const mandera = mdps.register({ name: 'RW Mandera', zones: [E], location: { lat: 3.94, lng: 41.86 } }, { approvedBy: 'staff' });
+      const hops = () => routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).hops.map((h) => h.id);
+      roadMaps.propose('sbg-ke', 'N');
+      roadMaps.confirm('sbg-ke', 'N');
+      let card = false;
+      const spy = jest.spyOn(priceCards, 'inForceFor').mockImplementation((c) => (card && c === 'KE' ? ({ entityId: 'sbg-ke' } as never) : undefined));
+      try {
+        // The road map confirmed, no price card: straight between the two hubs, as today (D3).
+        expect(hops()).toEqual([west.did, garissa.mdpId, mandera.mdpId, east.did]);
+        expect(mdps.nextHop(mdps.require(garissa.mdpId), E, east.did)).toMatchObject({ id: mandera.mdpId });
+        // A price card in force: through Wajir and El Wak, the stops on the way; each floor sorts towards its next stop.
+        card = true;
+        expect(hops()).toEqual([west.did, garissa.mdpId, wajir.mdpId, elwak.mdpId, mandera.mdpId, east.did]);
+        expect(mdps.nextHop(mdps.require(garissa.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: wajir.mdpId });
+        expect(mdps.nextHop(mdps.require(wajir.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: elwak.mdpId });
+        expect(mdps.nextHop(mdps.require(elwak.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: mandera.mdpId });
+        expect(roadMaps.ofHub(wajir.mdpId)).toMatchObject({ routing: true, role: 'stop' });
+
+        // Arrival times: a hub measured to hold parcels ten hours adds them; before five parcels are measured, half an hour.
+        const before = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
+        const floors = (mdps as any).floors;
+        floors.set(wajir.mdpId, { ...(floors.get(wajir.mdpId) ?? { mdpId: wajir.mdpId, drops: [] }), dwells: [10, 10, 10, 10] });
+        expect(mdps.dwellHoursOf(wajir.mdpId)).toBeUndefined();
+        floors.set(wajir.mdpId, { ...floors.get(wajir.mdpId), dwells: [10, 10, 10, 10, 10] });
+        expect(mdps.dwellHoursOf(wajir.mdpId)).toBe(10);
+        const after = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
+        expect(Math.round((Date.parse(after) - Date.parse(before)) / 3_600_000 * 10) / 10).toBeCloseTo(9.5, 0);
+        // The middle of its waits, not the longest: one long wait does not set the promise.
+        floors.set(wajir.mdpId, { ...floors.get(wajir.mdpId), dwells: [1, 1, 2, 9, 10] });
+        expect(mdps.dwellHoursOf(wajir.mdpId)).toBe(2);
+        floors.set(wajir.mdpId, { ...floors.get(wajir.mdpId), dwells: [1, 2, 3, 4, 5, 6] });
+        expect(mdps.dwellHoursOf(wajir.mdpId)).toBe(3.5);
+
+        // A bag at Garissa for Wajir, its parcels' plans ending at Mandera. Wajir down: the bag goes on to El Wak, the next stop on
+        // the road — not to a hub serving its parcels' zone (Mandera, or another elsewhere).
+        parcels.accept({ agentDid: west.did, parcelId: 'RW-1', size: 'S', destZone: E, destPudoDid: east.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(west.did) } as never);
+        expect(parcels.get('RW-1').plan!.hops.map((h) => h.id)).toEqual([west.did, garissa.mdpId, wajir.mdpId, elwak.mdpId, mandera.mdpId, east.did]);
+        const bag = mdps.registerTote(garissa.mdpId);
+        mdps.assignTote(bag.code, wajir.mdpId, wajir.name);
+        totes.add(bag.code, 'RW-1', 'S');
+        totes.requireByCode(bag.code).status = 'available';
+        const other = mdps.register({ name: 'RW East Elsewhere', zones: [E], location: { lat: -1.3, lng: 36.9 } }, { approvedBy: 'staff' });
+        mdps.markDown(wajir.mdpId, { reason: 'power', until: new Date(Date.now() + 3_600_000).toISOString() }, { name: 'Floor lead', role: 'hub' });
+        expect(totes.requireByCode(bag.code).destinationNodeId).toBe(elwak.mdpId);
+        expect(totes.requireByCode(bag.code).destinationNodeId).not.toBe(other.mdpId);
+        // While Wajir is down, a new journey goes around it.
+        expect(roadMaps.pathFor(garissa.mdpId, mandera.mdpId)).toEqual([garissa.mdpId, elwak.mdpId, mandera.mdpId]);
+        mdps.markUp(wajir.mdpId, 'Floor lead');
+      } finally {
+        spy.mockRestore();
+        // The road map taken away again: no other test here routes along it.
+        (roadMaps as any).store.delete('sbg-ke');
+      }
     });
 
     it('a hub keeps its days: parcels sorted, and the days it ran full — its day’s sorting reached, or a bag held for room (2026-11-12)', () => {

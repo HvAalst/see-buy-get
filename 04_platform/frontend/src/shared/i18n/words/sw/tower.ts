@@ -2215,6 +2215,7 @@ export const words: Record<string, string> = {
   "tower.cases.kind.Hub_Down_Unconfirmed": "Kituo kilichofungwa baada ya muda kilioutoa, bila kuthibitisha kufunguliwa: hakuna kinachotumwa kwake",
   "tower.runPay.title": "Jinsi safari zinavyolipwa",
   "tower.roadMap.title": "Ramani ya barabara ya vituo",
+  "tower.plan.via": "kupitia {hubs}",
   "tower.roadMap.lede": "Vituo vipi ni vituo vya kusimama barabarani na vipi ni vya eneo pekee, na vituo vipi ni majirani: kituo hutuma tu kuelekea majirani zake na kwa maduka yake. Mfumo unapendekeza kutokana na umbali wa barabara; badilisha unachojua vizuri zaidi, kisha thibitisha. Hadi kithibitishwe, vifurushi vinaenda kama kawaida.",
   "tower.roadMap.hintConfirmed": "Inatumika: vituo {stops}, imethibitishwa na {by}",
   "tower.roadMap.hintNone": "Haijathibitishwa: vifurushi vinaenda kama kawaida",

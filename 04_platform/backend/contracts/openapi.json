@@ -51097,13 +51097,18 @@
           },
           "inForce": {
             "type": "boolean",
-            "description": "Its country's road map is confirmed: through parcels go along it."
+            "description": "Its country's road map is confirmed."
+          },
+          "routing": {
+            "type": "boolean",
+            "description": "…and its price card is in force: parcels go along the road map now, and its floor's bins are these (D3)."
           }
         },
         "required": [
           "neighbours",
           "mdpId",
-          "inForce"
+          "inForce",
+          "routing"
         ]
       },
       "HubCounterLine": {

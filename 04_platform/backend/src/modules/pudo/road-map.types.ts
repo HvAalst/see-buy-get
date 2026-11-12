@@ -77,8 +77,10 @@ export class RoadMapView {
 /** A hub's place on the road, for its own screen. */
 export class HubRoadView {
   mdpId!: string;
-  /** Its country's road map is confirmed: through parcels go along it. */
+  /** Its country's road map is confirmed. */
   inForce!: boolean;
+  /** …and its price card is in force: parcels go along the road map now, and its floor's bins are these (D3). */
+  routing!: boolean;
   @ApiPropertyOptional({ enum: ['stop', 'local'] }) role?: 'stop' | 'local';
   /** Local only: the stop that carries its through parcels. */
   @ApiPropertyOptional({ type: RoadNeighbour }) via?: RoadNeighbour;
