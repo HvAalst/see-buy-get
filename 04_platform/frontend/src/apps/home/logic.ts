@@ -189,6 +189,8 @@ export interface JoinForm {
   nationalId: string;
   /* where — a pin, never a street address (S16) */
   location: { lat: number; lng: number } | null;
+  /** 2026-11-12 — the hub-list row whose invitation brought them (the owner's D2): its code, carried into the hub's sign-up. */
+  inviteCode?: string;
   landmark: string;
   zone: string;
   /**
@@ -647,6 +649,8 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
         // The nearest landmark it was asked for — kept as its address (it was asked and dropped, 2026-11-01 audit). No fee
         // from here: a hub starts at its country's company's sort fee and sets its own from the Hub app.
         ...(f.landmark.trim() ? { address: f.landmark.trim() } : {}),
+        // 2026-11-12 — signed up through a hub-list row's invitation (the owner's D2): its code, which makes that row joined.
+        ...(f.inviteCode ? { inviteCode: f.inviteCode } : {}),
         // 2026-11-02 — its space, said on "About your hub": both numbers, which the step has checked.
         ...(wholeUpTo(f.bagPlaces, HUB_BAG_PLACES_MAX) != null && wholeUpTo(f.sortPerDay, HUB_SORT_PER_DAY_MAX) != null
           ? { bagPlaces: wholeUpTo(f.bagPlaces, HUB_BAG_PLACES_MAX), sortPerDay: wholeUpTo(f.sortPerDay, HUB_SORT_PER_DAY_MAX) }
@@ -922,7 +926,7 @@ export function formatDuration(minutes: number, t: Translate): string {
  * it can be shared, bookmarked, opened in a new tab and followed by a search engine; the app reads it once and
  * takes the visitor to the screen it names.
  */
-export type DeepLink = { join: RoleSpec['id']; near?: { lat: number; lng: number }; place?: string } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' | 'zones' } | null;
+export type DeepLink = { join: RoleSpec['id']; near?: { lat: number; lng: number }; place?: string; invite?: string } | { go: 'market' | 'agents' | 'verify' | 'signin' | 'roles' | 'zones' } | null;
 
 export function readDeepLink(search: string): DeepLink {
   const q = new URLSearchParams(search);
@@ -934,7 +938,9 @@ export function readDeepLink(search: string): DeepLink {
     const lat = near ? Number(near[1]) : NaN;
     const lng = near ? Number(near[2]) : NaN;
     const place = (q.get('place') ?? '').trim().slice(0, 80);
-    return { join: join as RoleSpec['id'], ...(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { near: { lat, lng } } : {}), ...(place ? { place } : {}) };
+    // …and the hub-list row's own code (the owner's D2): the hub signing up with it makes that row joined.
+    const invite = (q.get('row') ?? '').trim().toUpperCase();
+    return { join: join as RoleSpec['id'], ...(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { near: { lat, lng } } : {}), ...(place ? { place } : {}), ...(/^[A-Z0-9]{6,16}$/.test(invite) ? { invite } : {}) };
   }
   const go = q.get('go');
   if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles' || go === 'zones') return { go };

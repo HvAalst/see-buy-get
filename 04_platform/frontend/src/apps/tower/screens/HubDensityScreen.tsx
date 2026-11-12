@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import type { components } from '../../../lib/sbg';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Icon } from '../../../shared/ui';
-import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../ConsolePick';
 import { ConsoleFold } from '../ConsoleFold';
 import { holds } from '../staffRoles';
@@ -10,9 +10,11 @@ import type { TowerActions, TowerState } from '../useTowerApp';
 import type { ZoneAreaShape, ZoneShapes } from '../zones';
 import { ZoneAreaMap } from './ZoneAreaMap';
 import type { MapLine, MapPin } from './ZoneAreaMapLeaflet';
-import { densityFill, invitationLink, suggestionLine, type HubDensity, type HubSuggestion } from '../hubDensity';
+import { densityFill, suggestionLine, type HubDensity } from '../hubDensity';
+import { HubListFold } from './HubListFold';
 
 type Reach = components['schemas']['DensityReach'];
+type HubList = components['schemas']['HubListView'];
 
 /**
  * 2026-11-12 — WHERE HUBS ARE NEEDED (the owner, 2026-11-11: "each country staff should have a part in their system where they
@@ -37,10 +39,8 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [asideOf, setAsideOf] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
-  const [copied, setCopied] = useState<string | null>(null);
   const [reach, setReach] = useState<Reach | null>(null);
+  const [list, setList] = useState<HubList | null>(null);
 
   const load = useCallback(async () => {
     if (!client || !entityId) return;
@@ -50,6 +50,8 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
     setError(null);
     setView(v);
     setReach(v.reach);
+    // 2026-11-12 — the country's hub list (the owner's D2 and D7), beside the map.
+    void client.api.hubList(entityId).then((l) => setList(l.error ? null : (l.data as unknown as HubList)));
     if (v.mapVersion != null) {
       const s = await client.api.zoneShapes(entityId, v.mapVersion);
       setShapes(s.error ? null : (s.data as unknown as ZoneShapes));
@@ -58,6 +60,7 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
   useEffect(() => {
     setView(null);
     setShapes(null);
+    setList(null);
     setDone(null);
     void load();
   }, [load]);
@@ -73,8 +76,6 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
     setView(v);
     setReach(v.reach);
     setDone(message);
-    setAsideOf(null);
-    setReason('');
   };
 
   const byZone = useMemo(() => new Map((view?.zones ?? []).map((z) => [z.code, z])), [view]);
@@ -102,54 +103,6 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
       return a && b ? [{ from: [a.lat, a.lng] as [number, number], to: [b.lat, b.lng] as [number, number], kind: 'road' as const }] : [];
     });
   }, [view]);
-
-  const copy = async (s: HubSuggestion) => {
-    const link = invitationLink(s, globalThis.location?.origin ?? 'https://seebuyget.com');
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(s.id);
-    } catch {
-      setCopied(`show:${s.id}`);
-    }
-  };
-
-  const card = (s: HubSuggestion) => (
-    <li key={s.id} class="twr-suggest">
-      <p class="twr-clear__t">
-        {t(`tower.density.kind.${s.kind}` as MessageKey)}
-        {s.place.name ? ` · ${s.place.name}` : ''}
-      </p>
-      <p class="chint">{suggestionLine(s, t)}</p>
-      {s.towns.length ? <p class="chint">{t('tower.density.towns', { towns: s.towns.join(', ') })}</p> : null}
-      {s.aside ? <p class="chint">{t('tower.density.asideBy', { by: s.aside.by, at: formatDate(s.aside.at, { dateStyle: 'medium' }), reason: s.aside.reason })}</p> : null}
-      {writer && client && entityId ? (
-        <div class="twr-panelend">
-          {s.kind !== 'too_close' && !s.aside ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void copy(s)}>
-              {t(copied === s.id ? 'tower.density.copied' : 'tower.density.invite')}
-            </button>
-          ) : null}
-          {s.aside ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy !== null} onClick={() => void run(`back:${s.id}`, () => client.api.bringBackSuggestion(entityId, s.id), t('tower.density.broughtBack'))}>
-              {t('tower.density.bringBack')}
-            </button>
-          ) : asideOf === s.id ? (
-            <span class="crow">
-              <input class="cinput" maxLength={300} placeholder={t('tower.density.reason')} value={reason} onInput={(e) => setReason(e.currentTarget.value)} />
-              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy !== null || reason.trim().length < 3} onClick={() => void run(`aside:${s.id}`, () => client.api.setAsideSuggestion(entityId, s.id, reason.trim()), t('tower.density.setAsideDone'))}>
-                {t('tower.density.setAside')}
-              </button>
-            </span>
-          ) : (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setAsideOf(s.id)}>
-              {t('tower.density.setAside')}
-            </button>
-          )}
-        </div>
-      ) : null}
-      {copied === `show:${s.id}` ? <input class="cinput" readOnly value={invitationLink(s, globalThis.location?.origin ?? 'https://seebuyget.com')} onFocus={(e) => e.currentTarget.select()} /> : null}
-    </li>
-  );
 
   return (
     <>
@@ -194,16 +147,16 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
             </div>
           </section>
 
-          <ConsoleFold title={t('tower.density.suggestionsTitle')} hint={t('tower.density.suggestionsHint', { n: view.suggestions.length })} open>
-            {view.suggestions.length ? <ul class="twr-suggests">{view.suggestions.map(card)}</ul> : <p class="cons__empty">{t('tower.density.none')}</p>}
-            {view.setAside.length ? (
-              <>
-                <p class="twr-clear__t">{t('tower.density.asideTitle', { n: view.setAside.length })}</p>
-                <ul class="twr-suggests">{view.setAside.map(card)}</ul>
-              </>
-            ) : null}
-            <p class="chint">{t('tower.density.never')}</p>
-          </ConsoleFold>
+          {entityId ? <HubListFold entityId={entityId} writer={writer} actions={actions} list={list} onList={setList} /> : null}
+          {/* Two stops kept too close are not a place to recruit: said here, for the road map. */}
+          {view.suggestions.some((s) => s.kind === 'too_close') ? (
+            <section class="cons__panel">
+              <p class="twr-clear__t">{t('tower.density.kind.too_close')}</p>
+              {view.suggestions.filter((s) => s.kind === 'too_close').map((s) => (
+                <p key={s.id} class="chint">{suggestionLine(s, t)}</p>
+              ))}
+            </section>
+          ) : null}
 
           <ConsoleFold title={t('tower.density.hubsTitle')} hint={t('tower.density.hubsHint', { n: view.hubs.length })}>
             <table class="ctbl ctbl--stack">

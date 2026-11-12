@@ -7,6 +7,7 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { HeuristicRouter } from './router';
 import { HubDensityService } from './hub-density.service';
+import { HubListService } from './hub-list.service';
 import { coverageOf, gatherNeeds, reachOfGroup, reachStartOf, ROAD_GAP_KM, stillAside } from './hub-density';
 
 /**
@@ -145,20 +146,73 @@ describe('where hubs are needed (2026-11-12)', () => {
       expect(gap.towns.length).toBeGreaterThan(0);
     });
 
-    it('set aside with why — logged, and back by staff; the reach is the country’s own, logged', () => {
-      const need = density.view('sbg-ke').suggestions.find((s) => s.kind === 'hub_needed')!;
-      const aside = density.setAside('sbg-ke', need.id, 'A hub is being recruited there', 'Amina');
-      expect(aside.suggestions.map((s) => s.id)).not.toContain(need.id);
-      expect(aside.setAside.find((s) => s.id === need.id)?.aside).toMatchObject({ by: 'Amina', reason: 'A hub is being recruited there' });
-      expect(entities.changes('sbg-ke').find((c) => c.what === 'hubDensity')?.to).toMatch(/^set aside for 90 days/);
-      expect(() => density.setAside('sbg-ke', 'need:nowhere', 'gone', 'Amina')).toThrow(/no longer made/);
-      expect(density.bringBack('sbg-ke', need.id, 'Amina').suggestions.map((s) => s.id)).toContain(need.id);
-      expect(() => density.bringBack('sbg-ke', need.id, 'Amina')).toThrow(/not set aside/);
+    it('the reach is the country’s own, logged', () => {
       // A wider reach for remote zones: Marsabit's shops are within it, and no hub is needed there.
       const wide = density.setReach('sbg-ke', { urban: 15, rural: 60, remote: 600 }, 'Amina');
       expect(wide.reach.remote).toBe(600);
       expect(wide.zones.find((z) => z.code === 'KE-MRS')!.coverage).toBe('near');
       expect(wide.suggestions.some((s) => s.kind === 'hub_needed')).toBe(false);
+      expect(entities.changes('sbg-ke').find((c) => c.what === 'hubDensity')?.to).toBe('urban 15 km, rural 60 km, remote 600 km');
+    });
+
+    /** 2026-11-12 — the country's hub list (the owner's D2 and D7). */
+    describe('the hub list', () => {
+      const list = () => new HubListService(entities, mdpsStub as never, density);
+      let mdpsStub: { list: () => Array<Record<string, unknown>>; countryOf: (m: { country: string }) => string; isApproved: (m: { mdpId: string }) => boolean };
+      beforeEach(() => {
+        mdpsStub = { list: () => hubs as never, countryOf: (m) => m.country, isApproved: () => true };
+      });
+
+      it('its hubs joined from the start; each place a hub is needed an open row; too close is not a row', () => {
+        // A hub still waiting for its papers, signed up on its own (no invitation), is not yet a joined row.
+        mdpsStub.list = () => [...hubs, { mdpId: 'mdp_pending', name: 'Pending Sort', location: { lat: -1.3, lng: 36.9 }, country: 'KE', vetting: { state: 'pending' } }] as never;
+        mdpsStub.isApproved = (m) => m.mdpId !== 'mdp_pending';
+        const v = list().view('sbg-ke');
+        const joined = v.rows.filter((r) => r.status === 'joined').map((r) => r.mdpId).sort();
+        expect(joined).toEqual(['mdp_isiolo', 'mdp_nairobi', 'mdp_thika']);
+        const places = v.rows.filter((r) => r.kind === 'place').map((r) => r.suggestionKind).sort();
+        expect(places).toEqual(['extra_hub', 'hub_needed', 'road_gap']);
+        const need = v.rows.find((r) => r.suggestionKind === 'hub_needed')!;
+        expect(need).toMatchObject({ rowId: 'sug:need:KE-MRS', source: 'optimiser', status: 'open', name: 'Marsabit', numbers: { shops: 2, parcels: 10 } });
+        expect(v.counts).toEqual({ open: 3, negotiating: 0, rejected: 0, joined: 3 });
+        // A hub of the network keeps its own record.
+        expect(() => list().update('sbg-ke', 'hub:mdp_nairobi', { phone: '+254700000000' }, 'Amina')).toThrow(/keeps its own record/);
+      });
+
+      it('staff fill in a row and move it — never to joined; rejected takes a reason and comes back after 90 days; every change logged', () => {
+        const l = list();
+        const filled = l.update('sbg-ke', 'sug:need:KE-MRS', { name: 'Marsabit Hardware', phone: '+254711000111', email: 'owner@marsabit.example', address: 'Main road, by the market', status: 'negotiating' }, 'Amina');
+        expect(filled.rows.find((r) => r.rowId === 'sug:need:KE-MRS')).toMatchObject({ name: 'Marsabit Hardware', phone: '+254711000111', status: 'negotiating', updatedBy: 'Amina' });
+        expect(() => l.update('sbg-ke', 'sug:need:KE-MRS', { status: 'rejected' }, 'Amina')).toThrow(/Say why it is rejected/);
+        const t0 = Date.now();
+        const rejected = l.update('sbg-ke', 'sug:need:KE-MRS', { status: 'rejected', reason: 'Owner not interested' }, 'Amina', t0);
+        expect(rejected.rows.find((r) => r.rowId === 'sug:need:KE-MRS')).toMatchObject({ status: 'rejected', reason: 'Owner not interested', rejectedBy: 'Amina' });
+        expect(l.view('sbg-ke', t0 + 91 * 86_400_000).rows.find((r) => r.rowId === 'sug:need:KE-MRS')!.status).toBe('open');
+        expect(entities.changes('sbg-ke').filter((c) => c.what === 'hubList').map((c) => c.to)).toEqual(expect.arrayContaining(['negotiating', 'rejected: Owner not interested']));
+        expect(() => l.update('sbg-ke', 'sug:need:nowhere', { name: 'x' }, 'Amina')).toThrow(/no longer made/);
+        // A place staff add themselves.
+        const added = l.add('sbg-ke', { name: 'Laisamis crossroads', lat: 1.6, lng: 37.8 }, 'Amina');
+        expect(added.rows.find((r) => r.name === 'Laisamis crossroads')).toMatchObject({ source: 'staff', status: 'open', location: { lat: 1.6, lng: 37.8 } });
+      });
+
+      it('an invitation from a row gets the row a code; a hub that signs up with it makes the row joined, with the date; a hub gone, open again', () => {
+        const l = list();
+        const invited = l.invite('sbg-ke', 'sug:need:KE-MRS', 'Amina');
+        const code = invited.rows.find((r) => r.rowId === 'sug:need:KE-MRS')!.code!;
+        expect(code).toMatch(/^[A-Z2-9]{6}$/);
+        expect(l.invite('sbg-ke', 'sug:need:KE-MRS', 'Amina').rows.find((r) => r.rowId === 'sug:need:KE-MRS')!.code).toBe(code);
+        // The hub signs up through it (not yet approved): the row is joined, linked to it.
+        const newHub = { mdpId: 'mdp_marsabit', name: 'Marsabit Sort', location: { lat: 2.33, lng: 37.99 }, country: 'KE', inviteCode: code, createdAt: '2026-11-12T10:00:00.000Z', vetting: { state: 'draft' } };
+        mdpsStub.list = () => [...hubs, newHub] as never;
+        mdpsStub.isApproved = (m) => m.mdpId !== 'mdp_marsabit';
+        const joined = l.view('sbg-ke').rows.find((r) => r.rowId === 'sug:need:KE-MRS')!;
+        expect(joined).toMatchObject({ status: 'joined', mdpId: 'mdp_marsabit', hubName: 'Marsabit Sort', joinedAt: '2026-11-12T10:00:00.000Z' });
+        // Joined is the system's: staff cannot move it.
+        expect(() => l.update('sbg-ke', 'sug:need:KE-MRS', { status: 'open' }, 'Amina')).toThrow(/Joined is set by the system/);
+        // Refused at its papers, or gone: open again.
+        mdpsStub.list = () => [...hubs, { ...newHub, vetting: { state: 'draft', refusal: { reason: 'no papers' } } }] as never;
+        expect(l.view('sbg-ke').rows.find((r) => r.rowId === 'sug:need:KE-MRS')!.status).toBe('open');
+      });
     });
   });
 });

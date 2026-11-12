@@ -207,7 +207,9 @@ import { PriceReportService, PriceReportView } from './price-report.service';
 import { CatchmentService, CatchmentsView } from './catchment.service';
 import { RoadMapService } from './road-map.service';
 import { HubDensityService } from './hub-density.service';
-import { DensityAsideDto, DensityReachDto, HubDensityView } from './hub-density.types';
+import { DensityReachDto, HubDensityView } from './hub-density.types';
+import { HubListService } from './hub-list.service';
+import { HubListView, HubRowDto, HubRowNewDto } from './hub-list.types';
 import { RoadMapLinkDto, RoadMapMinKmDto, RoadMapRoleDto, RoadMapView } from './road-map.types';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
@@ -396,6 +398,8 @@ export class SbgController {
     @Optional() private readonly roadMaps?: RoadMapService,
     // 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3).
     @Optional() private readonly hubDensity?: HubDensityService,
+    // 2026-11-12 — the country's hub list (the owner's D2 and D7).
+    @Optional() private readonly hubList?: HubListService,
   ) {}
 
   /**
@@ -3105,20 +3109,43 @@ export class SbgController {
     return this.hubDensityOf().view(entityId);
   }
 
-  /** A suggestion set aside, with why. */
+  /* --- 2026-11-12 — the country's hub list (the owner's D2 and D7): its company, or staff. --- */
+
+  /** Its hubs (joined), the places a hub is needed, and the places staff added — with their fields and status. */
   @Roles('operator', 'entity_admin')
-  @Post('entities/:entityId/hub-density/aside/:suggestionId')
-  setAsideSuggestion(@Param('entityId') entityId: string, @Param('suggestionId') suggestionId: string, @Body() dto: DensityAsideDto, @Actor() actor: IntrospectionResult): HubDensityView {
+  @Get('entities/:entityId/hub-list')
+  entityHubList(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): HubListView {
     this.requireReach(actor, entityId);
-    return this.hubDensityOf().setAside(entityId, suggestionId, dto.reason, auditActor(actor));
+    return this.hubListOf().view(entityId);
   }
 
-  /** A suggestion set aside, brought back. */
+  /** A hub place staff add themselves. */
   @Roles('operator', 'entity_admin')
-  @Post('entities/:entityId/hub-density/back/:suggestionId')
-  bringBackSuggestion(@Param('entityId') entityId: string, @Param('suggestionId') suggestionId: string, @Actor() actor: IntrospectionResult): HubDensityView {
+  @Post('entities/:entityId/hub-list')
+  addHubRow(@Param('entityId') entityId: string, @Body() dto: HubRowNewDto, @Actor() actor: IntrospectionResult): HubListView {
     this.requireReach(actor, entityId);
-    return this.hubDensityOf().bringBack(entityId, suggestionId, auditActor(actor));
+    return this.hubListOf().add(entityId, dto, auditActor(actor));
+  }
+
+  /** A row's fields filled in, its status moved (never to joined; rejected with why). */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-list/:rowId')
+  updateHubRow(@Param('entityId') entityId: string, @Param('rowId') rowId: string, @Body() dto: HubRowDto, @Actor() actor: IntrospectionResult): HubListView {
+    this.requireReach(actor, entityId);
+    return this.hubListOf().update(entityId, rowId, dto, auditActor(actor));
+  }
+
+  /** The invitation to join from a row: its code made, for the link staff send. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-list/:rowId/invite')
+  inviteHubRow(@Param('entityId') entityId: string, @Param('rowId') rowId: string, @Actor() actor: IntrospectionResult): HubListView {
+    this.requireReach(actor, entityId);
+    return this.hubListOf().invite(entityId, rowId, auditActor(actor));
+  }
+
+  private hubListOf(): HubListService {
+    if (!this.hubList) throw new GlosError('INVALID_STATE', 'The hub list is not available here');
+    return this.hubList;
   }
 
   /** How far a zone's shops may be from a hub, by its group (D6). */

@@ -32,6 +32,7 @@ import type { HandoverPositionDto } from './handover-position';
 import { haversineKm } from './geo';
 import { confirmedInTime, confirmOpen, hubIsDown, HUB_DOWN_CONFIRM_WINDOW_H, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, unconfirmedPast, type HubDownReason } from './hub-down.types';
 import { ROUTER, type Router } from './router';
+import { INVITE_CODE } from './hub-list.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
@@ -244,7 +245,7 @@ export class MdpService {
    * registered it themselves, and so approved it, by name — or `'joining'`, a hub that signed itself up and is vetted
    * from its papers before it works. Asked of every caller, so that no new way in can skip it by leaving it out.
    */
-  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number; bagPlaces?: number; sortPerDay?: number }, vouched: { approvedBy: string } | 'joining'): Mdp {
+  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number; bagPlaces?: number; sortPerDay?: number; inviteCode?: string }, vouched: { approvedBy: string } | 'joining'): Mdp {
     if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
     // 2026-11-02 — its space, asked at sign-up ("About your hub"): both numbers, or neither — a hub that says neither is asked
     // on its start screen. The sign-up's profile is the form's own object, so the numbers are checked here, not by a DTO.
@@ -280,6 +281,8 @@ export class MdpService {
       createdAt: now,
       vetting: vouched === 'joining' ? { state: 'draft' } : { state: 'approved', approvedAt: now, approvedBy: vouched.approvedBy },
       ...(saysSpace ? { bagPlaces: input.bagPlaces, sortPerDay: input.sortPerDay, spaceSaidAt: now } : {}),
+      // 2026-11-12 — signed up through a hub-list row's invitation (D2): its code, as the link carried it.
+      ...(typeof input.inviteCode === 'string' && INVITE_CODE.test(input.inviteCode.trim().toUpperCase()) ? { inviteCode: input.inviteCode.trim().toUpperCase() } : {}),
     };
     this.mdps.set(mdp.mdpId, mdp);
     return mdp;

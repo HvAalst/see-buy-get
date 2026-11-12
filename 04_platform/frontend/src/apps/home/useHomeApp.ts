@@ -471,6 +471,7 @@ export function useHomeApp() {
       url.searchParams.delete('go');
       url.searchParams.delete('near');
       url.searchParams.delete('place');
+      url.searchParams.delete('row');
       history.replaceState(null, '', url.toString());
     } catch {
       /* a browser that refuses the rewrite still lands on the right screen */
@@ -478,7 +479,7 @@ export function useHomeApp() {
     if ('join' in link) {
       startJoin(link.join);
       // 2026-11-12 — the place a hub is wanted, from an invitation: its pin, and its town as the area (the joiner can change both).
-      if (link.near || link.place) setState((s) => ({ ...s, form: { ...s.form, ...(link.near ? { location: link.near } : {}), ...(link.place ? { zone: link.place } : {}) } }));
+      if (link.near || link.place || link.invite) setState((s) => ({ ...s, form: { ...s.form, ...(link.near ? { location: link.near } : {}), ...(link.place ? { zone: link.place } : {}), ...(link.invite ? { inviteCode: link.invite } : {}) } }));
     } else go(link.go);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

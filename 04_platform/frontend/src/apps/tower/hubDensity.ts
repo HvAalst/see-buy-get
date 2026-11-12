@@ -4,6 +4,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 /** 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3): the words and colours of the console's map. */
 export type HubDensity = components['schemas']['HubDensityView'];
 export type HubSuggestion = components['schemas']['HubSuggestion'];
+export type HubRow = components['schemas']['HubRow'];
 type DensityZone = components['schemas']['DensityZone'];
 
 /** Coverage in the colours of a state (good, to watch, wrong); demand in one hue, deeper with more parcels. */
@@ -18,7 +19,7 @@ export function densityFill(zone: DensityZone | undefined, layer: 'coverage' | '
 }
 
 /** A suggestion's reason with its numbers, in a sentence. */
-export function suggestionLine(s: HubSuggestion, t: Translate): string {
+export function suggestionLine(s: Pick<HubSuggestion, 'kind' | 'numbers' | 'zoneNames' | 'hubNames'>, t: Translate): string {
   const n = s.numbers;
   switch (s.kind) {
     case 'hub_needed':
@@ -32,9 +33,19 @@ export function suggestionLine(s: HubSuggestion, t: Translate): string {
   }
 }
 
-/** D7 — the invitation staff share: the hub sign-up, with the place filled in. */
-export function invitationLink(s: HubSuggestion, origin: string): string {
-  const q = new URLSearchParams({ join: 'mdp', near: `${s.place.lat.toFixed(4)},${s.place.lng.toFixed(4)}` });
-  if (s.place.name) q.set('place', s.place.name);
+/** A hub-list row's reason: the suggestion it stands for, with its numbers (the owner's D7: "its reason and numbers beside it"). */
+export function rowReason(row: HubRow, t: Translate): string {
+  return row.suggestionKind ? suggestionLine({ kind: row.suggestionKind, numbers: row.numbers ?? {}, zoneNames: row.zoneNames, hubNames: row.hubNames }, t) : '';
+}
+
+/**
+ * The owner's D2 — the invitation to join from a row: the hub sign-up, with the place filled in and the row's own code, which
+ * makes the row joined when the hub signs up with it.
+ */
+export function invitationLink(row: { name?: string; location?: { lat: number; lng: number } }, code: string, origin: string): string {
+  const q = new URLSearchParams({ join: 'mdp' });
+  if (row.location) q.set('near', `${row.location.lat.toFixed(4)},${row.location.lng.toFixed(4)}`);
+  if (row.name) q.set('place', row.name);
+  q.set('row', code);
   return `${origin.replace(/\/+$/, '')}/?${q.toString()}`;
 }

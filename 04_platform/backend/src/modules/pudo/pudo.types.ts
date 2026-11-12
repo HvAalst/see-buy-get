@@ -520,6 +520,11 @@ export class Mdp {
   /** 2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them. */
   sortPerDay?: number;
   /**
+   * 2026-11-12 — the code of the hub-list row whose invitation it signed up through (the owner's D2): that row is joined, linked
+   * to this hub — the system's, never staff's.
+   */
+  inviteCode?: string;
+  /**
    * 2026-11-12 — what it is paid for a bag it receives on its seal and passes on unopened (Hubs on the Road, D5): its own word,
    * as its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf.
    */

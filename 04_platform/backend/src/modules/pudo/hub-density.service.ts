@@ -7,7 +7,7 @@ import { AgentService } from './agent.service';
 import { CatchmentService } from './catchment.service';
 import { GAZETTEER, nearestPlaceAt } from './geo-gazetteer';
 import { haversineKm } from './geo';
-import { ASIDE_DAYS, coverageOf, DENSITY_DAYS, EXTRA_HUB_FULL_DAYS, gatherNeeds, middleOf, needScore, reachOfGroup, reachStartOf, ROAD_GAP_KM, stillAside } from './hub-density';
+import { coverageOf, DENSITY_DAYS, EXTRA_HUB_FULL_DAYS, gatherNeeds, middleOf, needScore, reachOfGroup, reachStartOf, ROAD_GAP_KM } from './hub-density';
 import type { DensityHub, DensityReach, DensityZone, HubDensityView, HubSuggestion } from './hub-density.types';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
@@ -18,18 +18,10 @@ import { ROUTER, type Router } from './router';
 import { ToteService } from './tote.service';
 import { ZoneMapService } from './zone-map.service';
 
-interface StoredAside {
-  by: string;
-  at: string;
-  reason: string;
-  score: number;
-}
-
 interface StoredDensity {
   entityId: string;
   /** The country's own reach by group (D6); absent = its starting figures. */
   reach?: DensityReach;
-  aside: Record<string, StoredAside>;
 }
 
 /** Shops counted where they stand: signed up and seen, working or not (a shop held for money still stands there). */
@@ -156,11 +148,6 @@ export class HubDensityService {
       ...(plan ? plan.tooClose.map((p) => this.tooClose(p, byId, plan.minKm)) : []),
       ...(plan ? plan.links.filter((l) => l.km > ROAD_GAP_KM).map((l) => this.roadGap(l, byId, country)) : []),
     ].filter((x): x is HubSuggestion => Boolean(x));
-    const asideOf = (x: HubSuggestion) => (stillAside(s.aside[x.id], x.score, now) ? s.aside[x.id] : undefined);
-    const withAside = all.map((x) => {
-      const a = asideOf(x);
-      return a ? { ...x, aside: { by: a.by, at: a.at, reason: a.reason } } : x;
-    });
     return {
       entityId: company.entityId,
       country,
@@ -171,33 +158,8 @@ export class HubDensityService {
       hubs: densityHubs,
       links: (plan?.links ?? []).map((l) => ({ a: l.a, b: l.b })),
       roadMapInForce: Boolean(roads?.confirmed),
-      suggestions: withAside.filter((x) => !x.aside).sort((a, b) => b.score - a.score),
-      setAside: withAside.filter((x) => x.aside).sort((a, b) => b.score - a.score),
+      suggestions: all.sort((a, b) => b.score - a.score),
     };
-  }
-
-  /** A suggestion set aside, with why: it comes back after 90 days, or sooner once its numbers double. Logged. */
-  setAside(entityId: string, id: string, reason: string, by: string, now: number = Date.now()): HubDensityView {
-    const company = this.company(entityId);
-    const v = this.view(entityId, now);
-    const found = [...v.suggestions, ...v.setAside].find((x) => x.id === id);
-    if (!found) throw new GlosError('NOT_FOUND', 'That suggestion is no longer made: read the map again');
-    const s = this.stored(company);
-    s.aside[id] = { by, at: new Date(now).toISOString(), reason: reason.trim(), score: found.score };
-    this.save(s);
-    this.entities.noteChange(company.entityId, { by, what: 'hubDensity', from: this.title(found), to: `set aside for ${ASIDE_DAYS} days: ${reason.trim()}` });
-    return this.view(entityId, now);
-  }
-
-  /** A suggestion set aside, brought back. */
-  bringBack(entityId: string, id: string, by: string, now: number = Date.now()): HubDensityView {
-    const company = this.company(entityId);
-    const s = this.stored(company);
-    if (!s.aside[id]) throw new GlosError('NOT_FOUND', 'That suggestion is not set aside');
-    delete s.aside[id];
-    this.save(s);
-    this.entities.noteChange(company.entityId, { by, what: 'hubDensity', from: id, to: 'brought back' });
-    return this.view(entityId, now);
   }
 
   /** The country's reach by group (D6). Logged. */
@@ -319,10 +281,6 @@ export class HubDensityService {
     return town ? { name: town.name, lat: town.location.lat, lng: town.location.lng } : { lat: Math.round(point.lat * 1e4) / 1e4, lng: Math.round(point.lng * 1e4) / 1e4 };
   }
 
-  private title(x: HubSuggestion): string {
-    const where = x.place.name ?? `${x.place.lat}, ${x.place.lng}`;
-    return x.kind === 'hub_needed' ? `a hub needed near ${where}` : x.kind === 'extra_hub' ? `an extra hub beside ${x.hubNames[0]}` : x.kind === 'too_close' ? `${x.hubNames.join(' and ')} too close` : `a gap on the road between ${x.hubNames.join(' and ')}`;
-  }
 
   private km(a: GeoPoint, b: GeoPoint): number {
     try {
@@ -348,7 +306,7 @@ export class HubDensityService {
 
   private stored(company: Entity): StoredDensity {
     const s = this.store.get(company.entityId);
-    return s ? { ...s, aside: { ...s.aside } } : { entityId: company.entityId, aside: {} };
+    return s ? { ...s } : { entityId: company.entityId };
   }
 
   private save(s: StoredDensity): void {

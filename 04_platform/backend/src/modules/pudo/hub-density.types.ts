@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, Max, Min } from 'class-validator';
 import type { GeoPoint } from './pudo.types';
 
 /*
@@ -88,17 +88,11 @@ export class SuggestionNumbers {
   @ApiPropertyOptional() min?: number;
 }
 
-export class SuggestionAside {
-  by!: string;
-  at!: string;
-  reason!: string;
-}
-
 export class HubSuggestion {
-  /** Stable while what it is about is: set aside by it. */
+  /** Stable while what it is about is: its row on the hub list is kept by it. */
   id!: string;
   @ApiProperty({ enum: SUGGESTION_KINDS }) kind!: SuggestionKind;
-  /** How strongly it is suggested: comes back from being set aside once this doubles. */
+  /** How strongly it is suggested: a row rejected on the hub list is open again once this doubles. */
   score!: number;
   @ApiProperty({ type: SuggestionPlace }) place!: SuggestionPlace;
   @ApiProperty({ type: [String] }) zones!: string[];
@@ -108,7 +102,6 @@ export class HubSuggestion {
   @ApiProperty({ type: SuggestionNumbers }) numbers!: SuggestionNumbers;
   /** A gap on the road: the known towns on the way between the two hubs. */
   @ApiProperty({ type: [String] }) towns!: string[];
-  @ApiPropertyOptional({ type: SuggestionAside }) aside?: SuggestionAside;
 }
 
 export class HubDensityView {
@@ -125,12 +118,6 @@ export class HubDensityView {
   roadMapInForce!: boolean;
   /** What it suggests, most strongly first. */
   @ApiProperty({ type: [HubSuggestion] }) suggestions!: HubSuggestion[];
-  /** Set aside by staff, until 90 days pass or their numbers double. */
-  @ApiProperty({ type: [HubSuggestion] }) setAside!: HubSuggestion[];
-}
-
-export class DensityAsideDto {
-  @IsString() @MinLength(3) @MaxLength(300) reason!: string;
 }
 
 export class DensityReachDto {

@@ -487,8 +487,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'runPay', 'roadMap', 'hubDensity', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'runPay' | 'roadMap' | 'hubDensity' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'runPay', 'roadMap', 'hubDensity', 'hubList', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'runPay' | 'roadMap' | 'hubDensity' | 'hubList' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;

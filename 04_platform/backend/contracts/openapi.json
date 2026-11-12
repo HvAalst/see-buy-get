@@ -14315,11 +14315,9 @@
         }
       }
     },
-    "/v1/sbg/entities/{entityId}/hub-density/aside/{suggestionId}": {
-      "post": {
-        "operationId": "Sbg.setAsideSuggestion",
-        "summary": "",
-        "description": "A suggestion set aside, with why.",
+    "/v1/sbg/entities/{entityId}/hub-list": {
+      "get": {
+        "operationId": "Sbg.entityHubList",
         "parameters": [
           {
             "name": "entityId",
@@ -14328,9 +14326,28 @@
             "schema": {
               "type": "string"
             }
-          },
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubListView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.addHubRow",
+        "summary": "",
+        "description": "A hub place staff add themselves.",
+        "parameters": [
           {
-            "name": "suggestionId",
+            "name": "entityId",
             "required": true,
             "in": "path",
             "schema": {
@@ -14343,7 +14360,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DensityAsideDto"
+                "$ref": "#/components/schemas/HubRowNewDto"
               }
             }
           }
@@ -14354,7 +14371,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HubDensityView"
+                  "$ref": "#/components/schemas/HubListView"
                 }
               }
             }
@@ -14362,11 +14379,11 @@
         }
       }
     },
-    "/v1/sbg/entities/{entityId}/hub-density/back/{suggestionId}": {
+    "/v1/sbg/entities/{entityId}/hub-list/{rowId}": {
       "post": {
-        "operationId": "Sbg.bringBackSuggestion",
+        "operationId": "Sbg.updateHubRow",
         "summary": "",
-        "description": "A suggestion set aside, brought back.",
+        "description": "A row's fields filled in, its status moved (never to joined; rejected with why).",
         "parameters": [
           {
             "name": "entityId",
@@ -14377,7 +14394,54 @@
             }
           },
           {
-            "name": "suggestionId",
+            "name": "rowId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubRowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubListView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/hub-list/{rowId}/invite": {
+      "post": {
+        "operationId": "Sbg.inviteHubRow",
+        "summary": "",
+        "description": "The invitation to join from a row: its code made, for the link staff send.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rowId",
             "required": true,
             "in": "path",
             "schema": {
@@ -14391,7 +14455,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HubDensityView"
+                  "$ref": "#/components/schemas/HubListView"
                 }
               }
             }
@@ -58770,6 +58834,7 @@
               "runPay",
               "roadMap",
               "hubDensity",
+              "hubList",
               "zones",
               "prices",
               "catchments",
@@ -60691,25 +60756,6 @@
           }
         }
       },
-      "SuggestionAside": {
-        "type": "object",
-        "properties": {
-          "by": {
-            "type": "string"
-          },
-          "at": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "by",
-          "at",
-          "reason"
-        ]
-      },
       "HubSuggestion": {
         "type": "object",
         "properties": {
@@ -60759,16 +60805,13 @@
               "type": "string"
             }
           },
-          "aside": {
-            "$ref": "#/components/schemas/SuggestionAside"
-          },
           "id": {
             "type": "string",
-            "description": "Stable while what it is about is: set aside by it."
+            "description": "Stable while what it is about is: its row on the hub list is kept by it."
           },
           "score": {
             "type": "number",
-            "description": "How strongly it is suggested: comes back from being set aside once this doubles."
+            "description": "How strongly it is suggested: a row rejected on the hub list is open again once this doubles."
           }
         },
         "required": [
@@ -60823,13 +60866,6 @@
               "$ref": "#/components/schemas/HubSuggestion"
             }
           },
-          "setAside": {
-            "description": "Set aside by staff, until 90 days pass or their numbers double.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/HubSuggestion"
-            }
-          },
           "entityId": {
             "type": "string"
           },
@@ -60847,24 +60883,269 @@
           "hubs",
           "links",
           "suggestions",
-          "setAside",
           "entityId",
           "country",
           "roadMapInForce"
         ]
       },
-      "DensityAsideDto": {
+      "HubRow": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "description": "In the network already (a hub), or a place a hub is wanted.",
+            "enum": [
+              "hub",
+              "place"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "description": "A hub of the network; a suggestion of the map; a place staff added.",
+            "enum": [
+              "network",
+              "optimiser",
+              "staff"
+            ]
+          },
+          "suggestionKind": {
+            "type": "string",
+            "enum": [
+              "hub_needed",
+              "extra_hub",
+              "too_close",
+              "road_gap"
+            ]
+          },
+          "suggestionId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "The row's own code, in its invitation; made when the first invitation is."
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "negotiating",
+              "rejected",
+              "joined"
+            ]
+          },
           "reason": {
             "type": "string",
-            "minLength": 3,
-            "maxLength": 300
+            "description": "Rejected: why, by whom, when — it comes back open after 90 days, or sooner once its numbers double."
+          },
+          "rejectedBy": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string"
+          },
+          "mdpId": {
+            "type": "string",
+            "description": "Joined: the hub, and when it signed up."
+          },
+          "hubName": {
+            "type": "string"
+          },
+          "joinedAt": {
+            "type": "string"
+          },
+          "numbers": {
+            "description": "A suggestion's reason and numbers, beside the row.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionNumbers"
+              }
+            ]
+          },
+          "zoneNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hubNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "towns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "The suggestion it stands for is no longer made (its place found a hub, or its numbers fell): kept, said so."
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "rowId": {
+            "type": "string"
           }
         },
         "required": [
-          "reason"
+          "kind",
+          "source",
+          "status",
+          "zoneNames",
+          "hubNames",
+          "towns",
+          "rowId"
         ]
+      },
+      "HubListCounts": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "number"
+          },
+          "negotiating": {
+            "type": "number"
+          },
+          "rejected": {
+            "type": "number"
+          },
+          "joined": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "open",
+          "negotiating",
+          "rejected",
+          "joined"
+        ]
+      },
+      "HubListView": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubRow"
+            }
+          },
+          "counts": {
+            "$ref": "#/components/schemas/HubListCounts"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows",
+          "counts",
+          "entityId",
+          "country"
+        ]
+      },
+      "HubRowNewDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "HubRowDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "negotiating",
+              "rejected"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it was rejected: required with that status.",
+            "minLength": 3,
+            "maxLength": 300
+          }
+        }
       },
       "DensityReachDto": {
         "type": "object",
@@ -64968,6 +65249,10 @@
           "sortPerDay": {
             "type": "number",
             "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
+          },
+          "inviteCode": {
+            "type": "string",
+            "description": "2026-11-12 — the code of the hub-list row whose invitation it signed up through (the owner's D2): that row is joined, linked\nto this hub — the system's, never staff's."
           },
           "passOnFee": {
             "type": "number",

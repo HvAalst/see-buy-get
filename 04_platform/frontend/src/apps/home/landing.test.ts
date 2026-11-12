@@ -33,6 +33,9 @@ describe('the front page', () => {
     expect(readDeepLink('?join=mdp&near=2.3284,37.9899&place=Marsabit')).toEqual({ join: 'mdp', near: { lat: 2.3284, lng: 37.9899 }, place: 'Marsabit' });
     expect(readDeepLink('?join=mdp&near=999,1&place=')).toEqual({ join: 'mdp' });
     expect(readDeepLink('?join=mdp&near=95,181')).toEqual({ join: 'mdp' });
+    // …and a hub-list row's code (the owner's D2), which a hub signing up with it makes that row joined; nothing else passes.
+    expect(readDeepLink('?join=mdp&row=k7qw3m')).toEqual({ join: 'mdp', invite: 'K7QW3M' });
+    expect(readDeepLink('?join=mdp&row=%3Cscript%3E')).toEqual({ join: 'mdp' });
     expect(readDeepLink('?join=mdp&near=javascript:1')).toEqual({ join: 'mdp' });
     expect(readDeepLink('?go=market')).toEqual({ go: 'market' });
     // 2026-11-08 — which price zone a place is in (zone pricing): a real address too.

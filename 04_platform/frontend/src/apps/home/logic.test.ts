@@ -344,6 +344,9 @@ describe('signupBody', () => {
 
     // A hub stands in one country even when it serves zones across a border.
     const hub = signupBody(role('mdp'), filled({ country: 'et' }), 'x') as { profile: { mdp: { country: string } } };
+    // 2026-11-12 — signed up through a hub-list row's invitation: its code goes with the hub's details.
+    expect((signupBody(role('mdp'), filled({ country: 'ke', inviteCode: 'K7QW3M' }), 'x') as { profile: { mdp: { inviteCode?: string } } }).profile.mdp.inviteCode).toBe('K7QW3M');
+    expect((signupBody(role('mdp'), filled({ country: 'ke' }), 'x') as { profile: { mdp: { inviteCode?: string } } }).profile.mdp.inviteCode).toBeUndefined();
     expect(hub.profile.mdp.country).toBe('ET');
 
     // An INDEPENDENT courier is contracted by a sister and says which; a fleet-attached one carries no

@@ -184,9 +184,13 @@ export function createOperatorApi(sbg: SbgClient) {
     confirmRoadMap: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/road-map/confirm', { params: { path: { entityId } } })),
     /** 2026-11-12 — where hubs are needed (the plan "Hubs on the Road", step 3). */
     hubDensity: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/hub-density', { params: { path: { entityId } } })),
-    setAsideSuggestion: (entityId: string, suggestionId: string, reason: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/aside/{suggestionId}', { params: { path: { entityId, suggestionId } }, body: { reason } })),
-    bringBackSuggestion: (entityId: string, suggestionId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/back/{suggestionId}', { params: { path: { entityId, suggestionId } } })),
+    /** 2026-11-12 — the country's hub list (the owner's D2 and D7). */
+    hubList: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/hub-list', { params: { path: { entityId } } })),
+    addHubRow: (entityId: string, body: { name: string; address?: string; lat?: number; lng?: number; phone?: string; email?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-list', { params: { path: { entityId } }, body })),
+    updateHubRow: (entityId: string, rowId: string, body: { name?: string; address?: string; lat?: number; lng?: number; phone?: string; email?: string; status?: 'open' | 'negotiating' | 'rejected'; reason?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-list/{rowId}', { params: { path: { entityId, rowId } }, body })),
+    inviteHubRow: (entityId: string, rowId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-list/{rowId}/invite', { params: { path: { entityId, rowId } } })),
     setDensityReach: (entityId: string, body: { urban: number; rural: number; remote: number }) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-density/reach', { params: { path: { entityId } }, body })),
     proposeCatchments: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/catchments/propose', { params: { path: { entityId } } })),
     /** 2026-11-09 — a net of hubs: a hub added to a zone (serve) or taken away from it. */

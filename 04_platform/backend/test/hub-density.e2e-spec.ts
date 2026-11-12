@@ -2,10 +2,12 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AGREED } from './agreed';
 
 /**
  * WHERE HUBS ARE NEEDED, over the wire (2026-11-12 — the plan "Hubs on the Road", step 3). Staff read the map's coverage,
- * hubs and suggestions; two stops kept too close are suggested; a suggestion is set aside with why and brought back; the
+ * hubs and suggestions; two stops kept too close are suggested; the hub list (the owner's D2 and D7): rows filled in, rejected
+ * with why, an invitation made, a hub signing up through it making its row joined; the
  * country's reach is set; a hub reads none of it. Two hubs in Wajir, far from any other test's.
  */
 describe('where hubs are needed, over the wire', () => {
@@ -28,7 +30,7 @@ describe('where hubs are needed, over the wire', () => {
     await app?.close();
   });
 
-  it('two stops kept too close are suggested; set aside with why, brought back; the reach is the country’s own', async () => {
+  it('two stops kept too close are suggested; the hub list: rows filled in, rejected with why, invited, joined by a sign-up; the reach is the country’s own', async () => {
     const hub = async (name: string, lat: number, lng: number) => {
       const made = (await http().post('/v1/sbg/mdps').set(operator).send({ name, zones: ['WajirTown'], country: 'KE', location: { lat, lng } }).expect(201)).body;
       return { ...made, token: bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: made.did }).expect(201)).body.access_token) };
@@ -51,16 +53,32 @@ describe('where hubs are needed, over the wire', () => {
 
     // A hub reads none of it, and changes nothing.
     await http().get('/v1/sbg/entities/sbg-ke/hub-density').set(a.token).expect(403);
-    await http().post(`/v1/sbg/entities/sbg-ke/hub-density/aside/${encodeURIComponent(close.id)}`).set(a.token).send({ reason: 'Two owners, one town' }).expect(403);
+    await http().get('/v1/sbg/entities/sbg-ke/hub-list').set(a.token).expect(403);
 
-    // Set aside with why (too short a why is refused), then brought back.
-    await http().post(`/v1/sbg/entities/sbg-ke/hub-density/aside/${encodeURIComponent(close.id)}`).set(operator).send({ reason: 'no' }).expect(400);
-    const aside = (await http().post(`/v1/sbg/entities/sbg-ke/hub-density/aside/${encodeURIComponent(close.id)}`).set(operator).send({ reason: 'Two owners, one town' }).expect(201)).body;
-    expect(aside.suggestions.map((s: { id: string }) => s.id)).not.toContain(close.id);
-    expect(aside.setAside.find((s: { id: string }) => s.id === close.id).aside).toMatchObject({ reason: 'Two owners, one town' });
-    const back = (await http().post(`/v1/sbg/entities/sbg-ke/hub-density/back/${encodeURIComponent(close.id)}`).set(operator).expect(201)).body;
-    expect(back.suggestions.map((s: { id: string }) => s.id)).toContain(close.id);
-    await http().post('/v1/sbg/entities/sbg-ke/hub-density/back/close:none:none').set(operator).expect(404);
+    // The hub list: both Wajir hubs joined from the start; a place staff add, filled in, rejected only with why.
+    const list0 = (await http().get('/v1/sbg/entities/sbg-ke/hub-list').set(operator).expect(200)).body;
+    expect(list0.rows.filter((r: { status: string; mdpId?: string }) => r.status === 'joined' && [a.mdpId, b.mdpId].includes(r.mdpId!))).toHaveLength(2);
+    await http().post(`/v1/sbg/entities/sbg-ke/hub-list/${encodeURIComponent('hub:' + a.mdpId)}`).set(operator).send({ phone: '+254700000001' }).expect(403);
+    const added = (await http().post('/v1/sbg/entities/sbg-ke/hub-list').set(operator).send({ name: 'Habaswein junction', lat: 1.01, lng: 39.49 }).expect(201)).body;
+    const row = added.rows.find((r: { name?: string }) => r.name === 'Habaswein junction');
+    expect(row).toMatchObject({ source: 'staff', status: 'open' });
+    const rowPath = `/v1/sbg/entities/sbg-ke/hub-list/${encodeURIComponent(row.rowId)}`;
+    await http().post(rowPath).set(operator).send({ status: 'joined' }).expect(400);
+    await http().post(rowPath).set(operator).send({ email: 'not-an-email' }).expect(400);
+    await http().post(rowPath).set(operator).send({ status: 'rejected' }).expect(400);
+    expect((await http().post(rowPath).set(operator).send({ phone: '+254722000333', status: 'negotiating' }).expect(201)).body.rows.find((r: { rowId: string }) => r.rowId === row.rowId)).toMatchObject({ phone: '+254722000333', status: 'negotiating' });
+    // The invitation: the row's code, which a hub signs up with — the row is joined by itself, linked to the new hub.
+    const code = (await http().post(`${rowPath}/invite`).set(operator).expect(201)).body.rows.find((r: { rowId: string }) => r.rowId === row.rowId).code;
+    expect(code).toMatch(/^[A-Z2-9]{6}$/);
+    const u = String(Date.now()).slice(-6);
+    const phone = `+2547${u}7`;
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const signed = (await http().post('/v1/sbg/auth/signup').send({ ...AGREED, role: 'mdp', email: `habaswein.${u}@depot.example`, password: 'mabati-na-misumari-4', phone, profile: { mdp: { name: `Habaswein Sort ${u}`, zones: ['WajirTown'], country: 'KE', location: { lat: 1.01, lng: 39.49 }, inviteCode: code.toLowerCase() } } }).expect(201)).body;
+    const joined = (await http().get('/v1/sbg/entities/sbg-ke/hub-list').set(operator).expect(200)).body.rows.find((r: { rowId: string }) => r.rowId === row.rowId);
+    expect(joined).toMatchObject({ status: 'joined', hubName: `Habaswein Sort ${u}` });
+    expect(joined.joinedAt).toBeTruthy();
+    expect(signed).toBeTruthy();
 
     // The reach: refused out of bounds, kept within them.
     await http().post('/v1/sbg/entities/sbg-ke/hub-density/reach').set(operator).send({ urban: 0, rural: 60, remote: 150 }).expect(400);
