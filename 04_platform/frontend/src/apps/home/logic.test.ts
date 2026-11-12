@@ -136,6 +136,10 @@ describe('stepBlocker', () => {
     expect(stepBlocker(shop, 'where', { ...filled(), country: '' }, t)).toContain('country');
     expect(stepBlocker(shop, 'where', { ...filled(), location: null }, t)).toContain('map');
     expect(stepBlocker(shop, 'where', filled(), t)).toBeNull();
+    // 2026-11-12 — the owner: a courier is asked for a zone, a zip or a postal code — never "area"; a shop as before.
+    expect(stepBlocker(shop, 'where', { ...filled(), zone: '' }, t)).toBe(t('home.block.zone'));
+    expect(stepBlocker(role('driver'), 'where', { ...filled(), zone: '' }, t)).toBe(t('home.block.zoneDriver'));
+    expect(t('home.block.zoneDriver')).toMatch(/zone, zip or postal code/);
     // Eight, for a shop as for everybody: seven is one short.
     expect(stepBlocker(shop, 'login', { ...filled(), password: '1234567' }, t)).toContain('8 characters');
     expect(stepBlocker(shop, 'login', filled(), t)).toBeNull();

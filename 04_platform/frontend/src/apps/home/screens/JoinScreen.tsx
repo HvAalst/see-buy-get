@@ -1031,7 +1031,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         <Note tone="info" icon="pin" title={t('home.join.where.noPin')} />
       )}
 
-      <Card label={t('home.join.where.areaTitle')}>
+      <Card label={t(role.kind === 'driver' ? 'home.join.where.zoneTitleDriver' : 'home.join.where.areaTitle')}>
         {/* The country was chosen on the first step: said here, where the map opened on it. */}
         {f.country ? <p class="card__note">{t('home.join.where.inCountry', { country: state.countries.find((c) => c.country === f.country)?.name ?? f.country })}</p> : null}
         {/* A fleet's depot: the pin above, and the address its letters go to. No delivery area — that is a shop's. */}
@@ -1049,7 +1049,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         {role.kind !== 'fleet' ? (
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="join-zone">
-            {t('home.join.where.areaLabel')}
+            {t(role.kind === 'driver' ? 'home.join.where.zoneLabelDriver' : 'home.join.where.areaLabel')}
           </label>
           <input
             id="join-zone"
@@ -1057,7 +1057,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
             list="join-zones"
             value={f.zone}
             onInput={(e) => actions.setForm({ zone: e.currentTarget.value })}
-            placeholder="Z-A"
+            placeholder={role.kind === 'driver' ? t('home.join.where.zonePhDriver') : 'Z-A'}
             autocapitalize="characters"
           />
         </div>
@@ -1069,7 +1069,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
             ))}
           </datalist>
         ) : null}
-        {role.kind !== 'fleet' ? <p class="card__note">{t(addressCountry(f.addressFormat) && (role.id === 'pudo' || role.id === 'mdp') ? 'home.join.where.areaOptional' : 'home.join.where.areaHint')}</p> : null}
+        {role.kind !== 'fleet' ? <p class="card__note">{t(role.kind === 'driver' ? 'home.join.where.zoneHintDriver' : addressCountry(f.addressFormat) && (role.id === 'pudo' || role.id === 'mdp') ? 'home.join.where.areaOptional' : 'home.join.where.areaHint')}</p> : null}
         {/* 2026-11-03 — the owner: "A country like the Netherlands should be checked at first step … It would trigger the address
             field besides the map": the address in the country's own parts, asked where the country writes them with a postcode. */}
         {(role.id === 'pudo' || role.id === 'mdp') && f.country ? (

@@ -539,7 +539,7 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // 2026-11-03 — the owner: "An address would be better in that case": where the country writes its addresses with a
       // postcode (the Netherlands), the address in its parts, and the network's area is not asked.
       if (addressCountry(f.addressFormat) && (role.id === 'pudo' || role.id === 'mdp')) return missingPart(f.address, f.addressFormat) ? t('home.block.address') : null;
-      if (!f.zone.trim()) return t('home.block.zone');
+      if (!f.zone.trim()) return t(role.kind === 'driver' ? 'home.block.zoneDriver' : 'home.block.zone');
       return null;
     case 'login':
       if (!f.email.includes('@')) return t('home.block.email');
