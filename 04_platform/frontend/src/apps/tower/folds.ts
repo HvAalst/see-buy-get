@@ -1,5 +1,5 @@
 import type { Translate } from '../../shared/i18n';
-import { LEGAL_FORM_LABEL, expiryTone, readinessCounts, documentBlocker, type CompanyRecord, type CompanyRecordView, type ExpiringItem, type ListSection } from './company';
+import { openWarnings, LEGAL_FORM_LABEL, expiryTone, readinessCounts, documentBlocker, type CompanyRecord, type CompanyRecordView, type ExpiringItem, type ListSection } from './company';
 import { CAPABILITY_LABEL, countryNameOf, type CatalogueCountry, type PresenceProposalRow, type PresenceRow } from './presence';
 import { amountsFormOf, amountsInForce, counterParcelMath, type EntityPricing, type EntityRow } from './money';
 import type { MarketDay, PriceVsStack, TimeToClaim } from './market';
@@ -63,10 +63,13 @@ export function partsStillToDo(view: Pick<CompanyRecordView, 'keeper' | 'readine
 
 /** The checklist itself: how much of it is done — and it opens while anything on it is still to do. */
 export function readinessFold(view: Pick<CompanyRecordView, 'keeper' | 'readiness'>, t: Translate): Fold {
-  if (view.keeper === 'company') return { hint: t('tower.company.fold.keepsOwn'), open: false };
-  if (view.readiness?.ready) return { hint: t('tower.company.fold.ready'), open: false };
+  // 2026-11-12 — warnings still to see to: said beside the state, and open the fold, whether the company is on or not.
+  const warned = openWarnings(view.readiness).length;
+  const plus = (hint: string): Fold => (warned ? { hint: `${hint} · ${t('tower.company.fold.warnings', { n: warned })}`, open: true } : { hint, open: false });
+  if (view.keeper === 'company') return plus(t('tower.company.fold.keepsOwn'));
+  if (view.readiness?.ready) return plus(t('tower.company.fold.ready'));
   const { met, total } = readinessCounts(view.readiness);
-  return { hint: t('tower.company.fold.readyCount', { met, total }), open: true };
+  return { hint: `${t('tower.company.fold.readyCount', { met, total })}${warned ? ` · ${t('tower.company.fold.warnings', { n: warned })}` : ''}`, open: true };
 }
 
 /** Licences and policies running out — the company's own, or every company's. Opens when one has lapsed or has two weeks left. */

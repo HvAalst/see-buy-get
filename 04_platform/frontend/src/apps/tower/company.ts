@@ -146,7 +146,8 @@ export interface CompanyRecordView {
   declarations?: CompanyDeclaration[];
   /** What has been said against its papers, and what was decided. For the company: what was said, never by whom. */
   reports?: PaperCase[];
-  readiness: { entityId: string; ready: boolean; items: ReadinessItem[] } | null;
+  /** 2026-11-12 — warnings: worth doing, never counted in `ready`, said whether the company is on or not. */
+  readiness: { entityId: string; ready: boolean; items: ReadinessItem[]; warnings?: ReadinessItem[] } | null;
   documents: CompanyDocument[];
   obligations: LocalObligation[];
   lapses: CapabilityLapse[];
@@ -428,6 +429,11 @@ export function itemLine(section: PaperBoundSection, item: Record<string, unknow
 export function readinessCounts(readiness: CompanyRecordView['readiness']): { met: number; total: number } {
   const items = readiness?.items ?? [];
   return { met: items.filter((i) => i.met).length, total: items.length };
+}
+
+/** 2026-11-12 — the warnings still to see to (the owner: "a warning … rather than a hard block"): never in the count. */
+export function openWarnings(readiness: CompanyRecordView['readiness']): ReadinessItem[] {
+  return (readiness?.warnings ?? []).filter((w) => !w.met);
 }
 
 /** CA4 — may this person verify this paper? Never the uploader: two people, as for switching a country on. */

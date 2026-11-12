@@ -27,6 +27,12 @@ export class CompanyReadiness {
   @ApiProperty() entityId: string;
   @ApiProperty() ready: boolean;
   @ApiProperty({ type: [ReadinessItem] }) items: ReadinessItem[];
+  /**
+   * 2026-11-12 — WORTH DOING, NEVER A BLOCK (the owner: "a warning on the company's readiness list rather than a hard block"):
+   * what makes the company work as it should once it is on — said before it is switched on and after; never counted in
+   * `ready`, never refused at switch-on.
+   */
+  @ApiProperty({ type: [ReadinessItem] }) warnings: ReadinessItem[];
 }
 
 @Injectable()
@@ -37,6 +43,8 @@ export class CompanyReadinessService {
    * of the turn on process"). They say so here rather than being imported, so this stays the foundation's.
    */
   private readonly others: Array<(entity: Entity) => ReadinessItem[]> = [];
+  /** 2026-11-12 — warnings other parts of the system say: shown, never counted in `ready`. */
+  private readonly warns: Array<(entity: Entity) => ReadinessItem[]> = [];
 
   constructor(
     private readonly entities: EntityService,
@@ -45,6 +53,11 @@ export class CompanyReadinessService {
 
   also(check: (entity: Entity) => ReadinessItem[]): void {
     this.others.push(check);
+  }
+
+  /** 2026-11-12 — a warning, said here by whatever part holds it: shown with the list, never stopping a switch-on. */
+  alsoWarn(check: (entity: Entity) => ReadinessItem[]): void {
+    this.warns.push(check);
   }
 
   readinessOf(entityId: string, now = Date.now()): CompanyReadiness {
@@ -97,6 +110,20 @@ export class CompanyReadinessService {
 
     for (const check of this.others) items.push(...check(entity));
 
-    return { entityId, ready: items.every((i) => i.met), items };
+    // 2026-11-12 — WARNINGS (the owner: weakness 1). A hub's own sort and pass-on fees are capped at a multiple of the
+    // country's list figures (D3): figures left at the network's starting numbers — not in the country's money — send every
+    // real hub fee to staff for approval.
+    const warnings: ReadinessItem[] = [];
+    if (isSister) {
+      const own = (key: 'mdpSortFee' | 'mdpPassOnFee') => typeof entity.amounts?.[key] === 'number';
+      warnings.push({
+        key: 'warn:hub_list_figures',
+        met: own('mdpSortFee') && own('mdpPassOnFee'),
+        label: `A hub's list figures — its fee for each parcel sorted and for each bag passed on — set in ${entity.currency ?? 'the company’s money'} on Rates & tax: a hub's own fees are capped at ${this.entities.hubFeeCeilingFor(entityId)} times them, so the network's starting figures send every real fee to staff for approval`,
+      });
+    }
+    for (const check of this.warns) warnings.push(...check(entity));
+
+    return { entityId, ready: items.every((i) => i.met), items, warnings };
   }
 }

@@ -190,6 +190,10 @@ describe('a company of ours switched on where people already work', () => {
     expect(line?.heldFor).toEqual({ company: 'SeeBuyGet Zambia Limited', country: 'ZM' });
     expect(await must(http().post(`/v1/sbg/documents/versions/${termsId}/publish`).set(bearer(brian)).send({}), 400)).toMatchObject({ code: 'INVALID_STATE', params: { reason: 'held_for_switch_on' } });
     expect((await record()).readiness.ready).toBe(true);
+    // 2026-11-12 — ready, with its warnings beside the list (the owner: "a warning … rather than a hard block"): no card of the
+    // kind Zambia prices by, and a hub's list figures still the network's — neither stops it being switched on (step 5).
+    const warned = ((await record()).readiness as unknown as { warnings: Array<{ key: string; met: boolean }> }).warnings;
+    expect(warned.filter((w) => !w.met).map((w) => w.key).sort()).toEqual(['warn:hub_list_figures', 'warn:price_card']);
     // Nobody heard a word of it yet.
     expect(await bell(shop)).toEqual([]);
   });

@@ -32,6 +32,7 @@ import {
   mayTakeOff,
   needsRelatesTo,
   readinessCounts,
+  openWarnings,
   recordHands,
   recordLede,
   relatesToChoices,
@@ -292,6 +293,19 @@ function Readiness({ view }: { view: CompanyRecordView }) {
           </ul>
         </div>
       )}
+      {/* 2026-11-12 — warnings (the owner: "a warning … rather than a hard block"): on or not, never stopping a switch-on. */}
+      {openWarnings(readiness).length ? (
+        <div style="margin:12px 0">
+          <p class="chint">{t('tower.company.warningsTitle')}</p>
+          <ul class="twr-checklist">
+            {openWarnings(readiness).map((w) => (
+              <li key={w.key} class="is-missing">
+                <Icon name="warning" size={14} /> {w.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </ConsoleFold>
   );
 }

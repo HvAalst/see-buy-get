@@ -103,6 +103,28 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     expect(cards.costs('sbg-ke', live).map((c) => c.band)).toEqual(['all', 'all', 'all', 'all']);
   });
 
+  it('warns, never blocks, while no card of the kind the country prices by is approved (the owner’s weakness 2, 2026-11-12)', () => {
+    const checks: Array<(e: never) => Array<{ key: string; met: boolean; label: string }>> = [];
+    const warned = new PriceCardService(entities, zones, undefined, { alsoWarn: (c: never) => checks.push(c) } as never);
+    const warning = (entityId: string) => checks.flatMap((c) => c(entities.get(entityId) as never)).find((w) => w.key === 'warn:price_card');
+    const now = Date.now();
+    entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+    expect(warning('sbg-ke')).toMatchObject({ met: false, label: expect.stringMatching(/^A fixed card approved on the Prices screen — the country prices by a fixed card: until one is, its parcels are priced by distance/) });
+    warned.setSettings('sbg-ke', { noticeDays: 0 }, NJERI);
+    warned.startDraft('sbg-ke', undefined, NJERI, now, 'fixed');
+    warned.saveDraft('sbg-ke', { ...(warned.overview('sbg-ke').pending[0] as unknown as PriceCardTerms), table: { all: [100, 150, 250, 400] } }, NJERI, now);
+    // Ready is not approved: still a warning.
+    warned.ready('sbg-ke', NJERI, now);
+    expect(warning('sbg-ke')?.met).toBe(false);
+    warned.approve('sbg-ke', warned.overview('sbg-ke').pending[0].version, undefined, OTIENO, now);
+    expect(warning('sbg-ke')?.met).toBe(true);
+    // By factors, the fixed card does not count: a zones card is what it needs.
+    entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
+    expect(warning('sbg-ke')).toMatchObject({ met: false, label: expect.stringMatching(/^A zones card approved/) });
+    // A company that runs no country: nothing to say.
+    expect(checks.flatMap((c) => c(entities.get('sbg') as never))).toEqual([]);
+  });
+
   it('a zones card starts from the newest zones card, never from a fixed one; a fixed card from the newest fixed one', () => {
     publishRow();
     const now = Date.now();

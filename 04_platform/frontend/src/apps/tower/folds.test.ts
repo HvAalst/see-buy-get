@@ -134,6 +134,16 @@ describe('a company record — what each section says while shut', () => {
     expect(readinessFold({ keeper: 'company', readiness: { entityId: 'e1', ready: false, items } }, t)).toEqual({ hint: 'The company keeps its own record', open: false });
   });
 
+  it('readiness: a warning still to see to opens the fold and is counted beside its state — on or not, never in the count (2026-11-12)', () => {
+    const items = [{ key: 'legal_name', met: true, label: 'x' }];
+    const warnings = [{ key: 'warn:price_card', met: false, label: 'a card' }, { key: 'warn:hub_list_figures', met: true, label: 'figures' }];
+    expect(readinessFold({ keeper: 'company', readiness: { entityId: 'e1', ready: true, items, warnings } }, t)).toEqual({ hint: 'The company keeps its own record · 1 warning', open: true });
+    expect(readinessFold({ keeper: 'staff', readiness: { entityId: 'e1', ready: true, items, warnings } }, t)).toEqual({ hint: 'Everything done — ready to switch on · 1 warning', open: true });
+    expect(readinessFold({ keeper: 'staff', readiness: { entityId: 'e1', ready: false, items: [...items, { key: 'tax', met: false, label: 'y' }], warnings } }, t)).toEqual({ hint: '1 of 2 done · 1 warning', open: true });
+    // Every warning seen to: as before.
+    expect(readinessFold({ keeper: 'company', readiness: { entityId: 'e1', ready: true, items, warnings: [warnings[1]] } }, t)).toEqual({ hint: 'The company keeps its own record', open: false });
+  });
+
   it('legal: the name, the form and the number — or that nothing is on record', () => {
     expect(legalHint(record(), t)).toBe('Nothing on record yet');
     expect(legalHint(record({ legalName: 'Kilima Logistics Ltd', legalForm: 'private_limited', registrationNumber: 'PVT-9' }), t)).toBe('Kilima Logistics Ltd · Private limited company · PVT-9');

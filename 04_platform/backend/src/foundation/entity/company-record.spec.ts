@@ -141,6 +141,26 @@ describe('a company, recorded properly', () => {
       expect(readiness.readinessOf(zm.entityId).ready).toBe(true);
     });
 
+    it('warns, and never blocks: a hub’s list figures still the network’s starting numbers (the owner’s weakness 1, 2026-11-12)', () => {
+      const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
+      makeCompanyReady(entities, documents, zm.entityId);
+      const r = readiness.readinessOf(zm.entityId);
+      // Ready to be switched on — the warning is shown beside the list, never counted in it.
+      expect(r.ready).toBe(true);
+      expect(r.items.some((i) => i.key.startsWith('warn:'))).toBe(false);
+      expect(r.warnings.find((w) => w.key === 'warn:hub_list_figures')).toMatchObject({ met: false, label: expect.stringMatching(/set in ZMW on Rates & tax: a hub's own fees are capped at 1.5 times them/) });
+      // Switched on all the same; its amounts are set once it is on. One of the two set: still a warning; both: met.
+      entities.activate(zm.entityId, 'Brian');
+      expect(readiness.readinessOf(zm.entityId).warnings.find((w) => w.key === 'warn:hub_list_figures')?.met).toBe(false);
+      entities.setAmounts(zm.entityId, { mdpSortFee: 12 }, 'Amina');
+      expect(readiness.readinessOf(zm.entityId).warnings.find((w) => w.key === 'warn:hub_list_figures')?.met).toBe(false);
+      entities.setAmounts(zm.entityId, { mdpPassOnFee: 10 }, 'Amina');
+      expect(readiness.readinessOf(zm.entityId).warnings.find((w) => w.key === 'warn:hub_list_figures')?.met).toBe(true);
+      // A partner holds no hub's fees of ours: no such warning.
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Partner' }, 'Amina');
+      expect(readiness.readinessOf(partner.entityId).warnings).toEqual([]);
+    });
+
     it('does not accept a bank account in the wrong money for a company of ours', () => {
       const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
       makeCompanyReady(entities, documents, zm.entityId);

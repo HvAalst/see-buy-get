@@ -17,6 +17,16 @@ export type HubFeeAsk = {
   ceiling: { sort: number; passOn: number; multiple: number };
 };
 
+/**
+ * 2026-11-12 — the owner's weakness 1: a hub list figure still the network's starting number, not one in the company's money —
+ * every real hub fee above the ceiling it makes then waits for approval. The sort fee's row, where it is one of them.
+ */
+export function startingListFigure(amounts: Array<{ key: string; amount: number; own: boolean }> | undefined): { amount: number } | null {
+  const rows = (amounts ?? []).filter((a) => a.key === 'mdpSortFee' || a.key === 'mdpPassOnFee');
+  if (!rows.length || rows.every((a) => a.own)) return null;
+  return { amount: rows.find((a) => a.key === 'mdpSortFee')?.amount ?? rows[0].amount };
+}
+
 /** The asks for one country: the console's company's own, the oldest first. */
 export function asksFor(rows: HubFeeAsk[], country: string | undefined): HubFeeAsk[] {
   return rows.filter((r) => !country || r.country === country).sort((a, b) => a.asked.at.localeCompare(b.asked.at));
@@ -67,6 +77,14 @@ export function HubFeesFold({ pricing, state, actions }: { pricing: EntityPricin
     <ConsoleFold title={t('tower.hubFees.title')} hint={asks.length ? t('tower.hubFees.waitingCount', { n: asks.length }) : t('tower.hubFees.current', { multiple: stored })}>
       <div class="twr-knobs">
         <p class="chint">{t('tower.hubFees.about')}</p>
+        {(() => {
+          const start = startingListFigure(pricing.amounts);
+          return start ? (
+            <p class="cerr" role="status">
+              {t('tower.hubFees.listAtStart', { list: money(start.amount), ceiling: money(Math.round(start.amount * stored * 100) / 100) })}
+            </p>
+          ) : null;
+        })()}
         <div class="twr-knobs__row">
           <section class="twr-knob">
             <label class="twr-clear__t" for="hub-fee-ceiling">

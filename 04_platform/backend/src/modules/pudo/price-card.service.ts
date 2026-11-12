@@ -8,6 +8,7 @@ import type { ParcelSize } from './pudo.types';
 import { ZoneMapService } from './zone-map.service';
 import { haversineKm } from './geo';
 import { OsrmRoadMatrix } from './road-matrix';
+import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { FIXED_BAND, type PriceCardKind } from './price-card.types';
 import type {
   EndCharge,
@@ -79,7 +80,23 @@ export class PriceCardService {
     private readonly zones: ZoneMapService,
     // 2026-11-08 — the routing server, where one is set: a card made ready keeps the road km between its zones (step 4).
     @Optional() private readonly roads?: OsrmRoadMatrix,
-  ) {}
+    // 2026-11-12 — the owner's weakness 2: a country running with no card of the kind it prices by, said as a warning.
+    @Optional() readiness?: CompanyReadinessService,
+  ) {
+    readiness?.alsoWarn((entity) => {
+      if (entity.kind !== 'sister' || !entity.jurisdiction) return [];
+      const fixed = this.kindFor(entity.entityId) === 'fixed';
+      // In force, or approved to start on a date to come: either way staff have done it.
+      const met = Boolean(this.cardsFrom(entity.jurisdiction)?.cards.length);
+      return [
+        {
+          key: 'warn:price_card',
+          met,
+          label: `${fixed ? 'A fixed card' : 'A zones card'} approved on the Prices screen — the country prices by ${fixed ? 'a fixed card' : 'factors'}: until one is, its parcels are priced by distance on the direct route`,
+        },
+      ];
+    });
+  }
 
   /** Every card being measured, measured. */
   async settled(): Promise<void> {
