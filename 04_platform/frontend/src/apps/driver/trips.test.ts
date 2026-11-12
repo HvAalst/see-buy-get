@@ -8,16 +8,16 @@ import { nextWords, tripBodies, tripDaysWords } from './trips';
  */
 describe('a saved trip, said and sent', () => {
   it('says its days short, Sunday first', () => {
-    expect(tripDaysWords([1, 2, 3, 4, 5, 6], t)).toBe('Mon–Sat');
-    expect(tripDaysWords([5, 1, 3], t)).toBe('Mon, Wed, Fri');
-    expect(tripDaysWords([0, 1, 2, 3, 4, 5, 6], t)).toBe('Every day');
-    expect(tripDaysWords([0, 6], t)).toBe('Sun, Sat');
+    expect(tripDaysWords([1, 2, 3, 4, 5, 6], t, 'driver.trips')).toBe('Mon–Sat');
+    expect(tripDaysWords([5, 1, 3], t, 'driver.trips')).toBe('Mon, Wed, Fri');
+    expect(tripDaysWords([0, 1, 2, 3, 4, 5, 6], t, 'driver.trips')).toBe('Every day');
+    expect(tripDaysWords([0, 6], t, 'driver.trips')).toBe('Sun, Sat');
   });
   it('says when it next runs: today, tomorrow, or its weekday', () => {
-    expect(nextWords({ day: '2026-11-12', clock: '16:00' }, '2026-11-12', t)).toBe('today at 16:00');
-    expect(nextWords({ day: '2026-11-13', clock: '05:30' }, '2026-11-12', t)).toBe('tomorrow at 05:30');
-    expect(nextWords({ day: '2026-11-16', clock: '05:30' }, '2026-11-12', t)).toBe('Mon 16 at 05:30');
-    expect(nextWords(undefined, '2026-11-12', t)).toBeNull();
+    expect(nextWords({ day: '2026-11-12', clock: '16:00' }, '2026-11-12', t, 'driver.trips')).toBe('today at 16:00');
+    expect(nextWords({ day: '2026-11-13', clock: '05:30' }, '2026-11-12', t, 'driver.trips')).toBe('tomorrow at 05:30');
+    expect(nextWords({ day: '2026-11-16', clock: '05:30' }, '2026-11-12', t, 'driver.trips')).toBe('Mon 16 at 05:30');
+    expect(nextWords(undefined, '2026-11-12', t, 'driver.trips')).toBeNull();
   });
   it('sends A → B, and B → A on the same days where a time back is given; nothing until complete', () => {
     const a = { label: 'Nairobi', lat: -1.286, lng: 36.817 };

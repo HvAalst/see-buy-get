@@ -9,7 +9,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 export type SavedTrip = components['schemas']['SavedTripView'];
 
 /** The days a trip runs, said short: "Mon–Sat", "Mon, Wed, Fri", "Every day" — three or more in a row said as their ends. */
-export function tripDaysWords(days: readonly number[], t: Translate, words: 'driver.trips' | 'fleet.trips' = 'driver.trips'): string {
+export function tripDaysWords(days: readonly number[], t: Translate, words: 'driver.trips' | 'fleet.trips'): string {
   const set = [...new Set(days)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b);
   if (set.length === 7) return t(`${words}.everyDay` as MessageKey);
   const word = (d: number) => t(`${words}.day.${d}` as MessageKey);
@@ -23,7 +23,7 @@ export function tripDaysWords(days: readonly number[], t: Translate, words: 'dri
 }
 
 /** When the next run is, in words: today, tomorrow, or its weekday — `today` the phone's own date (YYYY-MM-DD). */
-export function nextWords(next: { day: string; clock: string } | undefined, today: string, t: Translate, words: 'driver.trips' | 'fleet.trips' = 'driver.trips'): string | null {
+export function nextWords(next: { day: string; clock: string } | undefined, today: string, t: Translate, words: 'driver.trips' | 'fleet.trips'): string | null {
   if (!next) return null;
   const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
   if (next.day === today) return t(`${words}.today` as MessageKey, { clock: next.clock });

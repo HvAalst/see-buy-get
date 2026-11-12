@@ -38,7 +38,7 @@ export function TripsCard({ state, actions, onShift }: { state: DriverState; act
 
 function TripRow({ trip, actions, onShift, today, busy }: { trip: SavedTrip; actions: DriverActions; onShift: boolean; today: string; busy: boolean }) {
   const t = useT();
-  const next = nextWords(trip.next, today, t);
+  const next = nextWords(trip.next, today, t, 'driver.trips');
   return (
     <div class="trip-row" style="border-top:1px solid var(--bd);padding-top:12px;margin-top:12px">
       <p class="row__t">
@@ -46,7 +46,7 @@ function TripRow({ trip, actions, onShift, today, busy }: { trip: SavedTrip; act
         {trip.from.label} → {trip.to.label}
       </p>
       <p class="card__note">
-        {t('driver.trips.line', { time: trip.startTime, days: tripDaysWords(trip.days, t) })}
+        {t('driver.trips.line', { time: trip.startTime, days: tripDaysWords(trip.days, t, 'driver.trips') })}
         {trip.paused ? ` · ${t('driver.trips.paused')}` : next ? ` · ${t('driver.trips.next', { when: next })}` : ''}
       </p>
       {trip.skips.length ? <p class="card__note">{t('driver.trips.skipped', { days: trip.skips.map((d) => String(Number(d.slice(8, 10)))).join(', ') })}</p> : null}
