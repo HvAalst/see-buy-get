@@ -125,6 +125,32 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     expect(checks.flatMap((c) => c(entities.get('sbg') as never))).toEqual([]);
   });
 
+  it('a company still in draft: its own approved zones card clears its warning, yet prices nothing in its country (the owner, 2026-11-12: "the zones card for the earlier draft companies is not working")', () => {
+    const checks: Array<(e: never) => Array<{ key: string; met: boolean; label: string }>> = [];
+    const warned = new PriceCardService(entities, zones, undefined, { alsoWarn: (c: never) => checks.push(c) } as never);
+    const warning = (entityId: string) => checks.flatMap((c) => c(entities.get(entityId) as never)).find((w) => w.key === 'warn:price_card');
+    const now = Date.now();
+    const nl = entities.createCompany({ kind: 'sister', jurisdiction: 'NL', name: 'SeeBuyGet Netherlands' }, 'Amina');
+    expect(nl.status).toBe('draft');
+    entities.setPricingMode(nl.entityId, 'factors', 'Njeri W.');
+    zones.importAreas(nl.entityId, { geojson: ROW, source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+    zones.publish(nl.entityId, undefined, 'N');
+    expect(warning(nl.entityId)).toMatchObject({ met: false, label: expect.stringMatching(/^A zones card approved/) });
+    warned.setSettings(nl.entityId, { noticeDays: 0 }, NJERI);
+    warned.startDraft(nl.entityId, 1, NJERI, now, 'zones');
+    warned.saveDraft(nl.entityId, filled(warned.overview(nl.entityId).pending[0] as unknown as PriceCardTerms), NJERI, now);
+    warned.ready(nl.entityId, NJERI, now);
+    expect(warning(nl.entityId)?.met).toBe(false);
+    const version = warned.overview(nl.entityId).pending[0].version;
+    warned.approve(nl.entityId, version, undefined, OTIENO, now);
+    // Approved: the warning is met, on the company's record and its count on the Companies list.
+    expect(warning(nl.entityId)?.met).toBe(true);
+    expect(warned.cardsOfCompany(nl.entityId, now + 1000).map((c) => c.version)).toEqual([version]);
+    // Prepared, not trading: nothing in the Netherlands prices from it until two people switch the company on.
+    expect(warned.inForceFor('NL', now + 1000)).toBeUndefined();
+    expect(warned.cardsFrom('NL', now + 1000)).toBeUndefined();
+  });
+
   it('a zones card starts from the newest zones card, never from a fixed one; a fixed card from the newest fixed one', () => {
     publishRow();
     const now = Date.now();

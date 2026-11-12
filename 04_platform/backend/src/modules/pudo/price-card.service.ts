@@ -86,8 +86,10 @@ export class PriceCardService {
     readiness?.alsoWarn((entity) => {
       if (entity.kind !== 'sister' || !entity.jurisdiction) return [];
       const fixed = this.kindFor(entity.entityId) === 'fixed';
-      // In force, or approved to start on a date to come: either way staff have done it.
-      const met = Boolean(this.cardsFrom(entity.jurisdiction)?.cards.length);
+      // In force, or approved to start on a date to come: either way staff have done it. The company's own cards, read by
+      // its id: a company still in draft prepares its prices before the switch-on (the owner, 2026-11-12: "the zones card for
+      // the earlier draft companies is not working"), and the country lookup finds no draft.
+      const met = Boolean(this.cardsOfCompany(entity.entityId).length);
       return [
         {
           key: 'warn:price_card',
@@ -335,13 +337,22 @@ export class PriceCardService {
    */
   cardsFrom(country: string | undefined, now: number = Date.now()): { entityId: string; cards: StoredPriceCard[] } | undefined {
     const company = this.entities.forJurisdiction(country);
-    if (!company) return undefined;
-    const s = this.store.get(company.entityId);
-    if (!s) return undefined;
-    const kind = this.kindFor(company.entityId);
+    if (!company || !this.store.get(company.entityId)) return undefined;
+    return { entityId: company.entityId, cards: this.cardsOfCompany(company.entityId, now) };
+  }
+
+  /**
+   * One company's cards of the kind it prices by: the one in force, then every approved one to come, oldest first. By its
+   * id, so a company still in draft — preparing its prices — has them too; nothing prices from a draft's cards, since the
+   * country lookups that price (`inForceFor`, `cardsFrom`) never find one.
+   */
+  cardsOfCompany(entityId: string, now: number = Date.now()): StoredPriceCard[] {
+    const s = this.store.get(entityId);
+    if (!s) return [];
+    const kind = this.kindFor(entityId);
     const inForce = this.inForceOf(s, now, kind);
     const later = s.cards.filter((c) => kindOf(c) === kind && c.status === 'approved' && Date.parse(c.effectiveFrom!) > now).sort((a, b) => Date.parse(a.effectiveFrom!) - Date.parse(b.effectiveFrom!) || a.version - b.version);
-    return { entityId: company.entityId, cards: [...(inForce ? [inForce] : []), ...later] };
+    return [...(inForce ? [inForce] : []), ...later];
   }
 
   /** The band of a pair: the first band its zones-between fit, and the first its km fit — the further of the two. */
