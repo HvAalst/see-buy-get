@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  companyTags,
   AMOUNT_HINT,
   AMOUNT_LABEL,
   AMOUNT_ORDER,
@@ -279,5 +280,14 @@ describe('a company’s list of amounts', () => {
     expect(counterParcelMath(amountsInForce(slip, list()))).toMatchObject({ price: 1.6, over: true });
     // An emptied box is read at the starting figure, not at what the company had.
     expect(amountsInForce(typed(stored, { wholesale: '' }), stored).wholesale).toBe(1.6);
+  });
+});
+
+describe('a company’s tags on the Companies list (2026-11-12)', () => {
+  it('says a partner, a draft, and its warnings still to see to — counted, on or not', () => {
+    expect(companyTags({ kind: 'sister', status: 'active', warnings: 2 })).toEqual([{ key: 'tower.companies.warnings', tone: 'warn', n: 2 }]);
+    expect(companyTags({ kind: 'sister', status: 'draft', warnings: 1 }).map((x) => x.key)).toEqual(['tower.companies.draft', 'tower.companies.warnings']);
+    expect(companyTags({ kind: 'partner' }).map((x) => x.key)).toEqual(['tower.companies.partner']);
+    expect(companyTags({ kind: 'sister', warnings: 0 })).toEqual([]);
   });
 });

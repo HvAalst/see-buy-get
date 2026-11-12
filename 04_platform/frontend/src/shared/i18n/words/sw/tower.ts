@@ -948,6 +948,7 @@ export const words: Record<string, string> = {
   "tower.companies.drift": "Zimetofautiana kwa {drift}",
   "tower.companies.openTerms": "Fungua masharti ya {name}",
   "tower.companies.draft": "Rasimu — haijawashwa",
+  "tower.companies.warnings": "{n, plural, one {Onyo # — tazama rekodi yake} other {Maonyo # — tazama rekodi yake}}",
   "tower.companies.partner": "Mshirika wa ndani",
   "tower.companies.openRecord": "Fungua rekodi",
   "tower.companies.createTitle": "Unda kampuni",

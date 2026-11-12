@@ -145,6 +145,18 @@ export class EntityService implements OnApplicationBootstrap {
    * Resolve an entity that is allowed to be a party to a transaction. This is the isolation gate: name
    * the group as a collector or a performer and it is refused here, not caught in review later.
    */
+  /**
+   * 2026-11-12 — A COMPANY OF OURS PREPARES ITS PRICE LIST BEFORE IT IS SWITCHED ON (the owner: "fix these weaknesses
+   * indeed"): its amounts, rates, tax and the rest of Rates & tax are settings, not transactions — set while it is a draft,
+   * they are in place the day two people switch it on, rather than the network's starting figures. A partner, a customer's
+   * business or the holding company is still refused: it has no price list of ours. Money still waits for switch-on.
+   */
+  requireOursToPrepare(entityId: string): Entity {
+    const entity = this.get(entityId);
+    if (entity.kind !== 'sister') return this.requireTransacting(entityId);
+    return entity;
+  }
+
   requireTransacting(entityId: string): Entity {
     const entity = this.get(entityId);
     if (!canTransact(entity)) {
@@ -210,7 +222,7 @@ export class EntityService implements OnApplicationBootstrap {
    * add up to a rate that prices a market out of existence.
    */
   setRates(entityId: string, input: { lane?: string; costOfRiskPct?: number | null; profitOnRiskPct?: number | null; marginPct?: number | null }, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = EntityService.resolveRates(entity, input.lane);
     const apply = (into: RateStack): RateStack => {
       const next = { ...into };
@@ -293,7 +305,7 @@ export class EntityService implements OnApplicationBootstrap {
    * is the outcome the free-above-a-threshold shape exists to prevent.
    */
   setTopUpFee(entityId: string, rule: { freeAbove: number; amount: number } | null, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = entity.topUpFee;
 
     let next: TopUpFeeRule | undefined;
@@ -373,7 +385,7 @@ export class EntityService implements OnApplicationBootstrap {
    * float a shop must hold to take one in and the measure of its credit line: at zero both stop guarding anything.
    */
   setAmounts(entityId: string, patch: Partial<Record<string, number | null>>, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = resolveAmounts(entity.amounts);
     const own: Partial<Record<AmountKey, number>> = { ...(entity.amounts ?? {}) };
 
@@ -438,7 +450,7 @@ export class EntityService implements OnApplicationBootstrap {
    * rate would imply it collects tax on transactions it is deliberately never a party to.
    */
   setTax(entityId: string, input: { lane?: string; ratePct?: number | null; label?: string | null; registration?: string | null }, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = EntityService.resolveTax(entity, input.lane);
 
     // Built as a CANDIDATE and checked before anything is stored — the same discipline as setRates, and
@@ -526,7 +538,7 @@ export class EntityService implements OnApplicationBootstrap {
    * money.
    */
   setInsurance(entityId: string, input: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = EntityService.resolveInsurance(entity, input.lane);
 
     const apply = (into: InsuranceRule | undefined): InsuranceRule | undefined => {
@@ -592,7 +604,7 @@ export class EntityService implements OnApplicationBootstrap {
    * Saving what is already set is not a decision and is not logged as one.
    */
   setCustodyCaps(entityId: string, caps: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     for (const [kind, c] of Object.entries(caps) as Array<['shop' | 'rider', { start: number; liftedAfter: number } | undefined]>) {
       if (!c) continue;
       if (!Number.isInteger(c.start) || c.start < 1 || c.start > MAX_CUSTODY_START) throw new GlosError('VALIDATION_FAILED', `A ${kind === 'shop' ? 'shop' : 'rider'}'s cap starts at a whole number from 1 to ${MAX_CUSTODY_START}`, { field: `${kind}.start` });
@@ -622,7 +634,7 @@ export class EntityService implements OnApplicationBootstrap {
    * not logged as one.
    */
   setSealRules(entityId: string, rules: { crossBorder: boolean; containers: boolean }, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = EntityService.resolveSealRules(entity);
     const next = { crossBorder: Boolean(rules.crossBorder), containers: Boolean(rules.containers) };
     if (next.crossBorder === before.crossBorder && next.containers === before.containers) return entity;
@@ -655,7 +667,7 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   setPricingMode(entityId: string, mode: 'fixed' | 'factors', by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = this.pricingModeFor(entityId);
     if (before === mode) return entity;
     if (mode === 'factors') entity.pricingMode = 'factors';
@@ -667,7 +679,7 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   setHubFeeCeiling(entityId: string, multiple: number, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = this.hubFeeCeilingFor(entityId);
     const next = Math.round(multiple * 100) / 100;
     if (before === next) return entity;
@@ -679,7 +691,7 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   setRunPay(entityId: string, mode: 'bag' | 'km', by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = this.runPayFor(entityId);
     if (before === mode) return entity;
     if (mode === 'km') entity.runPay = 'km';
@@ -709,7 +721,7 @@ export class EntityService implements OnApplicationBootstrap {
    * CarrierPapersRule) and the caller has already refused any it does not recognise.
    */
   setCarrierPapers(entityId: string, enforce: string[], by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     const before = EntityService.resolveCarrierPapers(entity);
     const next = [...new Set(enforce.map((k) => k.trim()).filter(Boolean))].sort();
 
@@ -738,7 +750,7 @@ export class EntityService implements OnApplicationBootstrap {
    * at, so a knob turned this morning cannot rewrite what a customer was told yesterday.
    */
   setFeePct(entityId: string, pct: number, by?: string): Entity {
-    const entity = this.requireTransacting(entityId);
+    const entity = this.requireOursToPrepare(entityId);
     if (!Number.isFinite(pct) || pct < MIN_PLATFORM_FEE_PCT || pct > MAX_PLATFORM_FEE_PCT) {
       throw new GlosError('INVALID_INPUT', `A margin must be between ${MIN_PLATFORM_FEE_PCT * 100}% and ${MAX_PLATFORM_FEE_PCT * 100}%`);
     }
@@ -1104,7 +1116,8 @@ export class EntityService implements OnApplicationBootstrap {
       recentChanges: this.changes(entity.entityId, 8),
       // A screen that renders controls it cannot use is a screen that lies about what you may do. The
       // caller's reach is decided by the guard; this only reports it, so the UI never has to guess.
-      editable: (opts?.editable ?? false) && canTransact(entity),
+      // 2026-11-12 — a draft company of ours prepares its list before switch-on: editable too.
+      editable: (opts?.editable ?? false) && entity.kind === 'sister',
       bounds: {
         minRatePct: MIN_PLATFORM_FEE_PCT,
         maxRatePct: MAX_PLATFORM_FEE_PCT,

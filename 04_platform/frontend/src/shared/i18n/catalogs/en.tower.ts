@@ -1042,6 +1042,7 @@ export const enTowerCompanies = {
   'tower.companies.drift': 'Out by {drift}',
   'tower.companies.openTerms': 'Open {name}’s terms',
   'tower.companies.draft': 'Draft — not switched on',
+  'tower.companies.warnings': '{n, plural, one {# warning — see its record} other {# warnings — see its record}}',
   'tower.companies.partner': 'Local partner',
   'tower.companies.openRecord': 'Open the record',
   'tower.companies.createTitle': 'Create a company',

@@ -28,6 +28,17 @@ export interface EntityRow {
   holdsCustody?: boolean;
   /** CA3 — a company created from the console is a draft until two people switch its country on. Absent = active. */
   status?: 'draft' | 'active';
+  /** 2026-11-12 — its readiness warnings still to see to (never a block on switching it on), counted on the Companies list. */
+  warnings?: number;
+}
+
+/** 2026-11-12 — the tags a company's card on the Companies list carries: a partner, a draft, and its warnings still to see to. */
+export function companyTags(entity: Pick<EntityRow, 'kind' | 'status' | 'warnings'>): Array<{ key: 'tower.companies.partner' | 'tower.companies.draft' | 'tower.companies.warnings'; tone: 'info' | 'warn'; n?: number }> {
+  return [
+    ...(entity.kind === 'partner' ? [{ key: 'tower.companies.partner' as const, tone: 'info' as const }] : []),
+    ...(entity.status === 'draft' ? [{ key: 'tower.companies.draft' as const, tone: 'warn' as const }] : []),
+    ...(entity.warnings ? [{ key: 'tower.companies.warnings' as const, tone: 'warn' as const, n: entity.warnings }] : []),
+  ];
 }
 
 /** The lanes, in the order the table shows them, with the key each one is stored under. */

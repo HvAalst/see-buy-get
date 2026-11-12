@@ -149,9 +149,7 @@ describe('a company, recorded properly', () => {
       expect(r.ready).toBe(true);
       expect(r.items.some((i) => i.key.startsWith('warn:'))).toBe(false);
       expect(r.warnings.find((w) => w.key === 'warn:hub_list_figures')).toMatchObject({ met: false, label: expect.stringMatching(/set in ZMW on Rates & tax: a hub's own fees are capped at 1.5 times them/) });
-      // Switched on all the same; its amounts are set once it is on. One of the two set: still a warning; both: met.
-      entities.activate(zm.entityId, 'Brian');
-      expect(readiness.readinessOf(zm.entityId).warnings.find((w) => w.key === 'warn:hub_list_figures')?.met).toBe(false);
+      // 2026-11-12 — set while it is still a draft (the owner: "fix these weaknesses indeed"): one of the two, still a warning; both, met.
       entities.setAmounts(zm.entityId, { mdpSortFee: 12 }, 'Amina');
       expect(readiness.readinessOf(zm.entityId).warnings.find((w) => w.key === 'warn:hub_list_figures')?.met).toBe(false);
       entities.setAmounts(zm.entityId, { mdpPassOnFee: 10 }, 'Amina');
@@ -159,6 +157,27 @@ describe('a company, recorded properly', () => {
       // A partner holds no hub's fees of ours: no such warning.
       const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Partner' }, 'Amina');
       expect(readiness.readinessOf(partner.entityId).warnings).toEqual([]);
+    });
+
+    it('a draft company of ours prepares its whole price list before it is switched on; money still waits; a partner has none (2026-11-12)', () => {
+      const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
+      expect(zm.status).toBe('draft');
+      entities.setAmounts(zm.entityId, { mdpSortFee: 12, mdpPassOnFee: 10, wholesale: 40 }, 'Amina');
+      entities.setTax(zm.entityId, { ratePct: 0 }, 'Amina');
+      entities.setPricingMode(zm.entityId, 'factors', 'Amina');
+      entities.setHubFeeCeiling(zm.entityId, 2, 'Amina');
+      entities.setRunPay(zm.entityId, 'km', 'Amina');
+      expect(entities.amountsFor(zm.entityId)).toMatchObject({ mdpSortFee: 12, mdpPassOnFee: 10, wholesale: 40 });
+      expect(entities.pricingModeFor(zm.entityId)).toBe('factors');
+      // The Rates & tax screen may change it while it is a draft.
+      expect(entities.pricingFor(zm.entityId, [], { editable: true }).editable).toBe(true);
+      // Money still waits for the switch-on.
+      expect(() => entities.requireTransacting(zm.entityId)).toThrow(/still a draft/);
+      // A partner, or the holding company, has no price list of ours.
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Partner' }, 'Amina');
+      expect(() => entities.setAmounts(partner.entityId, { wholesale: 40 }, 'Amina')).toThrow(/still a draft|partner company/);
+      expect(() => entities.setAmounts('sbg', { wholesale: 40 }, 'Amina')).toThrow(/holding company/);
+      expect(entities.pricingFor(partner.entityId, [], { editable: true }).editable).toBe(false);
     });
 
     it('does not accept a bank account in the wrong money for a company of ours', () => {

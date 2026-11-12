@@ -948,6 +948,7 @@ export const words: Record<string, string> = {
   "tower.companies.drift": "በ{drift} ልዩነት",
   "tower.companies.openTerms": "የ{name}ን ውሎች ይክፈቱ",
   "tower.companies.draft": "ረቂቅ — አልበራም",
+  "tower.companies.warnings": "{n, plural, one {# ማስጠንቀቂያ — መዝገቡን ይመልከቱ} other {# ማስጠንቀቂያዎች — መዝገቡን ይመልከቱ}}",
   "tower.companies.partner": "የአካባቢ አጋር",
   "tower.companies.openRecord": "መዝገቡን ይክፈቱ",
   "tower.companies.createTitle": "ኩባንያ ይፍጠሩ",

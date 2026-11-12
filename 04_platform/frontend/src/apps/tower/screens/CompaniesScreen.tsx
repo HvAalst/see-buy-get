@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
-import { laneLabel, pctLabel } from '../money';
+import { companyTags, laneLabel, pctLabel } from '../money';
 import { companyCreateBlocker } from '../company';
 import { ConsoleFold } from '../ConsoleFold';
 import { createCompanyHint, runningOutFold } from '../folds';
@@ -172,10 +172,14 @@ function CompanyCard({ row, state, actions }: { row: CompanyRow; state: TowerSta
       </div>
 
       <div class="twr-card__body">
-        {entity.kind === 'partner' || isDraft ? (
+        {/* A partner, a draft, and — on or not — its warnings still to see to (2026-11-12): said here, opened on its record. */}
+        {companyTags(entity).length ? (
           <p class="twr-caps">
-            {entity.kind === 'partner' ? <span class="ctag ctag--info">{t('tower.companies.partner')}</span> : null}
-            {isDraft ? <span class="ctag ctag--warn">{t('tower.companies.draft')}</span> : null}
+            {companyTags(entity).map((tag) => (
+              <span key={tag.key} class={`ctag ctag--${tag.tone}`}>
+                {tag.n != null ? t(tag.key, { n: tag.n }) : t(tag.key)}
+              </span>
+            ))}
           </p>
         ) : null}
 

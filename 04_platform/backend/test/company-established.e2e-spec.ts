@@ -194,6 +194,13 @@ describe('a company of ours switched on where people already work', () => {
     // kind Zambia prices by, and a hub's list figures still the network's — neither stops it being switched on (step 5).
     const warned = ((await record()).readiness as unknown as { warnings: Array<{ key: string; met: boolean }> }).warnings;
     expect(warned.filter((w) => !w.met).map((w) => w.key).sort()).toEqual(['warn:hub_list_figures', 'warn:price_card']);
+    // Counted on the Companies list too.
+    const listed = async () => ((await must(http().get('/v1/sbg/entities').set(bearer(amina)), 200)) as Array<{ entityId: string; warnings?: number }>).find((e) => e.entityId === zambia)?.warnings;
+    expect(await listed()).toBe(2);
+    // Its list figures set while it is still a draft (2026-11-12): that warning is seen to before the switch-on.
+    await must(http().post(`/v1/sbg/entities/${zambia}/amounts`).set(bearer(amina)).send({ mdpSortFee: 12, mdpPassOnFee: 10 }), 201);
+    expect(((await record()).readiness as unknown as { warnings: Array<{ key: string; met: boolean }> }).warnings.filter((w) => !w.met).map((w) => w.key)).toEqual(['warn:price_card']);
+    expect(await listed()).toBe(1);
     // Nobody heard a word of it yet.
     expect(await bell(shop)).toEqual([]);
   });

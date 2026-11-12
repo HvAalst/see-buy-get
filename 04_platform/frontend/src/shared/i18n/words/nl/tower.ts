@@ -948,6 +948,7 @@ export const words: Record<string, string> = {
   "tower.companies.drift": "Afwijking van {drift}",
   "tower.companies.openTerms": "Voorwaarden van {name} openen",
   "tower.companies.draft": "Concept — niet ingeschakeld",
+  "tower.companies.warnings": "{n, plural, one {# waarschuwing — zie het dossier} other {# waarschuwingen — zie het dossier}}",
   "tower.companies.partner": "Lokale partner",
   "tower.companies.openRecord": "Het dossier openen",
   "tower.companies.createTitle": "Een bedrijf aanmaken",

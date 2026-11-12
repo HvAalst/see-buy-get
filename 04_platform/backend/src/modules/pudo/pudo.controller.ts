@@ -2404,7 +2404,8 @@ export class SbgController {
     // Never a customer's business: this is the structure of OUR companies, read by the rates, money and register
     // screens. Businesses have their own staff list (`GET businesses`).
     const rows = (actor?.role === 'operator' ? this.entities.list() : this.entities.administrable(actor?.tenant)).filter((e) => e.kind !== 'business');
-    return rows.map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId) }));
+    // 2026-11-12 — its warnings still to see to (the owner: "fix these weaknesses indeed"): counted on the Companies list.
+    return rows.map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId), ...(e.kind !== 'group' ? { warnings: this.readiness.readinessOf(e.entityId).warnings.filter((w) => !w.met).length } : {}) }));
   }
 
   /**
