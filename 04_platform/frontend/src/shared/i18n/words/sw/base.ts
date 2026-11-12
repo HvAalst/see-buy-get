@@ -139,7 +139,7 @@ export const words: Record<string, string> = {
   "notify.markRead": "Weka kuwa imesomwa",
   "notify.reply": "Jibu",
   "notify.open": "Fungua",
-  "notify.showAll": "Onyesha zote",
+  "notify.showAll": "Onyesha zaidi",
   "notify.showLess": "Onyesha chache",
   "opening.title": "SeeBuyGet bado haijafunguliwa nchini {country}",
   "opening.ask.button": "Omba SeeBuyGet ifungue nchini {country}",

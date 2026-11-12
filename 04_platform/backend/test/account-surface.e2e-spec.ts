@@ -125,6 +125,17 @@ describe('the account, reached from a role app', () => {
     expect(after.addressParts).toBeUndefined();
   });
 
+  it('lets a DRIVER put a photo on their profile from the Driver app, and see it there (the owner, 2026-11-12: "I can’t upload a profile picture")', async () => {
+    const as = { authorization: `Bearer ${driverToken}` };
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const up = (await http().post('/v1/sbg/media').set(as).send({ kind: 'avatar', dataUrl: PNG }).expect(201)).body as { mediaId: string };
+    const me = (await http().patch('/v1/sbg/account/profile').set(as).send({ avatarMediaId: up.mediaId }).expect(200)).body;
+    expect(me.avatarMediaId).toBe(up.mediaId);
+    // Its face shows in the app it was set from.
+    await http().get(`/v1/sbg/media/${up.mediaId}`).set(as).expect(200);
+    expect((await http().get('/v1/sbg/account/me').set(as).expect(200)).body.avatarMediaId).toBe(up.mediaId);
+  });
+
   it('lets somebody take their address back, because a field that only fills is one nobody should fill', async () => {
     await http().patch('/v1/sbg/account/profile').set('authorization', `Bearer ${driverToken}`).send({ address: '' }).expect(200);
     await http()

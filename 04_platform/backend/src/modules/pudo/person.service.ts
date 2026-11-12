@@ -229,7 +229,7 @@ export class PersonService {
    * purge the previous avatar's bytes so a person keeps exactly one. Both fields are optional and
    * independent (a caller may set just the name, just the avatar, or both).
    */
-  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts }): Person {
+  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts }, actingAs?: string): Person {
     const person = this.requireByDid(personDid);
 
     /*
@@ -284,13 +284,17 @@ export class PersonService {
         // The person must actually OWN this media — media.link() is best-effort and does NOT check, so
         // without this a caller could pin any known media id onto their own profile.
         const ref = this.media.get(next);
-        if (!ref || ref.ownerDid !== personDid) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
+        // 2026-11-12 — OR UPLOADED BY THE ACCOUNT THEY ACT AS NOW (the owner: "in the driver app I can't upload a profile
+        // picture"): an app uploads under the driver's or the shop's own id, never the person's — the token ties the two.
+        if (!ref || (ref.ownerDid !== personDid && (!actingAs || ref.ownerDid !== actingAs))) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
         // It must be an image uploaded AS an avatar. Re-kinding an evidence photo (a PoD/dispute the person
         // owns) to {type:'person'}/'account-doc' would strip it out of its retention bin AND detach it from
         // its parcel, so a later holdParcelForDispute()/anchorParcelTerminal() no longer protects it — and a
         // subsequent avatar replace would purgeByOwner() it, hard-deleting locked evidence mid-case. Refuse.
         if (ref.kind !== 'avatar') throw new GlosError('INVALID_INPUT', 'That image was not uploaded as a profile photo');
         this.media.link(next, { type: 'person', id: personDid }, 'avatar');
+        // The person's, from now: replaced later from any of their apps, its bytes are purged as theirs.
+        if (ref.ownerDid !== personDid) this.media.adoptAvatar(next, personDid);
       }
       if (person.avatarMediaId && person.avatarMediaId !== next) {
         this.media.purgeByOwner(person.avatarMediaId, personDid); // one avatar per person — drop the old bytes

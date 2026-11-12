@@ -139,7 +139,7 @@ export const words: Record<string, string> = {
   "notify.markRead": "Markeer als gelezen",
   "notify.reply": "Antwoorden",
   "notify.open": "Openen",
-  "notify.showAll": "Toon alles",
+  "notify.showAll": "Toon meer",
   "notify.showLess": "Toon minder",
   "opening.title": "SeeBuyGet is nog niet open in {country}",
   "opening.ask.button": "Vraag SeeBuyGet om te openen in {country}",

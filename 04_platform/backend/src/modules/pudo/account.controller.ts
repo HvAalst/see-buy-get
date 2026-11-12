@@ -149,7 +149,8 @@ export class AccountController {
   @SignedIn()
   @Patch('profile')
   setProfile(@Body() dto: AccountProfileDto, @Actor() actor: IntrospectionResult) {
-    const person = this.persons.setProfile(actingPerson(actor), dto);
+    // 2026-11-12 — and the account it acts as: its apps upload a photo under that account's own id.
+    const person = this.persons.setProfile(actingPerson(actor), dto, actor?.did);
     return this.persons.view(person);
   }
 

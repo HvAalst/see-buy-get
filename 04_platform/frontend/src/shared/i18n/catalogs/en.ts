@@ -199,7 +199,7 @@ export const en = {
   'notify.reply': 'Reply',
   'notify.open': 'Open',
   // 2026-11-02 — a notice that opens its place on a tap, with more to say than two lines hold: all of it, in the bell.
-  'notify.showAll': 'Show all',
+  'notify.showAll': 'Show more',
   'notify.showLess': 'Show less',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',

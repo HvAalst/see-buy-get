@@ -139,7 +139,7 @@ export const words: Record<string, string> = {
   "notify.markRead": "እንደተነበበ ምልክት ያድርጉ",
   "notify.reply": "ምላሽ ይስጡ",
   "notify.open": "ይክፈቱ",
-  "notify.showAll": "ሁሉንም ይመልከቱ",
+  "notify.showAll": "ተጨማሪ አሳይ",
   "notify.showLess": "ያነሰ ይመልከቱ",
   "opening.title": "SeeBuyGet በ{country} ገና ሥራ አልጀመረም",
   "opening.ask.button": "SeeBuyGet በ{country} እንዲከፈት ይጠይቁ",

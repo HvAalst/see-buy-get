@@ -249,6 +249,26 @@ describe('PersonService — the identity spine (S20)', () => {
       expect(media.get(first)).toBeUndefined(); // the old avatar's bytes + ref are gone
     });
 
+    it('takes a photo uploaded by the account the person acts as — a driver’s, a shop’s — and makes it the person’s (the owner, 2026-11-12)', () => {
+      const { person } = persons.enroll(PHONE, true, '24689');
+      const driverDid = dids.generate('driver:own').id;
+      const fromTheDriverApp = avatarFor(driverDid);
+      // Refused without the account it acts as: the image is the driver's, not the person's.
+      expect(() => persons.setProfile(person.personDid, { avatarMediaId: fromTheDriverApp })).toThrow(/not yours/);
+      persons.setProfile(person.personDid, { avatarMediaId: fromTheDriverApp }, driverDid);
+      expect(persons.findByDid(person.personDid)!.avatarMediaId).toBe(fromTheDriverApp);
+      // The person's from now: seen from any of their apps, purged as theirs when replaced.
+      expect(media.get(fromTheDriverApp)!.ownerDid).toBe(person.personDid);
+      expect(media.viewableBy(media.get(fromTheDriverApp)!, dids.generate('agent:own-shop').id, false, person.personDid)).toBe(true);
+      expect(media.viewableBy(media.get(fromTheDriverApp)!, dids.generate('agent:stranger').id, false, dids.generate('person:stranger2').id)).toBe(false);
+      const next = avatarFor(driverDid);
+      persons.setProfile(person.personDid, { avatarMediaId: next }, driverDid);
+      expect(media.get(fromTheDriverApp)).toBeUndefined();
+      // Another account's photo is still not theirs.
+      const strangers = avatarFor(dids.generate('driver:stranger').id);
+      expect(() => persons.setProfile(person.personDid, { avatarMediaId: strangers }, driverDid)).toThrow(/not yours/);
+    });
+
     it('refuses an avatar the person does not own (no cross-owner pinning)', () => {
       const { person } = persons.enroll(PHONE, true, '24689');
       const notMine = avatarFor(dids.generate('person:stranger').id);

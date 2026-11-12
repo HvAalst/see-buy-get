@@ -159,6 +159,8 @@ describe('a notice in the bell: one tap opens where it leads', () => {
     const toggled: string[] = [];
     const long = 'Damaged: two cartons crushed — they put it at 4,500 KES. Answer it under Runs: accept it, or refuse it with your reason, before the shipper asks again.';
     const { made } = row({ item: notice({ body: long }), onToggle: () => toggled.push('n-1') });
+    // 2026-11-12 — the owner: it opens the rest of a long notice, so it says "Show more", never "Show all".
+    expect(t('notify.showAll')).toBe('Show more');
     labelled(made, t('notify.showAll'))!.props.onClick!();
     expect(toggled).toEqual(['n-1']);
     expect(got).toEqual([]);

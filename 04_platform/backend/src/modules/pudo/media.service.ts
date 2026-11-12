@@ -151,8 +151,10 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /** May this caller fetch these bytes? Owner-or-operator, plus a posted hazard photo for any peer. */
-  viewableBy(ref: MediaRef, callerDid: string, isOperator: boolean): boolean {
-    return isOperator || ref.ownerDid === callerDid || MediaService.peerViewable(ref);
+  viewableBy(ref: MediaRef, callerDid: string, isOperator: boolean, callerPersonDid?: string): boolean {
+    // 2026-11-12 — a person's own profile photo, from any of the apps they act in.
+    const ownFace = Boolean(callerPersonDid) && ref.kind === 'avatar' && ref.ownerDid === callerPersonDid;
+    return isOperator || ref.ownerDid === callerDid || ownFace || MediaService.peerViewable(ref);
   }
 
   /** The bytes for a media (or its thumbnail). Throws GONE once the retention sweep has removed them. */
@@ -198,6 +200,17 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
    * filename or an unknown id, so old flows and demo data never break). Re-derives the retention bin from
    * the kind so a mis-uploaded kind still lands in the right place.
    */
+  /**
+   * 2026-11-12 — A PROFILE PHOTO BECOMES THE PERSON'S: uploaded under the account they act as (a driver's, a shop's), it is
+   * owned by the person once on their profile, so any of their apps sees it and a later replace purges it.
+   */
+  adoptAvatar(mediaId: string, personDid: string): void {
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.kind !== 'avatar') return;
+    ref.ownerDid = personDid;
+    this.refs.set(mediaId, ref);
+  }
+
   link(mediaId: string | undefined, link: MediaLink, kind?: MediaKind): void {
     if (!mediaId) return;
     const ref = this.refs.get(mediaId);

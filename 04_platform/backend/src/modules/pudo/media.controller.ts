@@ -70,7 +70,7 @@ export class MediaController {
     const ref = this.media.get(id);
     if (!ref) throw new GlosError('NOT_FOUND', 'No such media');
     // A non-operator caller must present a verified DID; actingDid throws (403) for a self-asserted token.
-    if (!this.media.viewableBy(ref, this.isOperator(actor) ? ref.ownerDid : actingDid(actor), this.isOperator(actor))) {
+    if (!this.media.viewableBy(ref, this.isOperator(actor) ? ref.ownerDid : actingDid(actor), this.isOperator(actor), actor?.personDid)) {
       throw new GlosError('FORBIDDEN', 'This media is not yours to view');
     }
     const { bytes, contentType } = this.media.blob(id, variant === 'thumb' ? 'thumb' : 'full');
