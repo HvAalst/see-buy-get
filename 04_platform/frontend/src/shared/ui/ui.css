@@ -527,6 +527,21 @@
   touch-action: none;
 }
 
+/* 2026-11-12 — THE WHOLE SCREEN, FOR A MAP (the owner: "a full screen slide up sheet"): it still slides up and is pulled
+   down to close; the map takes what the title and the buttons leave. */
+.sheet--full {
+  top: 0;
+  max-height: none;
+  height: 100dvh;
+  border-radius: 0;
+  padding-top: calc(10px + var(--sa-t, 0px));
+}
+.sheet--full .pmap-leaflet,
+.sheet--full .pmap {
+  height: calc(100dvh - 300px);
+  min-height: 260px;
+}
+
 .sheet--dragging {
   user-select: none;
   -webkit-user-select: none;

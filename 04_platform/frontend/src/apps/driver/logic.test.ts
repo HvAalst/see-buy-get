@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
-import { litresOf, loadSpaceBody,
+import { startFromHere, litresOf, loadSpaceBody,
   afterShiftLine,
   hoursWords,
   restSays,
@@ -801,5 +801,14 @@ describe('what the vehicle takes, as the driver types it (the owner, 2026-11-12:
     expect(litresOf(1)).toBe(1000);
     expect(litresOf(2.45)).toBe(2450);
     expect(litresOf(undefined)).toBeNull();
+  });
+});
+
+describe('the route starts where the phone is (the owner, 2026-11-12: "geo aware")', () => {
+  it('pins the start where the phone is while none is chosen; never over one chosen meanwhile', () => {
+    const here = { lat: 52.37, lng: 4.9 };
+    expect(startFromHere({ fromId: '' }, here, 'Where I am now')).toEqual({ fromId: '__custom', fromPlace: { label: 'Where I am now', pin: here, from: 'map' } });
+    expect(startFromHere({ fromId: 'agent-1' }, here, 'Where I am now')).toBeNull();
+    expect(startFromHere({ fromId: '__custom' }, here, 'Where I am now')).toBeNull();
   });
 });

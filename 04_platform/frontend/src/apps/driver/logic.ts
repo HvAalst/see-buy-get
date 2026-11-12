@@ -31,6 +31,15 @@ import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatu
  * 2026-11-12 — WHAT A DRIVER TYPES FOR WHAT THE VEHICLE TAKES (the owner: "Can I set it up to 600 Kg and 1000 liter volume?"):
  * whole kg above nothing; litres above nothing, or empty for not known — sent as m³ (1,000 litres = 1 m³).
  */
+/**
+ * 2026-11-12 — THE ROUTE'S START WHERE THE PHONE IS (the owner: "geo aware"): "Where I am now", pinned there — only while no
+ * start is chosen; one chosen meanwhile is never overwritten.
+ */
+export function startFromHere(form: { fromId: string }, point: { lat: number; lng: number }, hereLabel: string): { fromId: string; fromPlace: { label: string; pin: { lat: number; lng: number }; from: 'map' } } | null {
+  if (form.fromId) return null;
+  return { fromId: '__custom', fromPlace: { label: hereLabel, pin: point, from: 'map' } };
+}
+
 export function loadSpaceBody(kgText: string, litresText: string): { body: { capacityKg: number; volumeM3: number | null } } | { error: 'driver.load.errKg' | 'driver.load.errLitres' } {
   const kg = Number(kgText.trim().replace(',', '.'));
   if (!kgText.trim() || !Number.isInteger(kg) || kg <= 0) return { error: 'driver.load.errKg' };

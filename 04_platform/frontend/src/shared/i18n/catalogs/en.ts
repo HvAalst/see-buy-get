@@ -200,6 +200,10 @@ export const en = {
   'notify.open': 'Open',
   // 2026-11-02 — a notice that opens its place on a tap, with more to say than two lines hold: all of it, in the bell.
   'notify.showAll': 'Show more',
+  'place.sheet.here': 'Where I am now',
+  'place.sheet.use': 'Use this place',
+  'place.sheet.locating': 'Finding where you are…',
+  'place.sheet.locOff': 'Turn on location for this app to find where you are — or tap the map to place it.',
   'notify.showLess': 'Show less',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',

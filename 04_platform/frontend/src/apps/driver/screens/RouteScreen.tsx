@@ -1,7 +1,9 @@
 import { Button, Card, ErrorNote, Explainer, ExplainerReset, Icon, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { canLocate, currentPosition } from '../../../shared/position';
 import { vehicleWord } from '../vehicle-words';
-import { MAX_WORK_RADIUS_KM } from '../logic';
+import { MAX_WORK_RADIUS_KM, startFromHere } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 import { RoadSection } from './RoadSection';
 import { CounterSection } from './CounterSection';
@@ -40,6 +42,7 @@ function ready(id: string, place: CustomPlace): boolean {
 
 /** One end of the road when it is not a place on the network — a market, a junction, a depot gate. */
 function CustomEnd({ end, place, actions, reference, idPrefix }: { end: 'fromPlace' | 'toPlace'; place: CustomPlace; actions: DriverActions; reference: { lat: number; lng: number } | null; idPrefix: string }) {
+  // A road's start, opened with nothing placed, is where the phone is (2026-11-12, the owner: "geo aware").
   const t = useT();
   return (
     <PlacePicker
@@ -55,6 +58,7 @@ function CustomEnd({ end, place, actions, reference, idPrefix }: { end: 'fromPla
       onPin={(pin, from) => actions.setPlace(end, { pin, from })}
       geocode={actions.geocodePlace}
       noteText={(n) => roadNote(t, n)}
+      startHere={end === 'fromPlace'}
     />
   );
 }
@@ -140,8 +144,37 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
   );
 }
 
+/**
+ * 2026-11-12 — THE ROUTE STARTS WHERE THE PHONE IS (the owner: "the 'starting from' … should be geo aware and take my
+ * current location or ask me to turn on locations"). Asked once as the screen opens, while no start is chosen: there, the
+ * start is "Where I am now", pinned where the phone is; refused or not to be had, it says to turn location on, with a button
+ * to ask again. A start chosen meanwhile always wins.
+ */
+function useStartHere(state: DriverState, actions: DriverActions, hereLabel: string): { fix: 'idle' | 'asking' | 'off'; ask: () => void } {
+  const [fix, setFix] = useState<'idle' | 'asking' | 'off'>('idle');
+  const latest = useRef(state.form);
+  latest.current = state.form;
+  const ask = () => {
+    if (!canLocate()) return setFix('off');
+    setFix('asking');
+    void currentPosition(10_000).then((point) => {
+      if (!point) return setFix('off');
+      setFix('idle');
+      const next = startFromHere(latest.current, point, hereLabel);
+      if (!next) return;
+      actions.setForm({ fromId: next.fromId });
+      actions.setPlace('fromPlace', next.fromPlace);
+    });
+  };
+  useEffect(() => {
+    if (!latest.current.fromId) ask();
+  }, []);
+  return { fix, ask };
+}
+
 function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { loading: boolean; empty: boolean }) {
   const t = useT();
+  const here = useStartHere(state, actions, t('driver.route.hereLabel'));
   return (
     <>
 
@@ -151,6 +184,15 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
         <Note tone="warn" icon="pin" title={t('driver.route.emptyTitle')} detail={t('driver.route.emptyDetail')} />
       ) : null}
 
+      {here.fix === 'asking' && !state.form.fromId ? <Note tone="info" icon="pin" title={t('driver.route.locating')} /> : null}
+      {here.fix === 'off' && !state.form.fromId ? (
+        <div>
+          <Note tone="info" icon="pin" title={t('driver.route.locOff')} />
+          <Button variant="link" full={false} onClick={here.ask}>
+            {t('driver.route.locUse')}
+          </Button>
+        </div>
+      ) : null}
       <Card>
         <div class="field">
           <label class="field__label" for="from">

@@ -42,7 +42,13 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
     map.on('click', (e: L.LeafletMouseEvent) => onDropRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }));
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    // 2026-11-12 — a map in a sheet that is still sliding up, or a phone turned: Leaflet is told its box changed, or it
+    // draws grey tiles where the box grew.
+    const host = hostRef.current;
+    const watch = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize()) : null;
+    watch?.observe(host);
     return () => {
+      watch?.disconnect();
       map.remove();
       mapRef.current = null;
       layerRef.current = null;

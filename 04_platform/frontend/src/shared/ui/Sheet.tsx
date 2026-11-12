@@ -10,6 +10,8 @@ export interface SheetProps {
   children: ComponentChildren;
   /** Set false when a confirmation must be answered by a button, not by a tap-away. */
   dismissible?: boolean;
+  /** 2026-11-12 — the whole screen, for a map (the owner: "a full screen slide up sheet"). */
+  full?: boolean;
 }
 
 /** The sheets open now, the last on top: a key belongs to the top one only. */
@@ -43,7 +45,7 @@ const FOCUSABLE =
  * and focus returns to whatever opened it. The travel animation is CSS, so
  * prefers-reduced-motion (in ui.css) removes the motion without removing the sheet.
  */
-export function Sheet({ open, onClose, title, children, dismissible = true }: SheetProps) {
+export function Sheet({ open, onClose, title, children, dismissible = true, full = false }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
 
@@ -129,7 +131,7 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
         aria-hidden="true"
       />
       <div
-        class="sheet"
+        class={full ? 'sheet sheet--full' : 'sheet'}
         ref={panelRef}
         role="dialog"
         aria-modal="true"
