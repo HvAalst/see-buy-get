@@ -349,6 +349,36 @@ export class VehicleService {
   }
 
   /** Set the vehicle's open-data per-km transport rate (the driver/fleet manager prices their own asset). */
+  /**
+   * 2026-11-12 — WHAT THIS VEHICLE TAKES, AS ITS DRIVER OR FLEET SAYS (the owner: "it is assumed that it can load 1200 Kg. Can I
+   * set it up to 600 Kg and 1000 liter volume?"): the most it carries, never above what its class (or its body) may — and
+   * its load space, which a load is held against. Lowered, fewer loads are offered: what is offered and taken is judged
+   * against these figures. The space may be cleared (not known).
+   */
+  setLoadSpace(vehicleId: string, input: { capacityKg?: number; volumeM3?: number | null }, by: { name: string; role: 'fleet' | 'driver' | 'staff' }, now: number = Date.now()): Vehicle {
+    const v = this.require(vehicleId);
+    if (input.capacityKg === undefined && input.volumeM3 === undefined) throw new GlosError('INVALID_INPUT', 'Say what it carries: the weight, the load space, or both');
+    if (input.capacityKg !== undefined) {
+      const kg = Math.round(Number(input.capacityKg));
+      const spec = VEHICLE_SPEC[v.vehicleClass];
+      const ceiling = Math.max(spec.maxCapacityKg, v.truckSubtype ? (TRUCK_SUBTYPE_CATALOG[v.truckSubtype]?.capacityKg ?? 0) : 0);
+      if (!Number.isFinite(kg) || kg <= 0) throw new GlosError('AMOUNT_INVALID', 'The weight it carries is more than nothing', { field: 'capacityKg' });
+      if (kg > ceiling) throw new GlosError('INVALID_INPUT', `A ${v.vehicleClass.replace(/_/g, ' ')} carries at most ${ceiling} kg`, { field: 'capacityKg' });
+      v.capacityKg = kg;
+    }
+    if (input.volumeM3 !== undefined) {
+      if (input.volumeM3 === null) delete v.volumeM3;
+      else {
+        const m3 = Math.round(Number(input.volumeM3) * 100) / 100;
+        if (!Number.isFinite(m3) || m3 <= 0 || m3 > 150) throw new GlosError('INVALID_INPUT', 'Its load space is more than nothing and at most 150 m³ (150,000 litres)', { field: 'volumeM3' });
+        v.volumeM3 = m3;
+      }
+    }
+    v.loadSpaceSetBy = { name: by.name, role: by.role, at: new Date(now).toISOString() };
+    this.vehicles.set(v.vehicleId, v);
+    return v;
+  }
+
   setPrice(vehicleId: string, pricePerKm: number): Vehicle {
     if (pricePerKm < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const vehicle = this.require(vehicleId);

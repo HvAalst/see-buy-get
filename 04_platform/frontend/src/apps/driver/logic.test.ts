@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
-import {
+import { litresOf, loadSpaceBody,
   afterShiftLine,
   hoursWords,
   restSays,
@@ -782,5 +782,24 @@ describe('the odometer box', () => {
     expect(odometerOf('120 400 km')).toBe(120400);
     expect(odometerOf('')).toBeUndefined();
     expect(odometerOf('   ')).toBeUndefined();
+  });
+});
+
+describe('what the vehicle takes, as the driver types it (the owner, 2026-11-12: "600 Kg and 1000 liter volume")', () => {
+  it('sends whole kg and the litres as m³; empty litres for not known; refuses what cannot be meant', () => {
+    expect(loadSpaceBody('600', '1000')).toEqual({ body: { capacityKg: 600, volumeM3: 1 } });
+    expect(loadSpaceBody(' 600 ', '')).toEqual({ body: { capacityKg: 600, volumeM3: null } });
+    expect(loadSpaceBody('600', '1.000')).toEqual({ body: { capacityKg: 600, volumeM3: 1 } });
+    expect(loadSpaceBody('600', '2450')).toEqual({ body: { capacityKg: 600, volumeM3: 2.45 } });
+    expect(loadSpaceBody('', '1000')).toEqual({ error: 'driver.load.errKg' });
+    expect(loadSpaceBody('600.5', '1000')).toEqual({ error: 'driver.load.errKg' });
+    expect(loadSpaceBody('0', '')).toEqual({ error: 'driver.load.errKg' });
+    expect(loadSpaceBody('600', '-5')).toEqual({ error: 'driver.load.errLitres' });
+    expect(loadSpaceBody('600', 'lots')).toEqual({ error: 'driver.load.errLitres' });
+  });
+  it('reads m³ as litres', () => {
+    expect(litresOf(1)).toBe(1000);
+    expect(litresOf(2.45)).toBe(2450);
+    expect(litresOf(undefined)).toBeNull();
   });
 });

@@ -273,6 +273,11 @@ export class Vehicle {
    */
   volumeM3?: number;
   /**
+   * 2026-11-12 — who last set its weight or load space, and when (the owner: "the driver should be able to adjust the weight
+   * and volume"): its fleet, the driver who owns it or drives it, or staff. Absent: as it was registered.
+   */
+  loadSpaceSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
+  /**
    * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
    * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this
    * existed: read it through DispatchService.toteCapacityOf, never off the field.

@@ -19134,6 +19134,45 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/load-space": {
+      "patch": {
+        "operationId": "Sbg.setVehicleLoadSpace",
+        "summary": "",
+        "description": "2026-11-12 — WHAT A VEHICLE TAKES (the owner: \"the driver should be able to adjust the weight and volume\"): the weight it\ncarries and its load space, set by the fleet that owns it, the driver who owns it, the driver on a shift with it now, or\nstaff — who set it is kept. Loads are offered and taken against these figures.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleLoadSpaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vehicle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vehicles/{id}/pricing": {
       "patch": {
         "operationId": "Sbg.setVehiclePrice",
@@ -65945,6 +65984,22 @@
           "price"
         ]
       },
+      "VehicleLoadSpaceDto": {
+        "type": "object",
+        "properties": {
+          "capacityKg": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "volumeM3": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0.01,
+            "maximum": 150
+          }
+        }
+      },
       "VehicleDocuments": {
         "type": "object",
         "properties": {
@@ -66061,6 +66116,23 @@
             "type": "number",
             "description": "2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an\nairport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then\nsays the load's volume and that the space is not on record — it never guesses one from the class."
           },
+          "loadSpaceSetBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "toteCapacity": {
             "type": "number",
             "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
@@ -66173,6 +66245,7 @@
           "plate",
           "vehicleClass",
           "capacityKg",
+          "loadSpaceSetBy",
           "pricePerKm",
           "baseFee",
           "minMultiplier",

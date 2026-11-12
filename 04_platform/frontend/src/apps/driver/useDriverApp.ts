@@ -1490,6 +1490,20 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
+  /** 2026-11-12 — the driver sets what the vehicle takes (the owner: "the driver should be able to adjust the weight and volume"). */
+  const setLoadSpace = useCallback(
+    async (vehicleId: string, body: { capacityKg: number; volumeM3: number | null }): Promise<SbgError | null> => {
+      if (!client) return null;
+      const r = await client.api.setLoadSpace(vehicleId, body);
+      if (r.error) return r.error;
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.loadSaved'), detail: body.volumeM3 != null ? t('driver.toast.loadSavedDetail', { kg: body.capacityKg, litres: Math.round(body.volumeM3 * 1000) }) : t('driver.toast.loadSavedKg', { kg: body.capacityKg }) });
+      await refresh();
+      return null;
+    },
+    [client, pushToast, refresh],
+  );
+
   const matchRate = useCallback(
     async (vehicleId: string, price: number) => {
       if (!client) return;
@@ -2337,6 +2351,7 @@ export function useDriverApp() {
       freightInvoice: (freightId: string) => client!.api.freightInvoice(freightId),
       freightManifest: (freightId: string) => client!.api.freightManifest(freightId),
       matchRate,
+      setLoadSpace,
       submitRoute,
       repeatRoute,
       setOfferIndex,

@@ -1174,6 +1174,30 @@ describe('PUDO Light', () => {
     expect(() => controller.updateVendor('ven_nobody', {} as never, staff)).toThrow(/not found/i);
   });
 
+  it('a driver sets what the vehicle takes: the free room and the loads offered follow it, never above its class (the owner, 2026-11-12)', () => {
+    const driver = clearedRider({ displayName: 'Van', fullName: 'Van Driver', nationalId: 'ID-loadspace', mobile: '+254700440099', licenceClasses: ['van'] });
+    const van = vehicles.register({ plate: 'LS-VAN', vehicleClass: 'van', ownerName: 'Van Driver' });
+    expect(van.capacityKg).toBe(1200);
+    fleet.couple(driver.did, van.vehicleId);
+    expect(dispatch.remainingCapacity(driver.did)).toBe(1200);
+    // "Can I set it up to 600 Kg and 1000 liter volume?"
+    const set = vehicles.setLoadSpace(van.vehicleId, { capacityKg: 600, volumeM3: 1 }, { name: 'Van Driver', role: 'driver' });
+    expect(set).toMatchObject({ capacityKg: 600, volumeM3: 1, loadSpaceSetBy: { name: 'Van Driver', role: 'driver' } });
+    expect(dispatch.remainingCapacity(driver.did)).toBe(600);
+    // A load heavier than it now takes, or bigger than its space, is not for it.
+    const fits = (load: { weightKg: number; volumeM3?: number }) => (dispatch as any).vehicleCanCarry(vehicles.get(van.vehicleId), { kind: 'freight', ...load }, 10_000);
+    expect(fits({ weightKg: 550, volumeM3: 0.8 })).toBe(true);
+    expect(fits({ weightKg: 700 })).toBe(false);
+    expect(fits({ weightKg: 300, volumeM3: 1.5 })).toBe(false);
+    // Never above what a van may carry; never nothing; the space may be cleared.
+    expect(() => vehicles.setLoadSpace(van.vehicleId, { capacityKg: 2500 }, { name: 'Van Driver', role: 'driver' })).toThrow(/A van carries at most 2000 kg/);
+    expect(() => vehicles.setLoadSpace(van.vehicleId, { capacityKg: 0 }, { name: 'Van Driver', role: 'driver' })).toThrow(/more than nothing/);
+    expect(() => vehicles.setLoadSpace(van.vehicleId, { volumeM3: 200 }, { name: 'Van Driver', role: 'driver' })).toThrow(/at most 150 m³/);
+    expect(() => vehicles.setLoadSpace(van.vehicleId, {}, { name: 'Van Driver', role: 'driver' })).toThrow(/Say what it carries/);
+    expect(vehicles.setLoadSpace(van.vehicleId, { volumeM3: null }, { name: 'Staff', role: 'staff' }).volumeM3).toBeUndefined();
+    expect(vehicles.get(van.vehicleId).capacityKg).toBe(600);
+  });
+
   it('a parcel knows where it was BORN and who has HELD it — the two facts a status trail cannot give', () => {
     const origin = onboardAgent('Birth Shop', 'NorthTown', 50);
     const dest = onboardAgent('Birth Dest', 'SouthTown', 50);

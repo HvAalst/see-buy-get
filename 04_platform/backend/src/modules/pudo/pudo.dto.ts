@@ -1074,6 +1074,12 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/** 2026-11-12 — what a vehicle takes, as its driver or fleet says: the weight, and its load space in m³ (null: not known). */
+export class VehicleLoadSpaceDto {
+  @IsOptional() @IsNumber() @Min(1) @Max(100000) capacityKg?: number;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.01) @Max(150) volumeM3?: number | null;
+}
+
 /** 2026-11-12 — the owner's D3: how many times the list figure a hub may set its fees to before staff approve. */
 export class HubFeeCeilingDto {
   @IsNumber() @Min(1) @Max(10) multiple!: number;

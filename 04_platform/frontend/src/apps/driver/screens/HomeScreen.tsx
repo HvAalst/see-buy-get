@@ -29,10 +29,12 @@ import {
   removedLine,
   shiftSummary,
   usedPercent,
+  litresOf,
 } from '../logic';
 import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
+import { LoadSpaceSheet } from './LoadSpaceSheet';
 import { IdPhotoCard } from './IdPhotoCard';
 import { CarrierPlaceCard } from './CarrierPlaceCard';
 import { DriverCoverCard } from './DriverCoverCard';
@@ -818,6 +820,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [endOdo, setEndOdo] = useState('');
   const [defectOpen, setDefectOpen] = useState(false);
+  const [loadOpen, setLoadOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const shown = badgeToShow(state.session, state.driver?.badgeId);
@@ -858,7 +861,12 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
           {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
           {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
         </p>
+        {/* 2026-11-12 — what it takes, as the driver says (the owner: "the driver should be able to adjust the weight and volume"). */}
+        <p class="card__note">{v.volumeM3 != null ? t('driver.home.loadSpace', { litres: litresOf(v.volumeM3)! }) : t('driver.home.loadSpaceUnknown')}</p>
         <div class="linkcol">
+        <Button variant="link" full={false} onClick={() => setLoadOpen(true)}>
+          {t('driver.load.open')}
+        </Button>
         <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
           {t('driver.defect.open')}
         </Button>
@@ -871,6 +879,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Button>
         </div>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
+        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} /> : null}
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>
 

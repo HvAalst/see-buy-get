@@ -121,6 +121,8 @@ export interface VehicleView {
   vehicleClass: string;
   truckSubtype?: string;
   capacityKg: number;
+  /** 2026-11-12 — its load space in m³, where its fleet or driver said it (the owner: "1000 liter volume"). */
+  volumeM3?: number;
   pricePerKm: number;
   maxParcelKg: number;
   allowsFragile: boolean;

@@ -27,6 +27,23 @@ import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatu
  * The clamp applies to the BAR only. The numeric row shows the honest figure — a driver who
  * is 40 kg over must see that, not a tidy zero.
  */
+/**
+ * 2026-11-12 — WHAT A DRIVER TYPES FOR WHAT THE VEHICLE TAKES (the owner: "Can I set it up to 600 Kg and 1000 liter volume?"):
+ * whole kg above nothing; litres above nothing, or empty for not known — sent as m³ (1,000 litres = 1 m³).
+ */
+export function loadSpaceBody(kgText: string, litresText: string): { body: { capacityKg: number; volumeM3: number | null } } | { error: 'driver.load.errKg' | 'driver.load.errLitres' } {
+  const kg = Number(kgText.trim().replace(',', '.'));
+  if (!kgText.trim() || !Number.isInteger(kg) || kg <= 0) return { error: 'driver.load.errKg' };
+  const litres = litresText.trim() ? Number(litresText.trim().replace(/[\s.]/g, '').replace(',', '.')) : null;
+  if (litres !== null && (!Number.isFinite(litres) || litres <= 0)) return { error: 'driver.load.errLitres' };
+  return { body: { capacityKg: kg, volumeM3: litres === null ? null : Math.round(litres / 10) / 100 } };
+}
+
+/** m³ as litres, for the driver to read. */
+export function litresOf(volumeM3: number | undefined): number | null {
+  return volumeM3 == null ? null : Math.round(volumeM3 * 1000);
+}
+
 export function usedPercent(capacityKg: number | null | undefined, remainingKg: number): number {
   if (!capacityKg) return 0;
   return Math.max(0, Math.min(100, Math.round(((capacityKg - remainingKg) / capacityKg) * 100)));
