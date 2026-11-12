@@ -85,7 +85,6 @@ export const words: Record<string, string> = {
   "mdp.toast.passedOn": "{code} imepitishwa, haijafunguliwa",
   "mdp.toast.passedOnDetail": "Mfuko mzima wa {final}: uko hapa ukielekezwa {next}, na unatolewa kwa madereva.",
   "mdp.road.bins": "Kituo chako ni kituo cha kusimama barabarani. Mapipa kwenye sakafu yako: moja kuelekea kila moja ya vituo hivi, na maduka yako.",
-  "mdp.road.notYet": "Vifurushi vinaenda njia hii mara bei za nchi yako zitakapoanza kutumika; hadi hapo vinaenda kama kawaida.",
   "mdp.road.ownShops": "Maduka yako",
   "mdp.road.local": "Kituo chako ni cha eneo pekee: unapanga kwa maduka yako, na vifurushi vinavyopita vinaenda kupitia {hub} ({km}).",
   "mdp.road.km": "km {km}",

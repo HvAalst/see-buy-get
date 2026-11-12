@@ -87,7 +87,7 @@ export class HubRoadView {
   mdpId!: string;
   /** Its country's road map is confirmed. */
   inForce!: boolean;
-  /** …and its price card is in force: parcels go along the road map now, and its floor's bins are these (D3). */
+  /** Parcels go along it now, and its floor's bins are these: its road map is in force (D2). */
   routing!: boolean;
   @ApiPropertyOptional({ enum: ['stop', 'local'] }) role?: 'stop' | 'local';
   /** Local only: the stop that carries its through parcels. */

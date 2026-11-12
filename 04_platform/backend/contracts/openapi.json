@@ -51195,7 +51195,7 @@
           },
           "routing": {
             "type": "boolean",
-            "description": "…and its price card is in force: parcels go along the road map now, and its floor's bins are these (D3)."
+            "description": "Parcels go along it now, and its floor's bins are these: its road map is in force (D2)."
           }
         },
         "required": [

@@ -51,7 +51,6 @@ export function HubRoadCard({ sbg, mdpId }: { sbg: SbgClient | null; mdpId?: str
       ) : view.via ? (
         <p class="card__note">{t('mdp.road.local', { hub: view.via.name, km: km(view.via.km) })}</p>
       ) : null}
-      {!view.routing ? <p class="hint">{t('mdp.road.notYet')}</p> : null}
       <p class="hint">{t('mdp.road.byStaff')}</p>
     </Card>
   );

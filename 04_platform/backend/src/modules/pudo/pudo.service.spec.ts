@@ -2732,7 +2732,7 @@ describe('PUDO Light', () => {
       expect(parcels.get('MU5-B').plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'network_changed', planned: 'mdp_gone', took: hub.mdpId })]);
     });
 
-    it('along the road map: a journey passes every stop on the way, only with a price card in force; the floor sorts towards the next stop; a down stop is passed; arrival times count each hub as measured (2026-11-12)', () => {
+    it('along the road map: a journey passes every stop on the way once the road map is confirmed, at the price it would have without them; the floor sorts towards the next stop; a down stop is passed; arrival times count each hub as measured (2026-11-12)', () => {
       // Garissa – Wajir – El Wak – Mandera, far from every other test's hubs; shops at each end.
       const W = 'RW-West';
       const E = 'RW-East';
@@ -2745,31 +2745,35 @@ describe('PUDO Light', () => {
       const elwak = mdps.register({ name: 'RW El Wak', zones: ['RW-North'], location: { lat: 2.8, lng: 40.93 } }, { approvedBy: 'staff' });
       const mandera = mdps.register({ name: 'RW Mandera', zones: [E], location: { lat: 3.94, lng: 41.86 } }, { approvedBy: 'staff' });
       const hops = () => routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).hops.map((h) => h.id);
+      // Before staff confirm the road map: straight between the two hubs, as today (the owner's D2).
+      expect(hops()).toEqual([west.did, garissa.mdpId, mandera.mdpId, east.did]);
+      expect(mdps.nextHop(mdps.require(garissa.mdpId), E, east.did)).toMatchObject({ id: mandera.mdpId });
+      const before = routing.quoteShipment(west.did, east.did, 'S');
       roadMaps.propose('sbg-ke', 'N');
       roadMaps.confirm('sbg-ke', 'N');
-      let card = false;
-      const spy = jest.spyOn(priceCards, 'inForceFor').mockImplementation((c) => (card && c === 'KE' ? ({ entityId: 'sbg-ke' } as never) : undefined));
       try {
-        // The road map confirmed, no price card: straight between the two hubs, as today (D3).
-        expect(hops()).toEqual([west.did, garissa.mdpId, mandera.mdpId, east.did]);
-        expect(mdps.nextHop(mdps.require(garissa.mdpId), E, east.did)).toMatchObject({ id: mandera.mdpId });
-        // A price card in force: through Wajir and El Wak, the stops on the way; each floor sorts towards its next stop.
-        card = true;
+        // Confirmed: through Wajir and El Wak, the stops on the way, with no price card at all; each floor sorts towards its next
+        // stop. The price is the same as without them — routing never raises it (the owner's D3); the stops are the network's.
         expect(hops()).toEqual([west.did, garissa.mdpId, wajir.mdpId, elwak.mdpId, mandera.mdpId, east.did]);
+        const after = routing.quoteShipment(west.did, east.did, 'S');
+        expect(after.locked).toEqual(before.locked);
+        expect(after.flexible).toEqual(before.flexible);
+        expect(after.totalKm).toBe(before.totalKm);
+        expect(after.nodes.map((n) => n.id)).toEqual(before.nodes.map((n) => n.id));
         expect(mdps.nextHop(mdps.require(garissa.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: wajir.mdpId });
         expect(mdps.nextHop(mdps.require(wajir.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: elwak.mdpId });
         expect(mdps.nextHop(mdps.require(elwak.mdpId), E, east.did)).toMatchObject({ type: 'mdp', id: mandera.mdpId });
         expect(roadMaps.ofHub(wajir.mdpId)).toMatchObject({ routing: true, role: 'stop' });
 
         // Arrival times: a hub measured to hold parcels ten hours adds them; before five parcels are measured, half an hour.
-        const before = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
+        const arrivedBefore = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
         const floors = (mdps as any).floors;
         floors.set(wajir.mdpId, { ...(floors.get(wajir.mdpId) ?? { mdpId: wajir.mdpId, drops: [] }), dwells: [10, 10, 10, 10] });
         expect(mdps.dwellHoursOf(wajir.mdpId)).toBeUndefined();
         floors.set(wajir.mdpId, { ...floors.get(wajir.mdpId), dwells: [10, 10, 10, 10, 10] });
         expect(mdps.dwellHoursOf(wajir.mdpId)).toBe(10);
-        const after = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
-        expect(Math.round((Date.parse(after) - Date.parse(before)) / 3_600_000 * 10) / 10).toBeCloseTo(9.5, 0);
+        const arrivedAfter = routing.planJourney({ originAgentDid: west.did, destAgentDid: east.did, weightKg: 2 }).transitArrivalAt;
+        expect(Math.round((Date.parse(arrivedAfter) - Date.parse(arrivedBefore)) / 3_600_000 * 10) / 10).toBeCloseTo(9.5, 0);
         // The middle of its waits, not the longest: one long wait does not set the promise.
         floors.set(wajir.mdpId, { ...floors.get(wajir.mdpId), dwells: [1, 1, 2, 9, 10] });
         expect(mdps.dwellHoursOf(wajir.mdpId)).toBe(2);
@@ -2792,7 +2796,6 @@ describe('PUDO Light', () => {
         expect(roadMaps.pathFor(garissa.mdpId, mandera.mdpId)).toEqual([garissa.mdpId, elwak.mdpId, mandera.mdpId]);
         mdps.markUp(wajir.mdpId, 'Floor lead');
       } finally {
-        spy.mockRestore();
         // The road map taken away again: no other test here routes along it.
         (roadMaps as any).store.delete('sbg-ke');
       }

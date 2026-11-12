@@ -9,7 +9,6 @@ import type { Mdp } from './pudo.types';
 import type { HubRoadView, RoadMapView, RoadPlanView } from './road-map.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
 import { ROUTER, type Router } from './router';
-import { PriceCardService } from './price-card.service';
 import { adjacency, defaultMinKm, linksFor, nearest, pairOf, pathBetween, piecesOf, proposeRoadPlan, stopOf, tooClose, without, type Km, type RoadPlan } from './road-map';
 
 /** A plan as kept: the stops, the local hubs, the neighbours — and staff's own changes to the neighbours, replayed on a change of stops. */
@@ -49,8 +48,6 @@ export class RoadMapService implements OnModuleInit {
     private readonly entities: EntityService,
     private readonly mdps: MdpService,
     @Optional() @Inject(ROUTER) private readonly router?: Router,
-    // 2026-11-12 — D3: parcels go along the road map only where the country's price card is in force (no stop raises a price).
-    @Optional() private readonly priceCards?: PriceCardService,
   ) {}
 
   /** The hubs sort by the road map too: given its next stop here, so neither needs the other to be built. */
@@ -59,11 +56,12 @@ export class RoadMapService implements OnModuleInit {
   }
 
   /**
-   * 2026-11-12 — WHERE PARCELS GO ALONG THE ROAD MAP NOW (step 4): a country whose road map staff confirmed (D2) and whose
-   * price card is in force (D3: the price is the two ends', however many stops). Nothing elsewhere — today's routing stays.
+   * 2026-11-12 — WHERE PARCELS GO ALONG THE ROAD MAP NOW (step 4): a country whose road map staff confirmed (the owner's D2:
+   * "Today's routing stays until staff confirm the road map"). No price waits on it: routing never raises the price (D3 — it
+   * is worked out on the route without the road map's stops). Nothing elsewhere — today's routing stays.
    */
   routing(country: string | undefined, now: number = Date.now()): { plan: RoadPlan; km: Km } | undefined {
-    if (!country || !this.priceCards?.inForceFor(country, now)) return undefined;
+    if (!country) return undefined;
     return this.inForce(country, now);
   }
 
@@ -230,7 +228,7 @@ export class RoadMapService implements OnModuleInit {
     const hub = this.mdps.require(mdpId);
     const live = this.inForce(this.mdps.countryOf(hub), now);
     if (!live) return { mdpId, inForce: false, routing: false, neighbours: [], throughBins: [] };
-    const routing = Boolean(this.priceCards?.inForceFor(this.mdps.countryOf(hub), now));
+    const routing = true; // a road map in force is routed along (D2); no price card waits on it (D3)
     const name = (id: string) => this.mdps.find(id)?.name ?? id;
     const round = (n: number) => Math.round(n * 10) / 10;
     if (live.plan.stops.includes(mdpId)) {

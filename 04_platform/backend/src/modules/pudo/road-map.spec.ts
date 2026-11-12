@@ -148,16 +148,14 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
       expect(maps.inForce('KE')!.plan.stops).not.toContain(id('marsabit'));
     });
 
-    it('parcels go along it only once a price card is in force (D3): the path between two hubs, and the next stop', () => {
-      let card = false;
-      const priceCards = { inForceFor: (c: string) => (card && c === 'KE' ? { entityId: 'sbg-ke' } : undefined) };
-      const routed = new RoadMapService(entities, { ...mdps, find: mdps.find } as never, router, priceCards as never);
-      routed.propose('sbg-ke', 'Amina');
-      routed.confirm('sbg-ke', 'Amina');
+    it('parcels go along it once staff confirm it (D2) — no price card waits on it (D3): the path between two hubs, and the next stop', () => {
+      const routed = new RoadMapService(entities, { ...mdps, find: mdps.find } as never, router);
       expect(routed.routing('KE')).toBeUndefined();
       expect(routed.pathFor(id('nairobi'), id('moyale'))).toBeUndefined();
-      expect(routed.ofHub(id('isiolo'))).toMatchObject({ inForce: true, routing: false, role: 'stop' });
-      card = true;
+      routed.propose('sbg-ke', 'Amina');
+      expect(routed.pathFor(id('nairobi'), id('moyale'))).toBeUndefined();
+      routed.confirm('sbg-ke', 'Amina');
+      expect(routed.ofHub(id('isiolo'))).toMatchObject({ inForce: true, routing: true, role: 'stop' });
       expect(routed.pathFor(id('nairobi'), id('moyale'))).toEqual([id('nairobi'), id('isiolo'), id('marsabit'), id('moyale')]);
       expect(routed.nextToward(id('nairobi'), id('moyale'))).toBe(id('isiolo'));
       expect(routed.nextToward(id('marsabit'), id('moyale'))).toBe(id('moyale'));

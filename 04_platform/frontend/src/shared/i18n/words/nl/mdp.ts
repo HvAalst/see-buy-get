@@ -85,7 +85,6 @@ export const words: Record<string, string> = {
   "mdp.toast.passedOn": "{code} doorgegeven, niet geopend",
   "mdp.toast.passedOnDetail": "Een hele zak voor {final}: hij staat hier, geadresseerd aan {next}, en wordt aan chauffeurs aangeboden.",
   "mdp.road.bins": "Je hub is een stop op de weg. De bakken op je vloer: één richting elk van deze hubs, en je eigen winkels.",
-  "mdp.road.notYet": "Pakketten gaan deze weg zodra de prijskaart van je land van kracht is; tot dan gaan ze zoals altijd.",
   "mdp.road.ownShops": "Je eigen winkels",
   "mdp.road.local": "Je hub is alleen lokaal: je sorteert voor je eigen winkels, en doorgaande pakketten gaan via {hub} ({km}).",
   "mdp.road.km": "{km} km",

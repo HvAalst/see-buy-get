@@ -85,7 +85,6 @@ export const words: Record<string, string> = {
   "mdp.toast.passedOn": "{code} ተላልፏል፣ አልተከፈተም",
   "mdp.toast.passedOnDetail": "ለ{final} ሙሉ ከረጢት፦ እዚህ ለ{next} ተብሎ ቆሟል፣ ለሾፌሮችም ይቀርባል።",
   "mdp.road.bins": "ማዕከልዎ በመንገዱ ላይ ያለ ማቆሚያ ነው። በወለልዎ ላይ ያሉ ሳጥኖች፦ ወደ እያንዳንዱ ከእነዚህ ማዕከላት አንድ፣ እና የራስዎ ሱቆች።",
-  "mdp.road.notYet": "የአገርዎ የዋጋ ሰንጠረዥ በሥራ ላይ ሲውል ጥቅሎች በዚህ መንገድ ይሄዳሉ፤ እስከዚያ እንደወትሮው ይሄዳሉ።",
   "mdp.road.ownShops": "የራስዎ ሱቆች",
   "mdp.road.local": "ማዕከልዎ አካባቢያዊ ብቻ ነው፦ ለራስዎ ሱቆች ይለያሉ፣ የሚያልፉ ጥቅሎችም በ{hub} ({km}) በኩል ይሄዳሉ።",
   "mdp.road.km": "{km} ኪ.ሜ",

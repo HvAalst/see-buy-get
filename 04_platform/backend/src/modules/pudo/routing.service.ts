@@ -390,7 +390,9 @@ export class RoutingService {
       if (h.type === 'mdp') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'merchantOfRecord');
       if (h.type === 'pudo') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'takeIn');
     }
-    const sites = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
+    // D3 — priced on the route without the road map's stops: a hub on the way is paid by the network, never added to the price.
+    const priced = { hops: plan.priceHops ?? plan.hops, legs: plan.priceLegs ?? plan.legs };
+    const sites = priced.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
       const isHub = h.type === 'mdp';
       const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
       const own = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
@@ -409,7 +411,7 @@ export class RoutingService {
           { ...s, entityId: sellerId, purchased: true, currency: this.priceableCurrencyOf(s.country) },
     );
     const entityIds = [...new Set(stops.map((n) => n.entityId))];
-    const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
+    const legs = priced.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
     const totalKm = Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10;
     // ITEM 9. A MEASURED parcel is charged for what it measures; a DECLARED one for the band it was
     // declared as. The band is still derived from the same limit table, so nothing became under-declarable
@@ -508,7 +510,7 @@ export class RoutingService {
     // pay no price covered before, which a card now has to.
     const plannedCostOf = (): number => {
       const hubFees = nodes.filter((n) => n.type === 'mdp').reduce((sum, n) => sum + n.fee, 0);
-      const loading = plan.legs.length * this.entities.amountsFor(sellerId).toteLoadFee * (Math.min(factor, BAG_CAPACITY_UNITS) / BAG_CAPACITY_UNITS);
+      const loading = priced.legs.length * this.entities.amountsFor(sellerId).toteLoadFee * (Math.min(factor, BAG_CAPACITY_UNITS) / BAG_CAPACITY_UNITS);
       return Math.round((transport(min) + hubFees + loading) * 100) / 100;
     };
     const leg = (rate: number): QuoteLeg => {
@@ -634,6 +636,9 @@ export class RoutingService {
     }
 
     const route = this.buildRoute(origin, dest);
+    // 2026-11-12 — THE OWNER'S D3: "Routing never raises the price … stops along the road map are carried by the network". The
+    // price is worked out on the route as it would be with no road map: its two ends and their hubs, never the stops on the way.
+    const plain = route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false }) : route;
     const viaMdp = route.some((h) => h.type === 'mdp');
     if (!viaMdp && origin.zone !== dest.zone) {
       // Cross-zone with no hub → require a direct zone-pair corridor (the pre-MDP behaviour).
@@ -691,6 +696,9 @@ export class RoutingService {
       // rather than pretending to be a shop with a DID.
       originNode: { agentDid: origin.type === 'pudo' ? origin.id : '', shopName: origin.label, zone: origin.zone, country: origin.country, committed: origin.type === 'pudo' },
       hops: route.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone, country: h.country, location: h.location })),
+      /** The route the price is worked out on (D3): without the road map's stops on the way; the same as `hops` where there are none. */
+      priceHops: plain.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone, country: h.country, location: h.location })),
+      priceLegs: plain.slice(0, -1).map((from, i) => ({ from: from.label, to: plain[i + 1].label, distanceKm: Math.round(this.router.roadKm(from.location, plain[i + 1].location) * 10) / 10 })),
       mdpRouted: viaMdp,
       // The borders on this route, if any. A plan can be made across one; what cannot yet be made across
       // one is a PRICE (see the currency gate in quoteJourney) or an honest arrival time.
@@ -706,7 +714,7 @@ export class RoutingService {
   }
 
   /** origin PUDO → MDP(origin zone) → MDP(dest zone, if different) → dest PUDO (hubs collapse if shared). */
-  private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>): RouteHop[] {
+  private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, opts: { road?: boolean } = {}): RouteHop[] {
     // Every stop carries the country it stands in, so the crossings fall out of the route instead of
     // having to be declared. A hub's country is the hub's own — not the zone's — because a hub can serve
     // zones across a border and it is the HUB the goods are driven to.
@@ -739,7 +747,7 @@ export class RoutingService {
     // 2026-11-12 — ALONG THE ROAD MAP (step 4; the owner: "next hub on the road"): between its first hub and its last, every
     // stop on the way, where the country's road map is confirmed and its price card in force; a stop too near to be worth a
     // sort was made local only on the map and is not on the way.
-    const along = originMdp && destMdp && destMdp.mdpId !== originMdp.mdpId ? this.roadMaps?.pathFor(originMdp.mdpId, destMdp.mdpId) : undefined;
+    const along = opts.road !== false && originMdp && destMdp && destMdp.mdpId !== originMdp.mdpId ? this.roadMaps?.pathFor(originMdp.mdpId, destMdp.mdpId) : undefined;
     for (const id of along?.slice(1, -1) ?? []) {
       const hub = this.mdps.require(id);
       route.push({ type: 'mdp', id: hub.mdpId, label: hub.name, zone: hub.zones[0] ?? dest.zone, country: this.mdps.countryOf(hub), location: hub.location });
