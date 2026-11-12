@@ -95,6 +95,10 @@ export const enMdp = {
   'mdp.home.passOnLabel': 'Your fee for a bag passed on unopened',
   'mdp.home.passOnLabelIn': 'Your fee for a bag passed on unopened ({currency})',
   'mdp.home.passOnHint': 'A whole bag for a hub further on is received on its seal here, not opened, and sent on: you are paid this for each.',
+  'mdp.home.feeWaiting': 'Waiting for SeeBuyGet to approve {fee} a parcel. Until then you are paid your fee as it was.',
+  'mdp.home.feeWaitingPassOn': 'Waiting for SeeBuyGet to approve {fee} a bag passed on. Until then you are paid your fee as it was.',
+  'mdp.home.feeRefused': 'SeeBuyGet did not approve the fee you asked: {reason}',
+  'mdp.home.feeCeiling': 'Up to {sort} a parcel and {passOn} a bag passed on is yours at once. Above that, SeeBuyGet staff approve it first.',
   'mdp.toast.passedOn': '{code} passed on, not opened',
   'mdp.toast.passedOnDetail': 'A whole bag for {final}: it stands here addressed to {next}, and is offered to drivers.',
   'mdp.road.bins': 'Your hub is a stop on the road. The bins on your floor: one towards each of these hubs, and your own shops.',
@@ -407,6 +411,8 @@ export const enMdp = {
   'mdp.toast.loadMovingToMany': '{count} parcels moving to {dest}.',
   'mdp.toast.feeUpdatedTitle': 'Sort fee updated',
   'mdp.toast.feeUpdatedDetail': 'You now charge {price} per parcel.',
+  'mdp.toast.feeAskedTitle': 'Sent for approval',
+  'mdp.toast.feeAskedDetail': 'It is above your country’s ceiling: SeeBuyGet staff approve it first. Your bell tells you when they have.',
 
   // Reading B — COMING IN: stores' parcels brought in bulk, counted at the door and scanned in.
   'mdp.arrivals.title': 'Coming in',

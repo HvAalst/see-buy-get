@@ -8,6 +8,7 @@ import type { ParcelSize } from './pudo.types';
 import { ZoneMapService } from './zone-map.service';
 import { haversineKm } from './geo';
 import { OsrmRoadMatrix } from './road-matrix';
+import { FIXED_BAND, type PriceCardKind } from './price-card.types';
 import type {
   EndCharge,
   PriceBand,
@@ -48,6 +49,9 @@ export const DEFAULT_BANDS: PriceBand[] = [
   { key: 'national', name: 'National', maxZones: null, maxKm: null },
 ];
 export const DEFAULT_STEPS = [1, 2, 5, 10, 20, 30];
+/** 2026-11-12 — a fixed card starts with one weight for each size: small, medium, large, and heavy up to the most (D3). */
+export const FIXED_STEPS = [1, 5, 15, 30];
+const kindOf = (c: { kind?: PriceCardKind }): PriceCardKind => c.kind ?? 'zones';
 const DEFAULT_SETTINGS: PriceCardSettings = { filingRequired: false, noticeDays: 30 };
 /** How far ahead a card may be approved: a year, so a mistyped decade is refused. */
 const MAX_AHEAD_DAYS = 366;
@@ -87,7 +91,9 @@ export class PriceCardService {
   overview(entityId: string, now: number = Date.now()): PriceCardsView {
     const company = this.company(entityId);
     const s = this.stored(company);
-    const inForce = this.inForceOf(s, now);
+    const mode = this.entities.pricingModeFor(entityId);
+    const inForce = this.inForceOf(s, now, this.kindFor(entityId));
+    const other = this.inForceOf(s, now, this.kindFor(entityId) === 'fixed' ? 'zones' : 'fixed');
     const views = s.cards.map((c) => this.view(company, s, c, now));
     const pending = views.filter((v) => ['draft', 'ready', 'filed', 'cleared', 'scheduled'].includes(v.status));
     const working = s.cards.find((c) => ['draft', 'ready', 'filed', 'cleared'].includes(c.status));
@@ -96,7 +102,9 @@ export class PriceCardService {
       currency: company.currency ?? '',
       settings: { ...s.settings },
       zoneMaps: this.zones.setup(entityId, now).versions.map((v) => v.version),
+      mode,
       ...(inForce ? { inForce: this.view(company, s, inForce, now) } : {}),
+      ...(other ? { inForceOther: this.view(company, s, other, now) } : {}),
       pending,
       history: views.filter((v) => ['past', 'withdrawn'].includes(v.status)).sort((a, b) => b.version - a.version),
       costs: working ? this.costs(entityId, working) : [],
@@ -108,15 +116,21 @@ export class PriceCardService {
     const company = this.entities.forJurisdiction(country);
     if (!company) return undefined;
     const s = this.store.get(company.entityId);
-    const card = s ? this.inForceOf(s, at) : undefined;
+    // 2026-11-12 — the card of the kind the country prices by (the owner's D3); a card of the other kind prices nothing.
+    const card = s ? this.inForceOf(s, at, this.kindFor(company.entityId)) : undefined;
     return card ? { entityId: company.entityId, card } : undefined;
+  }
+
+  /** The kind of card a company's country prices by: its mode — a fixed card, or by factors (the zones card). */
+  kindFor(entityId: string): PriceCardKind {
+    return this.entities.pricingModeFor(entityId) === 'factors' ? 'zones' : 'fixed';
   }
 
   /** A price from one of the company's cards (its version, else the one in force, else the newest being worked on). */
   price(entityId: string, ask: PriceAsk, version?: number, now: number = Date.now()): ZonePrice {
     const company = this.company(entityId);
     const s = this.stored(company);
-    const card = version != null ? s.cards.find((c) => c.version === version) : (this.inForceOf(s, now) ?? this.working(s));
+    const card = version != null ? s.cards.find((c) => c.version === version) : (this.inForceOf(s, now, this.kindFor(entityId)) ?? this.working(s));
     if (!card) throw new GlosError('NOT_FOUND', `${company.name} has no price card${version != null ? ` ${version}` : ''}`);
     return this.priceOn(entityId, card, ask);
   }
@@ -128,9 +142,14 @@ export class PriceCardService {
    * the surcharges; at least the minimum. Before the shops' own fees, our fee and the tax.
    */
   priceOn(entityId: string, card: StoredPriceCard, ask: PriceAsk): ZonePrice {
-    const { zones, groups } = this.zones.publishedZones(entityId, card.zoneMapVersion);
-    const from = zones.find((z) => z.code === ask.from);
-    const to = zones.find((z) => z.code === ask.to);
+    // 2026-11-12 — A FIXED CARD (the owner's D3): one price per size, near or far — no zones, no band to find, no ends.
+    const fixed = kindOf(card) === 'fixed';
+    const published = fixed ? undefined : this.zones.publishedZones(entityId, card.zoneMapVersion);
+    const zones = published?.zones ?? [];
+    const groups = published?.groups ?? [];
+    const anywhere = { code: '', name: '', group: '', centre: { lat: 0, lng: 0 } };
+    const from = fixed ? anywhere : zones.find((z) => z.code === ask.from);
+    const to = fixed ? anywhere : zones.find((z) => z.code === ask.to);
     if (!from || !to) throw new GlosError('NOT_FOUND', `There is no zone ${!from ? ask.from : ask.to} on zone map ${card.zoneMapVersion}`);
     const w = card.weight;
     const weighed = ask.kg != null && ask.kg > 0 ? ask.kg : ask.size ? SIZE_WEIGHT_KG[ask.size] : undefined;
@@ -141,7 +160,7 @@ export class PriceCardService {
     const billableKg = Math.max(w.stepKg, Math.ceil(raw / w.stepKg - 1e-9) * w.stepKg);
     if (billableKg > w.maxKg + 1e-9) throw new GlosError('INVALID_INPUT', `It counts as ${r2(billableKg)} kg; the most a parcel may be here is ${w.maxKg} kg: send it as freight`, { field: 'kg' });
 
-    const { band, zonesCrossed, km } = this.bandFor(entityId, card, from, to);
+    const { band, zonesCrossed, km } = fixed ? { band: card.bands[0], zonesCrossed: 0, km: 0 } : this.bandFor(entityId, card, from, to);
 
     const lines: ZonePriceLine[] = [];
     const prices = card.table[band.key] ?? [];
@@ -152,7 +171,7 @@ export class PriceCardService {
 
     const groupName = (key: string) => groups.find((g) => g.key === key)?.name ?? key;
     const endCharge = (z: { code: string; group: string }): EndCharge => card.zoneCharges[z.code] ?? card.groupCharges[z.group] ?? { perParcel: 0, perKg: 0 };
-    for (const [key, z] of from.code === to.code ? ([['from', from]] as const) : ([['from', from], ['to', to]] as const)) {
+    for (const [key, z] of fixed ? [] : from.code === to.code ? ([['from', from]] as const) : ([['from', from], ['to', to]] as const)) {
       const c = endCharge(z);
       const amount = r2(c.perParcel + c.perKg * billableKg);
       if (amount) lines.push({ key: `end:${key}`, label: `${z.name} (${card.zoneCharges[z.code] ? 'its own price' : groupName(z.group)})`, amount });
@@ -270,8 +289,9 @@ export class PriceCardService {
     if (!company) return undefined;
     const s = this.store.get(company.entityId);
     if (!s) return undefined;
-    const inForce = this.inForceOf(s, now);
-    const later = s.cards.filter((c) => c.status === 'approved' && Date.parse(c.effectiveFrom!) > now).sort((a, b) => Date.parse(a.effectiveFrom!) - Date.parse(b.effectiveFrom!) || a.version - b.version);
+    const kind = this.kindFor(company.entityId);
+    const inForce = this.inForceOf(s, now, kind);
+    const later = s.cards.filter((c) => kindOf(c) === kind && c.status === 'approved' && Date.parse(c.effectiveFrom!) > now).sort((a, b) => Date.parse(a.effectiveFrom!) - Date.parse(b.effectiveFrom!) || a.version - b.version);
     return { entityId: company.entityId, cards: [...(inForce ? [inForce] : []), ...later] };
   }
 
@@ -297,14 +317,23 @@ export class PriceCardService {
   }
 
   /** A new draft: the newest card's terms, else the neutral start, on a published zone map (the one given, else the one in force). */
-  startDraft(entityId: string, zoneMapVersion: number | undefined, by: Doer, now: number = Date.now()): PriceCardsView {
+  startDraft(entityId: string, zoneMapVersion: number | undefined, by: Doer, now: number = Date.now(), kind: PriceCardKind = 'zones'): PriceCardsView {
     const company = this.company(entityId);
     const s = this.stored(company);
     if (this.working(s)) throw new GlosError('INVALID_STATE', 'A card is already being worked on: finish it or throw it away first');
+    if (kind === 'fixed') {
+      // 2026-11-12 — A FIXED CARD (the owner's D3): the newest fixed card's terms, else one price per size, all to fill in.
+      const newestFixed = [...s.cards].filter((c) => c.status !== 'withdrawn' && kindOf(c) === 'fixed').sort((a, b) => b.version - a.version)[0];
+      const terms: PriceCardTerms = newestFixed ? this.termsOf(newestFixed) : this.neutralFixed();
+      const card: StoredPriceCard = { ...terms, kind: 'fixed', version: s.cards.reduce((n, c) => Math.max(n, c.version), 0) + 1, status: 'draft', zoneMapVersion: 0, currency: company.currency ?? '', createdAt: new Date(now).toISOString(), createdBy: by.name };
+      this.save({ ...s, cards: [...s.cards, card] });
+      this.note(entityId, by, this.inForceLine(s, now), `price card ${card.version}: a fixed card, a draft`);
+      return this.overview(entityId, now);
+    }
     const setup = this.zones.setup(entityId, now);
     const mapVersion = zoneMapVersion ?? setup.inForce?.version;
     if (mapVersion == null || !setup.versions.some((v) => v.version === mapVersion)) throw new GlosError('INVALID_STATE', 'A price card is made on a published zone map: publish the zones first');
-    const newest = [...s.cards].filter((c) => c.status !== 'withdrawn').sort((a, b) => b.version - a.version)[0];
+    const newest = [...s.cards].filter((c) => c.status !== 'withdrawn' && kindOf(c) === 'zones').sort((a, b) => b.version - a.version)[0];
     const { groups } = this.zones.publishedZones(entityId, mapVersion);
     const terms: PriceCardTerms = newest ? this.termsOf(newest) : this.neutral(groups.map((g) => g.key));
     // Groups the map has that the terms do not get a charge of nothing, said on the card; a group gone is dropped.
@@ -321,9 +350,10 @@ export class PriceCardService {
     const s = this.stored(company);
     const draft = s.cards.find((c) => c.status === 'draft');
     if (!draft) throw new GlosError('INVALID_STATE', 'There is no draft card: start one first');
-    const shape = this.shapeProblem(terms);
+    const kept = kindOf(draft) === 'fixed' ? this.asFixed(terms) : terms;
+    const shape = this.shapeProblem(kept, kindOf(draft));
     if (shape) throw new GlosError('VALIDATION_FAILED', shape);
-    Object.assign(draft, this.termsOf(terms as StoredPriceCard));
+    Object.assign(draft, this.termsOf(kept as StoredPriceCard));
     this.save(s);
     this.note(entityId, by, `price card ${draft.version}`, `price card ${draft.version}: its terms saved`);
     return this.overview(entityId, now);
@@ -347,8 +377,8 @@ export class PriceCardService {
     if (!draft) throw new GlosError('INVALID_STATE', 'There is no draft card');
     const problems = this.problems(entityId, draft);
     if (problems.length) throw new GlosError('INVALID_STATE', `It cannot be made ready yet: ${problems[0]}`, { problems });
-    const byRoad = Boolean(this.roads?.configured());
-    Object.assign(draft, { status: 'ready', readyAt: new Date(now).toISOString(), readyBy: by.name, readyById: by.id, distances: byRoad ? 'measuring' : 'estimate' });
+    const byRoad = kindOf(draft) === 'zones' && Boolean(this.roads?.configured());
+    Object.assign(draft, { status: 'ready', readyAt: new Date(now).toISOString(), readyBy: by.name, readyById: by.id, ...(kindOf(draft) === 'zones' ? { distances: byRoad ? 'measuring' : 'estimate' } : {}) });
     this.save(s);
     if (byRoad) {
       const key = `${entityId}#${draft.version}`;
@@ -403,7 +433,7 @@ export class PriceCardService {
     if (problems.length) throw new GlosError('INVALID_STATE', `It cannot be approved: ${problems[0]}`, { problems });
     Object.assign(card, { status: 'approved', approvedAt: new Date(now).toISOString(), approvedBy: by.name, effectiveFrom: new Date(Math.max(at, now)).toISOString() });
     this.save(s);
-    this.note(entityId, by, this.inForceLine(s, now, card.version), `price card ${version} from ${card.effectiveFrom!.slice(0, 16).replace('T', ' ')} UTC`);
+    this.note(entityId, by, this.inForceLine(s, now, card.version, kindOf(card)), `price card ${version} from ${card.effectiveFrom!.slice(0, 16).replace('T', ' ')} UTC`);
     return this.overview(entityId, now);
   }
 
@@ -424,10 +454,11 @@ export class PriceCardService {
   /** What is wrong with a card's terms, in words — empty when nothing is. Shown on the draft; it stops ready and approval. */
   problems(entityId: string, card: StoredPriceCard): string[] {
     const out: string[] = [];
-    const shape = this.shapeProblem(card);
+    const shape = this.shapeProblem(card, kindOf(card));
     if (shape) return [shape];
+    const fixed = kindOf(card) === 'fixed';
     let zones: Array<{ code: string; group: string }> = [];
-    try {
+    if (!fixed) try {
       zones = this.zones.publishedZones(entityId, card.zoneMapVersion).zones;
     } catch {
       return [`Zone map ${card.zoneMapVersion} is not published`];
@@ -451,9 +482,9 @@ export class PriceCardService {
   }
 
   /** What is wrong with the card's shape before anything else can be said of it: the rules a figure must keep to. */
-  private shapeProblem(t: PriceCardTerms): string | null {
+  private shapeProblem(t: PriceCardTerms, kind: PriceCardKind = 'zones'): string | null {
     const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
-    if (!Array.isArray(t.bands) || t.bands.length < 2 || t.bands.length > 8) return 'A card has from 2 to 8 bands';
+    if (kind === 'fixed' ? !Array.isArray(t.bands) || t.bands.length !== 1 : !Array.isArray(t.bands) || t.bands.length < 2 || t.bands.length > 8) return kind === 'fixed' ? 'A fixed card has one price for each weight, anywhere' : 'A card has from 2 to 8 bands';
     const keys = new Set<string>();
     for (const [i, b] of t.bands.entries()) {
       if (!b?.key || keys.has(b.key)) return 'Every band needs a key of its own';
@@ -490,10 +521,12 @@ export class PriceCardService {
   costs(entityId: string, card: StoredPriceCard): PriceCostCell[] {
     const a = this.entities.amountsFor(entityId);
     const out: PriceCostCell[] = [];
+    const fixed = kindOf(card) === 'fixed';
     card.bands.forEach((b, i) => {
       const prev = i > 0 ? card.bands[i - 1].maxKm ?? 0 : 0;
-      const km = b.maxKm != null ? (prev + b.maxKm) / 2 : prev * 1.5 || 300;
-      const hubs = i === 0 ? 1 : 2;
+      // 2026-11-12 — a fixed card prices near and far alike: costed on a middling journey, two hubs and 150 km.
+      const km = fixed ? 150 : b.maxKm != null ? (prev + b.maxKm) / 2 : prev * 1.5 || 300;
+      const hubs = fixed ? 2 : i === 0 ? 1 : 2;
       card.steps.forEach((kg, j) => {
         const units = Math.min(BAG_CAPACITY_UNITS, kg / MEDIUM_KG);
         const cost = km * a.freightPerKm * units + hubs * a.mdpSortFee + (hubs + 1) * a.toteLoadFee * (units / BAG_CAPACITY_UNITS);
@@ -531,20 +564,20 @@ export class PriceCardService {
     return { s, card };
   }
 
-  private inForceOf(s: StoredPriceCards, at: number): StoredPriceCard | undefined {
+  private inForceOf(s: StoredPriceCards, at: number, kind: PriceCardKind): StoredPriceCard | undefined {
     return s.cards
-      .filter((c) => c.status === 'approved' && Date.parse(c.effectiveFrom!) <= at)
+      .filter((c) => kindOf(c) === kind && c.status === 'approved' && Date.parse(c.effectiveFrom!) <= at)
       .sort((a, b) => Date.parse(b.effectiveFrom!) - Date.parse(a.effectiveFrom!) || b.version - a.version)[0];
   }
 
   private statusOf(s: StoredPriceCards, c: StoredPriceCard, now: number): PriceCardView['status'] {
     if (c.status !== 'approved') return c.status;
-    if (this.inForceOf(s, now)?.version === c.version) return 'in_force';
+    if (this.inForceOf(s, now, kindOf(c))?.version === c.version) return 'in_force';
     return Date.parse(c.effectiveFrom!) > now ? 'scheduled' : 'past';
   }
 
-  private inForceLine(s: StoredPriceCards, now: number, besides?: number): string {
-    const c = this.inForceOf(s, now);
+  private inForceLine(s: StoredPriceCards, now: number, besides?: number, kind?: PriceCardKind): string {
+    const c = kind ? this.inForceOf(s, now, kind) : (this.inForceOf(s, now, 'fixed') ?? this.inForceOf(s, now, 'zones'));
     return c && c.version !== besides ? `price card ${c.version}` : 'no price card';
   }
 
@@ -564,6 +597,27 @@ export class PriceCardService {
     };
   }
 
+  /** 2026-11-12 — where a fixed card starts: one price for each size, all to fill in, in the country's own money. */
+  private neutralFixed(): PriceCardTerms {
+    const start = this.neutral([]);
+    return { ...start, bands: [{ ...FIXED_BAND }], steps: [...FIXED_STEPS], table: { [FIXED_BAND.key]: FIXED_STEPS.map(() => 0) }, perExtraKg: { [FIXED_BAND.key]: 0 }, groupCharges: {}, zoneCharges: {}, pairs: [] };
+  }
+
+  /** A fixed card's terms as kept: its one band, its own row of prices, no zones whatever was sent. */
+  private asFixed(t: PriceCardTerms): PriceCardTerms {
+    const band = t.bands?.[0];
+    const key = band?.key ?? FIXED_BAND.key;
+    return {
+      ...t,
+      bands: [{ key: FIXED_BAND.key, name: band?.name?.trim() || FIXED_BAND.name, maxZones: null, maxKm: null }],
+      table: { [FIXED_BAND.key]: t.table?.[key] ?? t.table?.[FIXED_BAND.key] ?? [] },
+      perExtraKg: { [FIXED_BAND.key]: t.perExtraKg?.[key] ?? t.perExtraKg?.[FIXED_BAND.key] ?? 0 },
+      groupCharges: {},
+      zoneCharges: {},
+      pairs: [],
+    };
+  }
+
   /** A card's terms, copied — never a reference into another card. */
   private termsOf(c: PriceCardTerms): PriceCardTerms {
     return JSON.parse(
@@ -576,6 +630,7 @@ export class PriceCardService {
     return {
       ...this.termsOf(c),
       version: c.version,
+      kind: kindOf(c),
       status,
       zoneMapVersion: c.zoneMapVersion,
       currency: c.currency,

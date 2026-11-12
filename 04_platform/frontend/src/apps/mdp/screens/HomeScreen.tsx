@@ -5,7 +5,7 @@ import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
 import { formatDate, useT } from '../../../shared/i18n';
 import { PlaceView } from '../../../shared/ui/PlaceView';
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
+import { bagLine, feeAskLines, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { PeopleSheet } from '../../agent/screens/PeopleSheet';
 import { HUB_PEOPLE_WORDS } from '../staffWords';
@@ -248,6 +248,12 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       <Card title={t('mdp.home.yourFee')} aside={<b class="mono">{money(hub?.pricePerParcel, hub?.currency)}</b>}>
         <p class="card__note">{t('mdp.home.feeNote')}</p>
         {hub?.passOnFee != null ? <p class="card__note">{t('mdp.home.passOnFee', { fee: money(hub.passOnFee, hub.currency) })}</p> : null}
+        {/* 2026-11-12 — the owner's D3: a fee above the country's ceiling waits for staff; one refused says why. */}
+        {feeAskLines(hub, t).map((line) => (
+          <p key={line} class="card__note">
+            {line}
+          </p>
+        ))}
         <div class="btnrow">
           <Button variant="link" full={false} onClick={() => actions.go('rates')}>
             {t('mdp.home.feesNear')}
@@ -290,6 +296,7 @@ function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   return (
     <Sheet open={open} onClose={onClose} title={t('mdp.home.feeSheetTitle')}>
       <p class="t-body">{t('mdp.home.feeSheetBody')}</p>
+      {state.hub?.feeCeiling ? <p class="hint">{t('mdp.home.feeCeiling', { sort: money(state.hub.feeCeiling.sort, state.hub.currency), passOn: money(state.hub.feeCeiling.passOn, state.hub.currency) })}</p> : null}
       <div class="field">
         <label class="field__label" for="fee">
           {state.hub?.currency ? t('mdp.home.feeSheetLabelIn', { currency: state.hub.currency }) : t('mdp.home.feeSheetLabel')}

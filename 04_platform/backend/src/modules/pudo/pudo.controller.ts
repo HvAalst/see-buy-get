@@ -166,7 +166,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, HubPriceDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, HubPriceDto, HubFeeCeilingDto, HubFeeDecisionDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PricingModeDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -3189,6 +3189,18 @@ export class SbgController {
     return this.cardsOf().overview(entityId);
   }
 
+  /**
+   * 2026-11-12 — the owner's D3: how parcels are priced in the country — a fixed card (one price per size, near or far) or by
+   * factors (the zones card). Every country starts on a fixed card. Logged.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/pricing-mode')
+  setEntityPricingMode(@Param('entityId') entityId: string, @Body() dto: PricingModeDto, @Actor() actor: IntrospectionResult): PriceCardsView {
+    this.requireReach(actor, entityId);
+    this.entities.setPricingMode(entityId, dto.mode, this.doerOf(actor).name);
+    return this.cardsOf().overview(entityId);
+  }
+
   /** Whether its regulator must have each card filed and cleared, and how many days' notice a new card gives. */
   @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/price-cards/settings')
@@ -3201,7 +3213,7 @@ export class SbgController {
   @Post('entities/:entityId/price-cards/draft')
   startEntityPriceCard(@Param('entityId') entityId: string, @Body() dto: PriceCardStartDto, @Actor() actor: IntrospectionResult): PriceCardsView {
     this.requireReach(actor, entityId);
-    return this.cardsOf().startDraft(entityId, dto.zoneMapVersion, this.doerOf(actor));
+    return this.cardsOf().startDraft(entityId, dto.zoneMapVersion, this.doerOf(actor), Date.now(), dto.kind ?? 'zones');
   }
 
   @Roles('operator', 'entity_admin')
@@ -3347,6 +3359,29 @@ export class SbgController {
   custodyCap(@Actor() actor: IntrospectionResult): CustodyCapView {
     const standing = actor?.role === 'agent' && actor.did ? this.parcels.shopStanding(actor.did) : actor?.role === 'driver' && actor.did ? this.parcels.riderStanding(actor.did) : undefined;
     return standing ? { capped: true, ...standing } : { capped: false };
+  }
+
+  /** 2026-11-12 — the owner's D3: the ceiling on a hub's fees, as a multiple of the list figure. Staff and its administrators. */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/hub-fee-ceiling')
+  setHubFeeCeiling(@Param('entityId') entityId: string, @Body() dto: HubFeeCeilingDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    this.entities.setHubFeeCeiling(entityId, dto.multiple, auditActor(actor));
+    return { entityId, multiple: this.entities.hubFeeCeilingFor(entityId) };
+  }
+
+  /** 2026-11-12 — hubs that asked for fees above the ceiling, waiting for a member of staff: the fees, the ceiling, the list. */
+  @Roles('operator')
+  @Get('hub-fees')
+  hubFeesAsked() {
+    return this.mdps.feesAsked().map((m) => ({ mdpId: m.mdpId, name: m.name, country: this.mdps.countryOf(m), currency: this.mdps.currencyOf(m), pricePerParcel: m.pricePerParcel, passOnFee: this.mdps.passOnFeeOf(m), asked: m.feeAsked!, ceiling: this.mdps.feeCeilingOf(m) }));
+  }
+
+  /** 2026-11-12 — a member of staff decides them: approved, they are the hub's fees; refused, with why. */
+  @Roles('operator')
+  @Post('mdps/:id/fee-decision')
+  decideHubFees(@Param('id') id: string, @Body() dto: HubFeeDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.mdps.decideFees(id, dto.approve, staffOf(actor).name, dto.reason);
   }
 
   /** 2026-11-09 (D6) — how a country's company pays runs and extra legs: by bag or by km. Staff and its own administrators. */
@@ -5865,7 +5900,7 @@ export class SbgController {
       if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) {
         // 2026-11-08 — the zone it stands in, on its country's map in force.
         const priceZone = this.zones?.zoneOfHub(m);
-        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}), ...this.glnOf('hub', m.mdpId), passOnFee: this.mdps.passOnFeeOf(m) };
+        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}), ...this.glnOf('hub', m.mdpId), passOnFee: this.mdps.passOnFeeOf(m), feeCeiling: this.mdps.feeCeilingOf(m) };
       }
       return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency, ...this.glnOf('hub', m.mdpId) };
     });

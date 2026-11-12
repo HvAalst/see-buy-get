@@ -28,6 +28,8 @@ export function suggestionLine(s: Pick<HubSuggestion, 'kind' | 'numbers' | 'zone
       return n.ratio != null ? t('tower.density.line.extra_hub_ratio' as MessageKey, { hub: s.hubNames[0], full: n.fullDays ?? 0, days: n.days ?? 14, ratio: n.ratio, zone: s.zoneNames[0] ?? '—' }) : t('tower.density.line.extra_hub' as MessageKey, { hub: s.hubNames[0], full: n.fullDays ?? 0, days: n.days ?? 14, zone: s.zoneNames[0] ?? '—' });
     case 'too_close':
       return t('tower.density.line.too_close' as MessageKey, { a: s.hubNames[0], b: s.hubNames[1], km: n.apart ?? 0, min: n.min ?? 0 });
+    case 'bottleneck':
+      return t('tower.density.line.bottleneck' as MessageKey, { hub: s.hubNames[0], ratio: n.ratio ?? 0 });
     default:
       return t('tower.density.line.road_gap' as MessageKey, { a: s.hubNames[0], b: s.hubNames[1], km: n.apart ?? 0 });
   }

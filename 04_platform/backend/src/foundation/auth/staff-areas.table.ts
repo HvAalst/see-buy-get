@@ -305,6 +305,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/entities/:entityId/record': 'any',
   'GET sbg/entities/:entityId/seal-rules': 'admin',
   'GET sbg/entities/:entityId/run-pay': 'admin',
+  'POST sbg/entities/:entityId/hub-fee-ceiling': 'admin',
+  'GET sbg/hub-fees': 'money',
+  'POST sbg/mdps/:id/fee-decision': 'money',
   // 2026-11-08 — a country's zones (zone pricing, step 1): set where its other terms are set.
   'GET sbg/entities/:entityId/zones': 'admin',
   'GET sbg/entities/:entityId/zones/shapes': 'admin',
@@ -806,6 +809,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/entities/:entityId/zones/draft/move': 'admin',
   'POST sbg/entities/:entityId/zones/draft/publish': 'admin',
   'POST sbg/entities/:entityId/price-cards/settings': 'admin',
+  'POST sbg/entities/:entityId/pricing-mode': 'admin',
   'POST sbg/entities/:entityId/price-cards/draft': 'admin',
   'POST sbg/entities/:entityId/price-cards/draft/terms': 'admin',
   'DELETE sbg/entities/:entityId/price-cards/draft': 'admin',

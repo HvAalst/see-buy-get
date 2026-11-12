@@ -159,6 +159,12 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Round 38 — where this company requires a seal on loads taken over in its country. */
     /** 2026-11-09 (D6) — how runs and extra legs are paid in a country: by bag or by km. */
     setRunPay: (entityId: string, mode: 'bag' | 'km') => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/run-pay', { params: { path: { entityId } }, body: { mode } })),
+    /** 2026-11-12 — the owner's D3: how many times the list figure a hub may set its fees to before staff approve. */
+    setHubFeeCeiling: (entityId: string, multiple: number) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/hub-fee-ceiling', { params: { path: { entityId } }, body: { multiple } })),
+    /** Hubs that asked for fees above the ceiling, waiting for staff. */
+    hubFeesAsked: () => sbg.request((c) => c.GET('/v1/sbg/hub-fees', {})),
+    /** Approve them, or refuse them with why. */
+    decideHubFees: (mdpId: string, approve: boolean, reason?: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/fee-decision', { params: { path: { id: mdpId } }, body: { approve, ...(reason ? { reason } : {}) } })),
     setSealRules: (entityId: string, body: { crossBorder: boolean; containers: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/seal-rules', { params: { path: { entityId } }, body })),
     /* 2026-11-08 — a country's zones (zone pricing, step 1). */
@@ -211,8 +217,10 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/price-cards/report', { params: { path: { entityId }, query: week ? { week } : {} } })),
     setPriceCardSettings: (entityId: string, body: { filingRequired?: boolean; noticeDays?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/settings', { params: { path: { entityId } }, body })),
-    startPriceCard: (entityId: string, zoneMapVersion?: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } }, body: zoneMapVersion ? { zoneMapVersion } : {} })),
+    startPriceCard: (entityId: string, zoneMapVersion?: number, kind?: 'zones' | 'fixed') =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } }, body: { ...(zoneMapVersion ? { zoneMapVersion } : {}), ...(kind ? { kind } : {}) } })),
+    /** 2026-11-12 — the owner's D3: how parcels are priced in a country — a fixed card, or by factors (the zones card). */
+    setPricingMode: (entityId: string, mode: 'fixed' | 'factors') => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/pricing-mode', { params: { path: { entityId } }, body: { mode } })),
     savePriceCard: (entityId: string, terms: unknown) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/price-cards/draft/terms', { params: { path: { entityId } }, body: terms as never })),
     discardPriceCard: (entityId: string) => sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/price-cards/draft', { params: { path: { entityId } } })),

@@ -2801,6 +2801,52 @@ describe('PUDO Light', () => {
       }
     });
 
+    it('a hub sets its own fees up to its country’s ceiling at once; above it, staff approve or refuse with why (the owner’s D3, 2026-11-12)', () => {
+      const hub = mdps.register({ name: 'Ceiling Hub', zones: ['CEIL-1'], location: { lat: 0.9, lng: 38.1 } }, { approvedBy: 'staff' });
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const list = entities.amountsFor(mdps.entityIdOrNone(hub)).mdpSortFee;
+      const ceiling = mdps.feeCeilingOf(hub);
+      expect(ceiling).toMatchObject({ multiple: 1.5, listSort: list, sort: Math.round(list * 1.5 * 100) / 100 });
+      // Within the ceiling: its own at once.
+      mdps.setPrice(hub.mdpId, ceiling.sort);
+      expect(mdps.require(hub.mdpId)).toMatchObject({ pricePerParcel: ceiling.sort });
+      expect(mdps.require(hub.mdpId).feeAsked).toBeUndefined();
+      // Above it: kept as asked, its fee as it was; on staff's list of fees waiting.
+      mdps.setPrice(hub.mdpId, ceiling.sort + 1, ceiling.passOn);
+      expect(mdps.require(hub.mdpId)).toMatchObject({ pricePerParcel: ceiling.sort, passOnFee: ceiling.passOn, feeAsked: { pricePerParcel: ceiling.sort + 1 } });
+      expect(mdps.require(hub.mdpId).feeAsked!.passOnFee).toBeUndefined();
+      expect(mdps.feesAsked().map((m) => m.mdpId)).toContain(hub.mdpId);
+      // Refused only with why: its fee stays, the hub is shown why.
+      expect(() => mdps.decideFees(hub.mdpId, false, 'Amina Otieno')).toThrow(/Say why/);
+      mdps.decideFees(hub.mdpId, false, 'Amina Otieno', 'Above every hub on this road');
+      expect(mdps.require(hub.mdpId)).toMatchObject({ pricePerParcel: ceiling.sort, feeRefused: { by: 'Amina Otieno', reason: 'Above every hub on this road' } });
+      expect(mdps.require(hub.mdpId).feeAsked).toBeUndefined();
+      expect(mdps.feesAsked().map((m) => m.mdpId)).not.toContain(hub.mdpId);
+      expect(() => mdps.decideFees(hub.mdpId, true, 'Amina Otieno')).toThrow(/has not asked/);
+      // Asked again and approved: its fee from now; asking within the ceiling later clears what was asked.
+      mdps.setPrice(hub.mdpId, ceiling.sort + 1);
+      expect(mdps.require(hub.mdpId).feeRefused).toBeUndefined();
+      mdps.decideFees(hub.mdpId, true, 'Amina Otieno');
+      expect(mdps.require(hub.mdpId).pricePerParcel).toBe(ceiling.sort + 1);
+      mdps.setPrice(hub.mdpId, ceiling.sort + 2);
+      mdps.setPrice(hub.mdpId, list);
+      expect(mdps.require(hub.mdpId)).toMatchObject({ pricePerParcel: list });
+      expect(mdps.require(hub.mdpId).feeAsked).toBeUndefined();
+      // The country raises its ceiling, logged: the same fee is within it.
+      entities.setHubFeeCeiling(ke, 5, 'Amina Otieno');
+      try {
+        expect(entities.hubFeeCeilingFor(ke)).toBe(5);
+        expect(entities.changes(ke).find((c) => c.what === 'hubFeeCeiling')).toMatchObject({ from: '1.5 × the list figure', to: '5 × the list figure' });
+        if (mdps.entityIdOrNone(hub) === ke) {
+          mdps.setPrice(hub.mdpId, ceiling.sort + 1);
+          expect(mdps.require(hub.mdpId).pricePerParcel).toBe(ceiling.sort + 1);
+        }
+      } finally {
+        entities.setHubFeeCeiling(ke, 1.5, 'Amina Otieno');
+      }
+      expect(entities.get(ke).hubFeeCeiling).toBeUndefined();
+    });
+
     it('whole bags past hubs: a far hub gets its own bin after 10 full days of 14; its bag is passed on unopened, each hub paid its pass-on fee, opened at the far hub (2026-11-12)', () => {
       const W = 'WB-West';
       const E = 'WB-East';
@@ -2866,8 +2912,10 @@ describe('PUDO Light', () => {
         // Its driver's card on the next leg says it is a whole bag for Mandera.
         expect((dispatch as any).wrapTote(code)?.throughTo).toBe('WB Mandera');
         expect(parcels.get('WB-1').plan!.hops[parcels.get('WB-1').plan!.at!].id).toBe(wajir.mdpId);
-        // On to El Wak, its own fee set higher by its owner; then Mandera opens it.
+        // On to El Wak, its own fee set higher by its owner — above its country's ceiling, so approved by staff; then Mandera opens it.
         mdps.setPrice(elwak.mdpId, 0.3, 1.25);
+        expect(mdps.passOnFeeOf(mdps.require(elwak.mdpId))).toBe(0.3);
+        mdps.decideFees(elwak.mdpId, true, 'Amina Otieno');
         expect(mdps.passOnFeeOf(mdps.require(elwak.mdpId))).toBe(1.25);
         mdps.loadBag(code, 'BUS-WB3');
         expect(mdps.dropBag(elwak.mdpId, code, receivedAtHub(elwak.mdpId)).passedOn).toMatchObject({ next: 'WB Mandera' });
@@ -10124,11 +10172,13 @@ describe('PUDO Light', () => {
       // A hub nobody registered is nobody's: said as that, before anything else.
       expect(() => controller.setMdpPrice('mdp_nobody', { price: 1 } as never, own)).toThrow(/not found|No such|Unknown/i);
 
-      expect((controller.setMdpPrice(hub.mdpId, { price: 7 } as never, own) as { pricePerParcel: number }).pricePerParcel).toBe(7);
+      // Within its country's ceiling (the owner's D3, 2026-11-12): its own at once.
+      const within = mdps.feeCeilingOf(mdps.require(hub.mdpId)).sort;
+      expect((controller.setMdpPrice(hub.mdpId, { price: within } as never, own) as { pricePerParcel: number }).pricePerParcel).toBe(within);
       expect((controller.registerTote(hub.mdpId, own) as { code: string }).code).toBeTruthy();
       // Its fee is what it is paid (the user, 2026-10-26: "Its own fee"): staff are refused by name, and nothing moves.
       expect(() => controller.setMdpPrice(hub.mdpId, { price: 8 } as never, staff)).toThrow(/A hub sets its own fee/);
-      expect(mdps.require(hub.mdpId).pricePerParcel).toBe(7);
+      expect(mdps.require(hub.mdpId).pricePerParcel).toBe(within);
       // Its bags are still the floor's: staff stand in for a hub there.
       expect((controller.registerTote(hub.mdpId, staff) as { code: string }).code).toBeTruthy();
     });
@@ -10299,7 +10349,11 @@ describe('PUDO Light', () => {
       const home = mdps.register({ name: 'Nairobi Fee Hub', zones: ['FeeZone'], location: at }, { approvedBy: 'staff' });
       const ets = [mdps.register({ name: 'Addis Fee Hub A', zones: ['FeeAddisA'], location: at, country: 'ET' } as never, { approvedBy: 'staff' }), mdps.register({ name: 'Addis Fee Hub B', zones: ['FeeAddisB'], location: at, country: 'ET' } as never, { approvedBy: 'staff' })];
       mdps.setPrice(home.mdpId, 0.4);
-      ets.forEach((h, i) => mdps.setPrice(h.mdpId, 20 + i * 5));
+      // Above the network's starting list figure: staff approved them (the owner's D3, 2026-11-12).
+      ets.forEach((h, i) => {
+        mdps.setPrice(h.mdpId, 20 + i * 5);
+        if (mdps.require(h.mdpId).feeAsked) mdps.decideFees(h.mdpId, true, 'Amina Otieno');
+      });
       const listed = (who: never, id: string) => (controller.listMdps(who) as Row[]).find((m) => m.mdpId === id)!;
       expect(listed(as('consumer'), ets[0].mdpId).currency).toBe('ETB');
       expect(listed(as('mdp', ets[0].did), ets[0].mdpId).currency).toBe('ETB');
@@ -14153,6 +14207,7 @@ describe('PUDO Light', () => {
       expect(first.stopFees).toContainEqual({ type: 'mdp', id: hub.mdpId, fee: 30, currency: mdps.currencyOf(mdps.require(hub.mdpId)) });
       // The hub raises its fee: the next parcel is sold at 40; the first keeps the 30 it was sold at.
       mdps.setPrice(hub.mdpId, 40);
+      mdps.decideFees(hub.mdpId, true, 'Amina Otieno'); // above 1.5 × its list's 25: staff approved it (the owner's D3)
       const second = sell(2);
       // One sold before fees were kept per stop: the hub's fee now.
       const third = sell(3);
@@ -14195,6 +14250,8 @@ describe('PUDO Light', () => {
     });
     const A = { name: 'Njeri W.', id: 'acct-1' };
     const B = { name: 'Otieno K.', id: 'acct-2' };
+    // The zones card prices "by factors" (the owner's D3, 2026-11-12): every country starts on a fixed card.
+    beforeEach(() => entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.'));
 
     function shopAt(shopName: string, location: { lat: number; lng: number }, topUp = 0) {
       const a = onboardAgent(shopName, 'MidTown', topUp);
@@ -14239,6 +14296,37 @@ describe('PUDO Light', () => {
       expect(q.flexible).toEqual(q.locked);
       // Its measurements count by the card's divisor: 40 × 30 × 20 cm is 4 kg shop to shop, so the 5 kg price.
       expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2, dims: { l: 40, w: 30, h: 20 } }).zone).toMatchObject({ billableKg: 4, amount: 100 });
+    });
+
+    it('a fixed card prices every journey inside the country alike, near or far, no zones asked; the country’s mode says which card prices (the owner’s D3, 2026-11-12)', () => {
+      const west = shopAt('FX West', { lat: -1.25, lng: 36.65 });
+      const east = shopAt('FX East', { lat: -1.25, lng: 36.75 });
+      const far = shopAt('FX Far', { lat: 0.35, lng: 37.58 }); // in no zone at all
+      entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+      priceCards.setSettings('sbg-ke', { noticeDays: 0 }, A);
+      const draft = priceCards.startDraft('sbg-ke', undefined, A, Date.now(), 'fixed').pending[0] as unknown as PriceCardTerms;
+      priceCards.saveDraft('sbg-ke', { ...draft, table: { all: [100, 150, 250, 400] } }, A);
+      priceCards.ready('sbg-ke', A);
+      priceCards.approve('sbg-ke', priceCards.overview('sbg-ke').pending[0].version, undefined, B);
+      const near = routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 });
+      expect(near.zone).toMatchObject({ band: 'all', amount: 150 });
+      expect(near.locked.base).toBe(Math.round((150 + west.pricePerParcel + east.pricePerParcel) * 100) / 100);
+      const farQ = routing.quoteShipment(west.did, far.did, 'M', undefined, { kg: 2 });
+      expect(farQ.zone).toMatchObject({ band: 'all', amount: 150 });
+      // The counter's list, offline: every shop in one place, one band, no ends.
+      const row = counterPrices.rowFor(west.did);
+      expect(row.cards[0]).toMatchObject({ origin: '*', bands: { '*': 'all' }, ends: {}, zoneMapVersion: 0 });
+      expect(row.cards[0].zoneOf[east.did]).toBe('*');
+      expect(row.cards[0].zoneOf[far.did]).toBe('*');
+      // By factors, with no zones card: priced by the route, as before any card.
+      entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toBeUndefined();
+      expect(counterPrices.rowFor(west.did).cards).toEqual([]);
+      // A zones card in force too: by factors it prices; on the fixed card again, the fixed card does.
+      cardInForce();
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toMatchObject({ band: 'local', amount: 80 });
+      entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+      expect(routing.quoteShipment(west.did, east.did, 'M', undefined, { kg: 2 }).zone).toMatchObject({ band: 'all', amount: 150 });
     });
 
     it('rounds a person’s price to the country’s cash step, the tax worked out of it; a business pays it to the cent', () => {

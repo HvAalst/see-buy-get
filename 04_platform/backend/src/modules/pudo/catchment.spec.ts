@@ -121,6 +121,30 @@ describe('a net of hubs: which hubs serve each zone', () => {
     expect(catchments.hubsFor('KE', undefined)).toEqual([]);
   });
 
+  it('of its zone’s hubs with room, the cheaper one when it is no more than a tenth farther than the nearest (the owner’s D3, 2026-11-12)', () => {
+    published();
+    const between = { lat: -1.159, lng: 36.754 }; // a little nearer North hub than North Two
+    const tooFar = { lat: -1.158, lng: 36.752 }; // about a fifth nearer North hub
+    const [north, north2] = [hubs[0], hubs[1]] as Array<{ pricePerParcel?: number }>;
+    try {
+      north.pricePerParcel = 0.4;
+      north2.pricePerParcel = 0.3;
+      expect(catchments.hubForPoint('KE', between)).toBe('mdp_north2');
+      // More than a tenth farther: the nearest, however cheap the other.
+      expect(catchments.hubForPoint('KE', tooFar)).toBe('mdp_north');
+      // The same fee: the nearest.
+      north2.pricePerParcel = 0.4;
+      expect(catchments.hubForPoint('KE', between)).toBe('mdp_north');
+      // The cheaper one full: the nearest with room.
+      north2.pricePerParcel = 0.1;
+      full.add('mdp_north2');
+      expect(catchments.hubForPoint('KE', between)).toBe('mdp_north');
+    } finally {
+      delete north.pricePerParcel;
+      delete north2.pricePerParcel;
+    }
+  });
+
   it('a hub that is down serves no zone while it is — shown on Zones still; past the time it confirmed, it serves again (2026-11-11)', () => {
     published();
     const nearNorthTwo = { lat: -1.19, lng: 36.79 };

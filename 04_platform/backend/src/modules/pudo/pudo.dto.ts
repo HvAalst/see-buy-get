@@ -9,7 +9,7 @@ import { DESTINATION_KINDS } from './destination.types';
 import { BAG_PLACES_MAX, BAG_PLACES_MIN, SORT_PER_DAY_MAX, SORT_PER_DAY_MIN } from './hub-space';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
@@ -1074,6 +1074,17 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/** 2026-11-12 — the owner's D3: how many times the list figure a hub may set its fees to before staff approve. */
+export class HubFeeCeilingDto {
+  @IsNumber() @Min(1) @Max(10) multiple!: number;
+}
+
+/** 2026-11-12 — staff decide fees a hub asked for above the ceiling: approve, or refuse with why. */
+export class HubFeeDecisionDto {
+  @IsBoolean() approve!: boolean;
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(300) reason?: string;
+}
+
 /** 2026-11-12 — a hub's own fees: each parcel it sorts, and (optionally) each bag it passes on unopened (D5). */
 export class HubPriceDto {
   @IsNumber() @Min(0) price!: number;
@@ -1906,8 +1917,15 @@ export class PriceCardSettingsDto {
 }
 
 export class PriceCardStartDto {
-  /** The published zone map it is made on; absent means the map in force. */
+  /** The published zone map it is made on; absent means the map in force. A fixed card names none. */
   @IsOptional() @IsInt() @Min(1) zoneMapVersion?: number;
+  /** 2026-11-12 — a zones card (absent) or a fixed card: one price per size, near or far (the owner's D3). */
+  @IsOptional() @IsIn(['zones', 'fixed']) kind?: 'zones' | 'fixed';
+}
+
+/** 2026-11-12 — the owner's D3: how parcels are priced in a country. */
+export class PricingModeDto {
+  @IsIn(['fixed', 'factors']) mode!: 'fixed' | 'factors';
 }
 
 export class PriceBandDto {
@@ -1945,7 +1963,8 @@ export class PriceSurchargesDto {
 
 /** The draft card's terms: the whole card, every time. */
 export class PriceCardTermsDto {
-  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(8) @ValidateNested({ each: true }) @Type(() => PriceBandDto) @ApiProperty({ type: [PriceBandDto] }) bands!: PriceBandDto[];
+  // From 1: a fixed card has one band (2026-11-12); a zones card from 2 to 8, said by the service.
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(8) @ValidateNested({ each: true }) @Type(() => PriceBandDto) @ApiProperty({ type: [PriceBandDto] }) bands!: PriceBandDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsNumber({}, { each: true }) @ApiProperty({ type: [Number] }) steps!: number[];
   @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'array', items: { type: 'number' } } }) table!: Record<string, number[]>;
   @IsObject() @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) perExtraKg!: Record<string, number>;

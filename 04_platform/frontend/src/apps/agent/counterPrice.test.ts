@@ -59,3 +59,23 @@ describe('a walk-up priced on the phone', () => {
     expect(priceFromRow({ ...golden.row, cards: [] }, ask, Date.parse(golden.now))).toBeUndefined();
   });
 });
+
+describe('a fixed card on the phone (the owner’s D3, 2026-11-12)', () => {
+  it('prices every shop alike, near or far: the server sends every shop in one place on one band, with no ends', () => {
+    const card = { ...golden.row.cards[0], zoneMapVersion: 0, origin: '*', table: { all: [100, 150, 250, 400] }, steps: [1, 5, 15, 30], perExtraKg: { all: 0 }, minimum: 0, cashStep: 0, bands: { '*': 'all' }, ends: {}, zoneOf: Object.fromEntries(Object.keys(golden.row.fees).map((did) => [did, '*'])) };
+    const row: CounterPriceRow = { ...golden.row, cards: [card] };
+    const others = Object.keys(row.fees).filter((d) => d !== row.shop);
+    expect(others.length).toBeGreaterThan(1);
+    const ask = (dest: string): CounterAsk => ({ dest, l: 20, w: 15, h: 10, kg: 2 });
+    const now = Date.parse(card.from) + 1000;
+    const prices = others.map((d) => priceFromRow(row, ask(d), now));
+    // The card's 5 kg price, the same to every shop; only the shop's own fee differs.
+    for (const [i, p] of prices.entries()) {
+      expect(p).toBeDefined();
+      const lane = row.lanes[row.sizes[0].lane];
+      const base = Math.round((150 + row.fees[row.shop] + row.fees[others[i]]) * 100) / 100;
+      const net = Math.round(base * (1 + lane.feePct) * 100) / 100;
+      expect(p!.gross).toBeCloseTo(Math.round((net + Math.round(net * Math.max(0, lane.taxPct) * 100) / 100) * 100) / 100, 2);
+    }
+  });
+});

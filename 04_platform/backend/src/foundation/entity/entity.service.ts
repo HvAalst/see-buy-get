@@ -642,6 +642,42 @@ export class EntityService implements OnApplicationBootstrap {
     return entity?.runPay === 'km' ? 'km' : 'bag';
   }
 
+  /** 2026-11-12 — the owner's D3: how many times the list figure a hub may set its sort and pass-on fees to before staff approve. */
+  hubFeeCeilingFor(entityId?: string): number {
+    const entity = entityId ? this.entities.get(entityId) : undefined;
+    return entity?.hubFeeCeiling ?? HUB_FEE_CEILING_START;
+  }
+
+  /** 2026-11-12 — the owner's D3: how parcels are priced in this company's country; absent = a fixed card. */
+  pricingModeFor(entityId?: string): 'fixed' | 'factors' {
+    const entity = entityId ? this.entities.get(entityId) : undefined;
+    return entity?.pricingMode === 'factors' ? 'factors' : 'fixed';
+  }
+
+  setPricingMode(entityId: string, mode: 'fixed' | 'factors', by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = this.pricingModeFor(entityId);
+    if (before === mode) return entity;
+    if (mode === 'factors') entity.pricingMode = 'factors';
+    else delete entity.pricingMode;
+    this.entities.set(entity.entityId, entity);
+    const words = (m: 'fixed' | 'factors') => (m === 'fixed' ? 'a fixed card' : 'by factors (zones and distance)');
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'pricingMode', from: words(before), to: words(mode) });
+    return entity;
+  }
+
+  setHubFeeCeiling(entityId: string, multiple: number, by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = this.hubFeeCeilingFor(entityId);
+    const next = Math.round(multiple * 100) / 100;
+    if (before === next) return entity;
+    if (next === HUB_FEE_CEILING_START) delete entity.hubFeeCeiling;
+    else entity.hubFeeCeiling = next;
+    this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'hubFeeCeiling', from: `${before} × the list figure`, to: `${next} × the list figure` });
+    return entity;
+  }
+
   setRunPay(entityId: string, mode: 'bag' | 'km', by?: string): Entity {
     const entity = this.requireTransacting(entityId);
     const before = this.runPayFor(entityId);
@@ -1060,6 +1096,7 @@ export class EntityService implements OnApplicationBootstrap {
       carrierPapers: EntityService.resolveCarrierPapers(entity),
       sealRules: EntityService.resolveSealRules(entity),
       runPay: entity.runPay === 'km' ? 'km' : 'bag',
+      hubFeeCeiling: entity.hubFeeCeiling ?? HUB_FEE_CEILING_START,
       custodyCaps: EntityService.resolveCustodyCaps(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
@@ -1122,6 +1159,9 @@ function custodyCapsLine(c: { shop?: { start: number; liftedAfter: number }; rid
 }
 
 /** Where a seal is required, as the change log says it. */
+/** 2026-11-12 — the owner's D3: "starting at 1.5 times". */
+export const HUB_FEE_CEILING_START = 1.5;
+
 function sealRulesLine(r: { crossBorder: boolean; containers: boolean }): string {
   const where = [r.crossBorder ? 'loads that cross a border' : '', r.containers ? 'container legs' : ''].filter(Boolean);
   return where.length ? `a seal on ${where.join(' and ')}` : 'no seal required';

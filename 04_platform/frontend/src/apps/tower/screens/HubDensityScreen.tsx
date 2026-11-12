@@ -92,7 +92,7 @@ export function HubDensityScreen({ state, actions }: { state: TowerState; action
   const pins: MapPin[] = useMemo(() => {
     if (!view) return [];
     const hubs: MapPin[] = view.hubs.map((h) => ({ id: h.mdpId, lat: h.location.lat, lng: h.location.lng, label: t('tower.density.hubLabel', { hub: h.name, full: h.fullDays }), kind: h.down ? 'down' : h.role === 'local' ? 'local' : 'stop' }));
-    const marks: MapPin[] = view.suggestions.filter((s) => s.kind === 'hub_needed' || s.kind === 'extra_hub' || s.kind === 'road_gap').map((s) => ({ id: s.id, lat: s.place.lat, lng: s.place.lng, label: suggestionLine(s, t), kind: 'suggested' }));
+    const marks: MapPin[] = view.suggestions.filter((s) => s.kind === 'hub_needed' || s.kind === 'extra_hub' || s.kind === 'road_gap' || s.kind === 'bottleneck').map((s) => ({ id: s.id, lat: s.place.lat, lng: s.place.lng, label: suggestionLine(s, t), kind: 'suggested' }));
     return [...hubs, ...marks];
   }, [view, t]);
   const lines: MapLine[] = useMemo(() => {

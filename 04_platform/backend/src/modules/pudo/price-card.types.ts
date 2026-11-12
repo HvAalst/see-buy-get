@@ -19,6 +19,17 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * that) → approved by a second person, from a date at least the country's notice days ahead → in force on that date.
  */
 
+/**
+ * 2026-11-12 — THE OWNER'S D3: a card is a ZONES card (bands by zones and distance, end charges — pricing "by factors") or a
+ * FIXED card (one price per size, near or far: one band, no zones). Absent on a card = zones (every card before).
+ */
+export const PRICE_CARD_KINDS = ['zones', 'fixed'] as const;
+export type PriceCardKind = (typeof PRICE_CARD_KINDS)[number];
+export const PRICING_MODES = ['fixed', 'factors'] as const;
+export type PricingMode = (typeof PRICING_MODES)[number];
+/** A fixed card's one band: anywhere in the country. */
+export const FIXED_BAND = { key: 'all', name: 'Anywhere', maxZones: null, maxKm: null };
+
 export class PriceBand {
   key: string;
   name: string;
@@ -86,6 +97,8 @@ export interface PriceCardTerms {
 
 export interface StoredPriceCard extends PriceCardTerms {
   version: number;
+  /** 2026-11-12 — zones (absent) or fixed. A fixed card names no zone map (0). */
+  kind?: PriceCardKind;
   status: 'draft' | 'ready' | 'filed' | 'cleared' | 'approved' | 'withdrawn';
   zoneMapVersion: number;
   currency: string;
@@ -147,6 +160,8 @@ export class PriceCardSettingsView {
 
 export class PriceCardView {
   version: number;
+  /** 2026-11-12 — a zones card ("by factors") or a fixed card (one price per size, near or far). */
+  @ApiProperty({ enum: PRICE_CARD_KINDS }) kind: PriceCardKind;
   /** draft · ready · filed · cleared · approved (from a date to come: scheduled) · in_force · past · withdrawn. */
   @ApiProperty({ enum: ['draft', 'ready', 'filed', 'cleared', 'scheduled', 'in_force', 'past', 'withdrawn'] })
   status: 'draft' | 'ready' | 'filed' | 'cleared' | 'scheduled' | 'in_force' | 'past' | 'withdrawn';
@@ -204,8 +219,14 @@ export class PriceCardsView {
   /** The zone maps a card can be made with: the published versions. */
   @ApiProperty({ type: [Number] })
   zoneMaps: number[];
+  /** 2026-11-12 — the owner's D3: how parcels are priced here — a fixed card, or by factors (the zones card). */
+  @ApiProperty({ enum: PRICING_MODES }) mode: PricingMode;
+  /** The card that prices parcels now: the one in force of the kind the mode names. */
   @ApiPropertyOptional({ type: PriceCardView })
   inForce?: PriceCardView;
+  /** A card of the other kind in force too: kept, not pricing anything while the mode names the other. */
+  @ApiPropertyOptional({ type: PriceCardView })
+  inForceOther?: PriceCardView;
   @ApiProperty({ type: [PriceCardView] })
   pending: PriceCardView[];
   @ApiProperty({ type: [PriceCardView] })

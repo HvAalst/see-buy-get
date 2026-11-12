@@ -10,6 +10,7 @@ import { haversineKm } from './geo';
 import { coverageOf, DENSITY_DAYS, EXTRA_HUB_FULL_DAYS, gatherNeeds, middleOf, needScore, reachOfGroup, reachStartOf, ROAD_GAP_KM } from './hub-density';
 import type { DensityHub, DensityReach, DensityZone, HubDensityView, HubSuggestion } from './hub-density.types';
 import { MdpService } from './mdp.service';
+import { piecesOf } from './road-map';
 import { ParcelService } from './parcel.service';
 import type { GeoPoint, Mdp } from './pudo.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
@@ -147,6 +148,7 @@ export class HubDensityService {
       ...this.extraHubs(zones, densityHubs, served?.zones ?? [], country),
       ...(plan ? plan.tooClose.map((p) => this.tooClose(p, byId, plan.minKm)) : []),
       ...(plan ? plan.links.filter((l) => l.km > ROAD_GAP_KM).map((l) => this.roadGap(l, byId, country)) : []),
+      ...(plan ? this.bottlenecks(plan, byId, company.entityId) : []),
     ].filter((x): x is HubSuggestion => Boolean(x));
     return {
       entityId: company.entityId,
@@ -223,6 +225,42 @@ export class HubDensityService {
         hubs: [h.mdpId],
         hubNames: [h.name],
         numbers: { fullDays: h.fullDays, days: DENSITY_DAYS, ...(ratio !== undefined ? { ratio } : {}) },
+        towns: [],
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 2026-11-12 — A HUB IS A BOTTLENECK (the owner's D3: "the optimiser flags a hub with no alternative that charges above the
+   * list figure"): a stop the road map cannot go around — taking it out leaves the stops in pieces — whose sort or pass-on fee
+   * is above its country's list figure. A second hub there gives senders and the network a choice.
+   */
+  private bottlenecks(plan: { stops: Array<{ mdpId: string }>; links: Array<{ a: string; b: string }> }, byId: Map<string, Mdp>, entityId: string): HubSuggestion[] {
+    const list = this.entities.amountsFor(entityId);
+    const stops = plan.stops.map((s) => s.mdpId);
+    const links = plan.links.map((l): [string, string] => [l.a, l.b]);
+    const out: HubSuggestion[] = [];
+    const base = piecesOf(stops, links).length;
+    for (const id of stops) {
+      const hub = byId.get(id);
+      if (!hub) continue;
+      const rest = stops.filter((s) => s !== id);
+      if (rest.length < 2 || piecesOf(rest, links.filter(([a, b]) => a !== id && b !== id)).length <= base) continue;
+      const sortRatio = list.mdpSortFee > 0 ? hub.pricePerParcel / list.mdpSortFee : 0;
+      const passRatio = list.mdpPassOnFee > 0 ? this.mdps.passOnFeeOf(hub) / list.mdpPassOnFee : 0;
+      const ratio = Math.round(Math.max(sortRatio, passRatio) * 100) / 100;
+      if (!(ratio > 1)) continue;
+      out.push({
+        id: `bottleneck:${id}`,
+        kind: 'bottleneck',
+        score: Math.round(ratio * 10),
+        place: { name: hub.name, lat: hub.location.lat, lng: hub.location.lng },
+        zones: [],
+        zoneNames: [],
+        hubs: [id],
+        hubNames: [hub.name],
+        numbers: { ratio, fee: hub.pricePerParcel, list: list.mdpSortFee },
         towns: [],
       });
     }

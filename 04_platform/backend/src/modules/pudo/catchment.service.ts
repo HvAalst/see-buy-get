@@ -116,6 +116,9 @@ const NEARBY = 12;
 
 type Serving = { mdpId: string; how: ServingHow };
 
+/** D3 — a cheaper hub is preferred over the nearest when it is no more than this much farther (the "on the way" tenth). */
+const CHEAPER_WITHIN = 1.1;
+
 /**
  * A NET OF HUBS (2026-11-09 — the owner's answers): every approved hub serves the zone its pin stands in, by itself; a hub
  * may add neighbouring zones from its own app; staff add hubs to a zone and take any away — the zone a hub stands in too —
@@ -306,7 +309,12 @@ export class CatchmentService implements OnModuleInit {
       .map((id) => this.mdps.require(id))
       .map((h) => ({ h, km: this.km(point, h.location) }))
       .sort((a, b) => a.km - b.km || a.h.mdpId.localeCompare(b.h.mdpId));
-    return (ranked.find(({ h }) => this.mdps.hasRoom(h, now)) ?? ranked[0]).h.mdpId;
+    const roomy = ranked.filter(({ h }) => this.mdps.hasRoom(h, now));
+    if (!roomy.length) return ranked[0].h.mdpId;
+    // 2026-11-12 — the owner's D3: "Where another hub is on the way, routing prefers the cheaper one" — of the zone's hubs with
+    // room no more than a tenth farther than the nearest, the one with the lowest sort fee; the nearest where fees are equal.
+    const reach = roomy[0].km * CHEAPER_WITHIN;
+    return roomy.filter((r) => r.km <= reach).sort((a, b) => a.h.pricePerParcel - b.h.pricePerParcel || a.km - b.km)[0].h.mdpId;
   }
 
   /** Whether a hub serves the zone a pin lies in: then it hands a parcel for there straight to its shop. */

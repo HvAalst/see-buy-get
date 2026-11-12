@@ -117,6 +117,19 @@ export function money(v: number | null | undefined, currency: string | undefined
   return cash(v, currency);
 }
 
+/**
+ * 2026-11-12 — the owner's D3: what the hub's fee card says of fees it asked for above its country's ceiling (waiting for
+ * staff), and of the last one refused, with why — once it has not asked again since.
+ */
+export function feeAskLines(hub: Pick<MdpView, 'feeAsked' | 'feeRefused' | 'currency'> | null | undefined, t: Translate): string[] {
+  if (!hub) return [];
+  const out: string[] = [];
+  if (hub.feeAsked?.pricePerParcel != null) out.push(t('mdp.home.feeWaiting', { fee: money(hub.feeAsked.pricePerParcel, hub.currency) }));
+  if (hub.feeAsked?.passOnFee != null) out.push(t('mdp.home.feeWaitingPassOn', { fee: money(hub.feeAsked.passOnFee, hub.currency) }));
+  if (hub.feeRefused && !hub.feeAsked) out.push(t('mdp.home.feeRefused', { reason: hub.feeRefused.reason }));
+  return out;
+}
+
 export function roundMoney(v: number): number {
   return Math.round(v * 100) / 100;
 }

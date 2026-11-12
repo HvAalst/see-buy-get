@@ -487,8 +487,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'runPay', 'roadMap', 'hubDensity', 'hubList', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'runPay' | 'roadMap' | 'hubDensity' | 'hubList' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'runPay', 'roadMap', 'hubDensity', 'hubList', 'hubFeeCeiling', 'pricingMode', 'zones', 'prices', 'catchments', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'runPay' | 'roadMap' | 'hubDensity' | 'hubList' | 'hubFeeCeiling' | 'pricingMode' | 'zones' | 'prices' | 'catchments' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -625,6 +625,8 @@ export class EntityPricing {
   @ApiProperty({ type: ResolvedCustodyCaps }) custodyCaps: ResolvedCustodyCaps;
   /** 2026-11-09 (D6) — how a run, and an extra leg, is paid here: by bag (each bag's own pay) or by km (km × the driver's rate). */
   @ApiProperty({ enum: ['bag', 'km'] }) runPay: 'bag' | 'km';
+  /** 2026-11-12 — the owner's D3: a hub sets its fees up to this many times the list figure; above that, staff approve. */
+  hubFeeCeiling: number;
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
@@ -725,6 +727,13 @@ export class Entity {
   sealRules?: SealRulesRule;
   /** 2026-11-09 (D6) — how runs and extra legs are paid here; absent = by bag. Read it through EntityService.runPayFor(). */
   runPay?: 'bag' | 'km';
+  /** 2026-11-12 — the owner's D3: a hub's sort and pass-on fees up to this many times the list figure; absent = 1.5. */
+  hubFeeCeiling?: number;
+  /**
+   * 2026-11-12 — the owner's D3: how parcels are priced here — a fixed card (one price per size, near or far) or by factors
+   * (the zone card: distance, size, the ends). Absent = fixed: "Every country starts on a fixed card".
+   */
+  pricingMode?: 'fixed' | 'factors';
   /** Round 38 — the custody cap for new shops and new independent riders. Read it through EntityService.custodyCapsFor(). */
   custodyCaps?: { shop?: CustodyCap; rider?: CustodyCap };
   /** Sisters point at the group they belong to. */

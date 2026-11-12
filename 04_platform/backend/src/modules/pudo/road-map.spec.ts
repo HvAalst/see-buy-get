@@ -7,6 +7,7 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { HeuristicRouter } from './router';
 import { RoadMapService } from './road-map.service';
+import * as roadMap from './road-map';
 import { defaultMinKm, pathBetween, proposeRoadPlan, stopOf, without, type Km } from './road-map';
 
 /** Kenyan towns, as the road map's example (the plan "Hubs on the Road"): the Moyale road and the road west. */
@@ -66,6 +67,20 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
     expect(noNairobi.stops).toContain(noNairobi.local.thika);
   });
 
+  it('of two near-equal ways, the one through the cheaper hub: each stop on the way counted as the road its fee is worth, never the end (the owner’s D3)', () => {
+    // A diamond: A to D through B (200 km) or through C (204 km).
+    const plan = { stops: ['A', 'B', 'C', 'D'], local: {}, links: [['A', 'B'], ['B', 'D'], ['A', 'C'], ['C', 'D']] as Array<[string, string]> };
+    const road: Record<string, number> = { AB: 100, BD: 100, AC: 102, CD: 102 };
+    const far: Km = (a, b) => road[[a, b].sort().join('')];
+    expect(pathBetween(plan, 'A', 'D', far)).toEqual(['A', 'B', 'D']);
+    // B charges 10 km more than C: through C.
+    expect(pathBetween(plan, 'A', 'D', far, (h) => (h === 'B' ? 15 : 5))).toEqual(['A', 'C', 'D']);
+    // Only a little more: still through B — the road decides, the fee only between near-equal ways.
+    expect(pathBetween(plan, 'A', 'D', far, (h) => (h === 'B' ? 7 : 5))).toEqual(['A', 'B', 'D']);
+    // The end's own fee is never counted against the way: both ways end at D.
+    expect(pathBetween(plan, 'A', 'D', far, (h) => (h === 'D' ? 1000 : 0))).toEqual(['A', 'B', 'D']);
+  });
+
   describe('the service: proposed, changed and confirmed by the country’s staff', () => {
     let entities: EntityService;
     let maps: RoadMapService;
@@ -93,6 +108,24 @@ describe('a road map of hubs (2026-11-12, the plan "Hubs on the Road")', () => {
       down.clear();
       approved.clear();
       for (const h of hubs) if (h.mdpId !== 'mdp_kisumu') approved.add(h.mdpId);
+    });
+
+    it('a journey along it weighs each stop on the way by its own sort fee, at the country’s rate per km (the owner’s D3)', () => {
+      maps.propose('sbg-ke', 'Amina');
+      maps.confirm('sbg-ke', 'Amina');
+      const isiolo = hubs.find((h) => h.mdpId === id('isiolo'))! as { pricePerParcel?: number };
+      isiolo.pricePerParcel = 0.6;
+      const spy = jest.spyOn(roadMap, 'pathBetween');
+      try {
+        expect(maps.pathFor(id('nairobi'), id('moyale'))).toEqual([id('nairobi'), id('isiolo'), id('marsabit'), id('moyale')]);
+        const stopCost = spy.mock.calls[spy.mock.calls.length - 1][4]!;
+        const perKm = entities.amountsFor('sbg-ke').freightPerKm;
+        expect(stopCost(id('isiolo'))).toBeCloseTo(0.6 / perKm, 5);
+        expect(stopCost(id('marsabit'))).toBe(0);
+      } finally {
+        spy.mockRestore();
+        delete isiolo.pricePerParcel;
+      }
     });
 
     it('nothing is in force until staff confirm; a proposal, changed and confirmed, is in force — every change logged', () => {

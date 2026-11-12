@@ -105,6 +105,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/mdps': list({ row: { field: 'country' } }),
   'GET sbg/gs1/ours': network('SeeBuyGet’s own GS1 prefix: one licence, the same in every country'),
   'GET sbg/hub-papers': list({ row: { field: 'country' } }),
+  'GET sbg/hub-fees': list({ row: { field: 'country' } }),
   'GET sbg/fleet/managers': list({ row: { of: 'fleet', id: 'did' } }),
   'GET sbg/fleet/managers/kyc-queue': list({ row: { of: 'fleet', id: 'did' } }),
   'GET sbg/fleet/managers/setting-up': list({ at: 'items', row: { field: 'jurisdiction' } }),

@@ -5,6 +5,7 @@ import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { ConsoleFold } from '../ConsoleFold';
+import { HubFeesFold } from './HubFeesFold';
 import { adminsHint, amountsFold, changesHint, impactHint, topUpFeeHint } from '../folds';
 import {
   AMOUNT_HINT,
@@ -148,6 +149,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
           <CarrierPapers pricing={pricing} state={state} actions={actions} />
           <SealRules pricing={pricing} state={state} actions={actions} />
           <RunPay pricing={pricing} state={state} actions={actions} />
+          <HubFeesFold pricing={pricing} state={state} actions={actions} />
           <CustodyCaps pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />

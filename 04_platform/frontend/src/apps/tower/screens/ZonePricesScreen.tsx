@@ -17,6 +17,7 @@ import {
   marginOf,
   removeStep,
   setCell,
+  sizeOfStep,
   statusKey,
   termsOf,
   weekShift,
@@ -128,12 +129,14 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
         <p class="cons__empty">{t('tower.prices.loading')}</p>
       ) : (
         <>
+          <ModeFold view={view} writer={writer} busy={busy === 'mode'} onSave={(mode) => client && run('mode', () => client.api.setPricingMode(entityId, mode), t(mode === 'fixed' ? 'tower.prices.mode.savedFixed' : 'tower.prices.mode.savedFactors'))} />
           <section class="cons__panel twr-zonestatus">
             {view.inForce ? (
               <p>{t('tower.prices.inForce', { version: view.inForce.version, date: new Date(view.inForce.effectiveFrom ?? '').toLocaleString(), who: view.inForce.approvedBy ?? '' })}</p>
             ) : (
-              <p>{t('tower.prices.noneInForce')}</p>
+              <p>{t(view.mode === 'factors' ? 'tower.prices.noneInForceFactors' : 'tower.prices.noneInForceFixed')}</p>
             )}
+            {view.inForceOther ? <p class="chint">{t('tower.prices.otherInForce', { version: view.inForceOther.version, kind: t(view.inForceOther.kind === 'fixed' ? 'tower.prices.kind.fixed' : 'tower.prices.kind.zones') })}</p> : null}
             {view.pending
               .filter((c) => c.status === 'scheduled')
               .map((c) => (
@@ -152,11 +155,11 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
 
           {!card ? (
             writer ? (
-              <StartCard view={view} busy={busy === 'start'} onStart={(v) => client && run('start', () => client.api.startPriceCard(entityId, v), t('tower.prices.started'))} />
+              <StartCard view={view} busy={busy === 'start'} onStart={(kind, v) => client && run('start', () => client.api.startPriceCard(entityId, v, kind), t('tower.prices.started'))} />
             ) : null
           ) : (
             <ConsoleFold title={t('tower.prices.card', { version: card.version })} hint={t(statusKey(card.status))} defaultOpen>
-              <p class="chint">{t('tower.prices.onMap', { version: card.zoneMapVersion, currency: card.currency })}</p>
+              <p class="chint">{card.kind === 'fixed' ? t('tower.prices.fixedOn', { currency: card.currency }) : t('tower.prices.onMap', { version: card.zoneMapVersion, currency: card.currency })}</p>
               {/* 2026-11-08 — how it measures the km between two zones, fixed when it is made ready (step 4). */}
               {card.distances ? <p class="chint">{t(card.distances === 'roads' ? 'tower.prices.distances.roads' : card.distances === 'measuring' ? 'tower.prices.distances.measuring' : 'tower.prices.distances.estimate')}{card.distancesWhy ? ' ' + t('tower.prices.distances.why', { why: card.distancesWhy }) : ''}</p> : null}
               {card.problems.length ? (
@@ -191,7 +194,7 @@ export function ZonePricesScreen({ state, actions }: { state: TowerState; action
             </ConsoleFold>
           )}
 
-          {card || view.inForce ? <TryPrice entityId={entityId} actions={actions} zoneList={zoneList} /> : null}
+          {card || view.inForce ? <TryPrice entityId={entityId} actions={actions} zoneList={zoneList} fixed={(view.inForce ?? card)?.kind === 'fixed'} /> : null}
           {/* 2026-11-08 — once a card has priced anything: its price against what carrying it costs, pair by pair (step 4). */}
           {view.inForce || view.history.length ? <PriceReport entityId={entityId} actions={actions} /> : null}
 
@@ -361,21 +364,66 @@ function SettingsFold({ view, writer, busy, onSave }: { view: PriceCardsView; wr
   );
 }
 
-function StartCard({ view, busy, onStart }: { view: PriceCardsView; busy: boolean; onStart: (zoneMapVersion?: number) => void }) {
+function StartCard({ view, busy, onStart }: { view: PriceCardsView; busy: boolean; onStart: (kind: 'zones' | 'fixed', zoneMapVersion?: number) => void }) {
   const t = useT();
   const [map, setMap] = useState(String(view.zoneMaps[0] ?? ''));
-  if (!view.zoneMaps.length) return <p class="cons__empty">{t('tower.prices.needZones')}</p>;
-  return (
-    <section class="cons__panel twr-zonechosen">
-      <p class="twr-clear__t">{t('tower.prices.start')}</p>
+  // 2026-11-12 — the owner's D3: a fixed card (one price per size, near or far) needs no zones; the kind the country prices
+  // by comes first.
+  const fixed = (
+    <section key="fixed" class="cons__panel twr-zonechosen">
+      <p class="twr-clear__t">{t('tower.prices.startFixed')}</p>
+      <p class="chint">{t('tower.prices.startFixedLede')}</p>
+      <button type="button" class={`cbtn cbtn--sm ${view.mode === 'fixed' ? 'cbtn--primary' : 'cbtn--ghost'}`} disabled={busy} onClick={() => onStart('fixed')}>
+        {t('tower.prices.startFixedGo')}
+      </button>
+    </section>
+  );
+  const zones = !view.zoneMaps.length ? (
+    <p key="zones" class="cons__empty">{t('tower.prices.needZones')}</p>
+  ) : (
+    <section key="zones" class="cons__panel twr-zonechosen">
+      <p class="twr-clear__t">{t('tower.prices.startZones')}</p>
       <p class="chint">{t('tower.prices.startLede')}</p>
       <div class="twr-zonechosen__row">
         <ConsolePick label={t('tower.prices.zoneMap')} value={map} onChange={setMap} small options={view.zoneMaps.map((v) => ({ value: String(v), label: t('tower.prices.zoneMapN', { version: v }) }))} />
-        <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => onStart(map ? Number(map) : undefined)}>
+        <button type="button" class={`cbtn cbtn--sm ${view.mode === 'factors' ? 'cbtn--primary' : 'cbtn--ghost'}`} disabled={busy} onClick={() => onStart('zones', map ? Number(map) : undefined)}>
           {t('tower.prices.startGo')}
         </button>
       </div>
     </section>
+  );
+  return <>{view.mode === 'factors' ? [zones, fixed] : [fixed, zones]}</>;
+}
+
+/**
+ * 2026-11-12 — HOW PARCELS ARE PRICED HERE (the owner's D3: "Pricing is a setting per country: a fixed card … or by factors
+ * … Every country starts on a fixed card"). The card that prices is the one in force of the kind this names.
+ */
+function ModeFold({ view, writer, busy, onSave }: { view: PriceCardsView; writer: boolean; busy: boolean; onSave: (mode: 'fixed' | 'factors') => void }) {
+  const t = useT();
+  const [draft, setDraft] = useState(view.mode);
+  useEffect(() => setDraft(view.mode), [view.mode]);
+  const MODES = ['fixed', 'factors'] as const;
+  return (
+    <ConsoleFold title={t('tower.prices.mode.title')} hint={t(view.mode === 'factors' ? 'tower.prices.mode.factors' : 'tower.prices.mode.fixed')}>
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.prices.mode.about')}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          {MODES.map((m) => (
+            <button key={m} type="button" class={`cbtn cbtn--sm ${draft === m ? 'cbtn--primary' : 'cbtn--ghost'}`} aria-pressed={draft === m} disabled={!writer || busy} onClick={() => setDraft(m)}>
+              {draft === m ? <Icon name="check" size={14} /> : null}
+              {t(m === 'fixed' ? 'tower.prices.mode.fixed' : 'tower.prices.mode.factors')}
+            </button>
+          ))}
+        </div>
+        <p class="chint">{t(draft === 'fixed' ? 'tower.prices.mode.fixedLede' : 'tower.prices.mode.factorsLede')}</p>
+        {writer ? (
+          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || draft === view.mode} onClick={() => onSave(draft)}>
+            {t('tower.prices.mode.save')}
+          </button>
+        ) : null}
+      </div>
+    </ConsoleFold>
   );
 }
 
@@ -410,8 +458,16 @@ function CardTerms({
   const [pairBand, setPairBand] = useState('');
   const set = (patch: Partial<PriceCardTerms>) => onChange({ ...terms, ...patch });
   const zoneOptions = zoneList.map((z) => ({ value: z.code, label: z.name, tag: z.code }));
+  // 2026-11-12 — a fixed card (the owner's D3): one price for each size, near or far — its weights said as the sizes.
+  const fixed = card.kind === 'fixed';
+  const stepLabel = (kg: number, i: number) => {
+    const size = fixed ? sizeOfStep(kg, i === terms.steps.length - 1) : null;
+    return size ? t('tower.prices.kgSize', { kg, size: t(`tower.prices.size.${size}` as never) }) : t('tower.prices.kg', { kg });
+  };
   return (
     <div class="twr-card">
+      {fixed ? null : (
+      <>
       <p class="twr-clear__t">{t('tower.prices.bands')}</p>
       <p class="chint">{t('tower.prices.bandsLede')}</p>
       <table class="ctbl ctbl--stack">
@@ -442,16 +498,18 @@ function CardTerms({
           })}
         </tbody>
       </table>
+      </>
+      )}
 
-      <p class="twr-clear__t">{t('tower.prices.table', { currency: card.currency })}</p>
-      <p class="chint">{t('tower.prices.tableLede')}</p>
+      <p class="twr-clear__t">{fixed ? t('tower.prices.fixedTable', { currency: card.currency }) : t('tower.prices.table', { currency: card.currency })}</p>
+      <p class="chint">{fixed ? t('tower.prices.fixedTableLede') : t('tower.prices.tableLede')}</p>
       <div class="twr-pricegrid">
         <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.prices.col.upTo')}</th>
               {terms.bands.map((b) => (
-                <th key={b.key}>{b.name}</th>
+                <th key={b.key}>{fixed ? t('tower.prices.fixedCol') : b.name}</th>
               ))}
             </tr>
           </thead>
@@ -459,7 +517,7 @@ function CardTerms({
             {terms.steps.map((kg, i) => (
               <tr key={kg}>
                 <td class="ctbl__strong">
-                  {t('tower.prices.kg', { kg })}
+                  {stepLabel(kg, i)}
                   {editable && terms.steps.length > 1 ? (
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => onChange(removeStep(terms, i))}>
                       {t('tower.prices.removeStep')}
@@ -512,6 +570,8 @@ function CardTerms({
       ) : null}
       <p class="chint">{t('tower.prices.costNote')}</p>
 
+      {fixed ? null : (
+      <>
       <p class="twr-clear__t">{t('tower.prices.ends')}</p>
       <p class="chint">{t('tower.prices.endsLede')}</p>
       <table class="ctbl ctbl--stack">
@@ -617,6 +677,8 @@ function CardTerms({
           </button>
         </div>
       ) : null}
+      </>
+      )}
 
       <p class="twr-clear__t">{t('tower.prices.rules')}</p>
       <div class="twr-knobs">
@@ -752,7 +814,7 @@ function CardActions({
   );
 }
 
-function TryPrice({ entityId, actions, zoneList }: { entityId: string; actions: TowerActions; zoneList: Array<{ code: string; name: string }> }) {
+function TryPrice({ entityId, actions, zoneList, fixed }: { entityId: string; actions: TowerActions; zoneList: Array<{ code: string; name: string }>; fixed?: boolean }) {
   const t = useT();
   const client = actions.client();
   const [from, setFrom] = useState('');
@@ -765,9 +827,9 @@ function TryPrice({ entityId, actions, zoneList }: { entityId: string; actions: 
   const [err, setErr] = useState<string | null>(null);
   const options = zoneList.map((z) => ({ value: z.code, label: z.name, tag: z.code }));
   const ask = async () => {
-    if (!client || !from || !to) return;
+    if (!client || (!fixed && (!from || !to))) return;
     setErr(null);
-    const r = await client.api.tryZonePrice(entityId, { from, to, kg, l: dims.l, w: dims.w, h: dims.h, door, fragile });
+    const r = await client.api.tryZonePrice(entityId, { from: fixed ? '' : from, to: fixed ? '' : to, kg, l: dims.l, w: dims.w, h: dims.h, door, fragile });
     if (r.error) {
       setErr(r.error.detail || r.error.title || '');
       setAnswer(null);
@@ -778,10 +840,12 @@ function TryPrice({ entityId, actions, zoneList }: { entityId: string; actions: 
   return (
     <ConsoleFold title={t('tower.prices.try')} hint={t('tower.prices.tryHint')}>
       <div class="twr-zonechosen">
-        <div class="twr-zonechosen__row">
-          <ConsolePick label={t('tower.prices.tryFrom')} value={from} onChange={setFrom} small options={options} />
-          <ConsolePick label={t('tower.prices.tryTo')} value={to} onChange={setTo} small options={options} />
-        </div>
+        {fixed ? null : (
+          <div class="twr-zonechosen__row">
+            <ConsolePick label={t('tower.prices.tryFrom')} value={from} onChange={setFrom} small options={options} />
+            <ConsolePick label={t('tower.prices.tryTo')} value={to} onChange={setTo} small options={options} />
+          </div>
+        )}
         <div class="twr-zonechosen__row">
           <label class="cfield">
             <span class="cfield__label">{t('tower.prices.tryKg')}</span>
@@ -799,7 +863,7 @@ function TryPrice({ entityId, actions, zoneList }: { entityId: string; actions: 
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-pressed={fragile} onClick={() => setFragile(!fragile)}>
             {t('tower.prices.tryFragile')}
           </button>
-          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!from || !to} onClick={() => void ask()}>
+          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={!fixed && (!from || !to)} onClick={() => void ask()}>
             {t('tower.prices.tryGo')}
           </button>
         </div>
@@ -810,7 +874,7 @@ function TryPrice({ entityId, actions, zoneList }: { entityId: string; actions: 
         ) : null}
         {answer ? (
           <div class="cons__panel">
-            <p class="twr-clear__t">{t('tower.prices.tryAnswer', { from: answer.fromName, to: answer.toName, band: answer.bandName, zones: answer.zonesCrossed, km: Math.round(answer.km).toLocaleString(), kg: answer.billableKg })}</p>
+            <p class="twr-clear__t">{fixed ? t('tower.prices.tryAnswerFixed', { kg: answer.billableKg }) : t('tower.prices.tryAnswer', { from: answer.fromName, to: answer.toName, band: answer.bandName, zones: answer.zonesCrossed, km: Math.round(answer.km).toLocaleString(), kg: answer.billableKg })}</p>
             <ul class="twr-zonestatus">
               {answer.lines.map((l) => (
                 <li key={l.key}>

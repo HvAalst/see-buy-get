@@ -63,6 +63,8 @@ export function marginOf(row: { price: number; planned: number }): number {
 }
 export interface PriceCardView extends PriceCardTerms {
   version: number;
+  /** 2026-11-12 — a zones card ("by factors") or a fixed card: one price per size, near or far (the owner's D3). */
+  kind: 'zones' | 'fixed';
   status: CardStatus;
   zoneMapVersion: number;
   currency: string;
@@ -93,7 +95,11 @@ export interface PriceCardsView {
   currency: string;
   settings: { filingRequired: boolean; noticeDays: number };
   zoneMaps: number[];
+  /** 2026-11-12 — how parcels are priced here (the owner's D3): the card that prices is the one in force of the mode's kind. */
+  mode: 'fixed' | 'factors';
   inForce?: PriceCardView;
+  /** A card of the other kind in force too: it prices nothing. */
+  inForceOther?: PriceCardView;
   pending: PriceCardView[];
   history: PriceCardView[];
   costs: PriceCostCell[];
@@ -177,6 +183,15 @@ export function approveFrom(day: string, earliest: string): string | undefined {
 }
 
 /** A number typed into a price box: a figure, or 0 where nothing usable was typed. */
+/**
+ * 2026-11-12 — a fixed card's weight said as the size it stands for (the owner's D3: "one price per size"): the network's
+ * sizes weigh 1, 5 and 15 kg; its last weight is the heaviest; any other weight is said as itself.
+ */
+export function sizeOfStep(kg: number, last: boolean): 'S' | 'M' | 'L' | 'heavy' | null {
+  if (last) return 'heavy';
+  return kg === 1 ? 'S' : kg === 5 ? 'M' : kg === 15 ? 'L' : null;
+}
+
 export function figure(text: string): number {
   const n = Number(text.replace(',', '.'));
   return Number.isFinite(n) && n >= 0 ? n : 0;

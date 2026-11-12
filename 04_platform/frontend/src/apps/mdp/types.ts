@@ -25,6 +25,11 @@ export interface MdpView {
   pricePerParcel: number;
   /** 2026-11-12 — what a whole bag passed on unopened pays it (its own fee, else its country's list figure). */
   passOnFee?: number;
+  /** 2026-11-12 — fees it asked for above its country's ceiling, waiting for staff (the owner's D3); the last refused, and why. */
+  feeAsked?: { pricePerParcel?: number; passOnFee?: number; at: string };
+  feeRefused?: { by: string; reason: string; at: string };
+  /** Its country's ceiling: what it may set at once, sort and pass-on. */
+  feeCeiling?: { sort: number; passOn: number; multiple: number; listSort: number; listPassOn: number };
   /** The country it stands in. Absent on a hub registered before hubs said one: the network's home country. */
   country?: string;
   /** The money the fee is in: the company’s that contracts the hub. Merged in by the controller. */

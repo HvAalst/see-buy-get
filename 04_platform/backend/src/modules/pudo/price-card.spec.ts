@@ -40,6 +40,8 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     entities.seed();
     zones = new ZoneMapService(entities, none as never, none as never);
     cards = new PriceCardService(entities, zones);
+    // The zones card is pricing "by factors" (the owner's D3, 2026-11-12): a country starts on a fixed card.
+    entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
   });
 
   /** Kenya's zones published: A to E, E remote. */
@@ -58,6 +60,69 @@ describe('a country’s price card (zone pricing, step 2)', () => {
     surcharges: { door: 150, oversize: 200, oversizeCm: 100, fragile: 50 },
   });
   const draftTerms = (): PriceCardTerms => cards.overview('sbg-ke').pending[0] as unknown as PriceCardTerms;
+
+  it('a fixed card: one price for each size, near or far, made with no zone map — the country’s mode says which card prices (the owner’s D3, 2026-11-12)', () => {
+    const now = Date.now();
+    cards.setSettings('sbg-ke', { noticeDays: 0 }, NJERI);
+    expect(entities.pricingModeFor('sbg-et')).toBe('fixed');
+    entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+    expect(entities.changes('sbg-ke').find((c) => c.what === 'pricingMode')).toMatchObject({ from: 'by factors (zones and distance)', to: 'a fixed card' });
+    expect(entities.get('sbg-ke').pricingMode).toBeUndefined();
+    // No zone map published, and a fixed card starts anyway: one band, a weight for each size, no zones, all to fill in.
+    const draft = cards.startDraft('sbg-ke', undefined, NJERI, now, 'fixed').pending[0];
+    expect(draft).toMatchObject({ kind: 'fixed', status: 'draft', zoneMapVersion: 0, steps: [1, 5, 15, 30], groupCharges: {}, zoneCharges: {}, pairs: [] });
+    expect(draft.bands).toEqual([{ key: 'all', name: 'Anywhere', maxZones: null, maxKm: null }]);
+    expect(draft.problems).toContain('Anywhere has a weight with no price');
+    // Whatever bands, ends or pairs are sent, a fixed card keeps one band and no zones.
+    const terms = draftTerms();
+    cards.saveDraft('sbg-ke', { ...terms, bands: [...terms.bands, { key: 'far', name: 'Far', maxZones: null, maxKm: null }], table: { all: [100, 150, 250, 400] }, perExtraKg: { all: 0 }, groupCharges: { remote: { perParcel: 400, perKg: 0 } }, pairs: [{ a: 'X', b: 'Y', band: 'far' }] }, NJERI, now);
+    const kept = cards.overview('sbg-ke', now).pending[0];
+    expect(kept).toMatchObject({ bands: [{ key: 'all' }], table: { all: [100, 150, 250, 400] }, groupCharges: {}, pairs: [], problems: [] });
+    cards.ready('sbg-ke', NJERI, now);
+    expect(cards.overview('sbg-ke', now).pending[0].distances).toBeUndefined();
+    cards.approve('sbg-ke', kept.version, undefined, OTIENO, now);
+    // In force, and pricing: the same near or far, whatever zones are named — none are asked.
+    expect(cards.inForceFor('KE', now + 1000)?.card).toMatchObject({ version: kept.version, kind: 'fixed' });
+    const live = cards.inForceFor('KE', now + 1000)!.card;
+    const near = cards.priceOn('sbg-ke', live, { from: '', to: '', kg: 2 });
+    expect(near).toMatchObject({ band: 'all', zonesCrossed: 0, km: 0, amount: 150, billableKg: 2 });
+    expect(near.lines.map((l) => l.key)).toEqual(['table']);
+    expect(cards.priceOn('sbg-ke', live, { from: 'KE-A', to: 'KE-Z', kg: 12, fragile: true }).amount).toBe(250);
+    const v = cards.overview('sbg-ke', now + 1000);
+    expect(v).toMatchObject({ mode: 'fixed', inForce: { version: kept.version, kind: 'fixed', status: 'in_force' } });
+    expect(v.inForceOther).toBeUndefined();
+    // By factors: the fixed card prices nothing — kept, said as the other card in force; no zones card yet.
+    entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
+    expect(cards.inForceFor('KE', now + 1000)).toBeUndefined();
+    expect(cards.overview('sbg-ke', now + 1000)).toMatchObject({ mode: 'factors', inForceOther: { version: kept.version, kind: 'fixed' } });
+    expect(cards.overview('sbg-ke', now + 1000).inForce).toBeUndefined();
+    expect(cards.cardsFrom('KE', now + 1000)?.cards).toEqual([]);
+    entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+    expect(cards.cardsFrom('KE', now + 1000)?.cards.map((c) => c.version)).toEqual([kept.version]);
+    // Its costs: a middling journey, beside each size.
+    expect(cards.costs('sbg-ke', live).map((c) => c.band)).toEqual(['all', 'all', 'all', 'all']);
+  });
+
+  it('a zones card starts from the newest zones card, never from a fixed one; a fixed card from the newest fixed one', () => {
+    publishRow();
+    const now = Date.now();
+    cards.startDraft('sbg-ke', undefined, NJERI, now, 'fixed');
+    cards.saveDraft('sbg-ke', { ...draftTerms(), table: { all: [100, 150, 250, 400] } }, NJERI, now);
+    cards.discardDraft('sbg-ke', NJERI, now);
+    const zonesDraft = cards.startDraft('sbg-ke', undefined, NJERI, now).pending[0];
+    expect(zonesDraft).toMatchObject({ kind: 'zones', zoneMapVersion: 1 });
+    expect(zonesDraft.bands.map((b) => b.key)).toEqual(['local', 'near', 'regional', 'national']);
+    // A zones card still has from 2 to 8 bands.
+    expect(() => cards.saveDraft('sbg-ke', { ...draftTerms(), bands: [draftTerms().bands[3]] }, NJERI, now)).toThrow(/from 2 to 8 bands/);
+    // Approved for a later date while the country prices by a fixed card: not on the counters' list; by factors, it is.
+    cards.saveDraft('sbg-ke', filled(draftTerms()), NJERI, now);
+    cards.ready('sbg-ke', NJERI, now);
+    cards.approve('sbg-ke', zonesDraft.version, undefined, OTIENO, now);
+    entities.setPricingMode('sbg-ke', 'fixed', 'Njeri W.');
+    expect(cards.cardsFrom('KE', now)?.cards).toEqual([]);
+    entities.setPricingMode('sbg-ke', 'factors', 'Njeri W.');
+    expect(cards.cardsFrom('KE', now)?.cards.map((c) => c.version)).toEqual([zonesDraft.version]);
+  });
 
   it('is made on a published zone map, from neutral words and no figures; what is still missing is said', () => {
     expect(() => cards.startDraft('sbg-ke', undefined, NJERI)).toThrow(/publish the zones first/);

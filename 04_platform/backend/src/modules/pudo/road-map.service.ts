@@ -80,7 +80,11 @@ export class RoadMapService implements OnModuleInit {
     const a = stopOf(live.plan, fromMdp);
     const b = stopOf(live.plan, toMdp);
     if (!a || !b) return undefined;
-    const path = pathBetween(live.plan, a, b, live.km);
+    // D3 — of two near-equal ways, the one through the cheaper hub: each stop on the way's sort fee, in km of road at the
+    // country's own rate per km.
+    const perKm = this.entities.amountsFor(this.entities.forJurisdiction(country)?.entityId).freightPerKm;
+    const stopCost = (id: string) => (perKm > 0 ? (this.mdps.find(id)?.pricePerParcel ?? 0) / perKm : 0);
+    const path = pathBetween(live.plan, a, b, live.km, stopCost);
     if (!path) return undefined;
     const out: string[] = [];
     for (const id of [fromMdp, ...path, toMdp]) if (out[out.length - 1] !== id) out.push(id);

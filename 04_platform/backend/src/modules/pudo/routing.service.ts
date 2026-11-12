@@ -551,17 +551,20 @@ export class RoutingService {
     nodes: QuoteNode[],
     carriers: QuoteCarriers,
   ): { price: ZonePrice; shopFees: number; cashStep: number } | undefined {
-    if (!this.priceCards || !this.zoneMaps || !plan.hops.length) return undefined;
+    if (!this.priceCards || !plan.hops.length) return undefined;
     const country = this.entities.find(sellerId)?.jurisdiction;
     if (!country || plan.hops.some((h) => (h.country ?? NETWORK_JURISDICTION) !== country)) return undefined;
     const live = this.priceCards.inForceFor(country, carriers.at ?? Date.now());
     if (!live || live.card.currency !== currency) return undefined;
     const first = plan.hops[0];
     const last = plan.hops[plan.hops.length - 1];
-    const from = this.zoneMaps.zoneCodeIn(live.entityId, live.card.zoneMapVersion, first.location);
-    const to = this.zoneMaps.zoneCodeIn(live.entityId, live.card.zoneMapVersion, last.location);
-    if (!from || !to) return undefined;
-    const price = this.priceCards.priceOn(live.entityId, live.card, { from, to, kg: carriers.kg ?? SIZE_WEIGHT_KG[size], dims: carriers.dims, fragile: carriers.fragile });
+    // 2026-11-12 — a fixed card (the owner's D3) prices near or far alike: no zones asked of its ends.
+    const fixed = live.card.kind === 'fixed';
+    if (!fixed && !this.zoneMaps) return undefined;
+    const from = fixed ? '' : this.zoneMaps!.zoneCodeIn(live.entityId, live.card.zoneMapVersion, first.location);
+    const to = fixed ? '' : this.zoneMaps!.zoneCodeIn(live.entityId, live.card.zoneMapVersion, last.location);
+    if (!fixed && (!from || !to)) return undefined;
+    const price = this.priceCards.priceOn(live.entityId, live.card, { from: from!, to: to!, kg: carriers.kg ?? SIZE_WEIGHT_KG[size], dims: carriers.dims, fragile: carriers.fragile });
     const shopFee = (h: { type: string; id: string }) => (h.type === 'pudo' ? (nodes.find((n) => n.type === 'pudo' && n.id === h.id)?.fee ?? 0) : 0);
     const shopFees = Math.round((shopFee(first) + (plan.hops.length > 1 ? shopFee(last) : 0)) * 100) / 100;
     return { price, shopFees, cashStep: live.card.cashStep };

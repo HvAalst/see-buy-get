@@ -79,6 +79,8 @@ export const NOTIFICATION_KINDS = [
    * for room at the hub it goes to, and that it goes on when there is room; to a hub, that today's sorting is full.
    */
   'hub_space',
+  /** 2026-11-12 — A HUB'S FEES ABOVE ITS COUNTRY'S CEILING (the owner's D3): to the hub, that staff approved them, or did not and why. */
+  'hub_fees',
   /** 2026-11-05 — PRE-DROP-OFF: to whoever booked a parcel, the time left on the place held for it at its drop-off shop. */
   'drop_off_hold',
   /** 2026-11-05 — to a shop, that bookings are going elsewhere because its shelf has no place left: make room. */

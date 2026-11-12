@@ -491,6 +491,20 @@ export class HubVetting {
  * shop: parcels are NOT shelved here, they are sorted into tote bags by next destination. One MDP
  * covers one or more zones; it sits in the middle of every multi-hop journey (PUDO → MDP → … → PUDO).
  */
+/** 2026-11-12 — fees a hub asked for above its country's ceiling (the owner's D3), waiting for staff. */
+export class HubFeesAsked {
+  pricePerParcel?: number;
+  passOnFee?: number;
+  at!: string;
+}
+
+/** 2026-11-12 — fees a hub asked for that staff did not approve: by whom and why. */
+export class HubFeesRefused {
+  by!: string;
+  reason!: string;
+  at!: string;
+}
+
 export class Mdp {
   mdpId: string;
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
@@ -529,6 +543,13 @@ export class Mdp {
    * as its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf.
    */
   passOnFee?: number;
+  /**
+   * 2026-11-12 — fees the hub asked for above its country's ceiling (the owner's D3: "above that needs staff approval"): kept, not
+   * charged, until a member of staff approves them; its fees stay as they were meanwhile.
+   */
+  feeAsked?: HubFeesAsked;
+  /** The last refusal of fees it asked for: by whom, why — shown to the hub. */
+  feeRefused?: HubFeesRefused;
   /**
    * 2026-11-09 — "SORT AND HAND OUT" (the owner: "The hub decides that. Only Sort vs Sort and Hand Out"): its counter, a shop
    * at its own address worked in the Shop app; absent while it has only ever sorted. Stopped: it sorts only again.

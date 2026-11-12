@@ -148,8 +148,12 @@ export function without(plan: RoadPlan, out: ReadonlySet<string>, km: Km): RoadP
   return { stops, local, links: joinPieces(stops, links, km) };
 }
 
-/** The shortest path by road between two stops over the neighbours, both ends included; nothing where none is. */
-export function pathBetween(plan: RoadPlan, from: string, to: string, km: Km): string[] | undefined {
+/**
+ * The shortest path by road between two stops over the neighbours, both ends included; nothing where none is. `stopCost` (the
+ * owner's D3: "Where another hub is on the way, routing prefers the cheaper one") adds each stop ON THE WAY's fee, in km of
+ * road it is worth, so of two near-equal ways the one through the cheaper hub is taken; the road's shape still decides.
+ */
+export function pathBetween(plan: RoadPlan, from: string, to: string, km: Km, stopCost?: (id: string) => number): string[] | undefined {
   if (from === to) return [from];
   const adj = adjacency(plan.stops, plan.links);
   if (!adj.has(from) || !adj.has(to)) return undefined;
@@ -161,7 +165,7 @@ export function pathBetween(plan: RoadPlan, from: string, to: string, km: Km): s
     open.delete(x);
     if (x === to) break;
     for (const y of adj.get(x) ?? []) {
-      const d = dist.get(x)! + km(x, y);
+      const d = dist.get(x)! + km(x, y) + (stopCost && y !== to ? Math.max(0, stopCost(y)) : 0);
       if (d < (dist.get(y) ?? Infinity)) {
         dist.set(y, d);
         prev.set(y, x);

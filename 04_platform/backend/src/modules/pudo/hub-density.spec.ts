@@ -82,6 +82,7 @@ describe('where hubs are needed (2026-11-12)', () => {
         isApproved: () => true,
         countryOf: (m: { country: string }) => m.country,
         isDown: () => false,
+        passOnFeeOf: (m: { passOnFee?: number }) => m.passOnFee ?? 0.3,
         daysOf: (id: string, n: number) => Array.from({ length: n }, (_, i) => ({ day: `d${i}`, sorted: id === 'mdp_isiolo' ? 12 : 1, ...(id === 'mdp_isiolo' && i % 2 ? { full: true } : {}) })),
       },
       catchments: {
@@ -96,6 +97,7 @@ describe('where hubs are needed (2026-11-12)', () => {
       roadMaps: {
         view: () => ({
           proposal: {
+            stops: [{ mdpId: 'mdp_isiolo' }, { mdpId: 'mdp_nairobi' }, { mdpId: 'mdp_thika' }],
             links: [{ a: 'mdp_isiolo', b: 'mdp_nairobi', aName: 'Isiolo', bName: 'Nairobi', km: 520 }, { a: 'mdp_isiolo', b: 'mdp_thika', aName: 'Isiolo', bName: 'Thika', km: 200 }],
             tooClose: [{ a: 'mdp_nairobi', b: 'mdp_thika', aName: 'Nairobi', bName: 'Thika', km: 45 }],
             minKm: 60,
@@ -144,6 +146,36 @@ describe('where hubs are needed (2026-11-12)', () => {
       const gap = v.suggestions.find((s) => s.kind === 'road_gap')!;
       expect(gap).toMatchObject({ hubNames: ['Isiolo', 'Nairobi'], numbers: { apart: 520 } });
       expect(gap.towns.length).toBeGreaterThan(0);
+    });
+
+    it('a hub is a bottleneck: a stop the road map cannot go around, charging above the list figure (the owner’s D3, 2026-11-12)', () => {
+      const isiolo = hubs.find((h) => h.mdpId === 'mdp_isiolo')! as { pricePerParcel?: number; passOnFee?: number };
+      const thika = hubs.find((h) => h.mdpId === 'mdp_thika')! as { pricePerParcel?: number };
+      try {
+        // Isiolo joins Nairobi and Thika: without it they are apart. At twice the list figure it is a bottleneck.
+        isiolo.pricePerParcel = 0.6;
+        thika.pricePerParcel = 0.9; // dear, but at the end of its road: it is gone around, not through
+        let v = density.view('sbg-ke');
+        const b = v.suggestions.filter((s) => s.kind === 'bottleneck');
+        expect(b).toHaveLength(1);
+        expect(b[0]).toMatchObject({ id: 'bottleneck:mdp_isiolo', hubs: ['mdp_isiolo'], hubNames: ['Isiolo'], numbers: { ratio: 2, fee: 0.6, list: 0.3 }, place: { name: 'Isiolo' } });
+        // Its pass-on fee counts as its sort fee does: the higher of the two.
+        isiolo.pricePerParcel = 0.3;
+        isiolo.passOnFee = 0.9;
+        v = density.view('sbg-ke');
+        expect(v.suggestions.find((s) => s.kind === 'bottleneck')?.numbers.ratio).toBe(3);
+        // At the list figure: none.
+        isiolo.passOnFee = 0.3;
+        expect(density.view('sbg-ke').suggestions.some((s) => s.kind === 'bottleneck')).toBe(false);
+        // A bottleneck is a row on the hub list: a place a second hub would give the network a choice.
+        isiolo.pricePerParcel = 0.45;
+        const rows = new HubListService(entities, { list: () => hubs as never, countryOf: (m: { country: string }) => m.country, isApproved: () => true } as never, density).view('sbg-ke').rows;
+        expect(rows.find((r) => r.suggestionKind === 'bottleneck')).toMatchObject({ rowId: 'sug:bottleneck:mdp_isiolo', status: 'open', numbers: { ratio: 1.5 } });
+      } finally {
+        delete isiolo.pricePerParcel;
+        delete isiolo.passOnFee;
+        delete thika.pricePerParcel;
+      }
     });
 
     it('the reach is the country’s own, logged', () => {

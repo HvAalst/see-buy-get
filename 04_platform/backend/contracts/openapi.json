@@ -14565,6 +14565,45 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/pricing-mode": {
+      "post": {
+        "operationId": "Sbg.setEntityPricingMode",
+        "summary": "",
+        "description": "2026-11-12 — the owner's D3: how parcels are priced in the country — a fixed card (one price per size, near or far) or by\nfactors (the zones card). Every country starts on a fixed card. Logged.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricingModeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCardsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/price-cards/settings": {
       "post": {
         "operationId": "Sbg.setEntityPriceCardSettings",
@@ -15271,6 +15310,90 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CustodyCapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/hub-fee-ceiling": {
+      "post": {
+        "operationId": "Sbg.setHubFeeCeiling",
+        "summary": "",
+        "description": "2026-11-12 — the owner's D3: the ceiling on a hub's fees, as a multiple of the list figure. Staff and its administrators.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubFeeCeilingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/hub-fees": {
+      "get": {
+        "operationId": "Sbg.hubFeesAsked",
+        "summary": "",
+        "description": "2026-11-12 — hubs that asked for fees above the ceiling, waiting for a member of staff: the fees, the ceiling, the list.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/fee-decision": {
+      "post": {
+        "operationId": "Sbg.decideHubFees",
+        "summary": "",
+        "description": "2026-11-12 — a member of staff decides them: approved, they are the hub's fees; refused, with why.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubFeeDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mdp"
                 }
               }
             }
@@ -54314,6 +54437,14 @@
             "type": "object",
             "description": "2026-11-09 (D6) — how runs and extra legs are paid here; absent = by bag. Read it through EntityService.runPayFor()."
           },
+          "hubFeeCeiling": {
+            "type": "number",
+            "description": "2026-11-12 — the owner's D3: a hub's sort and pass-on fees up to this many times the list figure; absent = 1.5."
+          },
+          "pricingMode": {
+            "type": "object",
+            "description": "2026-11-12 — the owner's D3: how parcels are priced here — a fixed card (one price per size, near or far) or by factors\n(the zone card: distance, size, the ends). Absent = fixed: \"Every country starts on a fixed card\"."
+          },
           "custodyCaps": {
             "type": "object",
             "properties": {
@@ -58835,6 +58966,8 @@
               "roadMap",
               "hubDensity",
               "hubList",
+              "hubFeeCeiling",
+              "pricingMode",
               "zones",
               "prices",
               "catchments",
@@ -59021,6 +59154,10 @@
               }
             ]
           },
+          "hubFeeCeiling": {
+            "type": "number",
+            "description": "2026-11-12 — the owner's D3: a hub sets its fees up to this many times the list figure; above that, staff approve."
+          },
           "bounds": {
             "$ref": "#/components/schemas/PricingBounds"
           },
@@ -59041,6 +59178,7 @@
           "transacting",
           "carrierPapers",
           "sealRules",
+          "hubFeeCeiling",
           "bounds",
           "editable"
         ]
@@ -60753,6 +60891,13 @@
           "min": {
             "type": "number",
             "description": "The country's minimum distance between two stops."
+          },
+          "fee": {
+            "type": "number",
+            "description": "A bottleneck: its sort fee, the country's list figure, and how many times that it charges (the higher of sort and pass-on)."
+          },
+          "list": {
+            "type": "number"
           }
         }
       },
@@ -60765,7 +60910,8 @@
               "hub_needed",
               "extra_hub",
               "too_close",
-              "road_gap"
+              "road_gap",
+              "bottleneck"
             ]
           },
           "place": {
@@ -60914,7 +61060,8 @@
               "hub_needed",
               "extra_hub",
               "too_close",
-              "road_gap"
+              "road_gap",
+              "bottleneck"
             ]
           },
           "suggestionId": {
@@ -61303,6 +61450,14 @@
       "PriceCardView": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "description": "2026-11-12 — a zones card (\"by factors\") or a fixed card (one price per size, near or far).",
+            "enum": [
+              "zones",
+              "fixed"
+            ]
+          },
           "status": {
             "type": "string",
             "description": "draft · ready · filed · cleared · approved (from a date to come: scheduled) · in_force · past · withdrawn.",
@@ -61453,6 +61608,7 @@
           }
         },
         "required": [
+          "kind",
           "status",
           "bands",
           "steps",
@@ -61521,8 +61677,29 @@
               "type": "number"
             }
           },
+          "mode": {
+            "type": "string",
+            "description": "2026-11-12 — the owner's D3: how parcels are priced here — a fixed card, or by factors (the zones card).",
+            "enum": [
+              "fixed",
+              "factors"
+            ]
+          },
           "inForce": {
-            "$ref": "#/components/schemas/PriceCardView"
+            "description": "The card that prices parcels now: the one in force of the kind the mode names.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceCardView"
+              }
+            ]
+          },
+          "inForceOther": {
+            "description": "A card of the other kind in force too: kept, not pricing anything while the mode names the other.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceCardView"
+              }
+            ]
           },
           "pending": {
             "type": "array",
@@ -61555,12 +61732,28 @@
         },
         "required": [
           "zoneMaps",
+          "mode",
           "pending",
           "history",
           "costs",
           "entityId",
           "currency",
           "settings"
+        ]
+      },
+      "PricingModeDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "factors"
+            ]
+          }
+        },
+        "required": [
+          "mode"
         ]
       },
       "PriceCardSettingsDto": {
@@ -61581,8 +61774,16 @@
         "properties": {
           "zoneMapVersion": {
             "type": "number",
-            "description": "The published zone map it is made on; absent means the map in force.",
+            "description": "The published zone map it is made on; absent means the map in force. A fixed card names none.",
             "minimum": 1
+          },
+          "kind": {
+            "type": "string",
+            "description": "2026-11-12 — a zones card (absent) or a fixed card: one price per size, near or far (the owner's D3).",
+            "enum": [
+              "zones",
+              "fixed"
+            ]
           }
         }
       },
@@ -62022,6 +62223,346 @@
         },
         "required": [
           "capped"
+        ]
+      },
+      "HubFeeCeilingDto": {
+        "type": "object",
+        "properties": {
+          "multiple": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "multiple"
+        ]
+      },
+      "HubFeeDecisionDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "approve"
+        ]
+      },
+      "HubPapers": {
+        "type": "object",
+        "properties": {
+          "idCopyRef": {
+            "type": "string",
+            "description": "The responsible person's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: \"People's ID photos only\" — as a driver's since 2026-10-30)."
+          },
+          "idPhotoDeletedAt": {
+            "type": "string",
+            "description": "When the ID photo was deleted, the papers having been checked."
+          },
+          "licenceRef": {
+            "type": "string"
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "submittedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "licenceRef",
+          "photoRefs",
+          "submittedAt"
+        ]
+      },
+      "HubRefusal": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "at"
+        ]
+      },
+      "HubVetting": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "papers": {
+            "$ref": "#/components/schemas/HubPapers"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "refusal": {
+            "$ref": "#/components/schemas/HubRefusal"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "HubFeesAsked": {
+        "type": "object",
+        "properties": {
+          "pricePerParcel": {
+            "type": "number"
+          },
+          "passOnFee": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "HubFeesRefused": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "reason",
+          "at"
+        ]
+      },
+      "HubDownCollect": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "byRole": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "staff"
+            ]
+          }
+        },
+        "required": [
+          "since",
+          "by",
+          "byRole"
+        ]
+      },
+      "HubDown": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string",
+            "description": "When it opens again — always said (the owner, 2026-11-11). It opens then only if the hub confirmed it in the day before."
+          },
+          "confirmedAt": {
+            "type": "string",
+            "description": "When the hub last said it opens at `until` — counted only in the day before it (confirmedInTime)."
+          },
+          "askedAt": {
+            "type": "string",
+            "description": "When the daily bell last asked."
+          },
+          "unconfirmedToldAt": {
+            "type": "string",
+            "description": "When it was told it stays closed for not confirming, for this `until`."
+          },
+          "collectable": {
+            "$ref": "#/components/schemas/HubDownCollect"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "power",
+              "flood",
+              "security",
+              "no_staff",
+              "authority",
+              "other"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who said so, by name."
+          },
+          "byRole": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "staff"
+            ]
+          }
+        },
+        "required": [
+          "since",
+          "reason",
+          "by",
+          "byRole"
+        ]
+      },
+      "Mdp": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "did": {
+            "type": "string",
+            "description": "Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to."
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country this hub stands in — same fact as a shop's, and it matters more here: a hub is where a\n cross-border journey changes hands, so the leg into it is the one that clears customs. Absent on\n pre-slice records; read it through MdpService.countryOf."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The sister company this hub is contracted to — same reasoning as a shop's: a fixed site sits in\n one country. Absent on pre-entity records; read it through MdpService.entityIdOf()."
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "pricePerParcel": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "vetting": {
+            "description": "Where it stands with SeeBuyGet: read it through MdpService.isApproved, never the field alone.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubVetting"
+              }
+            ]
+          },
+          "bagPlaces": {
+            "type": "number",
+            "description": "2026-11-02 — HOW MANY BAGS CAN STAND ON ITS FLOOR AT ONCE (the owner: \"shouldn't a hub also declare its space?\"): bags\nwaiting to be sorted, and bags being filled or waiting for a driver. Its owner's word, as its fee is (MdpService.setSpace).\nAbsent on a hub that has not said — which is never treated as full: read it through MdpService.spaceOf."
+          },
+          "sortPerDay": {
+            "type": "number",
+            "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
+          },
+          "inviteCode": {
+            "type": "string",
+            "description": "2026-11-12 — the code of the hub-list row whose invitation it signed up through (the owner's D2): that row is joined, linked\nto this hub — the system's, never staff's."
+          },
+          "passOnFee": {
+            "type": "number",
+            "description": "2026-11-12 — what it is paid for a bag it receives on its seal and passes on unopened (Hubs on the Road, D5): its own word,\nas its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf."
+          },
+          "feeAsked": {
+            "description": "2026-11-12 — fees the hub asked for above its country's ceiling (the owner's D3: \"above that needs staff approval\"): kept, not\ncharged, until a member of staff approves them; its fees stay as they were meanwhile.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubFeesAsked"
+              }
+            ]
+          },
+          "feeRefused": {
+            "description": "The last refusal of fees it asked for: by whom, why — shown to the hub.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubFeesRefused"
+              }
+            ]
+          },
+          "counter": {
+            "type": "object",
+            "properties": {
+              "agentDid": {
+                "required": true,
+                "type": "string"
+              },
+              "openedAt": {
+                "required": true,
+                "type": "string"
+              },
+              "stoppedAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "down": {
+            "description": "2026-11-11 — DOWN, as the hub or staff said (ISO 28000 gap 12): nothing is sent to it until it is open again or `until` passes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubDown"
+              }
+            ]
+          },
+          "spaceSaidAt": {
+            "type": "string",
+            "description": "When its owner last said them."
+          }
+        },
+        "required": [
+          "mdpId",
+          "did",
+          "name",
+          "zones",
+          "location",
+          "pricePerParcel",
+          "createdAt",
+          "counter"
         ]
       },
       "RunPayDto": {
@@ -65038,265 +65579,6 @@
         },
         "required": [
           "price"
-        ]
-      },
-      "HubPapers": {
-        "type": "object",
-        "properties": {
-          "idCopyRef": {
-            "type": "string",
-            "description": "The responsible person's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: \"People's ID photos only\" — as a driver's since 2026-10-30)."
-          },
-          "idPhotoDeletedAt": {
-            "type": "string",
-            "description": "When the ID photo was deleted, the papers having been checked."
-          },
-          "licenceRef": {
-            "type": "string"
-          },
-          "photoRefs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "submittedAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "licenceRef",
-          "photoRefs",
-          "submittedAt"
-        ]
-      },
-      "HubRefusal": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string"
-          },
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "reason",
-          "at"
-        ]
-      },
-      "HubVetting": {
-        "type": "object",
-        "properties": {
-          "state": {
-            "type": "object"
-          },
-          "papers": {
-            "$ref": "#/components/schemas/HubPapers"
-          },
-          "approvedAt": {
-            "type": "string"
-          },
-          "approvedBy": {
-            "type": "string"
-          },
-          "refusal": {
-            "$ref": "#/components/schemas/HubRefusal"
-          }
-        },
-        "required": [
-          "state"
-        ]
-      },
-      "HubDownCollect": {
-        "type": "object",
-        "properties": {
-          "since": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          },
-          "byRole": {
-            "type": "string",
-            "enum": [
-              "hub",
-              "staff"
-            ]
-          }
-        },
-        "required": [
-          "since",
-          "by",
-          "byRole"
-        ]
-      },
-      "HubDown": {
-        "type": "object",
-        "properties": {
-          "since": {
-            "type": "string"
-          },
-          "until": {
-            "type": "string",
-            "description": "When it opens again — always said (the owner, 2026-11-11). It opens then only if the hub confirmed it in the day before."
-          },
-          "confirmedAt": {
-            "type": "string",
-            "description": "When the hub last said it opens at `until` — counted only in the day before it (confirmedInTime)."
-          },
-          "askedAt": {
-            "type": "string",
-            "description": "When the daily bell last asked."
-          },
-          "unconfirmedToldAt": {
-            "type": "string",
-            "description": "When it was told it stays closed for not confirming, for this `until`."
-          },
-          "collectable": {
-            "$ref": "#/components/schemas/HubDownCollect"
-          },
-          "reason": {
-            "type": "string",
-            "enum": [
-              "power",
-              "flood",
-              "security",
-              "no_staff",
-              "authority",
-              "other"
-            ]
-          },
-          "note": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string",
-            "description": "Who said so, by name."
-          },
-          "byRole": {
-            "type": "string",
-            "enum": [
-              "hub",
-              "staff"
-            ]
-          }
-        },
-        "required": [
-          "since",
-          "reason",
-          "by",
-          "byRole"
-        ]
-      },
-      "Mdp": {
-        "type": "object",
-        "properties": {
-          "mdpId": {
-            "type": "string"
-          },
-          "did": {
-            "type": "string",
-            "description": "Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to."
-          },
-          "name": {
-            "type": "string"
-          },
-          "country": {
-            "type": "string",
-            "description": "The country this hub stands in — same fact as a shop's, and it matters more here: a hub is where a\n cross-border journey changes hands, so the leg into it is the one that clears customs. Absent on\n pre-slice records; read it through MdpService.countryOf."
-          },
-          "entityId": {
-            "type": "string",
-            "description": "The sister company this hub is contracted to — same reasoning as a shop's: a fixed site sits in\n one country. Absent on pre-entity records; read it through MdpService.entityIdOf()."
-          },
-          "zones": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "location": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "contactPhone": {
-            "type": "string"
-          },
-          "address": {
-            "type": "string"
-          },
-          "pricePerParcel": {
-            "type": "number"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "vetting": {
-            "description": "Where it stands with SeeBuyGet: read it through MdpService.isApproved, never the field alone.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HubVetting"
-              }
-            ]
-          },
-          "bagPlaces": {
-            "type": "number",
-            "description": "2026-11-02 — HOW MANY BAGS CAN STAND ON ITS FLOOR AT ONCE (the owner: \"shouldn't a hub also declare its space?\"): bags\nwaiting to be sorted, and bags being filled or waiting for a driver. Its owner's word, as its fee is (MdpService.setSpace).\nAbsent on a hub that has not said — which is never treated as full: read it through MdpService.spaceOf."
-          },
-          "sortPerDay": {
-            "type": "number",
-            "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
-          },
-          "inviteCode": {
-            "type": "string",
-            "description": "2026-11-12 — the code of the hub-list row whose invitation it signed up through (the owner's D2): that row is joined, linked\nto this hub — the system's, never staff's."
-          },
-          "passOnFee": {
-            "type": "number",
-            "description": "2026-11-12 — what it is paid for a bag it receives on its seal and passes on unopened (Hubs on the Road, D5): its own word,\nas its sort fee is. Absent: its country's list figure — read it through MdpService.passOnFeeOf."
-          },
-          "counter": {
-            "type": "object",
-            "properties": {
-              "agentDid": {
-                "required": true,
-                "type": "string"
-              },
-              "openedAt": {
-                "required": true,
-                "type": "string"
-              },
-              "stoppedAt": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          },
-          "down": {
-            "description": "2026-11-11 — DOWN, as the hub or staff said (ISO 28000 gap 12): nothing is sent to it until it is open again or `until` passes.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HubDown"
-              }
-            ]
-          },
-          "spaceSaidAt": {
-            "type": "string",
-            "description": "When its owner last said them."
-          }
-        },
-        "required": [
-          "mdpId",
-          "did",
-          "name",
-          "zones",
-          "location",
-          "pricePerParcel",
-          "createdAt",
-          "counter"
         ]
       },
       "VehicleDocuments": {

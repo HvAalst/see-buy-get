@@ -27,5 +27,10 @@ describe('where hubs are needed, on the console (2026-11-12)', () => {
     expect(suggestionLine({ ...base, kind: 'extra_hub', numbers: { fullDays: 7, days: 14, ratio: 1.4 } }, t as never)).toContain('extra_hub_ratio');
     expect(suggestionLine({ ...base, kind: 'too_close', hubNames: ['A', 'B'], numbers: { apart: 12, min: 60 } }, t as never)).toContain('"min":60');
     expect(suggestionLine({ ...base, kind: 'road_gap', hubNames: ['A', 'B'], numbers: { apart: 520 } }, t as never)).toContain('road_gap');
+    // 2026-11-12 — the owner's D3: a hub the road cannot go around, charging above the list figure.
+    const bottleneck = suggestionLine({ ...base, kind: 'bottleneck', hubNames: ['Isiolo'], numbers: { ratio: 2, fee: 0.6, list: 0.3 } }, t as never);
+    expect(bottleneck).toContain('tower.density.line.bottleneck');
+    expect(bottleneck).toContain('"ratio":2');
+    expect(bottleneck).toContain('"hub":"Isiolo"');
   });
 });

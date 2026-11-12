@@ -877,7 +877,13 @@ export function useMdpApp() {
         const r = await client.api.setPrice(hub.mdpId, price, passOnFee);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: money(price, hub.currency) }) });
+        // 2026-11-12 — the owner's D3: above the country's ceiling, the fee waits for staff rather than being its own at once.
+        const asked = (r.data as { feeAsked?: unknown } | undefined)?.feeAsked;
+        pushToast(
+          asked
+            ? { tone: 'info', icon: 'wallet', title: t('mdp.toast.feeAskedTitle'), detail: t('mdp.toast.feeAskedDetail') }
+            : { tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: money(price, hub.currency) }) },
+        );
         await refresh();
         if (stateRef.current.screen === 'rates') await loadRates();
       });

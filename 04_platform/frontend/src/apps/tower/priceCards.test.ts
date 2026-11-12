@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addStep, approveFrom, belowCost, cellCost, earliestDay, figure, marginOf, removeStep, setCell, weekShift, workingCard, type PriceCardTerms, type PriceCardsView } from './priceCards';
+import { addStep, approveFrom, belowCost, cellCost, earliestDay, figure, marginOf, removeStep, setCell, sizeOfStep, weekShift, workingCard, type PriceCardTerms, type PriceCardsView } from './priceCards';
 
 const TERMS: PriceCardTerms = {
   bands: [
@@ -63,5 +63,13 @@ describe('a country’s price card in the console (2026-11-08)', () => {
     expect(figure('12,5')).toBe(12.5);
     expect(figure('abc')).toBe(0);
     expect(figure('-3')).toBe(0);
+  });
+});
+
+describe('a fixed card’s weights said as sizes (the owner’s D3, 2026-11-12)', () => {
+  it('names the network’s sizes by their weight, the last weight heavy, any other weight as itself', () => {
+    expect([1, 5, 15, 30].map((kg, i, all) => sizeOfStep(kg, i === all.length - 1))).toEqual(['S', 'M', 'L', 'heavy']);
+    expect(sizeOfStep(2, false)).toBeNull();
+    expect(sizeOfStep(15, true)).toBe('heavy');
   });
 });

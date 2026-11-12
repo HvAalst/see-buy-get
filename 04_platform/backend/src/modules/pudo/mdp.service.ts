@@ -386,12 +386,26 @@ export class MdpService {
    * and what it is paid for each (the user, 2026-10-26: "Its own fee"). Parcels already sold keep the fee they were sold
    * at. Written at once — it is money.
    */
-  setPrice(mdpId: string, pricePerParcel: number, passOnFee?: number): Mdp {
+  setPrice(mdpId: string, pricePerParcel: number, passOnFee?: number, now: number = Date.now()): Mdp {
     if (pricePerParcel < 0 || (passOnFee !== undefined && passOnFee < 0)) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const mdp = this.require(mdpId);
-    mdp.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
-    // 2026-11-12 — and, where said, what a whole bag passed on unopened pays it (D5).
-    if (passOnFee !== undefined) mdp.passOnFee = Math.round(passOnFee * 100) / 100;
+    // 2026-11-12 — THE OWNER'S D3 (and D5): a hub sets its own sort and pass-on fees "up to a multiple of its country's list
+    // figure (starting at 1.5 times); above that needs staff approval". A fee within the ceiling is its own at once; one above it
+    // is kept as asked, its fee staying as it was, until a member of staff approves it.
+    const ceiling = this.feeCeilingOf(mdp);
+    const sort = Math.round(pricePerParcel * 100) / 100;
+    const pass = passOnFee !== undefined ? Math.round(passOnFee * 100) / 100 : undefined;
+    const asked: { pricePerParcel?: number; passOnFee?: number } = {};
+    if (sort <= ceiling.sort) mdp.pricePerParcel = sort;
+    else asked.pricePerParcel = sort;
+    if (pass !== undefined) {
+      if (pass <= ceiling.passOn) mdp.passOnFee = pass;
+      else asked.passOnFee = pass;
+    }
+    if (asked.pricePerParcel !== undefined || asked.passOnFee !== undefined) {
+      mdp.feeAsked = { ...asked, at: new Date(now).toISOString() };
+      delete mdp.feeRefused;
+    } else delete mdp.feeAsked;
     this.mdps.set(mdp.mdpId, mdp);
     return mdp;
   }
@@ -407,6 +421,53 @@ export class MdpService {
    */
   sendAnotherWay(parcel: Parcel, to: string, by: string, said: OffPlanSaid): void {
     this.routeKeeper?.leave(parcel, to, by, said);
+  }
+
+  /**
+   * 2026-11-12 — THE CEILING ON A HUB'S FEES (the owner's D3): its country's list figures times its company's multiple.
+   */
+  feeCeilingOf(mdp: Mdp): { sort: number; passOn: number; multiple: number; listSort: number; listPassOn: number } {
+    const entityId = this.entityIdOrNone(mdp);
+    const list = this.entities.amountsFor(entityId);
+    const multiple = this.entities.hubFeeCeilingFor(entityId);
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return { sort: round2(list.mdpSortFee * multiple), passOn: round2(list.mdpPassOnFee * multiple), multiple, listSort: list.mdpSortFee, listPassOn: list.mdpPassOnFee };
+  }
+
+  /** Hubs that asked for fees above the ceiling, waiting for staff, the oldest first. */
+  feesAsked(): Mdp[] {
+    return [...this.mdps.values()].filter((m) => m.feeAsked).sort((a, b) => a.feeAsked!.at.localeCompare(b.feeAsked!.at));
+  }
+
+  /**
+   * A member of staff decides fees a hub asked for above the ceiling: approved, they are its fees from now; refused, with why,
+   * its fees stay as they were. The hub is told by a bell notice.
+   */
+  decideFees(mdpId: string, approve: boolean, by: string, reason?: string, now: number = Date.now()): Mdp {
+    const mdp = this.require(mdpId);
+    const asked = mdp.feeAsked;
+    if (!asked) throw new GlosError('INVALID_STATE', `${mdp.name} has not asked for fees above the ceiling`);
+    if (!approve && !reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why: the hub is shown it', { field: 'reason' });
+    if (approve) {
+      if (asked.pricePerParcel !== undefined) mdp.pricePerParcel = asked.pricePerParcel;
+      if (asked.passOnFee !== undefined) mdp.passOnFee = asked.passOnFee;
+    } else mdp.feeRefused = { by, reason: reason!.trim(), at: new Date(now).toISOString() };
+    delete mdp.feeAsked;
+    this.mdps.set(mdpId, mdp);
+    if (this.notifications) {
+      const what = [asked.pricePerParcel !== undefined ? `a sort fee of ${asked.pricePerParcel}` : '', asked.passOnFee !== undefined ? `a pass-on fee of ${asked.passOnFee}` : ''].filter(Boolean).join(' and ');
+      void this.notifications
+        .notify(mdp.did, {
+          kind: 'hub_fees',
+          title: approve ? 'Your fees are approved' : 'Your fees were not approved',
+          body: approve ? `SeeBuyGet approved ${what}: it is what you are paid from now.` : `SeeBuyGet did not approve ${what}: ${reason!.trim()}. Your fees stay as they were.`,
+          link: '/',
+          tag: `hub-fees:${mdpId}:${asked.at}`,
+          data: { mdpId },
+        })
+        .catch(() => undefined);
+    }
+    return mdp;
   }
 
   /** 2026-11-12 — what a whole bag passed on unopened pays this hub (D5): its own fee, else its country's list figure. */

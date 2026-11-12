@@ -60,7 +60,7 @@ export class DensityLink {
   b!: string;
 }
 
-export const SUGGESTION_KINDS = ['hub_needed', 'extra_hub', 'too_close', 'road_gap'] as const;
+export const SUGGESTION_KINDS = ['hub_needed', 'extra_hub', 'too_close', 'road_gap', 'bottleneck'] as const;
 export type SuggestionKind = (typeof SUGGESTION_KINDS)[number];
 
 export class SuggestionPlace {
@@ -86,6 +86,9 @@ export class SuggestionNumbers {
   @ApiPropertyOptional() apart?: number;
   /** The country's minimum distance between two stops. */
   @ApiPropertyOptional() min?: number;
+  /** A bottleneck: its sort fee, the country's list figure, and how many times that it charges (the higher of sort and pass-on). */
+  @ApiPropertyOptional() fee?: number;
+  @ApiPropertyOptional() list?: number;
 }
 
 export class HubSuggestion {

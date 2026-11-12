@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { weekForm } from '../fleet/sites';
 import { bulkBody, feeEach, feesLine } from './arrivals';
+import { feeAskLines } from './logic';
 
 /** The money words keep the currency and the sum together with a no-break space; compared as plain spaces. */
 const plain = (s: string | null) => s?.replace(/[\u00a0\u202f]/g, ' ') ?? null;
@@ -27,5 +28,19 @@ describe('what a hub charges to take in each unit (D12; the user, 2026-10-26: �
     expect(plain(feesLine({ fees: { pallet: 150, sack: 5 }, feeCurrency: 'KES' }, t))).toBe('KES 150.00 a pallet · KES 5.00 a sack');
     expect(feesLine({ fees: {}, feeCurrency: 'KES' }, t)).toBeNull();
     expect(feesLine(undefined, t)).toBeNull();
+  });
+});
+
+describe('fees above the country’s ceiling (the owner’s D3, 2026-11-12)', () => {
+  it('says what waits for SeeBuyGet, sort and pass-on, in its own money; a refusal with why once it has not asked again', () => {
+    expect(feeAskLines(null, t)).toEqual([]);
+    expect(feeAskLines({ currency: 'KES' }, t)).toEqual([]);
+    const both = feeAskLines({ currency: 'KES', feeAsked: { pricePerParcel: 45, passOnFee: 30, at: '2026-11-12T08:00:00Z' } }, t).map(plain);
+    expect(both).toEqual(['Waiting for SeeBuyGet to approve KES 45.00 a parcel. Until then you are paid your fee as it was.', 'Waiting for SeeBuyGet to approve KES 30.00 a bag passed on. Until then you are paid your fee as it was.']);
+    expect(feeAskLines({ currency: 'KES', feeAsked: { passOnFee: 30, at: '2026-11-12T08:00:00Z' } }, t)).toHaveLength(1);
+    const refused = { by: 'Amina', reason: 'Above every hub on this road', at: '2026-11-12T09:00:00Z' };
+    expect(feeAskLines({ currency: 'KES', feeRefused: refused }, t)).toEqual(['SeeBuyGet did not approve the fee you asked: Above every hub on this road']);
+    // Asked again since: what waits now, not the old refusal.
+    expect(feeAskLines({ currency: 'KES', feeRefused: refused, feeAsked: { pricePerParcel: 40, at: '2026-11-12T10:00:00Z' } }, t).join(' ')).not.toContain('did not approve');
   });
 });

@@ -104,8 +104,29 @@ export class CounterPriceService {
   }
 
   private cardFor(entityId: string, card: StoredPriceCard, at: { lat: number; lng: number }, shops: Array<{ did: string; location: { lat: number; lng: number } }>): CounterCard | undefined {
-    const origin = this.zones.zoneCodeIn(entityId, card.zoneMapVersion, at);
+    // 2026-11-12 — A FIXED CARD (the owner's D3): every shop in one place, '*', priced on its one band — the phone's sums
+    // need nothing new: one zone, one band, no ends.
+    const anywhere = card.kind === 'fixed';
+    const origin = anywhere ? '*' : this.zones.zoneCodeIn(entityId, card.zoneMapVersion, at);
     if (!origin) return undefined;
+    if (anywhere) {
+      return {
+        version: card.version,
+        zoneMapVersion: 0,
+        from: card.effectiveFrom!,
+        origin,
+        steps: [...card.steps],
+        table: Object.fromEntries(Object.entries(card.table).map(([k, v]) => [k, [...v]])),
+        perExtraKg: { ...card.perExtraKg },
+        weight: { divisorShop: card.weight.divisorShop, stepKg: card.weight.stepKg, maxKg: card.weight.maxKg, volumeFromKg: card.weight.volumeFromKg },
+        surcharges: { oversize: card.surcharges.oversize, oversizeCm: card.surcharges.oversizeCm, fragile: card.surcharges.fragile },
+        minimum: card.minimum,
+        cashStep: card.cashStep,
+        bands: { '*': card.bands[0].key },
+        ends: {},
+        zoneOf: Object.fromEntries(shops.map((s) => [s.did, '*'])),
+      };
+    }
     const key = `${entityId}#${card.version}#${origin}`;
     let fixed = this.fixed.get(key);
     if (!fixed) {
