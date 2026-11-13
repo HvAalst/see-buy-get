@@ -59,9 +59,15 @@ export class WeightCheckController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/orders/:parcelId/weight-answer')
   answerAsStore(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: WeightAnswerDto, @Actor() actor: IntrospectionResult): ParcelWeightFound {
-    const store = this.vendors.get(id); // 404 if unknown
-    if (!actor?.did || actor.did !== store.did) throw new GlosError('FORBIDDEN', 'This store is not yours to answer for');
+    this.assertVendorSelf(id, actor);
     if (this.parcels.get(parcelId).vendorId !== id) throw new GlosError('NOT_FOUND', 'Order does not belong to this store');
     return this.checks.answer(parcelId, dto.text);
+  }
+
+  /** The store itself, from its own sign-in — never staff standing in (store-writes.spec.ts). */
+  private assertVendorSelf(id: string, actor: IntrospectionResult): void {
+    const vendor = this.vendors.get(id); // 404 if unknown
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name');
+    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to answer for');
   }
 }
