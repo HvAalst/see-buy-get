@@ -2,6 +2,7 @@ import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt, type CarrierCoverPr
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
+import { TOWING_KINDS, type TowingKind } from './trailer-rules';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -161,7 +162,18 @@ export class DriverService {
    * The country a driver's work is settled in: their fleet's, or their own for a courier. Where no company of ours
    * stands there yet, its money is the one their figures are said in — never the network's (the owner, 2026-10-30).
    */
-  private countryOfWork(did: string): string {
+  /** 2026-11-13 — what the driver's licence covers for towing (trailer-rules.ts): B with code 96, BE, E — the whole list. */
+  setTowing(did: string, kinds: string[]): FleetDriver {
+    const driver = this.require(did);
+    const known = [...new Set(kinds)].filter((k): k is TowingKind => (TOWING_KINDS as readonly string[]).includes(k));
+    if (known.length !== new Set(kinds).size) throw new GlosError('INVALID_INPUT', `A licence covers towing as ${TOWING_KINDS.join(', ')}`, { field: 'kinds' });
+    if (!driver.licence) throw new GlosError('INVALID_STATE', 'Your driving licence is not on record yet');
+    driver.licence.towing = known;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  countryOfWork(did: string): string {
     const driver = this.require(did);
     if (driver.managerDid) {
       try {

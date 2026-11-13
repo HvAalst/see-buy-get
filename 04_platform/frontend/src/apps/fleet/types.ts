@@ -68,6 +68,9 @@ export interface VehicleRow {
   capacityKg: number;
   /** 2026-11-13 — the loading equipment it carries ('MAN', by hand, always among them). */
   equipment?: string[];
+  /** 2026-11-13 — what it may tow, from its registration, and its rate a km while towing (trailer plan D3, D5). */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
+  pricePerKmWithTrailer?: number;
   pricePerKm: number;
   verified: boolean;
   status: string;

@@ -36,6 +36,9 @@ import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { LoadSpaceSheet } from './LoadSpaceSheet';
 import { equipmentWords } from '../../../shared/equipment';
+import { trailerApi, trailerLine } from '../../../shared/trailers';
+import { TrailersCard } from '../../../shared/trailers/TrailersCard';
+import { HitchSheet } from './HitchSheet';
 import { TripsCard } from './TripsCard';
 import { IdPhotoCard } from './IdPhotoCard';
 import { CarrierPlaceCard } from './CarrierPlaceCard';
@@ -220,6 +223,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       <DriverCoverCard state={state} actions={actions} sbg={sbg ?? null} />
       {/* 2026-11-12 — their saved trips, like an alarm (the owner: "much like an alarm"). */}
       <TripsCard state={state} actions={actions} onShift={false} />
+      {/* 2026-11-13 — their own trailers, riding for themselves (trailer plan D1); a fleet's driver uses the fleet's, hitched on shift. */}
+      {state.driver && !state.driver.managerDid ? <TrailersCard sbg={sbg ?? null} upload={(file) => actions.uploadPhoto('registration', file)} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
@@ -329,7 +334,7 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Card>
       ) : null}
 
-      {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own /> : null}
+      {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own sbg={sbg ?? null} /> : null}
       {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (
@@ -837,6 +842,9 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const [endOdo, setEndOdo] = useState('');
   const [defectOpen, setDefectOpen] = useState(false);
   const [loadOpen, setLoadOpen] = useState(false);
+  // 2026-11-13 — a trailer to hitch on this shift (trailer plan D2).
+  const [hitchOpen, setHitchOpen] = useState(false);
+  const towed = state.session.assignment?.trailer;
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const shown = badgeToShow(state.session, state.driver?.badgeId);
@@ -879,12 +887,23 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </p>
         {/* 2026-11-12 — what it takes, as the driver says (the owner: "the driver should be able to adjust the weight and volume"). */}
         <p class="card__note">{v.volumeM3 != null ? t('driver.home.loadSpace', { litres: litresOf(v.volumeM3)! }) : t('driver.home.loadSpaceUnknown')}</p>
+        {/* 2026-11-13 — towing (trailer plan D2): what the pair carries, and the trailer off; or one to hitch, behind a car or a van. */}
+        {towed ? <p class="card__note">{t('trailer.towing', { line: trailerLine(towed, t) })}</p> : null}
         {/* 2026-11-13 — what it carries for loading (the owner: "build loading equipment"); nothing said where by hand only. */}
         {equipmentWords(v.equipment, t) ? <p class="card__note">{t('equipment.line', { list: equipmentWords(v.equipment, t) })}</p> : null}
         <div class="linkcol">
         <Button variant="link" full={false} onClick={() => setLoadOpen(true)}>
           {t('driver.load.open')}
         </Button>
+        {towed ? (
+          <Button variant="link" full={false} onClick={() => void (sbg ? trailerApi(sbg).unhitch(state.driver!.did).then(() => actions.refresh()) : undefined)}>
+            {t('trailer.unhitch', { plate: towed.plate })}
+          </Button>
+        ) : v.vehicleClass === 'van' || v.vehicleClass === 'car' ? (
+          <Button variant="link" full={false} onClick={() => setHitchOpen(true)}>
+            {t('trailer.hitch')}
+          </Button>
+        ) : null}
         <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
           {t('driver.defect.open')}
         </Button>
@@ -897,7 +916,8 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Button>
         </div>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
-        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} /> : null}
+        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} sbg={sbg ?? null} onShift /> : null}
+        {hitchOpen && state.driver ? <HitchSheet open onClose={() => setHitchOpen(false)} sbg={sbg ?? null} driverDid={state.driver.did} towing={state.driver.licence?.towing ?? []} onDone={() => void actions.refresh()} /> : null}
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>
 

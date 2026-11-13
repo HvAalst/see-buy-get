@@ -16,5 +16,5 @@ addEnglish({ ...enFleet, ...enVehicles, ...enGoods, ...enUpkeep, ...enAbbr, ...e
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
 
 // 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
-wordsOf('fleet', 'site-hours', 'abbr', 'vehicles', 'energy', 'equipment', 'goods', 'upkeep', 'directory-card');
+wordsOf('fleet', 'site-hours', 'abbr', 'vehicles', 'energy', 'equipment', 'trailers', 'goods', 'upkeep', 'directory-card');
 helpWordsOf('help-app');

@@ -25,7 +25,7 @@ export interface DriverRecord {
   status: DriverStatus;
   assignedVehicleId?: string;
   homeZone?: string;
-  licence?: { classes?: string[]; number?: string; expiresAt?: string };
+  licence?: { classes?: string[]; number?: string; expiresAt?: string; /** 2026-11-13 — what it covers for towing. */ towing?: string[] };
   // REP4 — the driver's own rating + whether it has fallen below the network floor (freight is then paused
   // until it recovers). So the app can explain WHY the freight marketplace went quiet.
   rating?: { average: number; count: number; isNew?: boolean } | null;
@@ -125,6 +125,9 @@ export interface VehicleView {
   volumeM3?: number;
   /** 2026-11-13 — the loading equipment it carries ('MAN', by hand, among them). */
   equipment?: string[];
+  /** 2026-11-13 — what it may tow, from its registration, and its rate a km while towing (trailer plan D3, D5). */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
+  pricePerKmWithTrailer?: number;
   /** Whose it is: a fleet's (its own record) or a driver's own. */
   managerDid?: string;
   ownerDriverDid?: string;
@@ -165,6 +168,8 @@ export interface RecentVehicleView {
   /** 2026-11-12/13 — its load space (m³) and loading equipment (by hand left out), as its owner says. */
   volumeM3?: number;
   equipment?: string[];
+  /** 2026-11-13 — what it may tow, from its registration. */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
 }
 
 /**
@@ -194,6 +199,8 @@ export interface AssignmentView {
   /** The driver has switched off the road we work out from the loads they take. One decision, held for
    *  the shift — so turning it off is a switch rather than an argument with the next claim. */
   derivedLegOff?: boolean;
+  /** 2026-11-13 — a trailer hitched for this shift (trailer plan D2). */
+  trailer?: import('../../shared/trailers').HitchedTrailer;
   startedAt: string;
 }
 

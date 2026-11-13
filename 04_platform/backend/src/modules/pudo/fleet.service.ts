@@ -12,7 +12,27 @@ import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
 import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM, NEAR_LOCATED_H } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge, type Vehicle } from './fleet.types';
+import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge, type HitchedTrailer, type Vehicle } from './fleet.types';
+import { TrailerService, type TrailerInput } from './trailer.service';
+import { payloadOf, towingRefusal, type TrailerSpec } from './trailer-rules';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
+
+/**
+ * 2026-11-13 — THE VEHICLE WITH ITS TRAILER (trailer plan D2, D5): what the two carry and hold together — the trailer's load space
+ * counted only where the vehicle's is known, so nothing unmeasured is promised — its ramps among the equipment, the rate while
+ * towing where one is set, and the trailer itself for the time it takes (D4). A copy: the vehicle's own record never changes.
+ */
+export function withTrailer(v: Vehicle, t: HitchedTrailer | undefined): Vehicle {
+  if (!t) return v;
+  return {
+    ...v,
+    capacityKg: v.capacityKg + t.payloadKg,
+    ...(v.volumeM3 != null ? { volumeM3: Math.round((v.volumeM3 + (t.volumeM3 ?? 0)) * 100) / 100 } : {}),
+    equipment: t.ramp && !v.equipment.includes('RMP') ? [...v.equipment, 'RMP'] : v.equipment,
+    pricePerKm: v.pricePerKmWithTrailer ?? v.pricePerKm,
+    towing: t,
+  };
+}
 import { GeoPoint } from './pudo.types';
 import { haversineKm } from './geo';
 import { handedAt } from './observed-at';
@@ -89,6 +109,8 @@ export interface RecentVehicle {
   volumeM3?: number;
   /** 2026-11-13 — the loading equipment it carries besides handling by hand (a tail-lift, straps …). */
   equipment: Equipment[];
+  /** 2026-11-13 — what it may tow, from its registration. */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
   /** 2026-11-03 — the courier’s own: theirs to say what it runs on (POST vehicles/:id/energy). */
   own?: true;
   /**
@@ -166,6 +188,8 @@ export class FleetService {
     @Optional() risk?: RiskRegisterService,
     // Optional for the same reason: without it no driver is ever at rest.
     @Optional() private readonly rest?: RestingAccounts,
+    // 2026-11-13 — the trailers kept by couriers and fleets, hitched on a shift (trailer plan D2). Optional: without it none is.
+    @Optional() private readonly trailers?: TrailerService,
   ) {
     risk?.registerCorridorOf((did) => this.activeForDriver(did)?.corridorId);
   }
@@ -282,6 +306,8 @@ export class FleetService {
         // 2026-11-12/13 — its load space and loading equipment, as its owner says (shown on the driver's list, changed by its owner).
         ...(v.volumeM3 != null ? { volumeM3: v.volumeM3 } : {}),
         equipment: v.equipment.filter((e) => e !== 'MAN'),
+        // 2026-11-13 — what it may tow, from its registration (trailer plan D3).
+        ...(v.towLimits ? { towLimits: { brakedKg: v.towLimits.brakedKg, unbrakedKg: v.towLimits.unbrakedKg, ...(v.towLimits.grossKg != null ? { grossKg: v.towLimits.grossKg } : {}) } } : {}),
         verified: v.verified,
         busy: !!this.activeForVehicle(v.vehicleId),
         offRoad: this.vehicles.offRoadReasons(v.vehicleId),
@@ -746,7 +772,8 @@ export class FleetService {
     if (!driver || !this.drivers.canOperate(driver.did)) return undefined;
     const active = this.activeForDriver(driver.did);
     if (!active) return undefined;
-    const vehicle = this.vehicles.get(active.vehicleId);
+    // 2026-11-13 — with a trailer hitched, what the pair carries (trailer plan D2).
+    const vehicle = withTrailer(this.vehicles.get(active.vehicleId), active.trailer);
     return {
       driverDid: driver.did,
       badgeId,
@@ -768,10 +795,61 @@ export class FleetService {
     }
   }
 
-  /** The vehicle the driver is currently coupled to (for dispatch capacity + handling rules). */
+  /**
+   * The vehicle the driver is currently coupled to (for dispatch capacity + handling rules). 2026-11-13 — with a trailer hitched,
+   * the pair (trailer plan D2): what both carry and hold, the trailer's ramps among the equipment, and the rate while towing (D5).
+   */
   vehicleForDriver(driverDid: string) {
     const active = this.activeForDriver(driverDid);
-    return active ? this.vehicles.get(active.vehicleId) : undefined;
+    return active ? withTrailer(this.vehicles.get(active.vehicleId), active.trailer) : undefined;
+  }
+
+  /**
+   * 2026-11-13 — WHAT MAY BE HITCHED, CHECKED (trailer plan D2–D3), writing nothing: a kept trailer of the driver's own or their
+   * fleet's, not on another shift; or one hired for the day, as typed. Then the pairing the vehicle and the driver's licence allow,
+   * by the country's rule — refused saying why and what would allow it.
+   */
+  hitchable(driverDid: string, vehicleId: string, input: { trailerId?: string; hire?: TrailerInput }, now: number = Date.now()): HitchedTrailer {
+    if (!this.trailers) throw new GlosError('NOT_FOUND', 'Trailers are not kept on this server');
+    const driver = this.drivers.get(driverDid);
+    let spec: TrailerSpec;
+    let trailerId: string | undefined;
+    if (input.trailerId) {
+      const t = this.trailers.get(input.trailerId);
+      if (!this.trailers.ownedBy(t, { driverDid, managerDid: driver.managerDid })) throw new GlosError('FORBIDDEN', `${t.plate} is not yours or your fleet's to hitch`);
+      const elsewhere = [...this.assignments.values()].find((a) => a.status === 'active' && a.driverDid !== driverDid && a.trailer?.trailerId === t.trailerId);
+      if (elsewhere) throw new GlosError('ALREADY_COUPLED', `${t.plate} is hitched on another shift`);
+      spec = { plate: t.plate, maxKg: t.maxKg, emptyKg: t.emptyKg, braked: t.braked, closed: t.closed, ...(t.volumeM3 != null ? { volumeM3: t.volumeM3 } : {}), ramp: t.ramp };
+      trailerId = t.trailerId;
+    } else if (input.hire) {
+      spec = this.trailers.spec(input.hire);
+    } else {
+      throw new GlosError('FIELD_REQUIRED', 'Say which trailer: one you keep, or one hired for the day', { field: 'trailerId' });
+    }
+    const country = this.drivers.countryOfWork(driverDid);
+    const refusal = towingRefusal({ country, countryName: catalogueEntry(country)?.name ?? country, kinds: driver.licence?.towing ?? [], vehicle: this.vehicles.get(vehicleId), trailer: spec });
+    if (refusal) throw new GlosError('CANNOT_COUPLE', refusal);
+    const maxKmh = catalogueEntry(country)?.towingMaxKmh;
+    return { ...spec, ...(trailerId ? { trailerId } : { hired: true as const }), payloadKg: payloadOf(spec), ...(maxKmh ? { maxKmh } : {}), hitchedAt: new Date(now).toISOString() };
+  }
+
+  /** 2026-11-13 — hitch a trailer to the vehicle of this shift (D2): checked first, then on the shift until unhitched or it ends. */
+  hitch(driverDid: string, input: { trailerId?: string; hire?: TrailerInput }, now: number = Date.now()): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('INVALID_STATE', 'Start your shift first: a trailer is hitched to the vehicle you are driving');
+    const trailer = this.hitchable(driverDid, active.vehicleId, input, now);
+    active.trailer = trailer;
+    this.assignments.set(active.assignmentId, active);
+    return active;
+  }
+
+  /** 2026-11-13 — the trailer off (D2): what the shift takes is the vehicle's alone again. */
+  unhitch(driverDid: string): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active?.trailer) throw new GlosError('INVALID_STATE', 'No trailer is hitched on your shift');
+    delete active.trailer;
+    this.assignments.set(active.assignmentId, active);
+    return active;
   }
 
   activeForDriver(driverDid: string): Assignment | undefined {

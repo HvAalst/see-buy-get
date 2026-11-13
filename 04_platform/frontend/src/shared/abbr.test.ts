@@ -23,6 +23,8 @@ const PLAIN: Record<string, string> = {
   GLOS: 'name', SBG: 'name', TWILIO: 'name', QNAP: 'name', B2: 'name', R2: 'name', GIT: 'example', FRT: 'code', KLM: 'example', FM: 'code', PX9M: 'example', COL: 'code', FLT: 'code', DID: 'code', SID: 'code', POST: 'code', OSRM: 'name', SHA256: 'name', VAPID: 'name',
   // 2026-11-01 — the messaging app's own name (Share SeeBuyGet), as it is written on the phone.
   VK: 'name',
+  // 2026-11-13 — a driving-licence category, as it is printed on the card (towing a trailer: BE).
+  BE: 'licence',
 };
 
 describe('the trade’s short forms, said in full', () => {

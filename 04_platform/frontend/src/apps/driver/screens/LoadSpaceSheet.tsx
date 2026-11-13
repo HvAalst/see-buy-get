@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, ErrorNote, Sheet } from '../../../shared/ui';
-import type { SbgError } from '../../../lib/sbg';
+import type { SbgClient, SbgError } from '../../../lib/sbg';
+import { trailerApi } from '../../../shared/trailers';
 import { useT } from '../../../shared/i18n';
 import { equipmentOptions, equipmentWords } from '../../../shared/equipment';
 import { litresOf, loadSpaceBody } from '../logic';
@@ -20,10 +21,22 @@ export interface LoadSpaceVehicle {
   capacityKg: number;
   volumeM3?: number;
   equipment?: string[];
+  /** 2026-11-13 — what it may tow, and its rates (trailer plan D3, D5). */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
+  pricePerKm?: number;
+  pricePerKmWithTrailer?: number;
 }
 
-export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own }: { open: boolean; onClose: () => void; actions: DriverActions; vehicle: LoadSpaceVehicle; word: string; own: boolean }) {
+export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg, onShift = false }: { open: boolean; onClose: () => void; actions: DriverActions; vehicle: LoadSpaceVehicle; word: string; own: boolean; sbg?: SbgClient | null; onShift?: boolean }) {
   const t = useT();
+  // 2026-11-13 — what it may tow (trailer plan D3), for a car or a van; and, on a shift, its rate while towing (D5).
+  const tows = vehicle.vehicleClass === 'van' || vehicle.vehicleClass === 'car';
+  const [braked, setBraked] = useState(vehicle.towLimits ? String(vehicle.towLimits.brakedKg) : '');
+  const [unbraked, setUnbraked] = useState(vehicle.towLimits ? String(vehicle.towLimits.unbrakedKg) : '');
+  const [gross, setGross] = useState(vehicle.towLimits?.grossKg != null ? String(vehicle.towLimits.grossKg) : '');
+  const [towRate, setTowRate] = useState(vehicle.pricePerKmWithTrailer != null ? String(vehicle.pricePerKmWithTrailer) : '');
+  const towChanged = tows && (braked !== (vehicle.towLimits ? String(vehicle.towLimits.brakedKg) : '') || unbraked !== (vehicle.towLimits ? String(vehicle.towLimits.unbrakedKg) : '') || gross !== (vehicle.towLimits?.grossKg != null ? String(vehicle.towLimits.grossKg) : ''));
+  const rateChanged = tows && onShift && towRate !== (vehicle.pricePerKmWithTrailer != null ? String(vehicle.pricePerKmWithTrailer) : '');
   const [kg, setKg] = useState(String(vehicle.capacityKg));
   const [litres, setLitres] = useState(litresOf(vehicle.volumeM3)?.toString() ?? '');
   const before = (vehicle.equipment ?? []).filter((e) => e !== 'MAN');
@@ -37,8 +50,26 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own }: {
     if (!('body' in made)) return;
     setBusy(true);
     const failed = await actions.setLoadSpace(vehicle.vehicleId, made.body, equipmentChanged ? picked : undefined);
+    if (failed) {
+      setBusy(false);
+      return setError(failed);
+    }
+    if (sbg && towChanged && braked.trim() && unbraked.trim()) {
+      const r = await trailerApi(sbg).setTowLimits(vehicle.vehicleId, { brakedKg: Number(braked), unbrakedKg: Number(unbraked), grossKg: gross.trim() ? Number(gross) : null });
+      if (r.error) {
+        setBusy(false);
+        return setError(r.error);
+      }
+    }
+    if (sbg && rateChanged && vehicle.pricePerKm != null) {
+      const r = await trailerApi(sbg).setRateWithTrailer(vehicle.vehicleId, vehicle.pricePerKm, towRate.trim() ? Number(towRate.replace(',', '.')) : null);
+      if (r.error) {
+        setBusy(false);
+        return setError(r.error);
+      }
+    }
     setBusy(false);
-    if (failed) return setError(failed);
+    if (towChanged || rateChanged) await actions.refresh();
     setError(null);
     onClose();
   };
@@ -86,6 +117,28 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own }: {
           </p>
         )}
       </div>
+
+      {tows && own ? (
+        <div class="field">
+          <span class="field__label">{t('trailer.mayTow')}</span>
+          <p class="hint">{t('trailer.mayTowHint')}</p>
+          {(
+            [
+              ['tow-braked', 'trailer.towBraked', braked, setBraked],
+              ['tow-unbraked', 'trailer.towUnbraked', unbraked, setUnbraked],
+              ['tow-gross', 'trailer.towGross', gross, setGross],
+              ...(onShift ? ([['tow-rate', 'trailer.towRate', towRate, setTowRate]] as const) : []),
+            ] as const
+          ).map(([id, label, value, onSet]) => (
+            <div class="field" key={id}>
+              <label class="field__label" for={id}>
+                {t(label)}
+              </label>
+              <input id={id} class="input" type="number" inputMode="decimal" min="0" value={value} onInput={(e) => onSet(e.currentTarget.value)} />
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <Button chevron={false} busy={busy} disabled={!('body' in made)} onClick={() => void save()}>
         {t('driver.load.save')}

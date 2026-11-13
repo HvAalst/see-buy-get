@@ -5031,7 +5031,7 @@ export class SbgController {
     const owner = actor?.role === 'fleet_manager' && Boolean(v.managerDid) && actingTenant(actor) === v.managerDid;
     const onIt = Boolean(actor?.did) && this.fleet.activeForVehicle(id)?.driverDid === actor.did;
     if (actor?.role !== 'operator' && !owner && !onIt) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, or the driver on shift with it, sets its rate');
-    return this.vehicles.setPrice(id, dto.price);
+    return this.vehicles.setPrice(id, dto.price, dto.withTrailer);
   }
 
   /**

@@ -5307,7 +5307,8 @@ export class DispatchService {
     route: { from: GeoPoint; to?: GeoPoint },
     load: Claimable,
   ): { collectMin: number; deliverMin?: number } {
-    const speed = VEHICLE_SPEED_KMH[vehicle.vehicleClass === 'truck' ? 'truck' : 'bus'];
+    // 2026-11-13 — towing, no faster than the country's limit with a trailer (trailer plan D4).
+    const speed = Math.min(VEHICLE_SPEED_KMH[vehicle.vehicleClass === 'truck' ? 'truck' : 'bus'], vehicle.towing?.maxKmh ?? Number.POSITIVE_INFINITY);
     const eta = (a: GeoPoint, b: GeoPoint) => this.router.etaMinutes(a, b, speed);
     const drop = load.destLocation;
     const end = route.to;

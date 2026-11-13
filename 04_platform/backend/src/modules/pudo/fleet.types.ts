@@ -4,6 +4,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TruckSubtype, VEHICLE_CLASSES, VEHICLE_ENERGIES, VehicleClass, VehicleEnergy } from './fleet.config';
+import type { TowingKind, TrailerSpec } from './trailer-rules';
 import { Equipment } from './cargo.types';
 import type { CarrierPaperKind, PaperKind } from './papers';
 import { GeoPoint } from './pudo.types';
@@ -277,6 +278,15 @@ export class Vehicle {
    * and volume"): its fleet, the driver who owns it or drives it, or staff. Absent: as it was registered.
    */
   loadSpaceSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
+  /**
+   * 2026-11-13 — WHAT IT MAY TOW (trailer-rules.ts, plan D3), from its registration: braked and unbraked, and its own maximum weight
+   * where the country's rule counts the two together. Absent: it tows nothing until said.
+   */
+  towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number; setBy: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string } };
+  /** 2026-11-13 — its rate a km while towing (D5), where its owner set one; otherwise its own rate. */
+  pricePerKmWithTrailer?: number;
+  /** 2026-11-13 — on the copy a shift reads while a trailer is hitched (FleetService.vehicleForDriver): never stored. */
+  towing?: HitchedTrailer;
   /** 2026-11-13 — who last said what loading equipment it carries, and when (PATCH vehicles/:id/equipment). */
   equipmentSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
   /**
@@ -349,6 +359,8 @@ export class DriverPassport {
 export class DriverLicence {
   number: string;
   classes: VehicleClass[]; // vehicle classes the driver is cleared to operate
+  /** 2026-11-13 — what it covers for towing (trailer-rules.ts): B with code 96, BE, E — as on the card. */
+  towing?: TowingKind[];
   expiresAt?: string; // heavy registry: enforced (expired ⇒ cannot operate)
   /**
    * The photograph the date on record was READ FROM, when somebody recorded it from one. Absent means the
@@ -616,6 +628,18 @@ export class DeclaredArea {
 /** How a driver has said they take work: along a road, or within a radius of themselves. */
 export type DeclaredWork = DeclaredLeg | DeclaredArea;
 
+/** 2026-11-13 — a trailer hitched to the vehicle of a shift (plan D2): a kept one, or one hired for the day. */
+export interface HitchedTrailer extends TrailerSpec {
+  /** The kept trailer; absent on a day's hire. */
+  trailerId?: string;
+  hired?: true;
+  /** What it carries: its maximum less its own weight. */
+  payloadKg: number;
+  /** The country's top speed with a trailer (D4), where it has one. */
+  maxKmh?: number;
+  hitchedAt: string;
+}
+
 /** The flexible coupling: which driver is operating which vehicle (and on which corridor) right now. */
 export class Assignment {
   assignmentId: string;
@@ -648,6 +672,8 @@ export class Assignment {
   /** Round 24 — when SeeBuyGet heard the shift had ended, where later than `endedAt`: ended with no signal, dated by the phone. */
   endReceivedAt?: string;
   location?: GeoPoint; // last reported GPS position (live fleet map)
+  /** 2026-11-13 — a trailer hitched for this shift (plan D2): ends with the shift, as the snooze does. */
+  trailer?: HitchedTrailer;
   lastLocatedAt?: string;
 }
 

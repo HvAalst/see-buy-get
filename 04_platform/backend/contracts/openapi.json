@@ -7802,6 +7802,219 @@
         }
       }
     },
+    "/v1/sbg/trailers": {
+      "get": {
+        "operationId": "Trailer.list",
+        "summary": "",
+        "description": "A courier's own trailers and their fleet's; a fleet's own.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Trailer.register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrailerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/trailers/{id}": {
+      "delete": {
+        "operationId": "Trailer.retire",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/hitch": {
+      "post": {
+        "operationId": "Trailer.hitch",
+        "summary": "",
+        "description": "The driver, on their own shift: never staff, who are at nobody's wheel.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HitchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/unhitch": {
+      "post": {
+        "operationId": "Trailer.unhitch",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/towing": {
+      "patch": {
+        "operationId": "Trailer.towing",
+        "summary": "",
+        "description": "What the driver's licence covers for towing: said by the driver, their fleet, or staff.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TowingKindsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/towing": {
+      "patch": {
+        "operationId": "Trailer.towLimits",
+        "summary": "",
+        "description": "What a vehicle may tow, from its registration: said by whose it is, the driver on shift with it, or staff (as its load space).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TowLimitsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vehicle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/road": {
       "get": {
         "operationId": "HubZones.road",
@@ -52251,6 +52464,474 @@
           "text"
         ]
       },
+      "TrailerDto": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string"
+          },
+          "maxKg": {
+            "type": "number"
+          },
+          "emptyKg": {
+            "type": "number"
+          },
+          "braked": {
+            "type": "boolean"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "litres": {
+            "type": "number"
+          },
+          "ramp": {
+            "type": "boolean"
+          },
+          "registrationRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plate",
+          "maxKg",
+          "emptyKg",
+          "braked",
+          "closed"
+        ]
+      },
+      "HitchDto": {
+        "type": "object",
+        "properties": {
+          "trailerId": {
+            "type": "string"
+          },
+          "hire": {
+            "$ref": "#/components/schemas/TrailerDto"
+          }
+        }
+      },
+      "Assignment": {
+        "type": "object",
+        "properties": {
+          "assignmentId": {
+            "type": "string"
+          },
+          "driverDid": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "corridorId": {
+            "type": "string"
+          },
+          "work": {
+            "type": "object"
+          },
+          "snoozedUntil": {
+            "type": "string",
+            "description": "New offers are SNOOZED until this instant (absent = taking work).\n\nA rider needs this far more than a line-haul driver does: lunch, a fare of their own, a puncture, the\nlast hour of a long day. It stops NEW work only — everything already claimed is still theirs to carry,\nhand over and deliver, because snoozing offers is not going off shift. It lives on the coupling, so\nending the shift ends it: nobody discovers tomorrow morning that they are still snoozed."
+          },
+          "derivedLegOff": {
+            "type": "boolean",
+            "description": "The driver has switched OFF the road we worked out from the load they took.\n\nOne decision, honoured for the rest of the shift. Without it, turning it off would clear a road that\nthe very next claim puts straight back — which is not a switch, it is an argument. Like the snooze\nbeside it, it lives on the coupling, so ending the shift ends it."
+          },
+          "status": {
+            "type": "object"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "endReceivedAt": {
+            "type": "string",
+            "description": "Round 24 — when SeeBuyGet heard the shift had ended, where later than `endedAt`: ended with no signal, dated by the phone."
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "trailer": {
+            "type": "object"
+          },
+          "lastLocatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignmentId",
+          "driverDid",
+          "vehicleId",
+          "status",
+          "startedAt"
+        ]
+      },
+      "TowingKindsDto": {
+        "type": "object",
+        "properties": {
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "B96",
+                "BE",
+                "E"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kinds"
+        ]
+      },
+      "TowLimitsDto": {
+        "type": "object",
+        "properties": {
+          "brakedKg": {
+            "type": "number"
+          },
+          "unbrakedKg": {
+            "type": "number"
+          },
+          "grossKg": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "brakedKg",
+          "unbrakedKg"
+        ]
+      },
+      "VehicleDocuments": {
+        "type": "object",
+        "properties": {
+          "registrationPhotoRef": {
+            "type": "string"
+          },
+          "factoryId": {
+            "type": "string"
+          },
+          "insuranceRef": {
+            "type": "string"
+          },
+          "insuranceExpiresAt": {
+            "type": "string",
+            "description": "FP4 — a passed insurance expiry takes the vehicle OFF THE ROAD (see papers.ts); no date recorded switches nothing off."
+          },
+          "inspectionRef": {
+            "type": "string",
+            "description": "FP4 — the roadworthiness / inspection certificate, enforced the same way."
+          },
+          "inspectionExpiresAt": {
+            "type": "string"
+          },
+          "registrationCountry": {
+            "type": "string",
+            "description": "2026-11-10 — for a border manifest (Kenya–Ethiopia): where it is registered (two letters), its trailer's plate, its COMESA Yellow Card."
+          },
+          "trailerPlate": {
+            "type": "string"
+          },
+          "yellowCardNumber": {
+            "type": "string"
+          },
+          "yellowCardExpiresAt": {
+            "type": "string"
+          },
+          "customsLicenceKind": {
+            "type": "object",
+            "description": "2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control — C28 for transit goods, C40 for others."
+          },
+          "customsLicenceNumber": {
+            "type": "string"
+          },
+          "customsLicenceExpiresAt": {
+            "type": "string"
+          }
+        }
+      },
+      "PaperStatusView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "object",
+            "description": "READ from papers.ts rather than restated here — a second copy of an enum is a second thing to forget."
+          },
+          "state": {
+            "type": "object"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "daysLeft": {
+            "type": "number",
+            "description": "Whole days until it lapses — negative once it has. Absent without a date."
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state"
+        ]
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "energy": {
+            "type": "string",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "managerDid": {
+            "type": "string"
+          },
+          "qr": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "object"
+          },
+          "truckSubtype": {
+            "type": "object"
+          },
+          "capacityKg": {
+            "type": "number"
+          },
+          "deckM": {
+            "type": "number"
+          },
+          "volumeM3": {
+            "type": "number",
+            "description": "2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an\nairport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then\nsays the load's volume and that the space is not on record — it never guesses one from the class."
+          },
+          "loadSpaceSetBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "towLimits": {
+            "type": "object",
+            "properties": {
+              "brakedKg": {
+                "required": true,
+                "type": "number"
+              },
+              "unbrakedKg": {
+                "required": true,
+                "type": "number"
+              },
+              "grossKg": {
+                "required": false,
+                "type": "number"
+              },
+              "setBy": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "required": true,
+                    "type": "string"
+                  },
+                  "role": {
+                    "required": true,
+                    "type": "object"
+                  },
+                  "at": {
+                    "required": true,
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "pricePerKmWithTrailer": {
+            "type": "number",
+            "description": "2026-11-13 — its rate a km while towing (D5), where its owner set one; otherwise its own rate."
+          },
+          "towing": {
+            "type": "object",
+            "description": "2026-11-13 — on the copy a shift reads while a trailer is hitched (FleetService.vehicleForDriver): never stored."
+          },
+          "equipmentSetBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "toteCapacity": {
+            "type": "number",
+            "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
+          },
+          "pricePerKm": {
+            "type": "number"
+          },
+          "baseFee": {
+            "type": "number"
+          },
+          "minMultiplier": {
+            "type": "number"
+          },
+          "maxMultiplier": {
+            "type": "number"
+          },
+          "maxParcelKg": {
+            "type": "number"
+          },
+          "allowsFragile": {
+            "type": "boolean"
+          },
+          "coldChain": {
+            "type": "boolean"
+          },
+          "carriesBulk": {
+            "type": "boolean"
+          },
+          "liquid": {
+            "type": "boolean"
+          },
+          "hazmat": {
+            "type": "boolean"
+          },
+          "oversized": {
+            "type": "boolean"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "ownerType": {
+            "type": "object"
+          },
+          "ownerName": {
+            "type": "string"
+          },
+          "ownerDriverDid": {
+            "type": "string",
+            "description": "WHOSE OWN VEHICLE THIS IS when no fleet owns it — the courier who registered it at signup, and the only\ndriver who may start a shift on it. Absent on a fleet's vehicle (`managerDid` says whose) and on vehicles\nregistered before this existed."
+          },
+          "documents": {
+            "$ref": "#/components/schemas/VehicleDocuments"
+          },
+          "vehiclePhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trailerPhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "object"
+          },
+          "papers": {
+            "description": "FP4 — DERIVED on the owner's read, never stored: each paper's state today.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperStatusView"
+            }
+          },
+          "offRoad": {
+            "description": "DERIVED: every reason it cannot start a shift, in words — its papers, then its upkeep. Empty: it can.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "upkeep": {
+            "description": "DERIVED on the owner's read, never stored: the reasons besides its papers — in the workshop, a defect, a service overdue.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "description": "DERIVED on the owner's read: what to know that does not keep it off the road — a service due soon.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicleId",
+          "qr",
+          "plate",
+          "vehicleClass",
+          "capacityKg",
+          "loadSpaceSetBy",
+          "towLimits",
+          "equipmentSetBy",
+          "pricePerKm",
+          "baseFee",
+          "minMultiplier",
+          "maxMultiplier",
+          "maxParcelKg",
+          "allowsFragile",
+          "coldChain",
+          "carriesBulk",
+          "liquid",
+          "hazmat",
+          "oversized",
+          "equipment",
+          "ownerType",
+          "ownerName",
+          "documents",
+          "verified",
+          "status",
+          "createdAt"
+        ]
+      },
       "RoadNeighbour": {
         "type": "object",
         "properties": {
@@ -66780,6 +67461,12 @@
           "price": {
             "type": "number",
             "minimum": 0
+          },
+          "withTrailer": {
+            "type": "number",
+            "nullable": true,
+            "description": "2026-11-13 — its rate a km while towing a trailer (trailer plan D5): a number sets it, null clears it, absent leaves it.",
+            "minimum": 0
           }
         },
         "required": [
@@ -66817,290 +67504,6 @@
             "maximum": 150
           }
         }
-      },
-      "VehicleDocuments": {
-        "type": "object",
-        "properties": {
-          "registrationPhotoRef": {
-            "type": "string"
-          },
-          "factoryId": {
-            "type": "string"
-          },
-          "insuranceRef": {
-            "type": "string"
-          },
-          "insuranceExpiresAt": {
-            "type": "string",
-            "description": "FP4 — a passed insurance expiry takes the vehicle OFF THE ROAD (see papers.ts); no date recorded switches nothing off."
-          },
-          "inspectionRef": {
-            "type": "string",
-            "description": "FP4 — the roadworthiness / inspection certificate, enforced the same way."
-          },
-          "inspectionExpiresAt": {
-            "type": "string"
-          },
-          "registrationCountry": {
-            "type": "string",
-            "description": "2026-11-10 — for a border manifest (Kenya–Ethiopia): where it is registered (two letters), its trailer's plate, its COMESA Yellow Card."
-          },
-          "trailerPlate": {
-            "type": "string"
-          },
-          "yellowCardNumber": {
-            "type": "string"
-          },
-          "yellowCardExpiresAt": {
-            "type": "string"
-          },
-          "customsLicenceKind": {
-            "type": "object",
-            "description": "2026-11-11 — Kenya: KRA's licence for a vehicle carrying goods under customs control — C28 for transit goods, C40 for others."
-          },
-          "customsLicenceNumber": {
-            "type": "string"
-          },
-          "customsLicenceExpiresAt": {
-            "type": "string"
-          }
-        }
-      },
-      "PaperStatusView": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "object",
-            "description": "READ from papers.ts rather than restated here — a second copy of an enum is a second thing to forget."
-          },
-          "state": {
-            "type": "object"
-          },
-          "expiresAt": {
-            "type": "string"
-          },
-          "daysLeft": {
-            "type": "number",
-            "description": "Whole days until it lapses — negative once it has. Absent without a date."
-          },
-          "reference": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "state"
-        ]
-      },
-      "Vehicle": {
-        "type": "object",
-        "properties": {
-          "energy": {
-            "type": "string",
-            "enum": [
-              "petrol",
-              "diesel",
-              "electric",
-              "hybrid",
-              "gas",
-              "pedal"
-            ]
-          },
-          "vehicleId": {
-            "type": "string"
-          },
-          "managerDid": {
-            "type": "string"
-          },
-          "qr": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "vehicleClass": {
-            "type": "object"
-          },
-          "truckSubtype": {
-            "type": "object"
-          },
-          "capacityKg": {
-            "type": "number"
-          },
-          "deckM": {
-            "type": "number"
-          },
-          "volumeM3": {
-            "type": "number",
-            "description": "2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an\nairport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then\nsays the load's volume and that the space is not on record — it never guesses one from the class."
-          },
-          "loadSpaceSetBy": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "required": true,
-                "type": "string"
-              },
-              "role": {
-                "required": true,
-                "type": "object"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              }
-            }
-          },
-          "equipmentSetBy": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "required": true,
-                "type": "string"
-              },
-              "role": {
-                "required": true,
-                "type": "object"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              }
-            }
-          },
-          "toteCapacity": {
-            "type": "number",
-            "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
-          },
-          "pricePerKm": {
-            "type": "number"
-          },
-          "baseFee": {
-            "type": "number"
-          },
-          "minMultiplier": {
-            "type": "number"
-          },
-          "maxMultiplier": {
-            "type": "number"
-          },
-          "maxParcelKg": {
-            "type": "number"
-          },
-          "allowsFragile": {
-            "type": "boolean"
-          },
-          "coldChain": {
-            "type": "boolean"
-          },
-          "carriesBulk": {
-            "type": "boolean"
-          },
-          "liquid": {
-            "type": "boolean"
-          },
-          "hazmat": {
-            "type": "boolean"
-          },
-          "oversized": {
-            "type": "boolean"
-          },
-          "equipment": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "ownerType": {
-            "type": "object"
-          },
-          "ownerName": {
-            "type": "string"
-          },
-          "ownerDriverDid": {
-            "type": "string",
-            "description": "WHOSE OWN VEHICLE THIS IS when no fleet owns it — the courier who registered it at signup, and the only\ndriver who may start a shift on it. Absent on a fleet's vehicle (`managerDid` says whose) and on vehicles\nregistered before this existed."
-          },
-          "documents": {
-            "$ref": "#/components/schemas/VehicleDocuments"
-          },
-          "vehiclePhotoRefs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "trailerPhotoRefs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "verified": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "object"
-          },
-          "papers": {
-            "description": "FP4 — DERIVED on the owner's read, never stored: each paper's state today.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PaperStatusView"
-            }
-          },
-          "offRoad": {
-            "description": "DERIVED: every reason it cannot start a shift, in words — its papers, then its upkeep. Empty: it can.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "upkeep": {
-            "description": "DERIVED on the owner's read, never stored: the reasons besides its papers — in the workshop, a defect, a service overdue.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "notes": {
-            "description": "DERIVED on the owner's read: what to know that does not keep it off the road — a service due soon.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "createdAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "vehicleId",
-          "qr",
-          "plate",
-          "vehicleClass",
-          "capacityKg",
-          "loadSpaceSetBy",
-          "equipmentSetBy",
-          "pricePerKm",
-          "baseFee",
-          "minMultiplier",
-          "maxMultiplier",
-          "maxParcelKg",
-          "allowsFragile",
-          "coldChain",
-          "carriesBulk",
-          "liquid",
-          "hazmat",
-          "oversized",
-          "equipment",
-          "ownerType",
-          "ownerName",
-          "documents",
-          "verified",
-          "status",
-          "createdAt"
-        ]
       },
       "VehicleEquipmentDto": {
         "type": "object",
@@ -71335,6 +71738,12 @@
               "type": "object"
             }
           },
+          "towing": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "expiresAt": {
             "type": "string"
           },
@@ -73310,60 +73719,6 @@
         },
         "required": [
           "vehicleId"
-        ]
-      },
-      "Assignment": {
-        "type": "object",
-        "properties": {
-          "assignmentId": {
-            "type": "string"
-          },
-          "driverDid": {
-            "type": "string"
-          },
-          "vehicleId": {
-            "type": "string"
-          },
-          "corridorId": {
-            "type": "string"
-          },
-          "work": {
-            "type": "object"
-          },
-          "snoozedUntil": {
-            "type": "string",
-            "description": "New offers are SNOOZED until this instant (absent = taking work).\n\nA rider needs this far more than a line-haul driver does: lunch, a fare of their own, a puncture, the\nlast hour of a long day. It stops NEW work only — everything already claimed is still theirs to carry,\nhand over and deliver, because snoozing offers is not going off shift. It lives on the coupling, so\nending the shift ends it: nobody discovers tomorrow morning that they are still snoozed."
-          },
-          "derivedLegOff": {
-            "type": "boolean",
-            "description": "The driver has switched OFF the road we worked out from the load they took.\n\nOne decision, honoured for the rest of the shift. Without it, turning it off would clear a road that\nthe very next claim puts straight back — which is not a switch, it is an argument. Like the snooze\nbeside it, it lives on the coupling, so ending the shift ends it."
-          },
-          "status": {
-            "type": "object"
-          },
-          "startedAt": {
-            "type": "string"
-          },
-          "endedAt": {
-            "type": "string"
-          },
-          "endReceivedAt": {
-            "type": "string",
-            "description": "Round 24 — when SeeBuyGet heard the shift had ended, where later than `endedAt`: ended with no signal, dated by the phone."
-          },
-          "location": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "lastLocatedAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "assignmentId",
-          "driverDid",
-          "vehicleId",
-          "status",
-          "startedAt"
         ]
       },
       "DeclareLegDto": {

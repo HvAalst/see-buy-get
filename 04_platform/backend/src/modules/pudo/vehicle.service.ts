@@ -8,6 +8,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, EQUIPMENT_FITS, TRUCK_S
 import { ruleRefuses } from '../../foundation/http/api-rules';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { Equipment } from './cargo.types';
+import { TOWING_CLASSES, UNBRAKED_MAX_KG } from './trailer-rules';
 
 /** Loading equipment in words, for a refusal a person reads. */
 const EQUIPMENT_WORDS: Partial<Record<Equipment, string>> = {
@@ -417,11 +418,35 @@ export class VehicleService {
     return asked;
   }
 
-  setPrice(vehicleId: string, pricePerKm: number): Vehicle {
+  /** `withTrailer` (2026-11-13, D5): its rate while towing — a number sets it, null clears it, absent leaves it as it is. */
+  setPrice(vehicleId: string, pricePerKm: number, withTrailer?: number | null): Vehicle {
     if (pricePerKm < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
+    if (withTrailer != null && withTrailer < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative', { field: 'withTrailer' });
     const vehicle = this.require(vehicleId);
+    if (withTrailer != null && !TOWING_CLASSES.has(vehicle.vehicleClass)) throw new GlosError('INVALID_INPUT', `A ${vehicle.vehicleClass} tows no trailer: it has no rate with one`, { field: 'withTrailer' });
     vehicle.pricePerKm = Math.round(pricePerKm * 1000) / 1000;
+    if (withTrailer === null) delete vehicle.pricePerKmWithTrailer;
+    else if (withTrailer !== undefined) vehicle.pricePerKmWithTrailer = Math.round(withTrailer * 1000) / 1000;
+    this.vehicles.set(vehicle.vehicleId, vehicle);
     return vehicle;
+  }
+
+  /**
+   * 2026-11-13 — WHAT IT MAY TOW (plan D3), from its registration: braked and unbraked, and its own maximum weight. Only a car or a
+   * van tows; an unbraked trailer weighs at most 750 kg. Who said it is kept.
+   */
+  setTowLimits(vehicleId: string, input: { brakedKg: number; unbrakedKg: number; grossKg?: number | null }, by: { name: string; role: 'fleet' | 'driver' | 'staff' }, now: number = Date.now()): Vehicle {
+    const v = this.require(vehicleId);
+    if (!TOWING_CLASSES.has(v.vehicleClass)) throw new GlosError('INVALID_INPUT', `A ${v.vehicleClass} tows no trailer here: a car or a van does`);
+    const braked = Math.round(Number(input.brakedKg));
+    const unbraked = Math.round(Number(input.unbrakedKg));
+    if (!Number.isFinite(braked) || braked < 0 || braked > 3500) throw new GlosError('INVALID_INPUT', 'What it may tow braked is between 0 and 3,500 kg, as on its registration', { field: 'brakedKg' });
+    if (!Number.isFinite(unbraked) || unbraked < 0 || unbraked > UNBRAKED_MAX_KG) throw new GlosError('INVALID_INPUT', `What it may tow unbraked is between 0 and ${UNBRAKED_MAX_KG} kg`, { field: 'unbrakedKg' });
+    const gross = input.grossKg != null ? Math.round(Number(input.grossKg)) : undefined;
+    if (gross != null && (!Number.isFinite(gross) || gross < 500 || gross > 7500)) throw new GlosError('INVALID_INPUT', 'Its own maximum weight is between 500 and 7,500 kg, as on its registration', { field: 'grossKg' });
+    v.towLimits = { brakedKg: braked, unbrakedKg: unbraked, ...(gross != null ? { grossKg: gross } : {}), setBy: { name: by.name, role: by.role, at: new Date(now).toISOString() } };
+    this.vehicles.set(v.vehicleId, v);
+    return v;
   }
 
   list(filter: { status?: Vehicle['status']; vehicleClass?: VehicleClass; managerDid?: string } = {}): Vehicle[] {

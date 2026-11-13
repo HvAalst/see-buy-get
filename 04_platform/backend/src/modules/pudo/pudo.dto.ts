@@ -1073,6 +1073,8 @@ export class UpdateVendorDto {
 
 export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
+  /** 2026-11-13 — its rate a km while towing a trailer (trailer plan D5): a number sets it, null clears it, absent leaves it. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) withTrailer?: number | null;
 }
 
 /** 2026-11-12 — what a vehicle takes, as its driver or fleet says: the weight, and its load space in m³ (null: not known). */

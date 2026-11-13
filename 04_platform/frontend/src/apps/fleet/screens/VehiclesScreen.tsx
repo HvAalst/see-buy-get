@@ -12,7 +12,9 @@ import { equipmentFits, equipmentWords } from '../../../shared/equipment';
 import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
-import type { SbgClient } from '../../../lib/sbg';
+import type { SbgClient, SbgError } from '../../../lib/sbg';
+import { trailerApi } from '../../../shared/trailers';
+import { TrailersCard } from '../../../shared/trailers/TrailersCard';
 import { VehicleCareSheet } from '../../../shared/upkeep/VehicleCare';
 import { UpkeepRulesCard } from './UpkeepRulesCard';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
@@ -117,6 +119,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   const [energyFor, setEnergyFor] = useState<VehicleRow | null>(null);
   // 2026-11-13 — its loading equipment, changed after it is registered (the owner: "build loading equipment").
   const [equipmentFor, setEquipmentFor] = useState<VehicleRow | null>(null);
+  // 2026-11-13 — what a car or van may tow, and its rate while towing (trailer plan D3, D5).
+  const [towFor, setTowFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -383,6 +387,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
         </div>
       </Card>
 
+      {/* 2026-11-13 — the fleet's trailers, hitched by its drivers on a shift (trailer plan D1). */}
+      <TrailersCard sbg={sbg} upload={(file) => actions.uploadPhoto('registration', file)} />
       <UpkeepRulesCard sbg={sbg} fleetDid={state.manager?.did} />
 
       <Card title={t('fleet.vehicles.listTitle', { count: state.vehicles.length })}>
@@ -452,6 +458,11 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                         {t('equipment.change')}
                       </Button>
                     ) : null}
+                    {v.vehicleClass === 'van' || v.vehicleClass === 'car' ? (
+                      <Button variant="link" full={false} onClick={() => setTowFor(v)}>
+                        {t('trailer.mayTow')}
+                      </Button>
+                    ) : null}
                   </span>
                 </span>
                 <span class="row__end">
@@ -495,6 +506,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <EnergySheet vehicle={energyFor} onClose={() => setEnergyFor(null)} state={state} actions={actions} />
       {equipmentFor ? <EquipmentSheet vehicle={equipmentFor} onClose={() => setEquipmentFor(null)} state={state} actions={actions} /> : null}
+      {towFor ? <TowSheet vehicle={towFor} onClose={() => setTowFor(null)} sbg={sbg} onSaved={() => void actions.refresh()} /> : null}
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
       <VehicleCareSheet
         vehicle={careFor}
@@ -694,6 +706,55 @@ function EnergySheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
         {t('vehicle.energy.save')}
       </Button>
       <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
+  );
+}
+
+/**
+ * 2026-11-13 — WHAT A CAR OR VAN MAY TOW (trailer plan D3), from its registration: braked, unbraked, its own maximum weight — and its
+ * rate a km while towing (D5), where it differs. Without the first two, no trailer is hitched to it.
+ */
+function TowSheet({ vehicle, onClose, sbg, onSaved }: { vehicle: VehicleRow; onClose: () => void; sbg: SbgClient | null; onSaved: () => void }) {
+  const t = useT();
+  const [braked, setBraked] = useState(vehicle.towLimits ? String(vehicle.towLimits.brakedKg) : '');
+  const [unbraked, setUnbraked] = useState(vehicle.towLimits ? String(vehicle.towLimits.unbrakedKg) : '');
+  const [gross, setGross] = useState(vehicle.towLimits?.grossKg != null ? String(vehicle.towLimits.grossKg) : '');
+  const [rate, setRate] = useState(vehicle.pricePerKmWithTrailer != null ? String(vehicle.pricePerKmWithTrailer) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const save = async () => {
+    if (!sbg || !braked.trim() || !unbraked.trim()) return;
+    setBusy(true);
+    const api = trailerApi(sbg);
+    const r = await api.setTowLimits(vehicle.vehicleId, { brakedKg: Number(braked), unbrakedKg: Number(unbraked), grossKg: gross.trim() ? Number(gross) : null });
+    const p = r.error ? r : await api.setRateWithTrailer(vehicle.vehicleId, Number(vehicle.pricePerKm ?? 0), rate.trim() ? Number(rate.replace(',', '.')) : null);
+    setBusy(false);
+    if (p.error) return setError(p.error);
+    onSaved();
+    onClose();
+  };
+  const field = (id: string, label: string, value: string, onSet: (v: string) => void) => (
+    <div class="field">
+      <label class="field__label" for={id}>
+        {label}
+      </label>
+      <input id={id} class="input" type="number" inputMode="decimal" min="0" value={value} onInput={(e) => onSet(e.currentTarget.value)} />
+    </div>
+  );
+  return (
+    <Sheet open onClose={onClose} title={`${t('trailer.mayTow')} · ${vehicle.plate}`}>
+      <p class="t-body">{t('trailer.mayTowHint')}</p>
+      {error ? <ErrorNote error={error} showDetail /> : null}
+      {field('fleet-tow-braked', t('trailer.towBraked'), braked, setBraked)}
+      {field('fleet-tow-unbraked', t('trailer.towUnbraked'), unbraked, setUnbraked)}
+      {field('fleet-tow-gross', t('trailer.towGross'), gross, setGross)}
+      {field('fleet-tow-rate', t('trailer.towRate'), rate, setRate)}
+      <Button chevron={false} busy={busy} disabled={!braked.trim() || !unbraked.trim()} onClick={() => void save()}>
+        {t('equipment.save')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
         {t('common.cancel')}
       </Button>
     </Sheet>

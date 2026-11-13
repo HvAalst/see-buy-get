@@ -23,7 +23,12 @@ export interface CatalogueCountry {
   idDocuments: string[];
   /** CA8 — what the country requires of a company operating there, beyond incorporation and tax. */
   obligations: LocalObligation[];
+  /** 2026-11-13 — the top speed of a car or van towing a trailer, where the law sets one apart (the Netherlands, RVV 1990 art. 22e). */
+  towingMaxKmh?: number;
 }
+
+/** 2026-11-13 — the top speed with a trailer, where known; elsewhere the country's normal limit applies (trailer plan D4). */
+const TOWING_MAX_KMH: Record<string, number> = { NL: 90 };
 
 const regionName = new Intl.DisplayNames(['en'], { type: 'region' });
 
@@ -41,6 +46,7 @@ export const COUNTRY_CATALOGUE: readonly CatalogueCountry[] = COUNTRY_LINES.trim
       postalCode: !NO_POSTAL_CODE.has(code),
       idDocuments: ID_DOCUMENTS[code] ?? DEFAULT_ID_DOCUMENTS,
       obligations: OBLIGATIONS[code] ?? DEFAULT_OBLIGATIONS,
+      ...(TOWING_MAX_KMH[code] ? { towingMaxKmh: TOWING_MAX_KMH[code] } : {}),
     } satisfies CatalogueCountry;
   });
 
