@@ -51,6 +51,8 @@ describe('a net of hubs: which hubs serve each zone', () => {
   ];
   const approved = new Set<string>();
   const full = new Set<string>();
+  // 2026-11-13 — the hubs whose tools let them take a parcel over 23 kg (site tools, T3).
+  const lifts = new Set<string>();
   const none = { list: () => [], countryOf: () => 'KE' };
   const mdps = {
     list: () => hubs,
@@ -58,6 +60,7 @@ describe('a net of hubs: which hubs serve each zone', () => {
     isApproved: (m: { mdpId: string }) => approved.has(m.mdpId),
     countryOf: (m: { country: string }) => m.country,
     hasRoom: (m: { mdpId: string }) => !full.has(m.mdpId),
+    toolsOf: (m: { mdpId: string }) => ({ limits: { maxKg: lifts.has(m.mdpId) ? 30 : 23 } }),
   };
 
   beforeEach(async () => {
@@ -70,6 +73,7 @@ describe('a net of hubs: which hubs serve each zone', () => {
     catchments = new CatchmentService(entities, zones, mdps as never, new HeuristicRouter());
     approved.clear();
     full.clear();
+    lifts.clear();
     for (const h of hubs) approved.add(h.mdpId);
   });
 
@@ -119,6 +123,17 @@ describe('a net of hubs: which hubs serve each zone', () => {
     expect(catchments.hubForPoint('KE', { lat: 5, lng: 40 })).toBeUndefined();
     expect(catchments.hubForPoint('ET', IN.nw)).toBeUndefined();
     expect(catchments.hubsFor('KE', undefined)).toEqual([]);
+  });
+
+  it('a parcel heavier than a hub lifts by hand goes to one of its zone’s hubs whose tools take it — none can, and the nearest stands for the quote to name (2026-11-13)', () => {
+    published();
+    const nearNorthTwo = { lat: -1.19, lng: 36.79 };
+    expect(catchments.hubForPoint('KE', nearNorthTwo, undefined, 28)).toBe('mdp_north2');
+    lifts.add('mdp_north');
+    expect(catchments.hubForPoint('KE', nearNorthTwo, undefined, 28)).toBe('mdp_north');
+    // What every hub lifts by hand goes to the nearest, as before.
+    expect(catchments.hubForPoint('KE', nearNorthTwo, undefined, 20)).toBe('mdp_north2');
+    expect(catchments.hubForPoint('KE', nearNorthTwo)).toBe('mdp_north2');
   });
 
   it('of its zone’s hubs with room, the cheaper one when it is no more than a tenth farther than the nearest (the owner’s D3, 2026-11-12)', () => {

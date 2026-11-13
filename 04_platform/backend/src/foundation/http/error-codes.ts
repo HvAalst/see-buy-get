@@ -89,6 +89,8 @@ export const ERROR_CODES = {
   CAPACITY_EXCEEDED: { status: 400, title: 'Exceeds the available capacity' },
   FRAGILE_NOT_ALLOWED: { status: 400, title: 'This vehicle cannot carry fragile parcels' },
   CARGO_REQUIRES_DEDICATED: { status: 400, title: 'This load needs dedicated freight transport' },
+  // 2026-11-13 — heavier than a shop's or a hub's tools let it take (site-tools.ts, plan T3).
+  SITE_TOO_SMALL: { status: 400, title: 'Too heavy for a shop or hub on the way' },
   CARGO_INCOMPATIBLE: { status: 400, title: 'These goods cannot travel together' },
   VEHICLE_MISSING_CAPABILITY: { status: 400, title: 'This vehicle cannot carry this cargo' },
   BUDGET_EXCEEDED: { status: 400, title: "The price exceeds the shipper's budget" },

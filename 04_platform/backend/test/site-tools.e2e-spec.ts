@@ -35,11 +35,11 @@ describe('a shop’s and a hub’s tools, over the wire', () => {
     await app?.close();
   });
 
-  async function aShop(shopName: string): Promise<{ did: string; token: Auth }> {
+  async function aShop(shopName: string, zoneName?: string): Promise<{ did: string; token: Auth }> {
     const u = digits();
     const hours = { open: '00:00', close: '23:59' };
     const did = (await http().post('/v1/sbg/agents').set(staff).send({
-      shopName, zone: `Tools${u}`, country: 'KE', location: { lat: -1.286, lng: 36.817 }, landmark: 'by the market', shelf: { rows: 3, cols: 3 },
+      shopName, zone: zoneName ?? `Tools${u}`, country: 'KE', location: { lat: -1.286, lng: 36.817 }, landmark: 'by the market', shelf: { rows: 3, cols: 3 },
       openingHours: { mon: hours, tue: hours, wed: hours, thu: hours, fri: hours, sat: hours, sun: hours },
       fullName: `${shopName} owner`, nationalId: `ID-TL-${u}`, mobile: `+2547${u}3`, deviceImei: `IMEI-TL-${u}`,
       requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
@@ -119,5 +119,33 @@ describe('a shop’s and a hub’s tools, over the wire', () => {
     expect((await http().put(tools).set(asHub).send({ equipment: ['FLT', 'RMP'], forkliftLicence: 'G-2201', labelPrinter: true, cctv: true }).expect(200)).body).toMatchObject({ equipment: ['FLT', 'RMP'], tools: { forkliftLicence: 'G-2201' }, limits: { maxKg: 30, pallets: true } });
     expect((await http().get(tools).set(staff).expect(200)).body.equipment).toEqual(['FLT', 'RMP']);
     expect((await http().put(tools).set(staff).send({ equipment: [], labelPrinter: false, cctv: false }).expect(403)).body.detail).toMatch(/A hub says its own tools/);
+  });
+
+  /* Step 2 (T3): a parcel heavier than a shop's or a hub's tools let it take is refused, by name, before it is sold. */
+  it('a 28 kg parcel is refused through a hub that lifts by hand alone, and sold once it has a sack barrow; a shop too small is named', async () => {
+    const z = digits();
+    const barrow = { equipment: ['HTR'], labelPrinter: false, cctv: false };
+    const from = await aShop('Duka la Mwanzo', `HeavyA${z}`);
+    const to = await aShop('Duka la Mwisho', `HeavyB${z}`);
+    await http().put(`/v1/sbg/agents/${from.did}/tools`).set(from.token).send(barrow).expect(200);
+    await http().put(`/v1/sbg/agents/${to.did}/tools`).set(to.token).send(barrow).expect(200);
+    const hubName = `Hub Mikono ${z}`;
+    const hub = (await http().post('/v1/sbg/mdps').set(staff).send({ name: hubName, zones: [`HeavyA${z}`, `HeavyB${z}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+    declared(app, 'hub', hub.did);
+    const asHub = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
+    const quote = (origin: string, kg: number) => http().get(`/v1/sbg/quote?origin=${origin}&dest=${to.did}&size=HEAVY&kg=${kg}`);
+
+    const refused = (await quote(from.did, 28).expect(400)).body;
+    expect(refused).toMatchObject({ code: 'SITE_TOO_SMALL', params: { kg: 28, maxKg: 23, site: hubName } });
+    expect(refused.detail.startsWith(`${hubName} takes parcels up to 23 kg (what its people lift by hand): this one weighs 28 kg`)).toBe(true);
+    // A parcel it can lift goes; a size's assumed weight with no weight given stops nothing.
+    await quote(from.did, 20).expect(200);
+    await http().get(`/v1/sbg/quote?origin=${from.did}&dest=${to.did}&size=HEAVY`).expect(200);
+    // The hub says it has a sack barrow: the 28 kg parcel is sold.
+    await http().put(`/v1/sbg/mdps/${hub.mdpId}/tools`).set(asHub).send(barrow).expect(200);
+    await quote(from.did, 28).expect(200);
+    // A shop that lifts by hand alone is named as the one too small.
+    const small = await aShop('Duka Dogo', `HeavyA${z}`);
+    expect((await quote(small.did, 28).expect(400)).body.params).toMatchObject({ site: 'Duka Dogo', maxKg: 23 });
   });
 });

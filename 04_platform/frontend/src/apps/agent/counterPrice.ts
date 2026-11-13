@@ -32,6 +32,8 @@ export interface CounterPriceRow {
   sizes: Array<{ maxCm: [number, number, number]; maxKg: number; lane: string }>;
   lanes: Record<string, { feePct: number; taxPct: number }>;
   fees: Record<string, number>;
+  /** 2026-11-13 — each shop's heaviest parcel, as its tools let it take; absent in a list made before it was said. */
+  maxKg?: Record<string, number>;
   cards: CounterCard[];
 }
 
@@ -117,6 +119,9 @@ function cashRounded(base: number, gross: number, ratePct: number, step: number)
  */
 export function priceFromRow(row: CounterPriceRow | null | undefined, a: CounterAsk, now: number): CounterPrice | undefined {
   if (!row) return undefined;
+  // 2026-11-13 — heavier than this shop's or the other shop's tools let it take: no price, as the server refuses it (T3).
+  const most = (did: string) => row.maxKg?.[did];
+  if ((most(row.shop) != null && a.kg > most(row.shop)!) || (most(a.dest) != null && a.kg > most(a.dest)!)) return undefined;
   const card = cardAt(row, now);
   if (!card) return undefined;
   const destZone = card.zoneOf[a.dest];

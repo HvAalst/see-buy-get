@@ -167,6 +167,16 @@ export function siteToolsView(equipment: readonly Equipment[] | undefined, tools
   };
 }
 
+/**
+ * Refused where a parcel is heavier than a site's tools let it take (T3) — at the counter, in a quote, or a hub on the way:
+ * named, with the most it takes. Only a weight somebody gave: a size's assumed weight stops nothing.
+ */
+export function assertSiteTakes(site: { name: string; kind: 'shop' | 'hub' }, limits: SiteLimits, kg: number | undefined): void {
+  if (kg == null || !(kg > 0) || kg <= limits.maxKg) return;
+  const why = limits.by === 'scale' ? 'the most its scale weighs' : limits.by === 'hands' ? 'what its people lift by hand' : 'the most the network takes';
+  throw new GlosError('SITE_TOO_SMALL', `${site.name} takes parcels up to ${limits.maxKg} kg (${why}): this one weighs ${kg} kg. Choose another ${site.kind === 'shop' ? 'shop' : 'route'}, or send it as freight`, { kg, maxKg: limits.maxKg, site: site.name });
+}
+
 /** What a site is told about its scale's stamp, short because it is read on a lock screen. */
 export function stampNotice(s: ScaleStanding): { title: string; body: string } {
   const day = s.stampedUntil ? paperDay(s.stampedUntil) : '';

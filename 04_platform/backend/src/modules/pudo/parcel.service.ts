@@ -1,3 +1,4 @@
+import { assertSiteTakes } from './site-tools';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
@@ -2579,6 +2580,9 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
     this.media.requireHeld(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoffPhotoRef'); // round 31 — before the cash is counted
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
+    // 2026-11-13 — heavier than this shop's tools let it take now (they changed since the booking): refused, named (site tools, T3).
+    const shop = this.agents.get(agentDid);
+    assertSiteTakes({ name: shop.shopName, kind: 'shop' }, this.agents.toolsOf(shop).limits, parcel.weightKg);
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now

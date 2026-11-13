@@ -48,6 +48,8 @@ export interface CounterPriceRow {
   lanes: Record<string, { feePct: number; taxPct: number }>;
   /** Each shop's own fee, in the country's money, to the cent. */
   fees: Record<string, number>;
+  /** 2026-11-13 — each shop's heaviest parcel, as its tools let it take (site-tools.ts, T3): heavier at either end is not priced. */
+  maxKg: Record<string, number>;
   /** Empty where no card prices from this shop: nothing in force or coming, or its pin in no zone. */
   cards: CounterCard[];
 }
@@ -86,6 +88,8 @@ export class CounterPriceService {
     const fees: Record<string, number> = {};
     for (const a of peers) fees[a.did] = Math.round(a.pricePerParcel * 100) / 100;
     fees[shop.did] = Math.round(shop.pricePerParcel * 100) / 100;
+    const maxKg: Record<string, number> = {};
+    for (const a of [shop, ...peers]) maxKg[a.did] = this.agents.toolsOf(a, now).limits.maxKg;
     const found = sellerId && seller?.jurisdiction === country ? this.cards.cardsFrom(country, now) : undefined;
     const cards = (found?.cards ?? [])
       .filter((c) => c.currency === currency)
@@ -99,6 +103,7 @@ export class CounterPriceService {
       sizes: SIZE_LIMITS.map((l) => ({ maxCm: [...l.maxCm] as [number, number, number], maxKg: l.maxKg, lane: SIZE_LANE[l.size] })),
       lanes,
       fees,
+      maxKg,
       cards,
     };
   }

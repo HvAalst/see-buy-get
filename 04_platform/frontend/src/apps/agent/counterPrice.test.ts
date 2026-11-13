@@ -78,4 +78,18 @@ describe('a fixed card on the phone (the owner’s D3, 2026-11-12)', () => {
       expect(p!.gross).toBeCloseTo(Math.round((net + Math.round(net * Math.max(0, lane.taxPct) * 100) / 100) * 100) / 100, 2);
     }
   });
+
+  /* 2026-11-13 — a shop's tools (site tools, T3): heavier than either shop takes has no price on the phone, as the server refuses it. */
+  it('prices nothing heavier than this shop or the other shop takes', () => {
+    const now = Date.parse(golden.now);
+    const priced = golden.cases.find((c) => c.gross != null && c.kg > 2)!;
+    const ask = { dest: priced.dest, l: priced.l, w: priced.w, h: priced.h, kg: priced.kg, fragile: priced.fragile } as CounterAsk;
+    expect(priceFromRow(golden.row, ask, now)).toBeDefined();
+    const by = (shop: string, most: number) => ({ ...golden.row, maxKg: { ...golden.row.maxKg, [shop]: most } }) as CounterPriceRow;
+    expect(priceFromRow(by(golden.row.shop, priced.kg - 1), ask, now)).toBeUndefined();
+    expect(priceFromRow(by(priced.dest, priced.kg - 1), ask, now)).toBeUndefined();
+    expect(priceFromRow(by(priced.dest, priced.kg), ask, now)).toBeDefined();
+    // A list made before the limits were said prices as it did.
+    expect(priceFromRow({ ...golden.row, maxKg: undefined } as CounterPriceRow, ask, now)).toBeDefined();
+  });
 });

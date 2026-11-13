@@ -299,14 +299,17 @@ export class CatchmentService implements OnModuleInit {
    * The hub a parcel at a pin goes to — a shop's, a hub's, a door's: of the hubs serving the zone the pin lies in, the
    * nearest by road with room on its floor; none with room, the nearest. Or nothing, and then it routes as it always has.
    */
-  hubForPoint(country: string | undefined, point: GeoPoint | undefined, now: number = Date.now()): string | undefined {
+  hubForPoint(country: string | undefined, point: GeoPoint | undefined, now: number = Date.now(), kg?: number): string | undefined {
     if (!point) return undefined;
     const zone = this.zones.zoneAt(country, point, now);
     if (!zone) return undefined;
     const ids = this.hubsFor(country, zone.code, now);
     if (!ids.length) return undefined;
-    const ranked = ids
-      .map((id) => this.mdps.require(id))
+    // 2026-11-13 — A PARCEL ITS TOOLS CAN TAKE (the owner: "shop and hub tools", T3): of the zone's hubs, those whose tools let
+    // them take this weight; none can, and the nearest stands — the quote names it and refuses (RoutingService).
+    const able = (h: Mdp) => kg == null || this.mdps.toolsOf(h, now).limits.maxKg >= kg;
+    const all = ids.map((id) => this.mdps.require(id));
+    const ranked = (all.some(able) ? all.filter(able) : all)
       .map((h) => ({ h, km: this.km(point, h.location) }))
       .sort((a, b) => a.km - b.km || a.h.mdpId.localeCompare(b.h.mdpId));
     const roomy = ranked.filter(({ h }) => this.mdps.hasRoom(h, now));

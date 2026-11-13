@@ -19,7 +19,7 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'BAG_WAITS_FOR_ROOM' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'UNLOCK_OFF' | 'UNLOCK_FAILED' |'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'LINK_PENDING' | 'LINK_EXPIRED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'VEHICLE_CHECK_NEEDED' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'UNLOCK_OFF' | 'UNLOCK_FAILED' |'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'LINK_PENDING' | 'LINK_EXPIRED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'VEHICLE_CHECK_NEEDED' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'SITE_TOO_SMALL' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT' | 'COUNTRY_NOT_OPEN' | 'AGREEMENT_REQUIRED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
@@ -156,6 +156,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   FRAGILE_NOT_ALLOWED: { icon: 'block', tone: 'warn', say: 'error.no_fragile' },
   // S30 cargo taxonomy — a palletised/oversized load cannot use the PUDO network; it needs dedicated freight.
   CARGO_REQUIRES_DEDICATED: { icon: 'scale', tone: 'warn', say: 'error.needs_dedicated' },
+  // 2026-11-13 — heavier than a shop's or hub's tools let it take; the server's detail names it and its most (site tools, T3).
+  SITE_TOO_SMALL: { icon: 'scale', tone: 'warn', say: 'error.site_too_small' },
   // S31 — two goods that must not travel together (e.g. cement dust + fresh food), or a vehicle that lacks a
   // capability the cargo needs (perishable → cold chain, hazardous → hazmat).
   CARGO_INCOMPATIBLE: { icon: 'block', tone: 'warn', say: 'error.cargo_incompatible' },

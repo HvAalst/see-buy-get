@@ -18,6 +18,7 @@ import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/mo
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
 import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
+import { assertSiteTakes } from './site-tools';
 import { PriceCardService } from './price-card.service';
 import { ZoneMapService } from './zone-map.service';
 import { CatchmentService } from './catchment.service';
@@ -339,7 +340,7 @@ export class RoutingService {
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     this.doorFor(originAgentDid, destAgentDid);
-    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured, carriers);
+    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), size, undefined, measured, carriers);
   }
 
   /**
@@ -350,7 +351,7 @@ export class RoutingService {
    */
   quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
     this.doorFor(originAgentDid, destAgentDid);
-    const plan =this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
+    const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg });
     return { plan, quote: this.quoteJourney(plan, size, undefined, measured, carriers) };
   }
 
@@ -363,7 +364,7 @@ export class RoutingService {
    */
   quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     this.doorFor(undefined, destAgentDid);
-    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured, carriers);
+    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), size, sellerEntityId, measured, carriers);
   }
 
   /**
@@ -647,7 +648,7 @@ export class RoutingService {
    * the destination's opening hours — a parcel is never "ready for pickup" while the shop is closed.
    * `startAt`: when the journey began, where that was earlier than now (a take-in kept with no signal — round 23).
    */
-  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number }) {
+  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number; siteKg?: number }) {
     const dest = this.agents.get(input.destAgentDid);
     // A journey may start at a place that is not a node (a store's dock). When one is given it is used as
     // it stands; otherwise the origin is a PUDO — named, or the nearest one with room.
@@ -660,10 +661,12 @@ export class RoutingService {
       origin = { type: 'pudo', id: a.did, label: a.shopName, zone: a.zone, country: this.agents.countryOf(a), location: a.location };
     }
 
-    const route = this.buildRoute(origin, dest);
+    const route = this.buildRoute(origin, dest, { kg: input.siteKg });
+    // 2026-11-13 — every shop and hub on the way takes a parcel of this weight (the owner: "shop and hub tools", T3), or named.
+    this.assertSitesTake(route, input.siteKg);
     // 2026-11-12 — THE OWNER'S D3: "Routing never raises the price … stops along the road map are carried by the network". The
     // price is worked out on the route as it would be with no road map: its two ends and their hubs, never the stops on the way.
-    const plain = route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false }) : route;
+    const plain = route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false, kg: input.siteKg }) : route;
     const viaMdp = route.some((h) => h.type === 'mdp');
     if (!viaMdp && origin.zone !== dest.zone) {
       // Cross-zone with no hub → require a direct zone-pair corridor (the pre-MDP behaviour).
@@ -739,7 +742,21 @@ export class RoutingService {
   }
 
   /** origin PUDO → MDP(origin zone) → MDP(dest zone, if different) → dest PUDO (hubs collapse if shared). */
-  private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, opts: { road?: boolean } = {}): RouteHop[] {
+  /** Each shop and hub of a route takes a parcel of this weight, else refused by name (site-tools.ts). */
+  private assertSitesTake(route: RouteHop[], kg: number | undefined): void {
+    if (kg == null) return;
+    for (const hop of route) {
+      if (hop.type === 'pudo') {
+        const shop = this.agents.get(hop.id);
+        assertSiteTakes({ name: shop.shopName, kind: 'shop' }, this.agents.toolsOf(shop).limits, kg);
+      } else if (hop.type === 'mdp') {
+        const hub = this.mdps.require(hop.id);
+        assertSiteTakes({ name: hub.name, kind: 'hub' }, this.mdps.toolsOf(hub).limits, kg);
+      }
+    }
+  }
+
+  private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, opts: { road?: boolean; kg?: number } = {}): RouteHop[] {
     // Every stop carries the country it stands in, so the crossings fall out of the route instead of
     // having to be declared. A hub's country is the hub's own — not the zone's — because a hub can serve
     // zones across a border and it is the HUB the goods are driven to.
@@ -752,7 +769,7 @@ export class RoutingService {
     // 2026-11-09 — WHICH HUB, BY ZONE (hub catchments, the catchments-and-runs plan, Part A): the hub that serves the zone
     // a pin lies in, where its country has said; the area name typed at sign-up only where no catchment answers.
     const servedBy = (country: string | undefined, location: GeoPoint | undefined) => {
-      const id = this.catchments?.hubForPoint(country, location);
+      const id = this.catchments?.hubForPoint(country, location, undefined, opts.kg);
       return id ? this.mdps.list().find((m) => m.mdpId === id) : undefined;
     };
     // A journey handed in at a hub starts AT its first hub: that hub is the origin, not the zone's.

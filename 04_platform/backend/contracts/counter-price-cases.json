@@ -61,6 +61,12 @@
       "shop-east": 0.5,
       "shop-coast": 0.5
     },
+    "maxKg": {
+      "shop-west": 30,
+      "shop-west-two": 30,
+      "shop-east": 30,
+      "shop-coast": 30
+    },
     "cards": [
       {
         "version": 1,

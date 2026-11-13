@@ -3904,6 +3904,8 @@ describe('PUDO Light', () => {
     function setUp(tag: string) {
       const from = onboardAgent(`${tag} From`, 'NorthTown', 50);
       const to = onboardAgent(`${tag} To`, 'NorthTown', 50);
+      // 2026-11-13 — a sack barrow at each: a shop lifting by hand alone takes nothing over 23 kg (site tools, T3).
+      for (const s of [from, to]) agents.setTools(s.did, { equipment: ['HTR'], labelPrinter: false, cctv: false }, 'test');
       const ke = fleetIn('KE');
       // The cheapest on the network: a bicycle (20 kg a parcel at most, nothing fragile), at its depot.
       const bike = vehicles.register({ plate: `${tag}-B`, vehicleClass: 'bike', ownerName: 'B', managerDid: ke.did, pricePerKm: 0.001 });
@@ -3947,9 +3949,12 @@ describe('PUDO Light', () => {
     });
 
     it('where no vehicle can carry it, the selling company’s own road rate — a quote always has a price', () => {
-      const { from, to } = setUp('QCC');
+      const { from, to, car } = setUp('QCC');
       entities.setAmounts(entities.requireForJurisdiction('KE').entityId, { freightPerKm: 0.123 }, 'Amina Otieno');
-      expect(routing.quoteShipment(from.did, to.did, 'M', undefined, { kg: 50_000 }).perKm).toEqual({ min: 0.123, max: 0.123, from: 'company', carriers: 0 });
+      // 2026-11-13 — heavier than any shop takes (30 kg) is refused by the shops now (site tools, T3): 25 kg, which the bicycle
+      // cannot carry, with the car off the road.
+      vehicles.get(car.vehicleId).status = 'RETIRED';
+      expect(routing.quoteShipment(from.did, to.did, 'HEAVY', undefined, { kg: 25 }).perKm).toEqual({ min: 0.123, max: 0.123, from: 'company', carriers: 0 });
     });
 
     it('a store’s refund for a cheaper carrier is worked out only from a rate in the parcel’s own money', () => {
@@ -14284,6 +14289,8 @@ describe('PUDO Light', () => {
     function shopAt(shopName: string, location: { lat: number; lng: number }, topUp = 0) {
       const a = onboardAgent(shopName, 'MidTown', topUp);
       agents.setLocation(a.did, location);
+      // 2026-11-13 — a sack barrow: the golden walk-ups go up to 25 kg, over what one person lifts by hand (site tools, T3).
+      agents.setTools(a.did, { equipment: ['HTR'], labelPrinter: false, cctv: false }, 'test');
       return agents.get(a.did);
     }
 
@@ -14574,6 +14581,7 @@ describe('PUDO Light', () => {
           shop: names.get(row.shop),
           at: '2026-06-01T00:00:00.000Z',
           fees: rename(row.fees),
+          maxKg: rename(row.maxKg),
           cards: row.cards.map((c, i) => ({ ...c, from: dates[i], zoneOf: rename(c.zoneOf) })),
         },
         cases,
