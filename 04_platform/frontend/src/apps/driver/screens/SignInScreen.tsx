@@ -12,6 +12,7 @@ import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { driverConfig } from '../api';
+import { TestingAsk } from '../../../shared/opening/TestingAsk';
 
 export interface SignInScreenProps {
   /** Phone + PIN. Resolves to whether it worked. */
@@ -131,7 +132,12 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         <Note tone="warn" icon="lock" title={t('driver.signin.signedOutTitle')} detail={t('driver.signin.signedOutNote')} />
       ) : error && !confirming ? (
         /* On the email step the server's own sentence is the message: "that is not the recovery email on this account". */
-        step === 'email' ? <RefusalNote error={error} /> : <ErrorNote error={error} />
+        step === 'email' ? <RefusalNote error={error} /> : (
+          <>
+            <ErrorNote error={error} />
+            <TestingAsk error={error} kind="carrier" config={driverConfig()} />
+          </>
+        )
       ) : null}
 
       <Card>

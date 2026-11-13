@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
+import { hashPhone } from '../../foundation/identity/phone';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
@@ -258,6 +259,8 @@ export class MdpService {
     const country = requireCountryCode(input.country);
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
     if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a hub cannot register there`);
+    // 2026-11-13 — test mode: only a listed number signs a hub up.
+    this.presence.requireTester(country, input.contactPhone, 'signing a hub up');
     const entity = this.entities.forJurisdiction(country);
     // Real DID (S2) — an MDP worker is a first-class actor and their token binds to this, not to a
     // synthetic mdp_<hex> id. A pseudonymous operational profile makes it OperationalStore-resolvable
@@ -275,6 +278,7 @@ export class MdpService {
       zones: input.zones,
       location: input.location,
       contactPhone: input.contactPhone,
+      ...(input.contactPhone ? { phoneHash: hashPhone(input.contactPhone) } : {}),
       address: input.address?.trim() || undefined,
       // Its own fee — what senders are charged and what it is paid for each parcel it sorts. A hub that names none starts
       // at its company's list (the user, 2026-10-26: "Its own fee"), and sets its own from its home screen.
@@ -970,7 +974,9 @@ export class MdpService {
 
   /** COMING (2026-10-25): signed up where SeeBuyGet takes sign-ups and is not open yet. Only COMING — see DriverService. */
   notOpenYet(mdp: Mdp): boolean {
-    return this.presence.resolve(this.countryOf(mdp)).level === 'coming';
+    const country = this.countryOf(mdp);
+    // 2026-11-13 — and, in test mode, a hub not on the country's test list.
+    return this.presence.resolve(country).level === 'coming' || this.presence.closedTo(country, mdp.phoneHash);
   }
 
   /** Register a fresh laminated tote into the pool at this MDP. */

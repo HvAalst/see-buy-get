@@ -150,6 +150,8 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/market-pulse': every(ACROSS),
   'POST sbg/market-pulse/recompute': every(ACROSS),
   'GET sbg/network/plan-vs-actual': every(ACROSS),
+  // 2026-11-13 — staff are on no test list: they read the public map, what anybody may see.
+  'GET sbg/network/points/mine': network('the public map: what anybody may see'),
   'GET sbg/offers/response': every(ACROSS),
   'GET sbg/reputation/review': every(ACROSS),
   'GET sbg/border-waits': every(ACROSS),

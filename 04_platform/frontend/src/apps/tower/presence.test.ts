@@ -17,6 +17,11 @@ import {
   presenceRows,
   samePerson,
   takeInPromise,
+  takesGoods,
+  opensToPublic,
+  testerBlocker,
+  testersOnlyToSend,
+  TESTER_ROLES,
   type CatalogueCountry,
   type PresenceProposalRow,
   type PresenceRow,
@@ -288,5 +293,39 @@ describe('who answers for the goods', () => {
 
   it('is NONE where nothing may be taken in', () => {
     expect(takeInPromise(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed } }))).toBe('none');
+  });
+});
+
+/** 2026-11-13 — TEST MODE: the box on the editor, what it sends, and who must approve. */
+describe('test mode on the console', () => {
+  it('sends the box only where it was changed and goods move', () => {
+    expect(testersOnlyToSend(row(), 'matched', undefined)).toBeUndefined();
+    expect(testersOnlyToSend(row(), 'matched', true)).toBe(true);
+    expect(testersOnlyToSend(row({ testersOnly: true }), 'matched', true)).toBeUndefined();
+    expect(testersOnlyToSend(row({ testersOnly: true }), 'matched', false)).toBe(false);
+    // Nothing to test where nothing moves.
+    expect(takesGoods('coming')).toBe(false);
+    expect(testersOnlyToSend(row(), 'coming', true)).toBeUndefined();
+  });
+
+  it('lifting the list opens the country, so a second person approves; keeping it needs nobody else', () => {
+    expect(opensToPublic(row({ testersOnly: true }), 'matched', false)).toBe(true);
+    expect(needsSecondPerson(row({ testersOnly: true }), 'matched', false)).toBe(true);
+    expect(needsSecondPerson(row(), 'matched', true)).toBe(false);
+    expect(needsSecondPerson(row({ testersOnly: true }), 'matched', undefined)).toBe(false);
+  });
+
+  it('asks for a number with its country code, a name and what they test', () => {
+    expect(testerBlocker({ phone: '0991234567', name: 'A', role: 'shop' })).toBe('tower.presence.testers.needPhone');
+    expect(testerBlocker({ phone: '+265 99 123 4567', name: ' ', role: 'shop' })).toBe('tower.presence.testers.needName');
+    expect(testerBlocker({ phone: '+265991234567', name: 'A', role: 'pilot' })).toBe('tower.presence.testers.needRole');
+    expect(testerBlocker({ phone: '+265-99-123-4567', name: 'A', role: 'shop' })).toBeNull();
+  });
+
+  it('names the same testers as the server', () => {
+    const source = readFileSync('../backend/src/foundation/presence/presence.types.ts', 'utf8');
+    const server = source.match(/TESTER_ROLES = \[([^\]]+)\]/)?.[1].match(/'([a-z]+)'/g)?.map((s) => s.slice(1, -1));
+    expect(server?.length).toBeGreaterThan(0);
+    expect([...TESTER_ROLES]).toEqual(server);
   });
 });

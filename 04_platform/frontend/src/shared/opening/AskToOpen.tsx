@@ -38,7 +38,10 @@ export function askMessage(business: string, why: string): string {
  * sent to the requests staff weigh country by country (POST countries/:code/interest), and answered at once by email
  * ("interest-received"); the day the country takes sign-ups or opens, everybody who asked is written to again.
  */
-export function AskToOpen({ country, kind, email = '', config }: { country: string | undefined; kind: AskKind; email?: string; config: SbgConfig }) {
+/** 2026-11-13 — what a person waiting on a country being tested says, for the staff reading the list: no business to describe. */
+export const WAITING_MESSAGE = 'Waiting while SeeBuyGet is being tested here: tell me the day it opens to everyone.';
+
+export function AskToOpen({ country, kind, email = '', config, waiting = false }: { country: string | undefined; kind: AskKind; email?: string; config: SbgConfig; /** 2026-11-13 — test mode: only an email, to be told the day it opens to everyone. */ waiting?: boolean }) {
   const t = useT();
   const locale = useLocale();
   const code = (country ?? '').trim().toUpperCase();
@@ -50,13 +53,13 @@ export function AskToOpen({ country, kind, email = '', config }: { country: stri
   const [sentTo, setSentTo] = useState<string | null>(null);
   if (!/^[A-Z]{2}$/.test(code)) return null;
   const name = countryNameIn(code, locale);
-  const ready = form.email.includes('@') && form.business.trim().length >= 3 && form.why.trim().length >= 10;
+  const ready = form.email.includes('@') && (waiting || (form.business.trim().length >= 3 && form.why.trim().length >= 10));
 
   const send = async () => {
     setBusy(true);
     setError(null);
     const r = await publicRequest<{ noteId: string }>(config, `/v1/sbg/countries/${encodeURIComponent(code)}/interest`, {
-      body: { kind, email: form.email.trim(), message: askMessage(form.business, form.why) },
+      body: { kind, email: form.email.trim(), message: waiting ? WAITING_MESSAGE : askMessage(form.business, form.why) },
     });
     setBusy(false);
     if (r.error) return setError(r.error);
@@ -77,10 +80,10 @@ export function AskToOpen({ country, kind, email = '', config }: { country: stri
         </p>
       ) : (
         <Button variant="outline" chevron={false} onClick={() => setOpen(true)}>
-          {t('opening.ask.button', { country: name })}
+          {t(waiting ? 'opening.wait.button' : 'opening.ask.button', { country: name })}
         </Button>
       )}
-      <Sheet open={open} onClose={() => { setOpen(false); setSentTo(null); }} title={t('opening.ask.title', { country: name })}>
+      <Sheet open={open} onClose={() => { setOpen(false); setSentTo(null); }} title={t(waiting ? 'opening.wait.title' : 'opening.ask.title', { country: name })}>
         {sentTo ? (
           <>
             <Note tone="ok" icon="check" title={t('opening.ask.sent', { email: sentTo })} detail={t('opening.ask.sentDetail', { country: name })} />
@@ -90,7 +93,9 @@ export function AskToOpen({ country, kind, email = '', config }: { country: stri
           </>
         ) : (
           <>
-            <p class="t-body">{t('opening.ask.lede', { country: name })}</p>
+            <p class="t-body">{t(waiting ? 'opening.wait.lede' : 'opening.ask.lede', { country: name })}</p>
+            {waiting ? null : (
+            <>
             <div class="field">
               <label class="field__label" for="ask-business">
                 {t('opening.ask.business')}
@@ -103,6 +108,8 @@ export function AskToOpen({ country, kind, email = '', config }: { country: stri
               </label>
               <textarea id="ask-why" class="input" rows={4} maxLength={420} placeholder={t('opening.ask.whyPh')} value={form.why} onInput={(e) => setForm({ ...form, why: e.currentTarget.value })} />
             </div>
+            </>
+            )}
             <div class="field">
               <label class="field__label" for="ask-email">
                 {t('opening.ask.email')}

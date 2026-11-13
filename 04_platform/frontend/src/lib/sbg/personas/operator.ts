@@ -442,8 +442,17 @@ export function createOperatorApi(sbg: SbgClient) {
     presence: () => sbg.request((c) => c.GET('/v1/sbg/presence', {})),
 
     /** Answers `{ applied }` for a change that gives the country nothing, `{ proposal }` for one a second person must approve. */
-    setPresence: (jurisdiction: string, body: { level: string; overrides?: Record<string, boolean>; note?: string; by?: string }) =>
+    setPresence: (jurisdiction: string, body: { level: string; overrides?: Record<string, boolean>; note?: string; by?: string; testersOnly?: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/presence/{jurisdiction}', { params: { path: { jurisdiction } }, body: body as never })),
+
+    /** 2026-11-13 — TEST MODE: a country's test list, and what was changed on it. */
+    presenceTesters: (jurisdiction: string) => sbg.request((c) => c.GET('/v1/sbg/presence/{jurisdiction}/testers', { params: { path: { jurisdiction } } })),
+    /** Put somebody on the list — one person is enough; the change is kept with their name. */
+    addPresenceTester: (jurisdiction: string, body: { phone: string; name: string; role: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/presence/{jurisdiction}/testers', { params: { path: { jurisdiction } }, body: body as never })),
+    /** Take somebody off the list, by the fingerprint the list shows. */
+    removePresenceTester: (jurisdiction: string, phoneHash: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/presence/{jurisdiction}/testers/{phoneHash}', { params: { path: { jurisdiction, phoneHash } } })),
 
     /** CA3/CA7 — create a company of ours or a partner, as a draft. */
     createCompany: (body: { kind: 'sister' | 'partner'; jurisdiction: string; name: string; by?: string }) =>

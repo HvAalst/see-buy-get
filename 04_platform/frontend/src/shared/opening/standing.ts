@@ -11,6 +11,8 @@ export interface CountryStanding {
   joinable: boolean;
   /** Sign-ups are taken there, and nothing moves until the day it opens. */
   coming?: boolean;
+  /** 2026-11-13 — TEST MODE: only the numbers on its test list join and work there until it opens to everyone. */
+  testing?: boolean;
   settles: boolean;
   settlesAs?: string;
 }

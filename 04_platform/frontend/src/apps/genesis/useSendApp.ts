@@ -334,11 +334,14 @@ export function useSendApp() {
   /* ----------------------------------------------------------------- points */
 
   const pointsEpoch = useRef(0);
+  // 2026-11-13 — TEST MODE: signed in, the map comes from the account's own view — a tester sees the shops of a country being tested.
+  const pointsClient = useRef<ConsumerClient | null>(null);
 
   const loadPoints = useCallback(async () => {
     const epoch = ++pointsEpoch.current;
     setState((s) => ({ ...s, pointsState: 'loading', pointsError: null }));
-    const r = await fetchPoints();
+    const signedIn = pointsClient.current;
+    const r = signedIn ? ((await signedIn.api.networkPointsMine()) as unknown as Awaited<ReturnType<typeof fetchPoints>>) : await fetchPoints();
     if (epoch !== pointsEpoch.current) return;
     if (r.error) {
       setState((s) => ({ ...s, pointsState: 'error', pointsError: r.error }));
@@ -489,6 +492,11 @@ export function useSendApp() {
 
   const [did, setDid] = useState<string | null>(null);
   const client = useMemo<ConsumerClient | null>(() => (did ? createConsumerClient(did) : null), [did]);
+  pointsClient.current = client;
+  // Signing in or out changes which shops a tester sees: a map already read is read again.
+  useEffect(() => {
+    if (stateRef.current.pointsState === 'ready') void loadPoints();
+  }, [client]);
   const parcelsEpoch = useRef(0);
   const authEpoch = useRef(0);
 

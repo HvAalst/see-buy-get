@@ -281,7 +281,8 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
     fillBag: (code, parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/parcels` as never, { body: { parcelId } } as never) as never),
     anotherWay: (parcelIds, toHubId, reason, note) => call((c) => c.POST('/v1/sbg/business/me/parcels/dock/another-way' as never, { body: { parcelIds, toHubId, offPlanReason: reason, ...(note ? { offPlanNote: note } : {}) } } as never) as never),
     sealBag: (code, closure) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/seal` as never, { body: { closure } } as never) as never),
-    shops: () => call((c) => c.GET('/v1/sbg/network/points' as never, {} as never) as never),
+    // 2026-11-13 — TEST MODE: the account's own view of the map — a tester sees the shops of a country being tested.
+    shops: () => call((c) => c.GET('/v1/sbg/network/points/mine' as never, {} as never) as never),
     upload: (dataUrl, thumbDataUrl) => call((c) => c.POST('/v1/sbg/media' as never, { body: { kind: 'content', dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } } as never) as never),
     quote: (originDid, destDid, s, fragile) =>
       call((c) =>

@@ -106,7 +106,7 @@ export class NetworkPulseService {
     const byTown = new Map<string, TownPage>();
     // Trading, and not at rest: a shop whose owner muted the account is not one anybody can use today.
     // Nor one in a country that is not open yet (COMING, 2026-10-25): it trades from the day it opens.
-    for (const a of this.agents.list().filter((x) => x.status === 'ACTIVE' && !this.agents.isResting(x.did) && !this.agents.notOpenYet(x))) {
+    for (const a of this.agents.list().filter((x) => x.status === 'ACTIVE' && !this.agents.isResting(x.did) && !this.agents.publicHidden(x))) {
       const town = a.zone.trim();
       if (!town) continue;
       const page = byTown.get(town.toLowerCase()) ?? { town, slug: townSlug(town), country: this.agents.countryOf(a), shops: [] };
@@ -130,11 +130,12 @@ export class NetworkPulseService {
 
   /** Uncached — what `pulse` serves. */
   measure(now: number = Date.now()): NetworkPulse {
-    const trading = this.agents.list().filter((a) => a.status === 'ACTIVE' && !this.agents.isResting(a.did) && !this.agents.notOpenYet(a));
+    const trading = this.agents.list().filter((a) => a.status === 'ACTIVE' && !this.agents.isResting(a.did) && !this.agents.publicHidden(a));
     const byDid = new Map(trading.map((a) => [a.did, a]));
     const since = now - WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-    const all = this.parcels.list();
+    // 2026-11-13 — a parcel made in test mode is counted in no report (T5).
+    const all = this.parcels.list().filter((p) => !p.test);
     const collected = all.filter((p) => p.status === 'Delivered').map((p) => ({ p, at: timeOf(p, 'Delivered') })).filter((c): c is { p: Parcel; at: number } => c.at !== null);
     const recent = collected.filter((c) => c.at >= since && c.at <= now);
 

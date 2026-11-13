@@ -26,10 +26,29 @@ import {
   pendingFor,
   presenceRows,
   takeInPromise,
+  takesGoods,
+  testerBlocker,
+  testersOnlyToSend,
+  TESTER_ROLES,
   type PresenceLevel,
   type PresenceProposalRow,
   type PresenceRow,
+  type PresenceTesterList,
+  type TesterRole,
 } from '../presence';
+import type { MessageKey } from '../../../shared/i18n';
+
+/** 2026-11-13 — what each tester tests, in words. */
+const TESTER_ROLE_LABEL: Record<TesterRole, MessageKey> = {
+  driver: 'tower.presence.testers.role.driver',
+  shop: 'tower.presence.testers.role.shop',
+  hub: 'tower.presence.testers.role.hub',
+  store: 'tower.presence.testers.role.store',
+  business: 'tower.presence.testers.role.business',
+  fleet: 'tower.presence.testers.role.fleet',
+  sender: 'tower.presence.testers.role.sender',
+  staff: 'tower.presence.testers.role.staff',
+};
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -293,7 +312,19 @@ function ProposalView({ proposal, state, actions }: { proposal: PresenceProposal
         <div class="ctbl__sub">{proposal.jurisdiction}</div>
       </td>
       <td>
-        <div>{t('tower.presence.proposal.line', { level: t(LEVEL_LABEL[proposal.level]), gains: proposal.gains.map((c) => t(CAPABILITY_LABEL[c])).join(', ') })}</div>
+        <div>
+          {proposal.gains.length || !proposal.opensToPublic
+            ? t('tower.presence.proposal.line', { level: t(LEVEL_LABEL[proposal.level]), gains: proposal.gains.map((c) => t(CAPABILITY_LABEL[c])).join(', ') })
+            : t('tower.presence.proposal.opensLine', { level: t(LEVEL_LABEL[proposal.level]) })}
+        </div>
+        {/* 2026-11-13 — test mode: whether approving keeps the country to its testers, or opens it to everybody. */}
+        {proposal.opensToPublic ? (
+          <div class="ctbl__sub">
+            <b>{t('tower.presence.proposal.opens', { country: countryNameOf(proposal.jurisdiction, state.catalogue) })}</b>
+          </div>
+        ) : proposal.testersOnly ? (
+          <div class="ctbl__sub">{t('tower.presence.proposal.testersOnly')}</div>
+        ) : null}
         <div class="ctbl__sub">{t('tower.presence.proposal.by', { who: proposal.proposedBy, when: when(proposal.proposedAt), expires: when(proposal.expiresAt) })}</div>
         {proposal.note ? <div class="ctbl__sub">{proposal.note}</div> : null}
         {/* What approving does beyond the country: its terms are published, and everybody there is told (2026-10-25). */}
@@ -376,6 +407,15 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
           <input class="cinput" value={form.note} onInput={(e) => actions.setCountryForm({ note: e.currentTarget.value })} />
         </label>
       </div>
+      {takesGoods(form.level) ? (
+        <label class="docs__check">
+          <input type="checkbox" checked={Boolean(form.testersOnly)} onChange={(e) => actions.setCountryForm({ testersOnly: e.currentTarget.checked })} />
+          <span>
+            <b>{t('tower.presence.testersOnly')}</b>
+            <span class="chint">{t('tower.presence.testersOnlyHint')}</span>
+          </span>
+        </label>
+      ) : null}
 
       <div class="twr-corridorsave">
         <button type="button" class="cbtn cbtn--primary" disabled={blocker !== null || state.busyId === 'country'} onClick={() => void actions.recordCountry()}>
@@ -410,6 +450,7 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
         <td><span class="ctbl__lbl">{t('tower.presence.col.standing')}</span>
           <span class={`ctag ${row.level === 'established' ? 'ctag--ok' : row.level === 'observed' ? 'ctag--quiet' : 'ctag--info'}`}>{t(LEVEL_LABEL[row.level])}</span>
           {waiting ? <div class="ctag ctag--warn" style="margin-top:4px">{t('tower.presence.pendingTag')}</div> : null}
+          {row.testersOnly ? <div class="ctag ctag--info" style="margin-top:4px">{t('tower.presence.testingTag', { n: row.testers ?? 0 })}</div> : null}
         </td>
         <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.presence.col.promise')}</span>{t(PROMISE_LABEL[promise])}</td>
         <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.presence.col.may')}</span>
@@ -467,7 +508,12 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
   const blocker = levelBlocker(row, level);
   const { gained, lost } = levelEffect(row, level);
   const busy = state.busyId === row.jurisdiction;
-  const second = needsSecondPerson(row, level);
+  // 2026-11-13 — TEST MODE: the box as ticked (or as the country stands), and what saving would send for it.
+  const testing = form.testersOnly ?? Boolean(row.testersOnly);
+  const testChange = testersOnlyToSend(row, level, form.testersOnly);
+  const changed = level !== row.level || testChange !== undefined;
+  const second = needsSecondPerson(row, level, form.testersOnly);
+  const country = countryNameOf(row.jurisdiction, state.catalogue);
 
   return (
     <div class="twr-presedit">
@@ -488,9 +534,25 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
         <input class="cinput" value={form.note} placeholder={t('tower.presence.f.notePlaceholder')} onInput={(e) => actions.setPresenceForm({ note: e.currentTarget.value })} />
       </label>
 
+      {takesGoods(level) ? (
+        <label class="docs__check twr-presedit__effect">
+          <input type="checkbox" checked={testing} onChange={(e) => actions.setPresenceForm({ testersOnly: e.currentTarget.checked })} />
+          <span>
+            <b>{t('tower.presence.testersOnly')}</b>
+            <span class="chint">{t('tower.presence.testersOnlyHint')}</span>
+          </span>
+        </label>
+      ) : null}
+
       <div class="twr-presedit__effect">
+        {testChange === true ? <p class="chint">{t('tower.presence.testersOnlyEffect', { country })}</p> : null}
+        {testChange === false ? (
+          <p class="chint">
+            <b>{t('tower.presence.opensToAll', { country })}</b>
+          </p>
+        ) : null}
         {level === row.level ? (
-          <p class="chint">{t('tower.presence.noChange')}</p>
+          testChange === undefined ? <p class="chint">{t('tower.presence.noChange')}</p> : second ? <p class="chint">{t('tower.presence.needsSecond')}</p> : null
         ) : (
           <>
             {lost.length ? (
@@ -552,13 +614,125 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
       </div>
 
       <div class="twr-presedit__act">
-        <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null || level === row.level} onClick={() => void actions.savePresence(row.jurisdiction)}>
+        <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null || !changed} onClick={() => void actions.savePresence(row.jurisdiction)}>
           {t(second ? 'tower.presence.propose' : 'tower.presence.save')}
         </button>
         <button type="button" class="cbtn cbtn--ghost" onClick={() => actions.open(null)}>
           {t('tower.presence.cancel')}
         </button>
       </div>
+
+      <Testers jurisdiction={row.jurisdiction} state={state} actions={actions} />
+    </div>
+  );
+}
+
+/**
+ * 2026-11-13 — TEST MODE (T2): A COUNTRY'S TEST LIST. Kept before the switch is pressed — put the numbers on first, then keep
+ * the country to them — and changed by one person, since a tester only gets the apps; every change is kept with a name. The
+ * numbers are never shown back: their last three digits, as staff recognise them.
+ */
+function Testers({ jurisdiction, state, actions }: { jurisdiction: string; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [list, setList] = useState<PresenceTesterList | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [form, setForm] = useState<{ phone: string; name: string; role: TesterRole }>({ phone: '', name: '', role: 'driver' });
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    if (!client) return;
+    const r = await client.api.presenceTesters(jurisdiction);
+    if (r.error) setFailed(r.error.detail || r.error.title);
+    else setList(r.data as unknown as PresenceTesterList);
+  };
+  useEffect(() => {
+    setList(null);
+    setFailed(null);
+    void load();
+  }, [client, jurisdiction]);
+
+  const blocker = testerBlocker(form);
+  const add = async () => {
+    if (!client) return;
+    setBusy(true);
+    setFailed(null);
+    const r = await client.api.addPresenceTester(jurisdiction, { phone: form.phone.replace(/[s-]/g, ''), name: form.name.trim(), role: form.role, ...(state.who?.name ? { by: state.who.name } : {}) });
+    setBusy(false);
+    if (r.error) return setFailed(r.error.detail || r.error.title);
+    setForm({ phone: '', name: '', role: form.role });
+    await load();
+  };
+  const remove = async (phoneHash: string) => {
+    if (!client) return;
+    setBusy(true);
+    setFailed(null);
+    const r = await client.api.removePresenceTester(jurisdiction, phoneHash);
+    setBusy(false);
+    if (r.error) return setFailed(r.error.detail || r.error.title);
+    setList(r.data as unknown as PresenceTesterList);
+  };
+
+  return (
+    <div class="twr-presedit__effect twr-testers">
+      <span class="cfield__label">{t('tower.presence.testers.title', { n: list?.testers.length ?? 0 })}</span>
+      <p class="chint">{t('tower.presence.testers.hint')}</p>
+      {list === null ? (
+        failed ? null : <p class="chint">{t('tower.queues.loading')}</p>
+      ) : list.testers.length === 0 ? (
+        <p class="chint">{t('tower.presence.testers.none')}</p>
+      ) : (
+        <table class="ctbl">
+          <tbody>
+            {list.testers.map((tester) => (
+              <tr key={tester.phoneHash}>
+                <td>
+                  <div class="ctbl__strong">{tester.name}</div>
+                  <div class="ctbl__sub">{t('tower.presence.testers.line', { ending: tester.ending, role: t(TESTER_ROLE_LABEL[tester.role]) })}</div>
+                </td>
+                <td class="ctbl__sub">{t('tower.presence.testers.added', { who: tester.addedBy, when: when(tester.addedAt) })}</td>
+                <td class="ctbl__num">
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void remove(tester.phoneHash)}>
+                    {t('tower.presence.testers.remove')}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div class="twr-corridorform">
+        <label class="cfield">
+          <span class="cfield__label">{t('tower.presence.testers.phone')}</span>
+          <input class="cinput" type="tel" inputMode="tel" autoComplete="off" placeholder={t('tower.presence.testers.phonePh')} value={form.phone} onInput={(e) => setForm({ ...form, phone: e.currentTarget.value })} />
+        </label>
+        <label class="cfield">
+          <span class="cfield__label">{t('tower.presence.testers.name')}</span>
+          <input class="cinput" maxLength={80} value={form.name} onInput={(e) => setForm({ ...form, name: e.currentTarget.value })} />
+        </label>
+        <ConsolePick label={t('tower.presence.testers.role')} value={form.role} onChange={(v) => setForm({ ...form, role: v as TesterRole })} options={TESTER_ROLES.map((r) => ({ value: r, label: t(TESTER_ROLE_LABEL[r]) }))} />
+      </div>
+      <div class="twr-presedit__act">
+        <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || blocker !== null} onClick={() => void add()}>
+          {t('tower.presence.testers.add')}
+        </button>
+        {blocker && (form.phone || form.name) ? <span class="chint">{t(blocker)}</span> : null}
+      </div>
+      {failed ? <p class="cerr">{failed}</p> : null}
+      {list?.log.length ? (
+        <details>
+          <summary class="chint">{t('tower.presence.testers.log', { n: list.log.length })}</summary>
+          <ul class="twr-checklist">
+            {list.log.slice(0, 30).map((entry) => (
+              <li key={entry.at + entry.said}>
+                <span class="ctbl__sub">
+                  {when(entry.at)} · {entry.by}: {entry.said}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt, type CarrierCoverPr
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
+import { hashPhone } from '../../foundation/identity/phone';
 import { TOWING_KINDS, type TowingKind } from './trailer-rules';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
@@ -302,6 +303,16 @@ export class DriverService {
     const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
     if (jurisdiction && !this.presence.can(jurisdiction, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${jurisdiction} yet, so a courier cannot register there`);
+    // 2026-11-13 — test mode: only a listed number signs a driver up — a fleet's driver where their fleet stands.
+    let testCountry: string | undefined = jurisdiction;
+    if (input.managerDid) {
+      try {
+        testCountry = this.managers.get(input.managerDid).jurisdiction ?? testCountry;
+      } catch {
+        // an unknown fleet is refused below, as before
+      }
+    }
+    this.presence.requireTester(testCountry, input.mobile, 'signing a driver up');
 
     // Heavy registry requires a real licence (number + expiry, not already expired).
     if (registry === 'heavy') {
@@ -344,6 +355,7 @@ export class DriverService {
     const driver: FleetDriver = {
       driverId: `drv_${randomBytes(8).toString('hex')}`,
       did,
+      phoneHash: hashPhone(input.mobile),
       managerDid: input.managerDid,
       jurisdiction,
       entityId: entity?.entityId,
@@ -634,7 +646,8 @@ export class DriverService {
     } catch {
       return undefined;
     }
-    return this.presence.resolve(country).level === 'coming' ? country : undefined;
+    // 2026-11-13 — and, in test mode, a driver not on the country's test list: it opens to them with everyone.
+    return this.presence.resolve(country).level === 'coming' || this.presence.closedTo(country, driver.phoneHash) ? country : undefined;
   }
 
   /** FP4 — why this driver cannot start a shift, in words. Empty when they can (status aside). */

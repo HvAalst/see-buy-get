@@ -35,6 +35,7 @@ describe('the network, measured for the front page', () => {
         countryOf: (a: { country: string }) => a.country,
         isResting: (did: string) => resting.includes(did),
         notOpenYet: (a: { country: string }) => coming.includes(a.country),
+        publicHidden: (a: { country: string }) => coming.includes(a.country),
       } as unknown as AgentService,
       { list: () => parcels } as unknown as ParcelService,
       { agentRating: (did: string) => ({ agentDid: did, average: ratings[did]?.average ?? 0, count: ratings[did]?.count ?? 0, isNew: false }) } as unknown as RatingService,

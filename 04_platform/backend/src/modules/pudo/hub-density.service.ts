@@ -89,7 +89,8 @@ export class HubDensityService {
     };
     for (const p of this.parcels.list()) {
       const at = Date.parse(p.acceptedAt ?? p.scans?.[0]?.at ?? '');
-      if (!Number.isFinite(at) || at < since) continue;
+      // 2026-11-13 — a parcel made in test mode is counted in no report (T5).
+      if (!Number.isFinite(at) || at < since || p.test) continue;
       const from = zoneOfShop(p.originAgentDid);
       const to = zoneOfShop(p.destAgentDid);
       if (from) sent.set(from, (sent.get(from) ?? 0) + 1);

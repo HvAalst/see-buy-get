@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { checkAddress, formatAddress, type AddressParts } from '../../foundation/countries/address-format';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -76,6 +77,8 @@ export class BusinessService {
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly codes?: ShipperCodesService,
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-13 — test mode: in a country being tested, only a listed number sets a business up. Optional for the specs.
+    @Optional() private readonly presence?: PresenceService,
   ) {
     // An account moving off a number takes its unanswered invitations with it.
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -127,6 +130,7 @@ export class BusinessService {
     const registrationNo = input.registrationNo?.trim();
     if (!registrationNo) throw new GlosError('FIELD_REQUIRED', 'Give the number the company registry knows the business by', { field: 'registrationNo' });
     const activities = cleanActivities(input.activities);
+    if (this.presence?.closedTo(input.country, person.phoneHash)) this.presence.requireTester(input.country, undefined, 'setting a business up');
 
     const unchecked = this.entities
       .businesses()

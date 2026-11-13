@@ -227,6 +227,9 @@ export const en = {
   'opening.ask.sentDetail': 'You hear from us again the day SeeBuyGet opens in {country}.',
   'opening.ask.asked': 'You asked SeeBuyGet to open in {country} on {day}.',
   'opening.ask.change': 'Change what you told us',
+  'opening.wait.button': 'Tell me when {country} opens',
+  'opening.wait.title': 'Be told when {country} opens',
+  'opening.wait.lede': 'SeeBuyGet is being tested in {country} with a few invited people. Leave your email and we write to you the day it opens to everyone.',
   // 2026-11-04 — papers uploaded and not sent, in the Shop and Hub apps (shared/papers.ts).
   'common.papers.waitingTitle': '{count, plural, one {# paper you uploaded is here, not sent yet} other {# papers you uploaded are here, not sent yet}}',
   'common.papers.waitingBody': 'It is attached to nothing yet, and no screen of SeeBuyGet’s staff shows it. Send your papers before {day}: after that, what you uploaded is deleted.',

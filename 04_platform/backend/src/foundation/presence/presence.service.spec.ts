@@ -286,6 +286,80 @@ describe('presence', () => {
     });
   });
 
+  /** 2026-11-13 — TEST MODE (the owner: "only allow specific Mobile numbers before fully open to the public"; T1–T5). */
+  describe('a country in test mode', () => {
+    const TESTER = '+260971234567';
+    const STRANGER = '+260961234567';
+    const hash = (phone: string) => presence.testersOf('ZM').testers.find((t) => t.ending === phone.slice(-3))?.phoneHash;
+
+    it('keeps a test list by the number’s fingerprint — never the number — and logs every change with a name', () => {
+      const added = presence.addTester('ZM', { phone: '+260 97-123 4567', name: 'Chanda', role: 'shop' }, 'Amina');
+      expect(added).toMatchObject({ ending: '567', name: 'Chanda', role: 'shop', addedBy: 'Amina' });
+      expect(JSON.stringify(presence.testersOf('ZM'))).not.toContain('971234567');
+      // Said again: one entry, its name and role changed.
+      presence.addTester('ZM', { phone: TESTER, name: 'Chanda M.', role: 'driver' }, 'Brian');
+      expect(presence.testersOf('ZM').testers).toEqual([expect.objectContaining({ name: 'Chanda M.', role: 'driver' })]);
+      presence.removeTester('ZM', added.phoneHash, 'Brian');
+      expect(presence.testersOf('ZM').testers).toEqual([]);
+      expect(presence.testersOf('ZM').log.map((l) => l.said)).toEqual(['removed Chanda M. (…567)', 'added Chanda M. (…567, driver)', 'added Chanda (…567, shop)']);
+      expect(() => presence.addTester('ZM', { phone: '0971234567', name: 'X', role: 'shop' }, 'Amina')).toThrow(/country code/);
+      expect(() => presence.addTester('ZM', { phone: TESTER, name: ' ', role: 'shop' }, 'Amina')).toThrow(/Say who the tester is/);
+      expect(() => presence.addTester('ZM', { phone: TESTER, name: 'X', role: 'pilot' }, 'Amina')).toThrow(/tests one of/);
+      expect(() => presence.addTester('XX', { phone: TESTER, name: 'X', role: 'shop' }, 'Amina')).toThrow(/not a country in the catalogue/);
+      expect(() => presence.removeTester('ZM', 'nobody', 'Amina')).toThrow(/No such tester/);
+    });
+
+    it('needs goods to move: testers only is refused on a country taking sign-ups only', () => {
+      expect(() => presence.set({ jurisdiction: 'ZM', level: 'coming', testersOnly: true })).toThrow();
+      presence.set({ jurisdiction: 'ZM', level: 'matched', testersOnly: true });
+      expect(presence.resolve('ZM')).toMatchObject({ testersOnly: true, testers: 0 });
+      // Lowered to where nothing moves, there is nothing left to test.
+      presence.set({ jurisdiction: 'ZM', level: 'observed' });
+      expect(presence.testing('ZM')).toBe(false);
+    });
+
+    it('refuses a number not on the list, by its country — and lets a tester through', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'matched', testersOnly: true });
+      presence.addTester('ZM', { phone: TESTER, name: 'Chanda', role: 'shop' }, 'Amina');
+      expect(presence.testingWithout(STRANGER)).toBe('ZM');
+      expect(presence.testingWithout(TESTER)).toBeUndefined();
+      // A number of a country not being tested is no business of the list.
+      expect(presence.testingWithout('+254712345678')).toBeUndefined();
+      expect(() => presence.requireTester('ZM', STRANGER, 'signing a shop up')).toThrow(/being tested in Zambia and opens to everyone soon: signing a shop up/);
+      expect(() => presence.requireTester('ZM', undefined, 'sending')).toThrow(/being tested in Zambia/);
+      expect(() => presence.requireTester('ZM', TESTER, 'signing a shop up')).not.toThrow();
+      expect(() => presence.requireTester('KE', STRANGER, 'signing a shop up')).not.toThrow();
+      expect(presence.closedTo('ZM', hash(TESTER))).toBe(false);
+      expect(presence.closedTo('ZM', 'someone-else')).toBe(true);
+      expect(presence.closedTo('KE', 'someone-else')).toBe(false);
+    });
+
+    it('switching it on is the safe direction — one person; lifting the list opens the country — two', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'matched' });
+      const on = presence.propose({ jurisdiction: 'ZM', level: 'matched', testersOnly: true, by: 'Amina' });
+      expect(on.proposal).toBeUndefined();
+      expect(on.applied?.testersOnly).toBe(true);
+      // A change that says nothing of it leaves it as it is.
+      presence.propose({ jurisdiction: 'ZM', level: 'matched', note: 'just a note', by: 'Amina' });
+      expect(presence.testing('ZM')).toBe(true);
+      const off = presence.propose({ jurisdiction: 'ZM', level: 'matched', testersOnly: false, by: 'Amina' });
+      expect(off.applied).toBeUndefined();
+      expect(off.proposal).toMatchObject({ opensToPublic: true, testersOnly: false, gains: [] });
+      expect(presence.testing('ZM')).toBe(true);
+      expect(() => presence.approve(off.proposal!.proposalId, 'Amina')).toThrow(/different person must approve/);
+      presence.approve(off.proposal!.proposalId, 'Brian');
+      expect(presence.testing('ZM')).toBe(false);
+    });
+
+    it('a raise that keeps testers only carries it through the second person', () => {
+      const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'matched', testersOnly: true, by: 'Amina' });
+      expect(proposal).toMatchObject({ testersOnly: true, gains: ['takeIn', 'signUp'] });
+      expect(proposal?.opensToPublic).toBeFalsy();
+      presence.approve(proposal!.proposalId, 'Brian');
+      expect(presence.resolve('ZM')).toMatchObject({ level: 'matched', testersOnly: true });
+    });
+  });
+
   /**
    * CL5 — the first of the two gates on holding a photograph of an official document.
    *

@@ -28,6 +28,8 @@ const SAY: Record<string, string> = {
   // telling a driver who is standing at the depot to "deliver what is aboard" is advice about a van they left.
   'error.hours_exceeded': 'Your driving hours do not allow this right now.',
   'error.too_heavy': 'Too heavy for the space you have left.',
+  // 2026-11-13 — test mode: only the listed numbers use the apps in that country until it opens.
+  'error.not_a_tester': 'SeeBuyGet is being tested in your country and opens to everyone soon. Leave your email to be told when.',
   // 2026-11-13 — a shop's or a hub's tools (site tools, T3): the server's detail names which, and the most it takes.
   'error.site_too_small': 'Too heavy for a shop or hub on its way. Choose another shop, or send it as freight.',
   'error.no_room': 'That run does not have room for this.',

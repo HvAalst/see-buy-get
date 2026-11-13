@@ -40,7 +40,7 @@ describe('a carrier that may not take new work', () => {
     const vault = { store: () => ({ vaultRef: `vault_${Math.random().toString(16).slice(2)}` }) } as unknown as IdentityVault;
     const core = { upsert: () => undefined } as unknown as OperationalStore;
     const bus = { publish: async () => undefined } as unknown as EventBus;
-    const presence = { can: () => true, require: () => undefined } as unknown as PresenceService;
+    const presence = { can: () => true, require: () => undefined, requireTester: () => undefined, closedTo: () => false, testing: () => false } as unknown as PresenceService;
     const geocoder = { geocode: () => ({ location: { lat: -1.28, lng: 36.82 } }) } as unknown as Geocoder;
 
     // The REAL media store (in memory under Jest), so ownership, adoption and purging are the rules the

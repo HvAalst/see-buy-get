@@ -12,6 +12,13 @@ import { duplicateField, isIdentityDocument, type DuplicateField } from '../../.
 import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { geocode, homeConfig, myAgreement, zoneAt } from '../api';
+import { AskToOpen, type AskKind } from '../../../shared/opening/AskToOpen';
+import { TestingAsk } from '../../../shared/opening/TestingAsk';
+
+/** 2026-11-13 — what somebody signing up would be, as the waiting list counts it. */
+function askKindOf(role: string | null | undefined): AskKind {
+  return role === 'pudo' ? 'shop' : role === 'mdp' ? 'hub' : role === 'vendor' ? 'store' : role === 'driver' || role === 'fleet' ? 'carrier' : 'other';
+}
 import { countryNameIn } from '../../../shared/documents/documents';
 import { pageNameFor } from '../../../shared/handle';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
@@ -52,6 +59,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
       ) : null}
 
       {state.error ? duplicateField(state.error) ? <AlreadyRegistered state={state} actions={actions} /> : <ErrorNote error={state.error} /> : null}
+      <TestingAsk error={state.error} kind={askKindOf(role?.id)} config={homeConfig()} />
 
       {state.step === 'phone' ? <PhoneStep state={state} actions={actions} /> : null}
       {state.step === 'code' ? <CodeStep state={state} actions={actions} /> : null}
@@ -255,7 +263,7 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
         {countries.map((c) => (
           <option key={c.country} value={c.country}>
             {c.name} ({c.country})
-            {c.joinable === false ? ` · ${t('home.join.country.notHere')}` : c.coming ? ` · ${t('home.join.country.comingTag')}` : c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
+            {c.joinable === false ? ` · ${t('home.join.country.notHere')}` : c.testing ? ` · ${t('home.join.country.testingTag')}` : c.coming ? ` · ${t('home.join.country.comingTag')}` : c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
           </option>
         ))}
       </select>
@@ -286,6 +294,12 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
             detail={t('home.join.country.notHereBody', { name: chosenCountry.name })}
           />
           <InterestForm country={chosenCountry} />
+        </>
+      ) : chosenCountry.testing ? (
+        // 2026-11-13 — TEST MODE: only invited numbers join here for now; everybody else leaves an email and is told the day it opens.
+        <>
+          <Note tone="info" icon="clock" title={t('home.join.country.testingTitle', { name: chosenCountry.name })} detail={t('home.join.country.testingBody', { name: chosenCountry.name })} />
+          <AskToOpen country={chosenCountry.country} kind="other" config={homeConfig()} waiting />
         </>
       ) : chosenCountry.coming ? (
         <Note tone="info" icon="clock" title={t('home.join.country.comingTitle', { name: chosenCountry.name })} detail={t('home.join.country.comingBody')} />

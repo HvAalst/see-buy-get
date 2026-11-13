@@ -63,6 +63,8 @@ export class MarketPulseService implements OnApplicationBootstrap, OnModuleDestr
     // the freight market, so they are not counted here — noted for a later refinement.)
     const demand = new Map<string, number>();
     for (const f of this.dispatch.listFreight({ status: 'available' })) {
+      // 2026-11-13 — a load posted in test mode moves no market price (T5).
+      if (f.test) continue;
       const cell = MarketPulseStore.cellFor(f.pickupLocation);
       demand.set(cell, (demand.get(cell) ?? 0) + 1);
     }

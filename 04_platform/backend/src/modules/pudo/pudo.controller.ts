@@ -41,7 +41,7 @@ import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Inject, Param
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
-import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
+import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
@@ -160,6 +160,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   ContactCardDto,
   MintRoadLegDto,
   PresenceDto,
+  PresenceTesterDto,
   PresenceDecisionDto,
   CreateCompanyDto,
   CompanyRecordDto,
@@ -503,6 +504,9 @@ export class SbgController {
   @Post('auth/phone/request')
   async phoneRequest(@Body() dto: PhoneRequestDto) {
     const to = this.otp.phoneFor(dto.phone);
+    // 2026-11-13 — TEST MODE: a number of a country being tested, not on its list, is sent no code — not even a stand-in.
+    const testing = this.presence.testingWithout(to);
+    if (testing) this.presence.requireTester(testing, to, 'signing in with a code');
     const texts = this.sms?.sends() ?? false;
     // THE OWNER'S STAND-IN CODE: a number named on the server takes its own code while no text can leave — as if Twilio had
     // delivered it. Nothing is sent, nothing shown: the answer is the one a delivered text gives.
@@ -886,6 +890,8 @@ export class SbgController {
       // work the day it opens. `coming` says which of the two, so a form can say it before anybody signs up.
       joinable: can.signUp,
       ...(can.signUp && !can.takeIn ? { coming: true } : {}),
+      // 2026-11-13 — TEST MODE: only the numbers on its test list join and work there until it opens to everyone.
+      ...(this.presence.testing(code) ? { testing: true } : {}),
     };
   }
 
@@ -924,7 +930,9 @@ export class SbgController {
   @RateLimit(20, 15 * 60)
   @Post('countries/:code/interest')
   registerInterest(@Param('code') code: string, @Body() dto: InterestDto) {
-    const open = this.presence.resolve(code.trim().toUpperCase()).capabilities.takeIn;
+    // 2026-11-13 — a country being tested is not open to the person asking: they wait with everybody else (test mode, T3).
+    const asked = code.trim().toUpperCase();
+    const open = this.presence.resolve(asked).capabilities.takeIn && !this.presence.testing(asked);
     const note = this.interest.add({ country: code, kind: dto.kind, email: dto.email, message: dto.message }, open);
     const country = catalogueEntry(note.country)?.name ?? note.country;
     void this.mail?.send('interest-received', { address: note.email }, { country, kind: note.kind }).catch(() => undefined);
@@ -1166,7 +1174,11 @@ export class SbgController {
     // lowered was told what stopped at the time, and is not told it is new.
     const firstOpening = !this.presence.resolve(proposal.jurisdiction).openedAt;
     const levelBefore = this.presence.resolve(proposal.jurisdiction).level;
+    // 2026-11-13 — TEST MODE: while only testers use it, the country has not opened to anybody else — nobody is written to;
+    // the day the list is lifted is the day it opens to everybody, and they are told then.
+    const testingBefore = this.presence.testing(proposal.jurisdiction);
     const decided = this.presence.approve(proposalId, by, undefined, who.key);
+    const testingAfter = this.presence.testing(proposal.jurisdiction);
     this.tellWhatStopped(proposal.jurisdiction, before);
     // Its terms, now that the company they name is on. A country that was already open is told who it works with from
     // today, by name; one opening today is told it is open (below), and these are its new terms.
@@ -1174,7 +1186,7 @@ export class SbgController {
     // A country that opened with nobody of ours behind the money told the people who asked about it "when a company is
     // established there, that changes and we will write again". This is that — to the ones who have not signed up there
     // since: those registered hear it in their app, and by email, with the terms (DocumentNoticeService).
-    if (proposal.level === 'established' && levelBefore !== 'established' && !firstOpening) {
+    if (proposal.level === 'established' && levelBefore !== 'established' && !firstOpening && !testingAfter) {
       const company = this.entities.forJurisdiction(proposal.jurisdiction);
       if (company) {
         const companyName = this.countryTerms?.nameOf(company) ?? company.name;
@@ -1191,8 +1203,9 @@ export class SbgController {
     const after = this.presence.resolve(proposal.jurisdiction).capabilities;
     const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
     const sister = this.entities.forJurisdiction(proposal.jurisdiction);
-    const opened = after.takeIn && !before.takeIn && firstOpening;
-    if (waiting.length && after.takeIn) {
+    const opensToPublic = testingBefore && !testingAfter && after.takeIn;
+    const opened = !testingAfter && after.takeIn && ((!before.takeIn && firstOpening) || opensToPublic);
+    if (waiting.length && after.takeIn && !testingAfter) {
       // Somebody who asked, was told it was coming, and then signed up hears about the opening once: as somebody
       // registered there (below), which also says whether they can start today.
       const registered = new Set(opened ? (this.countryNotice?.recipientsIn(proposal.jurisdiction) ?? []).map((r) => r.email?.trim().toLowerCase()).filter(Boolean) : []);
@@ -1253,12 +1266,38 @@ export class SbgController {
       incoterms: dto.incoterms,
       jurisdiction,
       level: dto.level,
+      // 2026-11-13 — test mode: only the listed numbers use the apps; switched off, the country opens to everybody.
+      ...(dto.testersOnly !== undefined ? { testersOnly: dto.testersOnly } : {}),
       overrides: dto.overrides as never,
       note: dto.note,
       ...this.signed(actor, dto.by),
     });
     if (result.applied) this.tellWhatStopped(jurisdiction, before);
     return result;
+  }
+
+  /* ------------------------------------------------- test mode: a country's test list -- */
+
+  /** 2026-11-13 — TEST MODE (T2): a country's test list and what was changed on it, newest first. */
+  @Roles('operator')
+  @Get('presence/:jurisdiction/testers')
+  presenceTesters(@Param('jurisdiction') jurisdiction: string): PresenceTesterList {
+    return this.presence.testersOf(jurisdiction);
+  }
+
+  /** Put somebody on the list. One person is enough — a tester only gets the apps — and the change is kept with their name. */
+  @Roles('operator')
+  @Post('presence/:jurisdiction/testers')
+  addPresenceTester(@Param('jurisdiction') jurisdiction: string, @Body() dto: PresenceTesterDto, @Actor() actor: IntrospectionResult): PresenceTester {
+    return this.presence.addTester(jurisdiction, { phone: dto.phone, name: dto.name, role: dto.role }, auditActor(actor, dto.by));
+  }
+
+  /** Take somebody off the list, by the fingerprint the list shows. Their account stays; it waits for the country to open. */
+  @Roles('operator')
+  @Delete('presence/:jurisdiction/testers/:phoneHash')
+  removePresenceTester(@Param('jurisdiction') jurisdiction: string, @Param('phoneHash') phoneHash: string, @Actor() actor: IntrospectionResult): PresenceTesterList {
+    this.presence.removeTester(jurisdiction, phoneHash, auditActor(actor));
+    return this.presence.testersOf(jurisdiction);
   }
 
   /* ----------------------------------------------- CA6: the rules of crossing a border -- */
@@ -4895,6 +4934,8 @@ export class SbgController {
   pricingNear(@Actor() actor: IntrospectionResult, @Query('type') type?: string, @Query('lat') lat?: string, @Query('lng') lng?: string, @Query('radiusKm') radiusKm?: string, @Query('limit') limit?: string) {
     const R = Number(radiusKm) || 25;
     const L = Math.min(Number(limit) || 50, 200);
+    // 2026-11-13 — test mode: a tester sees the shops and hubs of a country testing with them.
+    const caller = this.callerPhoneHash(actor);
     const here = lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined;
     const pct = (sorted: number[], p: number): number => {
       if (!sorted.length) return 0;
@@ -4927,12 +4968,12 @@ export class SbgController {
     // nobody compares themselves against, keeps every rate as it always has.
     const inAskersMoney = <T,>(all: T[], moneyOf: (x: T) => string | undefined): T[] => (!type ? all : money ? all.filter((x) => moneyOf(x) === money) : []);
     const rowsFor = (t: string): Row[] => {
-      if (t === 'mdp') return inAskersMoney(this.mdps.approvedList().filter((m) => !this.mdps.notOpenYet(m)), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
+      if (t === 'mdp') return inAskersMoney(this.mdps.approvedList().filter((m) => !this.mdps.notOpenYet(m) && (!this.presence.testing(this.mdps.countryOf(m)) || this.presence.isTester(this.mdps.countryOf(m), caller))), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
       if (t === 'vehicle') {
         return inAskersMoney(this.vehicles.list({ status: 'ACTIVE' }), (v) => this.drivers.rateCurrencyOf(v)).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
       }
       // Not a shop that signed up before its country opened: nobody can use it yet (COMING, 2026-10-25).
-      const shops = this.agents.list().filter((a) => a.status === 'ACTIVE' && !this.agents.notOpenYet(a));
+      const shops = this.agents.list().filter((a) => a.status === 'ACTIVE' && this.shopSeenBy(a, caller));
       return inAskersMoney(shops, (a) => this.shopCurrency(a.did)).map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
     };
     const forType = (t: string) => {
@@ -5228,7 +5269,41 @@ export class SbgController {
   networkPoints() {
     // A shop at rest — its owner muted the account — is off the map: receivers find it from their own parcel.
     // Nor a shop in a country that is not open yet: it signed up ahead of the day (COMING, 2026-10-25).
-    return this.agents.list().filter((a) => !this.agents.isResting(a.did) && !this.agents.notOpenYet(a)).map((a) => this.shopCard(a));
+    // 2026-11-13 — nor a shop in a country in test mode: testers find it through network/points/mine.
+    return this.agents.list().filter((a) => !this.agents.isResting(a.did) && !this.agents.publicHidden(a)).map((a) => this.shopCard(a));
+  }
+
+  /**
+   * 2026-11-13 — TEST MODE (T4): the map as a tester sees it — the public one, and the shops of a country being tested that
+   * has this caller on its list (the shop on it too). Signed in, because the public map reads no token.
+   */
+  @SignedIn()
+  @Get('network/points/mine')
+  networkPointsMine(@Actor() actor: IntrospectionResult) {
+    const caller = this.callerPhoneHash(actor);
+    return this.agents.list().filter((a) => !this.agents.isResting(a.did) && this.shopSeenBy(a, caller)).map((a) => this.shopCard(a));
+  }
+
+  /** 2026-11-13 — the caller's phone fingerprint, for whether they are on a country's test list: the person's, else the account's. */
+  private callerPhoneHash(actor?: IntrospectionResult): string | undefined {
+    if (actor?.personDid) {
+      const person = this.persons.findByDid(actor.personDid);
+      if (person?.phoneHash) return person.phoneHash;
+    }
+    if (!actor?.did) return undefined;
+    const own = this.accounts.phoneHashForDid(actor.did) ?? this.agents.find(actor.did)?.phoneHash;
+    if (own) return own;
+    try {
+      return this.drivers.get(actor.did).phoneHash;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Whether a shop is on the map for this caller: open to everyone, or in a country testing with the caller and the shop both listed. */
+  private shopSeenBy(a: ReturnType<AgentService['list']>[number], caller: string | undefined): boolean {
+    if (!this.agents.publicHidden(a)) return true;
+    return !this.agents.notOpenYet(a) && this.presence.isTester(this.agents.countryOf(a), caller);
   }
 
   /** A shop as anybody may see it: where it is, whether it is open, what it charges. Nothing it holds, owes or was asked for. */

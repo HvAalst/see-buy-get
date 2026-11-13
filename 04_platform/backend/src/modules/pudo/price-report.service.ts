@@ -88,7 +88,8 @@ export class PriceReportService {
     let unplanned = 0;
     for (const p of this.parcels.list()) {
       const z = p.zonePrice;
-      if (!z || p.sellerEntityId !== entityId || p.status === 'Voided') continue;
+      // 2026-11-13 — a parcel made in test mode is counted in no report (T5).
+      if (!z || p.sellerEntityId !== entityId || p.status === 'Voided' || p.test) continue;
       const at = Date.parse(p.acceptedAt);
       if (!(at >= from && at < to)) continue;
       if (z.plannedCost == null) {

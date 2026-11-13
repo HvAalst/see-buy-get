@@ -44,6 +44,9 @@ export interface PresenceRow {
   companies?: Array<{ entityId: string; name: string; kind: 'sister' | 'partner'; status: 'draft' | 'active'; ready: boolean }>;
   /** CL1 — the trade terms switched on here, per direction. Empty everywhere until somebody selects one. */
   incoterms?: { origin: string[]; destination: string[] };
+  /** 2026-11-13 — TEST MODE: only the numbers on its test list use the apps here; and how many are on it. */
+  testersOnly?: boolean;
+  testers?: number;
   /** CA5 — capabilities switched off by a lapsed licence or policy. */
   lapses?: Array<{ capability: PresenceCapability; entityId: string; source: 'licence' | 'insurance'; kind: string; reference: string; expiredAt: string }>;
 }
@@ -176,6 +179,8 @@ export interface NewCountryForm {
   jurisdiction: string;
   level: PresenceLevel;
   note: string;
+  /** 2026-11-13 — TEST MODE: switched on with only the numbers on its test list. */
+  testersOnly?: boolean;
 }
 
 export const EMPTY_COUNTRY_FORM: NewCountryForm = { jurisdiction: '', level: 'matched', note: '' };
@@ -212,6 +217,9 @@ export interface PresenceProposalRow {
   reason?: string;
   /** Said by the server to whoever is reading: THEY proposed this one. Absent from a server that predates it. */
   mine?: boolean;
+  /** 2026-11-13 — TEST MODE: the change keeps the country to its testers; or lifts the list, opening it to everybody. */
+  testersOnly?: boolean;
+  opensToPublic?: boolean;
   /** A switch-on that publishes the country's terms naming its company (2026-10-25): which, and the company. */
   publishes?: { title: string; company: string };
 }
@@ -267,8 +275,50 @@ export function approvalBlocker(proposal: PresenceProposalRow, who: string | und
 }
 
 /** Does moving this country to this level need a second person? Only a change that GIVES it something does. */
-export function needsSecondPerson(row: PresenceRow, level: PresenceLevel): boolean {
-  return levelEffect(row, level).gained.length > 0;
+export function needsSecondPerson(row: PresenceRow, level: PresenceLevel, testersOnly?: boolean): boolean {
+  return levelEffect(row, level).gained.length > 0 || opensToPublic(row, level, testersOnly);
+}
+
+/** 2026-11-13 — TEST MODE sits on a level that moves goods: there is nothing to test where nothing moves. */
+export function takesGoods(level: PresenceLevel): boolean {
+  return LEVEL_DEFAULTS[level].takeIn;
+}
+
+/** Lifting the test list where goods move opens the country to everybody — a gain like any other, so two people. */
+export function opensToPublic(row: PresenceRow, level: PresenceLevel, testersOnly: boolean | undefined): boolean {
+  return Boolean(row.testersOnly) && testersOnly === false && takesGoods(level);
+}
+
+/** What the editor sends for test mode: the box where it was changed and the level moves goods; otherwise nothing. */
+export function testersOnlyToSend(row: PresenceRow, level: PresenceLevel, ticked: boolean | undefined): boolean | undefined {
+  if (ticked === undefined || !takesGoods(level)) return undefined;
+  return ticked === Boolean(row.testersOnly) ? undefined : ticked;
+}
+
+/** 2026-11-13 — what a tester tests: the app they are listed for (the server's list). */
+export const TESTER_ROLES = ['driver', 'shop', 'hub', 'store', 'business', 'fleet', 'sender', 'staff'] as const;
+export type TesterRole = (typeof TESTER_ROLES)[number];
+
+export interface PresenceTesterRow {
+  phoneHash: string;
+  ending: string;
+  name: string;
+  role: TesterRole;
+  addedBy: string;
+  addedAt: string;
+}
+
+export interface PresenceTesterList {
+  testers: PresenceTesterRow[];
+  log: Array<{ at: string; by: string; said: string }>;
+}
+
+/** Why a tester cannot be added yet, or null: a number with its country code, a name, what they test. */
+export function testerBlocker(form: { phone: string; name: string; role: string }): MessageKey | null {
+  if (!/^\+\d{8,15}$/.test(form.phone.replace(/[\s-]/g, ''))) return 'tower.presence.testers.needPhone';
+  if (!form.name.trim()) return 'tower.presence.testers.needName';
+  if (!(TESTER_ROLES as readonly string[]).includes(form.role)) return 'tower.presence.testers.needRole';
+  return null;
 }
 
 /** The waiting change for a country, if there is one — the table marks the row rather than hiding it. */

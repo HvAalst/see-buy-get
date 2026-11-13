@@ -53,6 +53,8 @@ export function createVendorApi(sbg: SbgClient) {
     ...createMediaApi(sbg),
     /** The store's public record (never re-exposes the secret). */
     me: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } } })),
+    /** 2026-11-13 — TEST MODE: the map as this account sees it — the public one, and a country being tested that lists it. */
+    networkPointsMine: () => sbg.request((c) => c.GET('/v1/sbg/network/points/mine')),
 
     /** Update pin / address / callback URL / split policy. */
     update: (

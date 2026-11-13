@@ -13,6 +13,7 @@ import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/p
 import { recoveryApi } from '../../../shared/account/recovery';
 import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { sendConfig } from '../api';
+import { TestingAsk } from '../../../shared/opening/TestingAsk';
 
 // Built once: the doors a person uses before they are signed in.
 const recovery = recoveryApi(sendConfig());
@@ -152,6 +153,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
         <h1 class="scr__title">{t('send.auth.codeTitle')}</h1>
         <p class="scr__lede">{t('send.auth.codeLede', { phone: state.authPhone })}</p>
         {state.authError ? <ErrorNote error={state.authError} showDetail /> : null}
+        <TestingAsk error={state.authError} kind="other" config={sendConfig()} />
         <Card>
           <div class="field">
             <span class="field__label">{t('send.auth.codeLabel')}</span>
@@ -196,6 +198,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
         <h1 class="scr__title">{t('send.auth.pinTitle')}</h1>
         <p class="scr__lede">{t('send.auth.pinLede')}</p>
         {state.authError ? <ErrorNote error={state.authError} /> : null}
+        <TestingAsk error={state.authError} kind="other" config={sendConfig()} />
         <Card>
           <div class="field">
             <span class="field__label">{t('send.newPin')}</span>
@@ -222,6 +225,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       <p class="scr__lede">{t('send.auth.lede')}</p>
       {/* With the server's own words: "use a mobile number" and "wait 40s" are the part somebody can act on. */}
       {state.authError ? <ErrorNote error={state.authError} showDetail /> : null}
+      <TestingAsk error={state.authError} kind="other" config={sendConfig()} />
       <Card>
         <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
       </Card>

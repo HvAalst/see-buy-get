@@ -552,6 +552,9 @@ export const enHome = {
   'home.join.country.comingTitle': 'SeeBuyGet opens in {name} soon',
   'home.join.country.comingBody':
     'You can sign up now. Your account is made and your papers are checked before the day it opens, so you can start on that day. Until then nothing moves here and nobody finds you on the map. You are told the day it opens, and who you work with there.',
+  'home.join.country.testingTag': 'being tested',
+  'home.join.country.testingTitle': 'SeeBuyGet is being tested in {name}',
+  'home.join.country.testingBody': 'Only invited numbers can join in {name} for now. It opens to everyone soon: leave your email to be told the day it does.',
   'home.join.country.note': 'This is the company you will be paid by, so it has to be where you really are.',
   /* A country the network MATCHES but does not stand in. The suffix in the list is not enough — money and
      responsibility are the whole difference, and somebody joining deserves to read it in full before they

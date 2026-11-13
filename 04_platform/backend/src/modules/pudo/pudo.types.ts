@@ -81,6 +81,8 @@ export class Agent {
   agentId: string;
   did: string;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
+  /** 2026-11-13 — the mobile's fingerprint (never the number): whether this account is on its country's test list. */
+  phoneHash?: string;
   shopName: string;
   /**
    * THE NATIONAL ID IT REGISTERED WITH WENT TO SOMEBODY ELSE, by a decision of two members of staff
@@ -591,6 +593,8 @@ export class Mdp {
   feeAsked?: HubFeesAsked;
   /** The last refusal of fees it asked for: by whom, why — shown to the hub. */
   feeRefused?: HubFeesRefused;
+  /** 2026-11-13 — its contact number's fingerprint: whether the hub is on its country's test list. */
+  phoneHash?: string;
   /** 2026-11-13 — its handling equipment (by hand always; a sack barrow, a pallet jack, a forklift, a ramp or dock) and its tools. */
   equipment?: Equipment[];
   tools?: SiteTools;
@@ -1214,6 +1218,8 @@ export class Parcel {
   weighed?: ParcelWeighed;
   /** 2026-11-13 — weighed later at a hub, unlike what was said: recorded, the sender told, their side beside it. */
   weightFound?: ParcelWeightFound;
+  /** 2026-11-13 — made while its country was in test mode: counted in no report (T5). */
+  test?: boolean;
   fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
   // S30 — cargo taxonomy. cargoClass (P0–P6) is DERIVED from weight+dims at create and drives the handling
   // lane (P4+ never enters the PUDO/MDP pipeline). natureCode is the commodity's primary nature (default

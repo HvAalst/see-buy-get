@@ -820,14 +820,15 @@ export function useVendorApp() {
 
   const loadPoints = useCallback(async () => {
     setState((s) => ({ ...s, pointsState: 'loading' }));
-    const r = await fetchPoints();
+    // 2026-11-13 — TEST MODE: signed in, the store's own view of the map (a country being tested shows to its testers).
+    const r = client ? ((await client.api.networkPointsMine()) as unknown as Awaited<ReturnType<typeof fetchPoints>>) : await fetchPoints();
     if (r.error) {
       setState((s) => ({ ...s, pointsState: 'error' }));
       fail(r.error);
       return;
     }
     setState((s) => ({ ...s, points: r.data ?? [], pointsState: 'ready' }));
-  }, [fail]);
+  }, [fail, client]);
   /**
    * The buyer's address — the one on the order — or a place near them, looked for in the countries the shops are in,
    * to put the nearest shops first (2026-10-25: three words were a guess nobody could check). Null where it is not

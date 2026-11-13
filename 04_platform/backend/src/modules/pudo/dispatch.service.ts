@@ -6,6 +6,7 @@ import { clockAt, minutesOf, momentAt, utcDay } from './fleet-clock';
 import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
@@ -506,6 +507,8 @@ export class DispatchService {
     @Optional() private readonly manifests?: BorderManifestService,
     // The vehicle a load was taken over on, for its manifest. Optional for the specs.
     @Optional() private readonly vehicleBook?: VehicleService,
+    // 2026-11-13 — test mode: a load posted where a country is being tested is marked a test. Optional for the specs.
+    @Optional() private readonly presence?: PresenceService,
   ) {
     // The manifest reads a load's carrier, seals and steps from here; it never reaches back into dispatch.
     this.manifests?.useFacts((freightId) => {
@@ -675,8 +678,11 @@ export class DispatchService {
     if (input.destEquipment != null && !siteHandles(input.destEquipment)) equipmentGaps.push('dest');
     // The account the buyer's number is certainly for today, so the order stays theirs if the number moves on.
     const buyerAccount = input.buyerMobile ? this.persons?.settledAt(hashPhone(input.buyerMobile), now)?.personDid : undefined;
+    // 2026-11-13 — TEST MODE (T5): a load from or to a country being tested is a test, counted in no report.
+    const testLoad = [input.pickupCountry, input.destCountry].some((c) => c && this.presence?.testing(c));
     const freight: Freight = {
       freightId: `frt_${randomBytes(5).toString('hex')}`,
+      ...(testLoad ? { test: true as const } : {}),
       code: checkOnly ? 'FRT-TEST' : `FRT-${String(this.freightSeq).padStart(3, '0')}`,
       description: input.description,
       pickupLocation: input.pickupLocation,

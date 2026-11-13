@@ -117,6 +117,8 @@ export class FleetManagerService {
     if (!this.presence.can(jurisdiction, 'signUp')) {
       throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${jurisdiction} yet, so a fleet cannot register there`);
     }
+    // 2026-11-13 — test mode: only a listed number signs a fleet up.
+    this.presence.requireTester(jurisdiction, input.contactPhone, 'signing a fleet up');
     const entity = this.entities.forJurisdiction(jurisdiction);
     const location = input.location ?? this.geocoder.geocode(input.depotAddress!).location;
 

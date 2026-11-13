@@ -65,7 +65,7 @@ describe('status callbacks to a store', () => {
       { upsert: () => undefined } as unknown as OperationalStore,
       { forJurisdiction: () => undefined } as unknown as EntityService,
       {} as unknown as BooksService,
-      { can: () => true } as unknown as PresenceService,
+      { can: () => true, requireTester: () => undefined } as unknown as PresenceService,
     );
     const callbacks = new VendorCallbackService(bus, {} as unknown as ParcelService, vendors);
     return { vendors, callbacks };

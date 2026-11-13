@@ -1030,6 +1030,8 @@ export class Freight {
    */
   carriedBy?: CarriedBody;
   createdAt: string;
+  /** 2026-11-13 — posted while its country was in test mode: counted in no report (T5). */
+  @ApiPropertyOptional() test?: boolean;
 }
 
 /** FB4a — the vehicle that took a load, as much of it as the market series needs. */

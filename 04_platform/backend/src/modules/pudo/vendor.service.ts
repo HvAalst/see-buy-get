@@ -280,6 +280,8 @@ export class VendorService {
     // every money path refuses by name (entityIdOf). Where the network does not operate at all, it is refused.
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
     if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a store cannot register there`);
+    // 2026-11-13 — test mode: only a listed number signs a store up.
+    this.presence.requireTester(country, input.ownerPhone, 'signing a store up');
     const entity = this.entities.forJurisdiction(country);
     // A real DID (S2 pattern — mdp got the same treatment): the vendorId stays the domain
     // key; the DID is what the vendors/login token binds to. No PII goes to the core.

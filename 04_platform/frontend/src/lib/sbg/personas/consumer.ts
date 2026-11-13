@@ -33,6 +33,8 @@ export function createConsumerApi(sbg: SbgClient) {
 
     /** The signed-in person + every role they hold (drives the role switcher). */
     me: () => sbg.request((c) => c.GET('/v1/sbg/identity/me')),
+    /** 2026-11-13 — TEST MODE: the map as this account sees it — the public one, and a country being tested that lists it. */
+    networkPointsMine: () => sbg.request((c) => c.GET('/v1/sbg/network/points/mine')),
 
     /** Set or change the 4-digit PIN. */
     setPin: (pin: string) => sbg.request((c) => c.POST('/v1/sbg/identity/pin', { body: { pin } })),

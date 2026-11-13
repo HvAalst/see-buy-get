@@ -10155,6 +10155,107 @@
         }
       }
     },
+    "/v1/sbg/presence/{jurisdiction}/testers": {
+      "get": {
+        "operationId": "Sbg.presenceTesters",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceTesterList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.addPresenceTester",
+        "summary": "",
+        "description": "Put somebody on the list. One person is enough — a tester only gets the apps — and the change is kept with their name.",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceTesterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceTester"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/presence/{jurisdiction}/testers/{phoneHash}": {
+      "delete": {
+        "operationId": "Sbg.removePresenceTester",
+        "summary": "",
+        "description": "Take somebody off the list, by the fingerprint the list shows. Their account stays; it waits for the country to open.",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "phoneHash",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceTesterList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-rules": {
       "get": {
         "operationId": "Sbg.borderRuleList",
@@ -20269,6 +20370,19 @@
     "/v1/sbg/network/points": {
       "get": {
         "operationId": "Sbg.networkPoints",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/network/points/mine": {
+      "get": {
+        "operationId": "Sbg.networkPointsMine",
+        "summary": "",
+        "description": "2026-11-13 — TEST MODE (T4): the map as a tester sees it — the public one, and the shops of a country being tested that\nhas this caller on its list (the shop on it too). Signed in, because the public map reads no token.",
         "parameters": [],
         "responses": {
           "200": {
@@ -54643,6 +54757,9 @@
           "vaultRef": {
             "type": "string"
           },
+          "phoneHash": {
+            "type": "string"
+          },
           "shopName": {
             "type": "string"
           },
@@ -55290,6 +55407,14 @@
           "mine": {
             "type": "boolean",
             "description": "On a listing, for whoever reads it: THEY proposed this one, so they are not the one to approve it. Never stored."
+          },
+          "testersOnly": {
+            "type": "boolean",
+            "description": "2026-11-13 — testers only, as proposed; absent leaves it as it is."
+          },
+          "opensToPublic": {
+            "type": "boolean",
+            "description": "2026-11-13 — this change lifts the test list: the country opens to everyone — a gain, so a second person."
           }
         },
         "required": [
@@ -55461,6 +55586,13 @@
           "openedAt": {
             "type": "string",
             "description": "When goods could first move here, if they ever could since this was recorded."
+          },
+          "testersOnly": {
+            "type": "boolean",
+            "description": "2026-11-13 — testers only (test mode), and how many are listed."
+          },
+          "testers": {
+            "type": "number"
           }
         },
         "required": [
@@ -55470,7 +55602,9 @@
           "hasEntity",
           "lapses",
           "recorded",
-          "incoterms"
+          "incoterms",
+          "testersOnly",
+          "testers"
         ]
       },
       "PresenceDto": {
@@ -55514,11 +55648,131 @@
           },
           "by": {
             "type": "string"
+          },
+          "testersOnly": {
+            "type": "boolean",
+            "description": "2026-11-13 — TESTERS ONLY (test mode): only the numbers on the country's test list use the apps. Left out, it stays as it\nis. Switching it off opens the country to everybody, which a second person approves."
           }
         },
         "required": [
           "level",
           "incoterms"
+        ]
+      },
+      "PresenceTester": {
+        "type": "object",
+        "properties": {
+          "phoneHash": {
+            "type": "string"
+          },
+          "ending": {
+            "type": "string",
+            "description": "The number's last three digits, as staff recognise it."
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop",
+              "hub",
+              "store",
+              "business",
+              "fleet",
+              "sender",
+              "staff"
+            ]
+          },
+          "addedBy": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phoneHash",
+          "ending",
+          "name",
+          "role",
+          "addedBy",
+          "addedAt"
+        ]
+      },
+      "PresenceTesterLogEntry": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "said": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "said"
+        ]
+      },
+      "PresenceTesterList": {
+        "type": "object",
+        "properties": {
+          "testers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresenceTester"
+            }
+          },
+          "log": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresenceTesterLogEntry"
+            }
+          }
+        },
+        "required": [
+          "testers",
+          "log"
+        ]
+      },
+      "PresenceTesterDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "shop",
+              "hub",
+              "store",
+              "business",
+              "fleet",
+              "sender",
+              "staff"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "phone",
+          "name"
         ]
       },
       "BorderRuleDto": {
@@ -64406,6 +64660,10 @@
               }
             ]
           },
+          "phoneHash": {
+            "type": "string",
+            "description": "2026-11-13 — its contact number's fingerprint: whether the hub is on its country's test list."
+          },
           "equipment": {
             "description": "2026-11-13 — its handling equipment (by hand always; a sack barrow, a pallet jack, a forklift, a ramp or dock) and its tools.",
             "type": "array",
@@ -65501,6 +65759,10 @@
           "weightFound": {
             "type": "object",
             "description": "2026-11-13 — weighed later at a hub, unlike what was said: recorded, the sender told, their side beside it."
+          },
+          "test": {
+            "type": "boolean",
+            "description": "2026-11-13 — made while its country was in test mode: counted in no report (T5)."
           },
           "fragile": {
             "type": "boolean"
@@ -70910,6 +71172,10 @@
               "$ref": "#/components/schemas/FreightInstructionAmendment"
             }
           },
+          "test": {
+            "type": "boolean",
+            "description": "2026-11-13 — posted while its country was in test mode: counted in no report (T5)."
+          },
           "freightId": {
             "type": "string"
           },
@@ -71972,6 +72238,9 @@
             "description": "The sister that contracts this courier directly. Absent for a fleet-attached driver."
           },
           "vaultRef": {
+            "type": "string"
+          },
+          "phoneHash": {
             "type": "string"
           },
           "displayName": {

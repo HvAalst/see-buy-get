@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { catalogueEntry } from '../countries/catalogue';
+import { catalogueEntry, COUNTRY_CATALOGUE } from '../countries/catalogue';
+import { hashPhone } from '../identity/phone';
 import { GlosError } from '../http/glos-error';
 import { incotermEntry, putsDutyOnSeller } from '../incoterms/catalogue';
 import { PersistentMap } from '../store/persistent-map';
@@ -12,6 +13,10 @@ import {
   PRESENCE_CAPABILITIES,
   type Presence,
   type PresenceProposal,
+  type PresenceTester,
+  type TesterRole,
+  TESTER_ROLES,
+  PresenceTesterList,
   type CapabilityLapse,
   type PresenceCapabilities,
   type PresenceCapability,
@@ -45,6 +50,9 @@ export class PresenceService implements OnApplicationBootstrap {
   }
   /** Which ACCOUNT proposed each. Beside the proposal, not on it: a proposal is read whole by every member of staff. */
   private readonly proposerKeys = new PersistentMap<string, string>('presence-proposal-keys');
+  /** 2026-11-13 — each country's test list (test mode), by the number's fingerprint; and every change to it. */
+  private readonly testerLists = new PersistentMap<string, PresenceTester[]>('presence-testers');
+  private readonly testerLog = new PersistentMap<string, Array<{ at: string; by: string; said: string }>>('presence-tester-log');
 
   constructor(private readonly entities: EntityService) {}
 
@@ -89,7 +97,87 @@ export class PresenceService implements OnApplicationBootstrap {
       approvedBy: record?.approvedBy,
       setAt: record?.setAt,
       ...(record?.openedAt ? { openedAt: record.openedAt } : {}),
+      testersOnly: Boolean(record?.testersOnly),
+      testers: key ? (this.testerLists.get(key)?.length ?? 0) : 0,
     };
+  }
+
+  /* ------------------------------------------- 2026-11-13: test mode, testers only -- */
+
+  /** Testers only here: the apps for the listed numbers, "opens soon" for everybody else. */
+  testing(jurisdiction: string | undefined): boolean {
+    const key = normalise(jurisdiction);
+    return Boolean(key && this.presences.get(key)?.testersOnly);
+  }
+
+  /** Whether a number — by its fingerprint — is on this country's test list. */
+  isTester(jurisdiction: string | undefined, phoneHash: string | undefined): boolean {
+    const key = normalise(jurisdiction);
+    return Boolean(key && phoneHash && (this.testerLists.get(key) ?? []).some((t) => t.phoneHash === phoneHash));
+  }
+
+  /** Where this country is testing and the account is not one of its testers: what its people are told instead of working. */
+  closedTo(jurisdiction: string | undefined, phoneHash: string | undefined): boolean {
+    return this.testing(jurisdiction) && !this.isTester(jurisdiction, phoneHash);
+  }
+
+  /**
+   * The country a number belongs to that is testing without it — refused a code, a sign-up, a parcel. By its dialling code: every
+   * country that shares the code is asked, and any one testing without the number refuses it.
+   */
+  testingWithout(phone: string): string | undefined {
+    const hash = hashPhone(phone);
+    for (const c of countriesOfNumber(phone)) if (this.testing(c.code) && !this.isTester(c.code, hash)) return c.code;
+    return undefined;
+  }
+
+  /** Refused, with what to do, where a country tests without this number. `what`: what was refused, for the words. */
+  requireTester(jurisdiction: string | undefined, phone: string | undefined, what: string): void {
+    const key = normalise(jurisdiction);
+    if (!key || !this.testing(key)) return;
+    if (phone && this.isTester(key, hashPhone(phone))) return;
+    throw new GlosError('NOT_A_TESTER', `SeeBuyGet is being tested in ${catalogueEntry(key)?.name ?? key} and opens to everyone soon: ${what} is for the people testing it until then`, { country: key });
+  }
+
+  testersOf(jurisdiction: string): PresenceTesterList {
+    const key = this.checkCountry(jurisdiction);
+    return { testers: [...(this.testerLists.get(key) ?? [])], log: [...(this.testerLog.get(key) ?? [])] };
+  }
+
+  /** A tester on a country's list — one person may add, since a tester only gets the apps; logged. Said again: name and role change. */
+  addTester(jurisdiction: string, input: { phone: string; name: string; role: string }, by: string, now = Date.now()): PresenceTester {
+    const key = this.checkCountry(jurisdiction);
+    const phone = (input.phone ?? '').replace(/[\s-]/g, '');
+    if (!/^\+\d{8,15}$/.test(phone)) throw new GlosError('INVALID_INPUT', 'A mobile number with its country code, like +31612345678', { field: 'phone' });
+    const name = (input.name ?? '').trim().slice(0, 80);
+    if (!name) throw new GlosError('FIELD_REQUIRED', 'Say who the tester is', { field: 'name' });
+    if (!(TESTER_ROLES as readonly string[]).includes(input.role)) throw new GlosError('INVALID_INPUT', `A tester tests one of: ${TESTER_ROLES.join(', ')}`, { field: 'role' });
+    if (!by.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who you are');
+    const tester: PresenceTester = { phoneHash: hashPhone(phone), ending: phone.slice(-3), name, role: input.role as TesterRole, addedBy: by.trim(), addedAt: new Date(now).toISOString() };
+    const list = (this.testerLists.get(key) ?? []).filter((t) => t.phoneHash !== tester.phoneHash);
+    this.testerLists.set(key, [...list, tester]);
+    this.logTester(key, by, `added ${name} (…${tester.ending}, ${tester.role})`, now);
+    return tester;
+  }
+
+  removeTester(jurisdiction: string, phoneHash: string, by: string, now = Date.now()): void {
+    const key = this.checkCountry(jurisdiction);
+    const list = this.testerLists.get(key) ?? [];
+    const gone = list.find((t) => t.phoneHash === phoneHash);
+    if (!gone) throw new GlosError('NOT_FOUND', 'No such tester');
+    if (!by.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who you are');
+    this.testerLists.set(key, list.filter((t) => t.phoneHash !== phoneHash));
+    this.logTester(key, by, `removed ${gone.name} (…${gone.ending})`, now);
+  }
+
+  private logTester(key: string, by: string, said: string, now: number): void {
+    this.testerLog.set(key, [{ at: new Date(now).toISOString(), by: by.trim(), said }, ...(this.testerLog.get(key) ?? [])].slice(0, 200));
+  }
+
+  private checkCountry(jurisdiction: string): string {
+    const key = normalise(jurisdiction);
+    if (!key || !catalogueEntry(key)) throw new GlosError('INVALID_INPUT', `${jurisdiction} is not a country in the catalogue`);
+    return key;
   }
 
   /** One capability, for the paths that only care about one. */
@@ -174,9 +262,12 @@ export class PresenceService implements OnApplicationBootstrap {
     approvedBy?: string;
     /** CL1 — the trade terms allowed here, per direction. Replaces the stored sets outright when given. */
     incoterms?: { origin?: string[]; destination?: string[] };
+    /** 2026-11-13 — testers only; absent keeps it as it is. */
+    testersOnly?: boolean;
   }): ResolvedPresence {
-    const key = this.check(input.jurisdiction, input.level, input.overrides, false, input.incoterms);
+    const key = this.check(input.jurisdiction, input.level, input.overrides, false, input.incoterms, input.testersOnly);
     const before = this.presences.get(key);
+    const testersOnly = input.testersOnly ?? Boolean(before?.testersOnly);
     // The first day goods could move here, kept through every later change (see check: never COMING again).
     const openedAt = before?.openedAt ?? (capabilitiesOf(input.level, input.overrides).takeIn ? new Date().toISOString() : undefined);
     // CL1 — the trade terms are replaced only WHEN GIVEN. A change that leaves them out (a level, a note: the console sends
@@ -193,6 +284,7 @@ export class PresenceService implements OnApplicationBootstrap {
       ...(terms ? { incoterms: terms } : {}),
       setAt: new Date().toISOString(),
       ...(openedAt ? { openedAt } : {}),
+      ...(testersOnly && capabilitiesOf(input.level, input.overrides).takeIn ? { testersOnly: true } : {}),
     });
     return this.resolve(key);
   }
@@ -207,16 +299,21 @@ export class PresenceService implements OnApplicationBootstrap {
    * direction and an emergency must not wait for a second signature.
    */
   propose(
-    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string; /** The proposer's account, where they have one. */ byKey?: string; incoterms?: { origin?: string[]; destination?: string[] } },
+    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string; /** The proposer's account, where they have one. */ byKey?: string; incoterms?: { origin?: string[]; destination?: string[] }; testersOnly?: boolean },
     now = Date.now(),
   ): { applied?: ResolvedPresence; proposal?: PresenceProposal } {
     const by = input.by?.trim();
     if (!by) throw new GlosError('FIELD_REQUIRED', 'Say who you are — every change to a country names the person who made it');
-    const key = this.check(input.jurisdiction, input.level, input.overrides, true, input.incoterms);
+    const key = this.check(input.jurisdiction, input.level, input.overrides, true, input.incoterms, input.testersOnly);
     const gains = this.gainsOf(key, input.level, input.overrides);
     // CL1 — a term switched on is a gain like any other, and needs the second person.
     const termGains = this.termGainsOf(key, input.incoterms);
-    if (!gains.length && !termGains.length) return { applied: this.set({ ...input, jurisdiction: key, by }) };
+    // 2026-11-13 — lifting the test list opens the country to everyone: a gain, and the second person's. Putting a country on
+    // testers only is the safe direction, applied at once like a lowering.
+    const wasTesting = Boolean(this.presences.get(key)?.testersOnly);
+    const willTest = input.testersOnly ?? wasTesting;
+    const opensToPublic = wasTesting && !willTest && capabilitiesOf(input.level, input.overrides).takeIn;
+    if (!gains.length && !termGains.length && !opensToPublic) return { applied: this.set({ ...input, jurisdiction: key, by }) };
     const waiting = this.pendingFor(key, now);
     if (waiting) {
       throw new GlosError('CONFLICT', `A change to ${key} proposed by ${waiting.proposedBy} is already waiting for a second person — approve or decline it first`);
@@ -231,6 +328,8 @@ export class PresenceService implements OnApplicationBootstrap {
       gains,
       ...(termGains.length ? { termGains } : {}),
       ...(input.incoterms ? { incoterms: input.incoterms } : {}),
+      ...(willTest ? { testersOnly: true } : wasTesting ? { testersOnly: false } : {}),
+      ...(opensToPublic ? { opensToPublic: true } : {}),
       proposedBy: by,
       proposedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + PROPOSAL_TTL_DAYS * 86_400_000).toISOString(),
@@ -254,6 +353,7 @@ export class PresenceService implements OnApplicationBootstrap {
       note: proposal.note,
       by: proposal.proposedBy,
       approvedBy: who,
+      ...(proposal.testersOnly !== undefined ? { testersOnly: proposal.testersOnly } : {}),
     });
     Object.assign(proposal, { status: 'approved', decidedBy: who, decidedAt: new Date(now).toISOString() });
     this.proposals.set(proposal.proposalId, proposal);
@@ -329,11 +429,13 @@ export class PresenceService implements OnApplicationBootstrap {
   }
 
   /** The rules every standing obeys, asked by a proposal and again when it is applied. */
-  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>, proposing = false, incoterms?: { origin?: string[]; destination?: string[] }): string {
+  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>, proposing = false, incoterms?: { origin?: string[]; destination?: string[] }, testersOnly?: boolean): string {
     const key = normalise(jurisdiction);
     if (!key) throw new GlosError('INVALID_INPUT', 'A presence needs the country it is about');
     // Only a country that exists may have a standing. Two letters are not a country.
     if (!catalogueEntry(key)) throw new GlosError('INVALID_INPUT', `${key} is not a country in the catalogue`);
+    // 2026-11-13 — testers only is for a country where goods move: there is nothing to test at "coming".
+    if (testersOnly && !capabilitiesOf(level, overrides).takeIn) throw new GlosError('INVALID_STATE', `Testers only is for a country where goods move: raise ${catalogueEntry(key)!.name} to matched or above with it`);
     // COMING (2026-10-25) is for a country that has not opened. Once goods have moved there, "not open yet" would hold
     // back new shifts, hub floors and counters under a sentence that is not true: stopping new work is observed.
     if (level === 'coming' && (this.resolve(key).capabilities.takeIn || this.presences.get(key)?.openedAt)) {
@@ -466,4 +568,12 @@ function keptTerms(stored: { origin?: string[]; destination?: string[] }, can: P
 function normaliseTerms(input: { origin?: string[]; destination?: string[] }): { origin: string[]; destination: string[] } {
   const clean = (list?: string[]) => [...new Set((list ?? []).map((c) => incotermEntry(c)?.code).filter((c): c is string => Boolean(c)))];
   return { origin: clean(input.origin), destination: clean(input.destination) };
+}
+
+/** 2026-11-13 — the countries a number belongs to by its dialling code: the longest code that matches, every country sharing it. */
+export function countriesOfNumber(phone: string): Array<{ code: string; name: string }> {
+  const p = (phone ?? '').replace(/[\s-]/g, '');
+  const codes = [...new Set(COUNTRY_CATALOGUE.map((c) => c.dialCode))].filter((d) => p.startsWith(d)).sort((a, b) => b.length - a.length);
+  if (!codes.length) return [];
+  return COUNTRY_CATALOGUE.filter((c) => c.dialCode === codes[0]).map((c) => ({ code: c.code, name: c.name }));
 }

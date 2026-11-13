@@ -536,6 +536,8 @@ export class FleetDriver {
   /** Riding for themselves: their own insurance cover, sent and read by staff (2026-10-28). A fleet's driver has the fleet's. */
   @ApiPropertyOptional({ type: () => DriverCover }) cover?: DriverCover;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the vault — never in the core
+  /** 2026-11-13 — the mobile's fingerprint (never the number): whether this driver is on their country's test list. */
+  phoneHash?: string;
   displayName: string; // non-PII shop-floor label (e.g. "Driver J.")
   badgeId?: string; // scannable handover badge — issued on activation
   registry: DriverRegistry; // light (bike/motorcycle) | heavy (everything else)

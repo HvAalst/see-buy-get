@@ -224,6 +224,8 @@ export const ERROR_CODES = {
 
   // --- 404 Not Found ---------------------------------------------------------------------------
   NOT_FOUND: { status: 404, title: 'Not found' },
+  // 2026-11-13 — a country in test mode, and this number is not on its test list.
+  NOT_A_TESTER: { status: 403, title: 'Being tested here: opens to everyone soon' },
 
   // --- 409 Conflict ----------------------------------------------------------------------------
   CONFLICT: { status: 409, title: 'Conflict with existing data' },

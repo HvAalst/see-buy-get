@@ -15,6 +15,7 @@ import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useWideScreen } from '../../../shared/useWideScreen';
 import { businessConfig } from '../api';
+import { TestingAsk } from '../../../shared/opening/TestingAsk';
 import { PHONE_MAX, digitsReady, phoneReady } from '../logic';
 import type { BusinessActions, BusinessState, SignInStep } from '../useBusinessApp';
 
@@ -189,6 +190,7 @@ export function SignInScreen({ state, actions, narrow }: { state: BusinessState;
           ) : null}
 
           {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+          <TestingAsk error={state.error} kind="store" config={businessConfig()} />
 
           {step === 'login' && unlock.offered ? null : (
             <button type="submit" class="cbtn cbtn--primary" disabled={busy || !ready} style="margin-top:8px">

@@ -287,7 +287,8 @@ export function createAgentApi(sbg: SbgClient) {
     consignments: (owner: string) => sbg.request((c) => c.GET('/v1/sbg/consignments', { params: { query: { owner } } })),
 
     /** The public shop directory — the destination PUDOs the counter can send toward (Map/Address picker). */
-    networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points')),
+    // 2026-11-13 — TEST MODE: the shop's own view of the map — a tester sees the shops of a country being tested.
+    networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points/mine')),
 
     /** Resolve a typed area/place to a point (the "Address" intake mode → rank the nearest PUDO). */
     geocode: (q: string, countries: string[] = []) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q, ...(countries.length ? { country: countries.join(',') } : {}) } } })),

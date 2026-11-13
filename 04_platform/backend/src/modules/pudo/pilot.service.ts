@@ -159,7 +159,8 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
   /** The Sunday that began the week the first parcel was taken in at a counter: week 1 of the pilot. */
   private firstWeek(): number | undefined {
     let first: number | undefined;
-    for (const p of this.parcels.list()) {
+    // 2026-11-13 — a parcel made in test mode is counted in no report (T5).
+    for (const p of this.parcels.list().filter((x) => !x.test)) {
       const t = takenInAt(p);
       if (t !== undefined && (first === undefined || t < first)) first = t;
     }
@@ -172,7 +173,7 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
       const t = Date.parse(iso);
       return t >= from && t < to;
     };
-    const parcels = this.parcels.list();
+    const parcels = this.parcels.list().filter((p) => !p.test);
 
     let handed = 0;
     let missed = 0;

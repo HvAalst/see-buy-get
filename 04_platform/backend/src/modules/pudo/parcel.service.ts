@@ -1512,6 +1512,24 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /** Screen 1 — Accept Parcel (ingest). */
+  /**
+   * 2026-11-13 — TEST MODE (T4, T5): where a parcel touches a country being tested, everyone named on it must be on that
+   * country's test list, so no member of the public is drawn in; and the parcel is marked a test, counted in no report.
+   * `refuse` false: it already happened (a take-in kept with no signal) — marked, not refused.
+   */
+  private testMarkOf(countries: Array<string | undefined>, people: Array<{ phone?: string; phoneHash?: string; who: string }>, refuse = true): { test?: true } {
+    const testing = [...new Set(countries.filter((c): c is string => Boolean(c)))].filter((c) => this.presence.testing(c));
+    if (refuse) {
+      for (const c of testing) {
+        for (const p of people) {
+          const hash = p.phoneHash ?? (p.phone ? hashPhone(p.phone) : undefined);
+          if (!this.presence.isTester(c, hash)) this.presence.requireTester(c, undefined, p.who);
+        }
+      }
+    }
+    return testing.length ? { test: true } : {};
+  }
+
   accept(input: AcceptInput): Parcel {
     if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
     if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
@@ -1610,6 +1628,12 @@ export class ParcelService implements OnApplicationBootstrap {
     const taken = handedAt(input.observedAt, Date.now(), []);
     const now = taken.at;
     const received = taken.receivedAt ? { receivedAt: taken.receivedAt } : {};
+    // 2026-11-13 — test mode: the sender and the receiver on the test list, refused before anything is written.
+    const testMark = this.testMarkOf(
+      [this.agents.countryOf(agent), input.destPudoDid ? this.agents.countryOf(this.agents.get(input.destPudoDid)) : undefined, ...(input.walkInQuote?.nodes ?? []).map((n) => n.country)],
+      [{ phone: input.senderMobile, who: 'sending from this number' }, { phone: input.receiverMobile, who: 'sending to this number' }],
+      !taken.receivedAt,
+    );
     const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now, ...received }).txId;
     const parcel: Parcel = {
       parcelId: input.parcelId,
@@ -1641,6 +1665,7 @@ export class ParcelService implements OnApplicationBootstrap {
       receiverMobile: input.receiverMobile,
       senderPhoneHash: hashPhone(input.senderMobile) || undefined,
       receiverPhoneHash: hashPhone(input.receiverMobile) || undefined,
+      ...testMark,
       dropoffPhotoRef: input.dropoffPhotoRef,
       paymentMode: mode,
       status: 'At_PUDO',
@@ -2230,6 +2255,12 @@ export class ParcelService implements OnApplicationBootstrap {
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
     this.vendors.assertTakesOrders(input.vendorId);
+    // 2026-11-13 — test mode: the buyer on the test list, refused before anything is written; a box going back only marked.
+    const testMark = this.testMarkOf(
+      [this.agents.countryOf(dest), input.originAgentDid ? this.agents.countryOf(this.agents.get(input.originAgentDid)) : undefined, this.vendors.dockCountryOf(vendor), ...(input.quote.nodes ?? []).map((n) => n.country)],
+      [{ phone: input.buyerMobile, who: 'sending to this number' }],
+      !input.returnOf,
+    );
     // Round 29 — refused before anything is written where the store's prefix has no code left for it.
     this.codes?.assertCanIssue(vendorCoder(input.vendorId), 1);
     // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,
@@ -2337,6 +2368,7 @@ export class ParcelService implements OnApplicationBootstrap {
       receiverMobile: input.buyerMobile,
       // Vendor is not a person → no sender hash; the buyer (receiver) is, so they see this in their app.
       receiverPhoneHash: hashPhone(input.buyerMobile) || undefined,
+      ...testMark,
       buyerEmail: input.buyerEmail,
       paymentMode: 'prepaid',
       status: 'Created',
@@ -2438,6 +2470,11 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-05 — drop-off and collection at the one shop is a same-shop parcel (it was refused): priced as one stop by
     // its route, and shelved the moment it is handed in (intakeConsumerSend).
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
+    // 2026-11-13 — test mode: the sender and the receiver on the test list, refused before anything is written.
+    const testMark = this.testMarkOf(
+      [this.agents.countryOf(origin), this.agents.countryOf(dest), ...(input.quote.nodes ?? []).map((n) => n.country)],
+      [{ phoneHash: input.senderPhoneHash, who: 'sending' }, { phone: input.receiverMobile, who: 'sending to this number' }],
+    );
     // A person sending from a counter declares nothing — the flow asks for a size and a photo, not a
     // contents list and a value — so a crossing cannot be papered. Refusing is the honest answer: the
     // alternative is minting an undeclared international shipment and letting a border post discover it.
@@ -2489,6 +2526,7 @@ export class ParcelService implements OnApplicationBootstrap {
       senderPhoneHash: input.senderPhoneHash,
       receiverMobile: input.receiverMobile,
       receiverPhoneHash: hashPhone(input.receiverMobile) || undefined,
+      ...testMark,
       paymentMode: 'cash', // collected by the shop at drop-off, against the locked price below
       status: 'Created',
       trackingKey,
@@ -3715,6 +3753,7 @@ export class ParcelService implements OnApplicationBootstrap {
       senderPhoneHash: parcel.senderPhoneHash,
       receiverMobile: parcel.senderMobile === 'app' ? '' : parcel.senderMobile,
       receiverPhoneHash: parcel.senderPhoneHash,
+      ...(parcel.test ? { test: true as const } : {}),
       paymentMode: 'cash',
       status: 'At_MDP',
       atMdpId: input.hub.mdpId,

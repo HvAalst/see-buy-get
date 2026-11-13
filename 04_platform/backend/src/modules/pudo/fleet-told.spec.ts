@@ -273,7 +273,7 @@ describe('a fleet hears the answer to a document it sent', () => {
       { upsert: () => undefined } as unknown as OperationalStore,
       events,
       entities,
-      { can: () => true, require: () => undefined } as unknown as PresenceService,
+      { can: () => true, require: () => undefined, requireTester: () => undefined, closedTo: () => false, testing: () => false } as unknown as PresenceService,
       { geocode: () => ({ location: { lat: -1.28, lng: 36.82 } }) } as unknown as Geocoder,
       media,
     );
@@ -361,7 +361,7 @@ describe('a fleet’s office hears that one of its drivers sent a renewed licenc
       events,
       { requireActive: () => undefined } as unknown as FleetManagerService,
       entities,
-      { can: () => true } as unknown as PresenceService,
+      { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false } as unknown as PresenceService,
       media,
     );
     let n = 0;

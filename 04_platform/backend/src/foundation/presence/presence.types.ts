@@ -131,6 +131,40 @@ export class Presence {
    * again (2026-10-25): "not open yet" would stop new work under a sentence that is not true. Lowering it is observed.
    */
   @ApiPropertyOptional() openedAt?: string;
+  /** 2026-11-13 — TESTERS ONLY (test mode): only the listed numbers use the apps here; everybody else is told it opens soon. */
+  @ApiPropertyOptional() testersOnly?: boolean;
+}
+
+/** 2026-11-13 — what a tester tests: the app they are listed for. */
+export const TESTER_ROLES = ['driver', 'shop', 'hub', 'store', 'business', 'fleet', 'sender', 'staff'] as const;
+export type TesterRole = (typeof TESTER_ROLES)[number];
+
+/**
+ * 2026-11-13 — SOMEBODY ON A COUNTRY'S TEST LIST (the owner: "only allow specific Mobile numbers before fully open to the public").
+ * Kept by the number's fingerprint (never the number), with its last three digits for staff to recognise, a name and what
+ * they test.
+ */
+export class PresenceTester {
+  @ApiProperty() phoneHash: string;
+  /** The number's last three digits, as staff recognise it. */
+  @ApiProperty() ending: string;
+  @ApiProperty() name: string;
+  @ApiProperty({ enum: TESTER_ROLES }) role: TesterRole;
+  @ApiProperty() addedBy: string;
+  @ApiProperty() addedAt: string;
+}
+
+/** 2026-11-13 — one change to a test list, as kept: when, by whom, what. */
+export class PresenceTesterLogEntry {
+  @ApiProperty() at: string;
+  @ApiProperty() by: string;
+  @ApiProperty() said: string;
+}
+
+/** 2026-11-13 — a country's test list, and what was changed on it, newest first. */
+export class PresenceTesterList {
+  @ApiProperty({ type: [PresenceTester] }) testers: PresenceTester[];
+  @ApiProperty({ type: [PresenceTesterLogEntry] }) log: PresenceTesterLogEntry[];
 }
 
 /**
@@ -166,6 +200,10 @@ export class PresenceProposal {
   @ApiPropertyOptional() reason?: string;
   /** On a listing, for whoever reads it: THEY proposed this one, so they are not the one to approve it. Never stored. */
   @ApiPropertyOptional() mine?: boolean;
+  /** 2026-11-13 — testers only, as proposed; absent leaves it as it is. */
+  @ApiPropertyOptional() testersOnly?: boolean;
+  /** 2026-11-13 — this change lifts the test list: the country opens to everyone — a gain, so a second person. */
+  @ApiPropertyOptional() opensToPublic?: boolean;
 }
 
 /**
@@ -206,6 +244,9 @@ export class ResolvedPresence {
   @ApiPropertyOptional() setAt?: string;
   /** When goods could first move here, if they ever could since this was recorded. */
   @ApiPropertyOptional() openedAt?: string;
+  /** 2026-11-13 — testers only (test mode), and how many are listed. */
+  @ApiProperty() testersOnly: boolean;
+  @ApiProperty() testers: number;
 }
 
 /**

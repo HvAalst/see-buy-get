@@ -1,3 +1,4 @@
+import { hashPhone } from '../../foundation/identity/phone';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { buildSiteTools, siteToolsView, type SiteToolsInput } from './site-tools';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
@@ -125,7 +126,14 @@ export class AgentService {
    * a country lowered later keeps its shops on the map, for whoever is collecting what is on their shelves.
    */
   notOpenYet(agent: Agent): boolean {
-    return this.presence.resolve(this.countryOf(agent)).level === 'coming';
+    const country = this.countryOf(agent);
+    // 2026-11-13 — and, in test mode, a shop not on the country's test list: it opens to it with everyone.
+    return this.presence.resolve(country).level === 'coming' || this.presence.closedTo(country, agent.phoneHash);
+  }
+
+  /** 2026-11-13 — off the public map and lists: not open yet, or its country in test mode (testers see it where they are told to). */
+  publicHidden(agent: Agent): boolean {
+    return this.notOpenYet(agent) || this.presence.testing(this.countryOf(agent));
   }
 
   /** The sister this deployment's shops and hubs belong to — the fallback for pre-entity records. */
@@ -201,6 +209,8 @@ export class AgentService {
     const country = requireCountryCode(input.country);
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
     if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a shop cannot register there`);
+    // 2026-11-13 — test mode: only a listed number signs a shop up there.
+    this.presence.requireTester(country, input.mobile, 'signing a shop up');
     // Undefined where we are matching only. Every money path asks for it by name and refuses there;
     // nothing else needs it.
     const entity = this.entities.forJurisdiction(country);
@@ -233,6 +243,7 @@ export class AgentService {
       agentId: `agt_${randomBytes(8).toString('hex')}`,
       did,
       vaultRef,
+      phoneHash: hashPhone(input.mobile),
       shopName: input.shopName,
       zone: input.zone,
       // Where the shop IS, and the sister that follows from it. These are one decision written twice on

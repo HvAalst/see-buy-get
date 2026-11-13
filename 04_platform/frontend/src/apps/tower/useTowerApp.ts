@@ -28,7 +28,7 @@ import type { SupportInbox, SupportStatus } from './messages';
 import { triggerDownloadBlob } from '../../shared/download';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
-import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
+import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, takesGoods, testersOnlyToSend, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { setPickedCountry } from '../../lib/sbg/pickedCountry';
@@ -172,7 +172,7 @@ export interface TowerState {
   /** CA — who is waiting for a country we do not reach, by country. The evidence a switch-on is made on. */
   interest: InterestCountry[] | null;
   /** The row being changed. `level` empty means 'whatever that country already stands at'. */
-  presenceForm: { level: PresenceLevel | ''; note: string; incoterms?: { origin: string[]; destination: string[] } };
+  presenceForm: { level: PresenceLevel | ''; note: string; incoterms?: { origin: string[]; destination: string[] }; testersOnly?: boolean };
   /** Recording a country that is not on the map yet — the only way the FIRST country we are not in gets one. */
   countryForm: NewCountryForm;
   /** CA1 — every country that exists. Null while unread. */
@@ -345,7 +345,7 @@ export interface TowerActions {
   tamperUnit(ref: string): Promise<TamperUnit | null>;
   /** Round 35 — release a held unit, with what was found and done. True when the server took it. */
   releaseHold(ref: string, reason: string): Promise<boolean>;
-  setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] } }>): void;
+  setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] }; testersOnly: boolean }>): void;
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
   savePresence(jurisdiction: string): Promise<void>;
@@ -1454,6 +1454,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, busyId: 'country', queueError: null, done: null }));
         const { data, error } = await client.api.setPresence(code, {
           level: form.level,
+          ...(form.testersOnly && takesGoods(form.level) ? { testersOnly: true } : {}),
           ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}),
           ...(form.note.trim() ? { note: form.note.trim() } : {}),
         });
@@ -1470,7 +1471,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }));
         await loadPresence(client);
       },
-      setPresenceForm: (patch: Partial<{ level: PresenceLevel; note: string }>) =>
+      setPresenceForm: (patch: Partial<{ level: PresenceLevel; note: string; testersOnly: boolean }>) =>
         setState((s) => ({ ...s, presenceForm: { ...s.presenceForm, ...patch }, queueError: null })),
       /**
        * Move a country up or down the ladder.
@@ -1486,6 +1487,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const row = current.presence?.find((p) => p.jurisdiction === jurisdiction);
         const level = current.presenceForm.level || row?.level;
         if (!row || !level) return;
+        // 2026-11-13 — test mode, sent only where the box was changed and the level moves goods.
+        const testersOnly = testersOnlyToSend(row, level, current.presenceForm.testersOnly);
         setState((s) => ({ ...s, busyId: jurisdiction, queueError: null, done: null }));
         const { data, error } = await client.api.setPresence(jurisdiction, {
           level,
@@ -1495,6 +1498,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           ...(current.presenceForm.incoterms ? { incoterms: current.presenceForm.incoterms } : {}),
           ...(current.who?.name ? { by: current.who.name } : {}),
           ...(current.presenceForm.note.trim() ? { note: current.presenceForm.note.trim() } : {}),
+          ...(testersOnly !== undefined ? { testersOnly } : {}),
         });
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));

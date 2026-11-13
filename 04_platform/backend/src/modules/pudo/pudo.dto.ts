@@ -13,7 +13,7 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
-import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
+import { PRESENCE_LEVELS, TESTER_ROLES, type PresenceLevel, type TesterRole } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { HandoverPositionDto } from './handover-position';
 import { AgreementDto } from '../../foundation/documents/documents.types';
@@ -326,6 +326,19 @@ export class PresenceDto {
   @IsOptional() @IsObject() incoterms?: { origin?: string[]; destination?: string[] };
   /** Why. A country’s standing is a decision, and a decision with no reason cannot be reviewed. */
   @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() by?: string;
+  /**
+   * 2026-11-13 — TESTERS ONLY (test mode): only the numbers on the country's test list use the apps. Left out, it stays as it
+   * is. Switching it off opens the country to everybody, which a second person approves.
+   */
+  @IsOptional() @IsBoolean() testersOnly?: boolean;
+}
+
+/** 2026-11-13 — somebody put on a country's test list: their mobile with its country code, a name, and what they test. */
+export class PresenceTesterDto {
+  @IsString() @MaxLength(24) phone!: string;
+  @IsString() @MaxLength(80) name!: string;
+  @ApiProperty({ enum: TESTER_ROLES }) @IsIn(TESTER_ROLES as unknown as string[]) role!: TesterRole;
   @IsOptional() @IsString() by?: string;
 }
 
