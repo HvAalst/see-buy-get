@@ -277,6 +277,8 @@ export class Vehicle {
    * and volume"): its fleet, the driver who owns it or drives it, or staff. Absent: as it was registered.
    */
   loadSpaceSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
+  /** 2026-11-13 — who last said what loading equipment it carries, and when (PATCH vehicles/:id/equipment). */
+  equipmentSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
   /**
    * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
    * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this

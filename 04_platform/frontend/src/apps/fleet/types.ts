@@ -66,6 +66,8 @@ export interface VehicleRow {
   /** 2026-11-03 — what it runs on; absent where it was registered before it was asked. */
   energy?: string;
   capacityKg: number;
+  /** 2026-11-13 — the loading equipment it carries ('MAN', by hand, always among them). */
+  equipment?: string[];
   pricePerKm: number;
   verified: boolean;
   status: string;

@@ -4,10 +4,22 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
-import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_ENERGIES, VEHICLE_SPEC, VehicleClass, VehicleEnergy, energyMisfit } from './fleet.config';
+import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, EQUIPMENT_FITS, TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_ENERGIES, VEHICLE_SPEC, VehicleClass, VehicleEnergy, energyMisfit } from './fleet.config';
 import { ruleRefuses } from '../../foundation/http/api-rules';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { Equipment } from './cargo.types';
+
+/** Loading equipment in words, for a refusal a person reads. */
+const EQUIPMENT_WORDS: Partial<Record<Equipment, string>> = {
+  HTR: 'a sack barrow',
+  PLT: 'a pallet jack',
+  FLT: 'a forklift',
+  TLT: 'a tail-lift',
+  CRN: 'a crane',
+  RMP: 'loading ramps',
+  STR: 'straps',
+  ROL: 'a roller floor',
+};
 import { clampMultiplier } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
@@ -175,7 +187,7 @@ export class VehicleService {
       oversized: Boolean(sub?.oversized),
       // S32: every vehicle can do manual (human) handling; a truck subtype adds its built-in kit (a crane
       // truck self-loads), and the fleet manager may declare more (a tail-lift, a pallet jack). Deduped.
-      equipment: [...new Set<Equipment>(['MAN', ...(sub?.equipment ?? []), ...(input.equipment ?? [])])],
+      equipment: [...new Set<Equipment>(['MAN', ...(sub?.equipment ?? []), ...VehicleService.fitting(input.vehicleClass, input.equipment ?? [])])],
       ownerType: input.ownerType ?? 'driver_owned',
       ownerName: input.ownerName,
       // A fleet's vehicle is the fleet's, whoever is named on it: an owner-driver is recorded only where no fleet owns it.
@@ -377,6 +389,32 @@ export class VehicleService {
     v.loadSpaceSetBy = { name: by.name, role: by.role, at: new Date(now).toISOString() };
     this.vehicles.set(v.vehicleId, v);
     return v;
+  }
+
+  /**
+   * 2026-11-13 — WHAT LOADING EQUIPMENT IT CARRIES (the owner: "build loading equipment"), the whole list as its owner says it
+   * now — what is left out is taken off. Handling by hand stays, and so does what its body is built with (a crane truck's
+   * crane): those are not the owner's to take off. A piece its kind cannot carry is refused by name. Who said it is kept.
+   */
+  setEquipment(vehicleId: string, equipment: Equipment[], by: { name: string; role: 'fleet' | 'driver' | 'staff' }, now: number = Date.now()): Vehicle {
+    const v = this.require(vehicleId);
+    const sub: TruckSubtypeSpec | undefined = v.truckSubtype ? TRUCK_SUBTYPE_CATALOG[v.truckSubtype] : undefined;
+    const built = sub?.equipment ?? [];
+    v.equipment = [...new Set<Equipment>(['MAN', ...built, ...VehicleService.fitting(v.vehicleClass, equipment)])];
+    v.equipmentSetBy = { name: by.name, role: by.role, at: new Date(now).toISOString() };
+    this.vehicles.set(v.vehicleId, v);
+    return v;
+  }
+
+  /** The equipment asked for, every piece one a vehicle of this kind can carry — else refused, naming the first that cannot. */
+  static fitting(vehicleClass: VehicleClass, equipment: Equipment[]): Equipment[] {
+    const fits = EQUIPMENT_FITS[vehicleClass] ?? [];
+    const asked = equipment.filter((e) => e !== 'MAN');
+    const misfit = asked.find((e) => !fits.includes(e));
+    if (misfit) {
+      throw new GlosError('INVALID_INPUT', fits.length ? `A ${vehicleClass} cannot carry ${EQUIPMENT_WORDS[misfit] ?? misfit}: it carries ${fits.map((e) => EQUIPMENT_WORDS[e] ?? e).join(', ')}` : `A ${vehicleClass} carries no loading equipment: it is loaded by hand`, { field: 'equipment' });
+    }
+    return asked;
   }
 
   setPrice(vehicleId: string, pricePerKm: number): Vehicle {

@@ -4,10 +4,13 @@
  * catalog (en.driver.ts), the Fleet app adds them on its own (apps/fleet/english.ts).
  */
 import { enEnergy } from './en.energy';
+import { enEquipment } from './en.equipment';
 
 export const enVehicles = {
   // 2026-11-03 — what a vehicle runs on (en.energy.ts), said alike wherever a vehicle is registered.
   ...enEnergy,
+  // 2026-11-13 — loading equipment (en.equipment.ts), said alike by the Fleet and Driver apps.
+  ...enEquipment,
   /* WHAT THE DRIVER ACTUALLY RIDES. The class is registered against the vehicle, so the word is derived
      rather than fixed — see vehicle-words.ts. The map there is complete by compilation: an eighth class
      on the server stops this app building until somebody writes its noun. */

@@ -8,6 +8,7 @@ import { cash, perKmText } from '../../../shared/money';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
 import { failedWords, mediaIdOf } from '../../../shared/upload';
 import { fleetConfig } from '../api';
+import { equipmentFits, equipmentWords } from '../../../shared/equipment';
 import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -114,6 +115,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
   const [papersFor, setPapersFor] = useState<VehicleRow | null>(null);
   const [energyFor, setEnergyFor] = useState<VehicleRow | null>(null);
+  // 2026-11-13 — its loading equipment, changed after it is registered (the owner: "build loading equipment").
+  const [equipmentFor, setEquipmentFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -185,17 +188,18 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
         <div style="margin-top:12px">
           <EnergyChoice id="v-energy" vehicleClass={f.vehicleClass} value={f.energy} onChange={(energy) => actions.setVForm({ energy })} />
         </div>
-        {isTruck ? (
+        {/* 2026-11-13 — vans carry equipment too (the owner: "build loading equipment"): what this kind can carry, ticked. */}
+        {equipmentOptions(t, f.vehicleClass).length ? (
           <div class="field" style="margin-top:12px">
             {/* Equipment is ticked, not chosen — there is no single selection and no "not sure", so the
-                sheet always shows all seven. That is the right answer here anyway: a manager deciding what
-                their truck carries is comparing across the list, not checking one word. */}
+                sheet shows every piece this kind can carry. That is the right answer here anyway: a manager deciding what
+                their vehicle carries is comparing across the list, not checking one word. */}
             <p class="info-row">
               <span class="field__label">{t('fleet.vehicles.equipmentLabel')}</span>
-              <OptionInfo topic="equipment" title={t('fleet.vehicles.equipmentLabel')} config={fleetConfig()} options={equipmentHelp(t)} />
+              <OptionInfo topic="equipment" title={t('fleet.vehicles.equipmentLabel')} config={fleetConfig()} options={equipmentHelp(t, f.vehicleClass)} />
             </p>
             <div class="chips">
-              {equipmentOptions(t).map((eq) => {
+              {equipmentOptions(t, f.vehicleClass).map((eq) => {
                 const on = f.equipment.includes(eq.key);
                 return (
                   <button
@@ -396,6 +400,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                   <span class="row__s">
                     {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}${v.energy ? ` · ${energyWord(v.energy, t).toLowerCase()}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${perKmText(Number(v.pricePerKm ?? 0), state.dashboard?.currency)}/km`}
                   </span>
+                  {/* 2026-11-13 — what it carries for loading, said under its name; nothing where it is loaded by hand only. */}
+                  {equipmentWords(v.equipment, t) ? <span class="row__s">{t('equipment.line', { list: equipmentWords(v.equipment, t) })}</span> : null}
                   {/* Registered before it was asked: said as a gap, with the way to close it under the name. */}
                   {v.energy ? null : <span class={paperLineClass('due')}>{t('vehicle.energy.notOnRecord')}</span>}
                   {/* FP4 — a paper that has lapsed, is running out, or was never dated. In date says nothing. */}
@@ -441,6 +447,11 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                     <Button variant="link" full={false} onClick={() => setEnergyFor(v)}>
                       {v.energy ? t('vehicle.energy.change') : t('vehicle.energy.add')}
                     </Button>
+                    {equipmentFits(v.vehicleClass).length ? (
+                      <Button variant="link" full={false} onClick={() => setEquipmentFor(v)}>
+                        {t('equipment.change')}
+                      </Button>
+                    ) : null}
                   </span>
                 </span>
                 <span class="row__end">
@@ -483,6 +494,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <EnergySheet vehicle={energyFor} onClose={() => setEnergyFor(null)} state={state} actions={actions} />
+      {equipmentFor ? <EquipmentSheet vehicle={equipmentFor} onClose={() => setEquipmentFor(null)} state={state} actions={actions} /> : null}
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
       <VehicleCareSheet
         vehicle={careFor}
@@ -682,6 +694,47 @@ function EnergySheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
         {t('vehicle.energy.save')}
       </Button>
       <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
+  );
+}
+
+/** 2026-11-13 — the loading equipment of a registered vehicle: every piece its kind can carry, ticked; saved as the whole list. */
+function EquipmentSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const before = (vehicle.equipment ?? []).filter((e) => e !== 'MAN');
+  const [picked, setPicked] = useState<string[]>(before);
+  const same = picked.length === before.length && picked.every((e) => before.includes(e));
+  return (
+    <Sheet open onClose={onClose} title={t('fleet.vehicles.equipmentSheet', { plate: vehicle.plate })}>
+      <p class="t-body">{t('equipment.body')}</p>
+      <p class="info-row">
+        <span class="field__label">{t('fleet.vehicles.equipmentLabel')}</span>
+        <OptionInfo topic="equipment" title={t('fleet.vehicles.equipmentLabel')} config={fleetConfig()} options={equipmentHelp(t, vehicle.vehicleClass)} />
+      </p>
+      <div class="chips">
+        {equipmentOptions(t, vehicle.vehicleClass).map((eq) => {
+          const on = picked.includes(eq.key);
+          return (
+            <button key={eq.key} type="button" class={`chip chip--tap${on ? ' chip--on' : ''}`} aria-pressed={on} onClick={() => setPicked(on ? picked.filter((e) => e !== eq.key) : [...picked, eq.key])}>
+              {eq.label}
+            </button>
+          );
+        })}
+      </div>
+      <Button
+        chevron={false}
+        disabled={same}
+        busy={state.busy === `equipment:${vehicle.vehicleId}`}
+        onClick={() => {
+          onClose();
+          void actions.setVehicleEquipment(vehicle, picked);
+        }}
+      >
+        {t('equipment.save')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
         {t('common.cancel')}
       </Button>
     </Sheet>

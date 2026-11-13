@@ -19173,6 +19173,45 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/equipment": {
+      "patch": {
+        "operationId": "Sbg.setVehicleEquipment",
+        "summary": "",
+        "description": "2026-11-13 — WHAT LOADING EQUIPMENT A VEHICLE CARRIES (the owner: \"build loading equipment\"): the whole list, set by the\nfleet that owns it, the driver who owns it, or staff — not a fleet's driver on shift: the fleet keeps its own vehicles'\nrecord. Loads that need a piece are offered only to a vehicle that has it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleEquipmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vehicle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vehicles/{id}/pricing": {
       "patch": {
         "operationId": "Sbg.setVehiclePrice",
@@ -66535,6 +66574,23 @@
               }
             }
           },
+          "equipmentSetBy": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "toteCapacity": {
             "type": "number",
             "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
@@ -66648,6 +66704,7 @@
           "vehicleClass",
           "capacityKg",
           "loadSpaceSetBy",
+          "equipmentSetBy",
           "pricePerKm",
           "baseFee",
           "minMultiplier",
@@ -66666,6 +66723,31 @@
           "verified",
           "status",
           "createdAt"
+        ]
+      },
+      "VehicleEquipmentDto": {
+        "type": "object",
+        "properties": {
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "MAN",
+                "HTR",
+                "PLT",
+                "FLT",
+                "TLT",
+                "CRN",
+                "RMP",
+                "STR",
+                "ROL"
+              ]
+            }
+          }
+        },
+        "required": [
+          "equipment"
         ]
       },
       "ParcelInvoiceImporterDto": {

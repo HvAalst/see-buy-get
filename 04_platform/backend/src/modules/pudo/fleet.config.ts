@@ -16,6 +16,22 @@ export const VEHICLE_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'b
 export type VehicleClass = (typeof VEHICLE_CLASSES)[number];
 
 /**
+ * 2026-11-13 — THE LOADING EQUIPMENT A VEHICLE OF EACH KIND CAN CARRY, beyond handling by hand (the owner: "build loading
+ * equipment", vans included). A van takes a tail-lift, a pallet jack, a sack barrow, ramps and straps; a truck any of them; a
+ * bike or a motorbike none. A forklift, a crane and a roller floor are a truck's. Asked at registration and whenever its owner
+ * changes it; loads that need one are offered only to a vehicle that has it.
+ */
+export const EQUIPMENT_FITS: Record<VehicleClass, readonly Equipment[]> = {
+  bike: [],
+  motorcycle: [],
+  tuktuk: ['HTR', 'STR'],
+  car: ['HTR', 'STR'],
+  van: ['HTR', 'PLT', 'TLT', 'RMP', 'STR'],
+  bus: ['HTR', 'STR'],
+  truck: ['HTR', 'PLT', 'FLT', 'TLT', 'CRN', 'RMP', 'STR', 'ROL'],
+};
+
+/**
  * 2026-11-03 — WHAT A VEHICLE RUNS ON (the owner, on ISO 14083: "go ahead"). Asked of every vehicle at registration: the
  * emissions of a trip start from it (EN ISO 14083, the method Regulation (EU) 2026/1030 makes the EU's), and what a vehicle
  * ran on cannot be asked of its past trips later. A bicycle is pedalled or electric; nothing with an engine is pedalled.

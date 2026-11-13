@@ -5,6 +5,7 @@
  */
 
 import { energyMissing } from '../../shared/vehicleEnergy';
+import type { Equipment } from '../../shared/equipment';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from './types';
 import type { MessageKey, Translate } from '../../shared/i18n';
 // The words for what a driver reports on a road live with the driver app, which is where they are reported.
@@ -70,31 +71,11 @@ export interface VehicleForm {
   inspectionExpiresAt: string;
 }
 
-/** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
- *  labels for the console. 'MAN' is implicit (every vehicle can do manual handling) so it is not listed. */
-export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR' | 'ROL';
-const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey; detailKey: MessageKey }> = [
-  { key: 'HTR', labelKey: 'fleet.equipment.htr', detailKey: 'fleet.equipment.htrWhy' },
-  { key: 'PLT', labelKey: 'fleet.equipment.plt', detailKey: 'fleet.equipment.pltWhy' },
-  { key: 'TLT', labelKey: 'fleet.equipment.tlt', detailKey: 'fleet.equipment.tltWhy' },
-  { key: 'FLT', labelKey: 'fleet.equipment.flt', detailKey: 'fleet.equipment.fltWhy' },
-  { key: 'CRN', labelKey: 'fleet.equipment.crn', detailKey: 'fleet.equipment.crnWhy' },
-  { key: 'RMP', labelKey: 'fleet.equipment.rmp', detailKey: 'fleet.equipment.rmpWhy' },
-  { key: 'STR', labelKey: 'fleet.equipment.str', detailKey: 'fleet.equipment.strWhy' },
-  // 2026-11-01 — a roller floor: built-up airline pallets and containers, rolled on and off whole.
-  { key: 'ROL', labelKey: 'fleet.equipment.rol', detailKey: 'fleet.equipment.rolWhy' },
-];
-
-/** The declarable equipment options with their plain-words labels resolved in the active locale. */
-export function equipmentOptions(t: Translate): Array<{ key: Equipment; label: string }> {
-  return EQUIPMENT_KEYS.map((e) => ({ key: e.key, label: t(e.labelKey) }));
-}
-
-/** The same options with the sentence each picture is captioned by, for the help sheet. Kept beside the
- *  labels so a new piece of equipment cannot be added to one list and forgotten in the other. */
-export function equipmentHelp(t: Translate): Array<{ key: Equipment; label: string; detail: string }> {
-  return EQUIPMENT_KEYS.map((e) => ({ key: e.key, label: t(e.labelKey), detail: t(e.detailKey) }));
-}
+/**
+ * Load/unload equipment a fleet manager can declare (S32) — 2026-11-13: the list, its words and what each kind of vehicle can
+ * carry moved to shared/equipment.ts, said alike by the Driver app for a driver's own vehicle; vans carry it too.
+ */
+export { equipmentHelp, equipmentOptions, type Equipment } from '../../shared/equipment';
 
 export const EMPTY_VEHICLE: VehicleForm = {
   plate: '',

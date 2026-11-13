@@ -1497,12 +1497,19 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
-  /** 2026-11-12 — the driver sets what the vehicle takes (the owner: "the driver should be able to adjust the weight and volume"). */
+  /**
+   * 2026-11-12 — the driver sets what the vehicle takes (the owner: "the driver should be able to adjust the weight and volume");
+   * 2026-11-13 — and, on their own vehicle, the loading equipment it carries (the whole list), in the same save.
+   */
   const setLoadSpace = useCallback(
-    async (vehicleId: string, body: { capacityKg: number; volumeM3: number | null }): Promise<SbgError | null> => {
+    async (vehicleId: string, body: { capacityKg: number; volumeM3: number | null }, equipment?: string[]): Promise<SbgError | null> => {
       if (!client) return null;
       const r = await client.api.setLoadSpace(vehicleId, body);
       if (r.error) return r.error;
+      if (equipment) {
+        const e = await client.api.setVehicleEquipment(vehicleId, equipment);
+        if (e.error) return e.error;
+      }
       buzz();
       pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.loadSaved'), detail: body.volumeM3 != null ? t('driver.toast.loadSavedDetail', { kg: body.capacityKg, litres: Math.round(body.volumeM3 * 1000) }) : t('driver.toast.loadSavedKg', { kg: body.capacityKg }) });
       await refresh();

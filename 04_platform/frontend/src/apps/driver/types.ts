@@ -123,6 +123,11 @@ export interface VehicleView {
   capacityKg: number;
   /** 2026-11-12 — its load space in m³, where its fleet or driver said it (the owner: "1000 liter volume"). */
   volumeM3?: number;
+  /** 2026-11-13 — the loading equipment it carries ('MAN', by hand, among them). */
+  equipment?: string[];
+  /** Whose it is: a fleet's (its own record) or a driver's own. */
+  managerDid?: string;
+  ownerDriverDid?: string;
   pricePerKm: number;
   maxParcelKg: number;
   allowsFragile: boolean;
@@ -157,6 +162,9 @@ export interface RecentVehicleView {
   energy?: string;
   /** 2026-11-03 — the courier's own: theirs to say what it runs on. */
   own?: true;
+  /** 2026-11-12/13 — its load space (m³) and loading equipment (by hand left out), as its owner says. */
+  volumeM3?: number;
+  equipment?: string[];
 }
 
 /**

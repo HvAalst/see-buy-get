@@ -35,6 +35,7 @@ import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { LoadSpaceSheet } from './LoadSpaceSheet';
+import { equipmentWords } from '../../../shared/equipment';
 import { TripsCard } from './TripsCard';
 import { IdPhotoCard } from './IdPhotoCard';
 import { CarrierPlaceCard } from './CarrierPlaceCard';
@@ -165,6 +166,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const vehicle = vehicleWord(namedClass, t);
   const rest = restSays(state.session.hours, t, (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
+  // 2026-11-13 — one of their own, opened to say what it takes and carries.
+  const [loadFor, setLoadFor] = useState<RecentVehicleView | null>(null);
   // A courier's own vehicle has the upkeep a fleet's office keeps for its own: off the road and back, readings,
   // services, the daily check's defects and a breakdown's ending (2026-10-25 — the server had it all, no screen did).
   const [careFor, setCareFor] = useState<RecentVehicleView | null>(null);
@@ -275,6 +278,7 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
                     {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
                     {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
                   </span>
+                  {equipmentWords(v.equipment, t) ? <span class="row__s">{t('equipment.line', { list: equipmentWords(v.equipment, t) })}</span> : null}
                   {/* FP4 — why it cannot be taken today, in the words the office and the driver both see. */}
                   {v.offRoad?.length ? <span class="row__s">{v.offRoad.join(' · ')}</span> : null}
                 </span>
@@ -316,9 +320,16 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
               {t('driver.home.upkeep', { plate: v.plate })}
             </Button>
           ))}
+          {/* 2026-11-13 — what each of their own takes and carries, before a shift too (the owner: "build loading equipment"). */}
+          {state.vehicles.filter((v) => v.own).map((v) => (
+            <Button key={`load-${v.vehicleId}`} variant="link" full={false} onClick={() => setLoadFor(v)}>
+              {t('driver.load.openFor', { plate: v.plate })}
+            </Button>
+          ))}
         </Card>
       ) : null}
 
+      {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own /> : null}
       {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (
@@ -868,6 +879,8 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </p>
         {/* 2026-11-12 — what it takes, as the driver says (the owner: "the driver should be able to adjust the weight and volume"). */}
         <p class="card__note">{v.volumeM3 != null ? t('driver.home.loadSpace', { litres: litresOf(v.volumeM3)! }) : t('driver.home.loadSpaceUnknown')}</p>
+        {/* 2026-11-13 — what it carries for loading (the owner: "build loading equipment"); nothing said where by hand only. */}
+        {equipmentWords(v.equipment, t) ? <p class="card__note">{t('equipment.line', { list: equipmentWords(v.equipment, t) })}</p> : null}
         <div class="linkcol">
         <Button variant="link" full={false} onClick={() => setLoadOpen(true)}>
           {t('driver.load.open')}
@@ -884,7 +897,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Button>
         </div>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
-        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} /> : null}
+        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} /> : null}
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>
 

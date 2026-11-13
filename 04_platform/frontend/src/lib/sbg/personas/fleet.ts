@@ -77,6 +77,10 @@ export function createFleetApi(sbg: SbgClient) {
       // form feeds as validated strings; the backend re-validates (S5a contract quirk).
     }) => sbg.request((c) => c.POST('/v1/sbg/vehicles', { body: body as never })),
 
+    /** 2026-11-13 — the loading equipment a vehicle carries, the whole list (by hand is always assumed). */
+    setVehicleEquipment: (vehicleId: string, equipment: string[]) =>
+      sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/equipment', { params: { path: { id: vehicleId } }, body: { equipment: equipment as never } })),
+
     /** 2026-11-03 — say what a vehicle runs on: one registered before it was asked, or a correction. */
     setVehicleEnergy: (vehicleId: string, energy: string) =>
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/energy', { params: { path: { id: vehicleId } }, body: { energy: energy as never } })),

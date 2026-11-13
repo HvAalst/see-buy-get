@@ -1075,6 +1075,11 @@ export class SetPriceDto {
 }
 
 /** 2026-11-12 — what a vehicle takes, as its driver or fleet says: the weight, and its load space in m³ (null: not known). */
+/** 2026-11-13 — the loading equipment a vehicle carries now, the whole list (handling by hand is always assumed). */
+export class VehicleEquipmentDto {
+  @ApiProperty({ enum: EQUIPMENT, isArray: true }) @IsArray() @ArrayMaxSize(9) @IsIn(EQUIPMENT, { each: true }) equipment!: Equipment[];
+}
+
 export class VehicleLoadSpaceDto {
   @IsOptional() @IsNumber() @Min(1) @Max(100000) capacityKg?: number;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.01) @Max(150) volumeM3?: number | null;

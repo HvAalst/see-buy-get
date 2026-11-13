@@ -125,6 +125,9 @@ export function createDriverApi(sbg: SbgClient) {
     agents: () => sbg.request((c) => c.GET('/v1/sbg/agents', {})),
 
     /** Set this vehicle's public per-km rate. */
+    /** 2026-11-13 — the loading equipment of the driver's own vehicle, the whole list (by hand is always assumed). */
+    setVehicleEquipment: (vehicleId: string, equipment: string[]) =>
+      sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/equipment', { params: { path: { id: vehicleId } }, body: { equipment: equipment as never } })),
     /** 2026-11-12 — what the vehicle takes, as its driver says: the most it carries (kg) and its load space (m³; null: not known). */
     setLoadSpace: (vehicleId: string, body: { capacityKg?: number; volumeM3?: number | null }) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/load-space', { params: { path: { id: vehicleId } }, body })),

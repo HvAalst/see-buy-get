@@ -1,3 +1,4 @@
+import type { Equipment } from './cargo.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { RiskRegisterService } from './risk-register.service';
@@ -84,6 +85,10 @@ export interface RecentVehicle {
   offRoad: string[];
   /** 2026-11-03 — what it runs on, as its owner said; absent where it was registered before it was asked. */
   energy?: string;
+  /** 2026-11-12 — its load space in m³, where its owner or driver said it. */
+  volumeM3?: number;
+  /** 2026-11-13 — the loading equipment it carries besides handling by hand (a tail-lift, straps …). */
+  equipment: Equipment[];
   /** 2026-11-03 — the courier’s own: theirs to say what it runs on (POST vehicles/:id/energy). */
   own?: true;
   /**
@@ -274,6 +279,9 @@ export class FleetService {
         vehicleClass: v.vehicleClass,
         truckSubtype: v.truckSubtype,
         capacityKg: v.capacityKg,
+        // 2026-11-12/13 — its load space and loading equipment, as its owner says (shown on the driver's list, changed by its owner).
+        ...(v.volumeM3 != null ? { volumeM3: v.volumeM3 } : {}),
+        equipment: v.equipment.filter((e) => e !== 'MAN'),
         verified: v.verified,
         busy: !!this.activeForVehicle(v.vehicleId),
         offRoad: this.vehicles.offRoadReasons(v.vehicleId),

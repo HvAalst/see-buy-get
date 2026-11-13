@@ -13,6 +13,7 @@ import { OffersScreen } from './screens/OffersScreen';
 import { RouteScreen } from './screens/RouteScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { FleetSheet } from './screens/FleetSheet';
+import { CoverSheet, coverRowSub, keepsOwnCover } from './screens/DriverCoverCard';
 import { driverNoticeAct } from './notices';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
 import '../../shared/screens.css';
@@ -43,6 +44,8 @@ export function App() {
   const [needRefresh] = sw.needRefresh;
   // Who they drive for belongs to the person, so it is a row in the account menu; a fleet's offer is answered in a sheet.
   const [fleetOpen, setFleetOpen] = useState(false);
+  // 2026-11-13 — their own insurance cover, reachable on every screen (the owner could not find it after skipping the papers).
+  const [coverOpen, setCoverOpen] = useState(false);
   // Round 19 — a load's package scanned into any box finds its load: one of theirs opens on My loads.
   const loadFinder = useMemo(() => (sbg ? loadFinderFor(sbg, () => actions.go('loads')) : null), [sbg]);
   const nav = useScreenNav<Screen>({
@@ -132,7 +135,10 @@ export function App() {
               api={account}
               app="driver"
               onSignOut={actions.signOut}
-              rows={[{ key: 'fleet', icon: 'truck', label: t('driver.fleet.row'), sub: state.driver?.fleetName ?? t(state.driver?.removedFrom ? 'driver.fleet.rowNone' : 'driver.fleet.rowOwn'), onClick: () => setFleetOpen(true) }]}
+              rows={[
+                { key: 'fleet', icon: 'truck', label: t('driver.fleet.row'), sub: state.driver?.fleetName ?? t(state.driver?.removedFrom ? 'driver.fleet.rowNone' : 'driver.fleet.rowOwn'), onClick: () => setFleetOpen(true) },
+                ...(keepsOwnCover(state.driver) ? [{ key: 'cover', icon: 'badge' as const, label: t('driver.cover.title'), sub: coverRowSub(state.driver, t), onClick: () => setCoverOpen(true) }] : []),
+              ]}
             />
           </>
         }
@@ -156,6 +162,7 @@ export function App() {
       />
 
       <FleetSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} />
+      {coverOpen ? <CoverSheet state={state} actions={actions} sbg={sbg} onClose={() => setCoverOpen(false)} withStatus /> : null}
       <Toasts state={state} actions={actions} />
       {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}
       <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />

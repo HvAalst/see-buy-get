@@ -1,5 +1,6 @@
 import { energyWord } from '../../shared/vehicleEnergy';
 import { triggerDownload } from '../../shared/download';
+import { equipmentToSend, equipmentWords } from '../../shared/equipment';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
 import type { SavedTrip } from '../driver/trips';
@@ -791,7 +792,8 @@ export function useFleetApp() {
           : {}),
         ...(f.vehiclePhotoRefs.length ? { vehiclePhotoRefs: f.vehiclePhotoRefs } : {}),
         ...(f.trailerPhotoRefs.length ? { trailerPhotoRefs: f.trailerPhotoRefs } : {}),
-        ...(f.vehicleClass === 'truck' && f.equipment.length ? { equipment: f.equipment } : {}), // equipment applies to trucks only
+        // 2026-11-13 — only what this kind can carry: a piece ticked under another kind before the kind changed is not sent.
+        ...(equipmentToSend(f.equipment, f.vehicleClass).length ? { equipment: equipmentToSend(f.equipment, f.vehicleClass) } : {}),
       });
       if (r.error) return fail(r.error);
       const v = narrow<VehicleRow>(r.data);
@@ -902,6 +904,20 @@ export function useFleetApp() {
         const r = await client.api.setVehicleEnergy(vehicle.vehicleId, energy);
         if (r.error) return fail(r.error);
         pushToast({ tone: 'ok', icon: 'truck', title: t('vehicle.energy.saved', { plate: vehicle.plate, energy: energyWord(energy, t).toLowerCase() }) });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** 2026-11-13 — the loading equipment a vehicle carries, said by its office: the whole list (the owner: "build loading equipment"). */
+  const setVehicleEquipment = useCallback(
+    async (vehicle: { vehicleId: string; plate: string }, equipment: string[]) => {
+      if (!client) return;
+      await run(`equipment:${vehicle.vehicleId}`, async () => {
+        const r = await client.api.setVehicleEquipment(vehicle.vehicleId, equipment);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('equipment.saved', { plate: vehicle.plate }), detail: equipmentWords(equipment, t) || t('equipment.none') });
         await refresh();
       });
     },
@@ -1517,6 +1533,7 @@ export function useFleetApp() {
       setKyc,
       setVehiclePrice,
       setVehicleEnergy,
+      setVehicleEquipment,
       setVehiclePapers,
       sendOwnPaper,
       giveBackBooking,
