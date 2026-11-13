@@ -39,4 +39,8 @@ export const enSiteTools = {
   'tools.errMax': 'Say the most the scale weighs, in kg.',
   'tools.errStamp': 'Say the day the stamp runs to and add a photo of the certificate.',
   'tools.errLicence': 'Say the forklift operator’s licence number.',
+  'tools.sumKg': 'Takes up to {kg} kg',
+  'tools.sumPallets': 'pallets',
+  'tools.sumWeighs': 'its weights set the price',
+  'tools.sumLabels': 'prints labels',
 };

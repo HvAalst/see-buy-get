@@ -36,4 +36,8 @@ export const words: Record<string, string> = {
   "tools.errMax": "Sema uzito wa juu zaidi mizani inapima, kwa kilo.",
   "tools.errStamp": "Sema tarehe muhuri unaisha na uongeze picha ya cheti.",
   "tools.errLicence": "Sema namba ya leseni ya mwendeshaji wa forklift.",
+  "tools.sumKg": "Hupokea hadi kilo {kg}",
+  "tools.sumPallets": "paleti",
+  "tools.sumWeighs": "uzito wake unaweka bei",
+  "tools.sumLabels": "huchapa lebo",
 };

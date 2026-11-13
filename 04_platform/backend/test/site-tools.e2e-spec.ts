@@ -91,6 +91,9 @@ describe('a shop’s and a hub’s tools, over the wire', () => {
     // On its public card: up to 30 kg, pallets, prints labels; weights not counted.
     const card = (await http().get('/v1/sbg/network/points').expect(200)).body.find((p: { did: string }) => p.did === shop.did);
     expect(card).toMatchObject({ maxParcelKg: 30, takesPallets: true, weighs: false, printsLabels: true });
+    // Staff read it on the console's list of shops, beside the shop's record.
+    const row = (await http().get('/v1/sbg/agents').set(staff).expect(200)).body.find((a: { did: string }) => a.did === shop.did);
+    expect(row.toolsView).toMatchObject({ equipment: ['HTR', 'PLT', 'RMP'], limits: { maxKg: 30, pallets: true } });
   });
 
   it('in Kenya a stamped scale counts; the stamp is reminded thirty days ahead and on the day, once each', async () => {
@@ -121,6 +124,7 @@ describe('a shop’s and a hub’s tools, over the wire', () => {
     const tools = `/v1/sbg/mdps/${hub.mdpId}/tools`;
     expect((await http().put(tools).set(asHub).send({ equipment: ['FLT', 'RMP'], forkliftLicence: 'G-2201', labelPrinter: true, cctv: true }).expect(200)).body).toMatchObject({ equipment: ['FLT', 'RMP'], tools: { forkliftLicence: 'G-2201' }, limits: { maxKg: 30, pallets: true } });
     expect((await http().get(tools).set(staff).expect(200)).body.equipment).toEqual(['FLT', 'RMP']);
+    expect((await http().get('/v1/sbg/mdps').set(staff).expect(200)).body.find((m: { mdpId: string }) => m.mdpId === hub.mdpId).toolsView).toMatchObject({ limits: { pallets: true } });
     expect((await http().put(tools).set(staff).send({ equipment: [], labelPrinter: false, cctv: false }).expect(403)).body.detail).toMatch(/A hub says its own tools/);
   });
 

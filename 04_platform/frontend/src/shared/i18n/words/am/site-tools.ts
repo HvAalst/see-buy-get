@@ -36,4 +36,8 @@ export const words: Record<string, string> = {
   "tools.errMax": "ሚዛኑ የሚመዝነውን ከፍተኛ ክብደት በኪሎ ይናገሩ።",
   "tools.errStamp": "ማኅተሙ የሚያበቃበትን ቀን ይናገሩና የምስክር ወረቀቱን ፎቶ ያክሉ።",
   "tools.errLicence": "የፎርክሊፍት ኦፕሬተሩን የፈቃድ ቁጥር ይናገሩ።",
+  "tools.sumKg": "እስከ {kg} ኪሎ ይቀበላል",
+  "tools.sumPallets": "ፓሌቶች",
+  "tools.sumWeighs": "ክብደቱ ዋጋውን ይወስናል",
+  "tools.sumLabels": "መለያዎችን ያትማል",
 };

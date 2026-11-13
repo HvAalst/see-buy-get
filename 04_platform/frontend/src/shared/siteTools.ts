@@ -97,3 +97,20 @@ export function stampLine(s: SiteToolsView['stamp'], t: Translate, day: (iso: st
   if (s.state === 'lapsed') return t('tools.stampLapsed', { date: day(s.stampedUntil ?? '') });
   return null;
 }
+
+/**
+ * 2026-11-13 — WHAT A SITE'S TOOLS LET IT TAKE, IN ONE LINE, for staff (the console's Network screen, read only): its heaviest
+ * parcel, pallets, its equipment, whether its weights set the price, labels, and a stamp that asks for something.
+ */
+export function toolsSummary(v: SiteToolsView | undefined, t: Translate, day: (iso: string) => string): string {
+  if (!v) return '';
+  const parts = [t('tools.sumKg', { kg: v.limits.maxKg })];
+  if (v.limits.pallets) parts.push(t('tools.sumPallets'));
+  const have = SITE_EQUIPMENT.filter((e) => v.equipment.includes(e.key)).map((e) => t(e.label).toLowerCase());
+  if (have.length) parts.push(have.join(', '));
+  if (v.limits.weighs) parts.push(t('tools.sumWeighs'));
+  if (v.limits.printsLabels) parts.push(t('tools.sumLabels'));
+  const stamp = stampLine(v.stamp, t, day);
+  if (stamp) parts.push(stamp);
+  return parts.join(' · ');
+}

@@ -19,6 +19,8 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 
 export interface AgentRow {
   did: string;
+  /** 2026-11-13 — what its tools let it take (site tools), read by staff. */
+  toolsView?: import('../../shared/siteTools').SiteToolsView;
   shopName?: string;
   zone?: string;
   status?: string;
@@ -177,6 +179,8 @@ export function statusMixRows(mix: Record<string, number> | undefined): Array<{ 
 
 export interface HubRow {
   mdpId: string;
+  /** 2026-11-13 — what its tools let it take (site tools), read by staff. */
+  toolsView?: import('../../shared/siteTools').SiteToolsView;
   name?: string;
   zones?: string[];
   /** 2026-11-09 — the GS1 location number SeeBuyGet gave it; absent until given. */

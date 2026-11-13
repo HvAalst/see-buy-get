@@ -3618,7 +3618,8 @@ export class SbgController {
     if (actor?.role !== 'operator') return this.agents.list().map((a) => this.shopCard(a));
     // Beside each float, what one parcel costs at that shop's own company and the money both are in: a float is thin
     // or not against THAT, and a console that measured every shop against one figure of its own could not say.
-    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), ...this.shopMoney(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did), ...this.glnOf('shop', a.did) }));
+    // 2026-11-13 — and what its tools let it take, read by staff and changed by nobody but the shop (site-tools.ts).
+    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), ...this.shopMoney(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did), ...this.glnOf('shop', a.did), toolsView: this.agents.toolsOf(a) }));
   }
 
   @Roles('agent', 'operator')
@@ -6020,7 +6021,8 @@ export class SbgController {
       if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) {
         // 2026-11-08 — the zone it stands in, on its country's map in force.
         const priceZone = this.zones?.zoneOfHub(m);
-        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}), ...this.glnOf('hub', m.mdpId), passOnFee: this.mdps.passOnFeeOf(m), feeCeiling: this.mdps.feeCeilingOf(m) };
+        // 2026-11-13 — and what its tools let it take (site-tools.ts): staff read it on the hub's card.
+        return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m), ...(priceZone ? { priceZone } : {}), ...this.glnOf('hub', m.mdpId), passOnFee: this.mdps.passOnFeeOf(m), feeCeiling: this.mdps.feeCeilingOf(m), toolsView: this.mdps.toolsOf(m) };
       }
       return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency, ...this.glnOf('hub', m.mdpId) };
     });

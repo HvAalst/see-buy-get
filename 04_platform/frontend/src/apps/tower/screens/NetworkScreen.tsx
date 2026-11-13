@@ -9,6 +9,8 @@ import { HUB_DOWN_REASONS, HUB_DOWN_WORDS, isDownNow, unconfirmedPast, type HubD
 import { PlanVsActualFold } from './PlanVsActualFold';
 import { OurGs1Line } from './OurGs1Line';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { toolsSummary } from '../../../shared/siteTools';
+import { paperDay } from '../../../shared/papers';
 import {
   AGENT_OFFLINE_H,
   agentState,
@@ -297,6 +299,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     <td>
                       <div class="ctbl__strong">{row.shopName ?? t('tower.network.unnamedShop')}</div>
                       {row.gln ? <div class="ctbl__sub"><Abbreviated text={t('tower.network.gln', { gln: row.gln })} /></div> : null}
+                      {/* 2026-11-13 — what its tools let it take: the shop's word, read here (site tools). */}
+                      {row.toolsView ? <div class="ctbl__sub">{toolsSummary(row.toolsView, t, paperDay)}</div> : null}
                     </td>
                     <td>
                       <span class="ctbl__lbl">{t('tower.network.col.zone')}</span>
@@ -358,6 +362,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     {isDownNow(hub.down) ? <> · <span class="ctag ctag--warn">{t('tower.network.down', { since: formatDate(hub.down!.since, { dateStyle: 'medium', timeStyle: 'short' }), reason: t(HUB_DOWN_WORDS[hub.down!.reason as HubDownReason] ?? 'common.hubDown.reason.other') })}</span></> : null}
                   </span>
                 </div>
+                {/* 2026-11-13 — what its tools let it take: the hub's word, read here (site tools). */}
+                {hub.toolsView ? <p class="chint">{toolsSummary(hub.toolsView, t, paperDay)}</p> : null}
                 <HubDownStaff hub={hub} actions={actions} />
                 {filling.length === 0 ? (
                   <p class="chint">{t('tower.network.noOpenBags')}</p>

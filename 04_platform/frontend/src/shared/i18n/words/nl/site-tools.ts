@@ -36,4 +36,8 @@ export const words: Record<string, string> = {
   "tools.errMax": "Zeg het meeste dat de weegschaal weegt, in kg.",
   "tools.errStamp": "Zeg tot wanneer de stempel loopt en voeg een foto van het certificaat toe.",
   "tools.errLicence": "Zeg het nummer van het heftruckcertificaat.",
+  "tools.sumKg": "Neemt tot {kg} kg aan",
+  "tools.sumPallets": "pallets",
+  "tools.sumWeighs": "zijn gewicht bepaalt de prijs",
+  "tools.sumLabels": "print labels",
 };

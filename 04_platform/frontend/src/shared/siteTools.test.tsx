@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { addEnglish, t } from './i18n';
 import { enSiteTools } from './i18n/catalogs/en.site-tools';
-import { limitsLines, stampLine, toolsBody, toolsForm, type SiteToolsView } from './siteTools';
+import { limitsLines, stampLine, toolsBody, toolsForm, toolsSummary, type SiteToolsView } from './siteTools';
 import { SiteToolsSheet } from './site-tools/SiteToolsSheet';
 
 addEnglish(enSiteTools);
@@ -44,6 +44,13 @@ describe('a site’s tools', () => {
     expect(stampLine({ state: 'due', daysLeft: 1, stampedUntil: '2026-11-14' }, t, (d) => d)).toBe('Your scale’s stamp runs out in 1 day: record the new date once it is stamped.');
     expect(stampLine({ state: 'lapsed', stampedUntil: '2026-11-12' }, t, (d) => d)).toContain('2026-11-12');
     expect(stampLine(VIEW.stamp, t, (d) => d)).toBeNull();
+  });
+
+  it('says in one line for staff what a site’s tools let it take', () => {
+    expect(toolsSummary(VIEW, t, (d) => d)).toBe(`${t('tools.sumKg', { kg: 25 })} · ${t('tools.htr').toLowerCase()} · ${t('tools.sumWeighs')} · ${t('tools.sumLabels')}`);
+    const lapsed = { ...VIEW, stamp: { state: 'lapsed' as const, stampedUntil: '2026-11-12' } };
+    expect(toolsSummary(lapsed, t, (d) => d)).toContain('2026-11-12');
+    expect(toolsSummary(undefined, t, (d) => d)).toBe('');
   });
 
   it('the sheet offers the four handling tools and the scale, printer and CCTV', () => {
