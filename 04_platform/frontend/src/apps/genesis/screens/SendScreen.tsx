@@ -309,7 +309,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
 
       <div class="rows" role="list">
         {points.map((p) => (
-          <PointRow key={p.did} point={p} picked={picked === p.did} away={pointDistance(p, near)} full={from && p.freeSlots === 0} onPick={() => pick(p.did)} />
+          <PointRow key={p.did} point={p} picked={picked === p.did} away={pointDistance(p, near)} full={from && p.freeSlots === 0} tooHeavy={tooHeavyFor(p, state.dims.kg)} onPick={() => pick(p.did)} />
         ))}
       </div>
 
@@ -354,12 +354,40 @@ function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): strin
     ...(shop.freeSlots != null ? [shop.freeSlots === 1 ? t('send.point.slotOne', { count: shop.freeSlots }) : t('send.point.slotMany', { count: shop.freeSlots })] : []),
     reputationLine(shop.rating, t), // REP1 — always shown, honest about the cold start
     ...(servingSince(shop.since, t) ? [servingSince(shop.since, t)!] : []),
+    // 2026-11-13 — what its tools let it take (the owner: "shop and hub tools").
+    ...(shop.maxParcelKg != null ? [t('send.point.factMaxKg', { kg: shop.maxParcelKg })] : []),
+    ...(shop.printsLabels ? [t('send.point.factPrints')] : []),
+    ...(shop.weighs ? [t('send.point.factWeighs')] : []),
   ];
 }
 
-function PointRow({ point, picked, away, full, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; full?: boolean; onPick: () => void }) {
+/** 2026-11-13 — the parcel is heavier than this shop's tools let it take (T3): shown, and not offered. */
+export function tooHeavyFor(point: Pick<NetworkPoint, 'maxParcelKg'>, kgText: string): boolean {
+  const kg = Number(String(kgText ?? '').replace(',', '.'));
+  return point.maxParcelKg != null && kg > 0 && kg > point.maxParcelKg;
+}
+
+function PointRow({ point, picked, away, full, tooHeavy, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; full?: boolean; tooHeavy?: boolean; onPick: () => void }) {
   const t = useT();
   const closed = point.openState === 'closed';
+  if (tooHeavy && !closed) {
+    return (
+      <button type="button" class="row" disabled aria-pressed={false}>
+        <span class="row__ic">
+          <Icon name="home" size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t">{point.shopName}</span>
+          <span class="row__s">{t('send.point.factMaxKg', { kg: point.maxParcelKg ?? 0 })}</span>
+        </span>
+        <span class="row__end">
+          <Pill tone="idle" dot>
+            {t('send.point.tooHeavy')}
+          </Pill>
+        </span>
+      </button>
+    );
+  }
   return (
     <button type="button" class="row" disabled={closed || full} aria-pressed={picked} onClick={onPick}>
       <span class="row__ic">

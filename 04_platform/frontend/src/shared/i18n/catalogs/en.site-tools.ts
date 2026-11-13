@@ -1,0 +1,42 @@
+/**
+ * A SHOP'S OR A HUB'S TOOLS, IN WORDS (2026-11-13 — the owner: "shop and hub tools"). Its handling equipment, its scale and
+ * the inspector's stamp, a label printer, CCTV, and what they let it take: said alike by the Shop app and the Hub app
+ * (shared/site-tools/SiteToolsSheet.tsx), each adding this catalogue in its english.ts.
+ */
+export const enSiteTools = {
+  'tools.row': 'Tools',
+  'tools.rowSub': 'Scale, label printer, what you can lift',
+  'tools.title': 'Your tools',
+  'tools.change': 'Change your tools',
+  'tools.body': 'What you have decides which parcels you take and whether your weights set the price. Say only what you have.',
+  'tools.handling': 'For moving parcels',
+  'tools.htr': 'Sack barrow',
+  'tools.plt': 'Pallet jack',
+  'tools.flt': 'Forklift',
+  'tools.rmp': 'Ramp or loading dock',
+  'tools.forkliftLicence': 'The forklift operator’s licence number',
+  'tools.others': 'Also here',
+  'tools.scale': 'A scale',
+  'tools.printer': 'A label printer',
+  'tools.cctv': 'Cameras over the counter',
+  'tools.scaleMax': 'The most the scale weighs, in kg',
+  'tools.approved': 'Approved for trade: it carries the approval marks',
+  'tools.stamped': 'Stamped by the county weights and measures inspector',
+  'tools.stampedUntil': 'The stamp runs to',
+  'tools.certificate': 'Photo of the stamp certificate',
+  'tools.save': 'Save',
+  'tools.saved': 'Your tools are saved',
+  'tools.limitHands': 'You take parcels up to {kg} kg: lifted by hand alone. A sack barrow lets you take up to {max} kg.',
+  'tools.limitScale': 'You take parcels up to {kg} kg: the most your scale weighs.',
+  'tools.limitNetwork': 'You take parcels up to {kg} kg, the most the network takes.',
+  'tools.pallets': 'You take pallets.',
+  'tools.noPallets': 'Pallets need a pallet jack with a ramp or loading dock, or a forklift.',
+  'tools.weighs': 'Your weights set the price.',
+  'tools.guide': 'Your weights are a guide: the sender’s weight sets the price.',
+  'tools.stampDue': 'Your scale’s stamp runs out in {n, plural, one {# day} other {# days}}: record the new date once it is stamped.',
+  'tools.stampLapsed': 'Your scale’s stamp ran out on {date}: your weights are a guide until the new date is recorded.',
+  'tools.lastChanged': 'Last changed {date} by {who}',
+  'tools.errMax': 'Say the most the scale weighs, in kg.',
+  'tools.errStamp': 'Say the day the stamp runs to and add a photo of the certificate.',
+  'tools.errLicence': 'Say the forklift operator’s licence number.',
+};

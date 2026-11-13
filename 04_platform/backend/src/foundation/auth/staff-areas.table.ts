@@ -34,6 +34,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-02 — a hub's space: staff read what its floor holds, as support reads its floor; its owner alone says it.
   'GET sbg/mdps/:id/space': 'support',
   'PUT sbg/mdps/:id/space': 'none',
+  'GET sbg/mdps/:id/tools': 'support',
+  'PUT sbg/mdps/:id/tools': 'none',
   // 2026-11-09 — the zones a hub serves: read by staff, changed by the hub alone.
   'GET sbg/mdps/:id/zones-served': 'support',
   'GET sbg/mdps/:id/road': 'support',
@@ -660,6 +662,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/agents/:did/receive-bag': 'support',
   'POST sbg/agents/:did/shelf': 'support',
   'POST sbg/agents/:did/shopfront': 'support',
+  'GET sbg/agents/:did/tools': 'support',
+  'PUT sbg/agents/:did/tools': 'none',
   'POST sbg/agents/:did/submit-kyc': 'vetting',
   'POST sbg/agents/:did/top-up': 'money',
   'POST sbg/agents/:did/totes': 'support',

@@ -90,6 +90,11 @@ export function createAgentApi(sbg: SbgClient) {
     setBagBays: (did: string, bays: number, closedRoom?: number) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/bag-bays', { params: { path: { did } }, body: { bays, ...(closedRoom !== undefined ? { closedRoom } : {}) } })),
 
+    /** 2026-11-13 — the shop's tools (site-tools): what it said, and what that lets it take. */
+    getTools: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/tools', { params: { path: { did } } })),
+    /** 2026-11-13 — the shop says its tools, the whole set. */
+    setTools: (did: string, body: unknown) => sbg.request((c) => c.PUT('/v1/sbg/agents/{did}/tools', { params: { path: { did } }, body: body as never })),
+
     /** Move the shop's map pin (My-shop location editor). */
     setLocation: (did: string, lat: number, lng: number) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/location', { params: { path: { did } }, body: { lat, lng } })),

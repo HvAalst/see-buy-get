@@ -2,6 +2,7 @@
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
 import type { HubDown, ToteRedirect } from './hub-down.types';
+import type { ScaleStanding, SiteEquipment, SiteLimits, SiteTools } from './site-tools';
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import type { OffPlanReason, OffPlanStep } from './route-plan.types';
 import { FxRate } from '../../foundation/money/fx.service';
@@ -145,6 +146,8 @@ export class Agent {
   licenceRenewal?: { copyRef: string; expiresAt: string; sentAt: string };
   /** Why the last licence the shop sent was not accepted — shown to the shop, which sends another. */
   licenceRenewalRefusal?: { reason: string; at: string; by?: string };
+  /** 2026-11-13 — its tools: a scale, a label printer, CCTV (site-tools.ts); its handling equipment is `equipment`. */
+  tools?: SiteTools;
   /** What the last onboarding nudge was ABOUT — the missing set it named, e.g. "id,licence,photos" or
    *  "rejected" or "unfunded". Said once per distinct gap: progress starts a new clock, and an ignored
    *  nudge is never repeated. Follows CredentialReminderService's stamp-against-the-state rule. */
@@ -505,6 +508,16 @@ export class HubFeesRefused {
   at!: string;
 }
 
+/** 2026-11-13 — a shop's or a hub's tools as it and staff read them: what it said, and what that lets it take. */
+export interface SiteToolsView {
+  equipment: SiteEquipment[];
+  tools?: SiteTools;
+  limits: SiteLimits;
+  stamp: ScaleStanding;
+  /** Its country stamps scales used for trade (Kenya): the stamp's date and certificate are asked. */
+  stampCountry: boolean;
+}
+
 export class Mdp {
   mdpId: string;
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
@@ -550,6 +563,9 @@ export class Mdp {
   feeAsked?: HubFeesAsked;
   /** The last refusal of fees it asked for: by whom, why — shown to the hub. */
   feeRefused?: HubFeesRefused;
+  /** 2026-11-13 — its handling equipment (by hand always; a sack barrow, a pallet jack, a forklift, a ramp or dock) and its tools. */
+  equipment?: Equipment[];
+  tools?: SiteTools;
   /**
    * 2026-11-09 — "SORT AND HAND OUT" (the owner: "The hub decides that. Only Sort vs Sort and Hand Out"): its counter, a shop
    * at its own address worked in the Shop app; absent while it has only ever sorted. Stopped: it sorts only again.

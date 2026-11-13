@@ -46,6 +46,10 @@ export interface NetworkPoint {
   rating?: { count: number; average: number; isNew?: boolean } | null;
   freeSlots?: number;
   since?: string; // REP1 — "serving since" (the shop's onboarding date; a public trust signal, not PII)
+  /** 2026-11-13 — what its tools let it take: its heaviest parcel; a scale whose weight sets the price; it prints labels. */
+  maxParcelKg?: number;
+  weighs?: boolean;
+  printsLabels?: boolean;
 }
 
 export interface QuoteHop {

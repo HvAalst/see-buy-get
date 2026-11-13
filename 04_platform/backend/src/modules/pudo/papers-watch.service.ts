@@ -11,6 +11,8 @@ import { VehicleService } from './vehicle.service';
 import { AgentService } from './agent.service';
 import { LICENCE_GRACE_DAYS, licenceDay, shopLicenceStanding, type ShopLicenceStanding } from './shop-licence';
 import type { Agent } from './pudo.types';
+import { MdpService } from './mdp.service';
+import { scaleStanding, stampNotice, type SiteTools } from './site-tools';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
 
@@ -252,6 +254,8 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     @Optional() private readonly transit?: TransitAuthorityService,
     // Round 40 — the shops' trading licences. Optional for the same reason.
     @Optional() private readonly agents?: AgentService,
+    // 2026-11-13 — the hubs' scales, for their stamps. Optional for the same reason.
+    @Optional() private readonly mdps?: MdpService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -563,6 +567,22 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       if (l.renewalSent && l.state !== 'stopped') continue;
       const words = shopLicenceNotice(l);
       if (await this.tellOnce(`shop:${a.did}:trading_licence:${l.expiresAt}:${l.state}`, a.did, words.title, words.body, l.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${a.did}:trading_licence`)) out.notified++;
+    }
+    /*
+     * 2026-11-13 — A SCALE'S STAMP (the owner: "shop and hub tools", T5): where the law stamps a scale used for trade (Kenya),
+     * the shop or hub is told thirty days before the stamp runs out and on the day — once per mark per date, so a new stamp
+     * starts again. Past it, its weights are the sender's word until the new date is recorded (site-tools.ts).
+     */
+    const sites: Array<{ did: string; tools?: SiteTools; country?: string; approved: boolean }> = [
+      ...(this.agents?.list() ?? []).map((a) => ({ did: a.did, tools: a.tools, country: this.agents!.countryOf(a), approved: approvedShop(a) })),
+      ...(this.mdps?.list() ?? []).map((h) => ({ did: h.did, tools: h.tools, country: this.mdps!.countryOf(h), approved: true })),
+    ];
+    for (const site of sites) {
+      if (!site.approved || !site.tools?.scale?.stampedUntil) continue;
+      const stamp = scaleStanding(site.tools, site.country, now);
+      if (stamp.state !== 'due' && stamp.state !== 'lapsed') continue;
+      const words = stampNotice(stamp);
+      if (await this.tellOnce(`site:${site.did}:scale_stamp:${stamp.stampedUntil}:${stamp.state}`, site.did, words.title, words.body, stamp.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${site.did}:scale_stamp`)) out.notified++;
     }
     this.lastRun = { at: new Date(now).toISOString(), ...out };
     return out;

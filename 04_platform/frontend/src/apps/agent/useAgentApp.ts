@@ -866,6 +866,23 @@ export function useAgentApp() {
     [client, pushToast],
   );
 
+  /** 2026-11-13 — the shop's tools (the owner: "shop and hub tools"): read and said from the settings' Tools sheet. */
+  const tools = useMemo(
+    () =>
+      client && did
+        ? {
+            load: () => client.api.getTools(did) as Promise<{ data?: unknown; error?: SbgError | null }>,
+            save: async (body: unknown) => {
+              const r = (await client.api.setTools(did, body)) as { data?: unknown; error?: SbgError | null };
+              if (!r.error) pushToast({ tone: 'ok', icon: 'check', title: t('tools.saved') });
+              return r;
+            },
+            upload: (file: File) => uploadPhoto('kyc_licence', file),
+          }
+        : undefined,
+    [client, did, uploadPhoto, pushToast],
+  );
+
   /** 2026-11-03 — the shop's ID or trading licence as a photo or a PDF (the owner: "photo or pdf for both docs"). */
   const uploadPaper = useCallback(
     async (kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> => {
@@ -2823,6 +2840,7 @@ export function useAgentApp() {
       shopDevices,
       myApps,
       people,
+      tools,
       signOut,
       adoptToken,
       forgot,

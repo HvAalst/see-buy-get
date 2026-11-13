@@ -11,6 +11,7 @@ import { PhotoField } from './PhotoField';
 // 2026-11-03 — the shop's ID and trading licence: a photo, or a photo or PDF from the phone (the shared field).
 import { PhotoField as PaperField } from '../../../shared/ui/PhotoField';
 import { PeopleSheet } from './PeopleSheet';
+import { SiteToolsSheet } from '../../../shared/site-tools/SiteToolsSheet';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
 import type { Weekday, WeeklyHours } from '../types';
@@ -54,7 +55,7 @@ const DAYS: Array<{ key: Weekday; labelKey: MessageKey }> = [
   { key: 'sat', labelKey: 'agent.hours.day.sat' },
 ];
 
-type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 'people' | null;
+type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 'people' | 'tools' | null;
 
 /**
  * The PUDO's operational cockpit (My shop). Action-first: shop identity + status at the top, the wallet the
@@ -238,6 +239,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           <SettingRow icon="scale" title={t('agent.home.changePrice')} sub={t('agent.home.priceSub', { price: money(agent?.pricePerParcel, agent?.currency) })} onClick={() => setSheet('price')} />
           <SettingRow icon="grid" title={t('agent.home.shelfLink')} sub={t('agent.home.shelfSub')} onClick={() => actions.go('shelf')} />
           <SettingRow icon="person" title={t('agent.people.row')} sub={t('agent.people.rowSub')} onClick={() => setSheet('people')} />
+          {/* 2026-11-13 — its tools: what it can lift and weigh decides what it takes (the owner: "shop and hub tools"). */}
+          {actions.tools ? <SettingRow icon="weight" title={t('tools.row')} sub={t('tools.rowSub')} onClick={() => setSheet('tools')} /> : null}
         </div>
       </Card>}
 
@@ -253,6 +256,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       <LocationSheet open={sheet === 'location'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <HoursSheet open={sheet === 'hours'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <PeopleSheet open={sheet === 'people'} onClose={() => setSheet(null)} api={actions.people} />
+      {actions.tools ? <SiteToolsSheet open={sheet === 'tools'} onClose={() => setSheet(null)} load={actions.tools.load} save={actions.tools.save} upload={actions.tools.upload} /> : null}
 
       <Sheet open={sheet === 'close'} onClose={() => setSheet(null)} title={t('agent.home.closeSheetTitle')}>
         <p class="t-body">{t('agent.home.closeSheetBody')}</p>

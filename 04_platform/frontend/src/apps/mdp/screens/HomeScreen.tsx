@@ -17,6 +17,7 @@ import { HubSpaceCard } from './HubSpaceCard';
 import { ZonesServedCard } from './ZonesServedCard';
 import { HubCounterCard } from './HubCounterCard';
 import { HubDownCard } from './HubDownCard';
+import { HubToolsCard } from './HubToolsCard';
 import { HubRoadCard } from './HubRoadCard';
 
 export interface HomeScreenProps {
@@ -223,6 +224,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {/* 2026-11-11 — a hub down (ISO 28000 gap 12): said here, and open again here. */}
       <HubDownCard sbg={sbg ?? null} hub={hub} staff={Boolean(state.staff)} onChanged={() => void actions.refresh()} />
       <HubCounterCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} currency={hub?.currency} />
+      {/* 2026-11-13 — its tools: what its floor can lift and weigh decides what it takes (the owner: "shop and hub tools"). */}
+      <HubToolsCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} upload={(file) => actions.uploadPhoto(file, 'kyc_licence')} />
 
       {/* 2026-11-09 — the zones it serves (a net of hubs): the one it stands in, and zones near it its owner adds. */}
       <ZonesServedCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />

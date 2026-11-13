@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { buildSiteTools, siteToolsView, type SiteToolsInput } from './site-tools';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -21,7 +22,7 @@ import { Geocoder, GEOCODER } from './geocoder';
 import { countryOfSite, requireCountryCode } from './country';
 import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
-import { Agent, AgentRequirements, AgentStatus, GeoPoint, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
+import { Agent, AgentRequirements, AgentStatus, GeoPoint, KycDocuments, ShelfConfig, SiteToolsView, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
 import { licenceDay, licenceStopped, requireLicenceDate, shopLicenceStanding, LICENCE_GRACE_DAYS, type ShopLicenceStanding } from './shop-licence';
 
@@ -610,6 +611,26 @@ export class AgentService {
     if (closedRoom !== undefined) agent.closedBagRoom = Math.floor(closedRoom);
     this.agents.set(did, agent); // durable record, mutated in place — re-store so the snapshot flushes
     return agent;
+  }
+
+  /**
+   * 2026-11-13 — ITS TOOLS (the owner: "shop and hub tools"; site-tools.ts): its handling equipment, its scale, a label
+   * printer, CCTV — the whole set as the shop says it now, refused field by field before anything is written. Kept with who
+   * said it and what changed.
+   */
+  setTools(did: string, input: SiteToolsInput, by: string, now: number = Date.now()): SiteToolsView {
+    const agent = this.require(did);
+    const country = this.countryOf(agent);
+    const made = buildSiteTools(input, { country, before: agent.tools, beforeEquipment: agent.equipment, by, now, adoptCertificate: (ref) => this.media.adopt(ref, did, { type: 'agent', id: did }, 'kyc_licence') });
+    agent.tools = made.tools;
+    agent.equipment = made.equipment;
+    this.agents.set(did, agent);
+    return this.toolsOf(agent, now);
+  }
+
+  toolsOf(agent: Agent, now: number = Date.now()): SiteToolsView {
+    const country = this.countryOf(agent);
+    return siteToolsView(agent.equipment, agent.tools, country, now);
   }
 
   /** Move the shop's map pin (the agent drags it on the My-shop map). */

@@ -29,6 +29,7 @@ import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { NOTE_STAGES } from './note-archive.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
+import { SITE_EQUIPMENT } from './site-tools';
 
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
@@ -1075,6 +1076,23 @@ export class SetPriceDto {
 }
 
 /** 2026-11-12 — what a vehicle takes, as its driver or fleet says: the weight, and its load space in m³ (null: not known). */
+/** 2026-11-13 — a shop's or hub's scale: the most it weighs; approved for trade; where stamped (Kenya), until when and the certificate. */
+export class SiteScaleDto {
+  @IsNumber() @Min(0.1) @Max(3000) maxKg!: number;
+  @IsBoolean() approved!: boolean;
+  @IsOptional() @IsString() @MaxLength(10) stampedUntil?: string;
+  @IsOptional() @IsString() @MaxLength(120) certificateRef?: string;
+}
+
+/** 2026-11-13 — a shop's or hub's tools, the whole set as it says them now (site-tools.ts). */
+export class SiteToolsDto {
+  @ApiProperty({ enum: SITE_EQUIPMENT, isArray: true }) @IsArray() @ArrayMaxSize(4) @IsIn([...SITE_EQUIPMENT, 'MAN'], { each: true }) equipment!: string[];
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => SiteScaleDto) scale?: SiteScaleDto | null;
+  @IsBoolean() labelPrinter!: boolean;
+  @IsBoolean() cctv!: boolean;
+  @IsOptional() @IsString() @MaxLength(40) forkliftLicence?: string;
+}
+
 /** 2026-11-13 — the loading equipment a vehicle carries now, the whole list (handling by hand is always assumed). */
 export class VehicleEquipmentDto {
   @ApiProperty({ enum: EQUIPMENT, isArray: true }) @IsArray() @ArrayMaxSize(9) @IsIn(EQUIPMENT, { each: true }) equipment!: Equipment[];

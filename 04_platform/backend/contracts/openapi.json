@@ -7607,6 +7607,70 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/tools": {
+      "get": {
+        "operationId": "HubSpace.tools",
+        "summary": "",
+        "description": "2026-11-13 — ITS TOOLS (the owner: \"shop and hub tools\"; site-tools.ts): its handling equipment, scale, label printer and\nCCTV. Read by the hub and staff; said by its owner alone, as its space is.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "HubSpace.setTools",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteToolsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/road": {
       "get": {
         "operationId": "HubZones.road",
@@ -15878,6 +15942,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/tools": {
+      "get": {
+        "operationId": "Sbg.shopTools",
+        "summary": "",
+        "description": "2026-11-13 — A SHOP'S TOOLS (the owner: \"shop and hub tools\"): read by the shop and by staff; said by the shop alone, from\nits own sign-in — what it has at its counter is its word, and staff change nothing in its name.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "Sbg.setShopTools",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteToolsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -51898,6 +52026,71 @@
           "sortPerDay"
         ]
       },
+      "SiteScaleDto": {
+        "type": "object",
+        "properties": {
+          "maxKg": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 3000
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "stampedUntil": {
+            "type": "string",
+            "maxLength": 10
+          },
+          "certificateRef": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "maxKg",
+          "approved"
+        ]
+      },
+      "SiteToolsDto": {
+        "type": "object",
+        "properties": {
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "HTR",
+                "PLT",
+                "FLT",
+                "RMP"
+              ]
+            }
+          },
+          "scale": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteScaleDto"
+              }
+            ]
+          },
+          "labelPrinter": {
+            "type": "boolean"
+          },
+          "cctv": {
+            "type": "boolean"
+          },
+          "forkliftLicence": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "equipment",
+          "labelPrinter",
+          "cctv"
+        ]
+      },
       "RoadNeighbour": {
         "type": "object",
         "properties": {
@@ -53764,6 +53957,10 @@
                 "type": "string"
               }
             }
+          },
+          "tools": {
+            "type": "object",
+            "description": "2026-11-13 — its tools: a scale, a label printer, CCTV (site-tools.ts); its handling equipment is `equipment`."
           },
           "signupNudgedFor": {
             "type": "string",
@@ -63367,6 +63564,16 @@
                 "$ref": "#/components/schemas/HubFeesRefused"
               }
             ]
+          },
+          "equipment": {
+            "description": "2026-11-13 — its handling equipment (by hand always; a sack barrow, a pallet jack, a forklift, a ramp or dock) and its tools.",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "tools": {
+            "type": "object"
           },
           "counter": {
             "type": "object",

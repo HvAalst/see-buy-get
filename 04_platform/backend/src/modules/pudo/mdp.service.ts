@@ -23,7 +23,8 @@ import { CargoNature, VehicleCapability } from './cargo.types';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { GeoPoint, HubPapers, HubSpaceView, Mdp, NextHop, Parcel, Tote } from './pudo.types';
+import { GeoPoint, HubPapers, HubSpaceView, Mdp, NextHop, Parcel, SiteToolsView, Tote } from './pudo.types';
+import { buildSiteTools, siteToolsView, type SiteToolsInput } from './site-tools';
 import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
@@ -497,6 +498,20 @@ export class MdpService {
     this.mdps.set(mdp.mdpId, mdp);
     this.letWaitingGo(now);
     return this.spaceOf(mdp, now);
+  }
+
+  /** 2026-11-13 — its tools (site-tools.ts), the whole set as the hub says it now; kept with who said it and what changed. */
+  setTools(mdpId: string, input: SiteToolsInput, by: string, now: number = Date.now()): SiteToolsView {
+    const mdp = this.require(mdpId);
+    const made = buildSiteTools(input, { country: this.countryOf(mdp), before: mdp.tools, beforeEquipment: mdp.equipment, by, now, adoptCertificate: (ref) => Boolean(this.media?.adopt(ref, mdp.did, { type: 'hub', id: mdp.mdpId }, 'kyc_licence')) });
+    mdp.tools = made.tools;
+    mdp.equipment = made.equipment;
+    this.mdps.set(mdp.mdpId, mdp);
+    return this.toolsOf(mdp, now);
+  }
+
+  toolsOf(mdp: Mdp, now: number = Date.now()): SiteToolsView {
+    return siteToolsView(mdp.equipment ?? ['MAN'], mdp.tools, this.countryOf(mdp), now);
   }
 
   /** Its owner has said both numbers. */

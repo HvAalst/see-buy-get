@@ -26,9 +26,12 @@ import { enAbbr } from './en.abbr';
 import { enRefusal } from './en.refusal';
 import { enAnotherWay } from './en.another-way';
 import { enDirectory } from './en.directory';
+import { enSiteTools } from './en.site-tools';
 
 export const enApps = {
   ...enAgent,
+  // 2026-11-13 — a shop's or hub's tools, said by the Shop and Hub apps alike.
+  ...enSiteTools,
   ...enDriver,
   ...enFleet,
   ...enUpkeep,
