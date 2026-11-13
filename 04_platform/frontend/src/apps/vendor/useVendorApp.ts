@@ -1306,6 +1306,18 @@ export function useVendorApp() {
     [client, creds, fail],
   );
 
+  /** 2026-11-13 — the store's side, beside a weight a hub found on its order (site tools, T2): once, then shown as written. */
+  const answerWeight = useCallback(
+    async (parcelId: string, text: string): Promise<SbgError | null> => {
+      if (!client || !creds) return null;
+      const r = await client.api.weightAnswer(creds.vendorId, parcelId, text);
+      if (r.error) return r.error;
+      await openOrder(parcelId);
+      return null;
+    },
+    [client, creds, openOrder],
+  );
+
   const closeOrder = useCallback(() => {
     setState((s) => ({ ...s, detail: null, detailState: 'idle', callOff: null, move: null }));
   }, []);
@@ -1758,6 +1770,7 @@ export function useVendorApp() {
       topUp,
       saveLocation,
       openOrder,
+      answerWeight,
       closeOrder,
       askCallOff,
       cancelCallOff,

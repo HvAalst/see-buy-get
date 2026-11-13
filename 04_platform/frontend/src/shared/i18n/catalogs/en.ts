@@ -105,6 +105,12 @@ export const en = {
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
+  'common.weight.heavier': 'A hub found it weighs more than you said',
+  'common.weight.lighter': 'A hub found it weighs less than you said',
+  'common.weight.found': '{site} weighed it at {kg} kg on an approved scale on {date}; you said {said} kg. It is kept with the parcel; the price was settled when it was handed in.',
+  'common.weight.yourSide': 'Your side, shown beside it: “{text}”',
+  'common.weight.answerLabel': 'Your side, shown beside it',
+  'common.weight.answer': 'Send your side',
   'common.whatIsThis': 'What is this? {title}',
   // A hub where a driver or a store meets it (shared/hubReach.ts): open now on its own clock, and how to reach it.
   'common.hub.openNow': 'Open now',

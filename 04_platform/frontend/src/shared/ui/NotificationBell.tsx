@@ -66,6 +66,8 @@ const KIND_ICON: Record<string, IconName> = {
   driver_roster: 'clock',
   // A parcel past the time it was promised, still on its way.
   parcel_late: 'clock',
+  // 2026-11-13 — a parcel weighed later at a hub, unlike what its sender said.
+  parcel_weight: 'weight',
   // 2026-11-06 — a parcel its people were told was held up, on the road again.
   parcel_moving: 'truck',
   // 2026-11-06 — its pickup shop closed: choose another; it went to another; a shop found shut by a driver.

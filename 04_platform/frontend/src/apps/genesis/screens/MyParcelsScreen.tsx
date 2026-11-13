@@ -1,3 +1,4 @@
+import { WeightFoundCard } from '../../../shared/WeightFoundCard';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { MoveDropOff } from './MoveDropOff';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
@@ -262,6 +263,9 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           It sits ABOVE the collection code deliberately: the terms have changed, and finding that out
           after being shown the code is finding it out at the counter instead. It never replaces the code
           — the parcel is still theirs and still there, which is the whole point of the status. */}
+      {/* 2026-11-13 — a hub weighed what they sent, unlike what they said: what it found, and their side (site tools, T2). */}
+      {parcel.relation === 'sent' && parcel.weightFound ? <WeightFoundCard found={parcel.weightFound} onAnswer={actions.answerWeight} /> : null}
+
       {/* 2026-11-06 — its pickup shop closed: choose one of the shops the driver with it can take it to (the owner, point 6). */}
       {parcel.relation === 'received' && parcel.shopChoice ? (
         <Card

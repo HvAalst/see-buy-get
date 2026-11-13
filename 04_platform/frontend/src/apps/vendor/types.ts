@@ -205,6 +205,8 @@ export interface MovedView {
 }
 
 export interface OrderDetail extends OrderRow {
+  /** 2026-11-13 — a weight a hub found, unlike what the store said, and its side (site tools, T2). */
+  weightFound?: import('../../shared/WeightFoundCard').WeightFound;
   /** The damage claim report made when a problem was reported on this order. */
   damageReport?: { number: string };
   destAgentDid?: string;

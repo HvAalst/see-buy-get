@@ -233,7 +233,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // round 36 — a bag closed for the road on its coded seal, and one found tampered with: held
         'POST sbg/totes/:code/close', 'POST sbg/totes/:code/tamper',
         // a hub's floor, worked by its own people (the ISO 28000 check: "a hub's own people by name")
-        'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort', 'POST sbg/mdps/:id/totes', 'GET sbg/totes', 'POST sbg/mdps/:id/parcels/:parcelId/tamper',
+        'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort', 'POST sbg/mdps/:id/totes', 'GET sbg/totes', 'POST sbg/mdps/:id/parcels/:parcelId/tamper', 'POST sbg/mdps/:id/parcels/:parcelId/weight',
         // reading B — a store's parcels handed in at the hub's door in bulk: what is coming, counted, scanned off, finished
         'GET sbg/mdps/:id/arrivals', 'POST sbg/mdps/:id/arrivals/:arrivalId/receive', 'POST sbg/mdps/:id/arrivals/:arrivalId/scan', 'POST sbg/mdps/:id/arrivals/:arrivalId/finish', 'POST sbg/mdps/:id/arrivals/:arrivalId/missed', 'POST sbg/mdps/:id/arrivals/:arrivalId/empties', 'GET sbg/mdps/:id/contact', 'GET sbg/mdps/:id/carriers', 'GET sbg/mdps/:id/carrier-moves', 'POST sbg/mdps/:id/carrier-moves', 'POST sbg/mdps/:id/carrier-moves/:moveId/done',
         // 2026-11-02 — what the hub's floor holds against its space: its people read it; its owner says it

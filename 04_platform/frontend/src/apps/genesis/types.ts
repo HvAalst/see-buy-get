@@ -289,6 +289,8 @@ export interface MoveView {
 }
 
 export interface ConsumerParcelView {
+  /** 2026-11-13 — to the sender: a weight a hub found, unlike what they said, and their side (site tools, T2). */
+  weightFound?: import('../../shared/WeightFoundCard').WeightFound;
   parcelId: string;
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin)
   relation: 'sent' | 'received';

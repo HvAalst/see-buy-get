@@ -163,7 +163,7 @@ function ScreenRouter({ screen, state, actions, sbg }: { screen: Screen; state: 
     case 'drop':
       return <DropScreen state={state} actions={actions} />;
     case 'sort':
-      return <SortScreen state={state} actions={actions} />;
+      return <SortScreen state={state} actions={actions} sbg={sbg} />;
     case 'load':
       return <LoadScreen state={state} actions={actions} />;
     case 'newtote':

@@ -117,6 +117,9 @@ export function createVendorApi(sbg: SbgClient) {
     ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/ledger/export', { params: { path: { id: vendorId }, query: query ?? {} }, parseAs: 'text' })),
 
     /** Full detail for one order (validates it belongs to this store). */
+    /** 2026-11-13 — the store's side, beside a weight a hub found on its order (site tools, T2). */
+    weightAnswer: (vendorId: string, parcelId: string, text: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/orders/{parcelId}/weight-answer', { params: { path: { id: vendorId, parcelId } }, body: { text } })),
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),
 

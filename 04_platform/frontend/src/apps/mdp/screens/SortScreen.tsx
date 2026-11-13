@@ -4,6 +4,9 @@ import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { TamperSheet } from './TamperSheet';
+import { WeighSheet } from './WeighSheet';
+import { useState } from 'preact/hooks';
+import type { SbgClient } from '../../../lib/sbg';
 import { RelabelCard } from './RelabelCard';
 import { HandoverCard } from './HandoverCard';
 import { DueTag, dueById } from './DueTag';
@@ -11,6 +14,8 @@ import { DueTag, dueById } from './DueTag';
 export interface SortScreenProps {
   state: MdpState;
   actions: MdpActions;
+  /** 2026-11-13 — for weighing a parcel on the floor (site tools, T2). */
+  sbg?: SbgClient | null;
 }
 
 /**
@@ -18,7 +23,8 @@ export interface SortScreenProps {
  * instruction readable from a step back: the bag code, colour-keyed to its destination.
  * The queue chips let a worker tap instead of rescan when the pile is already listed.
  */
-export function SortScreen({ state, actions }: SortScreenProps) {
+export function SortScreen({ state, actions, sbg }: SortScreenProps) {
+  const [weighing, setWeighing] = useState(false);
   const t = useT();
   const last = state.last;
   const filling = fillingBags(state.totes);
@@ -128,7 +134,14 @@ export function SortScreen({ state, actions }: SortScreenProps) {
         <ReadAloud text={() => sortSummary(state.queue.length, state.last, t)} label={t('mdp.readAloud')} />
       </div>
 
+      {/* 2026-11-13 — weigh a parcel on the floor, on a scale that counts (site tools, T2). */}
+      {sbg && state.hub ? (
+        <Button variant="link" full={false} onClick={() => setWeighing(true)}>
+          {t('mdp.weigh.open')}
+        </Button>
+      ) : null}
       <TamperSheet state={state} actions={actions} />
+      {weighing ? <WeighSheet open onClose={() => setWeighing(false)} sbg={sbg ?? null} mdpId={state.hub?.mdpId} /> : null}
     </div>
   );
 }

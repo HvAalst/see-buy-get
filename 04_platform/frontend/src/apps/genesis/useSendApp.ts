@@ -913,6 +913,20 @@ export function useSendApp() {
    * app not listening.
    */
   /** 2026-11-06 — its pickup shop closed: one of the shops the driver with it picked, chosen. */
+  /** 2026-11-13 — the sender's side, beside a weight a hub found (site tools, T2): once, then shown as written. */
+  const answerWeight = useCallback(
+    async (text: string): Promise<SbgError | null> => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id) return null;
+      const r = await client.api.weightAnswer(id, text);
+      if (r.error) return r.error;
+      const found = narrow<NonNullable<ConsumerParcelView['weightFound']>>(r.data);
+      setState((s) => (s.openParcelDetail?.parcelId === id ? { ...s, openParcelDetail: { ...s.openParcelDetail, weightFound: found } } : s));
+      return null;
+    },
+    [client],
+  );
+
   const choosePickupShop = useCallback(
     async (shopDid: string) => {
       const id = stateRef.current.openParcelId;
@@ -1392,6 +1406,7 @@ export function useSendApp() {
     rateStore,
     respondToNotice,
     choosePickupShop,
+    answerWeight,
     nominateCollector,
     movePreview,
     moveParcel,

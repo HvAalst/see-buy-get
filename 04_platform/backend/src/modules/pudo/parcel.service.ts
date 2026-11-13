@@ -24,7 +24,7 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -283,6 +283,8 @@ export function disputeOutcomeOf(p: Parcel): DisputeOutcomeView | undefined {
  * entitled to reconcile — and nothing about how the price was built.
  */
 export interface VendorOrderDetail extends VendorOrderRow {
+  /** 2026-11-13 — weighed later at a hub, unlike what the store said, and its answer. */
+  weightFound?: ParcelWeightFound;
   /** Round 29 — its SSCC, under the store's GS1 prefix: given once it was paid, printed on its label. */
   sscc?: string;
   /** The damage claim report made when a problem was reported on this order: the store reads it at `GET parcels/:id/damage-report`. */
@@ -341,6 +343,8 @@ export function vendorOrderDetailOf(p: Parcel): VendorOrderDetail {
     coverLimit: p.coverLimit,
     shipmentPremium: p.shipmentPremium,
     ...(p.dispute || p.lost ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
+    // 2026-11-13 — weighed later at a hub, unlike what the store said, and its answer (site tools, T2).
+    ...(p.weightFound ? { weightFound: p.weightFound } : {}),
   };
 }
 
@@ -1350,6 +1354,7 @@ export class ParcelService implements OnApplicationBootstrap {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
       relation,
+      ...(relation === 'sent' && p.weightFound ? { weightFound: p.weightFound } : {}),
       ...(shopChoice ? { shopChoice } : {}),
       direction: p.direction,
       status: p.status,
@@ -4288,6 +4293,24 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /** Re-store the (in-place-mutated) parcel so the snapshot store flushes it to disk. */
+  /** 2026-11-13 — a weight found later at a hub, unlike what was said (weight-check.service.ts): kept with the parcel. */
+  recordWeightFound(parcelId: string, found: ParcelWeightFound): Parcel {
+    const parcel = this.require(parcelId);
+    parcel.weightFound = found;
+    this.persist(parcel);
+    return parcel;
+  }
+
+  /** The sender's side, beside it — once: one answer from the party, shown as written. */
+  answerWeightFound(parcelId: string, text: string, now: number = Date.now()): ParcelWeightFound {
+    const parcel = this.require(parcelId);
+    if (!parcel.weightFound) throw new GlosError('INVALID_STATE', 'Nothing was found on this parcel’s weight to answer');
+    if (parcel.weightFound.answer) throw new GlosError('INVALID_STATE', 'Your side is already said, beside it');
+    parcel.weightFound = { ...parcel.weightFound, answer: { text, at: new Date(now).toISOString() } };
+    this.persist(parcel);
+    return parcel.weightFound;
+  }
+
   private persist(parcel: Parcel): void {
     if (this.batch) {
       this.batch.set(parcel.parcelId, parcel);

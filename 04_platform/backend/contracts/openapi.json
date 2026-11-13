@@ -7671,6 +7671,137 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/parcels/{parcelId}/weight": {
+      "post": {
+        "operationId": "WeightCheck.weighAtHub",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeighParcelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/weight-answer": {
+      "post": {
+        "operationId": "WeightCheck.answerAsSender",
+        "summary": "",
+        "description": "The person who sent it: their side, once.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeightAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/orders/{parcelId}/weight-answer": {
+      "post": {
+        "operationId": "WeightCheck.answerAsStore",
+        "summary": "",
+        "description": "The store that sent it: its side, once.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeightAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/road": {
       "get": {
         "operationId": "HubZones.road",
@@ -52098,6 +52229,28 @@
           "cctv"
         ]
       },
+      "WeighParcelDto": {
+        "type": "object",
+        "properties": {
+          "kg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kg"
+        ]
+      },
+      "WeightAnswerDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "RoadNeighbour": {
         "type": "object",
         "properties": {
@@ -64663,6 +64816,10 @@
           },
           "weighed": {
             "type": "object"
+          },
+          "weightFound": {
+            "type": "object",
+            "description": "2026-11-13 — weighed later at a hub, unlike what was said: recorded, the sender told, their side beside it."
           },
           "fragile": {
             "type": "boolean"

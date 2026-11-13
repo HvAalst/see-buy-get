@@ -6,6 +6,9 @@ import { CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
 import { PapersWatchService } from '../src/modules/pudo/papers-watch.service';
 import { NotificationService } from '../src/modules/pudo/notification.service';
+import { ParcelService } from '../src/modules/pudo/parcel.service';
+import { AGREED } from './agreed';
+import { contentPhotoOver } from './content-photo';
 
 type Auth = Record<string, string>;
 
@@ -147,5 +150,38 @@ describe('a shop’s and a hub’s tools, over the wire', () => {
     // A shop that lifts by hand alone is named as the one too small.
     const small = await aShop('Duka Dogo', `HeavyA${z}`);
     expect((await quote(small.did, 28).expect(400)).body.params).toMatchObject({ site: 'Duka Dogo', maxKg: 23 });
+  });
+
+  /* Step 3 (T2): a weight found later at a hub, kept and the store told; the store answers once, beside it. */
+  it('a hub whose scale counts weighs a store’s parcel on its floor: kept and shown on the order; another hub may not; the store answers once', async () => {
+    const made = (await http().post('/v1/sbg/vendors').set(staff).send({ ...AGREED, name: `Weigh Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const store = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
+    const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(store).send({ amount: 5000 }).expect(201);
+    await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(staff).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);
+    const shop = await aShop('Duka la Uzito');
+    const order = (await http().post('/v1/sbg/inbound/orders').set(store).send({ vendorId: made.vendorId, originPudoDid: shop.did, destPudoDid: shop.did, buyerMobile: `+2547${digits()}2`, size: 'S', weightKg: 2, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store) }).expect(201)).body;
+    const parcelId = order.parcel.parcelId as string;
+    const aHub = async (name: string) => {
+      const hub = (await http().post('/v1/sbg/mdps').set(staff).send({ name, zones: [`Weigh${digits()}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+      declared(app, 'hub', hub.did);
+      return { ...hub, token: bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token) };
+    };
+    const hub = await aHub(`Hub Mizani ${digits()}`);
+    const other = await aHub(`Hub Jirani ${digits()}`);
+    await http().put(`/v1/sbg/mdps/${hub.mdpId}/tools`).set(hub.token).send({ equipment: ['HTR'], scale: { maxKg: 60, approved: true, stampedUntil: inDays(200), certificateRef: await photo(hub.token, 'hub') }, labelPrinter: false, cctv: false }).expect(200);
+    app.get(ParcelService).get(parcelId).status = 'At_MDP'; // standing on the hub's floor
+    const weigh = (who: { mdpId: string; token: Auth }, kg: number) => http().post(`/v1/sbg/mdps/${who.mdpId}/parcels/${parcelId}/weight`).set(who.token).send({ kg });
+
+    // Another hub may not weigh under this one's name, and with no scale said its own weighing keeps nothing. Here: the same weight keeps nothing.
+    await http().post(`/v1/sbg/mdps/${hub.mdpId}/parcels/${parcelId}/weight`).set(other.token).send({ kg: 3 }).expect(403);
+    expect((await weigh(other, 3).expect(400)).body.detail).toMatch(/Your scale is a guide/);
+    expect((await weigh(hub, 2.1).expect(201)).body).toMatchObject({ differs: false, saidKg: 2 });
+    expect((await weigh(hub, 3.5).expect(201)).body).toMatchObject({ differs: true, foundKg: 3.5, saidKg: 2 });
+    // On the store's order, with its bell; its side once.
+    expect((await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/${parcelId}`).set(store).expect(200)).body.weightFound).toMatchObject({ kg: 3.5, saidKg: 2, siteName: hub.name });
+    expect(app.get(NotificationService).inboxFor(made.did ?? (await http().get(`/v1/sbg/vendors/${made.vendorId}`).set(store)).body.did).some((n) => n.kind === 'parcel_weight')).toBe(true);
+    await http().post(`/v1/sbg/vendors/${made.vendorId}/orders/${parcelId}/weight-answer`).set(staff).send({ text: 'x' }).expect(403);
+    expect((await http().post(`/v1/sbg/vendors/${made.vendorId}/orders/${parcelId}/weight-answer`).set(store).send({ text: 'Weighed with its box at our dock' }).expect(201)).body.answer).toMatchObject({ text: 'Weighed with its box at our dock' });
+    expect((await http().post(`/v1/sbg/vendors/${made.vendorId}/orders/${parcelId}/weight-answer`).set(store).send({ text: 'Again' }).expect(400)).body.detail).toMatch(/already said/);
   });
 });

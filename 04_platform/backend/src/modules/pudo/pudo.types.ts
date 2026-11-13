@@ -534,6 +534,18 @@ export interface ParcelWeighed {
   bookedCost?: number;
 }
 
+/** 2026-11-13 — a weight found later on a scale that counts, unlike what was said (weight-check.service.ts), and the sender's side. */
+export interface ParcelWeightFound {
+  kg: number;
+  at: string;
+  /** The hub whose scale it was. */
+  by: string;
+  siteName: string;
+  /** What the sender said it weighed. */
+  saidKg: number;
+  answer?: { text: string; at: string };
+}
+
 export class Mdp {
   mdpId: string;
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
@@ -1050,6 +1062,8 @@ export interface ConsumerParcelView {
   shopChoice?: { closed: string; picks: Array<{ did: string; name: string; km: number }>; inBag: boolean; chosen?: string; settled?: { did: string; name: string } };
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner
   relation: 'sent' | 'received'; // the caller's side of this parcel
+  /** 2026-11-13 — to the sender: a weight found later at a hub, unlike what they said, and their answer (site tools, T2). */
+  weightFound?: ParcelWeightFound;
   direction: ParcelDirection;
   status: ParcelStatus;
   originZone: string;
@@ -1198,6 +1212,8 @@ export class Parcel {
   /** 2026-11-13 — weighed on a scale that counts, or the sender's word (site-tools.ts, T2). Absent: a size's assumed weight. */
   weightSource?: 'weighed' | 'declared';
   weighed?: ParcelWeighed;
+  /** 2026-11-13 — weighed later at a hub, unlike what was said: recorded, the sender told, their side beside it. */
+  weightFound?: ParcelWeightFound;
   fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
   // S30 — cargo taxonomy. cargoClass (P0–P6) is DERIVED from weight+dims at create and drives the handling
   // lane (P4+ never enters the PUDO/MDP pipeline). natureCode is the commodity's primary nature (default

@@ -146,6 +146,7 @@ import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { TAKEOVER_NEAR_KM, VehicleBreakdownService, type VehicleBrokeDown } from './vehicle-breakdown.service';
 import type { GeoPoint, Parcel } from './pudo.types';
+import { WeightCheckService } from './weight-check.service';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 describe('PUDO Light', () => {
@@ -3897,6 +3898,41 @@ describe('PUDO Light', () => {
       const walk = (shop: string, id: string) => parcels.accept({ agentDid: shop, parcelId: id, size: 'S', destZone: 'NorthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop), weightKg: 3 } as never);
       expect(walk(weighs.did, 'WG-W1')).toMatchObject({ weightSource: 'weighed', weighed: { kg: 3, siteName: 'WG Scale' } });
       expect(walk(guide.did, 'WG-W2')).toMatchObject({ weightSource: 'declared' });
+    });
+
+    /* 2026-11-13 — T2: a difference found later at a hub is recorded with both sides heard, and the sender is told. */
+    it('a hub whose scale counts weighs a store’s parcel: the same, nothing kept; a difference, recorded and the store told; it answers once', () => {
+      const until = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);
+      const shop = onboardAgent('WF From', 'NorthTown', 50);
+      const vendor = vendors.register({ name: 'WF Store', callbackUrl: 'https://wf.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 50);
+      const order = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'WF-1', originAgentDid: shop.did, destAgentDid: shop.did, buyerMobile: '+254700600011', size: 'S', weightKg: 2, contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, shop.did, 'S') } as never).parcel;
+      const hub = mdps.register({ name: 'WF Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } }, { approvedBy: 'staff' });
+      const told: Array<{ to: string; kind: string; title: string }> = [];
+      const checks = new WeightCheckService(parcels, mdps, vendors, { notify: async (to: string, n: { kind: string; title: string }) => void told.push({ to, ...n }) } as never);
+      parcels.get(order.parcelId).status = 'At_MDP'; // standing on the hub's floor
+
+      // A guide scale keeps nothing.
+      mdps.setTools(hub.mdpId, { equipment: ['HTR'], scale: { maxKg: 60, approved: false }, labelPrinter: false, cctv: false }, 'test');
+      expect(() => checks.atHub(hub.mdpId, order.parcelId, 3.4)).toThrow(/Your scale is a guide/);
+      // A stamped one: within a difference of scales, nothing kept.
+      mdps.setTools(hub.mdpId, { equipment: ['HTR'], scale: { maxKg: 60, approved: true, stampedUntil: until, certificateRef: photoBy(hub.did) }, labelPrinter: false, cctv: false }, 'test');
+      const said = parcels.get(order.parcelId).weightKg;
+      expect(checks.atHub(hub.mdpId, order.parcelId, said + 0.05)).toMatchObject({ differs: false });
+      expect(parcels.get(order.parcelId).weightFound).toBeUndefined();
+      // A difference: recorded, and the store told on its bell.
+      expect(checks.atHub(hub.mdpId, order.parcelId, said + 1.4)).toMatchObject({ differs: true, saidKg: said, foundKg: said + 1.4 });
+      expect(parcels.vendorOrderView(vendor.vendorId, order.parcelId).weightFound).toMatchObject({ kg: said + 1.4, saidKg: said, siteName: 'WF Hub', by: hub.did });
+      // The buyer is not shown it: it is between the hub and whoever sent it.
+      expect(parcels.consumerParcel(order.parcelId, hashPhone('+254700600011')).weightFound).toBeUndefined();
+      expect(told).toEqual([expect.objectContaining({ to: vendor.did, kind: 'parcel_weight', title: 'A parcel you sent weighs more than you said' })]);
+      // Its side, once, shown beside; never twice, never empty.
+      expect(() => checks.answer(order.parcelId, '  ')).toThrow(/Say your side/);
+      expect(checks.answer(order.parcelId, 'Our scale said 2 kg with the box').answer).toMatchObject({ text: 'Our scale said 2 kg with the box' });
+      expect(() => checks.answer(order.parcelId, 'Again')).toThrow(/already said/);
+      // Not on a hub's floor: weigh it there.
+      parcels.get(order.parcelId).status = 'On_Bus';
+      expect(() => checks.atHub(hub.mdpId, order.parcelId, 5)).toThrow(/not at a hub/);
     });
   });
 

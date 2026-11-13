@@ -103,6 +103,8 @@ export function createMdpApi(sbg: SbgClient) {
      * waiting to be sorted and going out, of its places; parcels sorted today, of its day's. Its people read it too.
      */
     space: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } } })),
+    /** 2026-11-13 — a parcel weighed on the hub's floor (site tools, T2): kept against it, its sender told, where it differs. */
+    weigh: (mdpId: string, parcelId: string, kg: number) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/parcels/{parcelId}/weight', { params: { path: { id: mdpId, parcelId } }, body: { kg } })),
     /** 2026-11-13 — the hub's tools (site-tools): what it said, and what that lets it take; and its owner says them. */
     tools: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/tools', { params: { path: { id: mdpId } } })),
     setTools: (mdpId: string, body: unknown) => sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/tools', { params: { path: { id: mdpId } }, body: body as never })),

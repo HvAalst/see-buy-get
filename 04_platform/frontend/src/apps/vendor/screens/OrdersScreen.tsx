@@ -1,3 +1,4 @@
+import { WeightFoundCard } from '../../../shared/WeightFoundCard';
 import { useEffect, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, Checkbox, Chip, Choice, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
@@ -646,6 +647,8 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
             <span>{t('vendor.order.sizeZone')}</span>
             <b>{`${d.size} → ${d.destZone}`}</b>
           </div>
+          {/* 2026-11-13 — a hub weighed it, unlike what the store said: what it found, and the store's side (site tools, T2). */}
+          {d.weightFound ? <WeightFoundCard found={d.weightFound} onAnswer={(text) => actions.answerWeight(d.parcelId, text)} /> : null}
           {d.shipmentCost != null ? (
             <div class="kv">
               <span>{t('vendor.order.shippingCost')}</span>
