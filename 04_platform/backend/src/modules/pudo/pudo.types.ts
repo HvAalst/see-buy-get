@@ -518,6 +518,22 @@ export interface SiteToolsView {
   stampCountry: boolean;
 }
 
+/**
+ * 2026-11-13 — WHERE A PARCEL'S WEIGHT CAME FROM (the owner: "shop and hub tools", T2): weighed on a scale that counts (approved
+ * for trade; in Kenya stamped and in date) — that weight set the price — or the sender's word, which a counter's guide does not
+ * change. The weighed record keeps what was booked beside it.
+ */
+export interface ParcelWeighed {
+  kg: number;
+  at: string;
+  /** The shop or hub whose scale it was. */
+  by: string;
+  siteName: string;
+  /** What the sender had said, and what they were to pay, where the weighing changed the price at the counter. */
+  bookedKg?: number;
+  bookedCost?: number;
+}
+
 export class Mdp {
   mdpId: string;
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
@@ -1179,6 +1195,9 @@ export class Parcel {
   size: ParcelSize;
   dimensionsCm?: Dimensions; // declared dims that derived the size tier
   weightKg: number; // implied by size tier (Heavy > 20 kg)
+  /** 2026-11-13 — weighed on a scale that counts, or the sender's word (site-tools.ts, T2). Absent: a size's assumed weight. */
+  weightSource?: 'weighed' | 'declared';
+  weighed?: ParcelWeighed;
   fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
   // S30 — cargo taxonomy. cargoClass (P0–P6) is DERIVED from weight+dims at create and drives the handling
   // lane (P4+ never enters the PUDO/MDP pipeline). natureCode is the commodity's primary nature (default

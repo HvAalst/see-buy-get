@@ -4,7 +4,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField, WeightInput } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling } from '../logic';
+import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, weighedFor } from '../logic';
 import { FreightBooking } from './FreightBooking';
 import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState, TakenInPlace } from '../useAgentApp';
@@ -127,7 +127,11 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       {pm && booked && pm.intakeReady ? (
         <>
           {pm.kind === 'peer_send' ? (
-            <GlanceNumber label={t('agent.accept.collectCash')} value={money(pm.cashDue, pm.currency)} sub={t('agent.accept.priceLocked')} />
+            <GlanceNumber
+              label={t('agent.accept.collectCash')}
+              value={money(pm.cashDue, pm.currency)}
+              sub={pm.weighedKg != null ? t('agent.accept.priceWeighed', { kg: pm.weighedKg, booked: pm.bookedKg ?? pm.weightKg, price: money(pm.bookedCashDue ?? 0, pm.currency) }) : t(pm.weighs ? 'agent.accept.weighHint' : 'agent.accept.priceLocked')}
+            />
           ) : (
             <Note tone="info" icon="wallet" title={t('agent.accept.prepaidTitle')} detail={t('agent.accept.prepaidDetail')} />
           )}
@@ -153,6 +157,14 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             </Card>
           ) : null}
 
+          {/* 2026-11-13 — weighed here, on a scale that counts: the price follows its weight (site tools, T2). */}
+          {pm.kind === 'peer_send' && pm.weighs ? (
+            <Card label={t('agent.accept.weighLabel')}>
+              <WeightInput id="intake-weighed" value={state.intakeWeighed} onInput={(kg) => actions.setIntakeWeighed(kg)} />
+              {weighedFor(pm, state.intakeWeighed) === null ? <p class="hint">{t('agent.accept.weighWait')}</p> : null}
+            </Card>
+          ) : null}
+
           {pm.kind === 'peer_send' ? (
             <Card label={t('agent.accept.proofPhoto')}>
               <PhotoField id="intake-photo" value={state.intakePhotoRef} label={t('agent.accept.takePhoto')} upload={(file) => actions.uploadPhoto('dropoff', file)} onCapture={actions.setIntakePhoto} />
@@ -163,7 +175,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           <div class="scr__cta">
             <Button
               onClick={() => void actions.submitIntake(papersSeen === pm.parcelId)}
-              disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none' || (pm.papers ? papersSeen !== pm.parcelId : false)}
+              disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none' || (pm.papers ? papersSeen !== pm.parcelId : false) || weighedFor(pm, state.intakeWeighed) === null}
               busy={state.busy === 'intake'}
             >
               {pm.kind === 'peer_send' ? t('agent.accept.collectAndTakeIn', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.takeIn')}

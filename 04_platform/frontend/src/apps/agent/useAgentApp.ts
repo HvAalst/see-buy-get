@@ -33,7 +33,7 @@ import { signal } from '../../shared/feedback';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { CustodyCapView } from '../../shared/custodyCap';
-import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, weighedFor, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
@@ -330,6 +330,8 @@ export interface AgentState {
   /** Bumped to re-fire the preview for an unchanged code (a retry after a transient failure). */
   previewNonce: number;
   intakePhotoRef: string;
+  /** 2026-11-13 — the weight typed at a counter whose scale counts, for a person's send (site tools, T2). */
+  intakeWeighed: string;
   /** The last completed intake — drives the "taken in, cash collected" sheet. */
   intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string; place?: TakenInPlace } | null;
   /** P3 — whose promise a walk-up taken in here is under. Re-asked every time the take-in screen opens,
@@ -426,6 +428,7 @@ const INITIAL: AgentState = {
   preMintError: null,
   previewNonce: 0,
   intakePhotoRef: '',
+  intakeWeighed: '',
   intakeDone: null,
   takeInTerms: null,
   takeInTermsState: 'idle',
@@ -2179,6 +2182,26 @@ export function useAgentApp() {
 
   const setIntakePhoto = useCallback((ref: string) => setState((s) => ({ ...s, intakePhotoRef: ref })), []);
 
+  /**
+   * 2026-11-13 — a person's send weighed on this counter's scale (site tools, T2): the preview asked again at that weight, so the
+   * cash shown is what that weight is quoted at. A weight cleared goes back to the booking's price.
+   */
+  const weighEpoch = useRef(0);
+  const setIntakeWeighed = useCallback(
+    (kg: string) => {
+      setState((s) => ({ ...s, intakeWeighed: kg }));
+      const pm = stateRef.current.preMint;
+      if (!client || !pm || pm.kind !== 'peer_send' || !pm.weighs) return;
+      const epoch = ++weighEpoch.current;
+      const value = Number(kg.replace(',', '.'));
+      void client.api.intakePreview(pm.parcelId, value > 0 ? value : undefined).then((r) => {
+        if (epoch !== weighEpoch.current || r.error) return;
+        setState((s) => (s.preMint?.parcelId === pm.parcelId ? { ...s, preMint: narrow<IntakePreview>(r.data) } : s));
+      });
+    },
+    [client],
+  );
+
   /** Re-run the preview for the current code (an unchanged id won't re-fire the effect on its own). */
   const retryPreview = useCallback(() => setState((s) => ({ ...s, previewNonce: s.previewNonce + 1 })), []);
 
@@ -2190,8 +2213,11 @@ export function useAgentApp() {
     const photo = stateRef.current.intakePhotoRef;
     // Only ever act on a SETTLED preview — never a stale one still on screen during a re-scan's fetch.
     if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo) || (pm.papers && !papersInPouch)) return;
+    // 2026-11-13 — weighed here: only once the cash shown is the price at that weight (the preview caught up with the scale).
+    const weighed = weighedFor(pm, stateRef.current.intakeWeighed);
+    if (weighed === null) return;
     await run('intake', async () => {
-      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined, takeInSeconds(), pm.papers ? papersInPouch : undefined);
+      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined, takeInSeconds(), pm.papers ? papersInPouch : undefined, weighed);
       if (r.error) return fail(r.error);
       buzz();
       previewEpoch.current++; // the form reset below must not race a stale preview into the cleared state
@@ -2199,6 +2225,7 @@ export function useAgentApp() {
         ...s,
         accept: { ...EMPTY_ACCEPT },
         intakePhotoRef: '',
+        intakeWeighed: '',
         preMint: null,
         preMintState: 'idle',
         preMintError: null,
@@ -2919,6 +2946,7 @@ export function useAgentApp() {
       depositConsignment,
       sendConsignment,
       setIntakePhoto,
+      setIntakeWeighed,
       retryPreview,
       submitIntake,
       dismissIntakeDone,

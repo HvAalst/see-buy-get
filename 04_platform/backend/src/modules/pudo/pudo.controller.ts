@@ -85,7 +85,7 @@ import { VendorService } from './vendor.service';
 import { storeDeskOf, storeRowOf, type StoreDesk, type StoreRecord, type StoreRow, type StoreStanding } from './store-desk';
 import { ShelfService } from './shelf.service';
 import { DamageReportService } from './damage-report.service';
-import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
+import { RoutingService, publicQuote, type QuoteCarriers, type ShipmentQuote } from './routing.service';
 import { HubArrivalService } from './hub-arrival.service';
 import { HubContactService } from './hub-contact.service';
 import { DropOffHoldService } from './drop-off-hold.service';
@@ -196,8 +196,8 @@ import { AddressSearchService, GEOCODER, Geocoder } from './geocoder';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import { PilotService } from './pilot.service';
-import { CustodyCapView, HandoverManifest, SiteToolsView } from './pudo.types';
-import { shopCardTools, type SiteToolsInput } from './site-tools';
+import { CustodyCapView, HandoverManifest, Parcel, SiteToolsView } from './pudo.types';
+import { scaleCounts, shopCardTools, type SiteToolsInput } from './site-tools';
 import { offPlanSaid } from './route-plan.types';
 import { ShopChoiceService } from './shop-choice.service';
 import { ZoneMapService } from './zone-map.service';
@@ -5405,7 +5405,8 @@ export class SbgController {
   @AtTheCounter()
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
     const did = actingDid(actor, dto.agentDid);
-    const taken = this.parcels.get(id).direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef, dto.observedAt) : this.parcels.intakeInbound(id, did, dto.papersInPouch === true, dto.observedAt);
+    const parcel = this.parcels.get(id);
+    const taken = parcel.direction === 'outbound' ? this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef, dto.observedAt, this.weighedAtCounter(parcel, did, dto.weighedKg)) : this.parcels.intakeInbound(id, did, dto.papersInPouch === true, dto.observedAt);
     this.pilot?.noteTakeIn(id, did, dto.takeInSeconds);
     return taken;
   }
@@ -5414,10 +5415,27 @@ export class SbgController {
    *  cash is due, where it goes. Field-picked (no phones, no handover secrets) and pinned to the acting
    *  shop — the same WRONG_PUDO rule the intake itself enforces, so the answer doubles as "is this mine
    *  to take in". */
+  /**
+   * 2026-11-13 — A PERSON'S SEND WEIGHED AT THIS COUNTER (the owner: "shop and hub tools", T2): on a scale that counts, the price that
+   * weight is quoted at on its own route — as the booking was quoted — for the take-in to collect. Nothing where no weight was given,
+   * the parcel is not a person's send, or the scale is a guide: the booking's price stands.
+   */
+  private weighedAtCounter(parcel: Parcel, agentDid: string, kg?: number): { kg: number; quote: ShipmentQuote } | undefined {
+    if (kg == null || parcel.direction !== 'outbound' || parcel.senderMobile !== 'app' || parcel.vendorId || !parcel.destAgentDid || parcel.originAgentDid !== agentDid) return undefined;
+    const shop = this.agents.get(agentDid);
+    if (!scaleCounts(shop.tools, this.agents.countryOf(shop), Date.now())) return undefined;
+    const weighed = Math.round(kg * 100) / 100;
+    const dims = parcel.dimensionsCm;
+    const size = dims ? classifySize({ ...dims, kg: weighed }) : parcel.size;
+    const quote = this.routing.quoteShipment(agentDid, parcel.destAgentDid, size, dims ? measuredFactor({ ...dims, kg: weighed }) : undefined, { kg: weighed, fragile: parcel.fragile, ...(dims ? { dims } : {}), consumer: true });
+    return { kg: weighed, quote };
+  }
+
   @Scopes('parcel:accept')
   @Get('parcels/:id/intake-preview')
   @AtTheCounter()
-  intakePreview(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+  @ApiQuery({ name: 'weighedKg', required: false, description: 'What the counter weighed it at: on a scale that counts, the cash due at that weight' })
+  intakePreview(@Param('id') id: string, @Actor() actor: IntrospectionResult, @Query('weighedKg') weighedKg?: string) {
     const parcel = this.parcels.get(id);
     if (actor?.role !== 'operator' && parcel.originAgentDid !== actor?.did) {
       throw new GlosError('WRONG_PUDO', 'This parcel is booked for drop-off at another shop');
@@ -5426,6 +5444,11 @@ export class SbgController {
     // A vendor order is intakeable only once the store has actually PAID (intakeInbound hard-requires
     // ParcelPaid); a peer send stays unpaid-by-design until the cash is collected at THIS counter.
     const intakeReady = parcel.status === 'Created' && (kind !== 'vendor_order' || parcel.paidStatus === 'ParcelPaid');
+    const counter = parcel.originAgentDid ? this.agents.get(parcel.originAgentDid) : undefined;
+    const weighs = Boolean(counter && scaleCounts(counter.tools, this.agents.countryOf(counter), Date.now()));
+    const kg = weighedKg != null && weighedKg !== '' ? Number(weighedKg) : undefined;
+    if (kg != null && !(Number.isFinite(kg) && kg > 0 && kg <= 1000)) throw new GlosError('VALIDATION_FAILED', 'A weight is a number of kg above nothing', { field: 'weighedKg' });
+    const weighedAt = kind === 'peer_send' && intakeReady && parcel.originAgentDid ? this.weighedAtCounter(parcel, parcel.originAgentDid, kg) : undefined;
     return {
       parcelId: parcel.parcelId,
       kind,
@@ -5436,7 +5459,10 @@ export class SbgController {
       fragile: parcel.fragile ?? false,
       destZone: parcel.destZone,
       destShopName: parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined,
-      cashDue: kind === 'peer_send' ? parcel.shipmentCost ?? 0 : 0,
+      cashDue: kind === 'peer_send' ? (weighedAt?.quote.locked.gross ?? parcel.shipmentCost ?? 0) : 0,
+      // 2026-11-13 — this counter's scale counts (T2): a weight typed here sets the price; and what was booked, where it did.
+      weighs,
+      ...(weighedAt ? { weighedKg: weighedAt.kg, bookedKg: parcel.weightKg, bookedCashDue: parcel.shipmentCost ?? 0 } : {}),
       // The money the cash is counted in: the selling company's, stamped on the parcel when it was priced.
       currency: parcelCurrency(parcel),
       // P3 — said in the same breath as the price: whose promise, who answers, and this parcel's own cover.

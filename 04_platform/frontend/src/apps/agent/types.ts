@@ -329,6 +329,12 @@ export interface IntakePreview {
   destShopName?: string;
   /** The locked price the shop collects in cash — 0 for a prepaid store order. */
   cashDue: number;
+  /** 2026-11-13 — this counter's scale counts (site tools, T2): a weight typed here sets the price. */
+  weighs?: boolean;
+  /** Weighed here: the weight the cash due is at, and what was booked. */
+  weighedKg?: number;
+  bookedKg?: number;
+  bookedCashDue?: number;
   /** The money it is counted in: the selling company's, stamped on the parcel. */
   currency?: string;
   /** P3 — whose promise, who answers, and this parcel's own cover. */

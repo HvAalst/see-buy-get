@@ -20005,13 +20005,20 @@
     "/v1/sbg/parcels/{id}/intake-preview": {
       "get": {
         "operationId": "Sbg.intakePreview",
-        "summary": "",
-        "description": "PG2 — what the counter must know about a scanned parcel BEFORE confirming intake: what it is, what\n cash is due, where it goes. Field-picked (no phones, no handover secrets) and pinned to the acting\n shop — the same WRONG_PUDO rule the intake itself enforces, so the answer doubles as \"is this mine\n to take in\".",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weighedKg",
+            "required": false,
+            "in": "query",
+            "description": "What the counter weighed it at: on a scale that counts, the cash due at that weight",
             "schema": {
               "type": "string"
             }
@@ -64651,6 +64658,12 @@
           "weightKg": {
             "type": "number"
           },
+          "weightSource": {
+            "type": "object"
+          },
+          "weighed": {
+            "type": "object"
+          },
           "fragile": {
             "type": "boolean"
           },
@@ -67233,6 +67246,12 @@
           "observedAt": {
             "type": "string",
             "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
+          },
+          "weighedKg": {
+            "type": "number",
+            "description": "2026-11-13 — a person's send weighed at this counter (site tools, T2): on a scale that counts, its weight sets the price and the\ncash taken; on one that does not, it is a guide and changes nothing.",
+            "minimum": 0.01,
+            "maximum": 1000
           }
         }
       },

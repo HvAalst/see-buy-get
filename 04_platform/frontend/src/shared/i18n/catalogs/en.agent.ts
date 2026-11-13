@@ -385,6 +385,10 @@ export const enAgent = {
   'agent.accept.lateCharged': 'Taken in at {amount}, charged to your float.',
   'agent.accept.lateToldOther': 'You told the sender {told}: the price changed while you had no signal.',
   'agent.accept.priceLocked': 'The price was locked when the sender booked — no arguing at the counter.',
+  'agent.accept.weighLabel': 'Weighed on your scale, in kg',
+  'agent.accept.weighHint': 'Your scale counts: weigh it, and the price follows its weight.',
+  'agent.accept.priceWeighed': 'At {kg} kg as weighed here. Booked as {booked} kg for {price}.',
+  'agent.accept.weighWait': 'Working out the price at this weight…',
   'agent.accept.prepaidTitle': 'Prepaid by the store',
   'agent.accept.prepaidDetail': 'Nothing to collect — the store already paid for this shipment.',
   // P3 — whose promise, said before the goods are accepted. Plain words a shopkeeper can repeat.

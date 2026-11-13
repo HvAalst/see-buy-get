@@ -1431,6 +1431,11 @@ export class IntakeDto {
   @IsOptional() @IsString() dropoffPhotoRef?: string;
   /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /**
+   * 2026-11-13 — a person's send weighed at this counter (site tools, T2): on a scale that counts, its weight sets the price and the
+   * cash taken; on one that does not, it is a guide and changes nothing.
+   */
+  @IsOptional() @IsNumber() @Min(0.01) @Max(1000) weighedKg?: number;
 }
 
 export class ShelveDto {

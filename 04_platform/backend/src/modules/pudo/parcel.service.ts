@@ -1,4 +1,4 @@
-import { assertSiteTakes } from './site-tools';
+import { assertSiteTakes, scaleCounts } from './site-tools';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
@@ -145,6 +145,53 @@ function zoneStampOf(quote: ShipmentQuote): Pick<Parcel, 'zonePrice'> {
 }
 
 /** Each stop's own fee as the parcel is sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
+/**
+ * 2026-11-13 — THE PRICE A PERSON'S SEND IS STAMPED WITH, from its quote (always the locked leg — see createConsumerSend): at
+ * booking, and again at the counter where a scale that counts weighs it (site-tools.ts, T2). One place, so the two never drift.
+ */
+function peerSendPriceOf(quote: ShipmentQuote): Partial<Parcel> {
+  const routeMode = 'locked' as const;
+  const chosen = quote.locked;
+  return {
+    routeMode,
+    routeKm: quote.totalKm,
+    lockedPerKm: quote.perKm.min,
+    nodeFees: quote.nodeFees,
+    stopFees: stopFeesOf(quote),
+    ...zoneStampOf(quote),
+    transportCost: chosen.transport,
+    platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
+    platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+    // …and what that rate was MADE of, for the same reason: a knob turned tomorrow must not rewrite
+    // why a shipment sold today was priced as it was.
+    rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
+    // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
+    // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
+    // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
+    // already sold and in the air, which is the one thing this whole block exists to prevent.
+    transportFactor: quote.transportFactor,
+    // …and the tax, which is stamped for a reason the knobs above do not have: a rate is changed by a
+    // government on a date, and every sale before it was correctly taxed at the old one. Recomputing
+    // from today's rate would restate history that the authority itself does not restate.
+    taxPct: quote.tax.ratePct,
+    taxLabel: quote.tax.label,
+    shipmentTax: chosen.tax,
+    // …and the cover inside the platform fee. Stamped for the same reason and one more: a refund must
+    // release exactly what the billing set aside, and a knob turned in between must not change that.
+    shipmentProvision: chosen.provision,
+    currency: quote.currency, // the cash the shop will take at the counter is in a named money
+    fx: quote.fx,
+    sellerEntityId: quote.sellerEntityId,
+    // GROSS — the price the sender was shown (the Send app shows `locked.gross`) and the cash the counter collects.
+    // It was `total`, the price BEFORE tax, while the charge below takes the tax out of it: with a rate set, the sender
+    // paid the tax short and the company owed the authority money it never collected (found 2026-10-18, building eTIMS).
+    shipmentCost: chosen.gross,
+    ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
+    ceilingTax: quote.flexible.tax,
+    ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
+  };
+}
+
 function stopFeesOf(quote: ShipmentQuote): NonNullable<Parcel['stopFees']> {
   return quote.nodes.map((n) => ({ type: n.type, id: n.id, fee: n.nativeFee, currency: n.currency }));
 }
@@ -1542,6 +1589,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // the legacy declared size tier.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : input.size ?? 'M';
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
+    // 2026-11-13 — where it came from (T2): a weight typed at a counter whose scale counts is weighed; otherwise the sender's word.
+    const counter = this.agents.get(input.agentDid);
+    const weightSource: Parcel['weightSource'] = input.weightKg == null ? undefined : scaleCounts(counter.tools, this.agents.countryOf(counter), Date.now()) ? 'weighed' : 'declared';
     const dimsCm: [number, number, number] | undefined = input.dimensionsCm ? [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] : undefined;
     // S30: derive the cargo class from the measurements (dims + weight). A class needing dedicated
     // transport can never be a counter parcel — refuse it here so a genuinely heavy walk-up is sent to the
@@ -1563,6 +1613,8 @@ export class ParcelService implements OnApplicationBootstrap {
       size,
       dimensionsCm: input.dimensionsCm,
       weightKg,
+      ...(weightSource ? { weightSource } : {}),
+      ...(weightSource === 'weighed' ? { weighed: { kg: weightKg, at: now, by: input.agentDid, siteName: counter.shopName } } : {}),
       cargoClass,
       natureCode,
       fragile: input.fragile ?? false,
@@ -2435,42 +2487,7 @@ export class ParcelService implements OnApplicationBootstrap {
       paymentMode: 'cash', // collected by the shop at drop-off, against the locked price below
       status: 'Created',
       trackingKey,
-      routeMode,
-      routeKm: quote.totalKm,
-      lockedPerKm: quote.perKm.min,
-      nodeFees: quote.nodeFees,
-      stopFees: stopFeesOf(quote),
-      ...zoneStampOf(quote),
-      transportCost: chosen.transport,
-      platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
-      platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
-      // …and what that rate was MADE of, for the same reason: a knob turned tomorrow must not rewrite
-      // why a shipment sold today was priced as it was.
-      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
-      // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
-      // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
-      // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
-      // already sold and in the air, which is the one thing this whole block exists to prevent.
-      transportFactor: quote.transportFactor,
-      // …and the tax, which is stamped for a reason the knobs above do not have: a rate is changed by a
-      // government on a date, and every sale before it was correctly taxed at the old one. Recomputing
-      // from today's rate would restate history that the authority itself does not restate.
-      taxPct: quote.tax.ratePct,
-      taxLabel: quote.tax.label,
-      shipmentTax: chosen.tax,
-      // …and the cover inside the platform fee. Stamped for the same reason and one more: a refund must
-      // release exactly what the billing set aside, and a knob turned in between must not change that.
-      shipmentProvision: chosen.provision,
-      currency: quote.currency, // the cash the shop will take at the counter is in a named money
-      fx: quote.fx,
-      sellerEntityId: quote.sellerEntityId,
-      // GROSS — the price the sender was shown (the Send app shows `locked.gross`) and the cash the counter collects.
-      // It was `total`, the price BEFORE tax, while the charge below takes the tax out of it: with a rate set, the sender
-      // paid the tax short and the company owed the authority money it never collected (found 2026-10-18, building eTIMS).
-      shipmentCost: chosen.gross,
-      ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
-      ceilingTax: quote.flexible.tax,
-      ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
+      ...peerSendPriceOf(quote),
       paidStatus: 'unpaid',
       acceptedAt: now,
       // Minted with the parcel (see accept()): the sender holds the release code in their own twin from
@@ -2572,7 +2589,12 @@ export class ParcelService implements OnApplicationBootstrap {
    * photo is taken NOW (walk-up parity, fraud defence), and acceptedAt is re-stamped — the void window runs
    * from PHYSICAL drop-off, not from the at-home mint.
    */
-  intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string, observedAt?: string): Parcel {
+  /**
+   * `weighed`: 2026-11-13 — the parcel weighed at this counter on a scale that counts, and the price that weight is quoted at (the
+   * controller asks the route): that price is the cash taken, and the parcel keeps the weight and what was booked beside it.
+   * Nothing is written until every check below has passed.
+   */
+  intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string, observedAt?: string, weighed?: { kg: number; quote: ShipmentQuote }): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a pre-minted peer send');
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
@@ -2582,15 +2604,29 @@ export class ParcelService implements OnApplicationBootstrap {
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
     // 2026-11-13 — heavier than this shop's tools let it take now (they changed since the booking): refused, named (site tools, T3).
     const shop = this.agents.get(agentDid);
-    assertSiteTakes({ name: shop.shopName, kind: 'shop' }, this.agents.toolsOf(shop).limits, parcel.weightKg);
+    assertSiteTakes({ name: shop.shopName, kind: 'shop' }, this.agents.toolsOf(shop).limits, weighed?.kg ?? parcel.weightKg);
+    // Weighed heavier than the parcel network carries at all: refused, as at booking.
+    const weighedSize = weighed ? classifySize({ ...(parcel.dimensionsCm ?? { l: 1, w: 1, h: 1 }), kg: weighed.kg }) : undefined;
+    const weighedClass = weighed ? this.cargo.classify({ kg: weighed.kg, dimsCm: parcel.dimensionsCm ? [parcel.dimensionsCm.l, parcel.dimensionsCm.w, parcel.dimensionsCm.h] : undefined }) : undefined;
+    if (weighedClass && this.cargo.dedicatedRequired(weighedClass)) throw new GlosError('CARGO_REQUIRES_DEDICATED', `Weighed at ${weighed!.kg} kg it is cargo class ${weighedClass}, too large for the parcel network: it needs dedicated freight transport`);
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
-    const due = parcel.shipmentCost ?? 0;
+    const due = weighed ? weighed.quote.locked.gross : (parcel.shipmentCost ?? 0);
     const gate = this.gate.canTransact(agentDid);
     if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
     // A same-shop parcel takes its shelf slot before anything is written (2026-11-05).
     const here = this.isSameShop(parcel);
+    // 2026-11-13 — WEIGHED AT THE COUNTER on a scale that counts (T2): its weight sets the price, the booking kept beside it.
+    if (weighed) {
+      const bookedKg = parcel.weightKg;
+      const bookedCost = parcel.shipmentCost;
+      Object.assign(parcel, peerSendPriceOf(weighed.quote), { weightKg: weighed.kg, size: weighedSize!, cargoClass: weighedClass! });
+      parcel.weightSource = 'weighed';
+      parcel.weighed = { kg: weighed.kg, at: new Date().toISOString(), by: agentDid, siteName: shop.shopName, bookedKg, ...(bookedCost != null ? { bookedCost } : {}) };
+    } else {
+      parcel.weightSource = parcel.weightSource ?? 'declared';
+    }
     if (here) parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size);
     const step = this.stepAt(parcel, observedAt);
     if (!here) this.placeTakenIn(parcel, agentDid);

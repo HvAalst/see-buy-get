@@ -145,7 +145,7 @@ import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rai
 import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { TAKEOVER_NEAR_KM, VehicleBreakdownService, type VehicleBrokeDown } from './vehicle-breakdown.service';
-import type { GeoPoint } from './pudo.types';
+import type { GeoPoint, Parcel } from './pudo.types';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 describe('PUDO Light', () => {
@@ -3853,6 +3853,50 @@ describe('PUDO Light', () => {
       expect(shelved.status).toBe('Ready_For_Pickup');
       expect(shelved.binSlot).toBeTruthy();
       expect(shelved.destAgentDid).toBe(shop.did);
+    });
+
+    /* 2026-11-13 — the owner: "shop and hub tools", T2 — a weight taken on a scale that counts sets the price. */
+    it('a person’s send weighed at a counter whose scale counts is priced at that weight, the booking kept beside it; on a guide scale the booking stands', () => {
+      const until = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);
+      const weighs = onboardAgent('WG Scale', 'NorthTown', 500);
+      const guide = onboardAgent('WG Guide', 'NorthTown', 500);
+      const to = onboardAgent('WG To', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'WG', originZone: 'NorthTown', destZone: 'SouthTown' });
+      agents.setLocation(to.did, { lat: -0.6, lng: 37.2 }); // some way off, so the weight makes a difference
+      agents.setTools(weighs.did, { equipment: ['HTR'], scale: { maxKg: 30, approved: true, stampedUntil: until, certificateRef: photoBy(weighs.did) }, labelPrinter: false, cctv: false }, 'test');
+      agents.setTools(guide.did, { equipment: ['HTR'], scale: { maxKg: 30, approved: false }, labelPrinter: false, cctv: false }, 'test');
+      const dims = { l: 30, w: 20, h: 10 };
+      const book = (from: string) =>
+        parcels.createConsumerSend({ senderPersonDid: 'did:person:wg', senderPhoneHash: 'h-wg', receiverMobile: '+254700600009', originAgentDid: from, destAgentDid: to.did, dimensionsCm: dims, weightKg: 2, quote: routing.quoteShipment(from, to.did, classifySize({ ...dims, kg: 2 }), measuredFactor({ ...dims, kg: 2 }), { kg: 2, dims, consumer: true }) }).parcel;
+
+      const sent = book(weighs.did);
+      const booked = sent.shipmentCost!;
+      const asShop = { role: 'agent', did: weighs.did } as never;
+      // The preview: this counter weighs; at 9 kg the cash due is what 9 kg is quoted at, the booking said beside it.
+      const before = controller.intakePreview(sent.parcelId, asShop) as { weighs: boolean; cashDue: number };
+      expect(before).toMatchObject({ weighs: true, cashDue: booked });
+      const preview = controller.intakePreview(sent.parcelId, asShop, '9') as { cashDue: number; weighedKg: number; bookedKg: number; bookedCashDue: number };
+      expect(preview).toMatchObject({ weighedKg: 9, bookedKg: 2, bookedCashDue: booked });
+      expect(preview.cashDue).toBeGreaterThan(booked);
+      // Taken in at 9 kg: the price is 9 kg's, the weight weighed, and what was booked kept.
+      const balanceBefore = gate.canTransact(weighs.did).balance;
+      const taken = controller.intake(sent.parcelId, { weighedKg: 9, dropoffPhotoRef: photoBy(weighs.did) } as never, asShop) as Parcel;
+      expect(taken).toMatchObject({ status: 'At_PUDO', weightKg: 9, weightSource: 'weighed', shipmentCost: preview.cashDue, weighed: { kg: 9, by: weighs.did, siteName: 'WG Scale', bookedKg: 2, bookedCost: booked } });
+      // The shop remits the cash it took — the weighed price — and is paid its take-in.
+      expect(balanceBefore - gate.canTransact(weighs.did).balance).toBeCloseTo(preview.cashDue - (taken.intakeLabour ?? 0), 2);
+
+      // A guide scale: the weight changes nothing, and the sender's word stands.
+      const other = book(guide.did);
+      const asGuide = { role: 'agent', did: guide.did } as never;
+      expect(controller.intakePreview(other.parcelId, asGuide, '9')).toMatchObject({ weighs: false, cashDue: other.shipmentCost });
+      const stood = controller.intake(other.parcelId, { weighedKg: 9, dropoffPhotoRef: photoBy(guide.did) } as never, asGuide) as Parcel;
+      expect(stood).toMatchObject({ weightKg: 2, weightSource: 'declared', shipmentCost: other.shipmentCost });
+      expect(stood.weighed).toBeUndefined();
+
+      // A walk-up: the counter's weight is weighed where the scale counts, the sender's word where it is a guide.
+      const walk = (shop: string, id: string) => parcels.accept({ agentDid: shop, parcelId: id, size: 'S', destZone: 'NorthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop), weightKg: 3 } as never);
+      expect(walk(weighs.did, 'WG-W1')).toMatchObject({ weightSource: 'weighed', weighed: { kg: 3, siteName: 'WG Scale' } });
+      expect(walk(guide.did, 'WG-W2')).toMatchObject({ weightSource: 'declared' });
     });
   });
 

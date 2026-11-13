@@ -305,7 +305,7 @@ export function createAgentApi(sbg: SbgClient) {
     /** PG4 — what a scanned sticker IS before confirming: a pre-minted peer send (with the cash due), a
      *  store order, or an already-used sticker. 404 = a fresh sticker → the walk-up form. Server-pinned
      *  to the acting shop (WRONG_PUDO for a parcel booked elsewhere). */
-    intakePreview: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/intake-preview', { params: { path: { id } } })),
+    intakePreview: (id: string, weighedKg?: number) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/intake-preview', { params: { path: { id }, ...(weighedKg ? { query: { weighedKg: String(weighedKg) } } : {}) } })),
 
     /** P3 — whose promise a walk-up taken in here is under, who answers for it, and the cover. Asked when
      *  the take-in screen opens, so it is said before the goods are accepted rather than after a refusal. */
@@ -317,8 +317,8 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
-    intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number, papersInPouch?: boolean) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}), ...(papersInPouch ? { papersInPouch } : {}), observedAt: new Date().toISOString() } })),
+    intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number, papersInPouch?: boolean, weighedKg?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: { ...(dropoffPhotoRef ? { dropoffPhotoRef } : {}), ...(takeInSeconds ? { takeInSeconds } : {}), ...(papersInPouch ? { papersInPouch } : {}), ...(weighedKg ? { weighedKg } : {}), observedAt: new Date().toISOString() } })),
 
     /**
      * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25

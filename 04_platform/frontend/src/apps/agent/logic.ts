@@ -963,3 +963,15 @@ export function agentWorkLine(
   // welcome answer, and a blank line would read as "not loaded yet".
   return bits.length ? bits.join(' · ') : t('agent.bar.clear');
 }
+
+/**
+ * 2026-11-13 — WHAT A WEIGHED TAKE-IN SENDS (site tools, T2): nothing where the counter's scale does not count, the parcel is not a
+ * person's send, or no weight was typed — the booking's price stands; the weight where the preview shows the cash at it; and
+ * null — wait — while the preview has not caught up with the weight typed, so the cash taken is never other than the cash shown.
+ */
+export function weighedFor(pm: { kind: string; weighs?: boolean; weighedKg?: number }, typed: string): number | undefined | null {
+  if (pm.kind !== 'peer_send' || !pm.weighs) return undefined;
+  const kg = Math.round(Number(String(typed ?? '').replace(',', '.')) * 100) / 100;
+  if (!(kg > 0)) return pm.weighedKg == null ? undefined : null;
+  return pm.weighedKg === kg ? kg : null;
+}
