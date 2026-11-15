@@ -152,6 +152,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'call-off-order', apps: ['vendor'], group: 'daily', steps: 4, notes: ['note'] },
   // Goods coming back to a person, brought to their door instead of the shop (2026-10-27: "Mobile money first").
   { id: 'goods-coming-back', apps: ['send'], group: 'wrong', steps: 4, notes: ['note'] },
+  // 2026-11-15 — a load paid first: the driver's pay held 24 hours, a problem decided by the protocol (the owner: "a protocol
+  // can be explained to all parties"). Public, so every party reads the same page; every decision notice links to it.
+  { id: 'when-something-goes-wrong', apps: ['send', 'driver', 'agent', 'mdp', 'business', 'vendor', 'console'], group: 'wrong', site: true, steps: 5, notes: ['note', 'note', 'why', 'careful'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
   { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why', 'note'] },
   { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare', 'note', 'note'] },

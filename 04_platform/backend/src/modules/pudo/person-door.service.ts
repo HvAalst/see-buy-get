@@ -94,6 +94,9 @@ export class PersonDoorService implements OnModuleInit {
       owns: (f) => Boolean(this.byFreight(f.freightId)),
       bill: (f, bill) => this.bill(f, bill),
       giveBack: (f, charged, why) => this.giveBack(f, charged, why),
+      // 2026-11-15 — the hold after delivery: the carriage price given back by the protocol, and who paid.
+      refundCarriage: (f, charged, why) => this.refundCarriage(f, charged, why),
+      payerOf: (f) => this.byFreight(f.freightId)?.personDid,
     });
     // What goes back goes to the number it came from — kept here, not in a payee's payout number.
     this.payouts.registerDestinations({
@@ -346,6 +349,27 @@ export class PersonDoorService implements OnModuleInit {
     if (req.raise?.state === 'awaiting') this.closeRaise(req, 'a driver took the load', Date.now());
     this.tell(req.personDid, 'A driver is bringing it to your door', `Load ${req.loadCode} was taken for ${this.money(req.billed, req.currency)}. What is left of what you paid goes back to your number once it is delivered.`, req.parcelId);
     return true;
+  }
+
+  /** 2026-11-15 — after delivery, the protocol gave the carriage price back: the bill reversed, and it goes back to their number. */
+  private refundCarriage(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void {
+    const req = this.byFreight(f.freightId);
+    if (!req) return;
+    this.books.post({
+      entityId: req.entityId,
+      kind: 'rebate',
+      ref: f.freightId,
+      currency: req.currency,
+      lines: [
+        { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: req.personDid, amount: -round2(charged.gross) },
+        { code: ACCOUNT_CODES.REVENUE, amount: round2(charged.gross - charged.tax - charged.provision) },
+        ...(charged.tax > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: round2(charged.tax) }] : []),
+        ...(charged.provision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: round2(charged.provision) }] : []),
+      ],
+    });
+    req.billed = undefined;
+    this.requests.set(req.requestId, req);
+    this.owe(req.personDid, req.entityId, req.currency, charged.gross, `carriage given back by the protocol: ${why}`, req, Date.now());
   }
 
   /** The bill given back, exactly — the driver gave the load back, or it went back on the board. */
@@ -713,6 +737,7 @@ export class PersonDoorService implements OnModuleInit {
       ...(raise ? { raise } : {}),
       ...(req.shopName ? { shopName: req.shopName } : {}),
       ...(req.shopParcelId ? { shopParcelId: req.shopParcelId } : {}),
+      ...(req.freightId ? { freightId: req.freightId, ...this.dispatch.holdOf(req.freightId) } : {}),
     };
   }
 

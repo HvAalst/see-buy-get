@@ -56,6 +56,8 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
+import { HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
+import type { HoldQueueRow } from './pay-hold-queue.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
 import { VehicleService } from './vehicle.service';
 import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type PrepaidShipper, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
@@ -442,7 +444,13 @@ export class DispatchService {
   private get prepaid(): PrepaidShipper | undefined {
     if (!this.prepaids.length) return undefined;
     const ownerOf = (f: Freight) => this.prepaids.find((p) => p.owns(f));
-    return { owns: (f) => Boolean(ownerOf(f)), bill: (f, bill) => ownerOf(f)?.bill(f, bill) ?? false, giveBack: (f, charged, why) => ownerOf(f)?.giveBack(f, charged, why) };
+    return {
+      owns: (f) => Boolean(ownerOf(f)),
+      bill: (f, bill) => ownerOf(f)?.bill(f, bill) ?? false,
+      giveBack: (f, charged, why) => ownerOf(f)?.giveBack(f, charged, why),
+      refundCarriage: (f, charged, why) => ownerOf(f)?.refundCarriage?.(f, charged, why),
+      payerOf: (f) => ownerOf(f)?.payerOf?.(f),
+    };
   }
   /**
    * WHICH ACCOUNT A DIVERTED ORDER'S BUYER IS — kept here, beside the loads, never on one: a load goes whole to every
@@ -2066,6 +2074,7 @@ export class DispatchService {
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}),
         ...(f.reservations ? { reservations: { note: f.reservations.note, at: f.reservations.at, ...(f.reservations.answer ? { answer: f.reservations.answer } : {}) } } : {}),
         ...(f.escrow ? { escrow: true } : {}),
+        ...this.holdOf(f.freightId),
         ...(f.deliveryCode && !['delivered', 'cancelled'].includes(f.status) ? { deliveryCode: f.deliveryCode } : {}),
         ...(f.payHold ? { awaitingPayment: f.payHold.until } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
@@ -3586,6 +3595,7 @@ export class DispatchService {
         this.freights.set(f.freightId, f);
         throw new GlosError('OTP_INVALID', 'That is not the delivery code: ask whoever receives it for the code the sender gave them', { field: 'deliveryCode' });
       }
+      f.deliveredWithCode = true;
     }
     // Round 35 — held under the tamper protocol: not handed to the receiver until operations releases it.
     this.refuseIfHeld(f);
@@ -3641,7 +3651,8 @@ export class DispatchService {
     // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     for (const ref of exceptions.flatMap((x) => x.photoRefs ?? [])) this.media.adopt(ref, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
-    this.payTheRoad(f);
+    // 2026-11-15 — a load a person paid first: the driver's pay waits 24 hours for a problem to be reported (the hold, H1).
+    this.payOrHold(f, now);
     this.manifests?.freeze(f.freightId, 'Delivered', now);
     // Refused at an earlier attempt, then taken after all: nothing is left for the sender to decide. The attempt stays —
     // unless a PART was refused at this handover (the user, 2026-10-27: "Refusal rules, for the part"): the rest is delivered,
@@ -4043,9 +4054,13 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (f.status !== 'delivered') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are still on the road — talk to the driver; a claim is made against a delivered load' : `Freight is ${f.status}, expected delivered`);
     if (f.claim) throw new GlosError('INVALID_STATE', f.claim.state === 'open' ? 'A claim on this load is already open' : 'This load’s claim has already been decided');
-    if (!FREIGHT_CLAIM_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'Say what is wrong: damaged, short, or not received');
+    if (!FREIGHT_CLAIM_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'Say what is wrong: damaged, part missing, not received, or not what was sent');
     const description = (input.description ?? '').trim();
     if (description.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you found — the operator deciding this has only your words and the photos');
+    // 2026-11-15 — while the driver's pay is held, a problem you can see comes with a photo of it (the hold, H2).
+    if (this.holdOpen(f) && input.kind !== 'not_received' && !input.photoRef) {
+      throw new GlosError('FIELD_REQUIRED', 'Add a photo of what you found: it is read beside the photos taken at pickup and at the door', { field: 'photoRef' });
+    }
     const deliveredAt = f.deliveredAt ? new Date(f.deliveredAt).getTime() : now;
     if (now - deliveredAt > FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A claim is made within ${FREIGHT_CLAIM_WINDOW_DAYS} days of delivery`);
     if (input.photoRef) this.media.requireHeld(input.photoRef, byDid, { type: 'freight', id: f.freightId }); // round 31
@@ -4057,6 +4072,10 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightClaimOpened, { freightId: f.freightId, code: f.code, kind: input.kind, byDid, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     // Where nothing of ours pays, nobody of ours decides: the claim closes with the report, the moment it is made.
     if (this.claimCoverLimit(f) <= 0) this.closeFreightClaimWithReport(f, now);
+    // 2026-11-15 — reported while the driver's pay is held: it stays held for the protocol, and the driver answers once (H5).
+    if (this.holdOpen(f) && f.claimedBy) {
+      this.tellHold(f.claimedBy, `A problem was reported on ${f.code}`, `The sender says: ${f.claim.description}. Your pay stays held until SeeBuyGet applies the protocol. Answer once, with words and photos, in the Driver app.`, f.freightId);
+    }
     return f;
   }
 
@@ -4517,6 +4536,170 @@ export class DispatchService {
     f.posterConfirmedAt = f.posterConfirmedAt ?? new Date(now).toISOString();
     this.freights.set(f.freightId, f);
     return f.posterConfirmedAt;
+  }
+
+  /* --------------------------- 2026-11-15 — the 24-hour hold and its protocol (pay-hold.types.ts) -- */
+
+  /** At delivery: a load a person paid first waits HOLD_HOURS before its driver is paid; any other is paid now. */
+  private payOrHold(f: Freight, now: number): void {
+    if (this.prepaid?.owns(f) && f.settlement !== 'between_parties') {
+      f.heldPay = { until: new Date(now + HOLD_HOURS * 3_600_000).toISOString() };
+      if (f.claimedBy) this.tellHold(f.claimedBy, `Delivered: ${f.code}`, `Your pay for it is released in ${HOLD_HOURS} hours, unless the sender reports a problem before then.`, f.freightId);
+      return;
+    }
+    this.payTheRoad(f);
+  }
+
+  /** Held, and not yet released or decided. */
+  private holdOpen(f: Freight): f is Freight & { heldPay: HeldPay } {
+    return Boolean(f.heldPay && !f.heldPay.releasedAt && !f.heldPay.decision);
+  }
+
+  /** A problem reported while the pay was held — it keeps the pay until the protocol is applied. */
+  private problemInHold(f: Freight): boolean {
+    return Boolean(f.heldPay && f.claim && Date.parse(f.claim.raisedAt) <= Date.parse(f.heldPay.until));
+  }
+
+  /** Every minute: a hold run out with nothing reported is released to the driver. */
+  releaseDueHolds(now: number = Date.now()): number {
+    let released = 0;
+    for (const f of this.freights.values()) {
+      if (!this.holdOpen(f) || Date.parse(f.heldPay.until) > now || this.problemInHold(f)) continue;
+      this.payTheRoad(f);
+      f.heldPay.releasedAt = new Date(now).toISOString();
+      this.freights.set(f.freightId, f);
+      if (f.claimedBy) this.tellHold(f.claimedBy, `Paid: ${f.code}`, 'Nothing was reported in the 24 hours: your pay is released.', f.freightId);
+      released += 1;
+    }
+    return released;
+  }
+
+  /** The protocol, read for a load whose pay is held and a problem was reported. */
+  readHold(freightId: string): ProtocolReading {
+    const f = this.requireFreight(freightId);
+    if (!f.heldPay || !f.claim || !this.problemInHold(f)) throw new GlosError('NOT_FOUND', 'No problem reported on that load while its pay was held');
+    return readProtocol(f, { kind: f.claim.kind });
+  }
+
+  /** Staff's queue: the held loads with a problem reported, oldest first, each with the record side by side and what the protocol says. */
+  holdQueue(): HoldQueueRow[] {
+    return [...this.freights.values()]
+      .filter((f) => this.holdOpen(f) && this.problemInHold(f))
+      .sort((a, b) => (a.claim!.raisedAt < b.claim!.raisedAt ? -1 : 1))
+      .map((f) => ({
+        freightId: f.freightId,
+        code: f.code,
+        description: f.description,
+        ...(f.pickupCountry ? { country: f.pickupCountry } : {}),
+        ...(f.lockedPrice != null ? { price: f.lockedPrice } : {}),
+        ...(f.postedCurrency ? { currency: f.postedCurrency } : {}),
+        deliveredAt: f.deliveredAt ?? '',
+        heldUntil: f.heldPay!.until,
+        problem: { kind: f.claim!.kind, description: f.claim!.description, at: f.claim!.raisedAt, ...(f.claim!.photoRef ? { photoRef: f.claim!.photoRef } : {}) },
+        ...(f.loadSafety?.securementPhotoRef ? { pickupPhotoRef: f.loadSafety.securementPhotoRef } : {}),
+        ...(f.reservations?.note ? { pickupNote: f.reservations.note } : {}),
+        ...(f.proofOfDelivery?.photoRef ? { doorPhotoRef: f.proofOfDelivery.photoRef } : {}),
+        doorNotes: (f.proofOfDelivery?.exceptions ?? []).filter((x) => x.count > 0).map((x) => `${x.kind} × ${x.count}`),
+        ...(f.heldPay!.answer ? { answer: f.heldPay!.answer } : {}),
+        ...(f.heldPay!.pendingOverride ? { pendingOverride: f.heldPay!.pendingOverride } : {}),
+        reading: readProtocol(f, { kind: f.claim!.kind }),
+      }));
+  }
+
+  /** Staff apply the protocol: the outcome the record says, confirmed by one person, everyone told with the step that decided. */
+  applyHoldProtocol(freightId: string, by: string, now: number = Date.now()): HeldPay {
+    const f = this.requireFreight(freightId);
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for the protocol');
+    if (f.heldPay.pendingOverride) throw new GlosError('INVALID_STATE', 'Going against the protocol waits for a second member of staff: approve it or let it stand');
+    const reading = readProtocol(f, { kind: f.claim!.kind });
+    this.decideHold(f, { step: reading.step, outcome: reading.outcome, by, at: new Date(now).toISOString() });
+    return f.heldPay!;
+  }
+
+  /** Going against the record: one member of staff asks, with a reason; a different one approves. */
+  proposeHoldOverride(freightId: string, input: { outcome: HoldOutcome; reason: string; by: string; byKey?: string }, now: number = Date.now()): HeldPay {
+    const f = this.requireFreight(freightId);
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for the protocol');
+    if (!HOLD_OUTCOMES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what instead: release it to the driver, or give the carriage price back');
+    if (input.outcome === readProtocol(f, { kind: f.claim!.kind }).outcome) throw new GlosError('INVALID_STATE', 'That is what the protocol says: apply it instead');
+    const reason = (input.reason ?? '').trim();
+    if (reason.length < 5) throw new GlosError('REASON_REQUIRED', 'Say why the record is wrong here: everyone is shown it');
+    f.heldPay.pendingOverride = { outcome: input.outcome, reason: reason.slice(0, 500), by: input.by, ...(input.byKey ? { byKey: input.byKey } : {}), at: new Date(now).toISOString() };
+    this.freights.set(f.freightId, f);
+    return f.heldPay;
+  }
+
+  approveHoldOverride(freightId: string, by: string, byKey: string | undefined, now: number = Date.now()): HeldPay {
+    const f = this.requireFreight(freightId);
+    const pending = f.heldPay?.pendingOverride;
+    if (!this.holdOpen(f) || !pending) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for a second member of staff');
+    const same = (byKey && pending.byKey ? byKey === pending.byKey : false) || by.trim().toLowerCase() === pending.by.trim().toLowerCase();
+    if (same) throw new GlosError('FORBIDDEN', 'A different member of staff approves going against the protocol');
+    const reading = readProtocol(f, { kind: f.claim!.kind });
+    delete f.heldPay.pendingOverride;
+    this.decideHold(f, { step: reading.step, outcome: pending.outcome, by: pending.by, at: new Date(now).toISOString(), overridden: true, reason: pending.reason, secondBy: by });
+    return f.heldPay!;
+  }
+
+  /** The driver answers the report once, while the pay is held: words and their own photos, shown beside it. */
+  answerHeldProblem(freightId: string, driverDid: string, input: { words: string; photoRefs?: string[] }, now: number = Date.now()): HeldPay {
+    const f = this.requireFreight(freightId);
+    if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'Only the driver who carried it answers');
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for your answer');
+    if (f.heldPay.answer) throw new GlosError('INVALID_STATE', 'You answered already: once is how it works');
+    const words = (input.words ?? '').trim();
+    if (words.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you know of it: what you saw at pickup and at the door', { field: 'words' });
+    const photoRefs = [...new Set(input.photoRefs ?? [])].slice(0, 5);
+    for (const ref of photoRefs) this.media.requireHeld(ref, driverDid, { type: 'freight', id: f.freightId });
+    for (const ref of photoRefs) this.media.adopt(ref, driverDid, { type: 'freight', id: f.freightId }, 'dispute');
+    f.heldPay.answer = { words: words.slice(0, 1000), photoRefs, at: new Date(now).toISOString(), by: driverDid };
+    this.freights.set(f.freightId, f);
+    return f.heldPay;
+  }
+
+  /** The loads this driver carried whose pay is held for a reported problem. */
+  heldProblemsFor(driverDid: string): Array<{ freightId: string; code: string; description: string; heldUntil: string; problem: { kind: string; description: string; at: string }; answered: boolean }> {
+    return [...this.freights.values()]
+      .filter((f) => f.claimedBy === driverDid && this.holdOpen(f) && this.problemInHold(f))
+      .map((f) => ({ freightId: f.freightId, code: f.code, description: f.description, heldUntil: f.heldPay!.until, problem: { kind: f.claim!.kind, description: f.claim!.description, at: f.claim!.raisedAt }, answered: Boolean(f.heldPay!.answer) }));
+  }
+
+  /** What the person who paid sees of the hold: until when, whether they can still report, and what was decided. */
+  holdOf(freightId: string, now: number = Date.now()): { heldUntil?: string; canReport?: boolean; reported?: boolean; holdWords?: string } {
+    const f = this.freights.get(freightId);
+    if (!f?.heldPay) return {};
+    const d = f.heldPay.decision;
+    return {
+      ...(!f.heldPay.releasedAt && !d ? { heldUntil: f.heldPay.until } : {}),
+      ...(this.holdOpen(f) && !f.claim && Date.parse(f.heldPay.until) > now ? { canReport: true } : {}),
+      ...(f.claim && this.problemInHold(f) ? { reported: true } : {}),
+      ...(d ? { holdWords: d.overridden ? `Two members of staff went against the record: ${d.reason}` : STEP_WORDS[d.step] } : {}),
+    };
+  }
+
+  /** Whether this person paid for this load first (a load they posted, a load to their own door). */
+  isPrepaidPayer(f: Freight, did: string): boolean {
+    return Boolean(did) && this.prepaid?.payerOf?.(f) === did;
+  }
+
+  private decideHold(f: Freight, decision: HoldDecision): void {
+    // Who paid, read before the money moves: a payment given back no longer says it owns the load.
+    const payer = this.prepaid?.payerOf?.(f);
+    if (decision.outcome === 'release') this.payTheRoad(f);
+    else if (f.billed) this.prepaid?.refundCarriage?.(f, { gross: f.billed.gross, tax: f.billed.tax, provision: f.billed.provision }, STEP_WORDS[decision.step]);
+    f.heldPay!.decision = decision;
+    this.freights.set(f.freightId, f);
+    const words = decision.overridden ? `SeeBuyGet went against the record here, two members of staff agreeing: ${decision.reason}` : STEP_WORDS[decision.step];
+    const outcome = decision.outcome === 'release' ? 'the driver is paid' : 'the carriage price goes back to the person who paid';
+    // Both sides told the same words, with the page that explains the protocol to everybody (H6).
+    for (const did of new Set([payer, f.claimedBy].filter((x): x is string => Boolean(x)))) {
+      void this.notifications?.notify(did, { kind: 'pay_decided', title: `${f.code}: decided — ${outcome}`, body: words, link: HOLD_HELP_PATH, tag: `hold:${f.freightId}:decided`, data: { freightId: f.freightId } }).catch(() => undefined);
+    }
+  }
+
+  /** The driver, in their own app: held, a problem reported, released. */
+  private tellHold(did: string, title: string, body: string, freightId: string): void {
+    void this.notifications?.notify(did, { kind: 'pay_hold', title, body, link: '/', tag: `hold:${freightId}:${title}`, data: { freightId } }).catch(() => undefined);
   }
 
   /** A load withdrawn, its checks done: what was billed given back, open proposals and offers closed, everyone told. */

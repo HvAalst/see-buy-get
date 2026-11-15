@@ -66,6 +66,11 @@ export interface PersonLoadRow {
   escrow?: boolean;
   deliveryCode?: string;
   awaitingPayment?: string;
+  /** 2026-11-15 — delivered: the driver's pay held until, whether a problem can still be reported, what was decided. */
+  heldUntil?: string;
+  canReport?: boolean;
+  reported?: boolean;
+  holdWords?: string;
 }
 
 /** A driver's price on it, and the person's price back where they gave one. */

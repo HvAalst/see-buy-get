@@ -26373,6 +26373,200 @@
         }
       }
     },
+    "/v1/sbg/holds": {
+      "get": {
+        "operationId": "Sbg.holdQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldQueueResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/holds/{freightId}/apply": {
+      "post": {
+        "operationId": "Sbg.applyHold",
+        "summary": "",
+        "description": "Apply the protocol: what the record says, confirmed by one member of staff.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldStaffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/holds/{freightId}/override": {
+      "post": {
+        "operationId": "Sbg.overrideHold",
+        "summary": "",
+        "description": "Go against the record: asked by one, with a reason everyone is shown; approved by a different member of staff.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldOverrideDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/holds/{freightId}/override/approve": {
+      "post": {
+        "operationId": "Sbg.approveHoldOverride",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldStaffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/problem-answer": {
+      "post": {
+        "operationId": "Sbg.answerHeldProblem",
+        "summary": "",
+        "description": "The driver answers a reported problem once, while their pay is held (H5).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/held-problems": {
+      "get": {
+        "operationId": "Sbg.heldProblems",
+        "summary": "",
+        "description": "The loads this driver carried whose pay is held for a reported problem.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/proposals/{id}/decline": {
       "post": {
         "operationId": "Sbg.declineFreightProposal",
@@ -51218,7 +51412,8 @@
             "enum": [
               "damaged",
               "short",
-              "not_received"
+              "not_received",
+              "wrong"
             ]
           },
           "state": {
@@ -69927,7 +70122,8 @@
             "enum": [
               "damaged",
               "short",
-              "not_received"
+              "not_received",
+              "wrong"
             ]
           },
           "decision": {
@@ -70607,6 +70803,128 @@
         "required": [
           "text",
           "at"
+        ]
+      },
+      "HoldAnswer": {
+        "type": "object",
+        "properties": {
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "words": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "photoRefs",
+          "words",
+          "at",
+          "by"
+        ]
+      },
+      "HoldDecision": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "not_handed_over",
+              "not_noted_at_door",
+              "noted_at_pickup",
+              "arose_in_carriage"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "release",
+              "refund"
+            ]
+          },
+          "overridden": {
+            "type": "boolean",
+            "description": "Gone against the record: who asked, who seconded, and why."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "secondBy": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "outcome",
+          "by",
+          "at"
+        ]
+      },
+      "HoldOverride": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "release",
+              "refund"
+            ]
+          },
+          "byKey": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason",
+          "by",
+          "at"
+        ]
+      },
+      "HeldPay": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/HoldAnswer"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/HoldDecision"
+          },
+          "pendingOverride": {
+            "$ref": "#/components/schemas/HoldOverride"
+          },
+          "releasedAt": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "until"
         ]
       },
       "DerivedBody": {
@@ -71499,6 +71817,18 @@
                 "type": "string"
               }
             }
+          },
+          "deliveredWithCode": {
+            "type": "boolean",
+            "description": "…and delivered with the code (not after the sender said it arrived)."
+          },
+          "heldPay": {
+            "description": "2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldPay"
+              }
+            ]
           },
           "freightId": {
             "type": "string"
@@ -76536,6 +76866,19 @@
               "negotiate"
             ]
           },
+          "heldUntil": {
+            "type": "string",
+            "description": "2026-11-15 — the driver's pay held after delivery: until when, whether a problem can still be reported, and what the protocol decided (H1–H3)."
+          },
+          "canReport": {
+            "type": "boolean"
+          },
+          "reported": {
+            "type": "boolean"
+          },
+          "holdWords": {
+            "type": "string"
+          },
           "escrow": {
             "type": "boolean",
             "description": "2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid."
@@ -77119,6 +77462,213 @@
           "phoneMasked"
         ]
       },
+      "HoldProblem": {
+        "type": "object",
+        "properties": {
+          "photoRef": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "description",
+          "at"
+        ]
+      },
+      "ProtocolFacts": {
+        "type": "object",
+        "properties": {
+          "handedOver": {
+            "type": "boolean",
+            "description": "Handed over with the delivery code, or the sender said it arrived — or, on a load to a door, the driver's proof there."
+          },
+          "notedAtDoor": {
+            "type": "boolean",
+            "description": "The same problem noted at the door, with the receiver there."
+          },
+          "notedAtPickup": {
+            "type": "boolean",
+            "description": "The same problem noted when the driver took it over."
+          }
+        },
+        "required": [
+          "handedOver",
+          "notedAtDoor",
+          "notedAtPickup"
+        ]
+      },
+      "ProtocolReading": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "not_handed_over",
+              "not_noted_at_door",
+              "noted_at_pickup",
+              "arose_in_carriage"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "release",
+              "refund"
+            ]
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ProtocolFacts"
+          },
+          "words": {
+            "type": "string",
+            "description": "The step's sentence, as everybody is told it."
+          }
+        },
+        "required": [
+          "step",
+          "outcome",
+          "facts",
+          "words"
+        ]
+      },
+      "HoldQueueRow": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/HoldProblem"
+          },
+          "pickupPhotoRef": {
+            "type": "string"
+          },
+          "pickupNote": {
+            "type": "string"
+          },
+          "doorPhotoRef": {
+            "type": "string"
+          },
+          "doorNotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer": {
+            "$ref": "#/components/schemas/HoldAnswer"
+          },
+          "pendingOverride": {
+            "$ref": "#/components/schemas/HoldOverride"
+          },
+          "reading": {
+            "$ref": "#/components/schemas/ProtocolReading"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "heldUntil": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "problem",
+          "doorNotes",
+          "reading",
+          "freightId",
+          "code",
+          "description",
+          "deliveredAt",
+          "heldUntil"
+        ]
+      },
+      "HoldQueueResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HoldQueueRow"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "HoldStaffDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "HoldOverrideDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "release",
+              "refund"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason"
+        ]
+      },
+      "HoldAnswerDto": {
+        "type": "object",
+        "properties": {
+          "words": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "words"
+        ]
+      },
       "WithdrawProposalDto": {
         "type": "object",
         "properties": {
@@ -77452,7 +78002,8 @@
             "enum": [
               "damaged",
               "short",
-              "not_received"
+              "not_received",
+              "wrong"
             ]
           },
           "description": {
@@ -78901,6 +79452,22 @@
             "type": "string"
           },
           "shopParcelId": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string",
+            "description": "2026-11-15 — delivered: the load, so a problem can be reported on it; the driver's pay held until; what was decided."
+          },
+          "heldUntil": {
+            "type": "string"
+          },
+          "canReport": {
+            "type": "boolean"
+          },
+          "reported": {
+            "type": "boolean"
+          },
+          "holdWords": {
             "type": "string"
           }
         },

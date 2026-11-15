@@ -152,6 +152,11 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/network/plan-vs-actual': every(ACROSS),
   // 2026-11-13 — staff are on no test list: they read the public map, what anybody may see.
   'GET sbg/network/points/mine': network('the public map: what anybody may see'),
+  // 2026-11-15 — the held loads with a problem reported: each row in its pickup country; one load by its id.
+  'GET sbg/holds': list({ at: 'items', row: { field: 'country' } }),
+  'POST sbg/holds/:freightId/apply': record('freight', 'freightId'),
+  'POST sbg/holds/:freightId/override': record('freight', 'freightId'),
+  'POST sbg/holds/:freightId/override/approve': record('freight', 'freightId'),
   'GET sbg/offers/response': every(ACROSS),
   'GET sbg/reputation/review': every(ACROSS),
   'GET sbg/border-waits': every(ACROSS),

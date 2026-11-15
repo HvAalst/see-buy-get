@@ -42,6 +42,8 @@ import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { PersonLoadPayService } from './person-load-pay.service';
 import { LoadPayDto, LoadPaymentView } from './person-load-pay.types';
+import { HeldPay } from './pay-hold.types';
+import { HoldAnswerDto, HoldOverrideDto, HoldQueueResponse, HoldStaffDto } from './pay-hold-queue.types';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
@@ -8327,6 +8329,53 @@ export class SbgController {
     return this.dispatch.takeCounter(id, actor.did);
   }
 
+  /* ------------------------------------------- 2026-11-15 — the 24-hour hold and its protocol -- */
+
+  /** Staff's queue: held loads with a problem reported, the record side by side, what the protocol says (H3). */
+  @Roles('operator')
+  @Get('holds')
+  holdQueue(): HoldQueueResponse {
+    return { items: this.dispatch.holdQueue() };
+  }
+
+  /** Apply the protocol: what the record says, confirmed by one member of staff. */
+  @Roles('operator')
+  @Post('holds/:freightId/apply')
+  applyHold(@Param('freightId') freightId: string, @Body() dto: HoldStaffDto, @Actor() actor: IntrospectionResult): HeldPay {
+    return this.dispatch.applyHoldProtocol(freightId, this.namedActor(actor, dto.by));
+  }
+
+  /** Go against the record: asked by one, with a reason everyone is shown; approved by a different member of staff. */
+  @Roles('operator')
+  @Post('holds/:freightId/override')
+  overrideHold(@Param('freightId') freightId: string, @Body() dto: HoldOverrideDto, @Actor() actor: IntrospectionResult): HeldPay {
+    const who = staffOf(actor, dto.by);
+    return this.dispatch.proposeHoldOverride(freightId, { outcome: dto.outcome, reason: dto.reason, by: who.name, byKey: who.key });
+  }
+
+  @Roles('operator')
+  @Post('holds/:freightId/override/approve')
+  approveHoldOverride(@Param('freightId') freightId: string, @Body() dto: HoldStaffDto, @Actor() actor: IntrospectionResult): HeldPay {
+    const who = staffOf(actor, dto.by);
+    return this.dispatch.approveHoldOverride(freightId, who.name, who.key);
+  }
+
+  /** The driver answers a reported problem once, while their pay is held (H5). */
+  @Roles('driver')
+  @Post('dispatch/freight/:id/problem-answer')
+  answerHeldProblem(@Param('id') id: string, @Body() dto: HoldAnswerDto, @Actor() actor: IntrospectionResult): HeldPay {
+    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'The driver who carried it answers, from their own sign-in');
+    return this.dispatch.answerHeldProblem(id, actor.did, { words: dto.words, ...(dto.photoRefs ? { photoRefs: dto.photoRefs } : {}) });
+  }
+
+  /** The loads this driver carried whose pay is held for a reported problem. */
+  @Roles('driver')
+  @Get('fleet/drivers/:did/held-problems')
+  heldProblems(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
+    return { items: this.dispatch.heldProblemsFor(did) };
+  }
+
   /** The poster says no to one price. The load, and every other proposal on it, stay open. */
   @SignedIn()
   @Post('dispatch/proposals/:id/decline')
@@ -8440,7 +8489,8 @@ export class SbgController {
     const did = actor.did;
     if (actor.role === 'operator') return { did: did ?? 'operator', role: 'operator' };
     const store = did ? this.vendors.byDid(did) : undefined;
-    const mine = Boolean(did) && (f.postedByDid === did || f.shipperDid === did || (store != null && f.shipperDid === store.vendorId));
+    // 2026-11-15 — and the person who paid for it first (a load to their own door): they report a problem in the hold.
+    const mine = Boolean(did) && (f.postedByDid === did || f.shipperDid === did || (store != null && f.shipperDid === store.vendorId) || this.dispatch.isPrepaidPayer(f, did!));
     if (!mine || !did) throw new GlosError('NOT_FOUND', 'Freight not found');
     return { did, role: 'shipper' };
   }

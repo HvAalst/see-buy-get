@@ -436,6 +436,12 @@ export interface DoorView {
   raise?: { to: number; amount: number; state: 'awaiting' | 'paid' | 'lapsed' | 'reversed'; until?: string; instructions?: string; pushed?: boolean; reference?: string; why?: string };
   shopName?: string;
   shopParcelId?: string;
+  /** 2026-11-15 — delivered: its load, the driver's pay held until, whether a problem can still be reported, what was decided. */
+  freightId?: string;
+  heldUntil?: string;
+  canReport?: boolean;
+  reported?: boolean;
+  holdWords?: string;
 }
 
 /** What bringing it to their door would be: the most to allow suggested — or why not. */

@@ -182,6 +182,24 @@ describe('a person’s own door, paid first by mobile money, over the wire', () 
       expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(0, 2);
     }
     expect(app.get(BooksService).balances(app.get(EntityService).requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
+
+    // 2026-11-15 — the hold: delivered with a dent noted at the door and nothing at pickup; the person reports it in the hold
+    // with a photo; step 3 gives the carriage price back to their number, and the books still balance.
+    const store = (dispatch as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    store.set(load.freightId, { ...store.get(load.freightId), status: 'delivered', deliveredAt: new Date().toISOString(), proofOfDelivery: { receiverName: 'Wanjiku', photoRef: 'pod-1', exceptions: [{ kind: 'damaged', count: 1 }] }, heldPay: { until: new Date(Date.now() + 24 * 3_600_000).toISOString() } });
+    expect((await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door).toMatchObject({ freightId: load.freightId, heldUntil: expect.any(String), canReport: true });
+    const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`dent:${digits()}`)]).toString('base64')}`;
+    const photoRef = (await http().post('/v1/sbg/media').set(sender).send({ kind: 'dispute', dataUrl }).expect(201)).body.mediaId as string;
+    await http().post(`/v1/sbg/dispatch/freight/${load.freightId}/claim`).set(sender).send({ kind: 'damaged', description: 'Dented on one side', photoRef }).expect(201);
+    expect((await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door).toMatchObject({ reported: true });
+    expect(dispatch.readHold(load.freightId)).toMatchObject({ step: 'arose_in_carriage', outcome: 'refund' });
+    await http().post(`/v1/sbg/holds/${load.freightId}/apply`).set(operator).send({ by: 'Achieng' }).expect(201);
+    const refunded = (await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door;
+    expect(refunded.owedBack).toBe(back + Math.ceil(billed - 1e-9));
+    expect(refunded.holdWords).toMatch(/^Step 3/);
+    expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(Math.ceil(billed - 1e-9), 2);
+    expect(dispatch.requireFreightPublic(load.freightId).driverPaid).toBeFalsy();
+    expect(app.get(BooksService).balances(app.get(EntityService).requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
   });
 
   it('a door in a zone its company delivers no doors in is refused, by name — the shop offered instead (zone flags, 2026-11-09)', async () => {

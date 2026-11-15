@@ -4,6 +4,7 @@ import { Icon } from '../../../shared/ui';
 import { DocumentStrip } from './DocumentStrip';
 import { renewalBlocker } from '../../../shared/papers';
 import { FleetsPanel } from './FleetsPanel';
+import { HeldPayPanel } from './HeldPayPanel';
 import { useT } from '../../../shared/i18n';
 import {
   CLAIM_SLOW_DAYS,
@@ -82,6 +83,9 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
           <b>{t('tower.claims.caveatLead')}</b> {t('tower.claims.caveat')}
         </span>
       </p>
+
+      {/* 2026-11-15 — a driver's pay held for a problem reported: decided by the protocol, first, since the money waits on it. */}
+      <HeldPayPanel state={state} actions={actions} />
 
       <QueuePanel
         count={rows == null && state.freightClaims == null ? null : (rows?.length ?? 0) + (state.freightClaims?.length ?? 0)}

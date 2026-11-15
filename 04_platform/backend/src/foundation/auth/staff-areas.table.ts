@@ -785,6 +785,13 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/dispatch/offers/:id/claim': 'support',
   'POST sbg/dispatch/offers/:id/ignore': 'support',
   'POST sbg/dispatch/proposals/:id/accept': 'support',
+  'POST sbg/dispatch/freight/:id/problem-answer': 'none',
+  'GET sbg/fleet/drivers/:did/held-problems': 'none',
+  // 2026-11-15 — a held pay decided by the protocol: support, who work the claims beside it.
+  'GET sbg/holds': 'support',
+  'POST sbg/holds/:freightId/apply': 'support',
+  'POST sbg/holds/:freightId/override': 'support',
+  'POST sbg/holds/:freightId/override/approve': 'support',
   'POST sbg/dispatch/freight/:id/pay': 'none',
   'GET sbg/dispatch/freight/:id/payment': 'none',
   'POST sbg/dispatch/freight/:id/arrived': 'none',

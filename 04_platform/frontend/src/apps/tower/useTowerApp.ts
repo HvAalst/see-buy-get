@@ -22,6 +22,7 @@ import { readsAgainLive } from './live';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
+import type { HoldRow } from './screens/HeldPayPanel';
 import { amount } from './queues';
 import type { RiskLevel, RiskRegisterView, RiskSubject, RiskThreat } from './risks';
 import type { SupportInbox, SupportStatus } from './messages';
@@ -121,6 +122,8 @@ export interface TowerState {
   claims: ClaimRow[] | null;
   /** FP3b — claims against delivered freight, read with the parcel ones and counted with them. */
   freightClaims: FreightClaimRow[] | null;
+  /** 2026-11-15 — a driver's pay held for a problem reported, waiting for the protocol (the hold). */
+  heldPays: HoldRow[] | null;
   /** The damage claim reports made, newest first. `null` while unread or when the read failed. */
   damageReports: DamageReportRow[] | null;
   disposal: DisposalRow[] | null;
@@ -498,6 +501,7 @@ const INITIAL: TowerState = {
   expiring: null,
   claims: null,
   freightClaims: null,
+  heldPays: null,
   damageReports: null,
   disposal: null,
   approvals: null,
@@ -847,9 +851,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     if (!support && !vetting) return;
     const ask = <T,>(mine: boolean, read: () => Promise<T>): Promise<T> => (mine ? read() : Promise.resolve(NOT_ASKED as T));
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes, hubApplications, riderIds] = await Promise.all([
+    const [claims, freightClaims, heldPays, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes, hubApplications, riderIds] = await Promise.all([
       ask(support, () => client.api.disputes()),
       ask(support, () => client.api.freightClaims()),
+      // 2026-11-15 — the money waits on these: a held pay, a problem reported, the protocol to apply.
+      ask(support, () => client.api.holds()),
       ask(support, () => client.api.disposalQueue()),
       ask(vetting, () => client.api.kycQueue()),
       // Read with the queues and kept apart from them everywhere after: it shares a screen with the
@@ -880,6 +886,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       loading: false,
       claims: claims.error ? null : (narrow<{ disputes: ClaimRow[] }>(claims.data)?.disputes ?? []),
       freightClaims: freightClaims.error ? null : (narrow<{ claims: FreightClaimRow[] }>(freightClaims.data)?.claims ?? []),
+      heldPays: heldPays.error ? null : (narrow<{ items: HoldRow[] }>(heldPays.data)?.items ?? []),
       damageReports: damageReports.error ? null : (narrow<{ items: DamageReportRow[] }>(damageReports.data)?.items ?? []),
       disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),

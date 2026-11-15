@@ -10,6 +10,7 @@ import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, usedPercent } from '../logic';
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
+import { HeldProblemsCard } from './HeldProblems';
 import { PassageSheet, PassageStrip } from './PassageStrip';
 import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
@@ -69,6 +70,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
           booked consignment on a scheduled run IS a load, and this is the tab called My loads. Renders
           nothing at all for a courier who is on no line, which is most of them. */}
       <RunSection state={state} actions={actions} />
+
+      {/* 2026-11-15 — a delivered load whose pay is held: the sender reported a problem; the driver answers once (the hold). */}
+      <HeldProblemsCard state={state} actions={actions} />
 
       {v ? (
         <GlanceNumber

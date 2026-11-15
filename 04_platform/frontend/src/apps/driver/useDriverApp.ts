@@ -49,6 +49,7 @@ import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import type { Uploaded } from '../../shared/upload';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import type { HeldProblem } from './screens/HeldProblems';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
 import type { components } from '../../lib/sbg/schema';
 
@@ -156,6 +157,8 @@ export interface DriverState {
   road: RoadConstraint[];
   /** 2026-11-12 — the driver's saved trips (the owner: "much like an alarm"); null until read. */
   trips: SavedTrip[] | null;
+  /** 2026-11-15 — loads delivered whose pay is held for a problem the sender reported; null until read (the hold). */
+  heldProblems: HeldProblem[] | null;
   /** A trip whose bell was tapped off shift: run once the shift starts. */
   pendingTrip: SavedTrip | null;
   roadState: 'idle' | 'loading' | 'error' | 'ready';
@@ -262,6 +265,7 @@ const INITIAL: DriverState = {
   boardPlace: { ...EMPTY_PLACE },
   road: [],
   trips: null,
+  heldProblems: null,
   pendingTrip: null,
   roadState: 'idle',
   observationNotice: null,
@@ -1672,6 +1676,34 @@ export function useDriverApp() {
     [client, did, run, fail],
   );
 
+  /* ------------------------------------------------- the hold on a delivered load's pay (2026-11-15) */
+
+  const loadHeldProblems = useCallback(async () => {
+    if (!client || !did) return;
+    const r = await client.api.heldProblems(did);
+    if (!r.error) setState((s) => ({ ...s, heldProblems: (narrow<{ items?: HeldProblem[] }>(r.data)?.items ?? []) as HeldProblem[] }));
+  }, [client, did]);
+
+  /** Answer a reported problem once: words and the driver's own photos, shown beside the report. */
+  const answerHeldProblem = useCallback(
+    async (freightId: string, words: string, photoRefs: string[]): Promise<boolean> => {
+      if (!client) return false;
+      const key = `hold-answer:${freightId}`;
+      setState((s) => ({ ...s, busy: key, error: null }));
+      const r = await client.api.answerHeldProblem(freightId, words, photoRefs);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) {
+        fail(r.error);
+        return false;
+      }
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.hold.answeredToast'), detail: t('driver.hold.answeredToastDetail') });
+      await loadHeldProblems();
+      return true;
+    },
+    [client, fail, pushToast, loadHeldProblems, t],
+  );
+
   /* ------------------------------------------------------------ saved trips (2026-11-12) */
 
   const loadTrips = useCallback(async () => {
@@ -2150,7 +2182,9 @@ export function useDriverApp() {
         buzz();
         // A part refused at the handover (2026-10-27): said as it is delivered — those packages stay with the driver.
         const refused = check.exceptions?.find((x) => x.kind === 'refused')?.count ?? 0;
-        pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.freightDelivered'), detail: refused ? t('driver.toast.freightDeliveredPart', { n: refused }) : t('driver.toast.freightDeliveredDetail') });
+        // 2026-11-15 — paid first by a person: the pay waits 24 hours for a problem to be reported (the hold).
+        const held = Boolean(narrow<{ heldPay?: { until?: string } }>(r.data)?.heldPay?.until);
+        pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.freightDelivered'), detail: refused ? t('driver.toast.freightDeliveredPart', { n: refused }) : held ? t('driver.toast.freightDeliveredHeld') : t('driver.toast.freightDeliveredDetail') });
         await refresh();
       });
     },
@@ -2519,6 +2553,8 @@ export function useDriverApp() {
       setHelpers,
       takeCounter,
       loadTrips,
+      loadHeldProblems,
+      answerHeldProblem,
       saveTrips,
       skipTrip,
       pauseTrip,

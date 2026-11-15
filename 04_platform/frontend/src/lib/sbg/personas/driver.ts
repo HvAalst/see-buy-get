@@ -229,6 +229,10 @@ export function createDriverApi(sbg: SbgClient) {
       // Round 24 — dated now, when the driver ends it: a shift ended with no signal is sent later with this body as it is.
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } }, body: { ...(odometerKm !== undefined ? { odometerKm } : {}), observedAt: new Date().toISOString() } })),
 
+    /** 2026-11-15 — the loads whose pay is held for a problem the sender reported, and the driver's one answer (the hold). */
+    heldProblems: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/held-problems', { params: { path: { did } } })),
+    answerHeldProblem: (freightId: string, words: string, photoRefs: string[]) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/problem-answer', { params: { path: { id: freightId } }, body: { words, ...(photoRefs.length ? { photoRefs } : {}) } })),
     /** 2026-11-12 — a driver's saved trips (the owner: "much like an alarm"): their own and their fleet's. */
     trips: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/trips', { params: { path: { did } } })),
     saveTrip: (did: string, body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/trips', { params: { path: { did } }, body: body as never })),

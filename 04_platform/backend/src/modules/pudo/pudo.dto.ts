@@ -25,7 +25,7 @@ import { TRUCK_SUBTYPES, VEHICLE_ENERGIES, type VehicleEnergy } from './fleet.co
 import { CARRIER_PAPER_KINDS } from './papers';
 import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
-import { RECEIVING_EXCEPTIONS, type ReceivingExceptionKind } from './dispatch.types';
+import { FREIGHT_CLAIM_KINDS, RECEIVING_EXCEPTIONS, type FreightClaimKind, type ReceivingExceptionKind } from './dispatch.types';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { NOTE_STAGES } from './note-archive.types';
@@ -3405,7 +3405,8 @@ export class DecideRefusalDto {
 
 /** FP3b — the sender's claim against a delivered load. */
 export class OpenFreightClaimDto {
-  @IsIn(['damaged', 'short', 'not_received']) kind!: 'damaged' | 'short' | 'not_received';
+  // 2026-11-15 — and `wrong`: not what was sent (the hold's protocol reads it against the door's note).
+  @IsIn(FREIGHT_CLAIM_KINDS as unknown as string[]) kind!: FreightClaimKind;
   @IsString() @MaxLength(1000) description!: string;
   @IsOptional() @IsString() photoRef?: string;
 }

@@ -21,6 +21,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
 import { LoadWork, LoadWorkView } from './load-work.types';
+import { HeldPay } from './pay-hold.types';
 import { TRUCK_SUBTYPES, TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 
@@ -237,6 +238,10 @@ export const REFUSAL_REMIND_H = 12;
 export interface PrepaidShipper {
   /** Whether this load was paid for first, so is billed through here. */
   owns(f: Freight): boolean;
+  /** 2026-11-15 — after delivery, the protocol gave the carriage price back: given back to the person, the bill reversed. */
+  refundCarriage?(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void;
+  /** …and who paid for it. */
+  payerOf?(f: Freight): string | undefined;
   /** Bill the driver's price, gross, out of what was paid first. True where it covered it. */
   bill(f: Freight, bill: { gross: number; tax: number; provision: number }): boolean;
   /** Give back exactly what was billed: the load went back on the board, or was withdrawn. */
@@ -403,7 +408,8 @@ export class FreightInstructionsView {
 }
 
 /** FP3b — what the sender says went wrong with a delivered load. */
-export const FREIGHT_CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
+// 2026-11-15 — and `wrong`: not what was sent, as a driver notes it at the door (the hold's protocol, H2).
+export const FREIGHT_CLAIM_KINDS = ['damaged', 'short', 'not_received', 'wrong'] as const;
 export type FreightClaimKind = (typeof FREIGHT_CLAIM_KINDS)[number];
 export const FREIGHT_CLAIM_DECISIONS = ['upheld', 'partly_upheld', 'rejected'] as const;
 /**
@@ -1044,6 +1050,10 @@ export class Freight {
   @ApiPropertyOptional() posterConfirmedAt?: string;
   /** …a price accepted and being paid: no other price is taken until it is paid or the time runs out. */
   @ApiPropertyOptional() payHold?: { proposalId: string; until: string };
+  /** …and delivered with the code (not after the sender said it arrived). */
+  @ApiPropertyOptional() deliveredWithCode?: boolean;
+  /** 2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts). */
+  @ApiPropertyOptional({ type: HeldPay }) heldPay?: HeldPay;
 }
 
 /** FB4a — the vehicle that took a load, as much of it as the market series needs. */
@@ -1606,6 +1616,11 @@ export class PostedFreightRow {
   status: FreightStatus;
   @ApiProperty({ enum: ['instant', 'negotiate'] })
   commitMode: FreightCommitMode;
+  /** 2026-11-15 — the driver's pay held after delivery: until when, whether a problem can still be reported, and what the protocol decided (H1–H3). */
+  @ApiPropertyOptional() heldUntil?: string;
+  @ApiPropertyOptional() canReport?: boolean;
+  @ApiPropertyOptional() reported?: boolean;
+  @ApiPropertyOptional() holdWords?: string;
   /** 2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid. */
   @ApiPropertyOptional() escrow?: boolean;
   @ApiPropertyOptional() deliveryCode?: string;

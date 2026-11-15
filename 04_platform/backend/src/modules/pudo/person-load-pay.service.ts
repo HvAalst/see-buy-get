@@ -54,9 +54,12 @@ export class PersonLoadPayService implements OnModuleInit {
 
   onModuleInit(): void {
     this.dispatch.registerPrepaid({
-      owns: (f) => Boolean(this.held(f.freightId)),
+      // Paid, and — for the hold after delivery (2026-11-15) — delivered: still this service's money to give back.
+      owns: (f) => Boolean(this.held(f.freightId) ?? this.settled(f.freightId)),
       bill: (f, bill) => this.bill(f, bill),
       giveBack: (f, charged, why) => this.giveBack(f, charged, why),
+      refundCarriage: (f, charged, why) => this.refundCarriage(f, charged, why),
+      payerOf: (f) => this.latest(f.freightId)?.personDid,
     });
     this.payouts.registerDestinations({
       of: (payeeId) => this.refundDestination(payeeId),
@@ -275,6 +278,29 @@ export class PersonLoadPayService implements OnModuleInit {
     this.tell(p.personDid, `${p.loadCode}: your money goes back to you`, `The driver did not carry it (${why}). ${this.money(p.paid ?? 0, p.currency)} goes back to your number with the next payout, and the load is open for prices again.`, p.freightId);
   }
 
+  /** 2026-11-15 — the protocol gave the carriage price back after delivery: the bill reversed, and it goes back to the person. */
+  private refundCarriage(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void {
+    const p = this.settled(f.freightId) ?? this.held(f.freightId);
+    if (!p) return;
+    this.books.post({
+      entityId: p.entityId,
+      kind: 'rebate',
+      ref: f.freightId,
+      currency: p.currency,
+      lines: [
+        { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: p.personDid, amount: -round2(charged.gross) },
+        { code: ACCOUNT_CODES.REVENUE, amount: round2(charged.gross - charged.tax - charged.provision) },
+        ...(charged.tax > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: round2(charged.tax) }] : []),
+        ...(charged.provision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: round2(charged.provision) }] : []),
+      ],
+    });
+    p.billed = undefined;
+    p.state = 'refunded';
+    p.why = why;
+    this.payments.set(p.payId, p);
+    this.owe(p, charged.gross);
+  }
+
   /** Delivered: what was paid and not used (the rounding up) goes back. */
   private delivered(freightId: string): void {
     const p = this.held(freightId);
@@ -316,6 +342,11 @@ export class PersonLoadPayService implements OnModuleInit {
   /** The payment that holds this load's money now: paid, and not yet given back or settled. */
   private held(freightId: string): LoadPayment | undefined {
     return [...this.payments.values()].find((p) => p.freightId === freightId && p.state === 'paid');
+  }
+
+  /** Delivered, its money settled — still this service's to give back, while a hold after delivery runs. */
+  private settled(freightId: string): LoadPayment | undefined {
+    return [...this.payments.values()].find((p) => p.freightId === freightId && p.state === 'delivered');
   }
 
   private latest(freightId: string): LoadPayment | undefined {

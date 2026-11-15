@@ -210,6 +210,10 @@ export const NOTIFICATION_KINDS = [
   'freight_counter',
   // 2026-11-13 — a person's load paid first: accepted and being paid, paid, not paid in time, money back (part 3b).
   'load_payment',
+  // 2026-11-15 — the driver's pay held after delivery: held, a problem reported, released, decided by the protocol.
+  'pay_hold',
+  // …and decided by the protocol: to the person who paid and the driver, linked to the page that explains it.
+  'pay_decided',
   /**
    * A person's own door, paid first by mobile money (the user, 2026-10-27: "Mobile money first"): paid, a driver bringing it,
    * delivered and what goes back to their number, no driver yet, or the time to pay ran out. In their app, never a text.

@@ -70,6 +70,11 @@ const KIND_ICON: Record<string, IconName> = {
   parcel_weight: 'weight',
   // 2026-11-13 — the poster answered a driver's price with one of its own (unusual loads).
   freight_counter: 'wallet',
+  // 2026-11-13 — a load paid first: the payment asked, paid, or given back.
+  load_payment: 'wallet',
+  // 2026-11-15 — a driver's pay held 24 hours after delivery: held, a problem reported, released; and decided by the protocol.
+  pay_hold: 'clock',
+  pay_decided: 'check',
   // 2026-11-06 — a parcel its people were told was held up, on the road again.
   parcel_moving: 'truck',
   // 2026-11-06 — its pickup shop closed: choose another; it went to another; a shop found shut by a driver.
@@ -149,7 +154,8 @@ export type NoticeAct = (item: InboxItem) => { label: string; run: () => void } 
 const BELL_ONLY = ['bell'] as const;
 
 /** Notices whose link is a public page to read — the terms, the data notice, cookies — offered as a link under it. */
-const READ_THERE = new Set(['terms_updated']);
+// …and a decision by the protocol on a held pay: the page that explains it to everybody (2026-11-15).
+const READ_THERE = new Set(['terms_updated', 'pay_decided']);
 
 /**
  * Where a notice points. Its own link — and a chat message sent before message notices carried one (2026-11-02) still

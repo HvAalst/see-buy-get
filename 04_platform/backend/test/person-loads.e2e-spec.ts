@@ -11,6 +11,7 @@ import { FundingService } from '../src/foundation/funding/funding.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { PersonLoadPayService } from '../src/modules/pudo/person-load-pay.service';
 import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
+import { RateLimitGuard } from '../src/foundation/http/rate-limit.guard';
 
 /**
  * A PERSON POSTS A LOAD FROM THE SEND APP, over the wire (the owner, 2026-11-13: plan U5, "a person posts a load in the Send
@@ -181,7 +182,11 @@ describe('a person posts a load, over the wire', () => {
     expect((await deliver()).status).toBe(400);
     const done = await deliver(code);
     expect(done.status).toBe(201);
-    expect(app.get(DispatchService).requireFreightPublic(keLoad)).toMatchObject({ status: 'delivered', driverPaid: true });
+    // Delivered with the code: the driver's pay is held 24 hours for a problem to be reported (2026-11-15, the hold H1).
+    const f = app.get(DispatchService).requireFreightPublic(keLoad);
+    expect(f).toMatchObject({ status: 'delivered', deliveredWithCode: true });
+    expect(f.driverPaid).toBeFalsy();
+    expect(Date.parse(f.heldPay!.until) - Date.now()).toBeGreaterThan(23.9 * 3_600_000);
   });
 
   it('8 · not paid in time: the driver is let go and the price is open again; the person may pay again', async () => {
@@ -215,5 +220,140 @@ describe('a person posts a load, over the wire', () => {
     const after = (await http().get(at('payment')).set(bearer(person)).expect(200)).body;
     expect(after).toMatchObject({ state: 'refunded', owedBack: view.amount });
     expect(app.get(DispatchService).requireFreightPublic(load.freightId).status).toBe('available');
+  });
+
+  /* ---------------- 2026-11-15: the driver's pay held 24 hours after delivery, decided by the protocol (H1–H5) -- */
+
+  const H = 3_600_000;
+  type Store = { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } };
+  const myRow = async (token: string, freightId: string) =>
+    ((await http().get('/v1/sbg/dispatch/posted').set(bearer(token)).expect(200)).body.items as Array<Record<string, unknown>>).find((r) => r.freightId === freightId)!;
+  const queue = async () => (await http().get('/v1/sbg/holds').set(bearer(operator)).expect(200)).body.items as Array<Record<string, any>>;
+
+  /** A Kenyan load: paid, picked up (with what the driver noted then), delivered with the code (with what was noted at the door). */
+  async function aDeliveredLoad(opts: { pickupNote?: string; atDoor?: 'damaged' | 'short' } = {}) {
+    const person = await aPerson();
+    const load = (await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Kileleshwa', destLocation: thika, destLabel: 'Thika', contactPhone: `+2547${digits()}9` })).expect(201)).body;
+    const at = (path: string) => `/v1/sbg/dispatch/freight/${load.freightId}/${path}`;
+    await http().post(at('proposals')).set(bearer(keDriver.token)).send({ from: nairobi, price: 1500 }).expect(201);
+    const id = ((await http().get(at('proposals')).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    // Every call here comes from one address: its count for paying starts again for each load.
+    (app.get(RateLimitGuard) as unknown as { hits: Map<string, unknown> }).hits.clear();
+    const view = (await http().post(at('pay')).set(bearer(person)).send({ proposalId: id, phone: `+25471${digits()}` }).expect(201)).body;
+    const personDid = (await http().get('/v1/sbg/identity/me').set(bearer(person)).expect(200)).body.personDid;
+    const funding = app.get(FundingService).list({ payerDid: personDid, purpose: 'load' })[0];
+    await http().post(`/v1/rails/funding/${funding.fundingId}/simulate`).set(bearer(operator)).send({ providerRef: `MPX${digits()}`, amount: view.amount }).expect(201);
+    const store = (app.get(DispatchService) as unknown as Store).freights;
+    store.set(load.freightId, { ...store.get(load.freightId), status: 'in_transit', pickedUpAt: new Date().toISOString(), ...(opts.pickupNote ? { reservations: { note: opts.pickupNote, at: new Date().toISOString() } } : {}) });
+    const code = (await myRow(person, load.freightId)).deliveryCode as string;
+    const exceptions = opts.atDoor ? [{ kind: opts.atDoor, count: 1, photoRefs: [await photo(keDriver.token, 'pod')] }] : undefined;
+    const done = await http().post(at('deliver')).set(bearer(keDriver.token)).send({ driverDid: keDriver.did, confirmed: requiredUnloadKeys(), receiverName: 'Achieng at the door', podPhotoId: await photo(keDriver.token, 'pod'), deliveryCode: code, ...(exceptions ? { exceptions } : {}) });
+    if (done.status !== 201) throw new Error(`deliver: ${JSON.stringify(done.body)}`);
+    return { person, freightId: load.freightId, at, amount: view.amount as number };
+  }
+  const report = async (l: { person: string; at: (p: string) => string }, kind: string) =>
+    http().post(l.at('claim')).set(bearer(l.person)).send({ kind, description: 'The door of the fridge is dented', photoRef: await photo(l.person, 'dispute') }).expect(201);
+
+  it('10 · delivered: held 24 hours, the person may report; nothing reported, it is released to the driver, not a minute before', async () => {
+    const d = app.get(DispatchService);
+    expect(await myRow(kePerson, keLoad)).toMatchObject({ heldUntil: expect.any(String), canReport: true });
+    // Held with nothing reported: nothing for staff to decide.
+    expect((await queue()).some((r) => r.freightId === keLoad)).toBe(false);
+    d.releaseDueHolds(Date.now() + 23 * H);
+    expect(d.requireFreightPublic(keLoad).driverPaid).toBeFalsy();
+    d.releaseDueHolds(Date.now() + 25 * H);
+    expect(d.requireFreightPublic(keLoad).driverPaid).toBe(true);
+    const after = await myRow(kePerson, keLoad);
+    expect([after.heldUntil, after.canReport]).toEqual([undefined, undefined]);
+  });
+
+  it('11 · damage found after delivery, not noted at the door: reported with a photo; held past the 24 hours; the driver answers once; step 2 pays the driver', async () => {
+    const l = await aDeliveredLoad();
+    // A problem you can see comes with a photo.
+    const bare = await http().post(l.at('claim')).set(bearer(l.person)).send({ kind: 'damaged', description: 'The door of the fridge is dented' });
+    expect([bare.status, bare.body.code]).toEqual([400, 'FIELD_REQUIRED']);
+    await report(l, 'damaged');
+    expect(await myRow(l.person, l.freightId)).toMatchObject({ reported: true });
+    const d = app.get(DispatchService);
+    d.releaseDueHolds(Date.now() + 25 * H);
+    expect(d.requireFreightPublic(l.freightId).driverPaid).toBeFalsy();
+    // The driver sees it and answers once; nobody else answers for them.
+    const held = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(keDriver.did)}/held-problems`).set(bearer(keDriver.token)).expect(200)).body.items as Array<Record<string, any>>;
+    expect(held.find((h) => h.freightId === l.freightId)).toMatchObject({ answered: false, problem: { kind: 'damaged' } });
+    await http().post(l.at('problem-answer')).set(bearer(l.person)).send({ words: 'Not mine to answer' }).expect(403);
+    // Another driver does not answer for the one who carried it.
+    const drivers = app.get(DriverService);
+    const other = drivers.register({ displayName: 'Otieno', fullName: 'Otieno Driver', nationalId: `ID-KE-${digits()}`, mobile: `+2547${digits()}3`, licenceClasses: ['van'], licenceNumber: `L-${digits()}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true } as never);
+    drivers.submitKyc(other.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(other.did, true);
+    declared(app, 'driver', other.did);
+    const otherToken = (await http().post('/v1/auth/token').send({ role: 'driver', did: other.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    await http().post(l.at('problem-answer')).set(bearer(otherToken)).send({ words: 'I was not there at all' }).expect(403);
+    await http().post(l.at('problem-answer')).set(bearer(keDriver.token)).send({ words: 'Wrapped and upright the whole way; no dent at the door', photoRefs: [await photo(keDriver.token, 'dispute')] }).expect(201);
+    await http().post(l.at('problem-answer')).set(bearer(keDriver.token)).send({ words: 'Once more' }).expect(400);
+    // Staff's queue: the record side by side, and what the protocol says.
+    const row = (await queue()).find((r) => r.freightId === l.freightId)!;
+    expect(row).toMatchObject({ country: 'KE', problem: { kind: 'damaged' }, answer: { words: expect.stringMatching(/Wrapped/) }, doorNotes: [], reading: { step: 'not_noted_at_door', outcome: 'release' } });
+    expect(row.problem.photoRef).toEqual(expect.any(String));
+    const decided = (await http().post(`/v1/sbg/holds/${l.freightId}/apply`).set(bearer(operator)).send({ by: 'Amina Otieno' }).expect(201)).body;
+    expect(decided.decision).toMatchObject({ step: 'not_noted_at_door', outcome: 'release', by: 'Amina Otieno' });
+    expect(d.requireFreightPublic(l.freightId).driverPaid).toBe(true);
+    expect((await queue()).some((r) => r.freightId === l.freightId)).toBe(false);
+    expect((await myRow(l.person, l.freightId)).holdWords).toMatch(/^Step 2/);
+    await http().post(`/v1/sbg/holds/${l.freightId}/apply`).set(bearer(operator)).send({ by: 'Amina Otieno' }).expect(400);
+  });
+
+  it('12 · noted at the door and not at pickup: step 3 gives the carriage price back, and the driver is not paid', async () => {
+    const l = await aDeliveredLoad({ atDoor: 'damaged' });
+    await report(l, 'damaged');
+    const row = (await queue()).find((r) => r.freightId === l.freightId)!;
+    expect(row).toMatchObject({ doorNotes: ['damaged × 1'], reading: { step: 'arose_in_carriage', outcome: 'refund' } });
+    await http().post(`/v1/sbg/holds/${l.freightId}/apply`).set(bearer(operator)).send({ by: 'Amina Otieno' }).expect(201);
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).driverPaid).toBeFalsy();
+    const paid = (await http().get(l.at('payment')).set(bearer(l.person)).expect(200)).body;
+    expect(paid.state).toBe('refunded');
+    expect(paid.owedBack).toBeGreaterThan(1500);
+    expect((await myRow(l.person, l.freightId)).holdWords).toMatch(/^Step 3: the problem was noted at the door/);
+    // Both sides told, with the page that explains the protocol.
+    for (const token of [l.person, keDriver.token]) {
+      const items = (await http().get('/v1/sbg/notifications/inbox').set(bearer(token)).expect(200)).body.items as Array<{ kind: string; link?: string; title: string }>;
+      expect(items.filter((n) => n.kind === 'pay_decided').map((n) => [n.title.split(':')[0], n.link])).toContainEqual([expect.any(String), '/help/when-something-goes-wrong/']);
+    }
+  });
+
+  it('13 · noted at the door and at pickup: step 3 pays the driver — it was so before', async () => {
+    const l = await aDeliveredLoad({ pickupNote: 'Door already dented when I took it', atDoor: 'damaged' });
+    await report(l, 'damaged');
+    expect((await queue()).find((r) => r.freightId === l.freightId)).toMatchObject({ pickupNote: expect.stringMatching(/dented/), reading: { step: 'noted_at_pickup', outcome: 'release' } });
+    await http().post(`/v1/sbg/holds/${l.freightId}/apply`).set(bearer(operator)).send({ by: 'Amina Otieno' }).expect(201);
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).driverPaid).toBe(true);
+  });
+
+  it('14 · going against the record takes a reason and a second member of staff; the protocol waits for them', async () => {
+    const l = await aDeliveredLoad({ atDoor: 'short' });
+    await report(l, 'short');
+    const path = (p = '') => `/v1/sbg/holds/${l.freightId}/override${p}`;
+    // What the protocol says already is applied, not overridden; a reason is required.
+    await http().post(path()).set(bearer(operator)).send({ outcome: 'refund', reason: 'Because', by: 'Amina Otieno' }).expect(400);
+    const noReason = await http().post(path()).set(bearer(operator)).send({ outcome: 'release', reason: ' ', by: 'Amina Otieno' });
+    expect([noReason.status, noReason.body.code]).toEqual([400, 'REASON_REQUIRED']);
+    await http().post(path()).set(bearer(operator)).send({ outcome: 'release', reason: 'The receiver counted before opening the second box', by: 'Amina Otieno' }).expect(201);
+    expect((await queue()).find((r) => r.freightId === l.freightId)?.pendingOverride).toMatchObject({ outcome: 'release', by: 'Amina Otieno' });
+    await http().post(`/v1/sbg/holds/${l.freightId}/apply`).set(bearer(operator)).send({ by: 'Brian Kamau' }).expect(400);
+    await http().post(path('/approve')).set(bearer(operator)).send({ by: 'Amina Otieno' }).expect(403);
+    const decided = (await http().post(path('/approve')).set(bearer(operator)).send({ by: 'Brian Kamau' }).expect(201)).body;
+    expect(decided.decision).toMatchObject({ step: 'arose_in_carriage', outcome: 'release', overridden: true, by: 'Amina Otieno', secondBy: 'Brian Kamau', reason: expect.stringMatching(/counted/) });
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).driverPaid).toBe(true);
+    expect((await myRow(l.person, l.freightId)).holdWords).toMatch(/went against the record: The receiver counted/);
+  });
+
+  it('15 · a report after the 24 hours keeps nothing held: the driver was paid; the claim is still recorded', async () => {
+    const l = await aDeliveredLoad();
+    const d = app.get(DispatchService);
+    d.releaseDueHolds(Date.now() + 25 * H);
+    expect(d.requireFreightPublic(l.freightId).driverPaid).toBe(true);
+    expect((await myRow(l.person, l.freightId)).canReport).toBeUndefined();
+    await http().post(l.at('claim')).set(bearer(l.person)).send({ kind: 'not_received', description: 'Nobody here got it' }).expect(201);
+    expect((await queue()).some((r) => r.freightId === l.freightId)).toBe(false);
   });
 });

@@ -1069,6 +1069,12 @@ export function createOperatorApi(sbg: SbgClient) {
     findLoad: (scanned: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/find-load', { params: { query: { scanned } } })),
     /** Round 32 — the store parcel a GS1 barcode (SSCC) belongs to. */
     findParcelBySscc: (scanned: string) => sbg.request((c) => c.GET('/v1/sbg/scan/parcel', { params: { query: { scanned } } })),
+    /** 2026-11-15 — held pays with a problem reported: the queue, the protocol applied, going against it (two people). */
+    holds: () => sbg.request((c) => c.GET('/v1/sbg/holds', {})),
+    applyHold: (freightId: string, by?: string) => sbg.request((c) => c.POST('/v1/sbg/holds/{freightId}/apply', { params: { path: { freightId } }, body: { ...(by ? { by } : {}) } })),
+    overrideHold: (freightId: string, input: { outcome: 'release' | 'refund'; reason: string }, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/holds/{freightId}/override', { params: { path: { freightId } }, body: { ...input, ...(by ? { by } : {}) } })),
+    approveHoldOverride: (freightId: string, by?: string) => sbg.request((c) => c.POST('/v1/sbg/holds/{freightId}/override/approve', { params: { path: { freightId } }, body: { ...(by ? { by } : {}) } })),
     proposeGs1: (disputeId: string, input: { to: 'claimant' | 'holders'; what: string; reason: string }, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/propose', { params: { path: { disputeId } }, body: { ...input, ...(by ? { by } : {}) } })),
     approveGs1: (disputeId: string, by?: string) => sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/approve', { params: { path: { disputeId } }, body: { ...(by ? { by } : {}) } })),

@@ -6,6 +6,8 @@ import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, type LoadOffer, type LoadPaymentView, type PersonLoadForm, type PersonLoadRow } from '../personLoads';
 import type { SendActions, SendState } from '../useSendApp';
+import type { Uploaded } from '../../../shared/upload';
+import { HoldBlock } from './HoldBlock';
 
 /**
  * 2026-11-13 — POST A LOAD (unusual loads, U5; part 3a): something too big for a shop — what it is, about how heavy, where from
@@ -199,7 +201,7 @@ function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, 
 }
 
 /** One of the person's loads: what it is, where it stands, the work, and — while it waits — the drivers' prices. */
-function LoadCard({ load, api, onChanged, phone }: { load: PersonLoadRow; api: ReturnType<typeof personLoadApi>; onChanged: () => void; phone?: string }) {
+function LoadCard({ load, api, onChanged, phone, client, upload }: { load: PersonLoadRow; api: ReturnType<typeof personLoadApi>; onChanged: () => void; phone?: string; client: SbgClient | null; upload: (file: File) => Promise<Uploaded> }) {
   const t = useT();
   const [offers, setOffers] = useState<LoadOffer[] | null>(null);
   const [payment, setPayment] = useState<LoadPaymentView | null>(null);
@@ -263,6 +265,8 @@ function LoadCard({ load, api, onChanged, phone }: { load: PersonLoadRow; api: R
         </>
       ) : null}
       {payment?.state === 'lapsed' && waiting ? <p class="hint">{t('send.load.lapsed')}</p> : null}
+      {/* 2026-11-15 — delivered: the driver's pay held 24 hours; a problem reported within them, decided by the protocol. */}
+      <HoldBlock freightId={load.freightId} hold={load} client={client} upload={upload} onChanged={onChanged} />
       {payment?.owedBack ? <p class="hint">{t('send.load.refunded', { amount: formatMoney(payment.owedBack, payment.currency) })}</p> : null}
       <p class="card__note">{t(load.escrow ? 'send.load.escrowNote' : 'send.load.payDirect')}</p>
     </Card>
@@ -270,7 +274,7 @@ function LoadCard({ load, api, onChanged, phone }: { load: PersonLoadRow; api: R
 }
 
 /** "Your loads", in My parcels: the loads this person posted, newest first. Nothing where they posted none. */
-export function PersonLoadsGroup({ client, phone }: { client: SbgClient | null; phone?: string }) {
+export function PersonLoadsGroup({ client, phone, upload }: { client: SbgClient | null; phone?: string; upload: (file: File) => Promise<Uploaded> }) {
   const t = useT();
   const api = useMemo(() => (client ? personLoadApi(client) : null), [client]);
   const [loads, setLoads] = useState<PersonLoadRow[] | null>(null);
@@ -287,7 +291,7 @@ export function PersonLoadsGroup({ client, phone }: { client: SbgClient | null; 
     <section>
       <h2 class="scr__section">{t('send.load.mine')}</h2>
       {loads.map((l) => (
-        <LoadCard key={l.freightId} load={l} api={api} phone={phone} onChanged={() => void read()} />
+        <LoadCard key={l.freightId} load={l} api={api} phone={phone} client={client} upload={upload} onChanged={() => void read()} />
       ))}
     </section>
   );

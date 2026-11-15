@@ -218,7 +218,7 @@ export function App() {
   const counts: Partial<Record<Screen, number | null>> = {
     cases: state.casesWaiting,
     hazards: state.hazards?.length ?? null,
-    claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
+    claims: state.claims == null && state.freightClaims == null && state.heldPays == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0) + (state.heldPays?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications, state.riderIds),
     // A business waiting for its check, and — round 18 — a GS1 prefix two businesses say is theirs, waiting to be decided.
@@ -258,7 +258,7 @@ export function App() {
               {waitingLine(
                 {
                   hazards: state.hazards?.length ?? null,
-                  claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
+                  claims: state.claims == null && state.freightClaims == null && state.heldPays == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0) + (state.heldPays?.length ?? 0),
                   disposal: state.disposal?.length ?? null,
                   approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications, state.riderIds),
                 },

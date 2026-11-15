@@ -14,6 +14,7 @@ import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
 import { PersonLoadsGroup } from './PersonLoad';
+import { HoldBlock } from './HoldBlock';
 import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
@@ -81,7 +82,7 @@ export function MyParcelsScreen({ state, actions, client = null }: MyParcelsScre
 
       {freights.length ? <FreightGroup items={freights} /> : null}
       {/* 2026-11-13 — the loads this person posted, with the drivers' prices (unusual loads, U5). */}
-      <PersonLoadsGroup client={client} phone={state.authPhone} />
+      <PersonLoadsGroup client={client} phone={state.authPhone} upload={(file) => actions.uploadPhoto('dispute', file)} />
 
       {empty ? (
         <Card tone="soft">
@@ -412,6 +413,8 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
 
       {/* …or to their own door, paid first by mobile money (2026-10-27: "Mobile money first"). */}
       {parcel.returnOf ? <DoorBlock parcel={parcel} state={state} actions={actions} /> : null}
+      {/* 2026-11-15 — delivered to their door: the driver's pay held 24 hours, and a problem reported within them (the hold). */}
+      {parcel.door?.freightId ? <HoldBlock freightId={parcel.door.freightId} hold={parcel.door} client={client} upload={(file) => actions.uploadPhoto('dispute', file)} onChanged={() => void actions.openParcel(parcel.parcelId)} /> : null}
 
       {parcel.relation === 'received' && parcel.sentToOldNumber ? <Note tone="info" icon="info" title={t('send.parcels.oldNumber.title')} detail={t('send.parcels.oldNumber.detail')} /> : null}
 

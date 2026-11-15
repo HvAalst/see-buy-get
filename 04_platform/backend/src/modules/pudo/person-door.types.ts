@@ -130,6 +130,12 @@ export class DoorView {
   @ApiPropertyOptional({ type: DoorRaiseView }) raise?: DoorRaiseView;
   @ApiPropertyOptional() shopName?: string;
   @ApiPropertyOptional() shopParcelId?: string;
+  /** 2026-11-15 — delivered: the load, so a problem can be reported on it; the driver's pay held until; what was decided. */
+  @ApiPropertyOptional() freightId?: string;
+  @ApiPropertyOptional() heldUntil?: string;
+  @ApiPropertyOptional() canReport?: boolean;
+  @ApiPropertyOptional() reported?: boolean;
+  @ApiPropertyOptional() holdWords?: string;
 }
 
 export class DoorRaiseDto {
