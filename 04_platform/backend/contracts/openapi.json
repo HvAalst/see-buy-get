@@ -26374,6 +26374,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadArrivedDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -71903,6 +71913,10 @@
             "type": "string",
             "description": "…the person said it arrived: delivered without the code (their receiver lost it)."
           },
+          "posterConfirmedBy": {
+            "type": "string",
+            "description": "2026-11-15 — who said it arrived, having confirmed they spoke to the receiver themselves."
+          },
           "payHold": {
             "type": "object",
             "properties": {
@@ -77633,6 +77647,14 @@
           "until",
           "phoneMasked"
         ]
+      },
+      "LoadArrivedDto": {
+        "type": "object",
+        "properties": {
+          "spokeToReceiver": {
+            "type": "boolean"
+          }
+        }
       },
       "HoldProblem": {
         "type": "object",

@@ -455,9 +455,13 @@ describe('a person posts a load, over the wire', () => {
     expect(app.get(OutboxMailSender).recent(email).find((m) => m.template === 'load-delivery-code')?.text).toContain(row.deliveryCode as string);
     expect(await claimOf(l.driver, l.freightId)).toMatchObject({ deliveryCodeNeeded: true, checkName: 'Nakato S.' });
     // The code lost: whoever sent it says it arrived — never staff, never somebody else.
-    await http().post(l.at('arrived')).set(bearer(operator)).expect(403);
-    await http().post(l.at('arrived')).set(bearer(await aPerson())).expect(404);
-    await http().post(l.at('arrived')).set(bearer(l.person)).expect(201);
+    await http().post(l.at('arrived')).set(bearer(operator)).send({ spokeToReceiver: true }).expect(403);
+    await http().post(l.at('arrived')).set(bearer(await aPerson())).send({ spokeToReceiver: true }).expect(404);
+    // Only having spoken to the receiver themselves, not only to the driver (2026-11-15).
+    const unsaid = await http().post(l.at('arrived')).set(bearer(l.person)).send({});
+    expect([unsaid.status, unsaid.body.detail]).toEqual([400, expect.stringMatching(/spoken to the person receiving it yourself/)]);
+    await http().post(l.at('arrived')).set(bearer(l.person)).send({ spokeToReceiver: true }).expect(201);
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).posterConfirmedBy).toEqual(expect.any(String));
     expect((await myRow(l.person, l.freightId)).arrivedSaid).toBe(true);
     expect((await claimOf(l.driver, l.freightId)).deliveryCodeNeeded).toBeUndefined();
   });
@@ -467,7 +471,7 @@ describe('a person posts a load, over the wire', () => {
     expect((await myRow(l.person, l.freightId)).deliveryCode).toBeUndefined();
     expect((await claimOf(l.driver, l.freightId)).deliveryCodeNeeded).toBeUndefined();
     // Nothing to say arrived without a code: it is delivered as it always was.
-    await http().post(l.at('arrived')).set(bearer(l.person)).expect(400);
+    await http().post(l.at('arrived')).set(bearer(l.person)).send({ spokeToReceiver: true }).expect(400);
   });
 
   it('20 · booked at a shop’s counter, where the number on it is the walk-in sender’s: the receiver is reached by email only', async () => {
@@ -526,7 +530,7 @@ describe('a person posts a load, over the wire', () => {
     const told = ((await http().get('/v1/sbg/notifications/inbox').set(bearer(l.person)).expect(200)).body.items as Array<{ kind: string; body: string }>).find((n) => n.kind === 'freight_problem');
     expect(told?.body).toMatch(/did not have the delivery code.*It arrived/);
     // Said arrived: the code is no longer the question at the door.
-    await http().post(l.at('arrived')).set(bearer(l.person)).expect(201);
+    await http().post(l.at('arrived')).set(bearer(l.person)).send({ spokeToReceiver: true }).expect(201);
     await failed('no_code').expect(400);
   });
 });

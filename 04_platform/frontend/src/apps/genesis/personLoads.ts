@@ -124,6 +124,6 @@ export function personLoadApi(sbg: SbgClient) {
     // 2026-11-13 — a load paid first (part 3b): pay to accept, read the payment, say it arrived.
     pay: (freightId: string, proposalId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pay', { params: { path: { id: freightId } }, body: { proposalId, phone } })),
     payment: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/payment', { params: { path: { id: freightId } } })),
-    arrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } } })),
+    arrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } }, body: { spokeToReceiver: true } })),
   };
 }

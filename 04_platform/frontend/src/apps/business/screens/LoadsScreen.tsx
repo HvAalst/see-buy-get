@@ -1,5 +1,6 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { pageGot, PaperSheet, Sections, usePaper } from '../../../shared/ui';
 import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
@@ -293,6 +294,7 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
 
 export function LoadDetail({ row, start, business, client, act, onClose, onChanged }: { row: PostedLoad; start?: string; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
+  const [asking, setAsking] = useState(false); // 2026-11-15 — "It arrived" asks the sender to confirm first
   const stage = loadStage(row);
   const says = planSays(row, t);
   const handed = deliverySays(row, t);
@@ -434,12 +436,16 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                           {row.arrivedSaid ? (
                             <span class="chint"> {t('business.loads.arrivedSaid')}</span>
                           ) : act && client ? (
-                            <>
-                              {' '}
-                              <button type="button" class="cbtn cbtn--ghost" onClick={() => void client.shipping.loadArrived(row.freightId).then((r) => !r.error && onChanged())}>
-                                {t('business.loads.arrived')}
-                              </button>
-                            </>
+                            asking ? (
+                              <ArrivedConfirm look="console" who={arrivedWho(row, t)} onCancel={() => setAsking(false)} onConfirm={() => void client.shipping.loadArrived(row.freightId).then((r) => { if (!r.error) { setAsking(false); onChanged(); } })} />
+                            ) : (
+                              <>
+                                {' '}
+                                <button type="button" class="cbtn cbtn--ghost" onClick={() => setAsking(true)}>
+                                  {t('business.loads.arrived')}
+                                </button>
+                              </>
+                            )
                           ) : null}
                           <span class="chint"> {t('business.loads.codeNote')}</span>
                         </dd>

@@ -3431,6 +3431,11 @@ export class OpenFreightClaimDto {
 }
 
 /** FP3 — the sender withdraws a load before taking over. The reason goes on the note. */
+/** 2026-11-15 — "It arrived": the sender confirms they spoke to the receiver themselves, not only to the driver. */
+export class LoadArrivedDto {
+  @IsOptional() @IsBoolean() spokeToReceiver?: boolean;
+}
+
 export class CancelFreightDto {
   @IsString() @MaxLength(500) reason!: string;
 }

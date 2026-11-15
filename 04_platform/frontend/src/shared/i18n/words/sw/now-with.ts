@@ -21,4 +21,9 @@ export const words: Record<string, string> = {
   "nowWith.vehicle.bus": "basi",
   "nowWith.vehicle.truck": "lori",
   "nowWith.vehicle.generic": "gari",
+  "nowWith.arrived.ask": "Tu kama mpokeaji anao, na uliongea naye mwenyewe, si na dereva tu. Kisha dereva anaweza kufikisha bila msimbo.",
+  "nowWith.arrived.who": "Aliye nao: {who}",
+  "nowWith.arrived.tick": "Niliongea na mpokeaji mwenyewe, na anao",
+  "nowWith.arrived.confirm": "Ndiyo, umefika",
+  "nowWith.arrived.cancel": "Bado",
 };

@@ -44,6 +44,12 @@ export function nowWithLine(n: NowWith, t: Translate): string {
   }
 }
 
+/** 2026-11-15 — who has a load, for the sender confirming it arrived: the company and vehicle, and the driver where named. */
+export function arrivedWho(row: { nowWith?: NowWith; carrier?: { driverName?: string; plate?: string } }, t: Translate): string | undefined {
+  const parts = [row.nowWith ? nowWithLine(row.nowWith, t) : undefined, row.carrier?.driverName ? [row.carrier.driverName, row.carrier.plate].filter(Boolean).join(' · ') : undefined].filter((x): x is string => Boolean(x));
+  return parts.length ? parts.join(' — ') : undefined;
+}
+
 /** "since 14:05" — today on this phone's clock; another day with its date. */
 export function nowWithSince(n: NowWith, t: Translate, now: Date = new Date()): string {
   const at = new Date(n.since);

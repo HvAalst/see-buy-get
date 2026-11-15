@@ -150,7 +150,7 @@ export class PersonLoadPayService implements OnModuleInit {
   arrived(personDid: string, freightId: string, now: number = Date.now()): { confirmedAt: string } {
     const f = this.dispatch.requireFreightPublic(freightId);
     if (f.postedByDid !== personDid) throw new GlosError('FORBIDDEN', 'That load is not yours');
-    return { confirmedAt: this.dispatch.posterSaysArrived(freightId, now) };
+    return { confirmedAt: this.dispatch.posterSaysArrived(freightId, now, personDid) };
   }
 
   /* ------------------------------------------------------------- the rail -- */

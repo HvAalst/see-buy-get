@@ -4580,11 +4580,12 @@ export class DispatchService {
   }
 
   /** The person says it arrived: the driver may deliver without the code. */
-  posterSaysArrived(freightId: string, now: number = Date.now()): string {
+  posterSaysArrived(freightId: string, now: number = Date.now(), by?: string): string {
     const f = this.requireFreight(freightId);
     // 2026-11-15 — any load with a delivery code, not only one paid first: the way out when the code is lost.
     if (!f.deliveryCode) throw new GlosError('INVALID_STATE', 'This load is delivered as it always was: it has no delivery code');
     if (!(f.status === 'claimed' || f.status === 'in_transit')) throw new GlosError('INVALID_STATE', `The load is ${f.status}`);
+    if (!f.posterConfirmedAt && by) f.posterConfirmedBy = by;
     f.posterConfirmedAt = f.posterConfirmedAt ?? new Date(now).toISOString();
     this.freights.set(f.freightId, f);
     return f.posterConfirmedAt;

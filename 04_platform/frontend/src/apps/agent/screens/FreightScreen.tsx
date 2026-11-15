@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
@@ -177,6 +178,7 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
   const [claiming, setClaiming] = useState(false);
   // FP6 — the link to hand on, and the verdict.
   const [sharing, setSharing] = useState(false);
+  const [asking, setAsking] = useState(false); // 2026-11-15 — "It arrived" asks the counter to confirm first
   const [rating, setRating] = useState(false);
   // FP7 — box 13.
   const [instructing, setInstructing] = useState(false);
@@ -277,9 +279,13 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
           {load.arrivedSaid ? (
             <p class="hint">{t('agent.freight.arrivedSaid')}</p>
           ) : (
-            <Button variant="link" full={false} busy={state.busy === `arrived:${load.freightId}`} onClick={() => void actions.loadArrived(load.freightId)}>
-              {t('agent.freight.arrived')}
-            </Button>
+            asking ? (
+              <ArrivedConfirm who={arrivedWho(load, t)} busy={state.busy === `arrived:${load.freightId}`} onCancel={() => setAsking(false)} onConfirm={() => void actions.loadArrived(load.freightId).then(() => setAsking(false))} />
+            ) : (
+              <Button variant="link" full={false} onClick={() => setAsking(true)}>
+                {t('agent.freight.arrived')}
+              </Button>
+            )
           )}
         </>
       ) : null}

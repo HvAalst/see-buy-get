@@ -21,4 +21,9 @@ export const words: Record<string, string> = {
   "nowWith.vehicle.bus": "bus",
   "nowWith.vehicle.truck": "vrachtwagen",
   "nowWith.vehicle.generic": "voertuig",
+  "nowWith.arrived.ask": "Alleen als de ontvanger het heeft, en je zelf met hen hebt gesproken, niet alleen met de chauffeur. De chauffeur kan dan afleveren zonder de code.",
+  "nowWith.arrived.who": "Wie het heeft: {who}",
+  "nowWith.arrived.tick": "Ik heb zelf met de ontvanger gesproken, en die heeft het",
+  "nowWith.arrived.confirm": "Ja, het is aangekomen",
+  "nowWith.arrived.cancel": "Nog niet",
 };

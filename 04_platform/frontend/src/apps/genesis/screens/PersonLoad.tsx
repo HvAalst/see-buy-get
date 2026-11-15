@@ -8,7 +8,8 @@ import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, ty
 import type { SendActions, SendState } from '../useSendApp';
 import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
-import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
+import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 
 /**
  * 2026-11-13 — POST A LOAD (unusual loads, U5; part 3a): something too big for a shop — what it is, about how heavy, where from
@@ -229,6 +230,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
   const [offers, setOffers] = useState<LoadOffer[] | null>(null);
   const [payment, setPayment] = useState<LoadPaymentView | null>(null);
   const [arrived, setArrived] = useState(false);
+  const [asking, setAsking] = useState(false); // 2026-11-15 — "It arrived" asks them to confirm first
   const waiting = (load.status === 'available' || load.status === 'scheduled') && !load.awaitingPayment;
   const readPayment = async () => {
     if (!load.escrow) return;
@@ -283,9 +285,13 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
           {arrived || load.arrivedSaid ? (
             <p class="hint">{t('send.load.arrivedDone')}</p>
           ) : (
-            <Button variant="link" full={false} onClick={() => void api.arrived(load.freightId).then((r) => !r.error && setArrived(true))}>
-              {t('send.load.arrived')}
-            </Button>
+            asking ? (
+              <ArrivedConfirm who={arrivedWho(load, t)} onCancel={() => setAsking(false)} onConfirm={() => void api.arrived(load.freightId).then((r) => { if (!r.error) { setArrived(true); setAsking(false); } })} />
+            ) : (
+              <Button variant="link" full={false} onClick={() => setAsking(true)}>
+                {t('send.load.arrived')}
+              </Button>
+            )
           )}
         </>
       ) : null}

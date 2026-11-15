@@ -23,4 +23,10 @@ export const enNowWith = {
   'nowWith.vehicle.bus': 'bus',
   'nowWith.vehicle.truck': 'truck',
   'nowWith.vehicle.generic': 'vehicle',
+  // 2026-11-15 — "It arrived", confirmed: the sender spoke to the receiver themselves.
+  'nowWith.arrived.ask': 'Only if the person receiving it has it, and you spoke to them yourself, not only to the driver. The driver can then deliver without the code.',
+  'nowWith.arrived.who': 'Who has it: {who}',
+  'nowWith.arrived.tick': 'I spoke to the receiver myself, and they have it',
+  'nowWith.arrived.confirm': 'Yes, it arrived',
+  'nowWith.arrived.cancel': 'Not yet',
 } as const;

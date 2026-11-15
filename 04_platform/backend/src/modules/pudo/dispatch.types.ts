@@ -1050,6 +1050,8 @@ export class Freight {
   @ApiPropertyOptional() deliveryCodeTries?: number;
   /** …the person said it arrived: delivered without the code (their receiver lost it). */
   @ApiPropertyOptional() posterConfirmedAt?: string;
+  /** 2026-11-15 — who said it arrived, having confirmed they spoke to the receiver themselves. */
+  @ApiPropertyOptional() posterConfirmedBy?: string;
   /** …a price accepted and being paid: no other price is taken until it is paid or the time runs out. */
   @ApiPropertyOptional() payHold?: { proposalId: string; until: string };
   /** …and delivered with the code (not after the sender said it arrived). */

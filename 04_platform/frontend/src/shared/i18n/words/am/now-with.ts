@@ -21,4 +21,9 @@ export const words: Record<string, string> = {
   "nowWith.vehicle.bus": "አውቶቡስ",
   "nowWith.vehicle.truck": "የጭነት መኪና",
   "nowWith.vehicle.generic": "ተሽከርካሪ",
+  "nowWith.arrived.ask": "ተቀባዩ ከተረከበ እና እርስዎ ራስዎ ካነጋገሩት ብቻ፣ ከሹፌሩ ጋር ብቻ ሳይሆን። ከዚያ ሹፌሩ ያለ ኮዱ ማድረስ ይችላል።",
+  "nowWith.arrived.who": "የያዘው፦ {who}",
+  "nowWith.arrived.tick": "ተቀባዩን ራሴ አነጋግሬዋለሁ፣ ተረክቧል",
+  "nowWith.arrived.confirm": "አዎ፣ ደርሷል",
+  "nowWith.arrived.cancel": "ገና ነው",
 };
