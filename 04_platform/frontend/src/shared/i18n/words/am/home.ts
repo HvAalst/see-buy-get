@@ -754,4 +754,8 @@ export const words: Record<string, string> = {
   "home.join.shopPapers.skip": "ለአሁኑ ይዝለሉ",
   "home.join.shopPapers.keptNote": "እዚህ የሰቀሉት ነገር ግን ያልላኩት ሰነድ በShop መተግበሪያ ውስጥ ለ48 ሰዓት ይጠብቅዎታል። ከዚያ በኋላ ይሰረዛል።",
   "home.join.shopPapers.skipNote": "ሱቅዎ በሁለቱም መንገድ ይከፈታል። ከዘለሉት፣ ከShop መተግበሪያ መነሻ ገጽ እስኪልኳቸው ድረስ ይጠብቃል።",
+  "home.join.done.store1": "Store መተግበሪያውን ይክፈቱ እና በኢሜይልዎና በይለፍ ቃልዎ ይግቡ",
+  "home.join.done.store2": "ወደ ቀሪ ሂሳብዎ ገንዘብ ያስገቡ፣ እና የመጀመሪያ ትዕዛዞችዎን በእጅ ይፍጠሩ፦ ለዚህ የሱቅ ሲስተም አያስፈልግም",
+  "home.join.done.store3": "ዝግጁ ሲሆኑ፣ ድር ሱቅዎን ወይም የሱቅ ሲስተምዎን ከ Store መተግበሪያ ያገናኙ፦ ገንቢዎ ሁሉንም ነገር እዚያ ያገኛል",
+  "home.join.done.storeConnect": "የሱቅ ሲስተምዎን ማገናኘት ምን እንደሚያደርግና እንዴት",
 };

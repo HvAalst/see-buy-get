@@ -1249,21 +1249,15 @@ function DoneStep({ state, actions }: JoinScreenProps) {
         <Note tone="info" icon="mail" title={t('home.join.done.linkTitle')} detail={t('home.join.done.linkSays', { email: acc?.email ?? store?.email ?? state.form.email, app: roleMeta(role, t).appNoun })} />
       ) : null}
 
+      {/* 2026-11-15 — NO KEY HERE (the owner: "the key should be shown once the owner is ready for it"): the store is ready to
+          ship by hand today; connecting its own shop system comes later, on its own page in the Store app, when asked. */}
       {store ? (
-        <>
-          {/* Each said by name, in words on the page: a card's `label` is only read by a screen reader. */}
-          <Card label={t('home.join.done.storeId')}>
-            <p class="t-label">{t('home.join.done.storeId')}</p>
-            <p class="cred">{store.vendorId}</p>
-          </Card>
-          <Card label={t('home.join.done.storeSecret')}>
-            <p class="t-label">{t('home.join.done.storeSecret')}</p>
-            <p class="cred">{store.secret}</p>
-          </Card>
-          <Card title={t('home.join.done.writeDown')} tone="soft">
-            <Checklist items={[t('home.join.done.secret1'), t('home.join.done.secret2'), t('home.join.done.secret3')]} />
-          </Card>
-        </>
+        <Card title={t('home.join.done.whatNext')} tone="soft">
+          <Checklist items={[t('home.join.done.store1'), t('home.join.done.store2'), t('home.join.done.store3')]} />
+          <p class="hint" style="margin-top:8px">
+            <a href={`${role.app}?go=connect`}>{t('home.join.done.storeConnect')}</a>
+          </p>
+        </Card>
       ) : null}
 
       {acc ? (

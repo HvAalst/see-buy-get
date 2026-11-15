@@ -94,3 +94,17 @@ describe('the steps stay in sight while the form scrolls (the owner, 2026-11-02)
     expect(render('pudo', 'login')).not.toContain('Last step');
   });
 });
+
+/*
+ * 2026-11-15 — A STORE'S LAST SIGN-UP SCREEN SHOWS NO KEY (the owner: "the key should be shown once the owner is ready for
+ * it"): ready to ship by hand today, and connecting its shop system later, on its own page in the Store app.
+ */
+describe('a store signed up', () => {
+  it('is told what comes next, and shown no key or secret', () => {
+    const html = render('vendor', 'done', { email: 'owner@duka.example' }, { store: { vendorId: 'ven_7f3a', secret: 'whsec_should_not_show', email: 'owner@duka.example' } });
+    expect(html).not.toContain('whsec_should_not_show');
+    expect(html).toContain(t('home.join.done.store2').slice(0, 30));
+    expect(html).toContain('?go=connect');
+  });
+});
+

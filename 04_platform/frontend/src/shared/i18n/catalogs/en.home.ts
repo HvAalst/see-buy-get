@@ -656,6 +656,11 @@ export const enHome = {
   'home.join.done.secret1': 'The secret signs your order callbacks: give it to your shop system',
   'home.join.done.secret2': 'It does not sign anybody in: you use your email and password',
   'home.join.done.secret3': 'Lost it? Replace it from the Store app, with your password',
+  // 2026-11-15 — a store's last sign-up screen: ready by hand now, the shop system connected later, when it is ready.
+  'home.join.done.store1': 'Open the Store app and sign in with your email and password',
+  'home.join.done.store2': 'Add money to your balance, and make your first orders by hand: no shop system is needed for that',
+  'home.join.done.store3': 'When you are ready, connect your webshop or shop system from the Store app: your developer finds everything there',
+  'home.join.done.storeConnect': 'What connecting your shop system does, and how',
   'home.join.done.whatNext': 'What happens next',
   'home.join.done.active1': 'Your app is ready to open',
   'home.join.done.active2': 'Sign in with your email and password',

@@ -19,6 +19,7 @@ import { DockScreen } from './screens/DockScreen';
 import { MintScreen } from './screens/MintScreen';
 import { OrdersScreen, type OrdersScreenProps } from './screens/OrdersScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { ConnectScreen } from './screens/ConnectScreen';
 import { StoreScreen } from './screens/StoreScreen';
 import { OpensSoonNote } from '../../shared/opening/OpensSoonNote';
 import { useVendorApp, type Screen, type VendorActions, type VendorState } from './useVendorApp';
@@ -30,7 +31,8 @@ import { NavScreen } from '../../shared/ui/NavScreen';
 // 2026-11-02 — Back, as an app means it (shared/nav.ts): the orders are home and every other screen is a tab's, so
 // they swap in place and Back from any of them is the orders. A shortcut may open any screen; Ship starts a new parcel.
 const TABS: readonly Screen[] = ['mint', 'books', 'dock', 'notes', 'store'];
-const LAUNCH = screensOf<Screen>({ orders: true, mint: true, books: true, dock: true, store: true, notes: true });
+// 2026-11-15 — and Connect your shop system, opened from the sign-up's last screen (?go=connect).
+const LAUNCH = screensOf<Screen>({ orders: true, mint: true, books: true, dock: true, store: true, notes: true, connect: true });
 
 export function App() {
   const t = useT();
@@ -167,6 +169,8 @@ function ScreenRouter({ screen, state, actions, archive, destination, client }: 
       return <DockScreen state={state} actions={actions} />;
     case 'store':
       return <StoreScreen state={state} actions={actions} />;
+    case 'connect':
+      return <ConnectScreen state={state} actions={actions} />;
     default:
       return <OrdersScreen state={state} actions={actions} client={client} />;
   }

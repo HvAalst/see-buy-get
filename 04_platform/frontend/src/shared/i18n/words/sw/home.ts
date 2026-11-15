@@ -754,4 +754,8 @@ export const words: Record<string, string> = {
   "home.join.shopPapers.skip": "Ruka kwa sasa",
   "home.join.shopPapers.keptNote": "Hati unayopakia hapa lakini usiitume inakusubiri kwenye programu ya Shop kwa saa 48. Baada ya hapo inafutwa.",
   "home.join.shopPapers.skipNote": "Duka lako linatengenezwa kwa vyovyote vile. Ukiruka, linasubiri hadi utakapozituma kutoka skrini ya mwanzo ya programu ya Shop.",
+  "home.join.done.store1": "Fungua programu ya Store na uingie kwa barua pepe na nenosiri lako",
+  "home.join.done.store2": "Weka pesa kwenye salio lako, na utengeneze oda zako za kwanza kwa mkono: hauhitaji mfumo wa duka kwa hilo",
+  "home.join.done.store3": "Ukiwa tayari, unganisha duka lako la mtandaoni au mfumo wa duka kutoka kwenye programu ya Store: msanidi programu wako atapata kila kitu huko",
+  "home.join.done.storeConnect": "Kile ambacho kuunganisha mfumo wako wa duka hufanya, na jinsi",
 };

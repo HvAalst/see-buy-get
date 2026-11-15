@@ -2,6 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Choice, ErrorNote, Info, Note, PlaceMap, PlaceWords, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { CopyButton } from '../../../shared/CopyButton';
 import { useT } from '../../../shared/i18n';
 import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
@@ -20,13 +21,7 @@ export interface StoreScreenProps {
 export function StoreScreen({ state, actions }: StoreScreenProps) {
   const t = useT();
   const [policyOpen, setPolicyOpen] = useState(false);
-  const [url, setUrl] = useState<string | null>(null);
   const v = state.vendor;
-  const shownUrl = url ?? v?.callbackUrl ?? '';
-  // The code tick box answers at once and settles on what the server says once the store record reloads.
-  const [codeOn, setCodeOn] = useState<boolean | null>(null);
-  const [allMessages, setAllMessages] = useState(false);
-  useEffect(() => setCodeOn(null), [v?.callbackCarriesCode]);
   const [emailOn, setEmailOn] = useState<boolean | null>(null);
   useEffect(() => setEmailOn(null), [v?.emailCodeToBuyers]);
 
@@ -52,7 +47,71 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <Gs1Card state={state} api={actions.gs1} />
 
-      {/* What a callback URL is, and whether this store needs one, in the (i)'s sheet (the user, 2026-10-26). */}
+      {/* 2026-11-15 — the collection code by email: the owner's choice, about the buyers, so it stays here (plan R3). */}
+      <Card title={t('vendor.store.emailCodeTitle')}>
+      {/* 2026-11-15 — the code by email to buyers who give an email and a name; the shop then checks the name (plan R3). */}
+      <label class="checkline" style="margin-top:14px">
+        <input
+          type="checkbox"
+          checked={emailOn ?? Boolean(v?.emailCodeToBuyers)}
+          disabled={!v || state.busy === 'email-code'}
+          onChange={(e) => {
+            setEmailOn(e.currentTarget.checked);
+            void actions.setEmailCode(e.currentTarget.checked);
+          }}
+        />
+        <span>{t('vendor.store.emailCode')}</span>
+      </label>
+      <p class="hint">{t('vendor.store.emailCodeNote')}</p>
+      </Card>
+
+      {/* 2026-11-15 — connecting a shop system has its own page, opened when the owner is ready for it (the owner). */}
+      <Card title={t('vendor.connect.title')}>
+        <p class="card__note">{t('vendor.connect.cardNote')}</p>
+        <Button chevron variant="outline" full={false} onClick={() => actions.go('connect')}>
+          {t('vendor.connect.open')}
+        </Button>
+      </Card>
+
+      <Card title={t('vendor.store.settlementTitle')}>
+        {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}
+        {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
+        {state.settlement.slice(0, 10).map((s) => (
+          <div key={s.id} class="kv">
+            <span>{`${ledgerTypeWord(s.type, t, s.parcelId)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
+            <b>{`${s.sign}${money(s.amount, s.currency ?? v?.currency)}`}</b>
+          </div>
+        ))}
+      </Card>
+
+      <div class="scr__foot">
+        <ReadAloud text={() => `${v?.balance === null ? t('vendor.noTillSpoken') : t('vendor.store.balanceSpoken', { balance: money(v?.balance, v?.currency) })}${v ? policyLine(v.shippingPolicy, t, v.currency) : ''}`} label={t('vendor.readAloud')} />
+        <Button variant="link" full={false} onClick={actions.signOut}>
+          {t('vendor.store.signOut')}
+        </Button>
+      </div>
+
+      <PolicySheet open={policyOpen} onClose={() => setPolicyOpen(false)} state={state} actions={actions} />
+    </div>
+  );
+}
+
+/**
+ * Where a store's own system hears what happens to its orders: the address, whether the code rides along, a test message,
+ * and what became of each message sent. On the Connect page since 2026-11-15 — for whoever builds the store's website.
+ */
+export function CallbacksCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  const [url, setUrl] = useState<string | null>(null);
+  const v = state.vendor;
+  const shownUrl = url ?? v?.callbackUrl ?? '';
+  // The code tick box answers at once and settles on what the server says once the store record reloads.
+  const [codeOn, setCodeOn] = useState<boolean | null>(null);
+  const [allMessages, setAllMessages] = useState(false);
+  useEffect(() => setCodeOn(null), [v?.callbackCarriesCode]);
+
+  // What a callback URL is, and whether this store needs one, in the (i)'s sheet (the user, 2026-10-26).
+  return (
       <Card
         title={t('vendor.store.callbacksTitle')}
         aside={
@@ -88,20 +147,6 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
           <span>{t('vendor.store.callbackCode')}</span>
         </label>
         <p class="hint">{t('vendor.store.callbackCodeNote')}</p>
-        {/* 2026-11-15 — the code by email to buyers who give an email and a name; the shop then checks the name (plan R3). */}
-        <label class="checkline" style="margin-top:14px">
-          <input
-            type="checkbox"
-            checked={emailOn ?? Boolean(v?.emailCodeToBuyers)}
-            disabled={!v || state.busy === 'email-code'}
-            onChange={(e) => {
-              setEmailOn(e.currentTarget.checked);
-              void actions.setEmailCode(e.currentTarget.checked);
-            }}
-          />
-          <span>{t('vendor.store.emailCode')}</span>
-        </label>
-        <p class="hint">{t('vendor.store.emailCodeNote')}</p>
         {v?.callbackUrl ? (
           <div style="margin-top:12px">
             <Button variant="outline" chevron={false} full={false} busy={state.busy === 'callback-test'} onClick={() => void actions.sendCallback()}>
@@ -142,30 +187,6 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
         )}
       </Card>
 
-      <KeysCard state={state} actions={actions} />
-
-      <SecretCard state={state} actions={actions} />
-
-      <Card title={t('vendor.store.settlementTitle')}>
-        {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}
-        {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
-        {state.settlement.slice(0, 10).map((s) => (
-          <div key={s.id} class="kv">
-            <span>{`${ledgerTypeWord(s.type, t, s.parcelId)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
-            <b>{`${s.sign}${money(s.amount, s.currency ?? v?.currency)}`}</b>
-          </div>
-        ))}
-      </Card>
-
-      <div class="scr__foot">
-        <ReadAloud text={() => `${v?.balance === null ? t('vendor.noTillSpoken') : t('vendor.store.balanceSpoken', { balance: money(v?.balance, v?.currency) })}${v ? policyLine(v.shippingPolicy, t, v.currency) : ''}`} label={t('vendor.readAloud')} />
-        <Button variant="link" full={false} onClick={actions.signOut}>
-          {t('vendor.store.signOut')}
-        </Button>
-      </div>
-
-      <PolicySheet open={policyOpen} onClose={() => setPolicyOpen(false)} state={state} actions={actions} />
-    </div>
   );
 }
 
@@ -176,7 +197,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
  * is then gone, because we keep only a hash of it. So the reveal is a sheet the merchant has to close by
  * hand — never a toast, which would take the only copy of a credential away on a timer.
  */
-function KeysCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+export function KeysCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<'publishable' | 'secret'>('publishable');
@@ -208,6 +229,8 @@ function KeysCard({ state, actions }: { state: VendorState; actions: VendorActio
               </span>
               <b class="mono-t">{k.value ?? `…${k.hint}`}</b>
             </div>
+            {/* A publishable key is shown whole and can be copied again; a secret one never comes back. */}
+            {k.value ? <CopyButton text={k.value} label={t('vendor.connect.copy')} copied={t('vendor.connect.copied')} variant="link" /> : null}
             {/* A publishable key is public by design; only a secret one has an age worth watching. */}
             {k.kind === 'secret' ? <CredentialAge iso={k.createdAt} machine class="hint" /> : null}
           </div>
@@ -274,6 +297,7 @@ function KeysCard({ state, actions }: { state: VendorState; actions: VendorActio
       <Sheet open={Boolean(state.issuedKey)} onClose={actions.dismissIssuedKey} title={t('vendor.keys.madeTitle')}>
         <p class="t-body">{t(state.issuedKey?.kind === 'secret' ? 'vendor.keys.madeSecret' : 'vendor.keys.madePublishable')}</p>
         <p class="words" style="word-break:break-all">{state.issuedKey?.secret}</p>
+        {state.issuedKey?.secret ? <CopyButton text={state.issuedKey.secret} label={t('vendor.connect.copy')} copied={t('vendor.connect.copied')} /> : null}
         <p class="card__note">{t('vendor.keys.madeWhere')}</p>
         <Button chevron={false} onClick={actions.dismissIssuedKey}>
           {t('vendor.keys.madeDone')}
@@ -462,7 +486,7 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
  * it regularly is good practice; it takes the current secret (an open console is not proof on its own), signs every
  * other session out, and the new secret is on screen exactly once, like the first.
  */
-function SecretCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+export function SecretCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
@@ -473,6 +497,8 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
   // WITH AN ACCOUNT the second proof is the password — so a lost secret can be replaced. Without one yet, it is the
   // current secret, which is also still what opens this console.
   const withAccount = state.vendor?.hasAccount === true;
+  // 2026-11-15 — a store signed up with its own password is shown no secret at sign-up: its first one is made here, when asked.
+  const first = withAccount && !state.vendor?.secretRotatedAt;
 
   return (
     <>
@@ -489,7 +515,7 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
             setOpen(true);
           }}
         >
-          {t('vendor.secret.rotate')}
+          {t(first ? 'vendor.secret.make' : 'vendor.secret.rotate')}
         </Button>
       </Card>
 
@@ -499,7 +525,7 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
           // The new secret is the only copy: the sheet closes by the button that says it was saved, never by a tap outside.
           if (!fresh) setOpen(false);
         }}
-        title={t(fresh ? 'vendor.secret.newTitle' : 'vendor.secret.sheetTitle')}
+        title={t(fresh ? 'vendor.secret.newTitle' : first ? 'vendor.secret.makeTitle' : 'vendor.secret.sheetTitle')}
       >
         {fresh ? (
           <>
@@ -507,6 +533,7 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
             <p class="mono-t" style="word-break:break-all">
               {fresh}
             </p>
+            <CopyButton text={fresh} label={t('vendor.connect.copy')} copied={t('vendor.connect.copied')} />
             <Button
               chevron={false}
               onClick={() => {

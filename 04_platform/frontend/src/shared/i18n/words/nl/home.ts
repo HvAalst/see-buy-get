@@ -754,4 +754,8 @@ export const words: Record<string, string> = {
   "home.join.shopPapers.skip": "Nu overslaan",
   "home.join.shopPapers.keptNote": "Een papier dat je hier uploadt maar niet verstuurt, wacht 48 uur op je in de Shop-app. Daarna wordt het verwijderd.",
   "home.join.shopPapers.skipNote": "Je winkel wordt hoe dan ook aangemaakt. Als je dit overslaat, wacht hij tot je ze verstuurt vanaf het startscherm van de Shop-app.",
+  "home.join.done.store1": "Open de Store-app en log in met je e-mailadres en wachtwoord",
+  "home.join.done.store2": "Zet geld op je saldo en maak je eerste bestellingen met de hand: daarvoor is geen winkelsysteem nodig",
+  "home.join.done.store3": "Als je er klaar voor bent, koppel je je webshop of winkelsysteem vanuit de Store-app: je ontwikkelaar vindt daar alles",
+  "home.join.done.storeConnect": "Wat het koppelen van je winkelsysteem doet, en hoe",
 };

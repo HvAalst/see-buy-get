@@ -152,6 +152,8 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'call-off-order', apps: ['vendor'], group: 'daily', steps: 4, notes: ['note'] },
   // Goods coming back to a person, brought to their door instead of the shop (2026-10-27: "Mobile money first").
   { id: 'goods-coming-back', apps: ['send'], group: 'wrong', steps: 4, notes: ['note'] },
+  // 2026-11-15 — connecting a webshop, for its developer: public, so the Store app's "Send to my developer" link opens it (the owner).
+  { id: 'connect-your-shop', apps: ['vendor', 'home'], group: 'start', site: true, steps: 6, notes: ['careful', 'note', 'note'] },
   // 2026-11-15 — a load paid first: the driver's pay held 24 hours, a problem decided by the protocol (the owner: "a protocol
   // can be explained to all parties"). Public, so every party reads the same page; every decision notice links to it.
   { id: 'when-something-goes-wrong', apps: ['send', 'driver', 'agent', 'mdp', 'business', 'vendor', 'console'], group: 'wrong', site: true, steps: 5, notes: ['note', 'note', 'why', 'careful'] },

@@ -86,7 +86,7 @@ import type {
   VendorView,
 } from './types';
 
-export type Screen = 'orders' | 'mint' | 'books' | 'dock' | 'store' | 'notes';
+export type Screen = 'orders' | 'mint' | 'books' | 'dock' | 'store' | 'notes' | 'connect';
 export type MintStep = 'source' | 'parcel' | 'dest' | 'origin' | 'price' | 'label';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
