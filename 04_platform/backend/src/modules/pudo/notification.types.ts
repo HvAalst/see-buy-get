@@ -93,6 +93,8 @@ export const NOTIFICATION_KINDS = [
   'shelf_full',
   /** 2026-11-06 — to a shop, that its corner for closed bags has just filled: the next closed bag stands where it works. */
   'bag_room',
+  /** 2026-11-15 — to a store's owner: their developer made a live key, or changed or removed where order updates go. */
+  'store_connection',
   /** 2026-11-06 — to a hub, the parcels standing there that can no longer be ready in time: sort them first, first in first out. */
   'sort_first',
   /** 2026-11-06 — to a parcel's people told it was held up, that it is on the road again. */

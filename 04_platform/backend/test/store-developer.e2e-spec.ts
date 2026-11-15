@@ -91,6 +91,14 @@ describe('a store’s developer, over the wire', () => {
     const after = (await http().get(`/v1/sbg/vendors/${vendorId}/activity`).set(bearer(owner)).expect(200)).body.items as Array<Record<string, unknown>>;
     expect(after[0]).toMatchObject({ act: 'key_revoked', label: 'Checkout' });
     expect(after[0].developer).toBeUndefined();
+    // 2026-11-15 — the owner's bell: told of the developer's new update address and a live key, not of the test key; and
+    // the developer's sign-in, on the store's own DID, cannot open that bell.
+    await http().post(`/v1/sbg/vendors/${vendorId}/api-keys`).set(dev).send({ kind: 'secret', mode: 'live', label: 'Live shop' }).expect(201);
+    await new Promise((r) => setImmediate(r));
+    const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(owner)).expect(200)).body.items as Array<{ kind: string; title: string; link?: string }>;
+    expect(bell.filter((n) => n.kind === 'store_connection').map((n) => n.title).sort()).toEqual(['Brian Studio changed where order updates go', 'Brian Studio made a live key']);
+    expect(bell.find((n) => n.kind === 'store_connection')?.link).toBe('/?go=connect');
+    await http().get('/v1/sbg/notifications/inbox').set(dev).expect(403);
     // Another store reads none of it.
     (app.get(RateLimitGuard) as unknown as { hits: Map<string, unknown> }).hits.clear();
     const phone2 = `+2547${digits()}`.slice(0, 13);
