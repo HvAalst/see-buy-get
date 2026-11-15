@@ -77,6 +77,27 @@ describe('a store’s developer, over the wire', () => {
     expect([policy.status, policy.body.detail]).toEqual([403, expect.stringMatching(/The owner changes the rest/)]);
     await http().post(`/v1/sbg/vendors/${vendorId}/secret/rotate`).set(dev).send({ password: 'x' }).expect(403);
     await http().post(`/v1/sbg/vendors/${vendorId}/developers`).set(dev).send({ name: 'Another', email: `x-${digits()}@studio.example` }).expect(403);
+    // 2026-11-15 — the history: who made the key and set the address, by name; the owner's invitation; never a key's value.
+    const hist = (await http().get(`/v1/sbg/vendors/${vendorId}/activity`).set(dev).expect(200)).body.items as Array<Record<string, unknown>>;
+    expect(hist).toEqual(expect.arrayContaining([
+      expect.objectContaining({ act: 'key_made', developer: 'Brian Studio', kind: 'secret', mode: 'test', label: 'Checkout', hint: expect.any(String) }),
+      expect.objectContaining({ act: 'address_set', developer: 'Brian Studio', url: 'https://studio.example/hooks/sbg' }),
+      expect.objectContaining({ act: 'developer_invited', name: 'Brian Studio' }),
+    ]));
+    expect(hist.find((e) => e.act === 'developer_invited')?.developer).toBeUndefined();
+    expect(JSON.stringify(hist)).not.toContain(key.secret);
+    // The owner revokes it: written down as the owner's.
+    await http().delete(`/v1/sbg/vendors/${vendorId}/api-keys/${key.keyId}`).set(bearer(owner)).expect(200);
+    const after = (await http().get(`/v1/sbg/vendors/${vendorId}/activity`).set(bearer(owner)).expect(200)).body.items as Array<Record<string, unknown>>;
+    expect(after[0]).toMatchObject({ act: 'key_revoked', label: 'Checkout' });
+    expect(after[0].developer).toBeUndefined();
+    // Another store reads none of it.
+    (app.get(RateLimitGuard) as unknown as { hits: Map<string, unknown> }).hits.clear();
+    const phone2 = `+2547${digits()}`.slice(0, 13);
+    const asked2 = await http().post('/v1/sbg/auth/phone/request').send({ phone: phone2 }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone: phone2, code: asked2.body.code }).expect(201);
+    const other = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${digits()}`, email: `other-${digits()}@duka.example`, password: 'maziwa-lala-2026', ownerPhone: phone2 }).expect(201)).body.token.access_token as string;
+    await http().get(`/v1/sbg/vendors/${vendorId}/activity`).set(bearer(other)).expect(403);
     // The owner sees when they last signed in.
     const list = (await http().get(`/v1/sbg/vendors/${vendorId}/developers`).set(bearer(owner)).expect(200)).body.items;
     expect(list[0]).toMatchObject({ devId, lastSignInAt: expect.any(String) });

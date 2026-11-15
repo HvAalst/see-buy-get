@@ -34993,6 +34993,35 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/activity": {
+      "get": {
+        "operationId": "StoreDeveloper.history",
+        "summary": "",
+        "description": "2026-11-15 — who did what on Connect, newest first: the owner and the store's developers read it alike.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreActivityResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}/developers": {
       "get": {
         "operationId": "StoreDeveloper.list",
@@ -85275,6 +85304,75 @@
         },
         "required": [
           "number"
+        ]
+      },
+      "StoreActivityEntry": {
+        "type": "object",
+        "properties": {
+          "developer": {
+            "type": "string",
+            "description": "The owner, or a developer's name."
+          },
+          "act": {
+            "type": "string",
+            "enum": [
+              "key_made",
+              "key_revoked",
+              "address_set",
+              "address_cleared",
+              "code_setting",
+              "test_sent",
+              "secret_made",
+              "developer_invited",
+              "developer_removed"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "A key: its kind (publishable/secret), world (test/live), last characters and label."
+          },
+          "mode": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Where order updates go now."
+          },
+          "on": {
+            "type": "boolean",
+            "description": "Whether the collection code rides in the updates."
+          },
+          "name": {
+            "type": "string",
+            "description": "A developer invited or taken out."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "act",
+          "at"
+        ]
+      },
+      "StoreActivityResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreActivityEntry"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "StoreDeveloperView": {

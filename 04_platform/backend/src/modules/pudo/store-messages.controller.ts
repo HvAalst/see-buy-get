@@ -1,6 +1,7 @@
-import { Controller, Param, Post } from '@nestjs/common';
+import { Controller, Param, Post, Optional } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { ForTheDeveloper } from '../../foundation/auth/for-the-developer';
+import { StoreActivityService } from './store-activity.service';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -18,6 +19,8 @@ export class StoreMessagesController {
   constructor(
     private readonly vendors: VendorService,
     private readonly sender: VendorCallbackService,
+    // 2026-11-15 — a test message is written in the store's history, with who sent it.
+    @Optional() private readonly activity?: StoreActivityService,
   ) {}
 
   /** A message that says only that it is a test, to the address the store has: does its system take and verify ours? */
@@ -27,6 +30,7 @@ export class StoreMessagesController {
   async test(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<VendorCallback> {
     this.assertTheStore(id, actor);
     const sent = this.vendors.testCallback(id);
+    this.activity?.note(id, actor, { act: 'test_sent' });
     await this.sender.drain();
     return this.vendors.callbackOf(id, sent.id);
   }

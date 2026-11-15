@@ -251,7 +251,8 @@ describe('exactly the five apps with chats receive shares', () => {
       }
       if (SHARE_APPS.includes(app)) expect({ app, signedIn: layers.some((l) => /chats=\{[^}]*chatApi/.test(l)) }).toEqual({ app, signedIn: true });
     }
-    // Two shells each in five apps (sign-in and signed in), one in the Send app, which signs in from inside.
-    expect(lines).toBe(11);
+    // Two shells each in five apps (sign-in and signed in), one in the Send app, which signs in from inside — and the Store
+    // app's third (2026-11-15): a store's developer, signed in to Connect alone, with no chats.
+    expect(lines).toBe(12);
   });
 });

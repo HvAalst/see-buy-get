@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { isStoreDeveloper } from '../../foundation/auth/for-the-developer';
+import { ForTheDeveloper, isStoreDeveloper } from '../../foundation/auth/for-the-developer';
+import { StoreActivityService } from './store-activity.service';
+import { StoreActivityResponse } from './store-activity.types';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -19,7 +21,17 @@ export class StoreDeveloperController {
   constructor(
     private readonly developers: StoreDeveloperService,
     private readonly vendors: VendorService,
+    private readonly activity: StoreActivityService,
   ) {}
+
+  /** 2026-11-15 — who did what on Connect, newest first: the owner and the store's developers read it alike. */
+  @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
+  @Get('vendors/:id/activity')
+  history(@Param('id') id: string, @Actor() actor: IntrospectionResult): StoreActivityResponse {
+    this.assertStoreReads(id, actor);
+    return { items: this.activity.list(id) };
+  }
 
   @Scopes('vendor:manage:self')
   @Get('vendors/:id/developers')
@@ -32,14 +44,18 @@ export class StoreDeveloperController {
   @Post('vendors/:id/developers')
   invite(@Param('id') id: string, @Body() dto: InviteStoreDeveloperDto, @Actor() actor: IntrospectionResult): StoreDeveloperView {
     this.assertOwner(id, actor);
-    return this.developers.invite(id, dto, actor.actorName ?? 'the owner');
+    const invited = this.developers.invite(id, dto, actor.actorName ?? 'the owner');
+    this.activity.note(id, actor, { act: 'developer_invited', name: invited.name });
+    return invited;
   }
 
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/developers/:devId/remove')
   remove(@Param('id') id: string, @Param('devId') devId: string, @Actor() actor: IntrospectionResult): StoreDeveloperView {
     this.assertOwner(id, actor);
-    return this.developers.remove(id, devId);
+    const out = this.developers.remove(id, devId);
+    this.activity.note(id, actor, { act: 'developer_removed', name: out.name });
+    return out;
   }
 
   /** A developer asks for a fresh sign-in link, by the email the owner gave. */
@@ -58,6 +74,13 @@ export class StoreDeveloperController {
   @Post('store-developers/session')
   session(@Body() dto: StoreDeveloperSessionDto): StoreDeveloperSession {
     return this.developers.session(dto.code);
+  }
+
+  /** A store's own records are the store's: its history is read by the store's own sign-ins — the owner's, or its developer's. */
+  private assertStoreReads(id: string, actor: IntrospectionResult): void {
+    const vendor = this.vendors.get(id);
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store’s own records are the store’s: its buyers, its collection codes, its messages to its systems. Staff read a store under Stores, and a parcel under Find a parcel');
+    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to view');
   }
 
   /** A store's own records are the store's: who its developers are is read by the owner's own sign-in alone. */

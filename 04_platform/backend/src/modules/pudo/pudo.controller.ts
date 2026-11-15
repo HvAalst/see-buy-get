@@ -73,6 +73,7 @@ import { CountryTermsService } from './country-terms.service';
 import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { ForTheDeveloper, isStoreDeveloper } from '../../foundation/auth/for-the-developer';
+import { StoreActivityService } from './store-activity.service';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { staffOf } from './staff-of';
@@ -419,6 +420,8 @@ export class SbgController {
     @Optional() private readonly hubList?: HubListService,
     // 2026-11-13 — a person paying for a load they posted, held until delivery (part 3b).
     @Optional() private readonly loadPay?: PersonLoadPayService,
+    // 2026-11-15 — who did what on a store's Connect page: keys, the update address, the secret (the owner).
+    @Optional() private readonly storeActivity?: StoreActivityService,
   ) {}
 
   /**
@@ -4346,6 +4349,7 @@ export class SbgController {
         throw err;
       }
     }
+    this.storeActivity?.note(id, actor, { act: 'secret_made' });
     return { vendorId: vendor.vendorId, secret: vendor.secret, secretRotatedAt: vendor.secretRotatedAt, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
@@ -4513,6 +4517,15 @@ export class SbgController {
       const other = Object.entries(dto).find(([k, v]) => v !== undefined && !theirs.has(k));
       if (other) throw new GlosError('FORBIDDEN', 'A developer sets where the order updates go. The owner changes the rest of the store');
     }
+    // 2026-11-15 — where updates go, and whether the code rides in them, written down when they change, with who.
+    const was = this.vendors.get(id);
+    const nextUrl = dto.callbackUrl?.trim();
+    if (dto.callbackUrl !== undefined && (nextUrl || '') !== (was.callbackUrl || '')) {
+      this.storeActivity?.note(id, actor, nextUrl ? { act: 'address_set', url: nextUrl } : { act: 'address_cleared' });
+    }
+    if (dto.callbackCarriesCode !== undefined && dto.callbackCarriesCode !== (was.callbackCarriesCode !== false)) {
+      this.storeActivity?.note(id, actor, { act: 'code_setting', on: dto.callbackCarriesCode });
+    }
     return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
@@ -4635,7 +4648,9 @@ export class SbgController {
     this.vendors.get(id); // 404 on an unknown store before anything is minted
     const { key, secret } = this.apiKeys.issue(id, dto.kind, dto.mode ?? 'test', dto.label);
     // `secret` is the only place the full value appears. The stored record is a hash for a secret key.
-    return { ...this.apiKeys.list(id).find((k) => k.keyId === key.keyId)!, secret };
+    const made = this.apiKeys.list(id).find((k) => k.keyId === key.keyId)!;
+    this.storeActivity?.note(id, actor, { act: 'key_made', kind: made.kind, mode: made.mode, hint: made.hint, ...(made.label ? { label: made.label } : {}) });
+    return { ...made, secret };
   }
 
   /** This store's keys, in a shape safe to render — never a secret, not even to its owner. */
@@ -4653,7 +4668,9 @@ export class SbgController {
   @Delete('vendors/:id/api-keys/:keyId')
   revokeApiKey(@Param('id') id: string, @Param('keyId') keyId: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorSelf(id, actor);
-    return this.apiKeys.revoke(id, keyId);
+    const gone = this.apiKeys.revoke(id, keyId);
+    this.storeActivity?.note(id, actor, { act: 'key_revoked', kind: gone.kind, mode: gone.mode, hint: gone.hint, ...(gone.label ? { label: gone.label } : {}) });
+    return gone;
   }
 
   /** Stop collecting here. Bags already claimed stay with the drivers who claimed them. */

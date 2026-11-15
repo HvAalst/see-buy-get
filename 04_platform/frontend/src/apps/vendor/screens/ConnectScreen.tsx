@@ -1,4 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import type { MessageKey } from '../../../shared/i18n';
+import type { StoreActivityRow } from '../useVendorApp';
 import { Button, Card, Checklist, ErrorNote, Note } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { frontDoorUrl } from '../../../shared/frontDoor';
@@ -69,6 +71,8 @@ export function ConnectScreen({ state, actions, developer = false }: { state: Ve
         <SecretCard state={state} actions={actions} />
       )}
 
+      <HistoryCard state={state} actions={actions} />
+
       <p class="hint">
         <a href={developerPageUrl()} target="_blank" rel="noopener">
           {t('vendor.connect.docs')}
@@ -135,6 +139,52 @@ function DevelopersCard({ state, actions }: { state: VendorState; actions: Vendo
       >
         {t('vendor.dev.invite')}
       </Button>
+    </Card>
+  );
+}
+
+const ACT_WORDS: Record<StoreActivityRow['act'], MessageKey> = {
+  key_made: 'vendor.log.keyMade',
+  key_revoked: 'vendor.log.keyRevoked',
+  address_set: 'vendor.log.addressSet',
+  address_cleared: 'vendor.log.addressCleared',
+  code_setting: 'vendor.log.codeOn',
+  test_sent: 'vendor.log.testSent',
+  secret_made: 'vendor.log.secretMade',
+  developer_invited: 'vendor.log.devInvited',
+  developer_removed: 'vendor.log.devRemoved',
+};
+
+/** One entry in words: who, then what — a key by its kind, world and last characters, never its value. */
+export function activityLine(e: StoreActivityRow, t: (key: MessageKey, params?: Record<string, string | number>) => string): string {
+  const who = e.developer ?? t('vendor.log.owner');
+  const key = [e.kind === 'secret' ? t('vendor.keys.kindSecret') : e.kind ? t('vendor.keys.kindPublishable') : '', e.mode === 'live' ? t('vendor.keys.modeLive') : e.mode ? t('vendor.keys.modeTest') : '', e.hint ? `…${e.hint}` : ''].filter(Boolean).join(' · ') + (e.label ? ` (${e.label})` : '');
+  const words = e.act === 'code_setting' ? t(e.on ? 'vendor.log.codeOn' : 'vendor.log.codeOff') : t(ACT_WORDS[e.act], { key, url: e.url ?? '', name: e.name ?? '' });
+  return `${who} ${words}`;
+}
+
+/**
+ * 2026-11-15 — WHO DID WHAT HERE (the owner: "Is it a common thing to record which keys they made? If so, build it"):
+ * the owner and the store's developers read the same history, newest first, read again whenever something on the page
+ * changes. A key is named by its kind, world and last characters — never its value.
+ */
+function HistoryCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  useEffect(() => {
+    void actions.loadActivity();
+  }, [state.apiKeys.length, state.apiKeys.filter((k) => k.revokedAt).length, state.vendor?.callbackUrl, state.vendor?.callbackCarriesCode, state.vendor?.secretRotatedAt, state.callbacks.length, state.developers?.length]);
+  const rows = state.activity ?? [];
+  const when = (iso: string) => new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return (
+    <Card title={t('vendor.log.title')}>
+      <p class="card__note">{t('vendor.log.note')}</p>
+      {rows.length === 0 ? <p class="hint">{t('vendor.log.none')}</p> : null}
+      {rows.map((e, i) => (
+        <div key={`${e.at}-${i}`} class="kv" style="margin-top:6px">
+          <span>{activityLine(e, t)}</span>
+          <b class="hint">{when(e.at)}</b>
+        </div>
+      ))}
     </Card>
   );
 }

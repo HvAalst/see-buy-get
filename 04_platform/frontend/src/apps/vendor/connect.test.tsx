@@ -60,3 +60,40 @@ describe('a developer with a sign-in of their own', () => {
   });
 });
 
+
+/*
+ * 2026-11-15 — WHO DID WHAT HERE (the owner: "Is it a common thing to record which keys they made? If so, build it"):
+ * the owner and the developer read the same history; each line says who — the owner, or the developer by name — and what,
+ * a key named by its kind, world and last characters only.
+ */
+describe('the history on Connect', () => {
+  const entries = [
+    { at: '2026-11-15T12:00:00.000Z', act: 'key_revoked', kind: 'secret', mode: 'test', hint: 'a1b2', label: 'Checkout' },
+    { at: '2026-11-15T11:00:00.000Z', developer: 'Brian Studio', act: 'key_made', kind: 'secret', mode: 'test', hint: 'a1b2', label: 'Checkout' },
+    { at: '2026-11-15T10:30:00.000Z', developer: 'Brian Studio', act: 'address_set', url: 'https://shop.example/hooks' },
+    { at: '2026-11-15T10:00:00.000Z', act: 'developer_invited', name: 'Brian Studio' },
+  ] as const;
+
+  it('names who did each thing: the owner, or the developer by name — for the owner and the developer alike', () => {
+    for (const developer of [false, true]) {
+      const s = { ...state({ hasAccount: true }), activity: entries, ...(developer ? { developer: { name: 'Brian Studio', store: 'Duka Bora' } } : {}) } as unknown as VendorState;
+      const html = renderToString(<ConnectScreen state={s} actions={actions} developer={developer} />);
+      expect(html).toContain(t('vendor.log.title'));
+      expect(html).toContain(`Brian Studio ${t('vendor.log.keyMade', { key: `${t('vendor.keys.kindSecret')} · ${t('vendor.keys.modeTest')} · …a1b2 (Checkout)` })}`);
+      expect(html).toContain(`${t('vendor.log.owner')} ${t('vendor.log.keyRevoked', { key: `${t('vendor.keys.kindSecret')} · ${t('vendor.keys.modeTest')} · …a1b2 (Checkout)` })}`);
+      expect(html).toContain('https://shop.example/hooks');
+      expect(html).toContain(`${t('vendor.log.owner')} ${t('vendor.log.devInvited', { name: 'Brian Studio' })}`);
+    }
+  });
+
+  it('says so when nothing was done yet', () => {
+    const html = renderToString(<ConnectScreen state={{ ...state({ hasAccount: true }), activity: [] } as unknown as VendorState} actions={actions} />);
+    expect(html).toContain(t('vendor.log.none'));
+  });
+
+  it('the code setting reads both ways', async () => {
+    const { activityLine } = await import('./screens/ConnectScreen');
+    expect(activityLine({ at: '2026-11-15T10:00:00.000Z', act: 'code_setting', on: false }, t)).toBe(`${t('vendor.log.owner')} ${t('vendor.log.codeOff')}`);
+    expect(activityLine({ at: '2026-11-15T10:00:00.000Z', act: 'code_setting', on: true, developer: 'Brian Studio' }, t)).toBe(`Brian Studio ${t('vendor.log.codeOn')}`);
+  });
+});

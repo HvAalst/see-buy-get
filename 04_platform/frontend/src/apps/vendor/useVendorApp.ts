@@ -93,6 +93,20 @@ import type {
 
 export type Screen = 'orders' | 'mint' | 'books' | 'dock' | 'store' | 'notes' | 'connect';
 
+/** One entry of the store's history on Connect: who (the owner, or a developer by name), what, and when. */
+export interface StoreActivityRow {
+  at: string;
+  developer?: string;
+  act: 'key_made' | 'key_revoked' | 'address_set' | 'address_cleared' | 'code_setting' | 'test_sent' | 'secret_made' | 'developer_invited' | 'developer_removed';
+  kind?: string;
+  mode?: string;
+  hint?: string;
+  label?: string;
+  url?: string;
+  on?: boolean;
+  name?: string;
+}
+
 /** A store's developer, as its owner reads them. */
 export interface StoreDeveloperRow {
   devId: string;
@@ -209,6 +223,8 @@ export interface VendorState {
   developer: { name: string; store: string } | null;
   /** …and, for the owner, the store's developers; null until read. */
   developers: StoreDeveloperRow[] | null;
+  /** …and who did what on Connect, newest first; null until read. */
+  activity: StoreActivityRow[] | null;
   /** A key the moment it was minted — the ONE time a secret is on screen, and it is gone when dismissed. */
   issuedKey: IssuedKey | null;
   storeState: 'idle' | 'loading' | 'ready';
@@ -275,6 +291,7 @@ const INITIAL: VendorState = {
   apiKeys: [],
   developer: null,
   developers: null,
+  activity: null,
   issuedKey: null,
   storeState: 'idle',
   dock: null,
@@ -803,6 +820,12 @@ export function useVendorApp() {
       apiKeys: keyR.error ? s.apiKeys : (narrow<ApiKeyRow[]>(keyR.data) ?? []),
       ...(devR && !devR.error ? { developers: narrow<{ items?: StoreDeveloperRow[] }>(devR.data)?.items ?? [] } : {}),
     }));
+  }, [client, creds]);
+  /** The history alone, read again after something on the page changed. */
+  const loadActivity = useCallback(async () => {
+    if (!client || !creds) return;
+    const r = await client.api.activity(creds.vendorId);
+    if (!r.error) setState((s) => ({ ...s, activity: narrow<{ items?: StoreActivityRow[] }>(r.data)?.items ?? [] }));
   }, [client, creds]);
   const loadConnectRef = useRef(loadConnect);
   useEffect(() => {
@@ -1919,6 +1942,7 @@ export function useVendorApp() {
       sendCallback,
       setCallbackCode,
       setEmailCode,
+      loadActivity,
       requestDeveloperLink,
       inviteDeveloper,
       removeDeveloper,
