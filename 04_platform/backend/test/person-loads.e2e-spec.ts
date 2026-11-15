@@ -488,4 +488,45 @@ describe('a person posts a load, over the wire', () => {
     const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(walkIn)).expect(200)).body.items as Array<{ kind: string }>;
     expect(inbox.some((n) => n.kind === 'load_code')).toBe(false);
   });
+
+  /* ---------------- 2026-11-15, "as recommended": a deadline on a reported problem; no code at the door -- */
+
+  it('21 · a reported problem nobody decides: said waiting after a day; after three days the protocol’s answer applies, and an unapproved override lapses', async () => {
+    const d = app.get(DispatchService);
+    const plain = await aDeliveredLoad();
+    await report(plain, 'damaged');
+    const overridden = await aDeliveredLoad({ atDoor: 'damaged' });
+    await report(overridden, 'damaged');
+    await http().post(`/v1/sbg/holds/${overridden.freightId}/override`).set(bearer(operator)).send({ outcome: 'release', reason: 'The receiver signed for it whole', by: 'Amina Otieno' }).expect(201);
+    const row = (await queue()).find((r) => r.freightId === plain.freightId)!;
+    expect(Date.parse(row.appliesAt) - Date.now()).toBeGreaterThan(71.9 * H);
+    expect(row.overdue).toBeUndefined();
+    // Not before three days.
+    expect(d.decideOverdueHolds(Date.now() + 71 * H)).toBe(0);
+    expect(d.requireFreightPublic(plain.freightId).driverPaid).toBeFalsy();
+    d.decideOverdueHolds(Date.now() + 73 * H);
+    // Step 2 (not noted at the door): the driver is paid, by the protocol on its own.
+    expect(d.requireFreightPublic(plain.freightId)).toMatchObject({ driverPaid: true, heldPay: { decision: { step: 'not_noted_at_door', outcome: 'release', automatic: true } } });
+    // The override nobody approved lapsed: the record decided (noted at the door, not at pickup — the carriage price back).
+    expect(d.requireFreightPublic(overridden.freightId).heldPay).toMatchObject({ decision: { step: 'arose_in_carriage', outcome: 'refund', automatic: true } });
+    expect(d.requireFreightPublic(overridden.freightId).heldPay?.pendingOverride).toBeUndefined();
+    expect(d.requireFreightPublic(overridden.freightId).driverPaid).toBeFalsy();
+    expect((await queue()).some((r) => r.freightId === plain.freightId || r.freightId === overridden.freightId)).toBe(false);
+  });
+
+  it('22 · the receiver has no delivery code at the door: the code goes to them again, and the sender is asked to say it arrived', async () => {
+    const email = `receiver-${digits()}@example.com`;
+    const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Wairimu N.' });
+    const store = (app.get(DispatchService) as unknown as Store).freights;
+    store.set(l.freightId, { ...store.get(l.freightId), status: 'in_transit', pickedUpAt: new Date().toISOString() });
+    const failed = (outcome: string) => http().post(l.at('delivery-failed')).set(bearer(keDriver.token)).send({ driverDid: keDriver.did, outcome });
+    await failed('no_code').expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(app.get(OutboxMailSender).recent(email).filter((m) => m.template === 'load-delivery-code').map((m) => m.text.includes(l.code))).toEqual([true, true]);
+    const told = ((await http().get('/v1/sbg/notifications/inbox').set(bearer(l.person)).expect(200)).body.items as Array<{ kind: string; body: string }>).find((n) => n.kind === 'freight_problem');
+    expect(told?.body).toMatch(/did not have the delivery code.*It arrived/);
+    // Said arrived: the code is no longer the question at the door.
+    await http().post(l.at('arrived')).set(bearer(l.person)).expect(201);
+    await failed('no_code').expect(400);
+  });
 });

@@ -3537,4 +3537,6 @@ export const words: Record<string, string> = {
   "tower.hold.asked": "{by} anaomba badala yake {outcome}, kwa sababu: “{reason}”",
   "tower.hold.notYou": "Mfanyakazi mwingine anaidhinisha.",
   "tower.hold.approve": "Idhinisha: {outcome}",
+  "tower.hold.overdue": "Inasubiri zaidi ya siku moja",
+  "tower.hold.appliesAt": "Kama hakuna atakayeamua kufikia {when}, jibu la utaratibu linatumika lenyewe.",
 };

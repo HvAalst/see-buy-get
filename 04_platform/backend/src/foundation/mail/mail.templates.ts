@@ -129,7 +129,7 @@ export interface MailParams {
   /** The report was decided: dismissed by one member of staff, or the paper struck by two. `effect`: what a strike put back, in words. */
   'company-paper-decided': { company: string; paper: string; outcome: 'dismissed' | 'struck'; reason: string; effect: string };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
-  'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string; code?: string; name?: string };
+  'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string; code?: string; name?: string; reissued?: boolean };
   'load-delivery-code': { code: string; load: string; from: string; name?: string; openUrl: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; /** D9 — what the receiver found not as the note says, in words. */ reservations?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
@@ -1513,10 +1513,12 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     sendLater: 48,
     sample: { shop: 'Mama Sarah Shop', address: 'Biashara St 12, Nairobi', collectBy: '2026-09-20T18:00:00Z' },
     build: (p) => ({
-      subject: `Your parcel is ready at ${p.shop}`,
+      // 2026-11-15 — a code reissued after it was emailed: the new one, said as new (the old one no longer works).
+      subject: p.reissued ? `Your collection code has changed: your parcel at ${p.shop}` : `Your parcel is ready at ${p.shop}`,
       preheader: `Collect it by ${formatDate(p.collectBy)}.`,
       blocks: [
-        { kind: 'heading', text: 'Your parcel is ready to collect' },
+        { kind: 'heading', text: p.reissued ? 'Your collection code has changed' : 'Your parcel is ready to collect' },
+        ...(p.reissued ? [{ kind: 'paragraph' as const, text: 'The code we emailed before no longer works. Use this one.' }] : []),
         { kind: 'facts', rows: [['Where', p.address ? `${p.shop}, ${p.address}` : p.shop], ['Collect by', formatDate(p.collectBy)]] },
         ...(p.code
           ? // 2026-11-15 — the store chose to email the code (plan R3): with the name the counter checks it against.

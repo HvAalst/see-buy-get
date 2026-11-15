@@ -3398,7 +3398,7 @@ export class FreightActionDto {
 /** FP3b — the driver stood at the door and could not hand over. */
 export class FreightDeliveryFailedDto {
   @IsOptional() @IsString() driverDid?: string;
-  @IsIn(['absent', 'refused', 'unreachable']) outcome!: 'absent' | 'refused' | 'unreachable';
+  @IsIn(['absent', 'refused', 'unreachable', 'no_code']) outcome!: 'absent' | 'refused' | 'unreachable' | 'no_code';
   @IsOptional() @IsString() @MaxLength(500) note?: string;
   /** 2026-11-10 — where the driver's phone was at this handover, and how sure it was — or that it gave none. Never refused for. */
   @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;

@@ -483,7 +483,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const [found, setFound] = useState<FoundForm>(noneFound);
   // FP3b — the other ending at the door: nobody there, refused, or unreachable.
   const [failing, setFailing] = useState(false);
-  const [failure, setFailure] = useState<'absent' | 'refused' | 'unreachable'>('absent');
+  const [failure, setFailure] = useState<'absent' | 'refused' | 'unreachable' | 'no_code'>('absent');
   const [failNote, setFailNote] = useState('');
   // FP8 — the way out before pickup: hand the load back, with a reason.
   const [handing, setHanding] = useState(false);
@@ -785,11 +785,14 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   <label class="field__label" for={`fail-${claim.ref}`}>
                     {t('driver.loads.failWhatLabel')}
                   </label>
-                  <select id={`fail-${claim.ref}`} class="input" value={failure} onChange={(e) => setFailure(e.currentTarget.value as 'absent' | 'refused' | 'unreachable')} disabled={busy}>
+                  <select id={`fail-${claim.ref}`} class="input" value={failure} onChange={(e) => setFailure(e.currentTarget.value as 'absent' | 'refused' | 'unreachable' | 'no_code')} disabled={busy}>
                     <option value="absent">{t('driver.loads.failAbsent')}</option>
                     <option value="refused">{t('driver.loads.failRefused')}</option>
                     <option value="unreachable">{t('driver.loads.failUnreachable')}</option>
+                    {/* 2026-11-15 — the receiver has no delivery code: it goes to them again, the sender is asked. */}
+                    {claim.deliveryCodeNeeded ? <option value="no_code">{t('driver.loads.failNoCode')}</option> : null}
                   </select>
+                  {failure === 'no_code' ? <p class="hint">{t('driver.loads.failNoCodeHint')}</p> : null}
                 </div>
                 <div class="field" style="margin-top:10px">
                   <label class="field__label" for={`failnote-${claim.ref}`}>

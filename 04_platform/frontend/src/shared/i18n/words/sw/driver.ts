@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "driver.hold.answeredToast": "Jibu limetumwa",
   "driver.hold.answeredToastDetail": "Linaonyeshwa pamoja na ripoti. Utaambiwa likiamuliwa.",
   "driver.loads.checkName": "Msimbo ulitumwa kwake kwa barua pepe: nimekagua kuwa huyu ni {name}",
+  "driver.loads.failNoCode": "Hawana msimbo wa kufikisha",
+  "driver.loads.failNoCodeHint": "Msimbo unatumwa kwao tena, na mtumaji anaombwa kusema umefika. Subiri kidogo, kisha jaribu Fikisha tena.",
 };

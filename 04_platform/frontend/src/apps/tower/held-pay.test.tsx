@@ -20,6 +20,7 @@ const row = (over: Partial<HoldRow> = {}): HoldRow => ({
   problem: { kind: 'damaged', description: 'The door is dented', at: '2026-11-15T12:00:00.000Z' },
   doorNotes: ['damaged × 1'],
   reading: { step: 'arose_in_carriage', outcome: 'refund', facts: { handedOver: true, notedAtDoor: true, notedAtPickup: false }, words: 'Step 3: the problem was noted at the door and not when the driver took it over.' },
+  appliesAt: '2026-11-18T12:00:00.000Z',
   ...over,
 });
 const state = { who: { name: 'Amina Otieno' }, busyId: null } as unknown as TowerState;
@@ -34,6 +35,13 @@ describe('a held pay in staff’s queue', () => {
     expect(html).toContain(t('tower.hold.noAnswer'));
     expect(html).toContain(t('tower.hold.apply', { outcome: t('tower.hold.refund') }));
     expect(html).toContain('Step 3: the problem was noted at the door');
+  });
+
+  it('says when the protocol’s answer applies by itself, and that it has waited over a day', () => {
+    const fresh = renderToString(<HeldRow row={row()} state={state} actions={actions} onChanged={() => undefined} />);
+    expect(fresh).toContain(t('tower.hold.appliesAt', { when: '' }).split('{')[0].trim().slice(0, 12));
+    expect(fresh).not.toContain(t('tower.hold.overdue'));
+    expect(renderToString(<HeldRow row={row({ overdue: true })} state={state} actions={actions} onChanged={() => undefined} />)).toContain(t('tower.hold.overdue'));
   });
 
   it('stops at the question that decided: not handed over asks nothing more', () => {

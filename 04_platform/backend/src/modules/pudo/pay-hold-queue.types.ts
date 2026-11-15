@@ -27,6 +27,9 @@ export class HoldQueueRow {
   @ApiPropertyOptional({ type: HoldAnswer }) answer?: HoldAnswer;
   @ApiPropertyOptional({ type: HoldOverride }) pendingOverride?: HoldOverride;
   @ApiProperty({ type: ProtocolReading }) reading: ProtocolReading;
+  /** 2026-11-15 — reported more than a day ago: the reminder; and when the protocol's answer applies by itself. */
+  @ApiPropertyOptional() overdue?: boolean;
+  appliesAt: string;
 }
 
 export class HoldQueueResponse {

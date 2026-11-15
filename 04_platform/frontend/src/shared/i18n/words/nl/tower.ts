@@ -3537,4 +3537,6 @@ export const words: Record<string, string> = {
   "tower.hold.asked": "{by} vraagt in plaats daarvan om {outcome}, omdat: “{reason}”",
   "tower.hold.notYou": "Een andere medewerker keurt het goed.",
   "tower.hold.approve": "Goedkeuren: {outcome}",
+  "tower.hold.overdue": "Wacht al meer dan een dag",
+  "tower.hold.appliesAt": "Als niemand beslist vóór {when}, geldt het antwoord van het protocol vanzelf.",
 };

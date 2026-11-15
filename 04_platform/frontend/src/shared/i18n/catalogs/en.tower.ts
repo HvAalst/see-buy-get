@@ -1510,6 +1510,8 @@ export const enTowerQueues = {
   'tower.hold.asked': '{by} asks to {outcome} instead, because: “{reason}”',
   'tower.hold.notYou': 'A different member of staff approves it.',
   'tower.hold.approve': 'Approve: {outcome}',
+  'tower.hold.overdue': 'Waiting over a day',
+  'tower.hold.appliesAt': 'If nobody decides by {when}, the protocol’s answer applies by itself.',
 
   // ---- damage claims ----
   'tower.claims.title': 'Damage claims',

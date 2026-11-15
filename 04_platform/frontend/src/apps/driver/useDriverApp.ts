@@ -2194,7 +2194,7 @@ export function useDriverApp() {
   /** FP3b — the driver was at the door and could not hand over: the attempt is written down, the sender is told,
    *  and the load stays on the van (nothing moves in the list — the same row keeps its Deliver control). */
   const failDelivery = useCallback(
-    async (ref: string, input: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string }) => {
+    async (ref: string, input: { outcome: 'absent' | 'refused' | 'unreachable' | 'no_code'; note?: string }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {

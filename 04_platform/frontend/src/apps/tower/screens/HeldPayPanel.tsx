@@ -23,6 +23,9 @@ export interface HoldRow {
   answer?: { words: string; photoRefs: string[]; at: string };
   pendingOverride?: { outcome: 'release' | 'refund'; reason: string; by: string; at: string };
   reading: { step: string; outcome: 'release' | 'refund'; facts: { handedOver: boolean; notedAtDoor: boolean; notedAtPickup: boolean }; words: string };
+  /** 2026-11-15 — reported more than a day ago; and when the protocol's answer applies by itself. */
+  overdue?: boolean;
+  appliesAt: string;
 }
 
 const KIND_WORDS: Record<string, MessageKey> = {
@@ -137,6 +140,10 @@ export function HeldRow({ row, state, actions, onChanged }: { row: HoldRow; stat
         {f.handedOver && f.notedAtDoor ? question('tower.hold.q3', f.notedAtPickup, step === 'noted_at_pickup' || step === 'arose_in_carriage') : null}
       </ol>
       <p class="crow__sub" style="margin-top:6px">{row.reading.words}</p>
+      {/* 2026-11-15 — the reminder, and the deadline: after three days the protocol's answer applies by itself. */}
+      <p class="chint">
+        {row.overdue ? <span class="ctag ctag--warn">{t('tower.hold.overdue')}</span> : null} {t('tower.hold.appliesAt', { when: when(row.appliesAt) })}
+      </p>
 
       {row.pendingOverride ? (
         <div style="margin-top:10px">

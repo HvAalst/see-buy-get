@@ -13,6 +13,8 @@ export class PayHoldSweeper implements OnApplicationBootstrap, OnModuleDestroy {
     this.timer = setInterval(() => {
       try {
         this.dispatch.releaseDueHolds();
+        // 2026-11-15 — a reported problem nobody decided in three days: the protocol's answer applies.
+        this.dispatch.decideOverdueHolds();
       } catch (err) {
         this.logger.warn(`the pay hold sweep did not run: ${(err as Error).message}`);
       }

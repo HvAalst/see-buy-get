@@ -424,7 +424,7 @@ export function createDriverApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
-    failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string; position?: HandoverFix }) =>
+    failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable' | 'no_code'; note?: string; position?: HandoverFix }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/delivery-failed', { params: { path: { id: freightId } }, body: { driverDid, ...body } })),
 
     /** A load the shipper pays them for directly: they say it was paid, the price agreed (2026-10-27). The shipper sees it. */

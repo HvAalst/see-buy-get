@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "driver.hold.answeredToast": "መልስ ተልኳል",
   "driver.hold.answeredToastDetail": "ከሪፖርቱ ጎን ይታያል። ሲወሰን ይነገርዎታል።",
   "driver.loads.checkName": "ኮዱ በኢሜይል ተልኮላቸዋል፦ ይህ {name} መሆኑን አረጋግጫለሁ",
+  "driver.loads.failNoCode": "የማድረሻ ኮዱ የላቸውም",
+  "driver.loads.failNoCodeHint": "ኮዱ እንደገና ይላክላቸዋል፣ ላኪውም እንደደረሰ እንዲገልጽ ይጠየቃል። ትንሽ ይጠብቁ፣ ከዚያ እንደገና ማድረስን ይሞክሩ።",
 };

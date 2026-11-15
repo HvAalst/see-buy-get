@@ -3537,4 +3537,6 @@ export const words: Record<string, string> = {
   "tower.hold.asked": "{by} በምትኩ {outcome} እንዲደረግ ይጠይቃል፣ ምክንያቱም፦ “{reason}”",
   "tower.hold.notYou": "ሌላ ሠራተኛ ያጸድቀዋል።",
   "tower.hold.approve": "ያጽድቁ፦ {outcome}",
+  "tower.hold.overdue": "ከአንድ ቀን በላይ እየጠበቀ ነው",
+  "tower.hold.appliesAt": "እስከ {when} ማንም ካልወሰነ፣ የፕሮቶኮሉ መልስ በራሱ ተግባራዊ ይሆናል።",
 };

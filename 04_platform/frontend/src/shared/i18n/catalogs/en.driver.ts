@@ -833,6 +833,8 @@ export const enDriver = {
   'driver.toast.freightDeliveredDetail': 'Your capacity is freed.',
   // 2026-11-15 — the pay for a load a person paid first, held 24 hours after delivery (the hold).
   'driver.toast.freightDeliveredHeld': 'Your capacity is freed. Your pay for it is released in 24 hours, unless the sender reports a problem before then.',
+  'driver.loads.failNoCode': 'They do not have the delivery code',
+  'driver.loads.failNoCodeHint': 'The code is sent to them again, and the sender is asked to say it arrived. Wait a moment, then try Deliver again.',
   'driver.loads.checkName': 'The code was emailed to them: I checked this is {name}',
   'driver.hold.title': 'Problems reported',
   'driver.hold.lede': 'The sender reported a problem with a load you delivered, so your pay for it is held. Answer once: SeeBuyGet reads your answer beside the report and applies the protocol.',

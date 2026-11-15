@@ -56,7 +56,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
-import { HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
+import { HOLD_DECIDE_HOURS, HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, HOLD_REMIND_HOURS, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
 import type { NowWithView } from './now-with.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
@@ -3746,7 +3746,8 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
-    if (!DELIVERY_FAILURES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what happened at the door: absent, refused or unreachable');
+    if (!DELIVERY_FAILURES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what happened at the door: absent, refused, unreachable, or no delivery code');
+    if (input.outcome === 'no_code' && !(f.deliveryCode && !f.posterConfirmedAt)) throw new GlosError('INVALID_INPUT', 'This load needs no delivery code: say what else happened at the door');
     const note = input.note?.trim();
     const at = new Date(now).toISOString();
     // 2026-11-10 — the door the driver stood at: where their phone was, and how far from the place of delivery.
@@ -3754,6 +3755,8 @@ export class DispatchService {
     f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid, ...(atDoor ? { position: atDoor } : {}) }];
     // REFUSED (the user, 2026-10-27): the sender decides what happens to the goods, within REFUSAL_DECIDE_H hours — the first
     // refusal starts the clock, and a second at the same door does not restart it.
+    // 2026-11-15 — no code at the door: it is sent to the receiver again (NotificationDispatcher), and the sender is asked.
+    if (input.outcome === 'no_code') void this.events.publish(GlosEvent.Pudo.DeliveryCodeIssued, { freightId: f.freightId }, { source: 'pudo' }).catch(() => undefined);
     if (input.outcome === 'refused' && !f.refusal) f.refusal = { at, ...(driverDid ? { by: driverDid } : {}), ...(note ? { note: note.slice(0, 500) } : {}), decideBy: new Date(now + REFUSAL_DECIDE_H * 3_600_000).toISOString() };
     this.freights.set(f.freightId, f);
     void this.events
@@ -4652,7 +4655,28 @@ export class DispatchService {
         ...(f.heldPay!.answer ? { answer: f.heldPay!.answer } : {}),
         ...(f.heldPay!.pendingOverride ? { pendingOverride: f.heldPay!.pendingOverride } : {}),
         reading: readProtocol(f, { kind: f.claim!.kind }),
+        // 2026-11-15 — waiting more than a day is said on the row; after three days the protocol's answer applies.
+        ...(Date.now() - Date.parse(f.claim!.raisedAt) >= HOLD_REMIND_HOURS * 3_600_000 ? { overdue: true } : {}),
+        appliesAt: new Date(Date.parse(f.claim!.raisedAt) + HOLD_DECIDE_HOURS * 3_600_000).toISOString(),
       }));
+  }
+
+  /**
+   * 2026-11-15 — NOBODY DECIDED IN THREE DAYS (the owner: "as recommended"): the protocol's own answer applies, since it is
+   * read from the record anyway — a driver's pay is never held for days on a decision staff only confirm. Going against
+   * the record that a second member of staff did not approve in time lapses: it takes two people, and they did not agree.
+   */
+  decideOverdueHolds(now: number = Date.now()): number {
+    let decided = 0;
+    for (const f of this.freights.values()) {
+      if (!this.holdOpen(f) || !this.problemInHold(f)) continue;
+      if (now - Date.parse(f.claim!.raisedAt) < HOLD_DECIDE_HOURS * 3_600_000) continue;
+      delete f.heldPay.pendingOverride;
+      const reading = readProtocol(f, { kind: f.claim!.kind });
+      this.decideHold(f, { step: reading.step, outcome: reading.outcome, by: 'the protocol, after three days', at: new Date(now).toISOString(), automatic: true });
+      decided += 1;
+    }
+    return decided;
   }
 
   /** Staff apply the protocol: the outcome the record says, confirmed by one person, everyone told with the step that decided. */
@@ -4738,7 +4762,11 @@ export class DispatchService {
     else if (f.billed) this.prepaid?.refundCarriage?.(f, { gross: f.billed.gross, tax: f.billed.tax, provision: f.billed.provision }, STEP_WORDS[decision.step]);
     f.heldPay!.decision = decision;
     this.freights.set(f.freightId, f);
-    const words = decision.overridden ? `SeeBuyGet went against the record here, two members of staff agreeing: ${decision.reason}` : STEP_WORDS[decision.step];
+    const words = decision.overridden
+      ? `SeeBuyGet went against the record here, two members of staff agreeing: ${decision.reason}`
+      : decision.automatic
+        ? `Nobody of SeeBuyGet decided within three days, so the protocol's answer applies. ${STEP_WORDS[decision.step]}`
+        : STEP_WORDS[decision.step];
     const outcome = decision.outcome === 'release' ? 'the driver is paid' : 'the carriage price goes back to the person who paid';
     // Both sides told the same words, with the page that explains the protocol to everybody (H6).
     for (const did of new Set([payer, f.claimedBy].filter((x): x is string => Boolean(x)))) {

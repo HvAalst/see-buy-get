@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "driver.hold.answeredToast": "Antwoord verstuurd",
   "driver.hold.answeredToastDetail": "Het wordt naast de melding getoond. Je hoort het als er is beslist.",
   "driver.loads.checkName": "De code is hun per e-mail gestuurd: ik heb gecontroleerd dat dit {name} is",
+  "driver.loads.failNoCode": "Ze hebben de afleveringscode niet",
+  "driver.loads.failNoCodeHint": "De code wordt opnieuw naar hen gestuurd en de afzender wordt gevraagd te zeggen dat het is aangekomen. Wacht even en probeer dan opnieuw Afleveren.",
 };

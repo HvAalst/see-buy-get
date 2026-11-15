@@ -876,7 +876,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number; decideBy?: string; pickupLabel?: string }): Promise<void> {
     if (!payload.posterDid) return;
-    const why = payload.outcome === 'absent' ? 'nobody was there to receive it' : payload.outcome === 'refused' ? 'the receiver refused it' : 'the driver could not reach the place';
+    const why = payload.outcome === 'absent' ? 'nobody was there to receive it' : payload.outcome === 'refused' ? 'the receiver refused it' : payload.outcome === 'no_code' ? 'the receiver did not have the delivery code' : 'the driver could not reach the place';
+    // 2026-11-15 — no code: it went to the receiver again; if it arrived, the sender says so and the driver may deliver without it.
+    const noCode = payload.outcome === 'no_code';
     // Refused: the sender decides where the goods go, and pays the way (the user, 2026-10-27) — said with the time to answer.
     const refused = payload.outcome === 'refused' && payload.decideBy && payload.pickupLabel;
     try {
@@ -885,7 +887,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         title: refused ? `Load ${payload.code} was refused at the door` : `Load ${payload.code} could not be delivered`,
         body: refused
           ? `The driver was at ${payload.destLabel ?? 'the destination'} and the receiver refused it${payload.note ? ` — "${payload.note}"` : ''}. The driver keeps the goods until you say where they go: back to ${payload.pickupLabel}, to another place, or given up — you pay the way. With no answer ${byWords(payload.decideBy!)}, they go back to ${payload.pickupLabel}, at your cost.`
-          : `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
+          : noCode
+            ? `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The code was sent to the receiver again. If it has arrived, open the load and tap It arrived: the driver can then deliver without the code.`
+            : `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
         // 2026-11-02 — the load itself (the owner: "wire it in"): refused, its answer comes first; otherwise its door.
         link: refused ? loadLink(payload.freightId) : loadLink(payload.freightId, 'road'),
         tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
@@ -2403,6 +2407,21 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       const parcel = this.parcels.get(parcelId);
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      // 2026-11-15 — its code was emailed: the new one is emailed too, with the same name check (the owner: "as recommended").
+      // Never when the code changed because the account moved: that account is shown no code for a day, and nor is its email.
+      if (this.mail && !quietFor && parcel.codeEmailedAt && parcel.buyerEmail && parcel.receiverName && parcel.collectionCode && (parcel.status === 'Ready_For_Pickup' || parcel.status === 'Unclaimed')) {
+        const shop = this.shop(parcel.destAgentDid);
+        this.parcels.markCodeEmailed(parcel.parcelId);
+        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail }, {
+          shop: shop?.shopName ?? parcel.destZone ?? 'your pickup point',
+          ...(shop?.physicalAddress || shop?.landmark ? { address: shop.physicalAddress ?? shop.landmark } : {}),
+          collectBy: new Date(Date.parse(parcel.readyAt ?? new Date().toISOString()) + UNCOLLECTED_H * 3_600_000).toISOString(),
+          openUrl: `${appUrl('send')}?parcel=${encodeURIComponent(parcel.parcelId)}`,
+          code: parcel.collectionCode,
+          name: parcel.receiverName,
+          reissued: true,
+        });
+      }
       // On a PEER SEND the sender is told as well: they are the relay to a receiver with no app (the same
       // role the store plays on a vendor order), so a rotated code that reached only the receiver would
       // strand exactly the person the relay exists for. A vendor order tells the buyer only — its store

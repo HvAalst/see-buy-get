@@ -205,7 +205,8 @@ export const FREIGHT_STATUSES = ['scheduled', 'available', 'ordered', 'claimed',
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
 /** FP3b — a delivery the driver could not make: they were there, the goods were not handed over, and why. */
-export const DELIVERY_FAILURES = ['absent', 'refused', 'unreachable'] as const;
+// 2026-11-15 — and `no_code`: the receiver does not have the delivery code (the code sent again, the sender asked to say it arrived).
+export const DELIVERY_FAILURES = ['absent', 'refused', 'unreachable', 'no_code'] as const;
 export type DeliveryFailure = (typeof DELIVERY_FAILURES)[number];
 export class FreightDeliveryAttempt {
   @ApiProperty({ enum: DELIVERY_FAILURES })

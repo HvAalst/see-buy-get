@@ -16,6 +16,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * Never more than the carriage price: goods are paid for only where a company states cover (rule: damage is reported).
  */
 export const HOLD_HOURS = 24;
+/** 2026-11-15 — a reported problem: staff are reminded after a day, and after three the protocol's own answer applies. */
+export const HOLD_REMIND_HOURS = 24;
+export const HOLD_DECIDE_HOURS = 72;
 /** The public page that explains the protocol to everybody — every decision notice links to it (H6). */
 export const HOLD_HELP_PATH = '/help/when-something-goes-wrong/';
 /** A door further than this from where the phone was at the handover is not shown to have been reached. */
@@ -61,6 +64,8 @@ export class HoldAnswer {
 }
 
 export class HoldDecision {
+  /** 2026-11-15 — nobody decided within HOLD_DECIDE_HOURS: the protocol's answer applied by itself. */
+  @ApiPropertyOptional() automatic?: boolean;
   @ApiProperty({ enum: PROTOCOL_STEPS }) step: ProtocolStep;
   @ApiProperty({ enum: HOLD_OUTCOMES }) outcome: HoldOutcome;
   by: string;

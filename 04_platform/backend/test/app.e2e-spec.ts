@@ -863,6 +863,15 @@ describe('GLOS backend (e2e)', () => {
     // An order may say no for itself, whatever the store's setting.
     const optedOut = await shipThrough({ externalOrderId: 'ORD-80', buyerMobile: '+254700996', buyerEmail: 'optout@example.com', buyerName: 'Wanjiku M.', emailCode: false });
     expect(app.get(OutboxMailSender).recent('optout@example.com').find((m) => m.template === 'ready-for-collection')?.text).not.toContain(optedOut.code);
+    // 2026-11-15 — its code reissued after it was emailed: the new one is emailed too, and the counter still checks the name.
+    const again = await shipThrough({ externalOrderId: 'ORD-81', buyerMobile: '+254700995', buyerEmail: 'again@example.com', buyerName: 'Njeri W.' });
+    await request(http).post(`/v1/sbg/parcels/${again.id}/reissue-release`).set(auth).send({ by: 'Achieng' }).expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    const sent = app.get(OutboxMailSender).recent('again@example.com').filter((m) => m.template === 'ready-for-collection');
+    const newCode = (sent.find((m) => m.subject.startsWith('Your collection code has changed'))?.text ?? '').match(/COL-[0-9A-F]{8}/)?.[0] ?? '';
+    expect(newCode).toMatch(/^COL-/);
+    expect(newCode).not.toBe(again.code);
+    expect((await request(http).post('/v1/sbg/parcels/collect').set(auth).send({ agentDid: dest, collectionCode: newCode }).expect(201)).body.checkName).toBe('Njeri W.');
 
     // Vendor received signed status callbacks — read by the store; their bodies and signatures are not staff's.
     await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(403);

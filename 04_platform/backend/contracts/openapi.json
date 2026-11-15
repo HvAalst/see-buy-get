@@ -50963,7 +50963,8 @@
             "enum": [
               "absent",
               "refused",
-              "unreachable"
+              "unreachable",
+              "no_code"
             ]
           },
           "position": {
@@ -70927,6 +70928,10 @@
       "HoldDecision": {
         "type": "object",
         "properties": {
+          "automatic": {
+            "type": "boolean",
+            "description": "2026-11-15 — nobody decided within HOLD_DECIDE_HOURS: the protocol's answer applied by itself."
+          },
           "step": {
             "type": "string",
             "enum": [
@@ -77746,6 +77751,10 @@
           "reading": {
             "$ref": "#/components/schemas/ProtocolReading"
           },
+          "overdue": {
+            "type": "boolean",
+            "description": "2026-11-15 — reported more than a day ago: the reminder; and when the protocol's answer applies by itself."
+          },
           "freightId": {
             "type": "string"
           },
@@ -77760,6 +77769,9 @@
           },
           "heldUntil": {
             "type": "string"
+          },
+          "appliesAt": {
+            "type": "string"
           }
         },
         "required": [
@@ -77770,7 +77782,8 @@
           "code",
           "description",
           "deliveredAt",
-          "heldUntil"
+          "heldUntil",
+          "appliesAt"
         ]
       },
       "HoldQueueResponse": {
@@ -78068,7 +78081,8 @@
             "enum": [
               "absent",
               "refused",
-              "unreachable"
+              "unreachable",
+              "no_code"
             ]
           },
           "note": {
