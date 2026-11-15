@@ -260,6 +260,8 @@ export interface PostedLoad {
   trackingKey?: string;
   trackingUrl?: string;
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  /** 2026-11-15 — who has it now: the company carrying it and its vehicle (plan R1). */
+  nowWith?: import('../../shared/nowWith').NowWith;
   rating?: { stars: number; issues: string[]; at: string };
   canRate: boolean;
   /** B4 — the client it was sent for, as their agent. */

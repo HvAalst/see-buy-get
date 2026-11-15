@@ -403,6 +403,7 @@ export const words: Record<string, string> = {
   "business.loads.fact.weight": "Uzito",
   "business.loads.fact.keptOwn": "kama ulivyotoa — ni lori lenye jokofu au lililozuiwa joto pekee linalouchukua, na dereva hurekodi joto.",
   "business.loads.fact.keptUsual": "kiwango cha kawaida kwa bidhaa za baridi: hukutoa kiwango chako mwenyewe.",
+  "business.loads.fact.nowWith": "Sasa",
   "business.loads.fact.carrier": "Msafirishaji",
   "business.loads.fact.road": "Barabarani",
   "business.seals.title": "Lakiri",

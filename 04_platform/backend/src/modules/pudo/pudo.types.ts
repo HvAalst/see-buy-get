@@ -5,6 +5,7 @@ import type { HubDown, ToteRedirect } from './hub-down.types';
 import type { ScaleStanding, SiteEquipment, SiteLimits, SiteTools } from './site-tools';
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import type { OffPlanReason, OffPlanStep } from './route-plan.types';
+import type { NowWithView } from './now-with.types';
 import { FxRate } from '../../foundation/money/fx.service';
 import { BorderCrossing } from './country';
 import { UnitHold } from './tamper.types';
@@ -1062,6 +1063,8 @@ export interface RunningLate {
 
 export interface ConsumerParcelView {
   parcelId: string;
+  /** 2026-11-15 — who has it now, by name: a shop, a hub, or on the road a company and its kind of vehicle (plan R1). */
+  nowWith?: NowWithView;
   /** 2026-11-06 — its pickup shop closed: the shops the driver with it can take it to, to choose from; and where it went. */
   shopChoice?: { closed: string; picks: Array<{ did: string; name: string; km: number }>; inBag: boolean; chosen?: string; settled?: { did: string; name: string } };
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner

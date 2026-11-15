@@ -1,4 +1,5 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { pageGot, PaperSheet, Sections, usePaper } from '../../../shared/ui';
 import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
@@ -233,7 +234,7 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
                     </span>
                     <span class="crow__sub">
                       {t('business.loads.rowSub', { dest: r.destLabel, kg: r.weightKg.toLocaleString(), when: r.createdAt.slice(0, 10) })}
-                      {r.carrier?.driverName ? ` · ${t('business.loads.carriedBy', { who: r.carrier.driverName })}` : ''}
+                      {r.nowWith ? ` · ${nowWithLine(r.nowWith, t)}` : r.carrier?.driverName ? ` · ${t('business.loads.carriedBy', { who: r.carrier.driverName })}` : ''}
                       {r.onBehalfOf ? ` · ${t('business.sentFor.forClient', { name: r.onBehalfOf.name })}` : ''}
                       {r.contract ? ` · ${t('business.loads.withCarrier', { fleet: r.contract.fleetName, day: r.deliverOn ?? '' })}` : ''}
                     </span>
@@ -411,6 +412,16 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                         <dd class="cons__factv">
                           {says.full}
                           <span class="chint"> {planDo(says, row.contract?.fleetName ?? '', t)}</span>
+                        </dd>
+                      </div>
+                    ) : null}
+                    {/* 2026-11-15 — who has it now, by the company carrying it (plan R1). */}
+                    {row.nowWith ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.nowWith')}</dt>
+                        <dd class="cons__factv">
+                          {nowWithLine(row.nowWith, t)}
+                          <span class="chint"> {nowWithSince(row.nowWith, t)}</span>
                         </dd>
                       </div>
                     ) : null}

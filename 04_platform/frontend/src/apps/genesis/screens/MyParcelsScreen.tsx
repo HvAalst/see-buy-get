@@ -15,6 +15,7 @@ import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
 import { PersonLoadsGroup } from './PersonLoad';
 import { HoldBlock } from './HoldBlock';
+import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
@@ -238,6 +239,13 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
                 : parcel.relation === 'received'
                   ? t('send.parcels.onWayTo', { zone: parcel.destZone })
                   : t('send.parcels.onWayFrom', { zone: parcel.originZone })}
+            {/* 2026-11-15 — who has it now, by name, to sender and receiver alike (plan R1). */}
+            {parcel.nowWith && !toDoor ? (
+              <>
+                <br />
+                {nowWithLine(parcel.nowWith, t)} · {nowWithSince(parcel.nowWith, t)}
+              </>
+            ) : null}
           </span>
         </span>
       </section>

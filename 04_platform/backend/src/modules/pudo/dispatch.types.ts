@@ -22,6 +22,7 @@ import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
 import { LoadWork, LoadWorkView } from './load-work.types';
 import { HeldPay } from './pay-hold.types';
+import { NowWithView } from './now-with.types';
 import { TRUCK_SUBTYPES, TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 
@@ -1672,6 +1673,8 @@ export class PostedFreightRow {
   trackingUrl?: string;
   /** FP6 — who is carrying it, once taken: the driver's display name and the plate. No phone, no fleet internals. */
   @ApiPropertyOptional() carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  /** 2026-11-15 — who has it now: the company carrying it and its kind of vehicle; taken but not yet picked up, said so (plan R1). */
+  @ApiPropertyOptional({ type: NowWithView }) nowWith?: NowWithView;
   /** FP6 — the shipper's rating, once given. */
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string };
   /** FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins). */

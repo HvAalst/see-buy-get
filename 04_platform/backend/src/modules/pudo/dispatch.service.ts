@@ -58,6 +58,7 @@ import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
+import type { NowWithView } from './now-with.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
 import { VehicleService } from './vehicle.service';
 import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type PrepaidShipper, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
@@ -2065,6 +2066,8 @@ export class DispatchService {
         ...(f.trackingKey ? { trackingKey: f.trackingKey, trackingUrl: trackingUrlOf(f.trackingKey) } : {}),
         // Reloaded onto another of the carrier's vehicles after a breakdown: the driver and the vehicle carrying it now.
         ...(f.carriage ? { carrier: carrierNow(f, this.driverNameOf(f.carriage.driverDid)) } : {}),
+        // 2026-11-15 — who has it now, by the company we contract with and the kind of vehicle (plan R1).
+        ...this.nowWithOf(f),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
         ...(f.incoterm ? { incoterm: f.incoterm, claimant: riskBearerOf(f.incoterm) } : {}),
@@ -4491,6 +4494,25 @@ export class DispatchService {
     if (!f.shipperDid || !this.vendors.has(f.shipperDid)) return undefined;
     this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, why, charged.tax, charged.provision);
     return charged.gross;
+  }
+
+  /** 2026-11-15 — a load's carrier, by name: the fleet's trading name or the courier's, and the kind of vehicle (HolderNamesService). */
+  private carrierNames?: (driverDid: string) => { name?: string; vehicle?: string };
+
+  registerCarrierNames(fn: (driverDid: string) => { name?: string; vehicle?: string }): void {
+    this.carrierNames = fn;
+  }
+
+  /** Who has a load now: taken by a driver (not yet picked up), or on the road with them. Nothing before or after. */
+  nowWithOf(f: Freight): { nowWith?: NowWithView } {
+    if (!f.claimedBy || (f.status !== 'claimed' && f.status !== 'in_transit')) return {};
+    const pickedUp = f.status === 'in_transit';
+    const driverDid = pickedUp ? (f.carriage?.driverDid ?? f.claimedBy) : f.claimedBy;
+    const named = this.carrierNames?.(driverDid) ?? {};
+    // On the road the vehicle it is in now — reloaded after a breakdown, the one it was moved to.
+    const vehicle = pickedUp && f.carriage ? carrierNow(f, undefined).vehicleClass : named.vehicle;
+    const since = (pickedUp ? f.pickedUpAt : f.claimedAt) ?? new Date().toISOString();
+    return { nowWith: { kind: 'carrier', since, pickedUp, ...(named.name ? { name: named.name } : {}), ...(vehicle ? { vehicle } : {}) } };
   }
 
   /** Say how a load paid for first is billed and given back (PersonDoorService, at boot). */

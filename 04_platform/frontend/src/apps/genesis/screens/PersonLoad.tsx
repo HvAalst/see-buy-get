@@ -8,6 +8,7 @@ import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, ty
 import type { SendActions, SendState } from '../useSendApp';
 import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
+import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 
 /**
  * 2026-11-13 — POST A LOAD (unusual loads, U5; part 3a): something too big for a shop — what it is, about how heavy, where from
@@ -228,6 +229,8 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       <p class="card__note">
         <Pill tone={waiting ? 'idle' : 'info'}>{t(waiting ? 'send.load.waiting' : 'send.load.taken')}</Pill> {load.destLabel}
       </p>
+      {/* 2026-11-15 — who has it now (plan R1). */}
+      {load.nowWith ? <p class="hint">{nowWithLine(load.nowWith, t)} · {nowWithSince(load.nowWith, t)}</p> : null}
       <LoadWorkSummary work={load.work} forDriver={false} />
       {waiting ? (
         offers === null ? null : offers.length === 0 ? (

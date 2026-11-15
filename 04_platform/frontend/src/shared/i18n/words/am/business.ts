@@ -403,6 +403,7 @@ export const words: Record<string, string> = {
   "business.loads.fact.weight": "ክብደት",
   "business.loads.fact.keptOwn": "እርስዎ እንደሰጡት — የሚወስደው ባለማቀዝቀዣ ወይም ሙቀት የማያስተላልፍ የጭነት መኪና ብቻ ነው፤ አሽከርካሪውም የሙቀት መጠኑን ይመዘግባል።",
   "business.loads.fact.keptUsual": "ለቀዘቀዙ ዕቃዎች የተለመደው፦ የራስዎን የሙቀት ክልል አልሰጡም።",
+  "business.loads.fact.nowWith": "አሁን",
   "business.loads.fact.carrier": "አጓጓዥ",
   "business.loads.fact.road": "በመንገድ ላይ",
   "business.seals.title": "ማኅተሞች",

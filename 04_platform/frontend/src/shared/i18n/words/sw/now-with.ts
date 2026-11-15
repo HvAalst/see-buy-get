@@ -1,0 +1,24 @@
+// Kiswahili — version 1, written in for en.now-with.ts (2026-11-15). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "nowWith.shop": "Sasa iko kwa {name}, duka la kuchukulia",
+  "nowWith.shopUnnamed": "Sasa iko kwenye duka la kuchukulia",
+  "nowWith.hub": "Sasa iko {name}, kituo cha kupanga",
+  "nowWith.hubUnnamed": "Sasa iko kwenye kituo cha kupanga",
+  "nowWith.carrier": "Iko njiani na {name}, kwa {vehicle}",
+  "nowWith.carrierNoVehicle": "Iko njiani na {name}",
+  "nowWith.carrierUnnamed": "Iko njiani",
+  "nowWith.taken": "Imechukuliwa na {name}, kwa {vehicle}: bado haijabebwa",
+  "nowWith.takenNoVehicle": "Imechukuliwa na {name}: bado haijabebwa",
+  "nowWith.takenUnnamed": "Dereva ameichukua: bado haijabebwa",
+  "nowWith.sender": "Bado iko kwa mtumaji",
+  "nowWith.since": "tangu {time}",
+  "nowWith.vehicle.bike": "baiskeli",
+  "nowWith.vehicle.motorcycle": "pikipiki",
+  "nowWith.vehicle.tuktuk": "tuktuk",
+  "nowWith.vehicle.car": "gari dogo",
+  "nowWith.vehicle.van": "gari dogo la mizigo",
+  "nowWith.vehicle.bus": "basi",
+  "nowWith.vehicle.truck": "lori",
+  "nowWith.vehicle.generic": "gari",
+};

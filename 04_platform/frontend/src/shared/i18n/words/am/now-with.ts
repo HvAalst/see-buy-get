@@ -1,0 +1,24 @@
+// አማርኛ — version 1, written in for en.now-with.ts (2026-11-15). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "nowWith.shop": "አሁን በ{name} ነው፣ የመረከቢያ ሱቅ",
+  "nowWith.shopUnnamed": "አሁን በመረከቢያ ሱቅ ነው",
+  "nowWith.hub": "አሁን በ{name} ነው፣ የመለያ ማዕከል",
+  "nowWith.hubUnnamed": "አሁን በመለያ ማዕከል ነው",
+  "nowWith.carrier": "ከ{name} ጋር በመንገድ ላይ ነው፣ በ{vehicle}",
+  "nowWith.carrierNoVehicle": "ከ{name} ጋር በመንገድ ላይ ነው",
+  "nowWith.carrierUnnamed": "በመንገድ ላይ ነው",
+  "nowWith.taken": "{name} ተቀብሎታል፣ በ{vehicle}፦ ገና አልተነሳም",
+  "nowWith.takenNoVehicle": "{name} ተቀብሎታል፦ ገና አልተነሳም",
+  "nowWith.takenUnnamed": "ሹፌር ተቀብሎታል፦ ገና አልተነሳም",
+  "nowWith.sender": "ገና ከላኪው ጋር ነው",
+  "nowWith.since": "ከ{time} ጀምሮ",
+  "nowWith.vehicle.bike": "ብስክሌት",
+  "nowWith.vehicle.motorcycle": "ሞተር ሳይክል",
+  "nowWith.vehicle.tuktuk": "ባጃጅ",
+  "nowWith.vehicle.car": "መኪና",
+  "nowWith.vehicle.van": "ቫን",
+  "nowWith.vehicle.bus": "አውቶቡስ",
+  "nowWith.vehicle.truck": "የጭነት መኪና",
+  "nowWith.vehicle.generic": "ተሽከርካሪ",
+};

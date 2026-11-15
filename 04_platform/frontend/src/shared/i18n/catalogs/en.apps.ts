@@ -27,6 +27,7 @@ import { enRefusal } from './en.refusal';
 import { enAnotherWay } from './en.another-way';
 import { enDirectory } from './en.directory';
 import { enSiteTools } from './en.site-tools';
+import { enNowWith } from './en.now-with';
 
 export const enApps = {
   ...enAgent,
@@ -49,4 +50,6 @@ export const enApps = {
   ...enRefusal,
   ...enAnotherWay,
   ...enDirectory,
+  // 2026-11-15 — who has it now (plan R1), said by the Send, Business and Shop apps alike.
+  ...enNowWith,
 };

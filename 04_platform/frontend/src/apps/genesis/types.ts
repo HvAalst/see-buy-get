@@ -1,4 +1,5 @@
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
+import type { NowWith } from '../../shared/nowWith';
 import type { ChargedBy } from '../../shared/sizePrice';
 
 /**
@@ -356,6 +357,8 @@ export interface ConsumerParcelView {
   wentBack?: boolean;
   /** Their goods coming to their own door, paid first by mobile money (2026-10-27): where that stands. */
   door?: DoorView;
+  /** 2026-11-15 — who has it now, by name (plan R1). */
+  nowWith?: NowWith;
   payAtCollection?: { amount: number; currency: string };
 }
 

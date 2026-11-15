@@ -6213,10 +6213,11 @@ describe('PUDO Light', () => {
       // The report is built from the chain of hands: here, as it would stand had those two each carried a leg.
       const p = parcels.get(parcelId);
       const at = p.custody![1];
-      p.custody!.splice(1, 1, { ...at, holderId: employed.did }, { holderKind: 'driver', holderId: own.did, from: at.to!, to: at.to! }, { holderKind: 'hub', holderId: 'mdp_nowhere', from: at.to!, to: at.to! });
+      p.custody!.splice(1, 1, { ...at, holderId: employed.did }, { holderKind: 'driver', holderId: own.did, from: at.to!, to: at.to! }, { holderKind: 'hub', holderId: 'mdp_nowhere', from: at.to!, to: at.to! }, { holderKind: 'hub', holderId: 'Ghala Kuu', from: at.to!, to: at.to! });
       const fresh = new DamageReportService(parcels, agents, media, vendors, persons, drivers, managers, mdps);
       const hands = fresh.read(parcelId, staff).body.custody.map((leg) => `${leg.holder.kind}: ${leg.holder.name}`);
-      expect(hands.slice(1, 4)).toEqual(['driver: Report Haulage', 'driver: Baraka R.', 'hub: A sorting hub']);
+      // 2026-11-15 — a hub's hand-over records its name: said as it is (an id nobody can look up still is not).
+    expect(hands.slice(1, 5)).toEqual(['driver: Report Haulage', 'driver: Baraka R.', 'hub: A sorting hub', 'hub: Ghala Kuu']);
       expect(JSON.stringify(fresh.read(parcelId, staff))).not.toMatch(/Wanjiru/);
       expect(reports.read(parcelId, staff).body.custody[1].holder.name).toBe('The carrier'); // the one already made is as it was made
     });

@@ -1,5 +1,6 @@
 import type { SbgClient } from '../../lib/sbg';
 import type { MessageKey } from '../../shared/i18n';
+import type { NowWith } from '../../shared/nowWith';
 import { EMPTY_WORK, workBlocker, workBody, type LoadWorkForm, type LoadWorkView } from '../../shared/loadWork';
 
 /**
@@ -71,6 +72,8 @@ export interface PersonLoadRow {
   canReport?: boolean;
   reported?: boolean;
   holdWords?: string;
+  /** 2026-11-15 — who has it now: the company carrying it and its vehicle; taken, not picked up yet (plan R1). */
+  nowWith?: NowWith;
 }
 
 /** A driver's price on it, and the person's price back where they gave one. */

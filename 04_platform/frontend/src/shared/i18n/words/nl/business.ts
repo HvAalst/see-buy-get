@@ -403,6 +403,7 @@ export const words: Record<string, string> = {
   "business.loads.fact.weight": "Gewicht",
   "business.loads.fact.keptOwn": "zoals je het opgaf — alleen een koelwagen of geïsoleerde wagen neemt het aan, en de chauffeur legt de temperatuur vast.",
   "business.loads.fact.keptUsual": "het gebruikelijke voor gekoelde goederen: je gaf geen eigen bereik op.",
+  "business.loads.fact.nowWith": "Nu",
   "business.loads.fact.carrier": "Vervoerder",
   "business.loads.fact.road": "Onderweg",
   "business.seals.title": "Zegels",

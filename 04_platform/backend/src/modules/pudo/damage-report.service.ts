@@ -500,7 +500,8 @@ export class DamageReportService implements OnModuleInit {
       case 'shop':
         return { kind, name: this.agents.find(id)?.shopName ?? 'A collection shop' };
       case 'hub':
-        return { kind, name: attempt(() => this.mdps?.require(id).name) ?? 'A sorting hub' };
+        // A hub's hand-over records its NAME (older ones its id): either is read; an id nobody can look up is never shown.
+        return { kind, name: attempt(() => this.mdps?.find(id)?.name) ?? (id && !id.startsWith('mdp_') && !id.startsWith('did:') ? id : 'A sorting hub') };
       case 'driver':
         return { kind, name: this.carrierName(id) };
       case 'sender':

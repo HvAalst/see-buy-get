@@ -385,6 +385,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReadyForPickup, (e) =>
       this.onParcelReadyForPickup(e.payload.parcelId),
     );
+    // 2026-11-15 — on the road to its shop: its receiver is told once (plan R1: the bell only at the moments that matter).
+    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.onParcelOnItsWay(e.payload.parcelId));
     this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
     // 2026-11-06 — its plan, made again, expects it later than it was promised: its people are told now (movement unification).
     this.events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => this.onExpectedLate(e.payload));
@@ -1816,6 +1818,34 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`store-rate notify failed for ${e.parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 2026-11-15 — ON ITS WAY TO YOUR SHOP (plan R1). The first time a parcel goes on the road, its receiver — where they have
+   * an account — is told once, with the shop it is going to; who has it at each hand after that is on the parcel itself
+   * ("Now with …"), not on the bell. Not for one going on to a business's own door: its business is told, not its receiver.
+   */
+  private async onParcelOnItsWay(parcelId: string): Promise<void> {
+    try {
+      if (this.doors?.goesToADoor(parcelId)) return;
+      const parcel = this.parcels.get(parcelId);
+      if (parcel.status === 'Ready_For_Pickup' || parcel.status === 'Delivered') return;
+      const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
+      if (!person) return;
+      const told = this.notifications.inboxFor(person.personDid, 500).some((n) => n.kind === 'parcel_on_way' && (n.data as { parcelId?: string } | undefined)?.parcelId === parcelId);
+      if (told) return;
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      await this.notifications.notify(person.personDid, {
+        kind: 'parcel_on_way',
+        title: 'Your parcel is on its way',
+        body: `On the road to ${where}. Open it to see who has it now.`,
+        link: `/?parcel=${parcelId}`,
+        tag: `on-way:${parcelId}`,
+        data: { parcelId },
+      });
+    } catch (err) {
+      this.logger.warn(`on-its-way notify failed for ${parcelId}: ${(err as Error).message}`);
     }
   }
 

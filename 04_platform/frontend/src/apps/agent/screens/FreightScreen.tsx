@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
@@ -148,6 +149,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {f.canDecideRefusal && f.refusal ? <span class="row__s row__s--warn">{t('agent.freight.refusedRow', { by: utcMoment(f.refusal.decideBy) })}</span> : null}
         {f.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: f.returnOf.code })}</span> : null}
         {f.claim ? <span class="row__s">{claimLine(f.claim, t, f.currency)}</span> : null}
+        {/* 2026-11-15 — who has it now, by the company carrying it (plan R1). */}
+        {f.nowWith ? <span class="row__s">{nowWithLine(f.nowWith, t)}</span> : null}
         {/* FP6 — who has it, and what the shop said of them. */}
         {f.carrier ? <span class="row__s">{t('agent.freight.carrierLine', { driver: f.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: f.carrier.plate ?? '' })}</span> : null}
         {f.rating ? <span class="row__s">{t('agent.freight.ratedLine', { stars: f.rating.stars })}</span> : null}
@@ -266,6 +269,7 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
           </Button>
         ) : null}
       </div>
+      {load.nowWith ? <p class="scr__lede">{nowWithLine(load.nowWith, t)} · {nowWithSince(load.nowWith, t)}</p> : null}
       {load.carrier ? <p class="scr__lede">{t('agent.freight.carrierLine', { driver: load.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: load.carrier.plate ?? '' })}</p> : null}
       {load.rating ? <p class="scr__lede">{t('agent.freight.ratedLine', { stars: load.rating.stars })}</p> : null}
 

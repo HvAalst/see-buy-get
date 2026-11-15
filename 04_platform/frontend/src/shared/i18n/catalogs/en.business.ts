@@ -435,6 +435,7 @@ export const enBusiness = {
   // 2026-11-03 — a load kept cold: the range, and whose it is.
   'business.loads.fact.keptOwn': 'as you gave it — only a refrigerated or insulated truck takes it, and the driver logs the temperature.',
   'business.loads.fact.keptUsual': 'the usual for chilled goods: you gave no range of your own.',
+  'business.loads.fact.nowWith': 'Now',
   'business.loads.fact.carrier': 'Carrier',
   'business.loads.fact.road': 'On the road',
   // Round 15 — the seals on a load.

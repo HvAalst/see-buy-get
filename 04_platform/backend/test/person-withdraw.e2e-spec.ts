@@ -8,6 +8,8 @@ import { MdpService } from '../src/modules/pudo/mdp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { WalletGateService } from '../src/modules/pudo/wallet-gate.service';
 import { AGREED } from './agreed';
+import { EventBus } from '../src/foundation/events/event-bus.service';
+import { GlosEvent } from '../src/foundation/events/glos-events';
 
 /**
  * A PERSON'S PARCEL WITHDRAWN BY STAFF AT A HUB, over the wire (the user, 2026-10-27: "Back to its shop, sender pays"). Staff
@@ -80,6 +82,12 @@ describe('a person’s parcel withdrawn at a hub, over the wire', () => {
     const receiver = await aPerson(receiverPhone);
     const id = `DUKA-${digits()}`;
     await http().post('/v1/sbg/parcels/accept').set(shop.owner).send({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'FarTown', senderMobile: senderPhone, receiverMobile: receiverPhone, dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(201);
+    // 2026-11-15 — who has it now, by name, to its receiver as to its sender (plan R1).
+    expect((await http().get(`/v1/sbg/identity/parcels/${id}`).set(receiver).expect(200)).body.nowWith).toMatchObject({ kind: 'shop', name: shop.name });
+    // On the road to its shop: its receiver is told once, however often it is handed on (R1: the bell at the moments that matter).
+    for (let i = 0; i < 2; i++) await app.get(EventBus).publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId: id }, { source: 'test' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await inbox(receiver)).filter((n) => n.kind === 'parcel_on_way')).toHaveLength(1);
     // At the hub now (the road there is any parcel's).
     Object.assign(app.get(ParcelService).get(id), { status: 'At_MDP', atMdpId: hub.mdpId });
 
@@ -107,6 +115,8 @@ describe('a person’s parcel withdrawn at a hub, over the wire', () => {
     const mine = (await http().get('/v1/sbg/identity/parcels').set(sender).expect(200)).body;
     expect((mine.received as Array<{ parcelId: string }>).map((p) => p.parcelId)).toContain(backId);
     const detail = (await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body;
+    // Turned round at the hub: it is with the hub, by name.
+    expect(detail.nowWith).toMatchObject({ kind: 'hub', name: hub.name });
     expect(detail).toMatchObject({ relation: 'received', returnOf: id, payAtCollection: { amount: told.amount, currency: expect.any(String) }, collectToken: { code: expect.stringMatching(/^\d{4}$/) } });
     const code = detail.collectToken.code as string;
 

@@ -76554,6 +76554,40 @@
           "day"
         ]
       },
+      "NowWithView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "shop",
+              "hub",
+              "carrier"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The shop's, the hub's or the carrier's name — absent where the record names nobody we can look up."
+          },
+          "vehicle": {
+            "type": "string",
+            "description": "On the road: the kind of vehicle (bike, motorcycle, tuktuk, car, van, bus, truck)."
+          },
+          "pickedUp": {
+            "type": "boolean",
+            "description": "A load: false while a driver has taken it but not yet picked it up."
+          },
+          "since": {
+            "type": "string",
+            "description": "Since when it has been in these hands."
+          }
+        },
+        "required": [
+          "kind",
+          "since"
+        ]
+      },
       "FreightInstructionsView": {
         "type": "object",
         "properties": {
@@ -76989,6 +77023,14 @@
                 "type": "string"
               }
             }
+          },
+          "nowWith": {
+            "description": "2026-11-15 — who has it now: the company carrying it and its kind of vehicle; taken but not yet picked up, said so (plan R1).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NowWithView"
+              }
+            ]
           },
           "rating": {
             "type": "object",

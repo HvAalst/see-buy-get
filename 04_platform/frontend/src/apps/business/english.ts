@@ -8,6 +8,7 @@ import { enTowerBusiness } from '../../shared/i18n/catalogs/en.tower-business';
 import { enRefusal } from '../../shared/i18n/catalogs/en.refusal';
 import { enAnotherWay } from '../../shared/i18n/catalogs/en.another-way';
 import { enDirectoryCard } from '../../shared/i18n/catalogs/en.directory-card';
+import { enNowWith } from '../../shared/i18n/catalogs/en.now-with';
 
 /**
  * The Business app's English, added before anything of it is evaluated: main.tsx imports this first. Its own words;
@@ -17,9 +18,9 @@ import { enDirectoryCard } from '../../shared/i18n/catalogs/en.directory-card';
  * light on a slow connection (the user, 2026-10-23). The help's words come when its Help opens, the articles about
  * working in this app with them (en.help-app.ts), not on the public site.
  */
-addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr, ...enRefusal, ...enDirectoryCard, ...enAnotherWay });
+addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr, ...enRefusal, ...enDirectoryCard, ...enAnotherWay, ...enNowWith });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
 
 // 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
-wordsOf('business', 'abbr', 'goods', 'site-hours', 'specialisms', 'tower-business', 'refusal', 'directory-card', 'another-way');
+wordsOf('business', 'abbr', 'goods', 'site-hours', 'specialisms', 'tower-business', 'refusal', 'directory-card', 'another-way', 'now-with');
 helpWordsOf('help-app');

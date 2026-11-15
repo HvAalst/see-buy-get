@@ -168,13 +168,18 @@ describe('a person posts a load, over the wire', () => {
     expect((await http().get(`/v1/sbg/dispatch/freight/${keLoad}/payment`).set(bearer(kePerson)).expect(200)).body.state).toBe('paid');
     const mine = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === keLoad);
     expect(mine.deliveryCode).toMatch(/^\d{6}$/);
+    // 2026-11-15 — who has it now: taken by the driver, by the name they ride under and their vehicle; not picked up yet (R1).
+    expect(mine.nowWith).toMatchObject({ kind: 'carrier', name: 'Mwangi', vehicle: 'van', pickedUp: false });
   });
 
   it('7 · delivered only with the code: a wrong one refused; the right one delivers, and the driver is paid on it', async () => {
     const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
     store.set(keLoad, { ...store.get(keLoad), status: 'in_transit', pickedUpAt: new Date().toISOString() });
-    const code = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === keLoad).deliveryCode as string;
-    const claim = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(keDriver.did)}/claims`).set(bearer(keDriver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === keLoad);
+    const onRoad = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === keLoad);
+    // On the road now: with the same driver, picked up (R1).
+    expect(onRoad.nowWith).toMatchObject({ kind: 'carrier', name: 'Mwangi', pickedUp: true });
+    const code = onRoad.deliveryCode as string;
+    const claim =(await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(keDriver.did)}/claims`).set(bearer(keDriver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === keLoad);
     expect(claim.deliveryCodeNeeded).toBe(true);
     const deliver = async (deliveryCode?: string) => http().post(`/v1/sbg/dispatch/freight/${keLoad}/deliver`).set(bearer(keDriver.token)).send({ driverDid: keDriver.did, confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: await photo(keDriver.token, 'pod'), ...(deliveryCode ? { deliveryCode } : {}) });
     const wrong = await deliver(code === '123456' ? '654321' : '123456');
@@ -265,6 +270,8 @@ describe('a person posts a load, over the wire', () => {
     expect(d.requireFreightPublic(keLoad).driverPaid).toBe(true);
     const after = await myRow(kePerson, keLoad);
     expect([after.heldUntil, after.canReport]).toEqual([undefined, undefined]);
+    // Delivered: with nobody of ours any more (R1).
+    expect(after.nowWith).toBeUndefined();
   });
 
   it('11 · damage found after delivery, not noted at the door: reported with a photo; held past the 24 hours; the driver answers once; step 2 pays the driver', async () => {

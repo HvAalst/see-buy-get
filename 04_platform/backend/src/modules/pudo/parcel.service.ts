@@ -53,6 +53,8 @@ const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
  * prints nothing rather than the word "Invalid" on a customer's parcel.
  */
 /** Once a parcel reaches one of these it can never be released again, so its code stops being shown. */
+import type { NowWithView } from './now-with.types';
+
 const TERMINAL_STATUSES = new Set<ParcelStatus>(['Delivered', 'Disputed', 'Voided']);
 
 /**
@@ -1371,6 +1373,8 @@ export class ParcelService implements OnApplicationBootstrap {
       createdAt: p.acceptedAt,
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
+      // 2026-11-15 — who has it now, named as we contract with them (plan R1): to its sender and its receiver alike.
+      ...this.nowWithOf(p),
       ...(runningLate(p) ? { runningLate: runningLate(p) } : {}),
       // The receiver's OWN photos + free-text reason are theirs alone — the sender's sent-twin sees the
       // status flip to Disputed, never the buyer's evidence or the words they wrote for the control tower.
@@ -2500,9 +2504,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const quote = input.quote;
     // Always the LOCKED (cheapest) leg: flexible's ceiling is refunded on delivery via the VENDOR prepaid
     // rail (rebateFlexible), which a cash-at-counter person has no account on — flexible here would just
-    // keep the over-hold. ceilingCost stays stamped for artefact parity with the vendor mint.
-    const routeMode = 'locked' as const;
-    const chosen = quote.locked;
+    // keep the over-hold (peerSendPriceOf, below). ceilingCost stays stamped for artefact parity with the vendor mint.
     const parcel: Parcel = {
       parcelId,
       did: this.mintShipmentDid(parcelId, 'outbound'), // DT — the twin's stable GLOS identity, minted at creation
@@ -4262,6 +4264,22 @@ export class ParcelService implements OnApplicationBootstrap {
 
   registerShopChoiceArrive(fn: (parcelId: string, agentDid: string) => void): void {
     this.shopChoiceArrive = fn;
+  }
+
+  /** 2026-11-15 — who holds a parcel now, by name (HolderNamesService registers it: it knows the hubs and the fleets). */
+  private holderNames?: (leg: CustodyLeg, p: Parcel) => NowWithView | undefined;
+
+  registerHolderNames(fn: (leg: CustodyLeg, p: Parcel) => NowWithView | undefined): void {
+    this.holderNames = fn;
+  }
+
+  /** The open hand-over, named — nothing once it is delivered or ended, and nothing for the receiver's own hands. */
+  private nowWithOf(p: Parcel): { nowWith?: NowWithView } {
+    if (TERMINAL_STATUSES.has(p.status) || p.status === 'Returned' || p.status === 'Lost') return {};
+    const leg = custodianOf(p);
+    if (!leg || leg.holderKind === 'receiver') return {};
+    const nowWith = this.holderNames?.(leg, p);
+    return nowWith ? { nowWith } : {};
   }
 
   /** 2026-11-06 — a buyer's parcel says the choice of shop open for it (ShopChoiceService registers it: it is above this). */
