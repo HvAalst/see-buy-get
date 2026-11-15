@@ -40,7 +40,8 @@ export function App() {
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where there is no
   // person behind the sign-in (a store's account is the store's, unless its operator gave their phone), rather than
   // opening onto a refusal. Such a store still has SETTINGS: its password, and who it contracts with.
-  const account = useAccount(sbg, state.phase === 'ready');
+  // A developer's sign-in has no person and no account of the store's to read (2026-11-15).
+  const account = useAccount(sbg, state.phase === 'ready' && !state.developer);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const noPerson = account.error?.code === 'FORBIDDEN' && !account.account;
@@ -72,6 +73,30 @@ export function App() {
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
           <AppLayer app="vendor" chats={null} />
           <SignInScreen state={state} actions={actions} error={state.error} />
+        </main>
+        <Toasts state={state} actions={actions} noNav />
+      </div>
+    );
+  }
+
+  // 2026-11-15 — THE STORE'S DEVELOPER: one page, Connect your shop system, and a way out. Nothing of the store's money,
+  // orders, buyers or account is loaded or shown — the server would refuse it anyway.
+  if (state.developer) {
+    return (
+      <div class="app app--sections">
+        <TopBar
+          title={t('vendor.appTitle')}
+          subtitle={t('vendor.dev.subtitle', { store: state.vendor?.name ?? state.developer.store })}
+          end={
+            <Button variant="link" full={false} onClick={actions.signOut}>
+              {t('vendor.dev.signOut')}
+            </Button>
+          }
+        />
+        <main class="app__scroll app__scroll--nonav">
+          {/* What every installed app has first: the call to install. No chats: a developer has none of the store's. */}
+          <AppLayer app="vendor" chats={null} />
+          <ConnectScreen state={state} actions={actions} developer />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>

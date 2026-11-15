@@ -34993,6 +34993,163 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/developers": {
+      "get": {
+        "operationId": "StoreDeveloper.list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreDevelopersResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "StoreDeveloper.invite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteStoreDeveloperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreDeveloperView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/developers/{devId}/remove": {
+      "post": {
+        "operationId": "StoreDeveloper.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "devId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreDeveloperView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/store-developers/link": {
+      "post": {
+        "operationId": "StoreDeveloper.link",
+        "summary": "",
+        "description": "A developer asks for a fresh sign-in link, by the email the owner gave.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreDeveloperLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreDeveloperLinkSent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/store-developers/session": {
+      "post": {
+        "operationId": "StoreDeveloper.session",
+        "summary": "",
+        "description": "A link's one-time code, for a developer's session.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreDeveloperSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreDeveloperSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/system": {
       "get": {
         "operationId": "BusinessSystem.view",
@@ -40507,7 +40664,7 @@
       "post": {
         "operationId": "Connections.checkRouter",
         "summary": "",
-        "description": "Ask the routing server now. The two places are a fleet's depot and a point a little way off it: places a plan\nwould really ask about, on whatever map the operator's server holds.",
+        "description": "Ask the routing server now. The two places are a place the network knows and a point a little way off it: a fleet's\ndepot first, as a plan would ask; with none yet, a shop, then a hub, then a known town in each country (2026-11-15 —\na server with no fleet on it could not be checked at all). The first that has a road between them is the answer; a\nmap that does not cover one country is no failure while another answers.",
         "parameters": [],
         "responses": {
           "201": {
@@ -85118,6 +85275,140 @@
         },
         "required": [
           "number"
+        ]
+      },
+      "StoreDeveloperView": {
+        "type": "object",
+        "properties": {
+          "lastSignInAt": {
+            "type": "string"
+          },
+          "removedAt": {
+            "type": "string"
+          },
+          "devId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "invitedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "devId",
+          "name",
+          "email",
+          "invitedAt"
+        ]
+      },
+      "StoreDevelopersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreDeveloperView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "InviteStoreDeveloperDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
+      "StoreDeveloperLinkDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "StoreDeveloperLinkSent": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent"
+        ]
+      },
+      "StoreDeveloperSessionDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "StoreDeveloperSession": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "object",
+            "properties": {
+              "access_token": {
+                "required": true,
+                "type": "string"
+              },
+              "expires_in": {
+                "required": false,
+                "type": "number"
+              }
+            }
+          },
+          "vendorId": {
+            "type": "string"
+          },
+          "storeName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "developer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "token",
+          "vendorId",
+          "storeName",
+          "name",
+          "developer"
         ]
       },
       "BusinessHookMessageView": {

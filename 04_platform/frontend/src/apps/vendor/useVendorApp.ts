@@ -50,6 +50,11 @@ import {
   fetchPoints,
   purgeVendorTokens,
   readCreds,
+  readDeveloper,
+  saveDeveloper,
+  clearDeveloper,
+  developerSession,
+  developerLink,
   readEmail,
   saveCreds,
   saveEmail,
@@ -87,6 +92,16 @@ import type {
 } from './types';
 
 export type Screen = 'orders' | 'mint' | 'books' | 'dock' | 'store' | 'notes' | 'connect';
+
+/** A store's developer, as its owner reads them. */
+export interface StoreDeveloperRow {
+  devId: string;
+  name: string;
+  email: string;
+  invitedAt: string;
+  lastSignInAt?: string;
+  removedAt?: string;
+}
 export type MintStep = 'source' | 'parcel' | 'dest' | 'origin' | 'price' | 'label';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
@@ -190,6 +205,10 @@ export interface VendorState {
   settlement: SettlementRow[];
   callbacks: CallbackRow[];
   apiKeys: ApiKeyRow[];
+  /** 2026-11-15 — signed in as the store's developer (by a link): the app holds only Connect. */
+  developer: { name: string; store: string } | null;
+  /** …and, for the owner, the store's developers; null until read. */
+  developers: StoreDeveloperRow[] | null;
   /** A key the moment it was minted — the ONE time a secret is on screen, and it is gone when dismissed. */
   issuedKey: IssuedKey | null;
   storeState: 'idle' | 'loading' | 'ready';
@@ -254,6 +273,8 @@ const INITIAL: VendorState = {
   settlement: [],
   callbacks: [],
   apiKeys: [],
+  developer: null,
+  developers: null,
   issuedKey: null,
   storeState: 'idle',
   dock: null,
@@ -413,6 +434,13 @@ export function useVendorApp() {
         return;
       }
       const vendor = narrow<VendorView>(meR.data);
+      // 2026-11-15 — the store's developer reads its record and Connect, nothing else of the store's.
+      const dev = readDeveloper();
+      if (dev) {
+        setState((s) => ({ ...s, phase: 'ready', vendor, developer: dev, screen: 'connect', error: null, stale: false, refreshing: false }));
+        void loadConnectRef.current();
+        return;
+      }
 
       // The register page loads on its own (ordersEpoch-guarded) path; the header counts come from the
       // store-wide stats endpoint, NOT the filtered page. Both run alongside the checkouts inbox.
@@ -582,6 +610,38 @@ export function useVendorApp() {
     });
   }, [enter]);
 
+  /**
+   * 2026-11-15 — A STORE'S DEVELOPER, SIGNED IN BY THEIR LINK (?dev=<code>): the code is used once for a session that opens
+   * only Connect; the address is cleaned of it at once, so a link copied from the bar opens nothing.
+   */
+  useEffect(() => {
+    const code = new URLSearchParams(globalThis.location?.search ?? '').get('dev');
+    if (!code) return;
+    try {
+      const url = new URL(globalThis.location.href);
+      url.searchParams.delete('dev');
+      globalThis.history?.replaceState(null, '', url.toString());
+    } catch {
+      /* an address that cannot be rewritten keeps its code; the code works once anyway */
+    }
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    void developerSession(code).then(async (r) => {
+      if (r.error || !r.data?.vendorId) return setState((s) => ({ ...s, phase: 'signin', busy: null, error: r.error ?? null }));
+      saveDeveloper(r.data.name, r.data.storeName);
+      await enter(r.data.vendorId, r.data.token);
+    });
+  }, [enter]);
+
+  /** …and asking for a new link by email: the same answer whether or not the address is a store's developer. */
+  const requestDeveloperLink = useCallback(async (email: string): Promise<boolean> => {
+    const mail = email.trim().toLowerCase();
+    if (!mail) return false;
+    setState((s) => ({ ...s, busy: 'dev-link', error: null }));
+    const r = await developerLink(mail);
+    setState((s) => ({ ...s, busy: null, ...(r.error ? { error: r.error } : {}) }));
+    return !r.error;
+  }, []);
+
   /** HOW A STORE SIGNS IN: its account's email and password. */
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -704,6 +764,7 @@ export function useVendorApp() {
     client?.client.session.clear();
     purgeVendorTokens(null);
     clearCreds();
+    clearDeveloper();
     setCreds(null);
     setState(() => ({ ...INITIAL, phase: 'signin' }));
   }, [client]);
@@ -727,6 +788,26 @@ export function useVendorApp() {
     }));
     if (setR.error) fail(setR.error);
   }, [client, creds, fail]);
+
+  /**
+   * 2026-11-15 — CONNECT YOUR SHOP SYSTEM, read on its own: where order updates go and what became of them, the keys, and
+   * — for the owner — the store's developers. Opened straight from a link, it no longer waits for the Store screen.
+   */
+  const loadConnect = useCallback(async () => {
+    if (!client || !creds) return;
+    const dev = readDeveloper();
+    const [cbR, keyR, devR] = await Promise.all([client.api.callbacks(creds.vendorId), client.api.apiKeys(creds.vendorId), dev ? Promise.resolve(null) : client.api.developers(creds.vendorId)]);
+    setState((s) => ({
+      ...s,
+      callbacks: cbR.error ? s.callbacks : (narrow<CallbackRow[]>(cbR.data) ?? []),
+      apiKeys: keyR.error ? s.apiKeys : (narrow<ApiKeyRow[]>(keyR.data) ?? []),
+      ...(devR && !devR.error ? { developers: narrow<{ items?: StoreDeveloperRow[] }>(devR.data)?.items ?? [] } : {}),
+    }));
+  }, [client, creds]);
+  const loadConnectRef = useRef(loadConnect);
+  useEffect(() => {
+    loadConnectRef.current = loadConnect;
+  }, [loadConnect]);
 
   /* -------------------------------------------------------------- the dock */
 
@@ -763,8 +844,9 @@ export function useVendorApp() {
       if (screen === 'orders') void refresh();
       if (screen === 'books') void fetchLedgerWith(stateRef.current.ledgerQuery);
       if (screen === 'dock') void loadDock();
+      if (screen === 'connect') void loadConnect();
     },
-    [loadStore, refresh, fetchLedgerWith, loadDock],
+    [loadStore, refresh, fetchLedgerWith, loadDock, loadConnect],
   );
 
   /**
@@ -1532,6 +1614,35 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** The owner invites a developer; they are emailed a link. Returns why it did not go, or nothing. */
+  const inviteDeveloper = useCallback(
+    async (name: string, email: string): Promise<boolean> => {
+      if (!client || !creds) return false;
+      let ok = false;
+      await run('dev-invite', async () => {
+        const r = await client.api.inviteDeveloper(creds.vendorId, { name: name.trim(), email: email.trim() });
+        if (r.error) return fail(r.error);
+        ok = true;
+        pushToast({ tone: 'ok', icon: 'mail', title: t('vendor.dev.sentToast', { email: email.trim() }) });
+        await loadConnect();
+      });
+      return ok;
+    },
+    [client, creds, run, fail, pushToast, loadConnect, t],
+  );
+
+  const removeDeveloper = useCallback(
+    async (devId: string) => {
+      if (!client || !creds) return;
+      await run(`dev-remove:${devId}`, async () => {
+        const r = await client.api.removeDeveloper(creds.vendorId, devId);
+        if (r.error) return fail(r.error);
+        await loadConnect();
+      });
+    },
+    [client, creds, run, fail, loadConnect],
+  );
+
   /** 2026-11-15 — whether the collection code is emailed to buyers who give an email and a name (plan R3). */
   const setEmailCode = useCallback(
     async (on: boolean) => {
@@ -1808,6 +1919,9 @@ export function useVendorApp() {
       sendCallback,
       setCallbackCode,
       setEmailCode,
+      requestDeveloperLink,
+      inviteDeveloper,
+      removeDeveloper,
       loadPoints,
       loadDock,
       enableDock,

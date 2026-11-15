@@ -39,6 +39,21 @@ export function vendorSession(email: string, password: string, device?: string):
   return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, ...secretBody(password, 'password'), ...(device ? { device } : {}) } });
 }
 
+/** 2026-11-15 — a store's developer: a one-time link's code for a session, and a new link asked for by email. */
+export interface DeveloperSessionView {
+  vendorId: string;
+  storeName: string;
+  name: string;
+  developer: boolean;
+  token: { access_token: string; expires_in?: number };
+}
+export function developerSession(code: string): Promise<Result<DeveloperSessionView>> {
+  return publicRequest<DeveloperSessionView>(vendorConfig(), '/v1/sbg/store-developers/session', { body: { code } });
+}
+export function developerLink(email: string): Promise<Result<{ sent: boolean }>> {
+  return publicRequest<{ sent: boolean }>(vendorConfig(), '/v1/sbg/store-developers/link', { body: { email } });
+}
+
 /**
  * @Public vendors/login — the store ID + the signing secret. Only for a store that has set no account up yet: it gets
  * in this way one last time, and is asked to set one up. A store WITH an account is refused here by the server.
@@ -166,6 +181,19 @@ export const readCreds = (): { vendorId: string } | null => {
   return vendorId ? { vendorId } : null;
 };
 export const saveCreds = (vendorId: string): void => set(ID_KEY, vendorId);
+/** 2026-11-15 — signed in as the store's developer (by a link): their name and the store's, so the app opens only Connect. */
+const DEV_KEY = 'sbg.vendor.developer';
+export const readDeveloper = (): { name: string; store: string } | null => {
+  try {
+    const raw = get(DEV_KEY);
+    const v = raw ? (JSON.parse(raw) as { name?: string; store?: string }) : null;
+    return v?.name ? { name: v.name, store: v.store ?? '' } : null;
+  } catch {
+    return null;
+  }
+};
+export const saveDeveloper = (name: string, store: string): void => set(DEV_KEY, JSON.stringify({ name, store }));
+export const clearDeveloper = (): void => drop(DEV_KEY);
 export const clearCreds = (): void => drop(ID_KEY);
 /** The email that signed in last, to fill the next sign-in. Kept across a sign-out, like the Shop app's. */
 export const readEmail = (): string | null => get(EMAIL_KEY);

@@ -243,6 +243,10 @@ export function createVendorApi(sbg: SbgClient) {
 
     /* --- merchant API keys: who the public shipping API sees when this store calls it --- */
 
+    /** 2026-11-15 — the store's developers: the owner's to invite and take out. */
+    developers: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/developers', { params: { path: { id: vendorId } } })),
+    inviteDeveloper: (vendorId: string, body: { name: string; email: string }) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/developers', { params: { path: { id: vendorId } }, body })),
+    removeDeveloper: (vendorId: string, devId: string) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/developers/{devId}/remove', { params: { path: { id: vendorId, devId } } })),
     /** This store's keys. Never carries a secret — not even to its owner; see the issue call. */
     apiKeys: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/api-keys', { params: { path: { id: vendorId } } })),
 

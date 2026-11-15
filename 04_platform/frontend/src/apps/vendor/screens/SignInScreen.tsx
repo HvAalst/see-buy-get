@@ -115,6 +115,9 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
 
       {/* 2026-11-02 — Help ("Trouble signing in?"), Read aloud and All apps, pinned to the bottom until signed in (the owner:
           "that clutter would be better off in a sticky footer for as long as the page goes. It changes after the sign in"). */}
+      {/* 2026-11-15 — a store's developer, invited by email, asks for a new link here (the owner: "as recommended"). */}
+      <DeveloperLink state={state} actions={actions} />
+
       <SignedOutBar help={{ app: 'vendor' }} aloud={() => t('vendor.signin.spoken')} />
 
       <ForgotSheet open={forgetting} onClose={() => setForgetting(false)} actions={actions} email={email} />
@@ -215,5 +218,32 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
         {t('vendor.signin.goBack')}
       </Button>
     </Sheet>
+  );
+}
+
+/** 2026-11-15 — a store's developer asks for a new sign-in link: the same answer whether or not the address is invited. */
+function DeveloperLink({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
+  return (
+    <Card title={t('vendor.dev.askTitle')} tone="soft">
+      <p class="card__note">{t('vendor.dev.askBody')}</p>
+      {sent ? (
+        <p class="hint" role="status">{t('vendor.dev.askSent')}</p>
+      ) : (
+        <>
+          <div class="field">
+            <label class="field__label" for="dev-link-email">
+              {t('vendor.dev.askEmail')}
+            </label>
+            <input id="dev-link-email" class="input" type="email" inputMode="email" autoComplete="email" value={email} onInput={(e) => setEmail(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} />
+          </div>
+          <Button variant="outline" chevron={false} full={false} disabled={!/^\S+@\S+\.\S+$/.test(email.trim())} busy={state.busy === 'dev-link'} onClick={() => void actions.requestDeveloperLink(email).then((ok) => ok && setSent(true))}>
+            {t('vendor.dev.askSend')}
+          </Button>
+        </>
+      )}
+    </Card>
   );
 }

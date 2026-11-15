@@ -33,3 +33,30 @@ describe('connecting a shop system', () => {
     expect(renderToString(<ConnectScreen state={state({ hasAccount: true, secretRotatedAt: '2026-11-15T10:00:00.000Z' })} actions={actions} />)).toContain(t('vendor.secret.rotate'));
   });
 });
+
+/*
+ * 2026-11-15 — THE STORE'S DEVELOPER ON THEIR OWN SIGN-IN: told who they are and that this page is all they see; no owner's
+ * steps, no invite, and the signing secret said to be the owner's to make. The owner, on the same page, invites them.
+ */
+describe('a developer with a sign-in of their own', () => {
+  it('the owner sees the invite card, and who was invited', () => {
+    const owner = { ...state({ hasAccount: true }), developers: [{ devId: 'sdv_1', name: 'Brian Studio', email: 'brian@studio.example', invitedAt: '2026-11-15T10:00:00.000Z' }] } as unknown as VendorState;
+    const html = renderToString(<ConnectScreen state={owner} actions={actions} />);
+    expect(html).toContain(t('vendor.dev.title'));
+    expect(html).toContain('Brian Studio');
+    expect(html).toContain(t('vendor.dev.remove'));
+    expect(html).toContain(`>${t('vendor.dev.invite')}<`);
+  });
+
+  it('the developer sees only the developer’s part: no owner’s steps, no invite, the secret the owner’s to make', () => {
+    const dev = { ...state({ hasAccount: true }), developer: { name: 'Brian Studio', store: 'Duka Bora' } } as unknown as VendorState;
+    const html = renderToString(<ConnectScreen state={dev} actions={actions} developer />);
+    expect(html).toContain(t('vendor.dev.signedInAs', { name: 'Brian Studio', store: 'Duka Bora' }));
+    expect(html).not.toContain(t('vendor.connect.youTitle'));
+    expect(html).not.toContain(t('vendor.dev.title'));
+    expect(html).toContain(t('vendor.dev.secretOwner'));
+    expect(html).not.toContain(t('vendor.secret.make'));
+    expect(html).toContain('ven_7f3a');
+  });
+});
+

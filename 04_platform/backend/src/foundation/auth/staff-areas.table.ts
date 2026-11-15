@@ -707,6 +707,12 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/business/me/parcels/collect-from': 'none',
   'POST sbg/business/me/parcels/collect-room': 'none',
   'POST sbg/business/me/parcels/email-code': 'none',
+  // 2026-11-15 — a store's developer: invited and taken out by the owner; a link asked for and used by the developer.
+  'GET sbg/vendors/:id/developers': 'none',
+  'POST sbg/vendors/:id/developers': 'none',
+  'POST sbg/vendors/:id/developers/:devId/remove': 'none',
+  'POST sbg/store-developers/link': 'none',
+  'POST sbg/store-developers/session': 'none',
   'POST sbg/business/me/parcels/:parcelId/call-off': 'none',
   'POST sbg/business/me/parcels/:parcelId/pay': 'none',
   'POST sbg/business/me/parcels/top-up': 'none',

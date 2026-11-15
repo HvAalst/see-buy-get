@@ -131,6 +131,7 @@ export interface MailParams {
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string; code?: string; name?: string; reissued?: boolean };
   'load-delivery-code': { code: string; load: string; from: string; name?: string; openUrl: string };
+  'store-developer-link': { store: string; name: string; link: string; until: string; invited: boolean };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; /** D9 — what the receiver found not as the note says, in words. */ reservations?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
@@ -1481,6 +1482,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'warning', title: 'This button works without signing in', text: `Until ${formatWhen(p.until)}, it opens the report for whoever has this email — so forward it only to somebody who should have it. The store sees this link on the report and can stop it.` },
         { kind: 'note', text: `SeeBuyGet carries parcels and keeps the record of every hand each one passes through. It does not judge a claim for damage or loss and it offers no payment: the claim is between ${p.store}, its customer and you. Questions about the claim go to ${p.store}.` },
       ],
+    }),
+  },
+
+  'store-developer-link': {
+    title: 'A store’s developer: the link to sign in (developer)',
+    sentWhen: 'A store invites its developer, or the developer asks for a new link from the Store app’s sign-in (2026-11-15).',
+    wired: true,
+    // The link works a day (a week for the invitation); later than that it would not open.
+    sendLater: 24,
+    sample: { store: 'Duka Bora', name: 'Brian', link: 'https://seebuyget.com/vendor/?dev=example', until: '2026-11-22T18:00:00Z', invited: true },
+    build: (p) => ({
+      subject: p.invited ? `${p.store} invites you to connect its webshop to SeeBuyGet` : `Your link to sign in to ${p.store} on SeeBuyGet`,
+      preheader: `It opens “Connect your shop system” for ${p.store}, until ${formatDate(p.until)}.`,
+      blocks: [
+        { kind: 'heading', text: p.invited ? `${p.store} asks you to connect its webshop` : `Sign in to ${p.store}` },
+        { kind: 'paragraph', text: `Hello ${p.name}. This link signs you in to the SeeBuyGet Store app as ${p.store}'s developer. You see only “Connect your shop system”: the store’s ID, its keys, and where its order updates go. You can make test and live keys, and set and test the address. Its money, orders and buyers stay the owner’s.` },
+        { kind: 'button', label: 'Open Connect your shop system', href: p.link },
+        { kind: 'facts', rows: [['Works until', formatDate(p.until)], ['Works', 'once: ask for a new link from the Store app’s sign-in, with this email']] },
+        { kind: 'warning', title: 'Keep this email to yourself', text: 'Whoever opens the link signs in as the store’s developer. Do not forward it.' },
+      ],
+      reason: `You are getting this email because ${p.store} named you as its developer on SeeBuyGet.`,
     }),
   },
 

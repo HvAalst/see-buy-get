@@ -72,6 +72,7 @@ import { DocumentsService } from '../../foundation/documents/documents.service';
 import { CountryTermsService } from './country-terms.service';
 import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
+import { ForTheDeveloper, isStoreDeveloper } from '../../foundation/auth/for-the-developer';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { staffOf } from './staff-of';
@@ -4405,6 +4406,7 @@ export class SbgController {
    * Returns the public view — the signing secret is issued once at registration and never re-exposed.
    */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Get('vendors/:id')
   getVendor(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     // Its balance, the number to reach it on and where its systems are called: the store's own. Its id was all it took.
@@ -4501,9 +4503,16 @@ export class SbgController {
    *  Owner-scoped (PG0): the callback URL + split policy are the store's webhook/money config — an
    *  unlabelled write would let ANY token redirect another store's callbacks or rewrite its pricing. */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Patch('vendors/:id')
   updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorSelf(id, actor);
+    // 2026-11-15 — a developer sets where the store's order updates go, and nothing else of the store's: refused before writing.
+    if (isStoreDeveloper(actor)) {
+      const theirs = new Set(['callbackUrl', 'callbackCarriesCode']);
+      const other = Object.entries(dto).find(([k, v]) => v !== undefined && !theirs.has(k));
+      if (other) throw new GlosError('FORBIDDEN', 'A developer sets where the order updates go. The owner changes the rest of the store');
+    }
     return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
@@ -4619,6 +4628,7 @@ export class SbgController {
    * into before revoking the old. Keys being cheap is what makes revoking one an easy decision.
    */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Post('vendors/:id/api-keys')
   issueApiKey(@Param('id') id: string, @Body() dto: IssueApiKeyDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorSelf(id, actor);
@@ -4630,6 +4640,7 @@ export class SbgController {
 
   /** This store's keys, in a shape safe to render — never a secret, not even to its owner. */
   @Scopes('vendor:read:self')
+  @ForTheDeveloper()
   @Get('vendors/:id/api-keys')
   listApiKeys(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorReads(id, actor);
@@ -4638,6 +4649,7 @@ export class SbgController {
 
   /** Stop a key working. Kept rather than deleted, so "what was that key doing" stays answerable. */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Delete('vendors/:id/api-keys/:keyId')
   revokeApiKey(@Param('id') id: string, @Param('keyId') keyId: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorSelf(id, actor);
@@ -4782,6 +4794,7 @@ export class SbgController {
   /** Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed). Owner-scoped —
    *  the outbox holds signatures + payloads for this store only. */
   @Scopes('vendor:read:self')
+  @ForTheDeveloper()
   @Get('vendors/:id/callbacks')
   vendorCallbacks(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorReads(id, actor);

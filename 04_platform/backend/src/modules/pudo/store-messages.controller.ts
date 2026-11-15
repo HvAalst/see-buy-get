@@ -1,5 +1,6 @@
 import { Controller, Param, Post } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
+import { ForTheDeveloper } from '../../foundation/auth/for-the-developer';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -21,6 +22,7 @@ export class StoreMessagesController {
 
   /** A message that says only that it is a test, to the address the store has: does its system take and verify ours? */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Post('vendors/:id/callbacks/test')
   async test(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<VendorCallback> {
     this.assertTheStore(id, actor);
@@ -31,6 +33,7 @@ export class StoreMessagesController {
 
   /** One sent again: the same message, to the address and with the secret the store has now, with a fresh round of tries. */
   @Scopes('vendor:manage:self')
+  @ForTheDeveloper()
   @Post('vendors/:id/callbacks/:callbackId/resend')
   async resend(@Param('id') id: string, @Param('callbackId') callbackId: string, @Actor() actor: IntrospectionResult): Promise<VendorCallback> {
     this.assertTheStore(id, actor);
