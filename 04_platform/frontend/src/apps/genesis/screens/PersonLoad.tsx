@@ -108,6 +108,28 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
           <textarea id="load-note" class="input" rows={3} maxLength={500} value={form.note} onInput={(e) => set({ note: e.currentTarget.value })} />
         </div>
       </Card>
+      {/* 2026-11-15 — who receives it, if not them: the code reaches that person, not by hand (plan R2). */}
+      <Card title={t('send.load.receiverTitle')}>
+        <p class="card__note">{t('send.load.receiverNote')}</p>
+        <div class="field">
+          <label class="field__label" for="load-rcv-name">
+            {t('send.load.receiverName')}
+          </label>
+          <input id="load-rcv-name" class="input" maxLength={80} autoComplete="off" value={form.receiverName} onInput={(e) => set({ receiverName: e.currentTarget.value })} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="load-rcv-phone">
+            {t('send.load.receiverPhone')}
+          </label>
+          <PhoneField id="load-rcv-phone" value={form.receiverPhone} onInput={(v) => set({ receiverPhone: v })} autoComplete="off" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="load-rcv-email">
+            {t('send.load.receiverEmail')}
+          </label>
+          <input id="load-rcv-email" class="input" type="email" inputMode="email" maxLength={120} autoComplete="off" value={form.receiverEmail} onInput={(e) => set({ receiverEmail: e.currentTarget.value })} />
+        </div>
+      </Card>
       <p class="card__note">{t('send.load.howPay')}</p>
       {problem ? (
         <p class="hint" role="alert">

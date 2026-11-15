@@ -1,7 +1,7 @@
 import { OwnBusinessRate } from './business-rate.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
 import { CARGO_NATURES, type CargoNature } from './cargo.types';
 import type { ParcelStatus } from './pudo.types';
@@ -45,6 +45,10 @@ export class BusinessParcelDto {
   @IsOptional() @ValidateNested() @Type(() => ToOwnPlaceDto) toOwnPlace?: ToOwnPlaceDto;
   /** The person who collects it. Never sent a text by us; the code is the business's to pass on. */
   @IsString() @MaxLength(30) receiverMobile!: string;
+  /** 2026-11-15 — the receiver's email and name: the collection code is emailed to them where the business chose it (plan R3). */
+  @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
+  @IsOptional() @IsBoolean() emailCode?: boolean;
   /** Measured, so it is priced on what it is rather than on a size band. */
   @ValidateNested() @Type(() => ParcelSizeDto) dimensionsCm!: ParcelSizeDto;
   @IsNumber() @Min(0.01) weightKg!: number;
@@ -281,6 +285,13 @@ export class BusinessParcelAccountView {
   @ApiPropertyOptional({ type: () => ParcelCollection }) collection?: ParcelCollection;
   /** 2026-11-12 — its own rate, where the country's staff gave it one (the owner's D3): a contract card, or a discount. */
   @ApiPropertyOptional({ type: () => OwnBusinessRate }) rate?: OwnBusinessRate;
+  /** 2026-11-15 — the collection code is emailed to receivers who are given an email and a name (plan R3). */
+  @ApiPropertyOptional() emailCode?: boolean;
+}
+
+/** 2026-11-15 — email the collection code to receivers, or stop (plan R3). */
+export class BusinessEmailCodeDto {
+  @IsBoolean() on!: boolean;
 }
 
 /** A shop at one end of a parcel. */

@@ -27,4 +27,12 @@ describe('a person’s load, on the Send app', () => {
     expect(body).toEqual({ description: 'A fridge', weightKg: 60.5, pickupLabel: 'Ntinda', pickupLocation: { lat: 0.35, lng: 32.6 }, destLabel: 'Entebbe', destLocation: { lat: 0.05, lng: 32.46 }, contactPhone: '+256700123456', instructions: 'Ring twice' });
     expect(body).not.toHaveProperty('commitMode');
   });
+
+  it('2026-11-15 — names who receives it: their number, email and name go with it; a broken email is said first (plan R2)', () => {
+    expect(personLoadBlocker(filled({ receiverEmail: 'not-an-email' }))).toBe('send.load.needEmail');
+    expect(personLoadBlocker(filled({ receiverEmail: '' }))).toBeNull();
+    const body = personLoadBody(filled({ receiverName: ' Achieng Otieno ', receiverPhone: ' +254712000111 ', receiverEmail: ' achieng@example.com ' }));
+    expect(body).toMatchObject({ buyerMobile: '+254712000111', receiverEmail: 'achieng@example.com', receiverName: 'Achieng Otieno' });
+    expect(personLoadBody(filled({}))).not.toHaveProperty('buyerMobile');
+  });
 });

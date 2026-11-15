@@ -788,4 +788,11 @@ export const words: Record<string, string> = {
   "vendor.hub.missing": "{n, plural, one {# ጥቅል አልነበረም} other {# ጥቅሎች አልነበሩም}}፦ አሁንም ከእርስዎ ጋር ናቸው፣ እንደገና ያስይዙ።",
   "vendor.hub.withdraw": "ያንሱት",
   "vendor.hub.withdrawn": "ተነስቷል፦ ጥቅሎቹ እንደገና ለማስያዝ ነጻ ናቸው።",
+  "vendor.store.emailCode": "የመውሰጃ ኮዱን ለገዢዎቼ በኢሜይል ላክ",
+  "vendor.store.emailCodeNote": "የገዢውን ኢሜይል እና ስም ለሚሰጡ ትዕዛዞች ብቻ። ከዚያ መደብሩ በመታወቂያቸው (ID) ላይ ያለውን ስም ደግሞ ይመረምራል፤ ስለዚህ የተላለፈ ኢሜይል ብቻውን ምንም አያስረክብም። የSend መተግበሪያ ኮዱን አሁንም ያሳያል።",
+  "vendor.toast.emailCodeOn": "ኮዱ ለገዢዎችዎ በኢሜይል ይላካል",
+  "vendor.toast.emailCodeOff": "ኮዱ በSend መተግበሪያ ውስጥ ይቆያል",
+  "vendor.mint.buyerEmail": "የገዢው ኢሜይል",
+  "vendor.mint.buyerName": "የገዢው ስም፣ በመታወቂያው (ID) ላይ እንዳለው",
+  "vendor.mint.buyerNameHint": "ለገዢዎች ኮዳቸውን በኢሜይል በሚልኩበት ጊዜ፣ መደብሩ ጥቅሉን ከማስረከቡ በፊት ይህን ስም ይመረምራል።",
 };

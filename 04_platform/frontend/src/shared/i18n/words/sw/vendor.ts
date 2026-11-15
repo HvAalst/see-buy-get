@@ -788,4 +788,11 @@ export const words: Record<string, string> = {
   "vendor.hub.missing": "{n, plural, one {Kifurushi # hakikuwepo} other {Vifurushi # havikuwepo}}: bado viko kwako, viweke tena.",
   "vendor.hub.withdraw": "Ondoa",
   "vendor.hub.withdrawn": "Imeondolewa: vifurushi vyake viko huru kuwekwa tena.",
+  "vendor.store.emailCode": "Watumie wanunuzi wangu msimbo wa kuchukua kwa barua pepe",
+  "vendor.store.emailCodeNote": "Ni kwa oda zinazotoa barua pepe na jina la mnunuzi tu. Duka hukagua pia jina kwenye kitambulisho chake (ID), kwa hiyo barua pepe iliyotumwa kwa mtu mwingine pekee haikabidhi chochote. Programu ya Send bado inaonyesha msimbo.",
+  "vendor.toast.emailCodeOn": "Msimbo unatumwa kwa wanunuzi wako kwa barua pepe",
+  "vendor.toast.emailCodeOff": "Msimbo unabaki kwenye programu ya Send",
+  "vendor.mint.buyerEmail": "Barua pepe ya mnunuzi",
+  "vendor.mint.buyerName": "Jina la mnunuzi, kama lilivyo kwenye kitambulisho chake (ID)",
+  "vendor.mint.buyerNameHint": "Unapowatumia wanunuzi msimbo wao kwa barua pepe, duka hukagua jina hili kabla ya kukabidhi kifurushi.",
 };

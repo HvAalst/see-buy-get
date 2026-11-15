@@ -188,6 +188,27 @@ function ParcelStep({ state, actions }: MintScreenProps) {
             </label>
             <input id="order-ref" class="input" value={f.externalOrderId} onInput={(e) => actions.setForm({ externalOrderId: e.currentTarget.value })} placeholder="SO-1024" />
           </div>
+          {/* 2026-11-15 — the buyer's email and name: with both, the code can be emailed and the shop checks the name (R3). */}
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="buyer-email">
+              {t('vendor.mint.buyerEmail')}
+            </label>
+            <input id="buyer-email" class="input" type="email" inputMode="email" maxLength={120} autoComplete="off" value={f.buyerEmail} onInput={(e) => actions.setForm({ buyerEmail: e.currentTarget.value })} />
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="buyer-name">
+              {t('vendor.mint.buyerName')}
+            </label>
+            <input id="buyer-name" class="input" maxLength={80} autoComplete="off" value={f.buyerName} onInput={(e) => actions.setForm({ buyerName: e.currentTarget.value })} />
+            <p class="hint">{t('vendor.mint.buyerNameHint')}</p>
+          </div>
+        </Card>
+      ) : state.vendor?.emailCodeToBuyers ? (
+        <Card label={t('vendor.mint.buyerName')}>
+          <div class="field">
+            <input id="buyer-name" class="input" maxLength={80} autoComplete="off" aria-label={t('vendor.mint.buyerName')} value={f.buyerName} onInput={(e) => actions.setForm({ buyerName: e.currentTarget.value })} />
+            <p class="hint">{t('vendor.mint.buyerNameHint')}</p>
+          </div>
         </Card>
       ) : null}
 

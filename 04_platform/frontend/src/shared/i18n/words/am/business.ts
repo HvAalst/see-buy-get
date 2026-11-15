@@ -1871,4 +1871,9 @@ export const words: Record<string, string> = {
   "business.manifest.refsHint": "ከእርስዎ ወይም ከጉምሩክ አስተላላፊዎ፦ የወጪ ንግድ ቁጥሩ ዕቃው ከመወሰዱ በፊት፣ የገቢ ንግድ ቁጥሩ ዕቃው ጣቢያው ከመድረሱ በፊት።",
   "business.manifest.save": "ቁጥሮቹን ያስቀምጡ",
   "business.manifest.saved": "ተቀምጧል። ዕቃው ከተወሰደ በኋላ ከተሰጡ፣ በእነሱ አዲስ የማኒፌስቱ ቅጂ ይቆለፋል።",
+  "business.parcels.f.receiverEmail": "የተቀባዩ ኢሜይል (አማራጭ)",
+  "business.parcels.f.receiverName": "የተቀባዩ ስም፣ በመታወቂያው (ID) ላይ እንዳለው (አማራጭ)",
+  "business.parcels.emailCode.title": "የመውሰጃ ኮድ በኢሜይል",
+  "business.parcels.emailCode.tick": "ኮዱን ለተቀባዮች በኢሜይል ይላኩ",
+  "business.parcels.emailCode.note": "የተቀባዩን ኢሜይል እና ስም ለሚሰጡ ጥቅሎች ብቻ። ከዚያ መደብሩ በመታወቂያቸው (ID) ላይ ያለውን ስም ደግሞ ይመረምራል፤ ስለዚህ የተላለፈ ኢሜይል ብቻውን ምንም አያስረክብም።",
 };

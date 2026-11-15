@@ -352,7 +352,7 @@ export interface AgentState {
    */
   handover: { badge: string; selected: string[]; missed: string[]; list: BusList | null; listState: 'idle' | 'loading' | 'ready'; scan: string; lastScanned: string | null; offPlan: Array<{ parcelId: string; planned: string }> };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
-  collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string; handPhotoRef: string };
+  collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string; handPhotoRef: string; nameChecked: boolean };
   /** `putAway`: a bag was just received, and these are the slots its parcels go in — shown until the shop says they are in. */
   receivebag: { code: string; putAway?: Array<{ slot: string; parcelIds: string[] }>; driverDid?: string; bag?: { closedWith?: BagClosedWith; held?: UnitHold } | null; mismatch?: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
@@ -365,7 +365,7 @@ export interface AgentState {
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[], list: null as BusList | null, listState: 'idle' as 'idle' | 'loading' | 'ready', scan: '', lastScanned: null as string | null, offPlan: [] as Array<{ parcelId: string; planned: string }> };
 const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', stars: 0, photoRef: '' };
-const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '', handPhotoRef: '' };
+const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '', handPhotoRef: '', nameChecked: false };
 
 const INITIAL: AgentState = {
   phase: 'boot',
@@ -2713,7 +2713,7 @@ export function useAgentApp() {
     const f = stateRef.current.collect;
     if (!f.found) return;
     await run('collect-confirm', async () => {
-      const r = await client.api.collectConfirm(f.found!.parcel.parcelId, did, f.code.trim(), f.handPhotoRef || undefined);
+      const r = await client.api.collectConfirm(f.found!.parcel.parcelId, did, f.code.trim(), f.handPhotoRef || undefined, f.found!.checkName ? f.nameChecked : undefined);
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, collect: { ...EMPTY_COLLECT }, screen: 'home' }));

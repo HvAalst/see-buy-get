@@ -1053,6 +1053,11 @@ export class Freight {
   @ApiPropertyOptional() payHold?: { proposalId: string; until: string };
   /** …and delivered with the code (not after the sender said it arrived). */
   @ApiPropertyOptional() deliveredWithCode?: boolean;
+  /** 2026-11-15 — who receives it, where the poster named them (plan R2): given the code in the Send app, or by email. */
+  @ApiPropertyOptional() receiverEmail?: string;
+  @ApiPropertyOptional() receiverName?: string;
+  /** …the code went by email: the driver also checks the receiver's name before handing it over. */
+  @ApiPropertyOptional() codeEmailedAt?: string;
   /** 2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts). */
   @ApiPropertyOptional({ type: HeldPay }) heldPay?: HeldPay;
 }
@@ -1782,6 +1787,9 @@ export class PostedFreightResponse {
 /** The buyer-facing, PII-free projection of a diverted freight job — the freight analogue of a
  *  ConsumerParcelView, shown in the buyer's "my shipments" so a diverted order never disappears. */
 export class FreightShipmentView {
+  /** 2026-11-15 — to its receiver: the delivery code to give the driver, while it is on its way; who has it now (R1, R2). */
+  @ApiPropertyOptional() deliveryCode?: string;
+  @ApiPropertyOptional({ type: NowWithView }) nowWith?: NowWithView;
   freightId!: string;
   code!: string; // human FRT-NNN reference
   status!: FreightStatus;
@@ -1827,6 +1835,8 @@ export class Claimable {
   kind: ClaimableKind;
   /** 2026-11-13 — delivered only with the code the sender gave whoever receives it (a load paid first, part 3b). */
   @ApiPropertyOptional() deliveryCodeNeeded?: boolean;
+  /** 2026-11-15 — the code was emailed to the receiver: check they are this person before handing it over (plan R2). */
+  @ApiPropertyOptional() checkName?: string;
   /**
    * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.

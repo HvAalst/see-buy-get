@@ -152,7 +152,15 @@ export class BusinessParcelService {
       ...(v.collection ? { collection: this.collectionOf(v) } : {}),
       // 2026-11-12 — its own rate, where the country's staff gave it one (the owner's D3): read here, never changed.
       ...(this.rates?.ownRate(v.vendorId) ? { rate: this.rates.ownRate(v.vendorId) } : {}),
+      ...(v.emailCodeToBuyers ? { emailCode: true } : {}),
     };
+  }
+
+  /** 2026-11-15 — email the collection code to its receivers, or stop (plan R3): the account's own setting. */
+  emailCode(who: ParcelActor, on: boolean): BusinessParcelAccountView {
+    const v = this.requireAccount(who);
+    this.vendors.updateProfile(v.vendorId, { emailCodeToBuyers: on });
+    return this.account(who);
   }
 
   /* -------------------------------------------------- collected from its own place -- */
@@ -386,6 +394,10 @@ export class BusinessParcelService {
       ...(origin ? { originAgentDid: origin } : { originZone }),
       destAgentDid: dest,
       buyerMobile: receiver,
+      // 2026-11-15 — the receiver's email and name, and this parcel's choice to email the code (plan R3).
+      ...(input.receiverEmail?.trim() ? { buyerEmail: input.receiverEmail.trim() } : {}),
+      ...(input.receiverName?.trim() ? { receiverName: input.receiverName.trim() } : {}),
+      ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       dimensionsCm: { l: dims.l, w: dims.w, h: dims.h },
       weightKg: kg,
       contentPhotoRef: input.contentPhotoRef,

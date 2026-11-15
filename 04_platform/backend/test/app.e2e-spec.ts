@@ -835,6 +835,35 @@ describe('GLOS backend (e2e)', () => {
     const delivered = await request(http).post(`/v1/sbg/parcels/${parcelId}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
+    // 2026-11-15 — "EMAIL THE CODE TO MY BUYERS" (plan R3): the store switches it on, signed in as itself; an order giving the
+    // buyer's email and name has its code emailed when it is ready; the counter then checks the name before handing it over.
+    await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).send({ emailCodeToBuyers: true }).expect(403);
+    expect((await request(http).patch(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(acme).send({ emailCodeToBuyers: true }).expect(200)).body.emailCodeToBuyers).toBe(true);
+    const shipThrough = async (body: Record<string, unknown>) => {
+      const o = (await request(http).post('/v1/sbg/inbound/orders').set(acme).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, size: 'M', contentPhotoRef: await contentPhotoOver(http, acme), ...body }).expect(201)).body;
+      await request(http).post(`/v1/sbg/parcels/${o.parcel.parcelId}/intake`).set(auth).send({ agentDid: origin }).expect(201);
+      await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [o.parcel.parcelId] }).expect(201);
+      await request(http).post(`/v1/sbg/parcels/${o.parcel.parcelId}/shelve`).set(auth).send({ agentDid: dest }).expect(201);
+      await new Promise((r) => setTimeout(r, 50));
+      return { id: o.parcel.parcelId as string, code: o.parcel.collectionCode as string };
+    };
+    const named = await shipThrough({ externalOrderId: 'ORD-78', buyerMobile: '+254700998', buyerEmail: 'achieng@example.com', buyerName: 'Achieng Otieno' });
+    const readyMail = app.get(OutboxMailSender).recent('achieng@example.com').find((m) => m.template === 'ready-for-collection');
+    expect(readyMail?.text).toContain(named.code);
+    expect(readyMail?.text).toContain('Achieng Otieno');
+    expect((await request(http).post('/v1/sbg/parcels/collect').set(auth).send({ agentDid: dest, collectionCode: named.code }).expect(201)).body.checkName).toBe('Achieng Otieno');
+    const unchecked = await request(http).post(`/v1/sbg/parcels/${named.id}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode: named.code });
+    expect([unchecked.status, unchecked.body.detail]).toEqual([400, expect.stringMatching(/check the name on their ID is Achieng Otieno/)]);
+    expect((await request(http).post(`/v1/sbg/parcels/${named.id}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode: named.code, nameChecked: true }).expect(201)).body.status).toBe('Delivered');
+    // No name on the order: the code is not emailed — there would be nothing to check it against — and nothing more is asked.
+    const unnamed = await shipThrough({ externalOrderId: 'ORD-79', buyerMobile: '+254700997', buyerEmail: 'nameless@example.com' });
+    const plainMail = app.get(OutboxMailSender).recent('nameless@example.com').find((m) => m.template === 'ready-for-collection');
+    expect(plainMail?.text).not.toContain(unnamed.code);
+    expect((await request(http).post(`/v1/sbg/parcels/${unnamed.id}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode: unnamed.code }).expect(201)).body.status).toBe('Delivered');
+    // An order may say no for itself, whatever the store's setting.
+    const optedOut = await shipThrough({ externalOrderId: 'ORD-80', buyerMobile: '+254700996', buyerEmail: 'optout@example.com', buyerName: 'Wanjiku M.', emailCode: false });
+    expect(app.get(OutboxMailSender).recent('optout@example.com').find((m) => m.template === 'ready-for-collection')?.text).not.toContain(optedOut.code);
+
     // Vendor received signed status callbacks — read by the store; their bodies and signatures are not staff's.
     await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(403);
     const cbs = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(acme).expect(200);

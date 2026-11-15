@@ -375,9 +375,9 @@ export function createAgentApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/parcels/collect', { body: { agentDid, collectionCode } })),
 
     /** Buyer checked the contents — close the order. */
-    collectConfirm: (parcelId: string, agentDid: string, collectionCode: string, deliveredPhotoRef?: string) =>
+    collectConfirm: (parcelId: string, agentDid: string, collectionCode: string, deliveredPhotoRef?: string, nameChecked?: boolean) =>
       sbg.request((c) =>
-        c.POST('/v1/sbg/parcels/{id}/collect-confirm', { params: { path: { id: parcelId } }, body: { agentDid, collectionCode, ...(deliveredPhotoRef ? { deliveredPhotoRef } : {}) } }),
+        c.POST('/v1/sbg/parcels/{id}/collect-confirm', { params: { path: { id: parcelId } }, body: { agentDid, collectionCode, ...(deliveredPhotoRef ? { deliveredPhotoRef } : {}), ...(nameChecked ? { nameChecked: true } : {}) } }),
       ),
 
     /** Buyer refused the parcel — file the dispute with a reason + proof photo. */

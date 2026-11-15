@@ -833,6 +833,10 @@ export const enAgent = {
   'agent.collect.checkContents': 'Let the buyer check the contents',
   'agent.collect.itemLine': '{qty} × {name}',
   'agent.collect.noItems': 'No item list came with this order.',
+  // 2026-11-15 — the code was emailed: the name on their ID is checked too (plan R3).
+  'agent.collect.checkNameTitle': 'Check their ID: {name}',
+  'agent.collect.checkNameDetail': 'This code was emailed, and an email can be forwarded. Hand the parcel over only to the person named.',
+  'agent.collect.checkNameTick': 'I checked their ID says {name}',
   'agent.collect.handOverGood': 'Hand over — all good',
   'agent.collect.reportProblem': 'Report a problem instead',
   'agent.collect.slotUnknown': 'unknown',

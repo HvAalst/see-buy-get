@@ -157,6 +157,9 @@ function FreightGroup({ items }: { items: FreightShipmentView[] }) {
                 <span class="row__s">
                   <Abbreviated text={t('send.parcels.freightRow', { dest: fr.destLabel, kg: fr.weightKg, cls: fr.cargoClass })} />
                 </span>
+                {/* 2026-11-15 — who has it now, and the code to give the driver (plan R1, R2). */}
+                {fr.nowWith ? <span class="row__s">{nowWithLine(fr.nowWith, t)}</span> : null}
+                {fr.deliveryCode ? <span class="row__s"><b>{t('send.parcels.freightCode', { code: fr.deliveryCode })}</b></span> : null}
               </span>
               <span class="row__end"><Pill tone={s ? s.tone : 'info'} dot>{s ? t(s.wordKey) : fr.status}</Pill></span>
             </div>

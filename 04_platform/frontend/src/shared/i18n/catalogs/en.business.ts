@@ -436,6 +436,12 @@ export const enBusiness = {
   'business.loads.fact.keptOwn': 'as you gave it — only a refrigerated or insulated truck takes it, and the driver logs the temperature.',
   'business.loads.fact.keptUsual': 'the usual for chilled goods: you gave no range of your own.',
   'business.loads.fact.nowWith': 'Now',
+  // 2026-11-15 — the collection code emailed to receivers (plan R3).
+  'business.parcels.f.receiverEmail': 'Receiver’s email (optional)',
+  'business.parcels.f.receiverName': 'Receiver’s name, as on their ID (optional)',
+  'business.parcels.emailCode.title': 'The collection code by email',
+  'business.parcels.emailCode.tick': 'Email the code to receivers',
+  'business.parcels.emailCode.note': 'Only for parcels that give the receiver’s email and name. The shop then also checks the name on their ID, so a forwarded email alone hands nothing over.',
   'business.loads.fact.carrier': 'Carrier',
   'business.loads.fact.road': 'On the road',
   // Round 15 — the seals on a load.

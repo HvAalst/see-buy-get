@@ -27,6 +27,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
   const [codeOn, setCodeOn] = useState<boolean | null>(null);
   const [allMessages, setAllMessages] = useState(false);
   useEffect(() => setCodeOn(null), [v?.callbackCarriesCode]);
+  const [emailOn, setEmailOn] = useState<boolean | null>(null);
+  useEffect(() => setEmailOn(null), [v?.emailCodeToBuyers]);
 
   return (
     <div class="scr">
@@ -86,6 +88,20 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
           <span>{t('vendor.store.callbackCode')}</span>
         </label>
         <p class="hint">{t('vendor.store.callbackCodeNote')}</p>
+        {/* 2026-11-15 — the code by email to buyers who give an email and a name; the shop then checks the name (plan R3). */}
+        <label class="checkline" style="margin-top:14px">
+          <input
+            type="checkbox"
+            checked={emailOn ?? Boolean(v?.emailCodeToBuyers)}
+            disabled={!v || state.busy === 'email-code'}
+            onChange={(e) => {
+              setEmailOn(e.currentTarget.checked);
+              void actions.setEmailCode(e.currentTarget.checked);
+            }}
+          />
+          <span>{t('vendor.store.emailCode')}</span>
+        </label>
+        <p class="hint">{t('vendor.store.emailCodeNote')}</p>
         {v?.callbackUrl ? (
           <div style="margin-top:12px">
             <Button variant="outline" chevron={false} full={false} busy={state.busy === 'callback-test'} onClick={() => void actions.sendCallback()}>

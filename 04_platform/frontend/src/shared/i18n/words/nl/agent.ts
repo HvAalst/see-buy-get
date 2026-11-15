@@ -1182,4 +1182,7 @@ export const words: Record<string, string> = {
   "agent.freightSteps.seePlanned": "Zodra het is geboekt, wacht het tot {when}, en gaat dan naar chauffeurs.",
   "agent.freightSteps.seeEarly": "Een chauffeur kan het vóór de dag reserveren.",
   "agent.freightSteps.seeNotEarly": "Geen enkele chauffeur ziet het vóór de dag.",
+  "agent.collect.checkNameTitle": "Controleer het ID: {name}",
+  "agent.collect.checkNameDetail": "Deze code is per e-mail verstuurd, en een e-mail kan worden doorgestuurd. Geef het pakket alleen mee aan de genoemde persoon.",
+  "agent.collect.checkNameTick": "Ik heb gezien dat op het ID {name} staat",
 };

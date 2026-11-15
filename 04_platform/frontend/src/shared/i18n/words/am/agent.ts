@@ -1182,4 +1182,7 @@ export const words: Record<string, string> = {
   "agent.freightSteps.seePlanned": "ከተያዘ በኋላ እስከ {when} ድረስ ይጠብቃል፣ ከዚያ ወደ አሽከርካሪዎች ይሄዳል።",
   "agent.freightSteps.seeEarly": "አሽከርካሪ ከቀኑ በፊት ሊይዘው ይችላል።",
   "agent.freightSteps.seeNotEarly": "ከቀኑ በፊት ማንም አሽከርካሪ አያየውም።",
+  "agent.collect.checkNameTitle": "መታወቂያቸውን (ID) ይመልከቱ፦ {name}",
+  "agent.collect.checkNameDetail": "ይህ ኮድ በኢሜይል ተልኳል፣ ኢሜይል ደግሞ ሊተላለፍ ይችላል። ጥቅሉን የሚሰጡት ስሙ ለተጠቀሰው ሰው ብቻ ነው።",
+  "agent.collect.checkNameTick": "መታወቂያቸው (ID) {name} እንደሚል አረጋግጫለሁ",
 };

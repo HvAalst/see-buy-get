@@ -62,6 +62,7 @@ export function createVendorApi(sbg: SbgClient) {
       patch: {
         callbackUrl?: string;
         callbackCarriesCode?: boolean;
+        emailCodeToBuyers?: boolean;
         location?: { lat: number; lng: number };
         address?: string;
         shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number; maxTransportSpend?: number; insurer?: { name: string; email: string } | null };
@@ -194,6 +195,8 @@ export function createVendorApi(sbg: SbgClient) {
       externalOrderId?: string;
       buyerMobile?: string;
       buyerEmail?: string;
+      /** 2026-11-15 — the buyer's name, checked at the counter when the code is emailed (plan R3). */
+      buyerName?: string;
       size?: 'S' | 'M' | 'L' | 'HEAVY';
       dimensionsCm?: { l: number; w: number; h: number };
       weightKg?: number;

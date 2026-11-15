@@ -134,6 +134,8 @@ export interface MintForm {
   routeMode: 'flexible' | 'locked';
   buyerMobile: string;
   buyerEmail: string;
+  /** 2026-11-15 — the buyer's name, as on their ID: with an email, the code is emailed and the shop checks it (plan R3). */
+  buyerName: string;
   externalOrderId: string;
   /** FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. Ignored for a parcel. */
   instructions: string;
@@ -163,6 +165,7 @@ export const EMPTY_MINT: MintForm = {
   routeMode: 'locked',
   buyerMobile: '',
   buyerEmail: '',
+  buyerName: '',
   externalOrderId: '',
   instructions: '',
   deliveryWindow: '',

@@ -40,6 +40,8 @@ export const NOTIFICATION_KINDS = [
   'parcel_ready',
   // 2026-11-15 — a parcel on the road to its shop: its receiver told once (plan R1).
   'parcel_on_way',
+  // 2026-11-15 — a load is coming to its named receiver: the delivery code is on it in their Send app (plan R2).
+  'load_code',
   /** 2026-11-05 — a store's order collected: its receiver is asked, once, what was right and what was not (two taps). */
   'store_rate',
   'load_nearby',

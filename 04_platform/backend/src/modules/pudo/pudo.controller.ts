@@ -5468,6 +5468,9 @@ export class SbgController {
       destAgentDid: destPudoDid,
       buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile ?? '',
       buyerEmail: dto.buyerEmail ?? handoff?.buyerEmail,
+      // 2026-11-15 — the buyer's name, and this order's choice to email them the code (plan R3).
+      ...(dto.buyerName?.trim() ? { receiverName: dto.buyerName.trim() } : {}),
+      ...(dto.emailCode !== undefined ? { emailCode: dto.emailCode } : {}),
       size: dto.size,
       dimensionsCm: dto.dimensionsCm,
       weightKg: dto.weightKg,
@@ -5583,7 +5586,7 @@ export class SbgController {
   @Post('parcels/:id/collect-confirm')
   @AtTheCounter()
   collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode, dto.deliveredPhotoRef);
+    return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode, dto.deliveredPhotoRef, dto.nameChecked);
   }
 
   /**
@@ -8425,7 +8428,7 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...(dto.deliveryCode ? { deliveryCode: dto.deliveryCode } : {}), ...phoneAtHandover(actor, dto.position) });
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...(dto.deliveryCode ? { deliveryCode: dto.deliveryCode } : {}), ...(dto.nameChecked ? { nameChecked: true } : {}), ...phoneAtHandover(actor, dto.position) });
   }
 
   /**

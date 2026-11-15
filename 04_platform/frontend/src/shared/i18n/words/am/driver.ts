@@ -1240,4 +1240,5 @@ export const words: Record<string, string> = {
   "driver.hold.answerSend": "መልሴን ላክ",
   "driver.hold.answeredToast": "መልስ ተልኳል",
   "driver.hold.answeredToastDetail": "ከሪፖርቱ ጎን ይታያል። ሲወሰን ይነገርዎታል።",
+  "driver.loads.checkName": "ኮዱ በኢሜይል ተልኮላቸዋል፦ ይህ {name} መሆኑን አረጋግጫለሁ",
 };

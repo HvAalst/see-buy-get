@@ -976,6 +976,8 @@ export class Vendor {
    * flip once that is the common case.
    */
   callbackCarriesCode?: boolean;
+  /** 2026-11-15 — email the collection code to buyers whose order gives an email and a name (plan R3). Off unless chosen. */
+  emailCodeToBuyers?: boolean;
   secret: string;
   /** When the signing secret was last rotated by the store. */
   secretRotatedAt?: string;
@@ -1303,6 +1305,12 @@ export class Parcel {
   externalOrderId?: string;
   buyerEmail?: string; // legacy order-notification channel; since S22 the collection token is delivered IN-APP
   // to the receiver's authenticated twin (never SMS'd/emailed as the secret) — see ConsumerParcelView.collectToken.
+  // 2026-11-15 — …unless the store chose to email it (plan R3): then only with the buyer's name, which the counter checks.
+  receiverName?: string;
+  /** This order's own choice to email the code; the store's setting where it said nothing. */
+  emailCode?: boolean;
+  /** The code went to the buyer by email: from then the counter also checks the name on their ID. */
+  codeEmailedAt?: string;
   // The buyer's QR collection token: shown in their app, scanned at the destination PUDO — the handover
   // secret, and the ONLY check standing between a stranger and this parcel. Never printed on the label
   // (it rode on the box until the parcel itself was handing out its own key), never in a public view.

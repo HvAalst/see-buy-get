@@ -9,7 +9,7 @@ import { DESTINATION_KINDS } from './destination.types';
 import { BAG_PLACES_MAX, BAG_PLACES_MIN, SORT_PER_DAY_MAX, SORT_PER_DAY_MIN } from './hub-space';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
@@ -1080,6 +1080,8 @@ export class UpdateVendorDto {
   @IsOptional() @IsString() callbackUrl?: string;
   /** Include the collection code in the ready_for_pickup callback (default true — see Vendor). */
   @IsOptional() @IsBoolean() callbackCarriesCode?: boolean;
+  /** 2026-11-15 — email the collection code to the buyer, where an order gives their email and name (plan R3). */
+  @IsOptional() @IsBoolean() emailCodeToBuyers?: boolean;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @ValidateNested() @Type(() => ShippingPolicyDto) shippingPolicy?: ShippingPolicyDto;
@@ -1226,6 +1228,10 @@ export class MintShipmentDto {
   @IsOptional() @IsIn(['S', 'M', 'L']) size?: 'S' | 'M' | 'L';
   /** Somebody has to be told where to collect it. */
   @IsString() buyerMobile!: string;
+  /** 2026-11-15 — the buyer's email and name, and whether the collection code is emailed to them (plan R3; the store's own setting when left out). */
+  @IsOptional() @IsEmail() @MaxLength(120) buyerEmail?: string;
+  @IsOptional() @IsString() @MaxLength(80) buyerName?: string;
+  @IsOptional() @IsBoolean() emailCode?: boolean;
   /** A photo of the contents — the baseline a damage claim is judged against. Upload it first. */
   @IsString() contentPhotoRef!: string;
   /** Your own order reference, carried through and returned on every callback. */
@@ -1399,6 +1405,9 @@ export class InboundOrderDto {
   @IsOptional() @IsString() @MaxLength(64) handInMdpId?: string;
   @IsString() destPudoDid!: string;
   @IsOptional() @IsString() buyerMobile?: string;
+  /** 2026-11-15 — the buyer's name, checked at the counter when the code is emailed; and this order's own choice (plan R3). */
+  @IsOptional() @IsString() @MaxLength(80) buyerName?: string;
+  @IsOptional() @IsBoolean() emailCode?: boolean;
   @IsOptional() @IsString() buyerEmail?: string;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
   @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
@@ -1475,6 +1484,8 @@ export class ShelveDto {
 export class CollectDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() collectionCode!: string;
+  /** 2026-11-15 — the code was emailed to the buyer: the shop checked the name on their ID (plan R3). */
+  @IsOptional() @IsBoolean() nameChecked?: boolean;
   /** 2026-11-05 — the hand-over photo: required where the parcel was taken in at this same shop. */
   @IsOptional() @IsString() @MaxLength(200) deliveredPhotoRef?: string;
 }
@@ -3013,6 +3024,9 @@ export class RegisterFreightDto {
    *  could claim; it stops being harmless the moment a term can put the loss on the receiver, because the
    *  party with standing then has no way to be recognised. */
   @IsOptional() @IsString() buyerMobile?: string;
+  /** 2026-11-15 — who receives it (plan R2): with the Send app on buyerMobile they see it and its code there; otherwise the code is emailed. */
+  @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
   /** FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window. */
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;
@@ -3358,6 +3372,8 @@ export class FreightActionDto {
   @IsOptional() @IsString() @MaxLength(60) terminalReceipt?: string;
   /** 2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b). */
   @IsOptional() @IsString() @MaxLength(12) deliveryCode?: string;
+  /** 2026-11-15 — the code was emailed to the receiver: the driver checked their name (plan R2). */
+  @IsOptional() @IsBoolean() nameChecked?: boolean;
   /** FP3 — at delivery: who received the goods, the photo of them as put down, and what the receiver said (box 24). */
   @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
   @IsOptional() @IsString() podPhotoId?: string;

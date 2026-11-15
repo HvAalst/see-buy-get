@@ -498,6 +498,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const [receipt, setReceipt] = useState('');
   // 2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b).
   const [deliveryCode, setDeliveryCode] = useState('');
+  const [nameChecked, setNameChecked] = useState(false); // 2026-11-15 — the code was emailed: their name checked (R2)
   useEffect(() => {
     setCounted('');
     setReceipt('');
@@ -653,6 +654,12 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   </label>
                   <input id={`code-${claim.ref}`} class="input" inputMode="numeric" maxLength={6} value={deliveryCode} onInput={(e) => setDeliveryCode(e.currentTarget.value.replace(/\D/g, ''))} disabled={busy} />
                   <p class="hint">{t('driver.loads.deliveryCodeHint')}</p>
+                  {claim.checkName ? (
+                    <label class="checkline" style="margin-top:8px">
+                      <input type="checkbox" checked={nameChecked} disabled={busy} onChange={(e) => setNameChecked(e.currentTarget.checked)} />
+                      <span>{t('driver.loads.checkName', { name: claim.checkName })}</span>
+                    </label>
+                  ) : null}
                 </div>
               ) : null}
               <div class="field" style="margin-top:14px">
@@ -668,7 +675,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
             <Button
               chevron={false}
               busy={busy}
-              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || !countOk || !receiptOk || foundWrong !== null || (!isPickup && Boolean(claim.deliveryCodeNeeded) && deliveryCode.length !== 6)}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || !countOk || !receiptOk || foundWrong !== null || (!isPickup && Boolean(claim.deliveryCodeNeeded) && deliveryCode.length !== 6) || (!isPickup && Boolean(claim.checkName) && !nameChecked)}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
@@ -678,7 +685,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}), ...(shed?.side === 'collection' && countedN !== null ? { countedPieces: countedN } : {}) });
                 } else {
                   const exceptions = foundOpen ? foundBody(found) : undefined;
-                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}), ...(claim.deliveryCodeNeeded ? { deliveryCode } : {}) });
+                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}), ...(claim.deliveryCodeNeeded ? { deliveryCode } : {}), ...(claim.checkName && nameChecked ? { nameChecked: true } : {}) });
                 }
                 onClose();
               }}

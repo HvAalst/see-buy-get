@@ -788,4 +788,11 @@ export const words: Record<string, string> = {
   "vendor.hub.missing": "{n, plural, one {# pakket was} other {# pakketten waren}} er niet: nog bij jou, boek opnieuw.",
   "vendor.hub.withdraw": "Intrekken",
   "vendor.hub.withdrawn": "Ingetrokken: de pakketten kunnen weer worden geboekt.",
+  "vendor.store.emailCode": "E-mail de afhaalcode naar mijn kopers",
+  "vendor.store.emailCodeNote": "Alleen voor bestellingen met het e-mailadres en de naam van de koper. De winkel controleert dan ook de naam op zijn ID, zodat een doorgestuurde e-mail alleen niets meegeeft. De Send-app toont de code nog steeds.",
+  "vendor.toast.emailCodeOn": "De code wordt naar je kopers gemaild",
+  "vendor.toast.emailCodeOff": "De code blijft in de Send-app",
+  "vendor.mint.buyerEmail": "E-mailadres van de koper",
+  "vendor.mint.buyerName": "Naam van de koper, zoals op zijn ID",
+  "vendor.mint.buyerNameHint": "Waar je kopers hun code mailt, controleert de winkel deze naam voordat het pakket wordt meegegeven.",
 };

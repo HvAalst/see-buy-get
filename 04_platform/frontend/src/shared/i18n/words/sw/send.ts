@@ -642,4 +642,11 @@ export const words: Record<string, string> = {
   "send.hold.wordsPh": "Mlango wa friji umebonyea",
   "send.hold.photo": "Picha ya ulichokuta",
   "send.hold.send": "Ripoti",
+  "send.load.receiverTitle": "Nani anapokea (kama si wewe)",
+  "send.load.receiverNote": "Msimbo wake wa kufikisha basi unamfikia bila wewe: kwenye programu yake ya Send kwa nambari hii, au kwa barua pepe. Ukitumwa kwa barua pepe, dereva hukagua pia jina lake.",
+  "send.load.receiverName": "Jina lake, kama lilivyo kwenye kitambulisho chake (ID)",
+  "send.load.receiverPhone": "Nambari yake ya simu",
+  "send.load.receiverEmail": "Barua pepe yake",
+  "send.load.needEmail": "Angalia anwani yake ya barua pepe",
+  "send.parcels.freightCode": "Msimbo wako wa kufikisha: {code}. Mpe dereva anapokukabidhi.",
 };

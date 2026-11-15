@@ -1871,4 +1871,9 @@ export const words: Record<string, string> = {
   "business.manifest.refsHint": "Van jou of je douane-expediteur: het exportnummer vóór het ophalen, het importnummer voordat de goederen de grenspost bereiken.",
   "business.manifest.save": "Nummers opslaan",
   "business.manifest.saved": "Opgeslagen. Als je ze na het ophalen geeft, wordt er een nieuwe kopie van het manifest met deze nummers bevroren.",
+  "business.parcels.f.receiverEmail": "E-mailadres van de ontvanger (optioneel)",
+  "business.parcels.f.receiverName": "Naam van de ontvanger, zoals op zijn ID (optioneel)",
+  "business.parcels.emailCode.title": "De afhaalcode per e-mail",
+  "business.parcels.emailCode.tick": "E-mail de code naar ontvangers",
+  "business.parcels.emailCode.note": "Alleen voor pakketten met het e-mailadres en de naam van de ontvanger. De winkel controleert dan ook de naam op zijn ID, zodat een doorgestuurde e-mail alleen niets meegeeft.",
 };

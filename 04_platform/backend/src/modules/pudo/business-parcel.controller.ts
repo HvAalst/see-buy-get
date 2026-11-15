@@ -22,6 +22,7 @@ import {
   ParcelPriceQueryDto,
   ParcelPriceView,
   BusinessParcelAccountView,
+  BusinessEmailCodeDto,
   BusinessParcelDetail,
   BusinessParcelDto,
   BusinessParcelLabel,
@@ -92,6 +93,13 @@ export class BusinessParcelController {
   @Post('business/me/parcels/collect-room')
   collectRoom(@Body() dto: BusinessCollectRoomDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
     return this.parcels.collectRoom(memberActor(this.businesses.requireMember(actor)), dto.bays, dto.closedRoom);
+  }
+
+  /** 2026-11-15 — email the collection code to its receivers, or stop (plan R3). */
+  @Roles('business')
+  @Post('business/me/parcels/email-code')
+  emailCode(@Body() dto: BusinessEmailCodeDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
+    return this.parcels.emailCode(memberActor(this.businesses.requireMember(actor)), dto.on);
   }
 
   /** Stop collecting there. */

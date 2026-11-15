@@ -419,7 +419,7 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
-    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string; position?: HandoverFix; deliveryCode?: string }) =>
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string; position?: HandoverFix; deliveryCode?: string; nameChecked?: boolean }) =>
       // Round 22 — dated when the goods were handed over, not when a signal was found.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 

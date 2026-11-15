@@ -1110,6 +1110,7 @@ export function useVendorApp() {
         ...(f.externalOrderId.trim() ? { externalOrderId: f.externalOrderId.trim() } : {}),
         ...(f.buyerMobile.trim() ? { buyerMobile: f.buyerMobile.trim() } : {}),
         ...(f.buyerEmail.trim() ? { buyerEmail: f.buyerEmail.trim() } : {}),
+        ...(f.buyerName.trim() ? { buyerName: f.buyerName.trim() } : {}),
         dimensionsCm: { l: Number(f.l), w: Number(f.w), h: Number(f.h) },
         weightKg: Number(f.kg),
         contentPhotoRef: f.photoRef,
@@ -1531,6 +1532,20 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** 2026-11-15 — whether the collection code is emailed to buyers who give an email and a name (plan R3). */
+  const setEmailCode = useCallback(
+    async (on: boolean) => {
+      if (!client || !creds) return;
+      await run('email-code', async () => {
+        const r = await client.api.update(creds.vendorId, { emailCodeToBuyers: on });
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t(on ? 'vendor.toast.emailCodeOn' : 'vendor.toast.emailCodeOff') });
+        await refresh();
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh],
+  );
+
   /** CV5 — whether our ready_for_pickup callback carries the buyer's collection code. */
   const setCallbackCode = useCallback(
     async (on: boolean) => {
@@ -1792,6 +1807,7 @@ export function useVendorApp() {
       saveCallback,
       sendCallback,
       setCallbackCode,
+      setEmailCode,
       loadPoints,
       loadDock,
       enableDock,

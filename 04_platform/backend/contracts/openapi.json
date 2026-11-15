@@ -4298,6 +4298,36 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/email-code": {
+      "post": {
+        "operationId": "BusinessParcel.emailCode",
+        "summary": "",
+        "description": "2026-11-15 — email the collection code to its receivers, or stop (plan R3).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessEmailCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels/dock": {
       "get": {
         "operationId": "BusinessParcel.dock",
@@ -43992,6 +44022,10 @@
                 "$ref": "#/components/schemas/OwnBusinessRate"
               }
             ]
+          },
+          "emailCode": {
+            "type": "boolean",
+            "description": "2026-11-15 — the collection code is emailed to receivers who are given an email and a name (plan R3)."
           }
         },
         "required": [
@@ -44198,6 +44232,17 @@
         "required": [
           "bays",
           "closedRoom"
+        ]
+      },
+      "BusinessEmailCodeDto": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
         ]
       },
       "ParcelEnd": {
@@ -44709,6 +44754,18 @@
             "type": "string",
             "description": "The person who collects it. Never sent a text by us; the code is the business's to pass on.",
             "maxLength": 30
+          },
+          "receiverEmail": {
+            "type": "string",
+            "description": "2026-11-15 — the receiver's email and name: the collection code is emailed to them where the business chose it (plan R3).",
+            "maxLength": 120
+          },
+          "receiverName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "emailCode": {
+            "type": "boolean"
           },
           "dimensionsCm": {
             "description": "Measured, so it is priced on what it is rather than on a size band.",
@@ -66243,6 +66300,17 @@
           "buyerEmail": {
             "type": "string"
           },
+          "receiverName": {
+            "type": "string"
+          },
+          "emailCode": {
+            "type": "boolean",
+            "description": "This order's own choice to email the code; the store's setting where it said nothing."
+          },
+          "codeEmailedAt": {
+            "type": "string",
+            "description": "The code went to the buyer by email: from then the counter also checks the name on their ID."
+          },
           "collectionCode": {
             "type": "string"
           },
@@ -67547,6 +67615,10 @@
             "type": "boolean",
             "description": "Include the collection code in the ready_for_pickup callback (default true — see Vendor)."
           },
+          "emailCodeToBuyers": {
+            "type": "boolean",
+            "description": "2026-11-15 — email the collection code to the buyer, where an order gives their email and name (plan R3)."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
           },
@@ -68435,6 +68507,14 @@
           "buyerMobile": {
             "type": "string"
           },
+          "buyerName": {
+            "type": "string",
+            "description": "2026-11-15 — the buyer's name, checked at the counter when the code is emailed; and this order's own choice (plan R3).",
+            "maxLength": 80
+          },
+          "emailCode": {
+            "type": "boolean"
+          },
           "buyerEmail": {
             "type": "string"
           },
@@ -68579,6 +68659,10 @@
           },
           "collectionCode": {
             "type": "string"
+          },
+          "nameChecked": {
+            "type": "boolean",
+            "description": "2026-11-15 — the code was emailed to the buyer: the shop checked the name on their ID (plan R3)."
           },
           "deliveredPhotoRef": {
             "type": "string",
@@ -71821,6 +71905,17 @@
           "deliveredWithCode": {
             "type": "boolean",
             "description": "…and delivered with the code (not after the sender said it arrived)."
+          },
+          "receiverEmail": {
+            "type": "string",
+            "description": "2026-11-15 — who receives it, where the poster named them (plan R2): given the code in the Send app, or by email."
+          },
+          "receiverName": {
+            "type": "string"
+          },
+          "codeEmailedAt": {
+            "type": "string",
+            "description": "…the code went by email: the driver also checks the receiver's name before handing it over."
           },
           "heldPay": {
             "description": "2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts).",
@@ -75071,6 +75166,15 @@
             "type": "string",
             "description": "CL1 — who the goods are FOR. The service has always accepted it and this DTO never offered it, so a\n load posted through this route recorded no receiver at all. That was harmless while only the sender\n could claim; it stops being harmless the moment a term can put the loss on the receiver, because the\n party with standing then has no way to be recognised."
           },
+          "receiverEmail": {
+            "type": "string",
+            "description": "2026-11-15 — who receives it (plan R2): with the Send app on buyerMobile they see it and its code there; otherwise the code is emailed.",
+            "maxLength": 120
+          },
+          "receiverName": {
+            "type": "string",
+            "maxLength": 80
+          },
           "instructions": {
             "type": "string",
             "description": "FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window.",
@@ -77823,6 +77927,10 @@
             "type": "string",
             "description": "2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b).",
             "maxLength": 12
+          },
+          "nameChecked": {
+            "type": "boolean",
+            "description": "2026-11-15 — the code was emailed to the receiver: the driver checked their name (plan R2)."
           },
           "receiverName": {
             "type": "string",
@@ -82019,6 +82127,18 @@
           "buyerMobile": {
             "type": "string",
             "description": "Somebody has to be told where to collect it."
+          },
+          "buyerEmail": {
+            "type": "string",
+            "description": "2026-11-15 — the buyer's email and name, and whether the collection code is emailed to them (plan R3; the store's own setting when left out).",
+            "maxLength": 120
+          },
+          "buyerName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "emailCode": {
+            "type": "boolean"
           },
           "contentPhotoRef": {
             "type": "string",

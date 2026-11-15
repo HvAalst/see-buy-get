@@ -1871,4 +1871,9 @@ export const words: Record<string, string> = {
   "business.manifest.save": "Hifadhi nambari",
   "business.manifest.saved": "Imehifadhiwa. Zikitolewa baada ya kuchukua, nakala mpya ya manifesti inagandishwa pamoja nazo.",
   "business.manifest.copies": "{n, plural, one {Nakala # imegandishwa hadi sasa, pamoja na alama yake ya utambulisho} other {Nakala # zimegandishwa hadi sasa, kila moja na alama yake ya utambulisho}}",
+  "business.parcels.f.receiverEmail": "Barua pepe ya mpokeaji (si lazima)",
+  "business.parcels.f.receiverName": "Jina la mpokeaji, kama lilivyo kwenye kitambulisho chake (ID) (si lazima)",
+  "business.parcels.emailCode.title": "Msimbo wa kuchukua kwa barua pepe",
+  "business.parcels.emailCode.tick": "Watumie wapokeaji msimbo kwa barua pepe",
+  "business.parcels.emailCode.note": "Ni kwa vifurushi vinavyotoa barua pepe na jina la mpokeaji tu. Duka hukagua pia jina kwenye kitambulisho chake (ID), kwa hiyo barua pepe iliyotumwa kwa mtu mwingine pekee haikabidhi chochote.",
 };

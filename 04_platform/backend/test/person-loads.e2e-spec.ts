@@ -12,6 +12,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { PersonLoadPayService } from '../src/modules/pudo/person-load-pay.service';
 import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
 import { RateLimitGuard } from '../src/foundation/http/rate-limit.guard';
+import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 /**
  * A PERSON POSTS A LOAD FROM THE SEND APP, over the wire (the owner, 2026-11-13: plan U5, "a person posts a load in the Send
@@ -40,8 +41,7 @@ describe('a person posts a load, over the wire', () => {
     await app?.close();
   });
 
-  async function aPerson(): Promise<string> {
-    const phone = `+2547${digits()}5`;
+  async function aPerson(phone = `+2547${digits()}5`): Promise<string> {
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `mover-${digits()}@example.com`;
@@ -362,5 +362,58 @@ describe('a person posts a load, over the wire', () => {
     expect((await myRow(l.person, l.freightId)).canReport).toBeUndefined();
     await http().post(l.at('claim')).set(bearer(l.person)).send({ kind: 'not_received', description: 'Nobody here got it' }).expect(201);
     expect((await queue()).some((r) => r.freightId === l.freightId)).toBe(false);
+  });
+
+  /* ---------------- 2026-11-15: the load names who receives it — the code reaches them, not by hand (plan R2) -- */
+
+  /** A Kenyan load naming its receiver, a driver's price accepted and paid: the code is made. */
+  async function aPaidLoadFor(receiver: { buyerMobile?: string; receiverEmail?: string; receiverName?: string }) {
+    const person = await aPerson();
+    const load = (await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Parklands', destLocation: thika, destLabel: 'Thika', contactPhone: `+2547${digits()}9`, ...receiver })).expect(201)).body;
+    const at = (path: string) => `/v1/sbg/dispatch/freight/${load.freightId}/${path}`;
+    await http().post(at('proposals')).set(bearer(keDriver.token)).send({ from: nairobi, price: 1500 }).expect(201);
+    const id = ((await http().get(at('proposals')).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    (app.get(RateLimitGuard) as unknown as { hits: Map<string, unknown> }).hits.clear();
+    const view = (await http().post(at('pay')).set(bearer(person)).send({ proposalId: id, phone: `+25471${digits()}` }).expect(201)).body;
+    const personDid = (await http().get('/v1/sbg/identity/me').set(bearer(person)).expect(200)).body.personDid;
+    const funding = app.get(FundingService).list({ payerDid: personDid, purpose: 'load' })[0];
+    await http().post(`/v1/rails/funding/${funding.fundingId}/simulate`).set(bearer(operator)).send({ providerRef: `MPX${digits()}`, amount: view.amount }).expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    return { person, freightId: load.freightId as string, at, code: (await myRow(person, load.freightId)).deliveryCode as string };
+  }
+
+  it('16 · its receiver has no Send app on that number: the code is emailed with their name, and the driver checks the name', async () => {
+    const email = `receiver-${digits()}@example.com`;
+    const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Achieng Otieno' });
+    const mail = app.get(OutboxMailSender).recent(email).find((m) => m.template === 'load-delivery-code');
+    expect(mail?.text).toContain(l.code);
+    expect(mail?.text).toContain('Achieng Otieno');
+    const store = (app.get(DispatchService) as unknown as Store).freights;
+    store.set(l.freightId, { ...store.get(l.freightId), status: 'in_transit', pickedUpAt: new Date().toISOString() });
+    const claim = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(keDriver.did)}/claims`).set(bearer(keDriver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === l.freightId);
+    expect(claim).toMatchObject({ deliveryCodeNeeded: true, checkName: 'Achieng Otieno' });
+    const deliver = async (more: object) => http().post(l.at('deliver')).set(bearer(keDriver.token)).send({ driverDid: keDriver.did, confirmed: requiredUnloadKeys(), receiverName: 'Achieng Otieno', podPhotoId: await photo(keDriver.token, 'pod'), deliveryCode: l.code, ...more });
+    const unchecked = await deliver({});
+    expect([unchecked.status, unchecked.body.detail]).toEqual([400, expect.stringMatching(/check the person receiving it is Achieng Otieno/)]);
+    // Refused before a try is counted.
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).deliveryCodeTries ?? 0).toBe(0);
+    expect((await deliver({ nameChecked: true })).status).toBe(201);
+  });
+
+  it('17 · its receiver has the Send app on that number: told on the bell, the load and its code in their My parcels, no email', async () => {
+    const phone = `+2547${digits()}7`;
+    const receiver = await aPerson(phone);
+    const email = `receiver-${digits()}@example.com`;
+    const l = await aPaidLoadFor({ buyerMobile: phone, receiverEmail: email, receiverName: 'Baraka K.' });
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(receiver)).expect(200)).body.items as Array<{ kind: string; body: string }>;
+    const told = inbox.find((n) => n.kind === 'load_code');
+    expect(told).toBeDefined();
+    // The code itself is not on the bell: it is on the load, in the app.
+    expect(told!.body).not.toContain(l.code);
+    const mine = (await http().get('/v1/sbg/identity/parcels').set(bearer(receiver)).expect(200)).body.freights as Array<{ freightId: string; deliveryCode?: string; nowWith?: { kind: string } }>;
+    expect(mine.find((f) => f.freightId === l.freightId)).toMatchObject({ deliveryCode: l.code, nowWith: { kind: 'carrier' } });
+    expect(app.get(OutboxMailSender).recent(email).filter((m) => m.template === 'load-delivery-code')).toHaveLength(0);
+    // Nobody checks a name the code never left the app for.
+    expect(app.get(DispatchService).requireFreightPublic(l.freightId).codeEmailedAt).toBeUndefined();
   });
 });

@@ -128,6 +128,10 @@ export interface PublicQuote {
 
 /** What a merchant asks for when they want the shipment, not just the price. */
 export interface MintInput {
+  /** 2026-11-15 — plan R3. */
+  buyerEmail?: string;
+  buyerName?: string;
+  emailCode?: boolean;
   from?: QuoteEndpoint;
   to?: QuoteEndpoint;
   dimensionsCm?: { l: number; w: number; h: number };
@@ -438,6 +442,10 @@ export class ShippingApiService {
       originAgentDid: origin.did,
       destAgentDid: dest.did,
       buyerMobile: input.buyerMobile.trim(),
+      // 2026-11-15 — the buyer's email and name, and this shipment's choice to email the code (plan R3).
+      ...(input.buyerEmail?.trim() ? { buyerEmail: input.buyerEmail.trim() } : {}),
+      ...(input.buyerName?.trim() ? { receiverName: input.buyerName.trim() } : {}),
+      ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       size: quoted.parcel.size,
       dimensionsCm: input.dimensionsCm,
       weightKg: input.weightKg,

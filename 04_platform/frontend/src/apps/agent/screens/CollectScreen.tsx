@@ -73,8 +73,18 @@ export function CollectBody({ state, actions }: CollectScreenProps) {
               <PhotoField id="collect-hand-photo" value={f.handPhotoRef} label={t('agent.release.handoverPhotoNeeded')} upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => actions.setCollect({ handPhotoRef: ref })} />
             </>
           ) : null}
+          {/* 2026-11-15 — the code was emailed, and an email can be forwarded: the name on their ID is checked too (plan R3). */}
+          {found.checkName ? (
+            <>
+              <Note tone="warn" icon="badge" title={t('agent.collect.checkNameTitle', { name: found.checkName })} detail={t('agent.collect.checkNameDetail')} />
+              <label class="checkline" style="margin-top:8px">
+                <input type="checkbox" checked={f.nameChecked} onChange={(e) => actions.setCollect({ nameChecked: e.currentTarget.checked })} />
+                <span>{t('agent.collect.checkNameTick', { name: found.checkName })}</span>
+              </label>
+            </>
+          ) : null}
           <div class="scr__cta">
-            <Button onClick={() => void actions.confirmCollect()} busy={state.busy === 'collect-confirm'} disabled={Boolean(found.parcel.originAgentDid && found.parcel.originAgentDid === found.parcel.destAgentDid) && !f.handPhotoRef}>
+            <Button onClick={() => void actions.confirmCollect()} busy={state.busy === 'collect-confirm'} disabled={(Boolean(found.parcel.originAgentDid && found.parcel.originAgentDid === found.parcel.destAgentDid) && !f.handPhotoRef) || (Boolean(found.checkName) && !f.nameChecked)}>
               {t('agent.collect.handOverGood')}
             </Button>
           </div>

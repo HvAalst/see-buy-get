@@ -361,6 +361,8 @@ export interface Claimable {
   work?: LoadWorkView;
   /** 2026-11-13 — delivered only with the code the sender gave whoever receives it (a load paid first). */
   deliveryCodeNeeded?: boolean;
+  /** 2026-11-15 — the code was emailed to the receiver: check they are this person (plan R2). */
+  checkName?: string;
 }
 
 /**

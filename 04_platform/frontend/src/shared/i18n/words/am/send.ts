@@ -642,4 +642,11 @@ export const words: Record<string, string> = {
   "send.hold.wordsPh": "የማቀዝቀዣው በር ተጎድቷል",
   "send.hold.photo": "ያገኙት ነገር ፎቶ",
   "send.hold.send": "ሪፖርት ያድርጉት",
+  "send.load.receiverTitle": "ማን ይቀበለዋል (እርስዎ ካልሆኑ)",
+  "send.load.receiverNote": "የማድረሻ ኮዳቸው ያለ እርስዎ ይደርሳቸዋል፦ በዚህ ቁጥር በSend መተግበሪያቸው፣ ወይም በኢሜይል። በኢሜይል ሲሄድ፣ አሽከርካሪው ስማቸውንም ይመረምራል።",
+  "send.load.receiverName": "ስማቸው፣ በመታወቂያቸው (ID) ላይ እንዳለው",
+  "send.load.receiverPhone": "ስልክ ቁጥራቸው",
+  "send.load.receiverEmail": "ኢሜይላቸው",
+  "send.load.needEmail": "የኢሜይል አድራሻቸውን ይፈትሹ",
+  "send.parcels.freightCode": "የማድረሻ ኮድዎ፦ {code}። ሲያስረክብ ለአሽከርካሪው ይስጡት።",
 };

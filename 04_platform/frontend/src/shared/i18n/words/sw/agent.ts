@@ -1182,4 +1182,7 @@ export const words: Record<string, string> = {
   "agent.freightSteps.seePlanned": "Ukishasajiliwa unasubiri hadi {when}, kisha unaenda kwa madereva.",
   "agent.freightSteps.seeEarly": "Dereva anaweza kuuhifadhi kabla ya siku hiyo.",
   "agent.freightSteps.seeNotEarly": "Hakuna dereva anayeuona kabla ya siku hiyo.",
+  "agent.collect.checkNameTitle": "Kagua kitambulisho chake (ID): {name}",
+  "agent.collect.checkNameDetail": "Msimbo huu ulitumwa kwa barua pepe, na barua pepe inaweza kutumwa kwa wengine. Mkabidhi kifurushi mtu aliyetajwa tu.",
+  "agent.collect.checkNameTick": "Nimekagua kitambulisho chake (ID) kinasema {name}",
 };

@@ -58,6 +58,8 @@ export interface VendorView {
   callbackUrl?: string;
   /** Whether the ready_for_pickup callback carries the collection code (default true — see the store screen). */
   callbackCarriesCode?: boolean;
+  /** 2026-11-15 — the collection code emailed to buyers whose order gives an email and a name (plan R3). */
+  emailCodeToBuyers?: boolean;
   location?: { lat: number; lng: number };
   address?: string;
   /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */

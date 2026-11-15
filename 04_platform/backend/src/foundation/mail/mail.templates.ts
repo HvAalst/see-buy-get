@@ -129,7 +129,8 @@ export interface MailParams {
   /** The report was decided: dismissed by one member of staff, or the paper struck by two. `effect`: what a strike put back, in words. */
   'company-paper-decided': { company: string; paper: string; outcome: 'dismissed' | 'struck'; reason: string; effect: string };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
-  'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
+  'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string; code?: string; name?: string };
+  'load-delivery-code': { code: string; load: string; from: string; name?: string; openUrl: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; /** D9 — what the receiver found not as the note says, in words. */ reservations?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
@@ -1483,6 +1484,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     }),
   },
 
+  'load-delivery-code': {
+    title: 'A load is coming: its delivery code (receiver)',
+    sentWhen: 'A load a person paid for first names who receives it, by email, and that person has no Send app on its number (plan R2, 2026-11-15).',
+    wired: true,
+    // Wanted until the load arrives, which may be a day or more on the road.
+    sendLater: 24,
+    sample: { code: '482915', load: 'LD-2041 · A fridge, upright', from: 'Wanjiru K.', name: 'Achieng Otieno', openUrl: 'https://seebuyget.com/send/' },
+    build: (p) => ({
+      subject: `A load is coming to you: your delivery code ${p.code}`,
+      preheader: 'Give this code to the driver when they hand it over.',
+      blocks: [
+        { kind: 'heading', text: 'A load is on its way to you' },
+        { kind: 'facts', rows: [['What', p.load], ['Sent by', p.from], ['Your delivery code', p.code], ...(p.name ? ([['Name the driver checks', p.name]] as Array<[string, string]>) : [])] },
+        { kind: 'paragraph', text: `When the driver arrives, check it is what was sent, then give them this code${p.name ? ` and show an ID with the name ${p.name}` : ''}. Without the code the driver cannot mark it delivered.` },
+        { kind: 'button', label: 'Follow it in the Send app', href: p.openUrl },
+        { kind: 'warning', title: 'Keep this email to yourself', text: 'The code hands the load over. Do not forward this email to anybody who should not receive it.' },
+      ],
+      reason: 'You are getting this email because somebody sending a load with SeeBuyGet named you as the person who receives it.',
+    }),
+  },
+
   'ready-for-collection': {
     title: 'Ready to collect (buyer)',
     sentWhen: 'A parcel is shelved at the collection shop, to the email the buyer gave the store.',
@@ -1496,9 +1518,19 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
       blocks: [
         { kind: 'heading', text: 'Your parcel is ready to collect' },
         { kind: 'facts', rows: [['Where', p.address ? `${p.shop}, ${p.address}` : p.shop], ['Collect by', formatDate(p.collectBy)]] },
-        { kind: 'paragraph', text: 'Open the Send app with the phone number you gave the store, show your collection code at the counter, and the shopkeeper hands your parcel over.' },
-        { kind: 'button', label: 'Open the Send app', href: p.openUrl ?? appUrl('send') },
-        { kind: 'note', text: 'The code is only in the app, never in an email. Cannot make it in time, or not sure when the shop is open? Message the shop from the parcel in the app.' },
+        ...(p.code
+          ? // 2026-11-15 — the store chose to email the code (plan R3): with the name the counter checks it against.
+            [
+              { kind: 'facts' as const, rows: [['Your collection code', p.code], ['Name the shop checks', p.name ?? '']] as Array<[string, string]> },
+              { kind: 'paragraph' as const, text: `Say this code at the counter and show an ID with the name ${p.name ?? 'on the order'}: the shopkeeper checks both, then hands your parcel over. The Send app on the phone number you gave the store shows the same code.` },
+              { kind: 'button' as const, label: 'Open the Send app', href: p.openUrl ?? appUrl('send') },
+              { kind: 'warning' as const, title: 'Keep this email to yourself', text: 'The code and your name together hand the parcel over. Do not forward this email to anybody who should not collect it.' },
+            ]
+          : [
+              { kind: 'paragraph' as const, text: 'Open the Send app with the phone number you gave the store, show your collection code at the counter, and the shopkeeper hands your parcel over.' },
+              { kind: 'button' as const, label: 'Open the Send app', href: p.openUrl ?? appUrl('send') },
+              { kind: 'note' as const, text: 'The code is only in the app, never in an email. Cannot make it in time, or not sure when the shop is open? Message the shop from the parcel in the app.' },
+            ]),
       ],
       reason: 'You are getting this email because a parcel for you is waiting at a SeeBuyGet shop.',
     }),

@@ -2254,7 +2254,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf'] }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; receiverName?: string; emailCode?: boolean; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf'] }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -2374,6 +2374,8 @@ export class ParcelService implements OnApplicationBootstrap {
       receiverPhoneHash: hashPhone(input.buyerMobile) || undefined,
       ...testMark,
       buyerEmail: input.buyerEmail,
+      ...(input.receiverName?.trim() ? { receiverName: input.receiverName.trim().slice(0, 80) } : {}),
+      ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       paymentMode: 'prepaid',
       status: 'Created',
       vendorId: input.vendorId,
@@ -2918,7 +2920,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * A burned code opens nothing: the counter learns at the lookup that this parcel needs a reissue,
    * rather than being walked to the confirm step only to be refused there.
    */
-  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string; holdingOwed?: number; currency?: string } {
+  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string; holdingOwed?: number; currency?: string; checkName?: string } {
     const parcel = [...this.parcels.values()].find(
       (p) => (p.collectionCode === collectionCode || p.collectProxy?.code === collectionCode) && p.destAgentDid === agentDid && isCollectable(p.status),
     );
@@ -2932,7 +2934,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // In this shop's own money, said beside the figure: the receiver pays it here, and the shop keeps it (the user,
     // 2026-10-25 — a counter may be handed a parcel another country's company sold).
     const holding = this.holdingOwed(parcel);
-    return { parcel, binSlot: parcel.binSlot, ...(holding.amount > 0 ? { holdingOwed: holding.amount, currency: holding.currency } : {}) };
+    // 2026-11-15 — the code was emailed: the counter is told whose name to check before it hands it over (plan R3).
+    const checkName = parcel.codeEmailedAt && parcel.receiverName && parcel.collectionCode === collectionCode ? parcel.receiverName : undefined;
+    return { parcel, binSlot: parcel.binSlot, ...(holding.amount > 0 ? { holdingOwed: holding.amount, currency: holding.currency } : {}), ...(checkName ? { checkName } : {}) };
   }
 
   /**
@@ -2943,7 +2947,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * this, a wrong code could be retried forever; the code is no longer printed on the parcel, so
    * getting it wrong repeatedly is someone guessing.
    */
-  collectConfirm(parcelId: string, agentDid: string, collectionCode: string, deliveredPhotoRef?: string): Parcel {
+  collectConfirm(parcelId: string, agentDid: string, collectionCode: string, deliveredPhotoRef?: string, nameChecked?: boolean): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
@@ -2959,6 +2963,11 @@ export class ParcelService implements OnApplicationBootstrap {
     // EITHER code opens it: the receiver's own, or the one held by somebody they named. Nominating a
     // neighbour to collect does not stop you collecting it yourself, and the shop still learns neither.
     const byProxy = !!parcel.collectProxy && parcel.collectProxy.code === supplied;
+    // 2026-11-15 — the code was emailed (plan R3): whoever holds the email holds the code, so the name on their ID is checked
+    // too. Refused before a try is counted; somebody the receiver named collects with their own code, as before.
+    if (parcel.codeEmailedAt && parcel.receiverName && supplied === parcel.collectionCode && !byProxy && !nameChecked) {
+      throw new GlosError('FIELD_REQUIRED', `The code was emailed: check the name on their ID is ${parcel.receiverName}, then tick it`, { field: 'nameChecked' });
+    }
     if (parcel.collectionCode !== supplied && !byProxy) {
       parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
       if (parcel.otpAttempts >= OTP_MAX_ATTEMPTS) {
@@ -4264,6 +4273,14 @@ export class ParcelService implements OnApplicationBootstrap {
 
   registerShopChoiceArrive(fn: (parcelId: string, agentDid: string) => void): void {
     this.shopChoiceArrive = fn;
+  }
+
+  /** 2026-11-15 — the collection code went to the buyer by email (plan R3): from now the counter checks the name too. */
+  markCodeEmailed(parcelId: string, now: number = Date.now()): void {
+    const p = this.parcels.get(parcelId);
+    if (!p) return;
+    p.codeEmailedAt = new Date(now).toISOString();
+    this.persist(p);
   }
 
   /** 2026-11-15 — who holds a parcel now, by name (HolderNamesService registers it: it knows the hubs and the fleets). */

@@ -26,6 +26,8 @@ describe('a business’s parcels', () => {
     expect(parcelSendGaps({ ...full, receiver: '0712' }, t)).toEqual(['business.parcels.gap.receiver']);
     expect(parcelSendGaps({ ...full, photoRef: '' }, t)).toEqual(['business.parcels.gap.photo']);
     expect(sendBody(full, 612.5)).toEqual({ originPudoDid: 'did:a', destPudoDid: 'did:b', receiverMobile: '0712 345 678', dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2.5, contentPhotoRef: 'med_1', routeMode: 'flexible', expectedTotal: 612.5 });
+    // 2026-11-15 — the receiver's email and name, for the emailed code (plan R3): sent when given, never empty.
+    expect(sendBody({ ...full, receiverEmail: ' a@b.ke ', receiverName: ' Achieng ' }, 612.5)).toMatchObject({ receiverEmail: 'a@b.ke', receiverName: 'Achieng' });
     expect(sendBody({ ...full, fragile: true, reference: ' INV-9 ' }, undefined)).toMatchObject({ fragile: true, reference: 'INV-9' });
     expect(sendBody({ ...full, photoRef: '' }, 1)).toBeNull();
   });

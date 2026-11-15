@@ -376,6 +376,8 @@ export interface HandoverView {
 export interface CollectView {
   parcel: ParcelView;
   binSlot?: string;
+  /** 2026-11-15 — the code was emailed to the buyer: check the name on their ID before handing it over (plan R3). */
+  checkName?: string;
   /**
    * What the customer owes for the days this parcel sat past its free window — absent when nothing does.
    *

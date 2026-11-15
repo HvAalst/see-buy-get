@@ -642,4 +642,11 @@ export const words: Record<string, string> = {
   "send.hold.wordsPh": "De deur van de koelkast is gedeukt",
   "send.hold.photo": "Foto van wat je hebt gevonden",
   "send.hold.send": "Melden",
+  "send.load.receiverTitle": "Wie ontvangt het (als jij het niet bent)",
+  "send.load.receiverNote": "Hun afleveringscode bereikt hen dan zonder jou: in hun Send-app op dit nummer, of per e-mail. Ging hij per e-mail, dan controleert de chauffeur ook hun naam.",
+  "send.load.receiverName": "Hun naam, zoals op hun ID",
+  "send.load.receiverPhone": "Hun telefoonnummer",
+  "send.load.receiverEmail": "Hun e-mailadres",
+  "send.load.needEmail": "Controleer hun e-mailadres",
+  "send.parcels.freightCode": "Jouw afleveringscode: {code}. Geef hem aan de chauffeur als die het overhandigt.",
 };

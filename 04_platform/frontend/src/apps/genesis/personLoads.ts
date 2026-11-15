@@ -21,9 +21,13 @@ export interface PersonLoadForm {
   contactPhone: string;
   note: string;
   work: LoadWorkForm;
+  /** 2026-11-15 — who receives it, if not the person: their code reaches them in the Send app or by email (plan R2). */
+  receiverName: string;
+  receiverPhone: string;
+  receiverEmail: string;
 }
 
-export const EMPTY_PERSON_LOAD = (phone = ''): PersonLoadForm => ({ description: '', weightKg: '', from: { label: '', pin: null }, to: { label: '', pin: null }, contactPhone: phone, note: '', work: EMPTY_WORK });
+export const EMPTY_PERSON_LOAD = (phone = ''): PersonLoadForm => ({ description: '', weightKg: '', from: { label: '', pin: null }, to: { label: '', pin: null }, contactPhone: phone, note: '', work: EMPTY_WORK, receiverName: '', receiverPhone: '', receiverEmail: '' });
 
 /** What still needs saying, in the order the form asks it — or null. */
 export function personLoadBlocker(f: PersonLoadForm): MessageKey | null {
@@ -33,6 +37,7 @@ export function personLoadBlocker(f: PersonLoadForm): MessageKey | null {
   if (!f.from.pin || f.from.label.trim().length < 2) return 'send.load.needFrom';
   if (!f.to.pin || f.to.label.trim().length < 2) return 'send.load.needTo';
   if (!f.contactPhone.trim()) return 'send.load.needPhone';
+  if (f.receiverEmail.trim() && !/^\S+@\S+\.\S+$/.test(f.receiverEmail.trim())) return 'send.load.needEmail';
   return workBlocker(f.work);
 }
 
@@ -48,6 +53,10 @@ export function personLoadBody(f: PersonLoadForm) {
     destLocation: f.to.pin!,
     contactPhone: f.contactPhone.trim(),
     ...(f.note.trim() ? { instructions: f.note.trim() } : {}),
+    // 2026-11-15 — who receives it (plan R2): on their number they see it and its code in the Send app; else by email.
+    ...(f.receiverPhone.trim() ? { buyerMobile: f.receiverPhone.trim() } : {}),
+    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim() } : {}),
+    ...(f.receiverName.trim() ? { receiverName: f.receiverName.trim() } : {}),
     ...(work ? { work } : {}),
   };
 }

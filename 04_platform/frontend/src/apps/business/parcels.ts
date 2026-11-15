@@ -9,6 +9,8 @@ import type { MessageKey, Translate } from '../../shared/i18n';
  */
 
 export interface ParcelAccount {
+  /** 2026-11-15 — the collection code emailed to receivers given an email and a name (plan R3). */
+  emailCode?: boolean;
   open: boolean;
   canOpen: boolean;
   whyNot?: string;
@@ -205,6 +207,8 @@ export interface SendParcel {
   destPudoDid?: string;
   toOwnPlace?: { siteId: string; maxSpend: number };
   receiverMobile: string;
+  receiverEmail?: string;
+  receiverName?: string;
   dimensionsCm: { l: number; w: number; h: number };
   weightKg: number;
   contentPhotoRef: string;
@@ -235,6 +239,7 @@ export interface ParcelsApi {
   collectFrom: (siteId: string, bays?: number, closedRoom?: number) => Promise<Result<ParcelAccount>>;
   /** 2026-11-06 — its room for bags at its own place, said again; the place stays. */
   collectRoom: (bays: number, closedRoom: number) => Promise<Result<ParcelAccount>>;
+  emailCode: (on: boolean) => Promise<Result<ParcelAccount>>;
   stopCollecting: () => Promise<Result<ParcelAccount>>;
   dock: () => Promise<Result<DockView>>;
   openBag: (destZone: string) => Promise<Result<DockView>>;
@@ -273,6 +278,7 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
       call((c) => c.GET('/v1/sbg/business/me/parcels/price' as never, { params: { query: { origin, ...(dest.startsWith(TO_PLACE) ? { toPlace: dest.slice(TO_PLACE.length) } : { dest }), l: String(s.l), w: String(s.w), h: String(s.h), kg: String(s.kg), ...(fragile ? { fragile: 'true' } : {}) } } } as never) as never),
     postDoor: (parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/post` as never, {} as never) as never),
     raiseDoor: (parcelId, maxSpend) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/raise` as never, { body: { maxSpend } } as never) as never),
+    emailCode: (on) => call((c) => c.POST('/v1/sbg/business/me/parcels/email-code' as never, { body: { on } } as never) as never),
     collectRoom: (bays, closedRoom) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-room' as never, { body: { bays, closedRoom } } as never) as never),
     collectFrom: (siteId, bays, closedRoom) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-from' as never, { body: { siteId, ...(bays ? { bays } : {}), ...(closedRoom !== undefined ? { closedRoom } : {}) } } as never) as never),
     stopCollecting: () => call((c) => c.DELETE('/v1/sbg/business/me/parcels/collect-from' as never, {} as never) as never),
@@ -306,9 +312,12 @@ export interface ParcelForm {
   photoRef: string;
   /** Delivered to its own place: the most it pays a driver for the last leg. */
   most: string;
+  /** 2026-11-15 — the receiver's email and name, for the emailed code (plan R3). */
+  receiverEmail: string;
+  receiverName: string;
 }
 
-export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '', most: '' };
+export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '', most: '', receiverEmail: '', receiverName: '' };
 
 const positive = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -350,6 +359,8 @@ export function sendBody(f: ParcelForm, expectedTotal: number | undefined): Send
     // Delivered to one of its own places, at most what it allows a driver for the last leg — or collected at a shop.
     ...(f.destDid.startsWith(TO_PLACE) ? { toOwnPlace: { siteId: f.destDid.slice(TO_PLACE.length), maxSpend: Number(f.most.replace(',', '.')) } } : { destPudoDid: f.destDid }),
     receiverMobile: f.receiver.trim(),
+    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim() } : {}),
+    ...(f.receiverName.trim() ? { receiverName: f.receiverName.trim() } : {}),
     dimensionsCm: { l: s.l, w: s.w, h: s.h },
     weightKg: s.kg,
     contentPhotoRef: f.photoRef,

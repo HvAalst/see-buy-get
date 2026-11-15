@@ -1240,4 +1240,5 @@ export const words: Record<string, string> = {
   "driver.hold.answerSend": "Mijn antwoord versturen",
   "driver.hold.answeredToast": "Antwoord verstuurd",
   "driver.hold.answeredToastDetail": "Het wordt naast de melding getoond. Je hoort het als er is beslist.",
+  "driver.loads.checkName": "De code is hun per e-mail gestuurd: ik heb gecontroleerd dat dit {name} is",
 };

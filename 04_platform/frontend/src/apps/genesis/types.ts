@@ -376,6 +376,9 @@ export interface FreightShipmentView {
   equipmentGaps: Array<'origin' | 'dest'>;
   createdAt: string;
   timeline: Array<{ status: string; at: string }>;
+  /** 2026-11-15 — to its receiver: the code to give the driver, and who has it now (plan R1, R2). */
+  deliveryCode?: string;
+  nowWith?: NowWith;
 }
 
 export interface MyParcels {

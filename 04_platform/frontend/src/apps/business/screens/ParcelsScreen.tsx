@@ -259,6 +259,8 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
         ) : null}
       </section>
 
+      {/* 2026-11-15 — the collection code by email to receivers (plan R3): the account's own switch. */}
+      {api ? <EmailCodePanel api={api} on={Boolean(account.emailCode)} onChanged={() => void load()} /> : null}
       {api ? <CollectPanel api={api} siteApi={client?.api ?? null} business={business} works={works} collection={account.collection} onChanged={() => void load()} /> : null}
 
       <section class="cons__panel">
@@ -312,6 +314,37 @@ function Head() {
  * places where goods are loaded becomes where drivers collect its parcels: they are bagged there by where they go, each
  * bag closed with its seal and a photograph, and the drivers near are told there is a bag to collect.
  */
+function EmailCodePanel({ api, on, onChanged }: { api: ReturnType<typeof parcelsApi>; on: boolean; onChanged: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('business.parcels.emailCode.title')}</span>
+      </div>
+      <label class="checkline">
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={busy}
+          onChange={async (e) => {
+            setBusy(true);
+            setError(null);
+            const r = await api.emailCode(e.currentTarget.checked);
+            setBusy(false);
+            if (r.error) return setError(r.error.detail || r.error.title || null);
+            onChanged();
+          }}
+        />
+        <span>{t('business.parcels.emailCode.tick')}</span>
+      </label>
+      <p class="chint">{t('business.parcels.emailCode.note')}</p>
+      {error ? <p class="cerr">{error}</p> : null}
+    </section>
+  );
+}
+
 function CollectPanel({ api, siteApi, business, works, collection, onChanged }: { api: ReturnType<typeof parcelsApi>; siteApi: unknown; business: BusinessView; works: boolean; collection?: ParcelCollection; onChanged: () => void }) {
   const t = useT();
   const [siteId, setSiteId] = useState('');
@@ -667,6 +700,17 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
         <label class="cfield">
           <span class="cfield__label">{t('business.parcels.f.reference')}</span>
           <input class="cinput" maxLength={60} value={form.reference} onInput={(e) => set({ reference: (e.target as HTMLInputElement).value })} />
+        </label>
+      </div>
+      {/* 2026-11-15 — the receiver's email and name: the code is emailed where the business chose it (plan R3). */}
+      <div class="biz-two">
+        <label class="cfield">
+          <span class="cfield__label">{t('business.parcels.f.receiverEmail')}</span>
+          <input class="cinput" type="email" inputMode="email" maxLength={120} value={form.receiverEmail} onInput={(e) => set({ receiverEmail: (e.target as HTMLInputElement).value })} />
+        </label>
+        <label class="cfield">
+          <span class="cfield__label">{t('business.parcels.f.receiverName')}</span>
+          <input class="cinput" maxLength={80} value={form.receiverName} onInput={(e) => set({ receiverName: (e.target as HTMLInputElement).value })} />
         </label>
       </div>
       <fieldset class="cfield biz-size">

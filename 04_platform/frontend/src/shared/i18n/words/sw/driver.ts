@@ -1240,4 +1240,5 @@ export const words: Record<string, string> = {
   "driver.hold.answerSend": "Tuma jibu langu",
   "driver.hold.answeredToast": "Jibu limetumwa",
   "driver.hold.answeredToastDetail": "Linaonyeshwa pamoja na ripoti. Utaambiwa likiamuliwa.",
+  "driver.loads.checkName": "Msimbo ulitumwa kwake kwa barua pepe: nimekagua kuwa huyu ni {name}",
 };

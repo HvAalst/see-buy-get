@@ -387,6 +387,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     );
     // 2026-11-15 — on the road to its shop: its receiver is told once (plan R1: the bell only at the moments that matter).
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.onParcelOnItsWay(e.payload.parcelId));
+    // 2026-11-15 — a load's delivery code made: its named receiver is given it, in the Send app or by email (plan R2).
+    this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.DeliveryCodeIssued, (e) => this.onDeliveryCodeIssued(e.payload.freightId));
     this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
     // 2026-11-06 — its plan, made again, expects it later than it was promised: its people are told now (movement unification).
     this.events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => this.onExpectedLate(e.payload));
@@ -1826,6 +1828,41 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * an account — is told once, with the shop it is going to; who has it at each hand after that is on the parcel itself
    * ("Now with …"), not on the bell. Not for one going on to a business's own door: its business is told, not its receiver.
    */
+  /**
+   * 2026-11-15 — A LOAD'S DELIVERY CODE TO ITS RECEIVER (plan R2). Where the poster named who receives it: with the Send app
+   * on that number, they are told on the bell and see the code on the load there; without it, the code is emailed, with
+   * the name the driver then checks. Never a text (rule-a-receiver-is-not-texted).
+   */
+  private async onDeliveryCodeIssued(freightId: string): Promise<void> {
+    try {
+      const f = this.dispatch.requireFreightPublic(freightId);
+      if (!f.deliveryCode) return;
+      const person = accountFor(this.dispatch.buyerOf(f), this.persons);
+      if (person) {
+        await this.notifications.notify(person.personDid, {
+          kind: 'load_code',
+          title: `A load is coming to you: ${f.code}`,
+          body: `${f.description}. Your delivery code is on it in My parcels: give it to the driver when they hand it over.`,
+          link: '/?screen=parcels',
+          tag: `load-code:${freightId}`,
+          data: { freightId },
+        });
+        return;
+      }
+      if (!this.mail || !f.receiverEmail) return;
+      this.dispatch.markCodeEmailed(freightId);
+      await this.mail.send('load-delivery-code', { address: f.receiverEmail }, {
+        code: f.deliveryCode,
+        load: `${f.code} · ${f.description}`,
+        from: f.postedByName ?? 'The sender',
+        ...(f.receiverName ? { name: f.receiverName } : {}),
+        openUrl: appUrl('send'),
+      });
+    } catch (err) {
+      this.logger.warn(`delivery code to the receiver failed for ${freightId}: ${(err as Error).message}`);
+    }
+  }
+
   private async onParcelOnItsWay(parcelId: string): Promise<void> {
     try {
       if (this.doors?.goesToADoor(parcelId)) return;
@@ -1859,7 +1896,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (this.mail && parcel.buyerEmail) {
         const shop = this.shop(parcel.destAgentDid);
         const since = parcel.readyAt ?? new Date().toISOString();
+        // 2026-11-15 — the store chose to email the code (plan R3), and the order gives the name the counter checks it against.
+        let storeSays = false;
+        try {
+          storeSays = parcel.vendorId ? Boolean(this.vendors.get(parcel.vendorId).emailCodeToBuyers) : false;
+        } catch {
+          storeSays = false;
+        }
+        const code = (parcel.emailCode ?? storeSays) && parcel.receiverName && parcel.collectionCode ? parcel.collectionCode : undefined;
+        if (code) this.parcels.markCodeEmailed(parcel.parcelId);
         void this.mail.send('ready-for-collection', { address: parcel.buyerEmail }, {
+          ...(code ? { code, name: parcel.receiverName } : {}),
           shop: shop?.shopName ?? parcel.destZone ?? 'your pickup point',
           ...(shop?.physicalAddress || shop?.landmark ? { address: shop.physicalAddress ?? shop.landmark } : {}),
           collectBy: new Date(Date.parse(since) + UNCOLLECTED_H * 3_600_000).toISOString(),

@@ -298,6 +298,14 @@ export const enSend = {
   'send.load.lapsed': 'Not paid in time: the driver is free again. Accept a price again when you are ready.',
   'send.load.refunded': '{amount} goes back to your number with the next payout.',
   // 2026-11-15 — the driver's pay held 24 hours after delivery, and the protocol that decides a problem (the hold).
+  // 2026-11-15 — a load names who receives it; the receiver's code (plan R2).
+  'send.load.receiverTitle': 'Who receives it (if not you)',
+  'send.load.receiverNote': 'Their delivery code then reaches them without you: in their Send app on this number, or by email. When it went by email, the driver also checks their name.',
+  'send.load.receiverName': 'Their name, as on their ID',
+  'send.load.receiverPhone': 'Their phone number',
+  'send.load.receiverEmail': 'Their email',
+  'send.load.needEmail': 'Check their email address',
+  'send.parcels.freightCode': 'Your delivery code: {code}. Give it to the driver when they hand it over.',
   'send.hold.until': 'The driver is paid {time}, unless you report a problem before then.',
   'send.hold.report': 'Report a problem',
   'send.hold.reported': 'You reported a problem',

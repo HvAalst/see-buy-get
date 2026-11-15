@@ -117,6 +117,11 @@ describe('a business’s parcels, paid from its own balance', () => {
     const vendors = app.get(VendorService);
     const till = vendors.forBusiness(biz.entityId)!;
     expect(vendors.list().filter((v) => v.business?.entityId === biz.entityId)).toHaveLength(1);
+    // 2026-11-15 — email the collection code to its receivers (plan R3): off until the business chooses it, its own switch.
+    expect((await account()).emailCode).toBeUndefined();
+    expect((await http().post('/v1/sbg/business/me/parcels/email-code').set(biz.token).send({ on: true }).expect(201)).body.emailCode).toBe(true);
+    expect(vendors.forBusiness(biz.entityId)!.emailCodeToBuyers).toBe(true);
+    expect((await http().post('/v1/sbg/business/me/parcels/email-code').set(biz.token).send({ on: false }).expect(201)).body.emailCode).toBeUndefined();
 
     // Sent with nothing in the balance: made, and unpaid — no label, no code to pass on.
     const first = (await http().post('/v1/sbg/business/me/parcels').set(biz.token).send(parcel(await photo(biz.token))).expect(201)).body;
@@ -217,6 +222,7 @@ describe('a business’s parcels, paid from its own balance', () => {
     expect((await http().get('/v1/sbg/business/me/parcels').set(viewer).expect(200)).body.total).toBe(1);
     await send(viewer, base(await photo(viewer))).expect(403);
     await http().post('/v1/sbg/business/me/parcels/top-up').set(viewer).send({ amount: 100 }).expect(403);
+    await http().post('/v1/sbg/business/me/parcels/email-code').set(viewer).send({ on: true }).expect(403);
     await http().post(`/v1/sbg/business/me/parcels/${made.parcelId}/call-off`).set(viewer).send({}).expect(403);
     expect((await http().get(`/v1/sbg/business/me/parcels/${made.parcelId}`).set(other.token).expect(404)).body.detail).toMatch(/^No parcel .* was sent by this business$/);
     await http().post(`/v1/sbg/business/me/parcels/${made.parcelId}/call-off`).set(other.token).send({}).expect(404);

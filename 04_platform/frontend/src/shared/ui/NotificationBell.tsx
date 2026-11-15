@@ -74,6 +74,9 @@ const KIND_ICON: Record<string, IconName> = {
   load_payment: 'wallet',
   // 2026-11-15 — a driver's pay held 24 hours after delivery: held, a problem reported, released; and decided by the protocol.
   pay_hold: 'clock',
+  // 2026-11-15 — a parcel on the road to its shop (R1); a load coming to its named receiver, its code in the app (R2).
+  parcel_on_way: 'truck',
+  load_code: 'key',
   pay_decided: 'check',
   // 2026-11-06 — a parcel its people were told was held up, on the road again.
   parcel_moving: 'truck',
