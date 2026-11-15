@@ -16,6 +16,9 @@ import type { Freight, InboundReceiver } from './dispatch.types';
 import { SiteService } from './site.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { RegisterFreightDto } from './pudo.dto';
+import { countryNear } from './geo-gazetteer';
+import { PersonService } from './person.service';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { ShipperCodesService, clientCoder } from './shipper-codes.service';
 
 /**
@@ -39,15 +42,15 @@ export class LoadPostingService {
     // Inbound, reading A: a load addressed to a business by the code of one of its receiving points.
     @Optional() private readonly sites?: SiteService,
     @Optional() private readonly entities?: EntityService,
+    // 2026-11-13 — a person posting a load: their fingerprint, for a country's test list (unusual loads, U5).
+    @Optional() private readonly persons?: PersonService,
   ) {}
 
   post(dto: RegisterFreightDto, actor: IntrospectionResult, checkOnly = false): Freight {
-    // A PERSON HAS NO WAY TO PAY FOR A LOAD YET (found 2026-10-27): posted here from the Send app, it was a load nobody is
-    // billed for and the network pays its driver at delivery — the free freight IdentityController already refuses for a send
-    // too big for a parcel. Refused before anything is worked out.
-    if (actor?.role === 'consumer') {
-      throw new GlosError('FORBIDDEN', 'Booking your own freight in the Send app is coming. Until then, a shop books it at its counter, or a business posts it.');
-    }
+    // 2026-11-13 — A PERSON POSTS A LOAD FROM THE SEND APP (unusual loads, U5). Where SeeBuyGet only matches, they pay the driver
+    // directly at the price they agree; where a company of ours takes the money, paying up front is coming (part 3b) and it is
+    // refused until then — never a load nobody is billed for. Asked before anything is worked out.
+    const person = actor?.role === 'consumer' ? this.personMayPost(dto, actor) : undefined;
     // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
     // takes the orientation-free tuple. Convert here, as createInbound/accept already do.
     const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
@@ -79,7 +82,7 @@ export class LoadPostingService {
     const cold = tempRangeGap(dto.natureCode, dto.tempRange);
     if (cold) throw new GlosError('VALIDATION_FAILED', cold, { field: 'tempRange' });
     const posted = this.dispatch.registerFreight(
-      { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
+      { ...load, dimensionsCm, ...(person ?? {}), ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),
       checkOnly,
     );
@@ -89,6 +92,27 @@ export class LoadPostingService {
     this.businesses?.notePosted(posted.freightId, actor);
     this.shipperCodes?.issue(posted.freightId, coder, posted.packages);
     return posted;
+  }
+
+  /**
+   * 2026-11-13 — WHETHER A PERSON MAY POST THIS LOAD, and what their load is (unusual loads, U5): where its pickup is (its pin's
+   * country, from the places we know), open there, on the test list where the country is being tested, and only where SeeBuyGet
+   * only matches — there the person pays the driver directly. Always negotiated: a person names no rate; drivers name prices.
+   * A person posts for themselves: no contract, client or receiving point.
+   */
+  private personMayPost(dto: RegisterFreightDto, actor: IntrospectionResult): { pickupCountry: string; destCountry: string; commitMode: 'negotiate'; betweenParties: true } {
+    if (dto.contractId || dto.forClientId || dto.receivingPoint) throw new GlosError('FORBIDDEN', 'A person posts a load for themselves: no contract, client or receiving point');
+    const country = (dto.pickupCountry?.toUpperCase() || countryNear(dto.pickupLocation)) ?? '';
+    if (!country) throw new GlosError('VALIDATION_FAILED', 'We cannot tell which country the pickup is in: put the pin nearer a town', { field: 'pickupLocation' });
+    const dest = (dto.destCountry?.toUpperCase() || (dto.destLocation ? countryNear(dto.destLocation) : undefined)) ?? country;
+    const name = catalogueEntry(country)?.name ?? country;
+    if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not carry loads in ${name} yet`);
+    if (this.presence.closedTo(country, this.persons?.findByDid(actor.did ?? '')?.phoneHash)) this.presence.requireTester(country, undefined, 'posting a load');
+    if (this.entities?.forJurisdiction(country) && this.presence.can(country, 'holdFloat')) {
+      throw new GlosError('FORBIDDEN', `Paying for a load from the Send app is coming in ${name}. Until then, a shop books it at its counter.`);
+    }
+    if (!dto.contactPhone?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give a number the driver can call about the load', { field: 'contactPhone' });
+    return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', betweenParties: true };
   }
 
   /**

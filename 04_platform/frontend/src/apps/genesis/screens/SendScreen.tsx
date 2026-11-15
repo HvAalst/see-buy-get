@@ -118,13 +118,25 @@ function ParcelStep({ state, actions }: SendScreenProps) {
       </Card>
 
       {derived?.dedicated ? (
-        <Note
-          tone="warn"
-          icon="truck"
-          title={t('send.parcel.dedicatedTitle')}
-          detail={<Abbreviated text={t('send.parcel.dedicatedDetail')} />}
-        />
-      ) : null}
+        <>
+          <Note
+            tone="warn"
+            icon="truck"
+            title={t('send.parcel.dedicatedTitle')}
+            detail={<Abbreviated text={t('send.parcel.dedicatedDetail')} />}
+          />
+          {/* 2026-11-13 — and the way on: post it as a load, for drivers to name a price (unusual loads, U5). */}
+          <Button variant="outline" chevron={false} onClick={() => actions.go('load')}>
+            {t('send.load.entryButton')}
+          </Button>
+        </>
+      ) : (
+        <p class="hint">
+          <button type="button" class="linkbtn" onClick={() => actions.go('load')}>
+            {t('send.load.entry')}
+          </button>
+        </p>
+      )}
 
       {state.deriveError ? <ErrorNote error={state.deriveError} onRetry={() => void actions.submitParcel()} /> : null}
 

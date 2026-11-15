@@ -307,6 +307,19 @@ export function nearestPlace(point: GeoPoint, withinKm = 60, country?: string): 
   return found ? { name: found.name, km: found.km } : null;
 }
 
+/**
+ * 2026-11-13 — THE COUNTRY A PIN IS IN, FROM THE PLACES WE KNOW (unusual loads, U5): the country of the nearest known place within
+ * `withinKm`, or nothing. Offline and quick; a pin far from every place we know is not placed in a country on a guess.
+ */
+export function countryNear(point: GeoPoint, withinKm = 60): string | undefined {
+  let best: { country: string; km: number } | undefined;
+  for (const entry of GAZETTEER) {
+    const km = haversineKm(point, entry.location);
+    if (km <= withinKm && (!best || km < best.km)) best = { country: entry.country, km };
+  }
+  return best?.country;
+}
+
 function nearestEntry(point: GeoPoint, withinKm: number, country?: string): { name: string; km: number; location: GeoPoint } | null {
   let best: { name: string; km: number; broad: boolean; location: GeoPoint } | null = null;
   for (const entry of placesIn(country ? [country] : undefined)) {

@@ -1,4 +1,5 @@
 import { AppLayer } from '../../shared/ui/AppLayer';
+import { LoadPostScreen } from './screens/PersonLoad';
 import { useEffect, useState } from 'preact/hooks';
 import { onLaunch } from '../../shared/launch';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
@@ -22,7 +23,7 @@ import { NavScreen } from '../../shared/ui/NavScreen';
 // 2026-11-02 — Back, as an app means it (shared/nav.ts): Send is home and the other three are tabs, so they swap in
 // place and Back from any of them is Send. A shortcut may open any of the four.
 const TABS: readonly Screen[] = ['track', 'parcels', 'account'];
-const LAUNCH = screensOf<Screen>({ send: true, track: true, parcels: true, account: true });
+const LAUNCH = screensOf<Screen>({ send: true, track: true, parcels: true, account: true, load: true });
 
 /**
  * The consumer shell. Send + Track are open to everyone — the first paint is still the first question,
@@ -105,9 +106,11 @@ export function App() {
 /** The authenticated tabs gate on sign-in; a stored session restores silently (a brief boot spinner). */
 function Router({ state, actions, account, sbg, guideAsked = 0, onGuideShown }: { state: SendState; actions: SendActions; account: AccountApi; sbg: SbgClient | null; guideAsked?: number; onGuideShown?: () => void }) {
   if (state.screen === 'track') return <TrackScreen state={state} actions={actions} />;
-  if (state.screen === 'parcels' || state.screen === 'account') {
+  if (state.screen === 'parcels' || state.screen === 'account' || state.screen === 'load') {
     if (state.restoring) return <Boot />;
     if (!state.identity) return <AuthScreen state={state} actions={actions} />;
+    // 2026-11-13 — posting a load is the signed-in person's own (unusual loads, U5).
+    if (state.screen === 'load') return <LoadPostScreen state={state} actions={actions} client={sbg} />;
     return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} client={sbg} /> : <AccountScreen state={state} actions={actions} account={account} guideAsked={guideAsked} onGuideShown={onGuideShown} />;
   }
   return <SendScreen state={state} actions={actions} />;

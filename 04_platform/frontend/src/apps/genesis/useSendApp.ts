@@ -46,7 +46,8 @@ import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDi
 import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, MoveView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
 import { refusalSentence } from '../../shared/ui/ErrorNote';
 
-export type Screen = 'send' | 'track' | 'parcels' | 'account';
+// 2026-11-13 — 'load': posting something too big for a shop as a load (unusual loads, U5).
+export type Screen = 'send' | 'track' | 'parcels' | 'account' | 'load';
 export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
 /** The consumer sign-in flow: enroll walks phone → code → pin; login is phone + pin together. */
 export type AuthMode = 'login' | 'enroll';

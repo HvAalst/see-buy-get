@@ -13,6 +13,7 @@ import { frontDoorUrl } from '../../../shared/frontDoor';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
+import { PersonLoadsGroup } from './PersonLoad';
 import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
@@ -79,6 +80,8 @@ export function MyParcelsScreen({ state, actions, client = null }: MyParcelsScre
       ) : null}
 
       {freights.length ? <FreightGroup items={freights} /> : null}
+      {/* 2026-11-13 — the loads this person posted, with the drivers' prices (unusual loads, U5). */}
+      <PersonLoadsGroup client={client} />
 
       {empty ? (
         <Card tone="soft">

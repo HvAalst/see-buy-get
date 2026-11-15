@@ -7,6 +7,7 @@ import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { NotificationService } from './notification.service';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PersonService } from './person.service';
@@ -720,7 +721,8 @@ export class DispatchService {
       postedByDid: input.postedByDid,
       ...(work ? { work } : {}),
       // …and the money it set its budget in, frozen with it: a load re-read in another money later would be a different load.
-      ...(this.posterCurrencyOf(input.postedByDid) ? { postedCurrency: this.posterCurrencyOf(input.postedByDid) } : {}),
+      // 2026-11-13 — a person paying the driver directly (unusual loads, U5): the money of the country it is picked up in.
+      ...((this.posterCurrencyOf(input.postedByDid) ?? (input.betweenParties && input.pickupCountry ? catalogueEntry(input.pickupCountry.toUpperCase())?.currency : undefined)) ? { postedCurrency: this.posterCurrencyOf(input.postedByDid) ?? catalogueEntry(input.pickupCountry!.toUpperCase())!.currency } : {}),
       ...(input.postedByName?.trim() ? { postedByName: input.postedByName.trim().slice(0, 80) } : {}),
       ...(input.onBehalfOf ? { onBehalfOf: input.onBehalfOf } : {}),
       // B2 — a customer's business settles with the carrier itself: stamped here, once, from who posted it, so
