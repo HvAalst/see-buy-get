@@ -52,3 +52,47 @@ describe('what this server is connected to — mail, push, and whether it is a s
     expect([live.mail.sends, live.push.sends, live.sms.sends]).toEqual([false, false, false]);
   });
 });
+
+/**
+ * 2026-11-15 — CHECKING THE ROUTE SERVER WITH NO FLEET YET (the owner's screen said "there is no fleet with a depot on the
+ * map yet"). It asks about a depot first, as a plan would; with none, a shop, a hub, then a known town in each country —
+ * and the first that has a road answers. A map that covers one country is no failure while another place answers.
+ */
+describe('checking the route server', () => {
+  const mail = new MailService(new OutboxMailSender());
+  const notifications = new NotificationService(new OutboxPushSender());
+  const sms = new SmsService(new OutboxSmsSender());
+  const make = (opts: { depots?: unknown[]; shops?: unknown[]; hubs?: unknown[]; answer: (a: { lat: number }) => Record<string, unknown> }) => {
+    const asked: Array<{ lat: number; lng: number }> = [];
+    const roads = {
+      configured: () => true,
+      check: async (a: { lat: number; lng: number }) => {
+        asked.push(a);
+        return { at: 'now', ...opts.answer(a) };
+      },
+    };
+    const managers = { list: () => opts.depots ?? [] };
+    const agents = { list: () => opts.shops ?? [] };
+    const mdps = { list: () => opts.hubs ?? [] };
+    return { asked, c: new ConnectionsController(roads as never, {} as never, managers as never, mail, notifications, sms, undefined, agents as never, mdps as never) };
+  };
+
+  it('with no fleet depot, asks at a shop', async () => {
+    const { c, asked } = make({ shops: [{ shopName: 'Mama Sarah Shop', location: { lat: -1.29, lng: 36.82 } }], answer: () => ({ ok: true, km: 2.1 }) });
+    expect(await c.checkRouter()).toMatchObject({ ok: true, km: 2.1, near: 'Mama Sarah Shop' });
+    expect(asked).toEqual([{ lat: -1.29, lng: 36.82 }]);
+  });
+
+  it('a place its map has no road for is passed over for the next; nothing on the network, a known town answers', async () => {
+    const { c, asked } = make({ hubs: [{ name: 'Ghala Kuu', location: { lat: 9.0, lng: 38.7 } }], answer: (a) => (a.lat > 5 ? { ok: true, noRoad: true } : { ok: true, km: 1.9 }) });
+    const got = await c.checkRouter();
+    expect(got).toMatchObject({ ok: true, km: 1.9 });
+    expect(got.near).not.toBe('Ghala Kuu');
+    expect(asked.length).toBeGreaterThan(1);
+  });
+
+  it('nothing answers anywhere: the last failure, said', async () => {
+    const { c } = make({ answer: () => ({ ok: false, why: 'connection refused' }) });
+    expect(await c.checkRouter()).toMatchObject({ ok: false, why: 'connection refused' });
+  });
+});

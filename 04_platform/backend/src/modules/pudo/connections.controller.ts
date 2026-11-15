@@ -12,6 +12,9 @@ import { PlanAdviserService } from './plan-adviser.service';
 import { OsrmRoadMatrix } from './road-matrix';
 import { RoadRouter } from './road-router';
 import { haversineKm } from './geo';
+import { AgentService } from './agent.service';
+import { MdpService } from './mdp.service';
+import { GAZETTEER } from './geo-gazetteer';
 
 /** When this server started: what it remembers of its connections is since then. */
 const SINCE = new Date().toISOString();
@@ -42,6 +45,9 @@ export class ConnectionsController {
     private readonly sms: SmsService,
     // 2026-11-09 — the network's places measured by road (zone pricing step 4): how many, and when.
     @Optional() private readonly roadTable?: RoadRouter,
+    // 2026-11-15 — with no fleet depot yet, a shop or a hub to ask about (the owner's check met "no fleet with a depot").
+    @Optional() private readonly agents?: AgentService,
+    @Optional() private readonly mdps?: MdpService,
   ) {}
 
   @Roles('operator')
@@ -52,8 +58,10 @@ export class ConnectionsController {
   }
 
   /**
-   * Ask the routing server now. The two places are a fleet's depot and a point a little way off it: places a plan
-   * would really ask about, on whatever map the operator's server holds.
+   * Ask the routing server now. The two places are a place the network knows and a point a little way off it: a fleet's
+   * depot first, as a plan would ask; with none yet, a shop, then a hub, then a known town in each country (2026-11-15 —
+   * a server with no fleet on it could not be checked at all). The first that has a road between them is the answer; a
+   * map that does not cover one country is no failure while another answers.
    */
   @Roles('operator')
   @Post('router/check')
@@ -61,14 +69,39 @@ export class ConnectionsController {
     const at = new Date().toISOString();
     // Nothing set comes first: with nobody to ask, which two places would have been asked about is beside the point.
     if (!this.roads.configured()) return { at, ok: false, why: 'no routing server is configured' };
-    const depot = this.managers.list().find((m) => m.location && Number.isFinite(m.location.lat) && Number.isFinite(m.location.lng));
-    if (!depot?.location) return { at, ok: false, why: 'there is no fleet with a depot on the map yet, so there are no two places to ask about' };
-    const a = depot.location;
-    const b = { lat: a.lat + CHECK_OFFSET_DEG, lng: a.lng + CHECK_OFFSET_DEG };
-    const got = await this.roads.check(a, b);
-    return { ...got, near: depot.companyName, apartKm: Math.round(haversineKm(a, b) * 10) / 10 };
+    let last: RouterCheck | undefined;
+    for (const place of this.checkPlaces()) {
+      const a = place.location;
+      const b = { lat: a.lat + CHECK_OFFSET_DEG, lng: a.lng + CHECK_OFFSET_DEG };
+      const got = await this.roads.check(a, b);
+      last = { ...got, near: place.name, apartKm: Math.round(haversineKm(a, b) * 10) / 10 };
+      if (got.ok && !got.noRoad) return last;
+    }
+    return last ?? { at, ok: false, why: 'there is no place on the map to ask about yet' };
+  }
+
+  /** Places to ask about, in the order a plan would: a depot, a shop, a hub — then one known town in each country. */
+  private checkPlaces(): Array<{ name: string; location: { lat: number; lng: number } }> {
+    const on = (p?: { lat: number; lng: number }): p is { lat: number; lng: number } => Boolean(p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const places: Array<{ name: string; location: { lat: number; lng: number } }> = [];
+    const depot = this.managers.list().find((m) => on(m.location));
+    if (depot?.location) places.push({ name: depot.companyName, location: depot.location });
+    const shop = this.agents?.list().find((x) => on(x.location));
+    if (shop?.location) places.push({ name: shop.shopName, location: shop.location });
+    const hub = this.mdps?.list().find((x) => on(x.location));
+    if (hub?.location) places.push({ name: hub.name, location: hub.location });
+    const seen = new Set<string>();
+    for (const town of GAZETTEER) {
+      if (seen.has(town.country) || town.broad) continue;
+      seen.add(town.country);
+      places.push({ name: town.name, location: town.location });
+    }
+    return places.slice(0, CHECK_MOST_PLACES);
   }
 }
+
+/** The most places one check asks about: the network's own three, and a town in each country after them. */
+export const CHECK_MOST_PLACES = 7;
 
 /** How far from the depot the second place is, each way: about a kilometre and a half apart in all. */
 export const CHECK_OFFSET_DEG = 0.01;
