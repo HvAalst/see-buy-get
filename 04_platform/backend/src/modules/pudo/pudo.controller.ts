@@ -162,6 +162,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   PresenceDto,
   PresenceTesterDto,
   DriverHelpersDto,
+  CounterProposalDto,
   PresenceDecisionDto,
   CreateCompanyDto,
   CompanyRecordDto,
@@ -8266,6 +8267,25 @@ export class SbgController {
   acceptFreightProposal(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
     return this.dispatch.acceptProposal(id);
+  }
+
+  /**
+   * 2026-11-13 — THE POSTER ANSWERS A PRICE WITH ITS OWN (unusual loads, U4): the side that posted it, as for accepting. The
+   * driver is told, and takes it or names another.
+   */
+  @SignedIn()
+  @Post('dispatch/proposals/:id/counter')
+  counterFreightProposal(@Param('id') id: string, @Body() dto: CounterProposalDto, @Actor() actor: IntrospectionResult) {
+    this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
+    return this.dispatch.counterProposal(id, { price: dto.price, ...(dto.note ? { note: dto.note } : {}), by: auditActor(actor) });
+  }
+
+  /** 2026-11-13 — the driver takes the poster's price back: the load is theirs at it. Their own price, from their own sign-in. */
+  @Roles('driver')
+  @Post('dispatch/proposals/:id/take-counter')
+  takeFreightCounter(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'Only the driver who named the price takes the price back');
+    return this.dispatch.takeCounter(id, actor.did);
   }
 
   /** The poster says no to one price. The load, and every other proposal on it, stay open. */

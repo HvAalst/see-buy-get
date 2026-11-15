@@ -26222,6 +26222,67 @@
         }
       }
     },
+    "/v1/sbg/dispatch/proposals/{id}/counter": {
+      "post": {
+        "operationId": "Sbg.counterFreightProposal",
+        "summary": "",
+        "description": "2026-11-13 — THE POSTER ANSWERS A PRICE WITH ITS OWN (unusual loads, U4): the side that posted it, as for accepting. The\ndriver is told, and takes it or names another.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CounterProposalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightProposal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/proposals/{id}/take-counter": {
+      "post": {
+        "operationId": "Sbg.takeFreightCounter",
+        "summary": "",
+        "description": "2026-11-13 — the driver takes the poster's price back: the load is theirs at it. Their own price, from their own sign-in.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/proposals/{id}/decline": {
       "post": {
         "operationId": "Sbg.declineFreightProposal",
@@ -74899,6 +74960,45 @@
           "marks"
         ]
       },
+      "ProposalCounter": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "price",
+          "at"
+        ]
+      },
+      "BoardMine": {
+        "type": "object",
+        "properties": {
+          "counter": {
+            "$ref": "#/components/schemas/ProposalCounter"
+          },
+          "proposalId": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "proposalId",
+          "price"
+        ]
+      },
       "BoardBlocker": {
         "type": "object",
         "properties": {
@@ -75023,6 +75123,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/LoadWorkView"
+              }
+            ]
+          },
+          "mine": {
+            "description": "2026-11-13 — this driver's own open price on it, and the poster's price back where they gave one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BoardMine"
               }
             ]
           },
@@ -76706,6 +76814,18 @@
               "superseded"
             ]
           },
+          "counter": {
+            "description": "2026-11-13 — the poster's price back, while the driver decides (unusual loads, U4).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProposalCounter"
+              }
+            ]
+          },
+          "agreedPrice": {
+            "type": "number",
+            "description": "The price it was accepted at, where that was the poster's price back and not the driver's."
+          },
           "proposalId": {
             "type": "string"
           },
@@ -76760,6 +76880,23 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "CounterProposalDto": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 100000000
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 280
+          }
+        },
+        "required": [
+          "price"
         ]
       },
       "WithdrawProposalDto": {

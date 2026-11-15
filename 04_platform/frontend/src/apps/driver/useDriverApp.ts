@@ -1213,6 +1213,27 @@ export function useDriverApp() {
    * 480 km empty run as if it were nothing, understating the deadhead on the load and in the market series
    * both — the exact "never invent a split" failure the loaded/deadhead work exists to prevent.
    */
+  /** 2026-11-13 — take the poster's price back: the load is the driver's at it (unusual loads, U4). */
+  const takeCounter = useCallback(
+    async (row: BoardRow) => {
+      if (!client || !row.mine?.counter) return false;
+      const key = `take-counter:${row.freightId}`;
+      setState((s) => ({ ...s, busy: key, error: null }));
+      const res = await client.api.takeCounter(row.mine.proposalId);
+      setState((s) => ({ ...s, busy: null }));
+      if (res.error) {
+        fail(res.error);
+        return false;
+      }
+      buzz();
+      pushToast({ tone: 'ok', icon: 'wallet', title: t('driver.board.counterTaken'), detail: row.code });
+      void fetchBoard(stateRef.current.boardReach);
+      await refresh();
+      return true;
+    },
+    [client, fail, fetchBoard, pushToast, refresh, t],
+  );
+
   const proposePrice = useCallback(
     async (row: BoardRow, price: number, note?: string) => {
       if (!client) return false;
@@ -2496,6 +2517,7 @@ export function useDriverApp() {
       matchRate,
       setLoadSpace,
       setHelpers,
+      takeCounter,
       loadTrips,
       saveTrips,
       skipTrip,

@@ -1121,6 +1121,12 @@ export class VehicleLoadSpaceDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.5) @Max(20) loadLengthM?: number | null;
 }
 
+/** 2026-11-13 — the poster's price back on a driver's price: in the driver's terms (their earning), with a word if wanted. */
+export class CounterProposalDto {
+  @IsNumber() @Min(0.01) @Max(100000000) price!: number;
+  @IsOptional() @IsString() @MaxLength(280) note?: string;
+}
+
 /** 2026-11-13 — the helpers who work with a driver on a job: none, one or two (unusual loads, U1). */
 export class DriverHelpersDto {
   @IsInt() @Min(0) @Max(2) helpers!: number;

@@ -92,7 +92,7 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
           <div class="rows board__list" role="list">
             {rows.map((row) => (
-              <BoardCard key={row.freightId} row={row} currency={state.session.currency} onPropose={() => setProposing(row)} onAsk={() => void ask(row)} />
+              <BoardCard key={row.freightId} row={row} currency={state.session.currency} onPropose={() => setProposing(row)} onAsk={() => void ask(row)} onTakeCounter={() => void actions.takeCounter(row)} taking={state.busy === `take-counter:${row.freightId}`} />
             ))}
           </div>
         </>
@@ -262,7 +262,7 @@ function Unlocks({ items, currency }: { items: ReturnType<typeof unlocks>; curre
   );
 }
 
-export function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currency?: string; onPropose: () => void; onAsk: () => void }) {
+export function BoardCard({ row, currency, onPropose, onAsk, onTakeCounter, taking = false }: { row: BoardRow; currency?: string; onPropose: () => void; onAsk: () => void; /** 2026-11-13 — take the poster's price back. */ onTakeCounter?: () => void; taking?: boolean }) {
   const t = useT();
   const body = row.bodyDerived;
   return (
@@ -283,6 +283,28 @@ export function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; 
       </p>
       {/* 2026-11-13 — what it takes to move it: each end, and what the driver brings (unusual loads). */}
       <LoadWorkSummary work={row.work} />
+      {/* 2026-11-13 — the driver's own price, and the poster's price back: take it, or name another (unusual loads, U4). */}
+      {row.mine ? (
+        <div class="board__mine">
+          <p class="meta">{t('driver.board.yourPrice', { amount: cash(row.mine.price, currency) })}</p>
+          {row.mine.counter ? (
+            <>
+              <p class="t-body">
+                <b>{t('driver.board.counter', { amount: cash(row.mine.counter.price, currency) })}</b>
+              </p>
+              {row.mine.counter.note ? <p class="meta">“{row.mine.counter.note}”</p> : null}
+              {onTakeCounter ? (
+                <Button chevron={false} busy={taking} onClick={onTakeCounter}>
+                  {t('driver.board.takeCounter', { amount: cash(row.mine.counter.price, currency) })}
+                </Button>
+              ) : null}
+              <Button variant="link" full={false} onClick={onPropose}>
+                {t('driver.board.nameAnother')}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* The rate leads, because it is the sort key and the decision: what this is worth per kilometre
           TURNED, empty run included. Without a vehicle there is no rate, and we say that rather than show 0. */}

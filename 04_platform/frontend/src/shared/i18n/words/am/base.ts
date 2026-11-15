@@ -203,7 +203,7 @@ export const words: Record<string, string> = {
   "work.bring.helper": "{n, plural, one {አንድ ረዳት} other {# ረዳቶች}}",
   "work.bring.tailLift": "የኋላ ማንሻ",
   "work.bring.palletJack": "የፓሌት መግፊያ",
-  "work.negotiated": "ይህ ተጨማሪ ሥራ ነው፤ ስለዚህ ሾፌሮች ለሙሉ ሥራው አንድ ዋጋ ይጠራሉ፣ እርስዎም ይመርጣሉ።",
+  "work.negotiated": "ይህ ተጨማሪ ሥራ ነው፤ ስለዚህ ሾፌሮች ለሙሉ ሥራው አንድ ዋጋ ይጠራሉ፦ ይቀበሉታል፣ በራስዎ ዋጋ ይመልሳሉ፣ ወይም ሌላ ይጠብቃሉ።",
   "work.negotiatedShort": "ተጨማሪ ሥራ፦ ለሙሉ ሥራው አንድ ዋጋ፣ ከለጠፈው ጋር የሚስማሙበት።",
   "work.needHandsPickup": "በመጫኛው ቦታ ማን እንደሚረዳ፣ ወይም ላኪው እንደሚጭነው ይናገሩ።",
   "work.needHandsDelivery": "በማድረሻው ቦታ ማን እንደሚረዳ፣ ወይም ተቀባዩ እንደሚያወርደው ይናገሩ።",

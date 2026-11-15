@@ -343,7 +343,8 @@ To switch it on:
    GLOS_ROUTER_URL=http://osrm:5000
    ```
 
-4. The next release starts it — or, at once: `cd /opt/seebuyget && docker compose up -d osrm api`.
+4. The next release starts it — or, at once: on GitHub, **Actions → Deploy → Run workflow**, the field left empty.
+   Not by hand on the server: between releases it is signed out of the image store, so it cannot fetch the map itself.
 
 The console's **Connections** screen says whether the routing server answers, and what became of the last time it was asked. A price card made ready while it answers keeps
 the road distances between its zones, frozen with the card; a card already approved keeps the distances it was approved

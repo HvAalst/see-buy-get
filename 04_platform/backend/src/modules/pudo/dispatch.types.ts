@@ -1132,6 +1132,25 @@ export class BoardBlocker {
   message: string;
 }
 
+/**
+ * 2026-11-13 — THE POSTER'S PRICE BACK (unusual loads, U4: "the poster accepts, counters or waits for another offer"): what they
+ * would pay instead, in the same terms as the driver's (the driver's earning), with a word if they gave one. The driver takes it
+ * — and that commits the load at it — or names another price.
+ */
+export class ProposalCounter {
+  price: number;
+  @ApiPropertyOptional() note?: string;
+  at: string;
+  @ApiPropertyOptional() by?: string;
+}
+
+/** 2026-11-13 — this driver's own open price on a load, and the poster's price back, on the board (unusual loads, U4). */
+export class BoardMine {
+  proposalId: string;
+  price: number;
+  @ApiPropertyOptional({ type: ProposalCounter }) counter?: ProposalCounter;
+}
+
 /** FB1 — one load as the board shows it: the market's facts, this driver's price, and every reason why not. */
 export class BoardRow {
   freightId: string;
@@ -1166,6 +1185,8 @@ export class BoardRow {
   commitMode: FreightCommitMode;
   /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
   @ApiPropertyOptional({ type: LoadWorkView }) work?: LoadWorkView;
+  /** 2026-11-13 — this driver's own open price on it, and the poster's price back where they gave one. */
+  @ApiPropertyOptional({ type: BoardMine }) mine?: BoardMine;
   scheduledPickupAt?: string;
   /** The empty run to reach it, the paid run, and their sum — the numbers the whole decision turns on. */
   deadheadKm: number;
@@ -1505,7 +1526,12 @@ export class FreightProposal {
   status: ProposalStatus;
   createdAt: string;
   decidedAt?: string;
+  /** 2026-11-13 — the poster's price back, while the driver decides (unusual loads, U4). */
+  @ApiPropertyOptional({ type: ProposalCounter }) counter?: ProposalCounter;
+  /** The price it was accepted at, where that was the poster's price back and not the driver's. */
+  @ApiPropertyOptional() agreedPrice?: number;
 }
+
 
 /** Named for the same reason as FreightBoardResponse — an inline `{ items }` puts nothing in the contract. */
 export class FreightProposalsResponse {

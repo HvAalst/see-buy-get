@@ -377,6 +377,8 @@ import type { BoardBlocker } from '../../shared/board';
 /** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
 export interface BoardRow {
   freightId: string;
+  /** 2026-11-13 — this driver's own open price, and the poster's price back where it gave one (unusual loads, U4). */
+  mine?: { proposalId: string; price: number; counter?: { price: number; note?: string } };
   /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
   work?: LoadWorkView;
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */

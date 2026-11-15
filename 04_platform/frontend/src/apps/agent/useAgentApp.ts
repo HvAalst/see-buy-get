@@ -152,6 +152,8 @@ export interface FreightClaim {
 }
 
 export interface FreightPrice {
+  /** 2026-11-13 — the shop's price back, while the driver decides (unusual loads, U4). */
+  counter?: { price: number; note?: string; at: string };
   proposalId: string;
   freightId: string;
   driverDid: string;
@@ -2047,6 +2049,20 @@ export function useAgentApp() {
     [client, run, fail, loadPosted, openPrices],
   );
 
+  /** 2026-11-13 — answer a driver's price with the shop's own (unusual loads, U4): the driver takes it or names another. */
+  const counterPrice = useCallback(
+    async (p: FreightPrice, price: number) => {
+      if (!client) return;
+      await run(`counter-price:${p.proposalId}`, async () => {
+        const r = await client.api.counterProposal(p.proposalId, price);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.freight.counterSent') });
+        await openPrices(p.freightId);
+      });
+    },
+    [client, run, fail, openPrices, pushToast, t],
+  );
+
   /** F2 — dismiss the booked-freight receipt and return to the shop home. */
   const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
 
@@ -2938,6 +2954,7 @@ export function useAgentApp() {
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       acceptPrice,
       declinePrice,
+      counterPrice,
       cancelFreight,
       rateFreight,
       setFreightInstructions,

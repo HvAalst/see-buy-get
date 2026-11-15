@@ -785,6 +785,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/dispatch/offers/:id/claim': 'support',
   'POST sbg/dispatch/offers/:id/ignore': 'support',
   'POST sbg/dispatch/proposals/:id/accept': 'support',
+  'POST sbg/dispatch/proposals/:id/counter': 'support',
+  'POST sbg/dispatch/proposals/:id/take-counter': 'none',
   'POST sbg/dispatch/proposals/:id/decline': 'support',
   'POST sbg/dispatch/proposals/:id/withdraw': 'support',
   'POST sbg/dispatch/publish-ready': 'support',

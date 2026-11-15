@@ -203,7 +203,7 @@ export const words: Record<string, string> = {
   "work.bring.helper": "{n, plural, one {een helper} other {# helpers}}",
   "work.bring.tailLift": "een laadklep",
   "work.bring.palletJack": "een palletwagen",
-  "work.negotiated": "Dit is extra werk, dus chauffeurs noemen één prijs voor de hele klus, en jij kiest.",
+  "work.negotiated": "Dit is extra werk, dus chauffeurs noemen één prijs voor de hele klus: je neemt die aan, antwoordt met je eigen prijs, of wacht op een andere.",
   "work.negotiatedShort": "Extra werk: één prijs voor de hele klus, afgesproken met wie het plaatste.",
   "work.needHandsPickup": "Zeg wie er helpt bij het ophalen, of dat de afzender het inlaadt.",
   "work.needHandsDelivery": "Zeg wie er helpt bij het afleveren, of dat de ontvanger het uitlaadt.",

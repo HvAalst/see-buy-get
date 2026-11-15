@@ -414,6 +414,10 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
 
 function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: PostedFreight; onTake: () => void } & FreightScreenProps) {
   const t = useT();
+  // 2026-11-13 — the shop's price back (unusual loads, U4).
+  const [answering, setAnswering] = useState(false);
+  const [answer, setAnswer] = useState('');
+  const answerAmount = Number(answer.replace(',', '.'));
   const decided = p.status !== 'open';
   // Named locally rather than trusted from the server's refusal: the shop should see that a price is over
   // budget BEFORE tapping accept and being told, so the conversation with the customer happens first.
@@ -428,6 +432,7 @@ function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: 
         <span class="row__s">{t('agent.freight.priceRun', { empty: p.deadheadKm, loaded: p.loadedKm })}</span>
         {/* The driver's own words for the number. Often the whole reason it is low. */}
         {p.note ? <span class="row__s">“{p.note}”</span> : null}
+        {p.counter && !decided ? <span class="row__s">{t('agent.freight.countered', { amount: money(p.counter.price, load.currency) })}</span> : null}
         {decided ? (
           <span class="freight__tags">
             <Pill tone="idle">{t(`agent.freight.priceStatus.${p.status}` as 'agent.freight.priceStatus.accepted')}</Pill>
@@ -448,7 +453,27 @@ function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: 
               <Button variant="link" full={false} busy={state.busy === `decline-price:${p.proposalId}`} onClick={() => void actions.declinePrice(p)}>
                 {t('agent.freight.decline')}
               </Button>
+              <Button variant="link" full={false} onClick={() => setAnswering(!answering)}>
+                {t('agent.freight.counter')}
+              </Button>
             </span>
+            {answering ? (
+              <span class="freight__answer">
+                <label class="field__label" for={`counter-${p.proposalId}`}>
+                  {t('agent.freight.counterPrice')}
+                </label>
+                <input id={`counter-${p.proposalId}`} class="input" type="number" inputMode="decimal" min="0.01" step="any" value={answer} onInput={(e) => setAnswer(e.currentTarget.value)} />
+                <Button
+                  full={false}
+                  chevron={false}
+                  busy={state.busy === `counter-price:${p.proposalId}`}
+                  disabled={!(answerAmount > 0) || answerAmount === p.price}
+                  onClick={() => void actions.counterPrice(p, answerAmount).then(() => setAnswering(false))}
+                >
+                  {t('agent.freight.counterSend')}
+                </Button>
+              </span>
+            ) : null}
           </>
         )}
       </span>

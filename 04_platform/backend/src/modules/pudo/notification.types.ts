@@ -206,6 +206,8 @@ export const NOTIFICATION_KINDS = [
   'parcel_withdrawn',
   // 2026-11-13 — a parcel weighed later at a hub, unlike what its sender said (site tools, T2).
   'parcel_weight',
+  // 2026-11-13 — the poster answered a driver's price with one of its own (unusual loads, U4).
+  'freight_counter',
   /**
    * A person's own door, paid first by mobile money (the user, 2026-10-27: "Mobile money first"): paid, a driver bringing it,
    * delivered and what goes back to their number, no driver yet, or the time to pay ran out. In their app, never a text.

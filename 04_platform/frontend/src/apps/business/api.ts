@@ -319,6 +319,8 @@ export interface CarriageContract {
 }
 
 export interface LoadProposal {
+  /** 2026-11-13 — the business's price back, while the driver decides (unusual loads, U4). */
+  counter?: { price: number; note?: string; at: string };
   proposalId: string;
   price: number;
   note?: string;

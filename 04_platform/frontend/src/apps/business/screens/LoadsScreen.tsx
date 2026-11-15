@@ -302,6 +302,9 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
   const paper = usePaper();
   const noteLinks = useNoteLinks(client ? client.client.sbg : null, kept === 'kept' ? row.noteId : undefined);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
+  // 2026-11-13 — the business's price back on one driver's price (unusual loads, U4).
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [answer, setAnswer] = useState('');
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -489,6 +492,23 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                                 <span class="crow__name">{priced(p.price, row.currency)}</span>
                               </span>
                               {p.note ? <span class="crow__sub">{p.note}</span> : null}
+                              {p.counter ? <span class="crow__sub">{t('business.loads.countered', { amount: priced(p.counter.price, row.currency) })}</span> : null}
+                              {act && answering === p.proposalId ? (
+                                <span class="biz-answer">
+                                  <label class="cfield">
+                                    <span class="cfield__label">{t('business.loads.counterPrice')}</span>
+                                    <input class="cinput" type="number" inputMode="decimal" min="0.01" step="any" value={answer} onInput={(e) => setAnswer((e.target as HTMLInputElement).value)} />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    class="cbtn cbtn--primary cbtn--sm"
+                                    disabled={busy || !(Number(answer.replace(',', '.')) > 0) || Number(answer.replace(',', '.')) === p.price}
+                                    onClick={() => void run(() => client!.shipping.counterProposal(p.proposalId, Number(answer.replace(',', '.'))) as never, t('business.loads.counterSent')).then(() => setAnswering(null))}
+                                  >
+                                    {t('business.loads.counterSend')}
+                                  </button>
+                                </span>
+                              ) : null}
                             </span>
                             {act ? (
                               <span class="crow__tail biz-choose__acts">
@@ -497,6 +517,9 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                                 </button>
                                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client!.shipping.declineProposal(p.proposalId) as never, t('business.loads.declined'))}>
                                   {t('business.loads.decline')}
+                                </button>
+                                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => { setAnswer(''); setAnswering(answering === p.proposalId ? null : p.proposalId); }}>
+                                  {t('business.loads.counter')}
                                 </button>
                               </span>
                             ) : null}

@@ -203,7 +203,7 @@ export const words: Record<string, string> = {
   "work.bring.helper": "{n, plural, one {msaidizi mmoja} other {wasaidizi #}}",
   "work.bring.tailLift": "lifti ya nyuma ya gari",
   "work.bring.palletJack": "jeki ya paleti",
-  "work.negotiated": "Hii ni kazi ya ziada, kwa hiyo madereva wanataja bei moja kwa kazi nzima, nawe unachagua.",
+  "work.negotiated": "Hii ni kazi ya ziada, kwa hiyo madereva wanataja bei moja kwa kazi nzima: unaikubali, unajibu kwa bei yako, au unasubiri nyingine.",
   "work.negotiatedShort": "Kazi ya ziada: bei moja kwa kazi nzima, mnakubaliana na aliyeiweka.",
   "work.needHandsPickup": "Sema nani yupo kusaidia mahali pa kuchukua, au kwamba mtumaji anaipakia.",
   "work.needHandsDelivery": "Sema nani yupo kusaidia mahali pa kufikisha, au kwamba mpokeaji anaipakua.",

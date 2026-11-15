@@ -7,6 +7,7 @@ import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { NotificationService } from './notification.service';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
@@ -510,6 +511,8 @@ export class DispatchService {
     @Optional() private readonly vehicleBook?: VehicleService,
     // 2026-11-13 — test mode: a load posted where a country is being tested is marked a test. Optional for the specs.
     @Optional() private readonly presence?: PresenceService,
+    // 2026-11-13 — a driver told the poster answered their price with one of its own (unusual loads, U4). Optional for the specs.
+    @Optional() private readonly notifications?: NotificationService,
   ) {
     // The manifest reads a load's carrier, seals and steps from here; it never reaches back into dispatch.
     this.manifests?.useFacts((freightId) => {
@@ -1622,6 +1625,9 @@ export class DispatchService {
     const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
 
     const rows: BoardRow[] = [];
+    // 2026-11-13 — this driver's open prices, by load: said on the card, with the poster's price back (unusual loads, U4).
+    const mineBy = new Map<string, FreightProposal>();
+    if (input.driverDid) for (const p of this.proposals.values()) if (p.driverDid === input.driverDid && p.status === 'open') mineBy.set(p.freightId, p);
     for (const f of this.freights.values()) {
       if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) continue;
       const deadheadKm = round1(this.router.roadKm(input.from, f.pickupLocation));
@@ -1726,6 +1732,7 @@ export class DispatchService {
         bodyHint: f.bodyHint,
         commitMode: commitModeOf(f),
         ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}),
+        ...(mineBy.get(f.freightId) ? { mine: { proposalId: mineBy.get(f.freightId)!.proposalId, price: mineBy.get(f.freightId)!.price, ...(mineBy.get(f.freightId)!.counter ? { counter: mineBy.get(f.freightId)!.counter } : {}) } } : {}),
         scheduledPickupAt: f.scheduledPickupAt,
         deadheadKm,
         loadedKm,
@@ -2972,7 +2979,39 @@ export class DispatchService {
    * driver may have de-coupled, re-coupled to an unsuitable vehicle, filled their capacity, or dropped below
    * the rating floor since. A proposal is an offer to treat with a shelf life, not a reservation.
    */
-  acceptProposal(proposalId: string, now: number = Date.now()): { proposal: FreightProposal; freight: Freight } {
+  /**
+   * 2026-11-13 — THE POSTER ANSWERS A PRICE WITH ITS OWN (unusual loads, U4: "the poster accepts, counters or waits"). Kept on the
+   * driver's price until the driver takes it or names another; said wrong, refused in words; over the load's budget, refused —
+   * the poster could not pay it. The driver is told on the bell.
+   */
+  counterProposal(proposalId: string, input: { price: number; note?: string; by?: string }, now: number = Date.now()): FreightProposal {
+    const p = this.requireProposal(proposalId);
+    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    const f = this.requireFreight(p.freightId);
+    if (!Number.isFinite(input.price) || input.price <= 0) throw new GlosError('INVALID_INPUT', 'Name a price above zero');
+    const price = Math.round(input.price * 100) / 100;
+    if (price === p.price) throw new GlosError('INVALID_INPUT', 'That is the driver’s own price: accept it instead');
+    if (f.maxSpend != null && this.shipperBill(price, f).gross > f.maxSpend) throw new GlosError('BUDGET_EXCEEDED', 'That price comes to more than the budget on this load');
+    const note = input.note?.trim().slice(0, 280);
+    p.counter = { price, ...(note ? { note } : {}), at: new Date(now).toISOString(), ...(input.by ? { by: input.by } : {}) };
+    this.proposals.set(p.proposalId, p);
+    const money = f.postedCurrency ? `${f.postedCurrency} ${price.toLocaleString('en')}` : price.toLocaleString('en');
+    void this.notifications
+      ?.notify(p.driverDid, { kind: 'freight_counter', title: `A price back for ${f.code}`, body: `The poster would pay ${money} for ${f.description}. Take it on the board, or name another price.`, link: '/?board', tag: `counter:${p.proposalId}`, data: { freightId: f.freightId, proposalId: p.proposalId } })
+      .catch(() => undefined);
+    return p;
+  }
+
+  /** 2026-11-13 — the driver takes the poster's price back: the load is committed at it, as an accepted price is (U4). */
+  takeCounter(proposalId: string, driverDid: string, now: number = Date.now()): { proposal: FreightProposal; freight: Freight } {
+    const p = this.requireProposal(proposalId);
+    if (p.driverDid !== driverDid) throw new GlosError('FORBIDDEN', 'That price is not yours');
+    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    if (!p.counter) throw new GlosError('INVALID_STATE', 'The poster has not answered with a price of its own');
+    return this.acceptProposal(proposalId, now, p.counter.price);
+  }
+
+  acceptProposal(proposalId: string, now: number = Date.now(), agreedPrice?: number): { proposal: FreightProposal; freight: Freight } {
     const p = this.requireProposal(proposalId);
     if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
     const f = this.requireFreight(p.freightId);
@@ -2995,9 +3034,10 @@ export class DispatchService {
 
     // The commit runs first: if it throws (budget, status, rating) nothing is marked accepted and the
     // negotiation is left exactly as it was, so the poster can raise a cap and try the same price again.
-    const freight = this.lockFreightToDriver(f, p.driverDid, vehicle, { deadheadKm: p.deadheadKm, loadedKm: p.loadedKm }, p.price, now);
+    const freight = this.lockFreightToDriver(f, p.driverDid, vehicle, { deadheadKm: p.deadheadKm, loadedKm: p.loadedKm }, agreedPrice ?? p.price, now);
     const at = new Date(now).toISOString();
     p.status = 'accepted';
+    if (agreedPrice != null) p.agreedPrice = agreedPrice;
     p.decidedAt = at;
     this.proposals.set(p.proposalId, p);
     // Everyone else's price is now moot — say so explicitly rather than leaving open proposals against a load

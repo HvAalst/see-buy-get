@@ -132,4 +132,35 @@ describe('unusual loads: the work on a load, over the wire', () => {
     const note = (await http().get(`/v1/sbg/dispatch/freight/${sofaId}/consignment-note`).set(bearer(biz)).expect(200)).body as { instructions: string[] };
     expect(note.instructions).toEqual(expect.arrayContaining(['Keep upright', 'Needs blankets or wrapping', 'At pickup: floor 3, no lift; carried 30 m; the driver brings a helper', 'At delivery: the receiver unloads']));
   });
+
+  it('5 · the business answers the driver’s price with its own; the driver sees it on the board and is told', async () => {
+    const offers = (await http().get(`/v1/sbg/dispatch/freight/${sofaId}/proposals`).set(bearer(biz)).expect(200)).body.items as Array<{ proposalId: string; driverDid: string; price: number }>;
+    const mine = offers.find((o) => o.driverDid === juma.did)!;
+    expect(mine.price).toBe(2500);
+    // Nothing to take before the business has answered with a price.
+    expect((await http().post(`/v1/sbg/dispatch/proposals/${mine.proposalId}/take-counter`).set(bearer(juma.token))).status).toBe(400);
+    const counter = (id: string, body: object) => http().post(`/v1/sbg/dispatch/proposals/${id}/counter`).set(bearer(biz)).send(body);
+    // Its own price is accepted, not answered; a price of nothing is refused.
+    expect((await counter(mine.proposalId, { price: 2500 })).status).toBe(400);
+    await counter(mine.proposalId, { price: 0 }).expect(400);
+    // Only the side that posted it answers.
+    await http().post(`/v1/sbg/dispatch/proposals/${mine.proposalId}/counter`).set(bearer(juma.token)).send({ price: 2000 }).expect(403);
+    expect((await counter(mine.proposalId, { price: 2000, note: 'Two floors are by the stairs only' }).expect(201)).body.counter).toMatchObject({ price: 2000, note: 'Two floors are by the stairs only' });
+    const row = (await board(juma)).find((r) => r.freightId === sofaId) as unknown as { mine?: { price: number; counter?: { price: number } } };
+    expect(row.mine).toMatchObject({ price: 2500, counter: { price: 2000 } });
+    const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(juma.token)).expect(200)).body.items as Array<{ kind: string; title: string }>;
+    expect(bell.find((n) => n.kind === 'freight_counter')?.title).toMatch(/A price back for FRT-/);
+  });
+
+  it('6 · the driver takes the price back: the load is theirs at it; nobody else takes it for them', async () => {
+    const offers = (await http().get(`/v1/sbg/dispatch/freight/${sofaId}/proposals`).set(bearer(biz)).expect(200)).body.items as Array<{ proposalId: string; driverDid: string }>;
+    const id = offers.find((o) => o.driverDid === juma.did)!.proposalId;
+    const take = (token: string) => http().post(`/v1/sbg/dispatch/proposals/${id}/take-counter`).set(bearer(token));
+    const other = await aVanDriver();
+    await take(other.token).expect(403);
+    const taken = (await take(juma.token).expect(201)).body;
+    expect(taken.proposal).toMatchObject({ status: 'accepted', agreedPrice: 2000 });
+    expect(taken.freight).toMatchObject({ lockedPrice: 2000, priceOrigin: 'negotiated' });
+    await take(juma.token).expect(400);
+  });
 });

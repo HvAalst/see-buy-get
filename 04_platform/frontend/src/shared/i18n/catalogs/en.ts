@@ -265,7 +265,7 @@ export const en = {
   'work.bring.helper': '{n, plural, one {a helper} other {# helpers}}',
   'work.bring.tailLift': 'a tail-lift',
   'work.bring.palletJack': 'a pallet jack',
-  'work.negotiated': 'This is extra work, so drivers name one price for the whole job, and you choose.',
+  'work.negotiated': 'This is extra work, so drivers name one price for the whole job: you accept it, answer with your own price, or wait for another.',
   'work.negotiatedShort': 'Extra work: one price for the whole job, agreed with the poster.',
   'work.needHandsPickup': 'Say who is there to help at the pickup, or that the sender loads it.',
   'work.needHandsDelivery': 'Say who is there to help at the delivery, or that the receiver unloads it.',

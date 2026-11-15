@@ -260,6 +260,10 @@ export function createAgentApi(sbg: SbgClient) {
     declineProposal: (proposalId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),
 
+    /** 2026-11-13 — answer a driver's price with your own, in the same terms (unusual loads, U4). The driver takes it or names another. */
+    counterProposal: (proposalId: string, price: number, note?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/counter', { params: { path: { id: proposalId } }, body: { price, ...(note ? { note } : {}) } })),
+
     /** F3 — open a consolidation LOT for a durable dry commodity (owner-scoped; the acting shop is the owner
      *  and its site becomes the freight's pickup). A perishable commodity is refused server-side. */
     openConsignment: (body: {
