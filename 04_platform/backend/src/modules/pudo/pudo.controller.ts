@@ -161,6 +161,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   MintRoadLegDto,
   PresenceDto,
   PresenceTesterDto,
+  DriverHelpersDto,
   PresenceDecisionDto,
   CreateCompanyDto,
   CompanyRecordDto,
@@ -4017,6 +4018,8 @@ export class SbgController {
       destCountry: this.agents.countryOf(dest),
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       commitMode: dto.commitMode,
+      // 2026-11-13 — what it takes to move it (unusual loads): any extra work makes it negotiated.
+      work: dto.work,
       // FB2c — the two facts only a person standing at the load can supply. They reach canonicalBody() inside
       // registerFreight, so the body stamped on this load is derived from what the counter actually saw.
       indivisible: dto.indivisible,
@@ -5043,7 +5046,11 @@ export class SbgController {
     const driver = actor?.role === 'driver' && Boolean(actor?.did) && (v.ownerDriverDid === actor.did || this.fleet.activeForVehicle(id)?.driverDid === actor.did);
     if (actor?.role !== 'operator' && !fleet && !driver) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, the driver who owns it, or the driver on shift with it, says what it takes');
     const role = actor?.role === 'operator' ? 'staff' : fleet ? 'fleet' : 'driver';
-    return this.vehicles.setLoadSpace(id, { ...(dto.capacityKg !== undefined ? { capacityKg: dto.capacityKg } : {}), ...(dto.volumeM3 !== undefined ? { volumeM3: dto.volumeM3 } : {}) }, { name: auditActor(actor), role });
+    return this.vehicles.setLoadSpace(
+      id,
+      { ...(dto.capacityKg !== undefined ? { capacityKg: dto.capacityKg } : {}), ...(dto.volumeM3 !== undefined ? { volumeM3: dto.volumeM3 } : {}), ...(dto.loadLengthM !== undefined ? { loadLengthM: dto.loadLengthM } : {}) },
+      { name: auditActor(actor), role },
+    );
   }
 
   /**
@@ -7868,6 +7875,18 @@ export class SbgController {
     return { carrierPlace: this.drivers.setCarrierPlace(did, dto).carrierPlace };
   }
 
+  /**
+   * 2026-11-13 — WHO WORKS WITH THE DRIVER (unusual loads, U1: "a driver's profile says which of these they can bring"): the
+   * helpers who come along on a job, none, one or two. The driver's own word, from their own sign-in.
+   */
+  @Roles('driver')
+  @Put('fleet/drivers/:did/helpers')
+  setDriverHelpers(@Param('did') did: string, @Body() dto: DriverHelpersDto, @Actor() actor: IntrospectionResult): { helpers: number } {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Who works with a driver is their own word, from their own sign-in');
+    this.assertDriverActs(did, actor);
+    return { helpers: this.drivers.setHelpers(did, dto.helpers).helpers ?? 0 };
+  }
+
   @Roles('driver', 'operator')
   @Post('fleet/drivers/:did/min-earn')
   setNudgeMinEarn(@Param('did') did: string, @Body() dto: NudgeMinEarnDto, @Actor() actor: IntrospectionResult) {
@@ -7900,7 +7919,9 @@ export class SbgController {
     const standstillMin = this.standstill?.watchedFor(did);
     // Round 17 — and how long their phone may say nothing on a shift before their fleet is told.
     const silentMin = this.standstill?.silenceFor(did);
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}), ...(standstillMin ? { standstillWatchMin: standstillMin } : {}), ...(silentMin ? { silentWatchMin: silentMin } : {}) };
+    // 2026-11-13 — and who works with them on a job: loads whose ends leave people to bring are offered by it (unusual loads).
+    const helpers = this.drivers.list().find((d) => d.did === did)?.helpers;
+    return { ...this.fleet.sessionFor(did), ...(helpers ? { helpers } : {}), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did), ...(currency ? { currency } : {}), ...(handoverPass ? { handoverPass } : {}), ...(positionsTo ? { positionsToFleetSystem: positionsTo } : {}), ...(standstillMin ? { standstillWatchMin: standstillMin } : {}), ...(silentMin ? { silentWatchMin: silentMin } : {}) };
   }
 
   @Roles('driver', 'fleet_manager', 'operator')

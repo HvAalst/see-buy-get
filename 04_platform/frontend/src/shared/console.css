@@ -1958,3 +1958,20 @@
   flex: 1 1 220px;
   min-width: 0;
 }
+
+/* 2026-11-13 — what it takes to move a load (unusual loads): each end set apart, its fields close together. */
+.loadwork {
+  display: grid;
+  gap: 12px;
+}
+.loadwork__end {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bd-soft);
+}
+.loadwork-sum {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0;
+}

@@ -13,6 +13,7 @@ import {
   draftTouched,
   dropLoadDraft,
   dropLoadDrafts,
+  gapWords,
   keepLoadDraft,
   keptLoadDraft,
   loadBody,
@@ -33,6 +34,7 @@ import {
   type SendIo,
 } from './postLoad';
 import { PostLoad, type PostStart } from './screens/PostLoad';
+import { EMPTY_WORK } from '../../shared/loadWork';
 import { LoadDetail, LoadsScreen } from './screens/LoadsScreen';
 import type { PostedLoad } from './api';
 
@@ -464,10 +466,22 @@ const CASES: Array<{ name: string; answers: Partial<PostForm>; business?: Busine
 ];
 
 describe('the same request as the one page, for the same answers', () => {
-  it('starts from the same answers the page started from — and the temperature, which it never asked, empty', () => {
-    expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, tempMinC: '', tempMaxC: '' });
-    expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), 'tempMinC', 'tempMaxC']);
-    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', tempMinC: '', tempMaxC: '' });
+  it('starts from the same answers the page started from — and the temperature and the work, which it never asked, empty', () => {
+    expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, tempMinC: '', tempMaxC: '', work: EMPTY_WORK });
+    expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), 'tempMinC', 'tempMaxC', 'work']);
+    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', tempMinC: '', tempMaxC: '', work: EMPTY_WORK });
+  });
+
+  // 2026-11-13 — what it takes to move it (unusual loads): asked on the goods step, sent only where it was said.
+  it('sends the work where it was said, and asks who helps at an end on the goods step', () => {
+    const said = { ...EMPTY_WORK, needs: 'two' as const, pickup: { ...EMPTY_WORK.pickup, hands: 'none' as const }, delivery: { ...EMPTY_WORK.delivery, theyDoIt: true } };
+    const ends = { country: 'KE', from: { name: 'A', location: { lat: -1.3, lng: 36.8 } }, to: { name: 'B', location: { lat: -1.2, lng: 36.9 } }, receiving: null, contract: null };
+    expect(loadBody(form({ description: 'Sofa', weightKg: '70', work: said }), ends).work).toEqual({ needs: 'two', pickup: { hands: 'none' }, delivery: { hands: 'none', theyDoIt: true } });
+    expect(loadBody(form({ description: 'Sofa', weightKg: '70' }), ends)).not.toHaveProperty('work');
+    const unsaid = { ...said, pickup: { ...said.pickup, hands: '' as const } };
+    expect(stepGaps('goods', form({ work: unsaid }), { crossing: false, contract: false, today: '2026-11-03' })).toContain('workPickup');
+    expect(gapWords('workPickup')).toBe('work.needHandsPickup');
+    expect(postFields('goods', false)).toContain('work');
   });
 
   // 2026-11-03 — the one key the page never sent: the range fresh or frozen food is kept in, when it is given.

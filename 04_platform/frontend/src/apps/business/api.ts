@@ -1,3 +1,4 @@
+import type { LoadWork } from '../../shared/loadWork';
 import { dropInvite, inviteBody } from '../../shared/invite';
 import type { SystemMessage, SystemView } from './system';
 import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
@@ -203,6 +204,8 @@ export interface ClientRef {
 export interface PostedLoad {
   freightId: string;
   code: string;
+  /** 2026-11-13 — what it takes to move it (unusual loads). */
+  work?: import('../../shared/loadWork').LoadWorkView;
   /** The carrier's reservations at taking over, and this business's answer once given (CMR Art. 8(2)). */
   reservations?: { note: string; at: string; answer?: { agreed: boolean; note?: string; by: string; at: string } };
   /** FP3b — the doors the driver stood at and could not hand over at, most recent last. */
@@ -357,6 +360,8 @@ export interface NewLoad {
   packages?: number;
   natureCode?: string;
   fragile?: boolean;
+  /** 2026-11-13 — what it takes to move it (unusual loads): any extra work makes it negotiated. */
+  work?: LoadWork;
   commitMode: 'instant' | 'negotiate';
   instructions?: string;
   contactName?: string;

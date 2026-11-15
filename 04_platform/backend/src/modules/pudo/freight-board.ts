@@ -109,6 +109,8 @@ export function blockersFor(
     cold?: string;
     /** 2026-11-01 — built-up airline pallets, on a vehicle without a roller floor. */
     pallets?: string;
+    /** 2026-11-13 — the people or equipment an end leaves for the driver, or a long item and a short load space: the take's words. */
+    work?: string;
     /** 2026-11-01 — a load bigger than the vehicle's declared load space; and the space not on record at all. */
     volume?: string;
     volumeUnknown?: string;
@@ -165,6 +167,7 @@ export function blockersFor(
   // Two cold loads on one truck (2026-11-03): resolvable — once the load aboard is delivered, this one can go on.
   if (ctx.cold) out.push({ kind: 'resolvable', code: 'COLD_RANGE_ABOARD', message: ctx.cold });
   if (ctx.pallets) out.push({ kind: 'physical', code: 'PALLETS_VEHICLE', message: ctx.pallets });
+  if (ctx.work) out.push({ kind: 'resolvable', code: 'WORK_NOT_COVERED', message: ctx.work });
   if (ctx.volume) out.push({ kind: 'physical', code: 'OVER_VEHICLE_VOLUME', message: ctx.volume });
   if (ctx.volumeUnknown) out.push({ kind: 'unknown', code: 'VOLUME_UNKNOWN', message: ctx.volumeUnknown });
   // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).

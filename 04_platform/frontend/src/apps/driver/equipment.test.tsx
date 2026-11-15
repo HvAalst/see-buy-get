@@ -49,7 +49,9 @@ describe('what your vehicle takes and carries', () => {
     const html = sheet({ equipment: ['MAN', 'PLT'] }, false);
     expect(html).toContain(t('equipment.plt'));
     expect(html).toContain(t('equipment.fleetSets'));
-    expect(html).not.toContain('aria-pressed');
+    // Nothing of the fleet's equipment to tick; who works with the driver is still theirs to say (unusual loads).
+    expect(html).not.toMatch(new RegExp('aria-pressed="(true|false)">' + t('equipment.plt')));
+    expect(html).toContain(t('driver.helpers.title'));
     expect(sheet({ equipment: ['MAN'] }, false)).toContain(t('equipment.none'));
   });
 

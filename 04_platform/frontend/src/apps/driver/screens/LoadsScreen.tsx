@@ -4,6 +4,7 @@ import { paidDirectLine } from '../../../shared/paidDirect';
 import { capLine } from '../../../shared/custodyCap';
 import { LoadFinderContext, useLoadFinder, type LoadFinder } from '../../../shared/loadFinder';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
+import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, usedPercent } from '../logic';
@@ -118,6 +119,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {control === 'pickup' && c.tempBand ? <span class="load__meta">{t('driver.loads.tempBeforePickup', { min: c.tempBand.minC, max: c.tempBand.maxC })}</span> : null}
                   {/* FP7 — what the sender wrote for the door, on the card so it is read before the walk to the gate. */}
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
+                  {/* 2026-11-13 — what it takes to move it, before the drive (unusual loads). */}
+                  <LoadWorkSummary work={c.work} />
                   {/* No papers, no loading: said on the card, before the drive to the gate. */}
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
                   {c.borderManifest?.missing.length ? <span class="load__warn">{t('driver.manifest.missingShort')}</span> : null}
@@ -555,6 +558,11 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
           {hasInstructions(claim.instructions) ? (
             <Card title={t('common.instructions.title')} tone="soft">
               <InstructionsBlock view={claim.instructions} />
+            </Card>
+          ) : null}
+          {claim.work ? (
+            <Card title={t('work.title')} tone="soft">
+              <LoadWorkSummary work={claim.work} />
             </Card>
           ) : null}
           <CheckGate items={items} checked={checked} onChange={setChecked} disabled={busy} />

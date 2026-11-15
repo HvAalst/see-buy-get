@@ -1,4 +1,5 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { pageGot, PaperSheet, Sections, usePaper } from '../../../shared/ui';
 import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
 import { useCallback, useEffect, useState } from 'preact/hooks';
@@ -357,6 +358,8 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                     </span>
                     <span class={`ctag ctag--${STAGE[stage].tone}`}>{t(STAGE[stage].label)}</span>
                   </div>
+                  {/* 2026-11-13 — what it takes to move it, as the business said, and what the driver brings (unusual loads). */}
+                  <LoadWorkSummary work={row.work} look="console" forDriver={false} />
                   <dl class="cons__facts">
                     <div class="cons__fact">
                       <dt class="cons__factk">{t('business.loads.fact.to')}</dt>

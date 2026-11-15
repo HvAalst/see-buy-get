@@ -274,6 +274,11 @@ export class Vehicle {
    */
   volumeM3?: number;
   /**
+   * 2026-11-13 — HOW LONG THE LOAD SPACE IS, in metres (unusual loads, U3: "a long item is matched to a load space long enough,
+   * where it is known"). Absent means unknown: a long item is not refused on a guess.
+   */
+  loadLengthM?: number;
+  /**
    * 2026-11-12 — who last set its weight or load space, and when (the owner: "the driver should be able to adjust the weight
    * and volume"): its fleet, the driver who owns it or drives it, or staff. Absent: as it was registered.
    */
@@ -571,6 +576,12 @@ export class FleetDriver {
    * Absent, or zero, means no floor. Bounded by MAX_NUDGE_MIN_EARN.
    */
   nudgeMinEarn?: number;
+  /**
+   * 2026-11-13 — WHO WORKS WITH THEM (unusual loads, U1: "a driver's profile says which of these they can bring"): the helpers
+   * who come along on a job, 0 to 2. A load whose end leaves people to bring is offered only to a driver who brings them.
+   * Absent: they work alone.
+   */
+  helpers?: number;
   assignedVehicleId?: string; // convenience mirror of the active coupling
   createdAt: string;
   lastSeenAt: string;

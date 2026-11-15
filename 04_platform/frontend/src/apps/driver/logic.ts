@@ -48,6 +48,13 @@ export function loadSpaceBody(kgText: string, litresText: string): { body: { cap
   return { body: { capacityKg: kg, volumeM3: litres === null ? null : Math.round(litres / 10) / 100 } };
 }
 
+/** 2026-11-13 — the load space's length in metres as typed: a number from 0.5 to 20, empty for not known, or a word wrong. */
+export function loadLengthOf(text: string): { m: number | null } | { error: 'driver.load.errLength' } {
+  if (!text.trim()) return { m: null };
+  const m = Number(text.trim().replace(',', '.'));
+  return Number.isFinite(m) && m >= 0.5 && m <= 20 ? { m: Math.round(m * 10) / 10 } : { error: 'driver.load.errLength' };
+}
+
 /** m³ as litres, for the driver to read. */
 export function litresOf(volumeM3: number | undefined): number | null {
   return volumeM3 == null ? null : Math.round(volumeM3 * 1000);

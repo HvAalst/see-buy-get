@@ -368,9 +368,9 @@ export class VehicleService {
    * its load space, which a load is held against. Lowered, fewer loads are offered: what is offered and taken is judged
    * against these figures. The space may be cleared (not known).
    */
-  setLoadSpace(vehicleId: string, input: { capacityKg?: number; volumeM3?: number | null }, by: { name: string; role: 'fleet' | 'driver' | 'staff' }, now: number = Date.now()): Vehicle {
+  setLoadSpace(vehicleId: string, input: { capacityKg?: number; volumeM3?: number | null; loadLengthM?: number | null }, by: { name: string; role: 'fleet' | 'driver' | 'staff' }, now: number = Date.now()): Vehicle {
     const v = this.require(vehicleId);
-    if (input.capacityKg === undefined && input.volumeM3 === undefined) throw new GlosError('INVALID_INPUT', 'Say what it carries: the weight, the load space, or both');
+    if (input.capacityKg === undefined && input.volumeM3 === undefined && input.loadLengthM === undefined) throw new GlosError('INVALID_INPUT', 'Say what it carries: the weight, the load space, or both');
     if (input.capacityKg !== undefined) {
       const kg = Math.round(Number(input.capacityKg));
       const spec = VEHICLE_SPEC[v.vehicleClass];
@@ -385,6 +385,15 @@ export class VehicleService {
         const m3 = Math.round(Number(input.volumeM3) * 100) / 100;
         if (!Number.isFinite(m3) || m3 <= 0 || m3 > 150) throw new GlosError('INVALID_INPUT', 'Its load space is more than nothing and at most 150 m³ (150,000 litres)', { field: 'volumeM3' });
         v.volumeM3 = m3;
+      }
+    }
+    // 2026-11-13 — how long it is: a long item is matched against it (unusual loads, U3). Cleared: not known.
+    if (input.loadLengthM !== undefined) {
+      if (input.loadLengthM === null) delete v.loadLengthM;
+      else {
+        const m = Math.round(Number(input.loadLengthM) * 10) / 10;
+        if (!Number.isFinite(m) || m < 0.5 || m > 20) throw new GlosError('INVALID_INPUT', 'Its load space is between 0.5 m and 20 m long', { field: 'loadLengthM' });
+        v.loadLengthM = m;
       }
     }
     v.loadSpaceSetBy = { name: by.name, role: by.role, at: new Date(now).toISOString() };

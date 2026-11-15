@@ -25278,6 +25278,38 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/helpers": {
+      "put": {
+        "operationId": "Sbg.setDriverHelpers",
+        "summary": "",
+        "description": "2026-11-13 — WHO WORKS WITH THE DRIVER (unusual loads, U1: \"a driver's profile says which of these they can bring\"): the\nhelpers who come along on a job, none, one or two. The driver's own word, from their own sign-in.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverHelpersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/min-earn": {
       "post": {
         "operationId": "Sbg.setNudgeMinEarn",
@@ -52835,6 +52867,10 @@
             "type": "number",
             "description": "2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an\nairport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then\nsays the load's volume and that the space is not on record — it never guesses one from the class."
           },
+          "loadLengthM": {
+            "type": "number",
+            "description": "2026-11-13 — HOW LONG THE LOAD SPACE IS, in metres (unusual loads, U3: \"a long item is matched to a load space long enough,\nwhere it is known\"). Absent means unknown: a long item is not refused on a guess."
+          },
           "loadSpaceSetBy": {
             "type": "object",
             "properties": {
@@ -66308,6 +66344,92 @@
           "scans"
         ]
       },
+      "LoadEnd": {
+        "type": "object",
+        "properties": {
+          "hands": {
+            "type": "string",
+            "enum": [
+              "none",
+              "one",
+              "two"
+            ]
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "FLT",
+                "PLT",
+                "DOCK",
+                "CRN"
+              ]
+            }
+          },
+          "theyDoIt": {
+            "type": "boolean",
+            "description": "\"Sender loads\" / \"Receiver unloads\": they do it themselves, so the driver brings nothing here."
+          },
+          "floor": {
+            "type": "number",
+            "description": "The floor it is on: 0 is the ground."
+          },
+          "lift": {
+            "type": "boolean",
+            "description": "A lift that takes it."
+          },
+          "carryM": {
+            "type": "number",
+            "description": "How far it is carried from where the vehicle stops, in metres."
+          },
+          "waitMin": {
+            "type": "number",
+            "description": "Waiting expected at this end, in minutes."
+          }
+        },
+        "required": [
+          "hands"
+        ]
+      },
+      "LoadWork": {
+        "type": "object",
+        "properties": {
+          "needs": {
+            "type": "string",
+            "enum": [
+              "one",
+              "two",
+              "three",
+              "machine"
+            ]
+          },
+          "pickup": {
+            "$ref": "#/components/schemas/LoadEnd"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/LoadEnd"
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "upright",
+                "noStack",
+                "long",
+                "blankets",
+                "securing"
+              ]
+            }
+          }
+        },
+        "required": [
+          "needs",
+          "pickup",
+          "delivery"
+        ]
+      },
       "FreightConsigneeDto": {
         "type": "object",
         "properties": {
@@ -66379,6 +66501,14 @@
             "enum": [
               "instant",
               "negotiate"
+            ]
+          },
+          "work": {
+            "description": "2026-11-13 — WHAT IT TAKES TO MOVE IT (unusual loads, U1–U3): for the pickup and the delivery, who helps there, what equipment,\nthe floor, a lift, how far it is carried, waiting; what the load takes to lift and carry; how it must be handled. Any extra\nwork makes it a negotiated load: drivers name one price for the whole job.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadWork"
+              }
             ]
           },
           "packaging": {
@@ -67764,6 +67894,13 @@
             "nullable": true,
             "minimum": 0.01,
             "maximum": 150
+          },
+          "loadLengthM": {
+            "type": "number",
+            "nullable": true,
+            "description": "2026-11-13 — how long the load space is, in metres; null clears it (unusual loads, U3).",
+            "minimum": 0.5,
+            "maximum": 20
           }
         }
       },
@@ -71176,6 +71313,14 @@
             "type": "boolean",
             "description": "2026-11-13 — posted while its country was in test mode: counted in no report (T5)."
           },
+          "work": {
+            "description": "2026-11-13 — what it takes to move it, as its poster said (unusual loads, U1–U3; load-work.ts). Frozen with the load.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadWork"
+              }
+            ]
+          },
           "freightId": {
             "type": "string"
           },
@@ -72320,6 +72465,10 @@
           "nudgeMinEarn": {
             "type": "number",
             "description": "Do not interrupt this driver for work paying less than this, all in.\n\nIt lives on the DRIVER, not on the coupling, unlike the snooze and the derived-leg switch beside it.\nThose two are moods held for a shift — a puncture, a favour taken this morning — and it is right that\nending the shift ends them. A fee floor is not a mood: it is the driver's cost base, and fuel does not\nget cheaper because yesterday finished. Asking for it again every morning would make it the thing it\nreplaced — a number typed into a search box that dies on the next reload.\n\nThe price of standing is that it can starve somebody silently, which is exactly what the snooze warns\nabout. That is paid for by COUNTING what it suppresses and showing them (see DispatchService's floor\nreport): a setting you can watch working is a setting you can undo.\n\nAbsent, or zero, means no floor. Bounded by MAX_NUDGE_MIN_EARN."
+          },
+          "helpers": {
+            "type": "number",
+            "description": "2026-11-13 — WHO WORKS WITH THEM (unusual loads, U1: \"a driver's profile says which of these they can bring\"): the helpers\nwho come along on a job, 0 to 2. A load whose end leaves people to bring is offered only to a driver who brings them.\nAbsent: they work alone."
           },
           "assignedVehicleId": {
             "type": "string"
@@ -74215,6 +74364,19 @@
           }
         }
       },
+      "DriverHelpersDto": {
+        "type": "object",
+        "properties": {
+          "helpers": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          }
+        },
+        "required": [
+          "helpers"
+        ]
+      },
       "NudgeMinEarnDto": {
         "type": "object",
         "properties": {
@@ -74378,6 +74540,14 @@
             "enum": [
               "instant",
               "negotiate"
+            ]
+          },
+          "work": {
+            "description": "2026-11-13 — WHAT IT TAKES TO MOVE IT (unusual loads, U1–U3): for the pickup and the delivery, who helps there, what equipment,\nthe floor, a lift, how far it is carried, waiting; what the load takes to lift and carry; how it must be handled. Any extra\nwork makes it a negotiated load: drivers name one price for the whole job.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadWork"
+              }
             ]
           },
           "description": {
@@ -74618,6 +74788,117 @@
           "weightKg"
         ]
       },
+      "EndGap": {
+        "type": "object",
+        "properties": {
+          "helpers": {
+            "type": "number"
+          },
+          "tailLift": {
+            "type": "boolean"
+          },
+          "palletJack": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "helpers",
+          "tailLift",
+          "palletJack"
+        ]
+      },
+      "GapPair": {
+        "type": "object",
+        "properties": {
+          "pickup": {
+            "$ref": "#/components/schemas/EndGap"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/EndGap"
+          }
+        },
+        "required": [
+          "pickup",
+          "delivery"
+        ]
+      },
+      "LoadExtra": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "string",
+            "enum": [
+              "pickup",
+              "delivery"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "helper",
+              "tailLift",
+              "palletJack",
+              "floors",
+              "carry",
+              "wait"
+            ]
+          },
+          "n": {
+            "type": "number",
+            "description": "How many: helpers, floors, metres, minutes."
+          }
+        },
+        "required": [
+          "end",
+          "kind"
+        ]
+      },
+      "LoadWorkView": {
+        "type": "object",
+        "properties": {
+          "needs": {
+            "type": "string",
+            "enum": [
+              "one",
+              "two",
+              "three",
+              "machine"
+            ]
+          },
+          "pickup": {
+            "$ref": "#/components/schemas/LoadEnd"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/LoadEnd"
+          },
+          "gaps": {
+            "$ref": "#/components/schemas/GapPair"
+          },
+          "extras": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadExtra"
+            }
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "upright",
+                "noStack",
+                "long",
+                "blankets",
+                "securing"
+              ]
+            }
+          }
+        },
+        "required": [
+          "extras",
+          "marks"
+        ]
+      },
       "BoardBlocker": {
         "type": "object",
         "properties": {
@@ -74735,6 +75016,14 @@
             "enum": [
               "instant",
               "negotiate"
+            ]
+          },
+          "work": {
+            "description": "2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadWorkView"
+              }
             ]
           },
           "coverRequired": {
@@ -76158,6 +76447,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FreightInstructionsView"
+              }
+            ]
+          },
+          "work": {
+            "description": "2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadWorkView"
               }
             ]
           },

@@ -129,8 +129,10 @@ export function createDriverApi(sbg: SbgClient) {
     setVehicleEquipment: (vehicleId: string, equipment: string[]) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/equipment', { params: { path: { id: vehicleId } }, body: { equipment: equipment as never } })),
     /** 2026-11-12 — what the vehicle takes, as its driver says: the most it carries (kg) and its load space (m³; null: not known). */
-    setLoadSpace: (vehicleId: string, body: { capacityKg?: number; volumeM3?: number | null }) =>
+    setLoadSpace: (vehicleId: string, body: { capacityKg?: number; volumeM3?: number | null; loadLengthM?: number | null }) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/load-space', { params: { path: { id: vehicleId } }, body })),
+    /** 2026-11-13 — who works with the driver on a job: none, one or two helpers (unusual loads, U1). */
+    setHelpers: (did: string, helpers: number) => sbg.request((c) => c.PUT('/v1/sbg/fleet/drivers/{did}/helpers', { params: { path: { did } }, body: { helpers } })),
     setVehiclePrice: (vehicleId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/pricing', { params: { path: { id: vehicleId } }, body: { price } })),
 

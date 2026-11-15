@@ -1,4 +1,5 @@
 import type { NewLoad } from './api';
+import { EMPTY_WORK, cleanWorkForm, workBlocker, workBody, type LoadWorkForm } from '../../shared/loadWork';
 import { isColdNature, isDangerousNature, loadGaps, nextDay, type LoadForm } from './logic';
 
 /*
@@ -50,9 +51,11 @@ export type PostForm = LoadForm & {
   /** 2026-11-03 — fresh or frozen food: the lowest and the highest it is kept at, in °C, as typed. Both empty is 2–8 °C. */
   tempMinC: string;
   tempMaxC: string;
+  /** 2026-11-13 — what it takes to move it (unusual loads, U1–U3). Nothing chosen: posted as before. */
+  work: LoadWorkForm;
 };
 
-export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '' };
+export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '', work: EMPTY_WORK };
 
 /** A new load's first answers, as the one page had them: going within the business's own country, arriving tomorrow. */
 export const startForm = (country: string, now: Date = new Date()): PostForm => ({ ...EMPTY_POST, destCountry: country, deliverOn: nextDay(now) });
@@ -112,7 +115,7 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
     case 'route':
       return ['fromSiteId', 'toSiteId', 'receivingPoint', 'receiverRef', 'destCountry', 'consigneeName', 'consigneeAddress', 'customsInstructions'];
     case 'goods':
-      return ['description', 'natureCode', 'unNumber', 'hazardClass', 'properShippingName', 'packingGroup', 'tempMinC', 'tempMaxC', 'weightKg', 'packaging', 'packages', 'volumeM3', 'fragile'];
+      return ['description', 'natureCode', 'unNumber', 'hazardClass', 'properShippingName', 'packingGroup', 'tempMinC', 'tempMaxC', 'weightKg', 'packaging', 'packages', 'volumeM3', 'fragile', 'work'];
     case 'when':
       return ['pickupOn', 'deliveryWindow'];
     case 'value':
@@ -131,7 +134,10 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
  * and at most 150 m³ (the box's `min`/`max`, and the server's); and a collection day gone, which the server would quietly
  * turn into "as soon as a carrier can". With a load kept on the phone for days, a day that has gone is likely.
  */
-export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3' | TempGap;
+export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3' | TempGap | WorkGap;
+
+/** 2026-11-13 — who helps at an end, not said (unless the sender loads or the receiver unloads it). */
+export type WorkGap = 'workPickup' | 'workDelivery';
 
 /** 2026-11-03 — a temperature range given for fresh or frozen food: one end without the other, past -30 or 30, or upside down. */
 export type TempGap = 'tempRange' | 'tempBounds' | 'tempOrder';
@@ -161,6 +167,8 @@ const GAP_STEP: Record<PostGap, PostStep> = {
   tempRange: 'goods',
   tempBounds: 'goods',
   tempOrder: 'goods',
+  workPickup: 'goods',
+  workDelivery: 'goods',
 };
 
 export interface PostCtx {
@@ -185,6 +193,8 @@ export function postGaps(form: PostForm, ctx: PostCtx): PostGap[] {
   const m3 = Number(form.volumeM3);
   if (form.volumeM3.trim() && !(m3 >= 0.01 && m3 <= 150)) gaps.push('volumeM3');
   gaps.push(...tempGaps(form));
+  const work = workBlocker(form.work);
+  if (work) gaps.push(work === 'work.needHandsPickup' ? 'workPickup' : 'workDelivery');
   if (!ctx.contract && form.pickupOn && form.pickupOn < ctx.today) gaps.push('pickupOnGone');
   return gaps;
 }
@@ -222,7 +232,7 @@ export function stepGaps(step: PostStep, form: PostForm, ctx: PostCtx): PostGap[
 export const gapStep = (gap: PostGap): PostStep => GAP_STEP[gap];
 
 /** The words a gap is said in, beside its field. */
-export const gapWords = (gap: PostGap): string => (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' || gap === 'tempRange' || gap === 'tempBounds' || gap === 'tempOrder' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
+export const gapWords = (gap: PostGap): string => gap === 'workPickup' ? 'work.needHandsPickup' : gap === 'workDelivery' ? 'work.needHandsDelivery' : (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' || gap === 'tempRange' || gap === 'tempBounds' || gap === 'tempOrder' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
 
 /** A place a load is collected from or delivered to, as the board and the consignment note carry it. */
 export interface LoadEnd {
@@ -270,6 +280,7 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
     ...(kept ? { tempRange: kept } : {}),
     ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
     fragile: form.fragile,
+    ...(workBody(form.work) ? { work: workBody(form.work) } : {}),
     ...(form.coverRequired ? { coverRequired: true } : {}),
     ...(Number(form.declaredValue) > 0 && form.valueCurrency ? { declaredValue: { amount: Number(form.declaredValue), currency: form.valueCurrency } } : {}),
     ...(Number(form.specialInterest) > 0 && form.valueCurrency ? { specialInterest: { amount: Number(form.specialInterest), currency: form.valueCurrency } } : {}),
@@ -399,6 +410,8 @@ export function keptLoadDraft(owner: string, now: number = Date.now(), store: St
     }
     if (form.commitMode !== 'negotiate' && form.commitMode !== 'instant') form.commitMode = 'negotiate';
     form.receivingPoint = '';
+    // 2026-11-13 — what it takes to move it, read back only as this version asks it.
+    form.work = cleanWorkForm(form.work);
     return { step: STEPS.includes(d.step as PostStep) ? (d.step as PostStep) : 'route', form, toReceiver: d.toReceiver === true, typedCode: typeof d.typedCode === 'string' ? d.typedCode : '', savedAt: d.savedAt };
   } catch {
     return null;

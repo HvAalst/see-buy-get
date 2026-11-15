@@ -59,6 +59,23 @@
   accent-color: var(--blue);
 }
 
+/* 2026-11-13 — what it takes to move a load (unusual loads): each end set apart, its fields close together. */
+.loadwork {
+  display: grid;
+  gap: 12px;
+}
+.loadwork__end {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bd-soft);
+}
+.loadwork-sum {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0;
+}
+
 /* Teaching text that can be put away once it has been read (Explainer). It reads as the lede it stands
    in for — same size, same colour — because it IS the lede until somebody is done with it. The cross is
    set on the end of the line rather than beside the block: it must be findable without ever competing

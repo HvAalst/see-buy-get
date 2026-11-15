@@ -40,6 +40,7 @@ import {
   type PostStep,
 } from '../postLoad';
 import { SentFor } from './SentFor';
+import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
@@ -521,6 +522,12 @@ export function PostLoad({
             <input type="checkbox" checked={form.fragile} onChange={() => set({ fragile: !form.fragile })} />
             <span>{t('business.loads.f.fragile')}</span>
           </label>
+          {/* 2026-11-13 — what it takes to move it (unusual loads, U1–U3): nothing chosen, posted as before. */}
+          <h2 class="cfield__label">{t('work.title')}</h2>
+          <LoadWorkFields look="console" value={form.work} onChange={(work) => set({ work })}>
+            {gap('workPickup')}
+            {gap('workDelivery')}
+          </LoadWorkFields>
         </>
       ) : null}
 

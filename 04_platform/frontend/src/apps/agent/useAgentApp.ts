@@ -1,4 +1,5 @@
 import { unsentPapersOf } from '../../shared/papers';
+import { workBody } from '../../shared/loadWork';
 import type { OffPlanReason } from './screens/OffPlanSheet';
 import type { InstructionsView } from '../../shared/instructions';
 import { onLaunch, type RunAsked } from '../../shared/launch';
@@ -1892,6 +1893,8 @@ export function useAgentApp() {
         // FB2c — sent only when the clerk actually said something. `false` and "no opinion" are both the
         // absence of an answer here, and sending them would dress a default up as an observation.
         indivisible: f.indivisible || undefined,
+        // 2026-11-13 — what it takes to move it, where the clerk said it (unusual loads): any extra work makes it negotiated.
+        ...(workBody(f.work) ? { work: workBody(f.work) } : {}),
         bodyHint: bodyHintValue(f.bodyHint),
         // FB5 — always present: bookFreightMissing() blocks the button until it is answered, so reaching here
         // means the clerk said it. Sent explicitly rather than left to the server's deployment default,

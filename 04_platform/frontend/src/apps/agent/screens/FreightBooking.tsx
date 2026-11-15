@@ -6,6 +6,7 @@ import { agentConfig } from '../api';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, FREIGHT_STEPS, PACKAGING_HELP, chooseBodyHint, dangerousGoodsValue, freightStepMissing, isDangerousNature, money, natureLabel, parseBudget, parseDims, plannedPickupIso, toggleExcludedBody, type BodyHint, type FreightStep, type PackagingChoice } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
@@ -208,6 +209,10 @@ export function FreightBooking({ state, actions, onTakeIn, start, now }: { state
               </div>
             </div>
             <p class="card__note">{t('agent.accept.excludedBodiesNote')}</p>
+          </Card>
+          {/* 2026-11-13 — what it takes to move it (unusual loads, U1–U3): nothing chosen, booked as before. */}
+          <Card label={t('work.title')}>
+            <LoadWorkFields value={f.work} onChange={(work) => actions.setAccept({ work })} />
           </Card>
         </>
       ) : null}

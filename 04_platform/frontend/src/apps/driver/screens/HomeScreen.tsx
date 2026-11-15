@@ -334,7 +334,7 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Card>
       ) : null}
 
-      {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own sbg={sbg ?? null} /> : null}
+      {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own sbg={sbg ?? null} helpers={state.session.helpers} /> : null}
       {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (
@@ -916,7 +916,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Button>
         </div>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
-        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} sbg={sbg ?? null} onShift /> : null}
+        {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} sbg={sbg ?? null} onShift helpers={state.session.helpers} /> : null}
         {hitchOpen && state.driver ? <HitchSheet open onClose={() => setHitchOpen(false)} sbg={sbg ?? null} driverDid={state.driver.did} towing={state.driver.licence?.towing ?? []} onDone={() => void actions.refresh()} /> : null}
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>

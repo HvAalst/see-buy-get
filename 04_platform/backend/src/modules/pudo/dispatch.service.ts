@@ -53,6 +53,7 @@ import { coverFor, DEFAULT_PACKAGING, MARKET_SUPPLY_STALE_MIN, DEFAULT_PRICE_PER
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
+import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
 import { VehicleService } from './vehicle.service';
 import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type PrepaidShipper, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
@@ -620,7 +621,9 @@ export class DispatchService {
     return { code: t.code, status: t.status, ...(t.waitsForRoom ? { waitsForRoom: t.waitsForRoom } : {}) };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number; work?: unknown }, now: number = Date.now(), checkOnly = false): Freight {
+    // 2026-11-13 — what it takes to move it, checked before anything is worked out (unusual loads, U1–U3).
+    const work = cleanWork(input.work);
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -663,7 +666,9 @@ export class DispatchService {
     // THE FIX THAT IS NOT ABOUT ANALYTICS: only loose goods load and discharge themselves. Bagged cement was
     // reporting that it needed NO handling equipment — the "you would need a forklift" signal going silent on
     // eighteen tonnes of sacks, which is the load that needs it most.
-    const requiredEquipment = selfLoading(packaging) ? [] : this.cargo.requiredEquipment(cargoClass);
+    // 2026-11-13 — where the poster said what it takes to move it, that decides (unusual loads, U1: "only a gap limits"): the
+    // weight class no longer guesses equipment for it — the gaps at its two ends are asked of the driver instead (workRefusal).
+    const requiredEquipment = selfLoading(packaging) || work ? [] : this.cargo.requiredEquipment(cargoClass);
     const requiredCapabilities = this.cargo.requiredCapabilities([natureCode]);
     // FB0b — conclude which BODY this load needs, and stamp the conclusion. Derived from the load's own facts,
     // never from the minter's hint: the hint is advisory by decision, and a market series built on a shop
@@ -705,10 +710,12 @@ export class DispatchService {
       // FB0c — 'negotiate' means the minter wants to agree a price before anyone commits. Stored only when it
       // is actually chosen: absent reads as 'instant', which is how every load has always behaved.
       // P1 — never on an order under a contract: its price is the contract's, and a negotiable load cannot be assigned.
-      commitMode: input.commitMode === 'negotiate' && !contract ? 'negotiate' : undefined,
+      // 2026-11-13 — U4: a load with any extra work is always negotiated — the driver names one price for the whole job.
+      commitMode: (input.commitMode === 'negotiate' || (work != null && extrasOf(work).length > 0)) && !contract ? 'negotiate' : undefined,
       // Who NEGOTIATES for the load — not necessarily who pays. A counter booking has no shipperDid at all
       // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
       postedByDid: input.postedByDid,
+      ...(work ? { work } : {}),
       // …and the money it set its budget in, frozen with it: a load re-read in another money later would be a different load.
       ...(this.posterCurrencyOf(input.postedByDid) ? { postedCurrency: this.posterCurrencyOf(input.postedByDid) } : {}),
       ...(input.postedByName?.trim() ? { postedByName: input.postedByName.trim().slice(0, 80) } : {}),
@@ -1398,6 +1405,10 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
+    if (offer.kind === 'freight') {
+      const cannot = this.workRefusal(offer.driverDid, this.requireFreight(offer.ref), vehicle);
+      if (cannot) throw new GlosError('VEHICLE_MISSING_CAPABILITY', cannot);
+    }
     // 2026-11-03 — a bag or a load kept cold, beside a cold load already aboard at a temperature it cannot share.
     const cold = this.coldRefusal(offer.driverDid, offer.kind, offer.ref);
     if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
@@ -1658,6 +1669,8 @@ export class DispatchService {
           cold: input.driverDid ? this.coldRefusal(input.driverDid, 'freight', f.freightId) : undefined,
           animals: animalVehicleRefusal(f.liveAnimals, vehicle),
           pallets: palletVehicleRefusal(f.airPallets, vehicle),
+          // 2026-11-13 — the people or equipment an end leaves for the driver, or a long item and a short load space.
+          work: input.driverDid ? this.workRefusal(input.driverDid, f, vehicle) : undefined,
           volume: volumeRefusal(f.volumeM3, vehicle),
           volumeUnknown: f.volumeM3 && vehicle && vehicle.volumeM3 == null ? `The load takes ${f.volumeM3} m³, and your vehicle’s load space is not on record: check it fits. Your fleet can record it on the vehicle.` : undefined,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
@@ -1712,6 +1725,7 @@ export class DispatchService {
         bodyDerived: bodyOf(f),
         bodyHint: f.bodyHint,
         commitMode: commitModeOf(f),
+        ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}),
         scheduledPickupAt: f.scheduledPickupAt,
         deadheadKm,
         loadedKm,
@@ -1862,6 +1876,23 @@ export class DispatchService {
    * unknown empty run to zero would flatter every negotiated job in the market series (FB0a's rule: never
    * invent a split), and the driver's app already reports its position.
    */
+  /**
+   * 2026-11-13 — WHY THIS DRIVER CANNOT DO THE WORK A LOAD NAMES (unusual loads, U1/U3), in their words — or undefined. Only a
+   * gap limits: the helpers they said work with them, the tail-lift and pallet jack on their vehicle; and a long item against a
+   * load space whose length is known.
+   */
+  private workRefusal(driverDid: string, f: Freight, vehicle: Vehicle | null | undefined): string | undefined {
+    if (!f.work && !f.dimensionsCm) return undefined;
+    let helpers = 0;
+    try {
+      helpers = this.drivers.get(driverDid).helpers ?? 0;
+    } catch {
+      // no driver record: works alone
+    }
+    const long = marksOf(f.work, f.dimensionsCm).includes('long') && f.dimensionsCm?.length ? Math.max(...f.dimensionsCm) : undefined;
+    return cannotDo(f.work, bringsOf(helpers, vehicle?.equipment), long, vehicle?.loadLengthM);
+  }
+
   propose(input: { freightId: string; driverDid: string; from: GeoPoint; price: number; note?: string }, now: number = Date.now()): FreightProposal {
     const f = this.requireFreight(input.freightId);
     if (commitModeOf(f) !== 'negotiate') throw new GlosError('INVALID_STATE', 'This load is taken at the offered price — claim it instead of proposing one');
@@ -1887,6 +1918,9 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your vehicle lacks something this load needs, so the poster could never accept an offer from it');
     }
+    // 2026-11-13 — and the work it names: what an end leaves for the driver to bring (unusual loads, U1).
+    const cannot = this.workRefusal(input.driverDid, f, vehicle);
+    if (cannot) throw new GlosError('VEHICLE_MISSING_CAPABILITY', cannot);
     // 2026-11-03 — and not beside a cold load aboard at a temperature it cannot share: the accept would refuse it.
     const cold = this.coldRefusal(input.driverDid, 'freight', f.freightId);
     if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
@@ -2003,7 +2037,7 @@ export class DispatchService {
         ...(f.namedPlace ? { namedPlace: f.namedPlace } : {}),
         ...(f.handBacks?.length ? { handBacks: f.handBacks.map((h) => ({ reason: h.reason, at: h.at })) } : {}),
         // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
-        ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
+        ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}),
         ...(f.reservations ? { reservations: { note: f.reservations.note, at: f.reservations.at, ...(f.reservations.answer ? { answer: f.reservations.answer } : {}) } } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
@@ -2956,6 +2990,7 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's current vehicle lacks a capability or equipment this load requires");
     }
+    if (this.workRefusal(p.driverDid, f, vehicle)) throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'That driver can no longer do what this load needs: the helpers or the equipment it takes, or the length of their load space');
     this.requireBorderAllows(vehicle, p.driverDid, 'freight', f.freightId);
 
     // The commit runs first: if it throws (budget, status, rating) nothing is marked accepted and the
@@ -4879,7 +4914,7 @@ export class DispatchService {
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
     // 2026-11-10 — between Kenya and Ethiopia: what the border manifest still lacks before pickup, and its page from then on.
     const borderManifest = this.manifests?.pairOf(f) && (f.status === 'claimed' || f.status === 'in_transit') ? this.manifestCard(f) : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(borderManifest ? { borderManifest } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(borderManifest ? { borderManifest } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}) };
   }
 
   /**

@@ -7,6 +7,7 @@ import { ConversationList, ConversationSheet } from '../../../shared/conversatio
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { blockerTone, boardDistanceLine, boardSummary, cash, originReady, unlocks } from '../logic';
 import type { BoardRow } from '../types';
+import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { BOARD_REACHES, type BoardReach, type DriverActions, type DriverState } from '../useDriverApp';
 
 export interface BoardScreenProps {
@@ -280,6 +281,8 @@ export function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; 
       <p class="board__desc">
         <Abbreviated text={row.description} />
       </p>
+      {/* 2026-11-13 — what it takes to move it: each end, and what the driver brings (unusual loads). */}
+      <LoadWorkSummary work={row.work} />
 
       {/* The rate leads, because it is the sort key and the decision: what this is worth per kilometre
           TURNED, empty run included. Without a vehicle there is no rate, and we say that rather than show 0. */}
@@ -402,6 +405,8 @@ function ProposeSheet({ row, state, actions, onClose }: { row: BoardRow | null; 
           <p class="t-body">
             <b>{row.code}</b> — <Abbreviated text={row.description} />
           </p>
+          {/* The work to price: one price for the whole job (unusual loads, U4). */}
+          <LoadWorkSummary work={row.work} />
           <div class="field">
             <label class="field__label" for="propose-price">
               {state.session.currency ? t('driver.board.proposePriceIn', { currency: state.session.currency }) : t('driver.board.proposePrice')}

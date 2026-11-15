@@ -14,6 +14,7 @@ import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
 import { PRESENCE_LEVELS, TESTER_ROLES, type PresenceLevel, type TesterRole } from '../../foundation/presence/presence.types';
+import { LoadWork } from './load-work.types';
 import { Type } from 'class-transformer';
 import { HandoverPositionDto } from './handover-position';
 import { AgreementDto } from '../../foundation/documents/documents.types';
@@ -1116,6 +1117,13 @@ export class VehicleEquipmentDto {
 export class VehicleLoadSpaceDto {
   @IsOptional() @IsNumber() @Min(1) @Max(100000) capacityKg?: number;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.01) @Max(150) volumeM3?: number | null;
+  /** 2026-11-13 — how long the load space is, in metres; null clears it (unusual loads, U3). */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.5) @Max(20) loadLengthM?: number | null;
+}
+
+/** 2026-11-13 — the helpers who work with a driver on a job: none, one or two (unusual loads, U1). */
+export class DriverHelpersDto {
+  @IsInt() @Min(0) @Max(2) helpers!: number;
 }
 
 /** 2026-11-12 — the owner's D3: how many times the list figure a hub may set its fees to before staff approve. */
@@ -3036,6 +3044,12 @@ export class RegisterFreightDto {
    *  every load has had until now. A negotiate load is deliberately kept out of the push offers and nudges,
    *  which exist to be answered with a single Claim tap. */
   @IsOptional() @IsIn(['instant', 'negotiate']) @ApiPropertyOptional({ enum: ['instant', 'negotiate'] }) commitMode?: 'instant' | 'negotiate';
+  /**
+   * 2026-11-13 — WHAT IT TAKES TO MOVE IT (unusual loads, U1–U3): for the pickup and the delivery, who helps there, what equipment,
+   * the floor, a lift, how far it is carried, waiting; what the load takes to lift and carry; how it must be handled. Any extra
+   * work makes it a negotiated load: drivers name one price for the whole job.
+   */
+  @IsOptional() @IsObject() @ApiPropertyOptional({ type: LoadWork }) work?: LoadWork;
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsBoolean() bulk?: boolean;
   /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
@@ -3128,6 +3142,12 @@ export class BookFreightDto {
    *  the first fit truck taking it at the computed rate. The cash cap still binds either way: a price above
    *  what the customer agreed cannot be accepted, whoever named it. */
   @IsOptional() @IsIn(['instant', 'negotiate']) @ApiPropertyOptional({ enum: ['instant', 'negotiate'] }) commitMode?: 'instant' | 'negotiate';
+  /**
+   * 2026-11-13 — WHAT IT TAKES TO MOVE IT (unusual loads, U1–U3): for the pickup and the delivery, who helps there, what equipment,
+   * the floor, a lift, how far it is carried, waiting; what the load takes to lift and carry; how it must be handled. Any extra
+   * work makes it a negotiated load: drivers name one price for the whole job.
+   */
+  @IsOptional() @IsObject() @ApiPropertyOptional({ type: LoadWork }) work?: LoadWork;
   @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string; // absent = ship now; present = planned
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
   /** FB2c — can the load be split into two smaller ones? The counter is the one place someone is standing in

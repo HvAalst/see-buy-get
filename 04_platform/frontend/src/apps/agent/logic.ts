@@ -10,6 +10,7 @@
  * English literals. Enumerated presentation (status/size/nature/…) resolves catalog keys via `t`.
  */
 
+import { EMPTY_WORK, workBlocker, type LoadWorkForm } from '../../shared/loadWork';
 import { dangerousGoodsValue, isDangerousNature } from '../../shared/dangerousGoods';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
@@ -348,6 +349,8 @@ export interface AcceptForm {
   // skeletal from a flatbed, and a binding wrong pick would exclude the operator who could have carried it).
   indivisible: boolean;
   bodyHint: BodyHint; // '' = no opinion
+  /** 2026-11-13 — what it takes to move it (unusual loads, U1–U3). Nothing chosen: booked as before. */
+  work: LoadWorkForm;
   // FB5 — how it is PACKED. Asked outright and required, because it is the one thing here the clerk can see
   // rather than judge, and the one whose default silently decides both the body and what has to lift it.
   packaging: PackagingChoice; // '' = not yet answered, which blocks the booking
@@ -511,6 +514,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   negotiate: false,
   indivisible: false,
   bodyHint: '',
+  work: EMPTY_WORK,
   packaging: '', // asked, never assumed — a fresh booking has no answer yet
   excludedBodies: [],
   instructions: '',
@@ -631,6 +635,9 @@ export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): st
   if (!packagingValue(f.packaging)) return t('agent.logic.freightPackaging');
   // Dangerous goods come with their UN number, name and class — the server refuses them without (2026-10-29).
   if (isDangerousNature(f.natureCode) && !dangerousGoodsValue(f)) return t('agent.logic.freightDangerous');
+  // 2026-11-13 — who helps at each end, once the clerk said what it takes to move it (unusual loads).
+  const work = workBlocker(f.work);
+  if (work) return t(work);
   if (f.freightWhen === 'planned') {
     const at = Date.parse(f.freightDate);
     if (!f.freightDate || Number.isNaN(at)) return t('agent.logic.freightPlannedDate');
@@ -672,6 +679,8 @@ export function freightStepMissing(step: FreightStep | 'goods', f: AcceptForm, n
   if (step === 'load') {
     if (!packagingValue(f.packaging)) return t('agent.logic.freightPackaging');
     if (isDangerousNature(f.natureCode) && !dangerousGoodsValue(f)) return t('agent.logic.freightDangerous');
+    const work = workBlocker(f.work);
+    if (work) return t(work);
   }
   return null;
 }

@@ -1,4 +1,5 @@
 import type { BorderAdviceView } from './border';
+import type { LoadWorkView } from '../../shared/loadWork';
 import type { PassageForDriver } from './passage';
 import type { SealToFind } from '../../shared/seals';
 import type { UnitHold } from '../../shared/tamper';
@@ -206,6 +207,8 @@ export interface AssignmentView {
 
 export interface SessionView {
   active: boolean;
+  /** 2026-11-13 — the helpers who work with this driver on a job (unusual loads). Absent: they work alone. */
+  helpers?: number;
   /** The money everything priced for this driver is in — board, offers, their loads, earnings: that of the company
    *  that pays them. Absent where no company of ours does (their price is then what they agree). Write money with
    *  `cash(…, session.currency)`. */
@@ -354,6 +357,8 @@ export interface Claimable {
   assignedBy?: { name?: string; at: string };
   /** FP7 — the sender's instructions for the door, with a contact to dial. Only the driver holding the load has them. */
   instructions?: InstructionsView;
+  /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the handling marks (unusual loads). */
+  work?: LoadWorkView;
 }
 
 /**
@@ -372,6 +377,8 @@ import type { BoardBlocker } from '../../shared/board';
 /** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
 export interface BoardRow {
   freightId: string;
+  /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
+  work?: LoadWorkView;
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
   paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */

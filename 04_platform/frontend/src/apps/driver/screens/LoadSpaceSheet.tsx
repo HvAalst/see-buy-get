@@ -4,7 +4,7 @@ import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { trailerApi } from '../../../shared/trailers';
 import { useT } from '../../../shared/i18n';
 import { equipmentOptions, equipmentWords } from '../../../shared/equipment';
-import { litresOf, loadSpaceBody } from '../logic';
+import { litresOf, loadLengthOf, loadSpaceBody } from '../logic';
 import type { DriverActions } from '../useDriverApp';
 
 /**
@@ -25,10 +25,18 @@ export interface LoadSpaceVehicle {
   towLimits?: { brakedKg: number; unbrakedKg: number; grossKg?: number };
   pricePerKm?: number;
   pricePerKmWithTrailer?: number;
+  /** 2026-11-13 — how long its load space is, in metres (unusual loads, U3). */
+  loadLengthM?: number;
 }
 
-export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg, onShift = false }: { open: boolean; onClose: () => void; actions: DriverActions; vehicle: LoadSpaceVehicle; word: string; own: boolean; sbg?: SbgClient | null; onShift?: boolean }) {
+export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg, onShift = false, helpers }: { open: boolean; onClose: () => void; actions: DriverActions; vehicle: LoadSpaceVehicle; word: string; own: boolean; sbg?: SbgClient | null; onShift?: boolean; /** 2026-11-13 — who works with the driver, as their session says (unusual loads). */ helpers?: number }) {
   const t = useT();
+  // 2026-11-13 — the load space's length, and who works with the driver (unusual loads, U1/U3).
+  const [length, setLength] = useState(vehicle.loadLengthM != null ? String(vehicle.loadLengthM) : '');
+  const lengthMade = loadLengthOf(length);
+  const lengthChanged = length !== (vehicle.loadLengthM != null ? String(vehicle.loadLengthM) : '');
+  const [crew, setCrew] = useState(helpers ?? 0);
+  const crewChanged = crew !== (helpers ?? 0);
   // 2026-11-13 — what it may tow (trailer plan D3), for a car or a van; and, on a shift, its rate while towing (D5).
   const tows = vehicle.vehicleClass === 'van' || vehicle.vehicleClass === 'car';
   const [braked, setBraked] = useState(vehicle.towLimits ? String(vehicle.towLimits.brakedKg) : '');
@@ -49,7 +57,8 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg
   const save = async () => {
     if (!('body' in made)) return;
     setBusy(true);
-    const failed = await actions.setLoadSpace(vehicle.vehicleId, made.body, equipmentChanged ? picked : undefined);
+    if ('error' in lengthMade) return;
+    const failed = await actions.setLoadSpace(vehicle.vehicleId, { ...made.body, ...(lengthChanged ? { loadLengthM: lengthMade.m } : {}) }, equipmentChanged ? picked : undefined);
     if (failed) {
       setBusy(false);
       return setError(failed);
@@ -66,6 +75,13 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg
       if (r.error) {
         setBusy(false);
         return setError(r.error);
+      }
+    }
+    if (crewChanged) {
+      const crewFailed = await actions.setHelpers(crew);
+      if (crewFailed) {
+        setBusy(false);
+        return setError(crewFailed);
       }
     }
     setBusy(false);
@@ -92,6 +108,25 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg
         <p class="hint">{t('driver.load.litresHint')}</p>
       </div>
       {'error' in made && (kg.trim() || litres.trim()) ? <p class="hint">{t(made.error)}</p> : null}
+      <div class="field">
+        <label class="field__label" for="load-length">
+          {t('driver.load.length')}
+        </label>
+        <input id="load-length" class="input" type="number" inputMode="decimal" min="0.5" max="20" step="0.1" value={length} onInput={(e) => setLength(e.currentTarget.value)} />
+        <p class="hint">{'error' in lengthMade ? t(lengthMade.error) : t('driver.load.lengthHint')}</p>
+      </div>
+
+      <div class="field">
+        <span class="field__label">{t('driver.helpers.title')}</span>
+        <p class="hint">{t('driver.helpers.lede')}</p>
+        <div class="chips">
+          {([0, 1, 2] as const).map((n) => (
+            <button key={n} type="button" class={`chip chip--tap${crew === n ? ' chip--on' : ''}`} aria-pressed={crew === n} onClick={() => setCrew(n)}>
+              {t(n === 0 ? 'driver.helpers.none' : n === 1 ? 'driver.helpers.one' : 'driver.helpers.two')}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div class="field">
         <span class="field__label">{t('equipment.title')}</span>
@@ -140,7 +175,7 @@ export function LoadSpaceSheet({ open, onClose, actions, vehicle, word, own, sbg
         </div>
       ) : null}
 
-      <Button chevron={false} busy={busy} disabled={!('body' in made)} onClick={() => void save()}>
+      <Button chevron={false} busy={busy} disabled={!('body' in made) || 'error' in lengthMade} onClick={() => void save()}>
         {t('driver.load.save')}
       </Button>
       <Button variant="link" onClick={onClose}>

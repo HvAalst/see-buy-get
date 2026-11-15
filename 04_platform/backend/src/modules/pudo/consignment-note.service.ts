@@ -1,4 +1,5 @@
 import { truckFlightWords } from './air-terminal.types';
+import { workLines } from './load-work';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
@@ -199,6 +200,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.fragile) instructions.push('Fragile — handle with care');
     if (f.indivisible) instructions.push('Indivisible load — do not split');
     if (f.requiredEquipment?.length) instructions.push(`Equipment required: ${f.requiredEquipment.join(', ')}`);
+    // 2026-11-13 — how it must be handled, and what each end has and leaves the driver to bring (unusual loads, U1–U3).
+    instructions.push(...workLines(f.work, f.dimensionsCm));
     if (f.scheduledPickupAt) instructions.push(`Taking over booked for ${when(f.scheduledPickupAt)}`);
     // FP7 — what the sender actually wrote, after what the load's facts imply; then every subsequent instruction, dated.
     if (f.instructions?.deliveryWindow) instructions.push(`Deliver: ${f.instructions.deliveryWindow}`);

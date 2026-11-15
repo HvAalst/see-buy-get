@@ -2,6 +2,7 @@ import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt, type CarrierCoverPr
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
+import { MAX_HELPERS } from './load-work';
 import { hashPhone } from '../../foundation/identity/phone';
 import { TOWING_KINDS, type TowingKind } from './trailer-rules';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -1094,6 +1095,16 @@ export class DriverService {
     // Zero and undefined are ONE state — no floor — rather than "a floor of nothing", which every load
     // clears anyway and which would leave two ways of saying the same thing.
     driver.nudgeMinEarn = amount != null && amount > 0 ? Math.round(amount * 100) / 100 : undefined;
+    return driver;
+  }
+
+  /** 2026-11-13 — the helpers who work with this driver, 0 to 2 (unusual loads, U1). Zero is "works alone". */
+  setHelpers(did: string, helpers: number): FleetDriver {
+    const driver = this.require(did);
+    if (!Number.isInteger(helpers) || helpers < 0 || helpers > MAX_HELPERS) throw new GlosError('INVALID_INPUT', `Say how many helpers work with you: none, one or two`, { field: 'helpers' });
+    if (helpers) driver.helpers = helpers;
+    else delete driver.helpers;
+    this.drivers.set(did, driver);
     return driver;
   }
 

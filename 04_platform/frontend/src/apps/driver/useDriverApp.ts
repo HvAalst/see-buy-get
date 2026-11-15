@@ -1502,7 +1502,7 @@ export function useDriverApp() {
    * 2026-11-13 — and, on their own vehicle, the loading equipment it carries (the whole list), in the same save.
    */
   const setLoadSpace = useCallback(
-    async (vehicleId: string, body: { capacityKg: number; volumeM3: number | null }, equipment?: string[]): Promise<SbgError | null> => {
+    async (vehicleId: string, body: { capacityKg: number; volumeM3: number | null; loadLengthM?: number | null }, equipment?: string[]): Promise<SbgError | null> => {
       if (!client) return null;
       const r = await client.api.setLoadSpace(vehicleId, body);
       if (r.error) return r.error;
@@ -1516,6 +1516,20 @@ export function useDriverApp() {
       return null;
     },
     [client, pushToast, refresh],
+  );
+
+  /** 2026-11-13 — who works with this driver on a job (unusual loads, U1): loads that need more hands are offered by it. */
+  const setHelpers = useCallback(
+    async (helpers: number): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      const r = await client.api.setHelpers(did, helpers);
+      if (r.error) return r.error;
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.helpers.saved') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
   );
 
   const matchRate = useCallback(
@@ -2481,6 +2495,7 @@ export function useDriverApp() {
       freightManifest: (freightId: string) => client!.api.freightManifest(freightId),
       matchRate,
       setLoadSpace,
+      setHelpers,
       loadTrips,
       saveTrips,
       skipTrip,

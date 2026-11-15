@@ -20,6 +20,7 @@ import { HeldByAuthority, HeldOnTheWay } from './load-detention.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
+import { LoadWork, LoadWorkView } from './load-work.types';
 import { TRUCK_SUBTYPES, TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 
@@ -1032,6 +1033,8 @@ export class Freight {
   createdAt: string;
   /** 2026-11-13 — posted while its country was in test mode: counted in no report (T5). */
   @ApiPropertyOptional() test?: boolean;
+  /** 2026-11-13 — what it takes to move it, as its poster said (unusual loads, U1–U3; load-work.ts). Frozen with the load. */
+  @ApiPropertyOptional({ type: LoadWork }) work?: LoadWork;
 }
 
 /** FB4a — the vehicle that took a load, as much of it as the market series needs. */
@@ -1161,6 +1164,8 @@ export class BoardRow {
   bodyHint?: TruckSubtype;
   @ApiProperty({ enum: ['instant', 'negotiate'] })
   commitMode: FreightCommitMode;
+  /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
+  @ApiPropertyOptional({ type: LoadWorkView }) work?: LoadWorkView;
   scheduledPickupAt?: string;
   /** The empty run to reach it, the paid run, and their sum — the numbers the whole decision turns on. */
   deadheadKm: number;
@@ -1617,6 +1622,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional() handBacks?: Array<{ reason: string; at: string }>;
   /** FP7 — the sender's own instructions, and whether they can still be rewritten (before pickup) or only added to. */
   @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
+  /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
+  @ApiPropertyOptional({ type: LoadWorkView }) work?: LoadWorkView;
   @ApiProperty({ enum: ['edit', 'amend', 'none'] })
   instructionsMode: 'edit' | 'amend' | 'none';
   /** The carrier's reservations at taking over, and the sender's answer once given (CMR Art. 8(2)). */
@@ -1839,6 +1846,8 @@ export class Claimable {
   @ApiPropertyOptional() assignedBy?: { name?: string; at: string };
   /** FP7 — the sender's instructions for the door, with a contact to dial. Only the driver holding the load reads them. */
   @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
+  /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */
+  @ApiPropertyOptional({ type: LoadWorkView }) work?: LoadWorkView;
   /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
   scheduledPickupAt?: string;
   /** CA6 — the country at each end of a freight, where it is known. */
