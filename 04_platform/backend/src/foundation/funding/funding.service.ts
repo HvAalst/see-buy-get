@@ -69,7 +69,7 @@ export class FundingService {
     const payer = this.payerFor(input.payerKind);
     // Refuses where we hold no money in their country, BEFORE a reference exists: an intent that could
     // never be posted is a promise to a shopkeeper that nobody can keep.
-    const { entityId, currency, label } = payer.resolve(input.payerDid);
+    const { entityId, currency, label } = payer.resolve(input.payerDid, purpose);
 
     for (const open of this.list({ payerDid: input.payerDid, purpose }).filter((f) => FUNDING_OPEN.includes(f.status))) {
       this.expire(open.fundingId, 'superseded by a newer request', now);

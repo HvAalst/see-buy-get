@@ -208,6 +208,8 @@ export const NOTIFICATION_KINDS = [
   'parcel_weight',
   // 2026-11-13 — the poster answered a driver's price with one of its own (unusual loads, U4).
   'freight_counter',
+  // 2026-11-13 — a person's load paid first: accepted and being paid, paid, not paid in time, money back (part 3b).
+  'load_payment',
   /**
    * A person's own door, paid first by mobile money (the user, 2026-10-27: "Mobile money first"): paid, a driver bringing it,
    * delivered and what goes back to their number, no driver yet, or the time to pay ran out. In their app, never a text.

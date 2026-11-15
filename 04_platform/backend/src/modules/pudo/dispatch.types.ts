@@ -1035,6 +1035,15 @@ export class Freight {
   @ApiPropertyOptional() test?: boolean;
   /** 2026-11-13 — what it takes to move it, as its poster said (unusual loads, U1–U3; load-work.ts). Frozen with the load. */
   @ApiPropertyOptional({ type: LoadWork }) work?: LoadWork;
+  /** 2026-11-13 — a person's load paid first to a company of ours and held until delivery (unusual loads, part 3b). */
+  @ApiPropertyOptional() escrow?: boolean;
+  /** …its delivery code: the person hands it on; the driver gives it at the door. Only the person is shown it. */
+  @ApiPropertyOptional() deliveryCode?: string;
+  @ApiPropertyOptional() deliveryCodeTries?: number;
+  /** …the person said it arrived: delivered without the code (their receiver lost it). */
+  @ApiPropertyOptional() posterConfirmedAt?: string;
+  /** …a price accepted and being paid: no other price is taken until it is paid or the time runs out. */
+  @ApiPropertyOptional() payHold?: { proposalId: string; until: string };
 }
 
 /** FB4a — the vehicle that took a load, as much of it as the market series needs. */
@@ -1149,6 +1158,10 @@ export class BoardMine {
   proposalId: string;
   price: number;
   @ApiPropertyOptional({ type: ProposalCounter }) counter?: ProposalCounter;
+  /** 2026-11-13 — accepted, and the sender is paying: until when (a load paid first, part 3b). */
+  @ApiPropertyOptional() awaitingPayment?: string;
+  /** …or the driver took the sender's price back, and it is theirs to pay. */
+  @ApiPropertyOptional() counterTaken?: boolean;
 }
 
 /** FB1 — one load as the board shows it: the market's facts, this driver's price, and every reason why not. */
@@ -1530,6 +1543,10 @@ export class FreightProposal {
   @ApiPropertyOptional({ type: ProposalCounter }) counter?: ProposalCounter;
   /** The price it was accepted at, where that was the poster's price back and not the driver's. */
   @ApiPropertyOptional() agreedPrice?: number;
+  /** 2026-11-13 — the driver took the poster's price back on a load paid first: it is the person's to pay now. */
+  @ApiPropertyOptional() counterTaken?: string;
+  /** …and what the person pays for it, all in (a load paid first). */
+  @ApiPropertyOptional() charge?: number;
 }
 
 
@@ -1589,6 +1606,10 @@ export class PostedFreightRow {
   status: FreightStatus;
   @ApiProperty({ enum: ['instant', 'negotiate'] })
   commitMode: FreightCommitMode;
+  /** 2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid. */
+  @ApiPropertyOptional() escrow?: boolean;
+  @ApiPropertyOptional() deliveryCode?: string;
+  @ApiPropertyOptional() awaitingPayment?: string;
   /** The money the budget, the prices offered and the one agreed are in: the poster’s company’s (Freight.postedCurrency). */
   @ApiPropertyOptional() currency?: string;
   /** The cash cap the customer agreed — what a price is judged against. */
@@ -1786,6 +1807,8 @@ export class DeskNumber {
 
 export class Claimable {
   kind: ClaimableKind;
+  /** 2026-11-13 — delivered only with the code the sender gave whoever receives it (a load paid first, part 3b). */
+  @ApiPropertyOptional() deliveryCodeNeeded?: boolean;
   /**
    * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.

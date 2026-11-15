@@ -3356,6 +3356,8 @@ export class FreightActionDto {
   @IsOptional() @IsInt() @Min(0) @Max(100000) countedPieces?: number;
   /** 2026-11-01 — at acceptance at an airline's cargo terminal: the handler's acceptance or warehouse receipt number. */
   @IsOptional() @IsString() @MaxLength(60) terminalReceipt?: string;
+  /** 2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b). */
+  @IsOptional() @IsString() @MaxLength(12) deliveryCode?: string;
   /** FP3 — at delivery: who received the goods, the photo of them as put down, and what the receiver said (box 24). */
   @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
   @IsOptional() @IsString() podPhotoId?: string;

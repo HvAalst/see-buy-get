@@ -492,6 +492,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   // 2026-11-01 — where road meets air: the pieces counted at the cargo shed, the handler's receipt at the cargo terminal.
   const [counted, setCounted] = useState('');
   const [receipt, setReceipt] = useState('');
+  // 2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b).
+  const [deliveryCode, setDeliveryCode] = useState('');
   useEffect(() => {
     setCounted('');
     setReceipt('');
@@ -640,6 +642,15 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               ) : null}
               <FoundSection claim={claim} open={foundOpen} setOpen={setFoundOpen} form={found} setForm={setFound} actions={actions} busy={busy} />
               <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} onReport={() => onTamper({ claim, finding: 'seal_not_as_on_the_note' })} />
+              {claim.deliveryCodeNeeded ? (
+                <div class="field" style="margin-top:14px">
+                  <label class="field__label" for={`code-${claim.ref}`}>
+                    {t('driver.loads.deliveryCode')}
+                  </label>
+                  <input id={`code-${claim.ref}`} class="input" inputMode="numeric" maxLength={6} value={deliveryCode} onInput={(e) => setDeliveryCode(e.currentTarget.value.replace(/\D/g, ''))} disabled={busy} />
+                  <p class="hint">{t('driver.loads.deliveryCodeHint')}</p>
+                </div>
+              ) : null}
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
                   {t('driver.loads.remarksLabel')}
@@ -653,7 +664,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
             <Button
               chevron={false}
               busy={busy}
-              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || !countOk || !receiptOk || foundWrong !== null}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || !countOk || !receiptOk || foundWrong !== null || (!isPickup && Boolean(claim.deliveryCodeNeeded) && deliveryCode.length !== 6)}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
@@ -663,7 +674,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}), ...(shed?.side === 'collection' && countedN !== null ? { countedPieces: countedN } : {}) });
                 } else {
                   const exceptions = foundOpen ? foundBody(found) : undefined;
-                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}) });
+                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}), ...(claim.deliveryCodeNeeded ? { deliveryCode } : {}) });
                 }
                 onClose();
               }}

@@ -7,6 +7,10 @@ import { FleetService } from '../src/modules/pudo/fleet.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { AGREED } from './agreed';
 import { declared } from './declared';
+import { FundingService } from '../src/foundation/funding/funding.service';
+import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { PersonLoadPayService } from '../src/modules/pudo/person-load-pay.service';
+import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
 
 /**
  * A PERSON POSTS A LOAD FROM THE SEND APP, over the wire (the owner, 2026-11-13: plan U5, "a person posts a load in the Send
@@ -71,7 +75,7 @@ describe('a person posts a load, over the wire', () => {
     expect(mine.map((r) => r.freightId)).toContain(loadId);
   });
 
-  it('2 · refused in words: a number to call missing, a pin far from every town, a contract, and Kenya until paying up front comes', async () => {
+  it('2 · refused in words: a number to call missing, a pin far from every town, a contract', async () => {
     const said = async (body: object) => {
       const r = await post(person, body);
       expect(r.status).toBeGreaterThanOrEqual(400);
@@ -80,7 +84,6 @@ describe('a person posts a load, over the wire', () => {
     expect(await said(fridge({ contactPhone: '' }))).toMatch(/number the driver can call/);
     expect(await said(fridge({ pickupLocation: { lat: -20, lng: 60 } }))).toMatch(/cannot tell which country the pickup is in/);
     expect(await said(fridge({ contractId: 'ctr_x' }))).toMatch(/for themselves/);
-    expect(await said(fridge({ pickupLocation: { lat: -1.2921, lng: 36.8219 }, destLocation: { lat: -1.1, lng: 37.0 } }))).toMatch(/Paying for a load from the Send app is coming in Kenya/);
   });
 
   it('3 · a driver names a price; the person accepts it from their own sign-in, and nobody else can', async () => {
@@ -100,5 +103,117 @@ describe('a person posts a load, over the wire', () => {
     await http().post(`/v1/sbg/dispatch/proposals/${offers[0].proposalId}/accept`).set(bearer(someoneElse)).expect(403);
     const taken = (await http().post(`/v1/sbg/dispatch/proposals/${offers[0].proposalId}/accept`).set(bearer(person)).expect(201)).body;
     expect(taken.freight).toMatchObject({ status: 'claimed', lockedPrice: 90000, settlement: 'between_parties' });
+  });
+  /* --------------------------- part 3b: in Kenya, paid first and held until delivery (the owner: "escrow") -- */
+
+  const nairobi = { lat: -1.2921, lng: 36.8219 };
+  const thika = { lat: -1.0388, lng: 37.0834 };
+  let operator = '';
+  let kePerson = '';
+  let keLoad = '';
+  let keDriver = { did: '', token: '' };
+  let proposalId = '';
+  const photo = async (token: string, kind: string) => {
+    const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${digits()}`)]).toString('base64')}`;
+    return (await http().post('/v1/sbg/media').set(bearer(token)).send({ kind, dataUrl }).expect(201)).body.mediaId as string;
+  };
+
+  it('4 · in Kenya, where a company of ours takes the money: posted to be paid first, in Kenya’s money, billed through it', async () => {
+    operator = (await http().post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token as string;
+    kePerson = await aPerson();
+    const load = (await post(kePerson, fridge({ pickupLocation: nairobi, pickupLabel: 'Kilimani', destLocation: thika, destLabel: 'Thika', contactPhone: '+254700123456' })).expect(201)).body;
+    keLoad = load.freightId;
+    expect(load).toMatchObject({ commitMode: 'negotiate', escrow: true, pickupCountry: 'KE', postedCurrency: 'KES' });
+    expect(load.settlement).toBeUndefined();
+    expect(load.sellerEntityId).toEqual(expect.any(String));
+  });
+
+  it('5 · a driver names a price; the person accepts it only by paying, all in; nothing else is taken meanwhile', async () => {
+    const drivers = app.get(DriverService);
+    const d = drivers.register({ displayName: 'Mwangi', fullName: 'Mwangi Driver', nationalId: `ID-KE-${digits()}`, mobile: `+2547${digits()}2`, licenceClasses: ['van'], licenceNumber: `L-${digits()}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true } as never);
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const van = app.get(VehicleService).register({ plate: `KDH ${digits().slice(0, 3)}E`, vehicleClass: 'van', capacityKg: 1_000, ownerName: 'Mwangi', ownerDriverDid: d.did, baseFee: 0.5, pricePerKm: 0.1 } as never);
+    app.get(FleetService).couple(d.did, van.vehicleId);
+    declared(app, 'driver', d.did);
+    keDriver = { did: d.did, token: (await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token as string };
+    await http().post(`/v1/sbg/dispatch/freight/${keLoad}/proposals`).set(bearer(keDriver.token)).send({ from: nairobi, price: 2003 }).expect(201);
+    const offers = (await http().get(`/v1/sbg/dispatch/freight/${keLoad}/proposals`).set(bearer(kePerson)).expect(200)).body.items as Array<{ proposalId: string; price: number; charge: number }>;
+    proposalId = offers[0].proposalId;
+    expect(offers[0].charge).toBeGreaterThan(2003);
+    // A total in cents, so the amount asked is seen rounded up to a whole shilling.
+    expect(Number.isInteger(offers[0].charge)).toBe(false);
+    // Not by Accept: by paying.
+    const plain = await http().post(`/v1/sbg/dispatch/proposals/${proposalId}/accept`).set(bearer(kePerson));
+    expect([plain.status, plain.body.detail]).toEqual([400, expect.stringMatching(/Accept it by paying for it/)]);
+    // Nobody else pays for it.
+    const other = await aPerson();
+    await http().post(`/v1/sbg/dispatch/freight/${keLoad}/pay`).set(bearer(other)).send({ proposalId, phone: '+254711000111' }).expect(403);
+    const paying = (await http().post(`/v1/sbg/dispatch/freight/${keLoad}/pay`).set(bearer(kePerson)).send({ proposalId, phone: '+254711000111' }).expect(201)).body;
+    expect(paying).toMatchObject({ state: 'awaiting', currency: 'KES', price: 2003, amount: Math.ceil(offers[0].charge) });
+    expect(Number.isInteger(paying.amount)).toBe(true);
+    await http().post(`/v1/sbg/dispatch/freight/${keLoad}/pay`).set(bearer(kePerson)).send({ proposalId, phone: '+254711000111' }).expect(400);
+    // The driver sees it accepted and being paid.
+    const board = (await http().get('/v1/sbg/dispatch/board').query({ lat: nairobi.lat, lng: nairobi.lng }).set(bearer(keDriver.token)).expect(200)).body.items as Array<{ freightId: string; mine?: { awaitingPayment?: string } }>;
+    expect(board.find((r) => r.freightId === keLoad)?.mine?.awaitingPayment).toEqual(expect.any(String));
+  });
+
+  it('6 · paid: the load is the driver’s, billed out of what was paid; the person holds the delivery code', async () => {
+    const funding = app.get(FundingService).list({ payerDid: (await http().get('/v1/sbg/identity/me').set(bearer(kePerson)).expect(200)).body.personDid, purpose: 'load' })[0];
+    const view = (await http().get(`/v1/sbg/dispatch/freight/${keLoad}/payment`).set(bearer(kePerson)).expect(200)).body;
+    await http().post(`/v1/rails/funding/${funding.fundingId}/simulate`).set(bearer(operator)).send({ providerRef: `MPX${digits()}`, amount: view.amount }).expect(201);
+    const f = app.get(DispatchService).requireFreightPublic(keLoad);
+    expect(f).toMatchObject({ status: 'claimed', claimedBy: keDriver.did, lockedPrice: 2003, paidStatus: 'billed' });
+    expect((await http().get(`/v1/sbg/dispatch/freight/${keLoad}/payment`).set(bearer(kePerson)).expect(200)).body.state).toBe('paid');
+    const mine = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === keLoad);
+    expect(mine.deliveryCode).toMatch(/^\d{6}$/);
+  });
+
+  it('7 · delivered only with the code: a wrong one refused; the right one delivers, and the driver is paid on it', async () => {
+    const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    store.set(keLoad, { ...store.get(keLoad), status: 'in_transit', pickedUpAt: new Date().toISOString() });
+    const code = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === keLoad).deliveryCode as string;
+    const claim = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(keDriver.did)}/claims`).set(bearer(keDriver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === keLoad);
+    expect(claim.deliveryCodeNeeded).toBe(true);
+    const deliver = async (deliveryCode?: string) => http().post(`/v1/sbg/dispatch/freight/${keLoad}/deliver`).set(bearer(keDriver.token)).send({ driverDid: keDriver.did, confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: await photo(keDriver.token, 'pod'), ...(deliveryCode ? { deliveryCode } : {}) });
+    const wrong = await deliver(code === '123456' ? '654321' : '123456');
+    expect([wrong.status, wrong.body.code]).toEqual([400, 'OTP_INVALID']);
+    expect((await deliver()).status).toBe(400);
+    const done = await deliver(code);
+    expect(done.status).toBe(201);
+    expect(app.get(DispatchService).requireFreightPublic(keLoad)).toMatchObject({ status: 'delivered', driverPaid: true });
+  });
+
+  it('8 · not paid in time: the driver is let go and the price is open again; the person may pay again', async () => {
+    const person = await aPerson();
+    const load = (await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Westlands', destLocation: thika, destLabel: 'Thika', contactPhone: '+254700123457' })).expect(201)).body;
+    await http().post(`/v1/sbg/dispatch/freight/${load.freightId}/proposals`).set(bearer(keDriver.token)).send({ from: nairobi, price: 1800 }).expect(201);
+    const id = ((await http().get(`/v1/sbg/dispatch/freight/${load.freightId}/proposals`).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    await http().post(`/v1/sbg/dispatch/freight/${load.freightId}/pay`).set(bearer(person)).send({ proposalId: id, phone: '+254711000222' }).expect(201);
+    // Within its fifteen minutes it waits; after them, the driver is let go.
+    app.get(PersonLoadPayService).sweep(Date.now() + 10 * 60_000);
+    expect((await http().get(`/v1/sbg/dispatch/freight/${load.freightId}/payment`).set(bearer(person)).expect(200)).body.state).toBe('awaiting');
+    app.get(PersonLoadPayService).sweep(Date.now() + 16 * 60_000);
+    expect((await http().get(`/v1/sbg/dispatch/freight/${load.freightId}/payment`).set(bearer(person)).expect(200)).body.state).toBe('lapsed');
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId)).toMatchObject({ status: 'available' });
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).payHold).toBeUndefined();
+    await http().post(`/v1/sbg/dispatch/freight/${load.freightId}/pay`).set(bearer(person)).send({ proposalId: id, phone: '+254711000222' }).expect(201);
+  });
+
+  it('9 · paid, then handed back by the driver: everything the person paid goes back, and the load is open for prices again', async () => {
+    const person = await aPerson();
+    const load = (await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Lavington', destLocation: thika, destLabel: 'Thika', contactPhone: '+254700123458' })).expect(201)).body;
+    const at = (path: string) => `/v1/sbg/dispatch/freight/${load.freightId}/${path}`;
+    await http().post(at('proposals')).set(bearer(keDriver.token)).send({ from: nairobi, price: 1500 }).expect(201);
+    const id = ((await http().get(at('proposals')).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    const view = (await http().post(at('pay')).set(bearer(person)).send({ proposalId: id, phone: '+254711000333' }).expect(201)).body;
+    const personDid = (await http().get('/v1/sbg/identity/me').set(bearer(person)).expect(200)).body.personDid;
+    const funding = app.get(FundingService).list({ payerDid: personDid, purpose: 'load' })[0];
+    await http().post(`/v1/rails/funding/${funding.fundingId}/simulate`).set(bearer(operator)).send({ providerRef: `MPX${digits()}`, amount: view.amount }).expect(201);
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).status).toBe('claimed');
+    await http().post(at('hand-back')).set(bearer(keDriver.token)).send({ reason: 'My van broke down' }).expect(201);
+    const after = (await http().get(at('payment')).set(bearer(person)).expect(200)).body;
+    expect(after).toMatchObject({ state: 'refunded', owedBack: view.amount });
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).status).toBe('available');
   });
 });

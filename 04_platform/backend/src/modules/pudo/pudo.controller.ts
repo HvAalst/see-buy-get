@@ -40,6 +40,8 @@ import { REVIEW_CODE_HELD, reviewCodeOn } from '../../foundation/runtime/review-
 import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
+import { PersonLoadPayService } from './person-load-pay.service';
+import { LoadPayDto, LoadPaymentView } from './person-load-pay.types';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
@@ -412,6 +414,8 @@ export class SbgController {
     @Optional() private readonly hubDensity?: HubDensityService,
     // 2026-11-12 — the country's hub list (the owner's D2 and D7).
     @Optional() private readonly hubList?: HubListService,
+    // 2026-11-13 — a person paying for a load they posted, held until delivery (part 3b).
+    @Optional() private readonly loadPay?: PersonLoadPayService,
   ) {}
 
   /**
@@ -8258,7 +8262,10 @@ export class SbgController {
   @Get('dispatch/freight/:id/proposals')
   listFreightProposals(@Param('id') id: string, @Actor() actor: IntrospectionResult): FreightProposalsResponse {
     this.requireNegotiator(id, actor);
-    return { items: this.dispatch.proposalsFor(id) };
+    // 2026-11-13 — a load paid first: what the person pays for each price, all in — one total, never the fee (part 3b).
+    const f = this.dispatch.requireFreightPublic(id);
+    const items = this.dispatch.proposalsFor(id);
+    return { items: f.escrow ? items.map((p) => ({ ...p, charge: this.dispatch.chargeFor(id, p.counterTaken && p.counter ? p.counter.price : p.price) })) : items };
   }
 
   /** The poster takes a price — and that acceptance is what claims the load. */
@@ -8266,6 +8273,8 @@ export class SbgController {
   @Post('dispatch/proposals/:id/accept')
   acceptFreightProposal(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
+    // 2026-11-13 — a load paid first is accepted by paying for it (part 3b): the load is committed when the money is in.
+    if (this.dispatch.requireFreightPublic(this.dispatch.requireProposalPublic(id).freightId).escrow) throw new GlosError('INVALID_STATE', 'Accept it by paying for it: the load is the driver\u2019s once it is paid');
     return this.dispatch.acceptProposal(id);
   }
 
@@ -8278,6 +8287,36 @@ export class SbgController {
   counterFreightProposal(@Param('id') id: string, @Body() dto: CounterProposalDto, @Actor() actor: IntrospectionResult) {
     this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
     return this.dispatch.counterProposal(id, { price: dto.price, ...(dto.note ? { note: dto.note } : {}), by: auditActor(actor) });
+  }
+
+  /**
+   * 2026-11-13 — A PERSON PAYS FOR THEIR LOAD (part 3b): accepting a driver's price, or the driver having taken theirs back — M-Pesa
+   * asks them for it, all in; held by our company until the load is delivered. Their own load, from their own sign-in.
+   */
+  @Roles('consumer')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('dispatch/freight/:id/pay')
+  payForLoad(@Param('id') id: string, @Body() dto: LoadPayDto, @Actor() actor: IntrospectionResult): Promise<LoadPaymentView> {
+    if (!this.loadPay || actor?.role !== 'consumer' || !actor.did) throw new GlosError('FORBIDDEN', 'A person pays for their own load, from their own sign-in');
+    return this.loadPay.pay(actor.did, id, { proposalId: dto.proposalId, phone: dto.phone });
+  }
+
+  /** What the person reads of their payment for a load: waiting, paid, not paid in time, money back. */
+  @Roles('consumer')
+  @Get('dispatch/freight/:id/payment')
+  loadPayment(@Param('id') id: string, @Actor() actor: IntrospectionResult): LoadPaymentView {
+    const view = actor?.did ? this.loadPay?.viewFor(actor.did, id) : undefined;
+    if (!view) throw new GlosError('NOT_FOUND', 'No payment for that load');
+    return view;
+  }
+
+  /** The person says it arrived: the driver may then deliver without the code. */
+  @Roles('consumer')
+  @Post('dispatch/freight/:id/arrived')
+  loadArrived(@Param('id') id: string, @Actor() actor: IntrospectionResult): { confirmedAt: string } {
+    if (!this.loadPay || actor?.role !== 'consumer' || !actor.did) throw new GlosError('FORBIDDEN', 'The person whose load it is says it arrived');
+    return this.loadPay.arrived(actor.did, id);
   }
 
   /** 2026-11-13 — the driver takes the poster's price back: the load is theirs at it. Their own price, from their own sign-in. */
@@ -8337,7 +8376,7 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...phoneAtHandover(actor, dto.position) });
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...(dto.deliveryCode ? { deliveryCode: dto.deliveryCode } : {}), ...phoneAtHandover(actor, dto.position) });
   }
 
   /**

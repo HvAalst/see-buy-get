@@ -287,6 +287,9 @@ export function BoardCard({ row, currency, onPropose, onAsk, onTakeCounter, taki
       {row.mine ? (
         <div class="board__mine">
           <p class="meta">{t('driver.board.yourPrice', { amount: cash(row.mine.price, currency) })}</p>
+          {/* 2026-11-13 — a load paid first: accepted and being paid, or the sender's price taken back (part 3b). */}
+          {row.mine.awaitingPayment ? <p class="t-body">{t('driver.board.awaitingPayment', { time: new Date(row.mine.awaitingPayment).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) })}</p> : null}
+          {row.mine.counterTaken && !row.mine.awaitingPayment ? <p class="t-body">{t('driver.board.counterTakenPaying')}</p> : null}
           {row.mine.counter ? (
             <>
               <p class="t-body">

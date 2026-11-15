@@ -81,7 +81,7 @@ export function MyParcelsScreen({ state, actions, client = null }: MyParcelsScre
 
       {freights.length ? <FreightGroup items={freights} /> : null}
       {/* 2026-11-13 — the loads this person posted, with the drivers' prices (unusual loads, U5). */}
-      <PersonLoadsGroup client={client} />
+      <PersonLoadsGroup client={client} phone={state.authPhone} />
 
       {empty ? (
         <Card tone="soft">

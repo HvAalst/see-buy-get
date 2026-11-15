@@ -62,6 +62,10 @@ export interface PersonLoadRow {
   currency?: string;
   openProposals?: number;
   work?: LoadWorkView;
+  /** 2026-11-13 — paid first to SeeBuyGet and held until delivery (part 3b); its delivery code; a price being paid. */
+  escrow?: boolean;
+  deliveryCode?: string;
+  awaitingPayment?: string;
 }
 
 /** A driver's price on it, and the person's price back where they gave one. */
@@ -71,6 +75,23 @@ export interface LoadOffer {
   note?: string;
   status: string;
   counter?: { price: number; note?: string };
+  /** What the person pays for it, all in (a load paid first), and whether the driver took their price back. */
+  charge?: number;
+  counterTaken?: string;
+}
+
+/** The person's payment for a load paid first. */
+export interface LoadPaymentView {
+  state: 'awaiting' | 'paid' | 'lapsed' | 'refunded' | 'delivered' | 'reversed';
+  amount: number;
+  currency: string;
+  price: number;
+  until: string;
+  phoneMasked: string;
+  instructions?: string;
+  reference?: string;
+  pushed?: boolean;
+  owedBack?: number;
 }
 
 export function personLoadApi(sbg: SbgClient) {
@@ -81,5 +102,9 @@ export function personLoadApi(sbg: SbgClient) {
     accept: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/accept', { params: { path: { id: proposalId } } })),
     decline: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),
     counter: (proposalId: string, price: number) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/counter', { params: { path: { id: proposalId } }, body: { price } })),
+    // 2026-11-13 — a load paid first (part 3b): pay to accept, read the payment, say it arrived.
+    pay: (freightId: string, proposalId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pay', { params: { path: { id: freightId } }, body: { proposalId, phone } })),
+    payment: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/payment', { params: { path: { id: freightId } } })),
+    arrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } } })),
   };
 }

@@ -4,7 +4,7 @@ import { Button, Card, Note, PhoneField, PlacePicker, Pill, refusalSentence, typ
 import { formatMoney, useT } from '../../../shared/i18n';
 import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
-import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, type LoadOffer, type PersonLoadForm, type PersonLoadRow } from '../personLoads';
+import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, type LoadOffer, type LoadPaymentView, type PersonLoadForm, type PersonLoadRow } from '../personLoads';
 import type { SendActions, SendState } from '../useSendApp';
 
 /**
@@ -105,7 +105,7 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
           <textarea id="load-note" class="input" rows={3} maxLength={500} value={form.note} onInput={(e) => set({ note: e.currentTarget.value })} />
         </div>
       </Card>
-      <p class="card__note">{t('send.load.payDirect')}</p>
+      <p class="card__note">{t('send.load.howPay')}</p>
       {problem ? (
         <p class="hint" role="alert">
           {problem}
@@ -122,8 +122,11 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
 }
 
 /** One driver's price on the person's load: accept it, answer with your own, or say no thanks. */
-function OfferRow({ offer, currency, api, onChanged }: { offer: LoadOffer; currency?: string; api: ReturnType<typeof personLoadApi>; onChanged: () => void }) {
+function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, phone = '' }: { offer: LoadOffer; currency?: string; api: ReturnType<typeof personLoadApi>; onChanged: () => void; escrow?: boolean; freightId: string; phone?: string }) {
   const t = useT();
+  // 2026-11-13 — a load paid first: accepting is paying, from a number M-Pesa asks (part 3b).
+  const [paying, setPaying] = useState(false);
+  const [payPhone, setPayPhone] = useState(phone);
   const [answering, setAnswering] = useState(false);
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
@@ -142,12 +145,20 @@ function OfferRow({ offer, currency, api, onChanged }: { offer: LoadOffer; curre
     <div class="row row--static" role="listitem">
       <span class="row__body">
         <span class="row__t">{t('send.load.offerLine', { amount: formatMoney(offer.price, currency) })}</span>
+        {escrow && offer.charge != null ? <span class="row__s">{t('send.load.payTotal', { amount: formatMoney(offer.charge, currency) })}</span> : null}
+        {offer.counterTaken ? <span class="row__s">{t('send.load.counterTaken')}</span> : null}
         {offer.note ? <span class="row__s">“{offer.note}”</span> : null}
         {offer.counter ? <span class="row__s">{t('send.load.countered', { amount: formatMoney(offer.counter.price, currency) })}</span> : null}
         <span class="freight__acts">
-          <Button variant="link" full={false} busy={busy} onClick={() => void act(() => api.accept(offer.proposalId))}>
-            {t('send.load.accept')}
-          </Button>
+          {escrow ? (
+            <Button variant="link" full={false} onClick={() => setPaying(!paying)}>
+              {t('send.load.pay', { amount: formatMoney(offer.charge ?? offer.price, currency) })}
+            </Button>
+          ) : (
+            <Button variant="link" full={false} busy={busy} onClick={() => void act(() => api.accept(offer.proposalId))}>
+              {t('send.load.accept')}
+            </Button>
+          )}
           <Button variant="link" full={false} onClick={() => setAnswering(!answering)}>
             {t('send.load.counter')}
           </Button>
@@ -155,6 +166,17 @@ function OfferRow({ offer, currency, api, onChanged }: { offer: LoadOffer; curre
             {t('send.load.decline')}
           </Button>
         </span>
+        {paying ? (
+          <span class="freight__answer">
+            <label class="field__label" for={`load-pay-${offer.proposalId}`}>
+              {t('send.load.payPhone')}
+            </label>
+            <PhoneField id={`load-pay-${offer.proposalId}`} value={payPhone} onInput={setPayPhone} />
+            <Button full={false} chevron={false} busy={busy} disabled={!payPhone.trim()} onClick={() => void act(() => api.pay(freightId, offer.proposalId, payPhone.trim()))}>
+              {t('send.load.payNow')}
+            </Button>
+          </span>
+        ) : null}
         {answering ? (
           <span class="freight__answer">
             <label class="field__label" for={`load-counter-${offer.proposalId}`}>
@@ -177,10 +199,21 @@ function OfferRow({ offer, currency, api, onChanged }: { offer: LoadOffer; curre
 }
 
 /** One of the person's loads: what it is, where it stands, the work, and — while it waits — the drivers' prices. */
-function LoadCard({ load, api, onChanged }: { load: PersonLoadRow; api: ReturnType<typeof personLoadApi>; onChanged: () => void }) {
+function LoadCard({ load, api, onChanged, phone }: { load: PersonLoadRow; api: ReturnType<typeof personLoadApi>; onChanged: () => void; phone?: string }) {
   const t = useT();
   const [offers, setOffers] = useState<LoadOffer[] | null>(null);
-  const waiting = load.status === 'available' || load.status === 'scheduled';
+  const [payment, setPayment] = useState<LoadPaymentView | null>(null);
+  const [arrived, setArrived] = useState(false);
+  const waiting = (load.status === 'available' || load.status === 'scheduled') && !load.awaitingPayment;
+  const readPayment = async () => {
+    if (!load.escrow) return;
+    const r = await api.payment(load.freightId);
+    setPayment(r.error ? null : (r.data as unknown as LoadPaymentView));
+  };
+  useEffect(() => {
+    void readPayment();
+  }, [load.freightId, load.status, load.awaitingPayment]);
+  const when = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const read = async () => {
     const r = await api.offers(load.freightId);
     if (!r.error) setOffers(((r.data as { items?: LoadOffer[] } | undefined)?.items ?? []).filter((o) => o.status === 'open'));
@@ -200,7 +233,7 @@ function LoadCard({ load, api, onChanged }: { load: PersonLoadRow; api: ReturnTy
         ) : (
           <div class="rows" role="list">
             {offers.map((o) => (
-              <OfferRow key={o.proposalId} offer={o} currency={load.currency} api={api} onChanged={() => {
+              <OfferRow key={o.proposalId} offer={o} currency={load.currency} api={api} escrow={Boolean(load.escrow)} freightId={load.freightId} phone={phone} onChanged={() => {
                 void read();
                 onChanged();
               }} />
@@ -208,13 +241,36 @@ function LoadCard({ load, api, onChanged }: { load: PersonLoadRow; api: ReturnTy
           </div>
         )
       ) : null}
-      <p class="card__note">{t('send.load.payDirect')}</p>
+      {/* 2026-11-13 — a load paid first (part 3b): the payment waiting, the delivery code, money back. */}
+      {payment?.state === 'awaiting' ? (
+        <>
+          <Note tone="info" icon="clock" title={t('send.load.payWaiting', { phone: payment.phoneMasked, amount: formatMoney(payment.amount, payment.currency), time: when(payment.until) })} detail={payment.instructions ?? ''} />
+          <Button variant="link" full={false} onClick={() => void readPayment().then(onChanged)}>
+            {t('send.load.checkAgain')}
+          </Button>
+        </>
+      ) : null}
+      {load.deliveryCode ? (
+        <>
+          <Note tone="ok" icon="check" title={t('send.load.codeTitle', { code: load.deliveryCode })} detail={t('send.load.codeDetail')} />
+          {arrived ? (
+            <p class="hint">{t('send.load.arrivedDone')}</p>
+          ) : (
+            <Button variant="link" full={false} onClick={() => void api.arrived(load.freightId).then((r) => !r.error && setArrived(true))}>
+              {t('send.load.arrived')}
+            </Button>
+          )}
+        </>
+      ) : null}
+      {payment?.state === 'lapsed' && waiting ? <p class="hint">{t('send.load.lapsed')}</p> : null}
+      {payment?.owedBack ? <p class="hint">{t('send.load.refunded', { amount: formatMoney(payment.owedBack, payment.currency) })}</p> : null}
+      <p class="card__note">{t(load.escrow ? 'send.load.escrowNote' : 'send.load.payDirect')}</p>
     </Card>
   );
 }
 
 /** "Your loads", in My parcels: the loads this person posted, newest first. Nothing where they posted none. */
-export function PersonLoadsGroup({ client }: { client: SbgClient | null }) {
+export function PersonLoadsGroup({ client, phone }: { client: SbgClient | null; phone?: string }) {
   const t = useT();
   const api = useMemo(() => (client ? personLoadApi(client) : null), [client]);
   const [loads, setLoads] = useState<PersonLoadRow[] | null>(null);
@@ -231,7 +287,7 @@ export function PersonLoadsGroup({ client }: { client: SbgClient | null }) {
     <section>
       <h2 class="scr__section">{t('send.load.mine')}</h2>
       {loads.map((l) => (
-        <LoadCard key={l.freightId} load={l} api={api} onChanged={() => void read()} />
+        <LoadCard key={l.freightId} load={l} api={api} phone={phone} onChanged={() => void read()} />
       ))}
     </section>
   );

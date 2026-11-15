@@ -43,7 +43,9 @@ export const FUNDING_OPEN: FundingStatus[] = ['awaiting'];
  *  the counter, an activation deposit is held and refundable and is not. And `door` (the user, 2026-10-27: "Mobile money
  *  first"): what a PERSON pays first for one load to their own door — held for that load alone, never a balance: it pays
  *  the driver's price, and what is left goes back to the number it came from. */
-export type FundingPurpose = 'float' | 'activation' | 'door';
+// 2026-11-13 — and `load`: what a person pays for a load they posted, once they accept a driver's price — held for that load
+// until it is delivered (unusual loads, part 3b).
+export type FundingPurpose = 'float' | 'activation' | 'door' | 'load';
 
 /** Who is putting money in. Each kind knows its own sister, its own currency and its own deposit account;
  *  see the registered `FundingPayer` below, which is where that knowledge stays. */
@@ -388,7 +390,7 @@ export const FUNDING_RAIL = 'FUNDING_RAIL';
 export interface FundingPayer {
   /** Which sister collects for this payer, and in what money. Throws where we hold no money in their
    *  country — an intent we could never post is not worth opening. */
-  resolve(payerDid: string): { entityId: string; currency: string; label: string };
+  resolve(payerDid: string, purpose?: FundingPurpose): { entityId: string; currency: string; label: string };
   /** The rail confirmed. Post it and hand back the journal entry that created the money. */
   credit(payerDid: string, credit: { purpose: FundingPurpose; gross: number; fee: number; reference: string; fundingId: string }): { entryId: string };
   /** It bounced. Post the exact mirror — the money did leave and did come back, and a book showing

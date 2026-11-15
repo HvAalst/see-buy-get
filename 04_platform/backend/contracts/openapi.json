@@ -26261,6 +26261,96 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/pay": {
+      "post": {
+        "operationId": "Sbg.payForLoad",
+        "summary": "",
+        "description": "2026-11-13 — A PERSON PAYS FOR THEIR LOAD (part 3b): accepting a driver's price, or the driver having taken theirs back — M-Pesa\nasks them for it, all in; held by our company until the load is delivered. Their own load, from their own sign-in.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadPayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/payment": {
+      "get": {
+        "operationId": "Sbg.loadPayment",
+        "summary": "",
+        "description": "What the person reads of their payment for a load: waiting, paid, not paid in time, money back.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/arrived": {
+      "post": {
+        "operationId": "Sbg.loadArrived",
+        "summary": "",
+        "description": "The person says it arrived: the driver may then deliver without the code.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/proposals/{id}/take-counter": {
       "post": {
         "operationId": "Sbg.takeFreightCounter",
@@ -71382,6 +71472,34 @@
               }
             ]
           },
+          "escrow": {
+            "type": "boolean",
+            "description": "2026-11-13 — a person's load paid first to a company of ours and held until delivery (unusual loads, part 3b)."
+          },
+          "deliveryCode": {
+            "type": "string",
+            "description": "…its delivery code: the person hands it on; the driver gives it at the door. Only the person is shown it."
+          },
+          "deliveryCodeTries": {
+            "type": "number"
+          },
+          "posterConfirmedAt": {
+            "type": "string",
+            "description": "…the person said it arrived: delivered without the code (their receiver lost it)."
+          },
+          "payHold": {
+            "type": "object",
+            "properties": {
+              "proposalId": {
+                "required": true,
+                "type": "string"
+              },
+              "until": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "freightId": {
             "type": "string"
           },
@@ -71648,6 +71766,7 @@
           "assignedBy",
           "rating",
           "clawback",
+          "payHold",
           "freightId",
           "code",
           "description",
@@ -74987,6 +75106,14 @@
           "counter": {
             "$ref": "#/components/schemas/ProposalCounter"
           },
+          "awaitingPayment": {
+            "type": "string",
+            "description": "2026-11-13 — accepted, and the sender is paying: until when (a load paid first, part 3b)."
+          },
+          "counterTaken": {
+            "type": "boolean",
+            "description": "…or the driver took the sender's price back, and it is theirs to pay."
+          },
           "proposalId": {
             "type": "string"
           },
@@ -76409,6 +76536,16 @@
               "negotiate"
             ]
           },
+          "escrow": {
+            "type": "boolean",
+            "description": "2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid."
+          },
+          "deliveryCode": {
+            "type": "string"
+          },
+          "awaitingPayment": {
+            "type": "string"
+          },
           "currency": {
             "type": "string",
             "description": "The money the budget, the prices offered and the one agreed are in: the poster’s company’s (Freight.postedCurrency)."
@@ -76826,6 +76963,14 @@
             "type": "number",
             "description": "The price it was accepted at, where that was the poster's price back and not the driver's."
           },
+          "counterTaken": {
+            "type": "string",
+            "description": "2026-11-13 — the driver took the poster's price back on a load paid first: it is the person's to pay now."
+          },
+          "charge": {
+            "type": "number",
+            "description": "…and what the person pays for it, all in (a load paid first)."
+          },
           "proposalId": {
             "type": "string"
           },
@@ -76897,6 +77042,81 @@
         },
         "required": [
           "price"
+        ]
+      },
+      "LoadPayDto": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 40
+          },
+          "phone": {
+            "type": "string",
+            "description": "The number M-Pesa asks to pay from.",
+            "minLength": 7,
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "proposalId",
+          "phone"
+        ]
+      },
+      "LoadPaymentView": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "awaiting",
+              "paid",
+              "lapsed",
+              "refunded",
+              "delivered",
+              "reversed"
+            ]
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "pushed": {
+            "type": "boolean"
+          },
+          "owedBack": {
+            "type": "number"
+          },
+          "why": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "description": "The driver's price the person accepted."
+          },
+          "until": {
+            "type": "string"
+          },
+          "phoneMasked": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "amount",
+          "currency",
+          "price",
+          "until",
+          "phoneMasked"
         ]
       },
       "WithdrawProposalDto": {
@@ -77006,6 +77226,11 @@
             "type": "string",
             "description": "2026-11-01 — at acceptance at an airline's cargo terminal: the handler's acceptance or warehouse receipt number.",
             "maxLength": 60
+          },
+          "deliveryCode": {
+            "type": "string",
+            "description": "2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b).",
+            "maxLength": 12
           },
           "receiverName": {
             "type": "string",

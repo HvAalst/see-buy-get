@@ -8,6 +8,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { AgentService } from './agent.service';
 import { VendorService } from './vendor.service';
 import { PersonDoorService } from './person-door.service';
+import { PersonLoadPayService } from './person-load-pay.service';
 
 /**
  * WHO CAN PUT MONEY IN, and which account it lands in when a rail confirms it.
@@ -39,6 +40,8 @@ export class FundingPayerRegistrar implements OnModuleInit {
     @Optional() private readonly notifications?: NotificationService,
     // A person paying first for a load to their own door (2026-10-27: "Mobile money first"). Optional, as above.
     @Optional() private readonly doors?: PersonDoorService,
+    // 2026-11-13 — a person paying for a load they posted (unusual loads, part 3b).
+    @Optional() private readonly loads?: PersonLoadPayService,
   ) {}
 
   onModuleInit(): void {
@@ -85,11 +88,13 @@ export class FundingPayerRegistrar implements OnModuleInit {
   /** …and the person: a prepayment for ONE load to their door, never a balance (PersonDoorService). */
   private registerPerson(): void {
     const doors = this.doors;
+    const loads = this.loads;
     if (!doors) return;
+    // 2026-11-13 — by what it is for: a person's own door, or a load they posted and accepted a price on (part 3b).
     this.funding.register('person', {
-      resolve: (personDid) => doors.resolvePayer(personDid),
-      credit: (personDid, c) => doors.paid(personDid, c),
-      reverse: (personDid, c) => doors.reversed(personDid, c),
+      resolve: (personDid, purpose) => (purpose === 'load' && loads ? loads.resolvePayer(personDid) : doors.resolvePayer(personDid)),
+      credit: (personDid, c) => (c.purpose === 'load' && loads ? loads.paid(personDid, c) : doors.paid(personDid, c)),
+      reverse: (personDid, c) => (c.purpose === 'load' && loads ? loads.reversed(personDid, c) : doors.reversed(personDid, c)),
     });
   }
 

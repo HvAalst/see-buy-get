@@ -39,12 +39,14 @@ describe('who posts a load on the board', () => {
     return (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
   }
 
-  // 2026-11-13 — a person may post where SeeBuyGet only matches (test/person-loads.e2e-spec.ts); where a company of ours takes
-  // the money, paying up front is coming, and until then it is refused — never a load nobody is billed for.
-  it('a person in the Send app is refused where a company of ours takes the money — paying up front is coming', async () => {
+  // 2026-11-13 — a person posts too (test/person-loads.e2e-spec.ts): where a company of ours takes the money, as here in Kenya,
+  // the load is paid to it first, when a price is accepted, and held until delivery — never a load nobody is billed for.
+  it('a person in the Send app posts a load paid to us first, held until delivery — never billed to nobody', async () => {
     const person = await aPerson();
-    const refused = await http().post('/v1/sbg/dispatch/freight').set(bearer(person)).send(load);
-    expect([refused.status, refused.body.code, refused.body.detail]).toEqual([403, 'FORBIDDEN', 'Paying for a load from the Send app is coming in Kenya. Until then, a shop books it at its counter.']);
+    const posted = (await http().post('/v1/sbg/dispatch/freight').set(bearer(person)).send({ ...load, contactPhone: '+254700111222' }).expect(201)).body;
+    expect(posted).toMatchObject({ escrow: true, commitMode: 'negotiate' });
+    expect(posted.sellerEntityId).toEqual(expect.any(String));
+    expect(posted.settlement).toBeUndefined();
   });
 
   it('a business still posts its own, settled between it and its carrier', async () => {

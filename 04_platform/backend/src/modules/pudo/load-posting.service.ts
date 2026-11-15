@@ -100,7 +100,7 @@ export class LoadPostingService {
    * only matches — there the person pays the driver directly. Always negotiated: a person names no rate; drivers name prices.
    * A person posts for themselves: no contract, client or receiving point.
    */
-  private personMayPost(dto: RegisterFreightDto, actor: IntrospectionResult): { pickupCountry: string; destCountry: string; commitMode: 'negotiate'; betweenParties: true } {
+  private personMayPost(dto: RegisterFreightDto, actor: IntrospectionResult): { pickupCountry: string; destCountry: string; commitMode: 'negotiate'; betweenParties?: true; sellerEntityId?: string; escrow?: true } {
     if (dto.contractId || dto.forClientId || dto.receivingPoint) throw new GlosError('FORBIDDEN', 'A person posts a load for themselves: no contract, client or receiving point');
     const country = (dto.pickupCountry?.toUpperCase() || countryNear(dto.pickupLocation)) ?? '';
     if (!country) throw new GlosError('VALIDATION_FAILED', 'We cannot tell which country the pickup is in: put the pin nearer a town', { field: 'pickupLocation' });
@@ -108,10 +108,11 @@ export class LoadPostingService {
     const name = catalogueEntry(country)?.name ?? country;
     if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not carry loads in ${name} yet`);
     if (this.presence.closedTo(country, this.persons?.findByDid(actor.did ?? '')?.phoneHash)) this.presence.requireTester(country, undefined, 'posting a load');
-    if (this.entities?.forJurisdiction(country) && this.presence.can(country, 'holdFloat')) {
-      throw new GlosError('FORBIDDEN', `Paying for a load from the Send app is coming in ${name}. Until then, a shop books it at its counter.`);
-    }
     if (!dto.contactPhone?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give a number the driver can call about the load', { field: 'contactPhone' });
+    // 2026-11-13 — where a company of ours takes the money, the person pays it when they accept a price, and it is held until the
+    // load is delivered (part 3b, the owner: "kept in escrow until delivery is accomplished").
+    const company = this.entities?.forJurisdiction(country);
+    if (company && this.presence.can(country, 'holdFloat')) return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', sellerEntityId: company.entityId, escrow: true };
     return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', betweenParties: true };
   }
 
