@@ -91,7 +91,7 @@ describe('a carrier calling off a whole run', () => {
     const drivers = { canOperate: () => true, offRoadReasons: () => [], clearedFor: (_did: string, cls: string) => (opts.cleared ? opts.cleared(cls) : true) } as unknown as DriverService;
     const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
     const corridors = new CorridorService();
-    const runs = new DepartureService(corridors, managers, drivers, vehicles, new CargoService(), media, { can: () => true } as unknown as PresenceService, events, hazards);
+    const runs = new DepartureService(corridors, managers, drivers, vehicles, new CargoService(), media, { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService, events, hazards);
 
     const proposed = corridors.proposeLine({ managerDid: MANAGER, company: 'Kilima Logistics', name: `Nairobi – Mombasa ${lanes}`, originZone: `Nairobi ${lanes}`, destZone: `Mombasa ${lanes}`, vehicleType: 'truck' });
     const corridor = corridors.publish(proposed.corridorId, 'did:glos:network-staff');

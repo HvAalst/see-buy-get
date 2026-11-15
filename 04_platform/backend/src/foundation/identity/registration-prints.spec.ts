@@ -138,7 +138,7 @@ describe('the registration prints', () => {
             { publish: () => Promise.resolve() } as never,
             { requireActive: () => undefined } as never,
             { forJurisdiction: () => undefined } as never,
-            { can: () => true } as never,
+            { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as never,
           );
         const courier = { displayName: 'Peer D.', fullName: 'Peer Dan', nationalId: '27781234', mobile: '+254712345678', licenceClasses: ['bike'] as never };
         build().register(courier);

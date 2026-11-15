@@ -56,7 +56,7 @@ describe('a booking’s life after it is sold', () => {
 
   const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
 
   let lanes = 0;
   const setUp = () => {

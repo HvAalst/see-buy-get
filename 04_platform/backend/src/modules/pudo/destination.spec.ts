@@ -93,7 +93,7 @@ describe('delivering a consignment note to your own storage', () => {
     const corridors = new CorridorService();
     const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
     const drivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-    const presence = { can: () => true } as unknown as PresenceService;
+    const presence = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
     const media = {
       adopt: () => undefined,
       // Round 31 — every photo is held here: the check itself is the media service's, tested there and over the wire.

@@ -91,7 +91,7 @@ describe('what somebody was asked for, and whether we may photograph it', () => 
     // permission — mean we must stop holding it now.
     const withdrawn: string[] = [];
     const media = { withdrawFieldEvidence: (id?: string) => id && withdrawn.push(id) };
-    const s = new FieldObservationService({ can: () => true } as never, media as never);
+    const s = new FieldObservationService({ can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as never, media as never);
     const o = s.record({ ...told, evidenceMediaId: 'med_9', consent: { agreed: true, noticeVersion: REDACTION_NOTICE_VERSION } }, who, NOW);
     s.removeEvidence(o.observationId, 'Hans', 'A declaration number was visible', NOW);
     expect(withdrawn).toEqual(['med_9']);

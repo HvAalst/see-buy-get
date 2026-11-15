@@ -24,7 +24,7 @@ import type { VehicleService } from './vehicle.service';
 
 /** Papers and the country are their own tests (departure-gates.spec.ts); here they simply say yes. */
 const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-const openEverywhere = { can: () => true } as unknown as PresenceService;
+const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
 /** Events are their own test (departure-events.spec.ts); here they go nowhere. */
 const silentBus = { publish: async () => undefined } as unknown as EventBus;
 

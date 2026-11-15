@@ -27,7 +27,7 @@ describe('what may go on this truck, and who carries the risk', () => {
 
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
   const noMedia = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
 
@@ -220,7 +220,7 @@ describe('a run whose vehicle cannot be read', () => {
   const SHIPPER = 'did:glos:shipper-legacy';
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
   const noMedia = { adopt: () => undefined, anchorFreightTerminal: () => undefined, holdFreightForDispute: () => undefined } as unknown as MediaService;
 

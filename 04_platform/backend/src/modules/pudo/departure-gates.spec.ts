@@ -53,7 +53,7 @@ describe('the two doors a run has to pass', () => {
 
   const oneTruck = { get: () => ({ vehicleId: 'veh_1', plate: 'KDA 001A', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
 /** Events are their own test (departure-events.spec.ts); here they go nowhere. */
 const silentBus = { publish: async () => undefined } as unknown as EventBus;
 
@@ -139,7 +139,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
   /* ------------------------------------------------------------------ the country -- */
 
   describe('the country', () => {
-    const woundDown = { can: () => false } as unknown as PresenceService;
+    const woundDown = { can: () => false, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
 
     it('will not let a run be declared where we no longer operate', () => {
       const { service, corridor } = setUp({ presence: woundDown });
@@ -150,7 +150,7 @@ const silentBus = { publish: async () => undefined } as unknown as EventBus;
       // THE CASE THAT IS NOT REDUNDANT WITH REGISTRATION: the run was declared while the door was open,
       // and the shipper arrives after it shut. Registration a year ago cannot answer this.
       const corridors = new CorridorService();
-      const shutting = { can: () => true };
+      const shutting = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false };
       const service = new DepartureService(corridors, managers, clearDrivers, oneTruck, new CargoService(), adopted(), shutting as unknown as PresenceService, silentBus);
       const run = declare(service, line(corridors).corridorId);
 
@@ -328,7 +328,7 @@ describe('the vehicle a run is sold on', () => {
   const MANAGER = 'did:glos:fleet-veh';
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
 
   const VAN = { vehicleId: 'veh_van', plate: 'KDA 111V', vehicleClass: 'van', capacityKg: 1200, managerDid: MANAGER, status: 'ACTIVE' };
@@ -412,7 +412,7 @@ describe('how the shipper pays the fleet', () => {
   const SHIPPER = 'did:glos:shipper-pay';
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
   const silent = { publish: async () => undefined } as unknown as EventBus;
   const truck = { get: () => ({ vehicleId: 'veh_p', plate: 'KDA 900P', vehicleClass: 'truck', capacityKg: 8000, managerDid: MANAGER, status: 'ACTIVE' }), isUsable: () => true, offRoadReasons: () => [] } as unknown as VehicleService;
 

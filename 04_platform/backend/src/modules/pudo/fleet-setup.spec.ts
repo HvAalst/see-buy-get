@@ -28,7 +28,7 @@ describe('a fleet’s papers: put on record by one member of staff, approved by 
     const vault = { store: () => ({ vaultRef: `vault_${Math.random().toString(16).slice(2)}` }) } as unknown as IdentityVault;
     const core = { upsert: () => undefined } as unknown as OperationalStore;
     const bus = { publish: async () => undefined } as unknown as EventBus;
-    const presence = { can: () => true, require: () => undefined } as unknown as PresenceService;
+    const presence = { can: () => true, require: () => undefined, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
     const geocoder = { geocode: () => ({ location: { lat: -1.28, lng: 36.82 } }) } as unknown as Geocoder;
     const managers = new FleetManagerService(dids, vault, core, bus, entities, presence, geocoder, new MediaService());
 

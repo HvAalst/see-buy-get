@@ -36,7 +36,7 @@ describe('a run’s booking as a contract of carriage', () => {
 
   const managers = { get: () => ({ jurisdiction: 'KE' }), tradingBlocks: () => [], assertMayTakeWork: () => undefined } as unknown as FleetManagerService;
   const clearDrivers = { canOperate: () => true, offRoadReasons: () => [] } as unknown as DriverService;
-  const openEverywhere = { can: () => true } as unknown as PresenceService;
+  const openEverywhere = { can: () => true, requireTester: () => undefined, closedTo: () => false, testing: () => false, isTester: () => false } as unknown as PresenceService;
   const adoptions: Array<{ mediaId: string; role: string }> = [];
   const media = {
     adopt: (mediaId: string, _by: string, _s: unknown, role: string) => void adoptions.push({ mediaId, role }),
