@@ -90,6 +90,8 @@ describe('booking a walk-up as freight, one part per screen', () => {
       "actions.setAccept({ instructions: e.currentTarget.value })",
       // 2026-11-13 — and one the card never had: what it takes to move it (unusual loads).
       "actions.setAccept({ work })",
+      // 2026-11-15 — and the receiver's email: the delivery code goes to them (the owner: "yes").
+      "actions.setAccept({ receiverEmail: e.currentTarget.value })",
     ];
     const src = readFileSync(join(HERE, 'screens/FreightBooking.tsx'), 'utf8');
     const now = [...src.matchAll(/actions\.setAccept\((?:\{[^}]*\}|\w+\([^)]*\))\)/g)].map((m) => m[0]);

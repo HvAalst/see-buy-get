@@ -113,6 +113,7 @@ export const GlosEvent = {
     ParcelMinted: 'pudo.parcel_minted', // PG1 — a person pre-minted a peer send in-app (cash at drop-off) → twin + journey born now
     ParcelAccepted: 'pudo.parcel_accepted',
     ParcelHandedToBus: 'pudo.parcel_handed_to_bus',
+    ReceiverCodeWanted: 'pudo.receiver_code_wanted', // 2026-11-15 — a load naming its receiver is on a vehicle: a code, where the receiver can be given it
     DeliveryCodeIssued: 'pudo.delivery_code_issued', // 2026-11-15 — a load's delivery code made: its named receiver is given it (plan R2)
     ParcelShortShipped: 'pudo.parcel_short_shipped', // a waiting parcel knowingly left behind at handover (short-ship)
     ParcelReadyForPickup: 'pudo.parcel_ready_for_pickup',

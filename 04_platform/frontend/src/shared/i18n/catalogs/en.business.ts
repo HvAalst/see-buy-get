@@ -436,6 +436,15 @@ export const enBusiness = {
   'business.loads.fact.keptOwn': 'as you gave it — only a refrigerated or insulated truck takes it, and the driver logs the temperature.',
   'business.loads.fact.keptUsual': 'the usual for chilled goods: you gave no range of your own.',
   'business.loads.fact.nowWith': 'Now',
+  // 2026-11-15 — a load names who receives it: a delivery code, given to them; lost, the business says it arrived.
+  'business.loads.f.receiverNote': 'Who receives it, if you know: once a driver has the load, its delivery code reaches them in the Send app on this number, or by email. Without the code the driver cannot mark it delivered.',
+  'business.loads.f.receiverName': 'Receiver’s name, as on their ID',
+  'business.loads.f.receiverPhone': 'Receiver’s phone',
+  'business.loads.f.receiverEmail': 'Receiver’s email',
+  'business.loads.fact.code': 'Delivery code',
+  'business.loads.codeNote': 'The receiver gives it to the driver at the handover.',
+  'business.loads.arrived': 'It arrived',
+  'business.loads.arrivedSaid': 'You said it arrived: the driver may deliver without the code.',
   // 2026-11-15 — the collection code emailed to receivers (plan R3).
   'business.parcels.f.receiverEmail': 'Receiver’s email (optional)',
   'business.parcels.f.receiverName': 'Receiver’s name, as on their ID (optional)',

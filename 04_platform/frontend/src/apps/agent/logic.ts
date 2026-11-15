@@ -366,6 +366,8 @@ export interface AcceptForm {
   deliveryWindow: string;
   // CMR boxes 2 and 9 at the counter (the gaps check, 2026-10-29): who receives it, and dangerous goods by their UN number.
   consigneeName: string;
+  /** 2026-11-15 — the receiver's email: their delivery code is emailed once a driver has it (the owner: "yes"). */
+  receiverEmail: string;
   dgUn: string;
   dgName: string;
   dgClass: string;
@@ -522,6 +524,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   contactPhone: '',
   deliveryWindow: '',
   consigneeName: '',
+  receiverEmail: '',
   dgUn: '',
   dgName: '',
   dgClass: '',

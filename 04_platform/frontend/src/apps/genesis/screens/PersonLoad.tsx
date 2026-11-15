@@ -280,7 +280,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       {load.deliveryCode ? (
         <>
           <Note tone="ok" icon="check" title={t('send.load.codeTitle', { code: load.deliveryCode })} detail={t('send.load.codeDetail')} />
-          {arrived ? (
+          {arrived || load.arrivedSaid ? (
             <p class="hint">{t('send.load.arrivedDone')}</p>
           ) : (
             <Button variant="link" full={false} onClick={() => void api.arrived(load.freightId).then((r) => !r.error && setArrived(true))}>

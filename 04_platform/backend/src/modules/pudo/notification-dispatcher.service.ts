@@ -389,6 +389,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.onParcelOnItsWay(e.payload.parcelId));
     // 2026-11-15 — a load's delivery code made: its named receiver is given it, in the Send app or by email (plan R2).
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.DeliveryCodeIssued, (e) => this.onDeliveryCodeIssued(e.payload.freightId));
+    // 2026-11-15 — a load naming its receiver is on a vehicle: a code, where the receiver can be given it (the owner: "yes").
+    this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.ReceiverCodeWanted, (e) => this.onReceiverCodeWanted(e.payload.freightId));
     this.events.subscribe<{ parcelId: string; toDoor?: string }>(GlosEvent.Pudo.ParcelDelivered, (e) => this.onStoreOrderCollected(e.payload));
     // 2026-11-06 — its plan, made again, expects it later than it was promised: its people are told now (movement unification).
     this.events.subscribe<{ parcelId: string; promisedAt: string; expectedAt: string }>(GlosEvent.Pudo.ParcelExpectedLate, (e) => this.onExpectedLate(e.payload));
@@ -1837,7 +1839,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       const f = this.dispatch.requireFreightPublic(freightId);
       if (!f.deliveryCode) return;
-      const person = accountFor(this.dispatch.buyerOf(f), this.persons);
+      // A counter's load names its walk-in sender by number: its receiver is reached by email only.
+      const person = f.codeByEmailOnly ? undefined : accountFor(this.dispatch.buyerOf(f), this.persons);
       if (person) {
         await this.notifications.notify(person.personDid, {
           kind: 'load_code',
@@ -1860,6 +1863,22 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`delivery code to the receiver failed for ${freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 2026-11-15 — A CODE FOR A LOAD THAT NAMES ITS RECEIVER (the owner: "yes"). Made only where the receiver can be given it
+   * — the Send app on the number it names, or an email — so a driver is never stopped by a code nobody holds. The poster
+   * sees it too, and can say it arrived.
+   */
+  private async onReceiverCodeWanted(freightId: string): Promise<void> {
+    try {
+      const f = this.dispatch.requireFreightPublic(freightId);
+      if (f.deliveryCode || f.escrow) return;
+      const reachable = Boolean(f.receiverEmail) || (!f.codeByEmailOnly && Boolean(accountFor(this.dispatch.buyerOf(f), this.persons)));
+      if (reachable) this.dispatch.issueDeliveryCode(freightId);
+    } catch (err) {
+      this.logger.warn(`a delivery code for the receiver was not made for ${freightId}: ${(err as Error).message}`);
     }
   }
 

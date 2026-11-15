@@ -416,4 +416,76 @@ describe('a person posts a load, over the wire', () => {
     // Nobody checks a name the code never left the app for.
     expect(app.get(DispatchService).requireFreightPublic(l.freightId).codeEmailedAt).toBeUndefined();
   });
+
+  /* ---------------- 2026-11-15: every load naming a receiver who can be reached gets a code (the owner: "yes") -- */
+
+  let ugDriver = { did: '', token: '' };
+  async function aUgDriver() {
+    if (ugDriver.did) return ugDriver;
+    const drivers = app.get(DriverService);
+    const d = drivers.register({ displayName: 'Ssali', fullName: 'Ssali Driver', nationalId: `ID-UG-${digits()}`, mobile: `+2567${digits()}2`, licenceClasses: ['van'], licenceNumber: `L-${digits()}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, jurisdiction: 'UG' } as never);
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const van = app.get(VehicleService).register({ plate: `UBB ${digits().slice(0, 3)}S`, vehicleClass: 'van', capacityKg: 1_000, ownerName: 'Ssali', ownerDriverDid: d.did, baseFee: 0.5, pricePerKm: 0.1, registeredIn: 'UG' } as never);
+    app.get(FleetService).couple(d.did, van.vehicleId);
+    declared(app, 'driver', d.did);
+    ugDriver = { did: d.did, token: (await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token as string };
+    return ugDriver;
+  }
+  /** In Uganda, where SeeBuyGet only matches: a person's load naming its receiver, a driver's price accepted. */
+  async function anAcceptedUgLoad(receiver: Record<string, string>) {
+    const driver = await aUgDriver();
+    const person = await aPerson();
+    const load = (await post(person, fridge(receiver)).expect(201)).body;
+    const at = (path: string) => `/v1/sbg/dispatch/freight/${load.freightId}/${path}`;
+    await http().post(at('proposals')).set(bearer(driver.token)).send({ from: kampala, price: 90000 }).expect(201);
+    const id = ((await http().get(at('proposals')).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    await http().post(`/v1/sbg/dispatch/proposals/${id}/accept`).set(bearer(person)).expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    return { person, driver, freightId: load.freightId as string, at };
+  }
+  const claimOf = async (driver: { did: string; token: string }, freightId: string) =>
+    ((await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/claims`).set(bearer(driver.token)).expect(200)).body.claims as Array<Record<string, unknown>>).find((c) => c.ref === freightId)!;
+
+  it('18 · not paid first, naming its receiver by email: a code once a driver has it, emailed; the poster may say it arrived', async () => {
+    const email = `receiver-${digits()}@example.com`;
+    const l = await anAcceptedUgLoad({ receiverEmail: email, receiverName: 'Nakato S.' });
+    const row = await myRow(l.person, l.freightId);
+    expect(row.deliveryCode).toMatch(/^\d{6}$/);
+    expect(app.get(OutboxMailSender).recent(email).find((m) => m.template === 'load-delivery-code')?.text).toContain(row.deliveryCode as string);
+    expect(await claimOf(l.driver, l.freightId)).toMatchObject({ deliveryCodeNeeded: true, checkName: 'Nakato S.' });
+    // The code lost: whoever sent it says it arrived — never staff, never somebody else.
+    await http().post(l.at('arrived')).set(bearer(operator)).expect(403);
+    await http().post(l.at('arrived')).set(bearer(await aPerson())).expect(404);
+    await http().post(l.at('arrived')).set(bearer(l.person)).expect(201);
+    expect((await myRow(l.person, l.freightId)).arrivedSaid).toBe(true);
+    expect((await claimOf(l.driver, l.freightId)).deliveryCodeNeeded).toBeUndefined();
+  });
+
+  it('19 · a receiver nobody can reach (a number without the Send app, no email): no code, so no driver is stopped by one', async () => {
+    const l = await anAcceptedUgLoad({ buyerMobile: `+2567${digits()}4` });
+    expect((await myRow(l.person, l.freightId)).deliveryCode).toBeUndefined();
+    expect((await claimOf(l.driver, l.freightId)).deliveryCodeNeeded).toBeUndefined();
+    // Nothing to say arrived without a code: it is delivered as it always was.
+    await http().post(l.at('arrived')).set(bearer(l.person)).expect(400);
+  });
+
+  it('20 · booked at a shop’s counter, where the number on it is the walk-in sender’s: the receiver is reached by email only', async () => {
+    const driver = await aUgDriver();
+    const senderPhone = `+2567${digits()}6`;
+    const walkIn = await aPerson(senderPhone);
+    const email = `receiver-${digits()}@example.com`;
+    const person = await aPerson();
+    const load = (await post(person, fridge({ buyerMobile: senderPhone, receiverEmail: email, receiverName: 'Okot P.' })).expect(201)).body;
+    // As a counter's booking stamps it (pudo.controller.ts bookFreight).
+    const store = (app.get(DispatchService) as unknown as Store).freights;
+    store.set(load.freightId, { ...store.get(load.freightId), codeByEmailOnly: true });
+    await http().post(`/v1/sbg/dispatch/freight/${load.freightId}/proposals`).set(bearer(driver.token)).send({ from: kampala, price: 90000 }).expect(201);
+    const id = ((await http().get(`/v1/sbg/dispatch/freight/${load.freightId}/proposals`).set(bearer(person)).expect(200)).body.items as Array<{ proposalId: string }>)[0].proposalId;
+    await http().post(`/v1/sbg/dispatch/proposals/${id}/accept`).set(bearer(person)).expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(app.get(OutboxMailSender).recent(email).filter((m) => m.template === 'load-delivery-code')).toHaveLength(1);
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(walkIn)).expect(200)).body.items as Array<{ kind: string }>;
+    expect(inbox.some((n) => n.kind === 'load_code')).toBe(false);
+  });
 });

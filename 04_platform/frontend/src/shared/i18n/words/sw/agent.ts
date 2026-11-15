@@ -1185,4 +1185,10 @@ export const words: Record<string, string> = {
   "agent.collect.checkNameTitle": "Kagua kitambulisho chake (ID): {name}",
   "agent.collect.checkNameDetail": "Msimbo huu ulitumwa kwa barua pepe, na barua pepe inaweza kutumwa kwa wengine. Mkabidhi kifurushi mtu aliyetajwa tu.",
   "agent.collect.checkNameTick": "Nimekagua kitambulisho chake (ID) kinasema {name}",
+  "agent.accept.receiverEmail": "Barua pepe ya mpokeaji",
+  "agent.accept.receiverEmailHint": "Msimbo wake wa kufikisha unatumwa kwa barua pepe dereva akishachukua mzigo, na dereva anakagua jina lililo hapo juu.",
+  "agent.freight.codeLine": "Msimbo wa kufikisha: {code}. Mpokeaji anampa dereva.",
+  "agent.freight.arrived": "Umefika",
+  "agent.freight.arrivedSaid": "Imesemwa umefika: dereva anaweza kufikisha bila msimbo.",
+  "agent.freight.arrivedToast": "Imesemwa umefika",
 };

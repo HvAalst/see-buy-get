@@ -4033,6 +4033,9 @@ export class SbgController {
       bodyHint: dto.bodyHint as never,
       excludedBodies: dto.excludedBodies as never,
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
+      // 2026-11-15 — who receives it: the code emailed to them once a driver has it (the number above is the sender's).
+      ...(dto.receiverEmail?.trim() ? { receiverEmail: dto.receiverEmail, codeForReceiver: true, codeByEmailOnly: true } : {}),
+      ...(dto.receiverName?.trim() ? { receiverName: dto.receiverName } : {}),
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,
       allowEarlyClaim: dto.allowEarlyClaim,
@@ -8316,12 +8319,17 @@ export class SbgController {
     return view;
   }
 
-  /** The person says it arrived: the driver may then deliver without the code. */
-  @Roles('consumer')
+  /**
+   * Whoever posted it says it arrived: the driver may then deliver without the code. A person, a business, a shop's
+   * counter (2026-11-15, the owner: "yes") — never staff in the sender's name.
+   */
+  @SignedIn()
   @Post('dispatch/freight/:id/arrived')
   loadArrived(@Param('id') id: string, @Actor() actor: IntrospectionResult): { confirmedAt: string } {
-    if (!this.loadPay || actor?.role !== 'consumer' || !actor.did) throw new GlosError('FORBIDDEN', 'The person whose load it is says it arrived');
-    return this.loadPay.arrived(actor.did, id);
+    if (actor?.role === 'operator' || !actor?.did) throw new GlosError('FORBIDDEN', 'Whoever sent it says it arrived: staff decide nothing in the sender’s name');
+    if (actor.role === 'consumer' && this.loadPay && this.dispatch.requireFreightPublic(id).escrow) return this.loadPay.arrived(actor.did, id);
+    this.assertFreightSender(id, actor);
+    return { confirmedAt: this.dispatch.posterSaysArrived(id) };
   }
 
   /** 2026-11-13 — the driver takes the poster's price back: the load is theirs at it. Their own price, from their own sign-in. */

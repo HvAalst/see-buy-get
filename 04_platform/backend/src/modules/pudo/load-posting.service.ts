@@ -82,7 +82,8 @@ export class LoadPostingService {
     const cold = tempRangeGap(dto.natureCode, dto.tempRange);
     if (cold) throw new GlosError('VALIDATION_FAILED', cold, { field: 'tempRange' });
     const posted = this.dispatch.registerFreight(
-      { ...load, dimensionsCm, ...(person ?? {}), ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
+      // 2026-11-15 — it names who receives it: a delivery code once a driver has it (the owner: "yes").
+      { ...load, dimensionsCm, ...(person ?? {}), ...(dto.buyerMobile?.trim() || dto.receiverEmail?.trim() ? { codeForReceiver: true } : {}), ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),
       checkOnly,
     );

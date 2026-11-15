@@ -425,6 +425,26 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                         </dd>
                       </div>
                     ) : null}
+                    {/* 2026-11-15 — the code the receiver gives the driver; lost, the business says it arrived (the owner: "yes"). */}
+                    {row.deliveryCode ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.code')}</dt>
+                        <dd class="cons__factv">
+                          <b class="mono-t">{row.deliveryCode}</b>
+                          {row.arrivedSaid ? (
+                            <span class="chint"> {t('business.loads.arrivedSaid')}</span>
+                          ) : act && client ? (
+                            <>
+                              {' '}
+                              <button type="button" class="cbtn cbtn--ghost" onClick={() => void client.shipping.loadArrived(row.freightId).then((r) => !r.error && onChanged())}>
+                                {t('business.loads.arrived')}
+                              </button>
+                            </>
+                          ) : null}
+                          <span class="chint"> {t('business.loads.codeNote')}</span>
+                        </dd>
+                      </div>
+                    ) : null}
                     {row.carrier?.driverName ? (
                       <div class="cons__fact">
                         <dt class="cons__factk">{t('business.loads.fact.carrier')}</dt>

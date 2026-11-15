@@ -643,6 +643,22 @@ export function PostLoad({
               <PhoneField id="load-contact-phone" value={form.contactPhone} onInput={(v) => set({ contactPhone: v })} autoComplete="off" inputClass="cinput" />
             </label>
           </div>
+          {/* 2026-11-15 — who receives it: their delivery code reaches them, not by hand (the owner: "yes"). */}
+          <p class="chint">{t('business.loads.f.receiverNote')}</p>
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.receiverName')}</span>
+            <input class="cinput" maxLength={80} value={form.receiverName} onInput={(e) => set({ receiverName: (e.target as HTMLInputElement).value })} />
+          </label>
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.receiverPhone')}</span>
+              <PhoneField id="load-receiver-phone" value={form.receiverPhone} onInput={(v) => set({ receiverPhone: v })} autoComplete="off" inputClass="cinput" />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.receiverEmail')}</span>
+              <input class="cinput" type="email" inputMode="email" maxLength={120} value={form.receiverEmail} onInput={(e) => set({ receiverEmail: (e.target as HTMLInputElement).value })} />
+            </label>
+          </div>
         </>
       ) : null}
 

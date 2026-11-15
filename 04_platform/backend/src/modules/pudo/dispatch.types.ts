@@ -1058,6 +1058,10 @@ export class Freight {
   @ApiPropertyOptional() receiverName?: string;
   /** …the code went by email: the driver also checks the receiver's name before handing it over. */
   @ApiPropertyOptional() codeEmailedAt?: string;
+  /** 2026-11-15 — the poster named who receives it: a delivery code once a driver has it, where the receiver can be given it (the owner: "yes"). */
+  @ApiPropertyOptional() codeForReceiver?: boolean;
+  /** …booked at a shop's counter, where the number on it is the walk-in sender's: the code reaches the receiver by email only. */
+  @ApiPropertyOptional() codeByEmailOnly?: boolean;
   /** 2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts). */
   @ApiPropertyOptional({ type: HeldPay }) heldPay?: HeldPay;
 }
@@ -1622,6 +1626,8 @@ export class PostedFreightRow {
   status: FreightStatus;
   @ApiProperty({ enum: ['instant', 'negotiate'] })
   commitMode: FreightCommitMode;
+  /** 2026-11-15 — the poster said it arrived: the driver may deliver without the code. */
+  @ApiPropertyOptional() arrivedSaid?: boolean;
   /** 2026-11-15 — the driver's pay held after delivery: until when, whether a problem can still be reported, and what the protocol decided (H1–H3). */
   @ApiPropertyOptional() heldUntil?: string;
   @ApiPropertyOptional() canReport?: boolean;

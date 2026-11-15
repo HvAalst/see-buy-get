@@ -116,6 +116,9 @@ export interface PostedFreight {
   trackingKey?: string;
   trackingUrl?: string;
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  /** 2026-11-15 — the delivery code the receiver gives the driver; and whether the counter said it arrived. */
+  deliveryCode?: string;
+  arrivedSaid?: boolean;
   /** 2026-11-15 — who has it now: the company carrying it and its vehicle (plan R1). */
   nowWith?: import('../../shared/nowWith').NowWith;
   /** The note this shop's archive keeps for the load, once there is a copy it may read — what its links hang on (the server names it; no screen builds one). */
@@ -1914,6 +1917,8 @@ export function useAgentApp() {
         deliveryWindow: f.deliveryWindow.trim() || undefined,
         // CMR boxes 2 and 9 (2026-10-29) — who receives it, and dangerous goods by their UN number.
         ...(f.consigneeName.trim() ? { consignee: { name: f.consigneeName.trim() } } : {}),
+        // 2026-11-15 — the receiver's email: the delivery code goes to them, checked against the name above.
+        ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim(), ...(f.consigneeName.trim() ? { receiverName: f.consigneeName.trim() } : {}) } : {}),
         ...(isDangerousNature(f.natureCode) && dangerousGoodsValue(f) ? { dangerousGoods: dangerousGoodsValue(f) } : {}),
         // CL1 — sent only when the clerk was told. No term means the sender claims, as before.
         incoterm: incotermValue(f.incoterm),
@@ -1951,6 +1956,20 @@ export function useAgentApp() {
   );
 
   /** FP3 — the shop withdraws a load before pickup. A driver who had claimed it is told; a charge comes back. */
+  /** 2026-11-15 — the receiver lost the code: the counter says it arrived, so the driver may deliver without it. */
+  const loadArrived = useCallback(
+    async (freightId: string) => {
+      if (!client) return;
+      await run(`arrived:${freightId}`, async () => {
+        const r = await client.api.loadArrived(freightId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.freight.arrivedToast') });
+        await loadPosted();
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted],
+  );
+
   const cancelFreight = useCallback(
     async (freightId: string, reason: string) => {
       if (!client) return;
@@ -2958,6 +2977,7 @@ export function useAgentApp() {
       declinePrice,
       counterPrice,
       cancelFreight,
+      loadArrived,
       rateFreight,
       setFreightInstructions,
       decideRefusal,

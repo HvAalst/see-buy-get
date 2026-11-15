@@ -467,9 +467,10 @@ const CASES: Array<{ name: string; answers: Partial<PostForm>; business?: Busine
 
 describe('the same request as the one page, for the same answers', () => {
   it('starts from the same answers the page started from — and the temperature and the work, which it never asked, empty', () => {
-    expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, tempMinC: '', tempMaxC: '', work: EMPTY_WORK });
-    expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), 'tempMinC', 'tempMaxC', 'work']);
-    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', tempMinC: '', tempMaxC: '', work: EMPTY_WORK });
+    const added = { tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '' };
+    expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, ...added });
+    expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), ...Object.keys(added)]);
+    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', ...added });
   });
 
   // 2026-11-13 — what it takes to move it (unusual loads): asked on the goods step, sent only where it was said.
@@ -478,6 +479,9 @@ describe('the same request as the one page, for the same answers', () => {
     const ends = { country: 'KE', from: { name: 'A', location: { lat: -1.3, lng: 36.8 } }, to: { name: 'B', location: { lat: -1.2, lng: 36.9 } }, receiving: null, contract: null };
     expect(loadBody(form({ description: 'Sofa', weightKg: '70', work: said }), ends).work).toEqual({ needs: 'two', pickup: { hands: 'none' }, delivery: { hands: 'none', theyDoIt: true } });
     expect(loadBody(form({ description: 'Sofa', weightKg: '70' }), ends)).not.toHaveProperty('work');
+    // 2026-11-15 — who receives it: their number, email and name go with it, so a code reaches them (the owner: "yes").
+    expect(loadBody(form({ description: 'Sofa', weightKg: '70', receiverPhone: ' +254712000222 ', receiverEmail: ' a@b.ke ', receiverName: ' Achieng ' }), ends)).toMatchObject({ buyerMobile: '+254712000222', receiverEmail: 'a@b.ke', receiverName: 'Achieng' });
+    expect(loadBody(form({ description: 'Sofa', weightKg: '70' }), ends)).not.toHaveProperty('buyerMobile');
     const unsaid = { ...said, pickup: { ...said.pickup, hands: '' as const } };
     expect(stepGaps('goods', form({ work: unsaid }), { crossing: false, contract: false, today: '2026-11-03' })).toContain('workPickup');
     expect(gapWords('workPickup')).toBe('work.needHandsPickup');

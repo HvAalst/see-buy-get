@@ -237,6 +237,14 @@ export function FreightBooking({ state, actions, onTakeIn, start, now }: { state
               <input id="freight-consignee" class="input" maxLength={120} value={f.consigneeName} onInput={(e) => actions.setAccept({ consigneeName: e.currentTarget.value })} autocomplete="off" />
             </div>
             <p class="card__note">{t('agent.accept.consigneeNote')}</p>
+            {/* 2026-11-15 — their email: the delivery code goes to them once a driver has it (the owner: "yes"). */}
+            <div class="field" style="margin-top:12px">
+              <label class="field__label" for="freight-receiver-email">
+                {t('agent.accept.receiverEmail')}
+              </label>
+              <input id="freight-receiver-email" class="input" type="email" inputMode="email" maxLength={120} value={f.receiverEmail} onInput={(e) => actions.setAccept({ receiverEmail: e.currentTarget.value })} autocomplete="off" />
+              <p class="hint">{t('agent.accept.receiverEmailHint')}</p>
+            </div>
           </Card>
           {/* FP7 — CMR box 13, taken down at the counter. The contact is a FIELD, not a line in the note: the driver
               dials it, and the public tracking page must be able to leave it out. */}

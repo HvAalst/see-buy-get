@@ -270,6 +270,19 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
         ) : null}
       </div>
       {load.nowWith ? <p class="scr__lede">{nowWithLine(load.nowWith, t)} · {nowWithSince(load.nowWith, t)}</p> : null}
+      {/* 2026-11-15 — the code the receiver gives the driver; lost, the counter says it arrived (the owner: "yes"). */}
+      {load.deliveryCode ? (
+        <>
+          <p class="scr__lede">{t('agent.freight.codeLine', { code: load.deliveryCode })}</p>
+          {load.arrivedSaid ? (
+            <p class="hint">{t('agent.freight.arrivedSaid')}</p>
+          ) : (
+            <Button variant="link" full={false} busy={state.busy === `arrived:${load.freightId}`} onClick={() => void actions.loadArrived(load.freightId)}>
+              {t('agent.freight.arrived')}
+            </Button>
+          )}
+        </>
+      ) : null}
       {load.carrier ? <p class="scr__lede">{t('agent.freight.carrierLine', { driver: load.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: load.carrier.plate ?? '' })}</p> : null}
       {load.rating ? <p class="scr__lede">{t('agent.freight.ratedLine', { stars: load.rating.stars })}</p> : null}
 

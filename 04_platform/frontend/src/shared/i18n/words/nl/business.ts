@@ -1876,4 +1876,12 @@ export const words: Record<string, string> = {
   "business.parcels.emailCode.title": "De afhaalcode per e-mail",
   "business.parcels.emailCode.tick": "E-mail de code naar ontvangers",
   "business.parcels.emailCode.note": "Alleen voor pakketten met het e-mailadres en de naam van de ontvanger. De winkel controleert dan ook de naam op zijn ID, zodat een doorgestuurde e-mail alleen niets meegeeft.",
+  "business.loads.f.receiverNote": "Wie het ontvangt, als je het weet: zodra een chauffeur de lading heeft, krijgt die persoon de afleveringscode in de Send-app op dit nummer, of per e-mail. Zonder de code kan de chauffeur hem niet als afgeleverd melden.",
+  "business.loads.f.receiverName": "Naam van de ontvanger, zoals op het ID",
+  "business.loads.f.receiverPhone": "Telefoon van de ontvanger",
+  "business.loads.f.receiverEmail": "E-mailadres van de ontvanger",
+  "business.loads.fact.code": "Afleveringscode",
+  "business.loads.codeNote": "De ontvanger geeft hem aan de chauffeur bij de overdracht.",
+  "business.loads.arrived": "Het is aangekomen",
+  "business.loads.arrivedSaid": "Je hebt gezegd dat het is aangekomen: de chauffeur mag afleveren zonder de code.",
 };

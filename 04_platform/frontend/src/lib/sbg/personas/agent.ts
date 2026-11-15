@@ -222,6 +222,8 @@ export function createAgentApi(sbg: SbgClient) {
       instructions?: string;
       contactName?: string;
       contactPhone?: string;
+      receiverEmail?: string;
+      receiverName?: string;
       deliveryWindow?: string;
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
 
@@ -233,6 +235,8 @@ export function createAgentApi(sbg: SbgClient) {
     /** FP2 — the load's consignment note (CMR), as a printable page. */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
+    /** 2026-11-15 — the receiver lost the code: it arrived. */
+    loadArrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } } })),
     cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
     /** Refused at the door (the user, 2026-10-27): the sender says where the goods go — back, another place, or given up. */
     /** A driver said this load was not paid: the sender answers that it paid, with a reference (2026-10-27). */

@@ -75,6 +75,8 @@ export interface PersonLoadRow {
   /** 2026-11-13 — paid first to SeeBuyGet and held until delivery (part 3b); its delivery code; a price being paid. */
   escrow?: boolean;
   deliveryCode?: string;
+  /** 2026-11-15 — they said it arrived: the driver may deliver without the code. */
+  arrivedSaid?: boolean;
   awaitingPayment?: string;
   /** 2026-11-15 — delivered: the driver's pay held until, whether a problem can still be reported, what was decided. */
   heldUntil?: string;

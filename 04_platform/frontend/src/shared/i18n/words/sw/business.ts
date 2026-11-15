@@ -1876,4 +1876,12 @@ export const words: Record<string, string> = {
   "business.parcels.emailCode.title": "Msimbo wa kuchukua kwa barua pepe",
   "business.parcels.emailCode.tick": "Watumie wapokeaji msimbo kwa barua pepe",
   "business.parcels.emailCode.note": "Ni kwa vifurushi vinavyotoa barua pepe na jina la mpokeaji tu. Duka hukagua pia jina kwenye kitambulisho chake (ID), kwa hiyo barua pepe iliyotumwa kwa mtu mwingine pekee haikabidhi chochote.",
+  "business.loads.f.receiverNote": "Nani anaupokea, kama unajua: dereva akishachukua mzigo, msimbo wake wa kufikisha unamfikia kwenye programu ya Send kwa namba hii, au kwa barua pepe. Bila msimbo dereva hawezi kuuweka kama umefikishwa.",
+  "business.loads.f.receiverName": "Jina la mpokeaji, kama lilivyo kwenye kitambulisho chake (ID)",
+  "business.loads.f.receiverPhone": "Simu ya mpokeaji",
+  "business.loads.f.receiverEmail": "Barua pepe ya mpokeaji",
+  "business.loads.fact.code": "Msimbo wa kufikisha",
+  "business.loads.codeNote": "Mpokeaji anampa dereva wakati wa kukabidhi.",
+  "business.loads.arrived": "Umefika",
+  "business.loads.arrivedSaid": "Umesema umefika: dereva anaweza kufikisha bila msimbo.",
 };

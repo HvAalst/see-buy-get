@@ -642,7 +642,7 @@ export class DispatchService {
     return { code: t.code, status: t.status, ...(t.waitsForRoom ? { waitsForRoom: t.waitsForRoom } : {}) };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; receiverEmail?: string; receiverName?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number; work?: unknown; escrow?: boolean }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; receiverEmail?: string; receiverName?: string; codeForReceiver?: boolean; codeByEmailOnly?: boolean; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number; work?: unknown; escrow?: boolean }, now: number = Date.now(), checkOnly = false): Freight {
     // 2026-11-13 — what it takes to move it, checked before anything is worked out (unusual loads, U1–U3).
     const work = cleanWork(input.work);
     // How many packages: a whole number, or not said at all — never a fraction of a box.
@@ -783,6 +783,8 @@ export class DispatchService {
       // 2026-11-15 — who receives it, where named (plan R2): their code reaches them in the Send app, or by this email.
       ...(input.receiverEmail?.trim() ? { receiverEmail: input.receiverEmail.trim().toLowerCase() } : {}),
       ...(input.receiverName?.trim() ? { receiverName: input.receiverName.trim().slice(0, 80) } : {}),
+      ...(input.codeForReceiver ? { codeForReceiver: true } : {}),
+      ...(input.codeByEmailOnly ? { codeByEmailOnly: true } : {}),
       // CL1 — the agreed term, canonicalised. An unknown code is dropped rather than stored: the caller was
       // already refused at the door, and a term nobody recognises must never end up deciding who may claim.
       ...(incotermEntry(input.incoterm) ? { incoterm: incotermEntry(input.incoterm)!.code } : {}),
@@ -1612,6 +1614,11 @@ export class DispatchService {
     // Its shipper was told it is on no vehicle. It is on one now, and that is said.
     this.tellOnDriver(f);
     this.freights.set(f.freightId, f);
+    // 2026-11-15 — it names who receives it (the owner: "yes"): on a vehicle now, so a delivery code — where the receiver
+    // can be given it, which NotificationDispatcher reads. A load paid first has its code from the payment.
+    if (f.codeForReceiver && !f.escrow && !f.deliveryCode) {
+      void this.events.publish(GlosEvent.Pudo.ReceiverCodeWanted, { freightId: f.freightId }, { source: 'pudo' }).catch(() => undefined);
+    }
     return f;
   }
 
@@ -2082,7 +2089,7 @@ export class DispatchService {
         ...(f.reservations ? { reservations: { note: f.reservations.note, at: f.reservations.at, ...(f.reservations.answer ? { answer: f.reservations.answer } : {}) } } : {}),
         ...(f.escrow ? { escrow: true } : {}),
         ...this.holdOf(f.freightId),
-        ...(f.deliveryCode && !['delivered', 'cancelled'].includes(f.status) ? { deliveryCode: f.deliveryCode } : {}),
+        ...(f.deliveryCode && !['delivered', 'cancelled'].includes(f.status) ? { deliveryCode: f.deliveryCode, ...(f.posterConfirmedAt ? { arrivedSaid: true } : {}) } : {}),
         ...(f.payHold ? { awaitingPayment: f.payHold.until } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
@@ -4572,7 +4579,8 @@ export class DispatchService {
   /** The person says it arrived: the driver may deliver without the code. */
   posterSaysArrived(freightId: string, now: number = Date.now()): string {
     const f = this.requireFreight(freightId);
-    if (!f.escrow) throw new GlosError('INVALID_STATE', 'This load is delivered as it always was');
+    // 2026-11-15 — any load with a delivery code, not only one paid first: the way out when the code is lost.
+    if (!f.deliveryCode) throw new GlosError('INVALID_STATE', 'This load is delivered as it always was: it has no delivery code');
     if (!(f.status === 'claimed' || f.status === 'in_transit')) throw new GlosError('INVALID_STATE', `The load is ${f.status}`);
     f.posterConfirmedAt = f.posterConfirmedAt ?? new Date(now).toISOString();
     this.freights.set(f.freightId, f);

@@ -1185,4 +1185,10 @@ export const words: Record<string, string> = {
   "agent.collect.checkNameTitle": "መታወቂያቸውን (ID) ይመልከቱ፦ {name}",
   "agent.collect.checkNameDetail": "ይህ ኮድ በኢሜይል ተልኳል፣ ኢሜይል ደግሞ ሊተላለፍ ይችላል። ጥቅሉን የሚሰጡት ስሙ ለተጠቀሰው ሰው ብቻ ነው።",
   "agent.collect.checkNameTick": "መታወቂያቸው (ID) {name} እንደሚል አረጋግጫለሁ",
+  "agent.accept.receiverEmail": "የተቀባዩ ኢሜይል",
+  "agent.accept.receiverEmailHint": "ሹፌር ጭነቱን ሲይዝ የማድረሻ ኮዱ በኢሜይል ይላክለታል፣ ሹፌሩም ከላይ ያለውን ስም ያረጋግጣል።",
+  "agent.freight.codeLine": "የማድረሻ ኮድ፦ {code}። ተቀባዩ ለሹፌሩ ይሰጠዋል።",
+  "agent.freight.arrived": "ደርሷል",
+  "agent.freight.arrivedSaid": "እንደደረሰ ተገልጿል፦ ሹፌሩ ያለ ኮዱ ማድረስ ይችላል።",
+  "agent.freight.arrivedToast": "እንደደረሰ ተገልጿል",
 };

@@ -1185,4 +1185,10 @@ export const words: Record<string, string> = {
   "agent.collect.checkNameTitle": "Controleer het ID: {name}",
   "agent.collect.checkNameDetail": "Deze code is per e-mail verstuurd, en een e-mail kan worden doorgestuurd. Geef het pakket alleen mee aan de genoemde persoon.",
   "agent.collect.checkNameTick": "Ik heb gezien dat op het ID {name} staat",
+  "agent.accept.receiverEmail": "E-mailadres van de ontvanger",
+  "agent.accept.receiverEmailHint": "De afleveringscode wordt naar hen gemaild zodra een chauffeur de lading heeft, en de chauffeur controleert de naam hierboven.",
+  "agent.freight.codeLine": "Afleveringscode: {code}. De ontvanger geeft hem aan de chauffeur.",
+  "agent.freight.arrived": "Het is aangekomen",
+  "agent.freight.arrivedSaid": "Gemeld als aangekomen: de chauffeur mag afleveren zonder de code.",
+  "agent.freight.arrivedToast": "Gemeld als aangekomen",
 };

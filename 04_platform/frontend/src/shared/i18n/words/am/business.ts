@@ -1876,4 +1876,12 @@ export const words: Record<string, string> = {
   "business.parcels.emailCode.title": "የመውሰጃ ኮድ በኢሜይል",
   "business.parcels.emailCode.tick": "ኮዱን ለተቀባዮች በኢሜይል ይላኩ",
   "business.parcels.emailCode.note": "የተቀባዩን ኢሜይል እና ስም ለሚሰጡ ጥቅሎች ብቻ። ከዚያ መደብሩ በመታወቂያቸው (ID) ላይ ያለውን ስም ደግሞ ይመረምራል፤ ስለዚህ የተላለፈ ኢሜይል ብቻውን ምንም አያስረክብም።",
+  "business.loads.f.receiverNote": "የሚቀበለው ማን እንደሆነ ካወቁ፦ ሹፌር ጭነቱን ሲይዝ፣ የማድረሻ ኮዱ በዚህ ቁጥር ባለው Send መተግበሪያ ወይም በኢሜይል ይደርሰዋል። ያለ ኮዱ ሹፌሩ እንደደረሰ ምልክት ማድረግ አይችልም።",
+  "business.loads.f.receiverName": "የተቀባዩ ስም፣ በመታወቂያው (ID) ላይ እንዳለው",
+  "business.loads.f.receiverPhone": "የተቀባዩ ስልክ",
+  "business.loads.f.receiverEmail": "የተቀባዩ ኢሜይል",
+  "business.loads.fact.code": "የማድረሻ ኮድ",
+  "business.loads.codeNote": "ተቀባዩ ሲረከብ ለሹፌሩ ይሰጠዋል።",
+  "business.loads.arrived": "ደርሷል",
+  "business.loads.arrivedSaid": "እንደደረሰ ገልጸዋል፦ ሹፌሩ ያለ ኮዱ ማድረስ ይችላል።",
 };

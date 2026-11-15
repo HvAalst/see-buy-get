@@ -26363,7 +26363,7 @@
       "post": {
         "operationId": "Sbg.loadArrived",
         "summary": "",
-        "description": "The person says it arrived: the driver may then deliver without the code.",
+        "description": "Whoever posted it says it arrived: the driver may then deliver without the code. A person, a business, a shop's\ncounter (2026-11-15, the owner: \"yes\") — never staff in the sender's name.",
         "parameters": [
           {
             "name": "id",
@@ -66895,6 +66895,7 @@
         "properties": {
           "incoterm": {
             "type": "string",
+            "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
             "enum": [
               "EXW",
               "FCA",
@@ -67009,6 +67010,14 @@
           },
           "customerMobile": {
             "type": "string"
+          },
+          "receiverEmail": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "receiverName": {
+            "type": "string",
+            "maxLength": 80
           },
           "namedPlace": {
             "type": "string",
@@ -71916,6 +71925,14 @@
           "codeEmailedAt": {
             "type": "string",
             "description": "…the code went by email: the driver also checks the receiver's name before handing it over."
+          },
+          "codeForReceiver": {
+            "type": "boolean",
+            "description": "2026-11-15 — the poster named who receives it: a delivery code once a driver has it, where the receiver can be given it (the owner: \"yes\")."
+          },
+          "codeByEmailOnly": {
+            "type": "boolean",
+            "description": "…booked at a shop's counter, where the number on it is the walk-in sender's: the code reaches the receiver by email only."
           },
           "heldPay": {
             "description": "2026-11-15 — paid first by a person: the driver's pay held 24 hours after delivery, and what became of it (pay-hold.types.ts).",
@@ -77003,6 +77020,10 @@
               "instant",
               "negotiate"
             ]
+          },
+          "arrivedSaid": {
+            "type": "boolean",
+            "description": "2026-11-15 — the poster said it arrived: the driver may deliver without the code."
           },
           "heldUntil": {
             "type": "string",

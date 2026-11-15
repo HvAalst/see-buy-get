@@ -837,6 +837,13 @@ export const enAgent = {
   'agent.collect.checkNameTitle': 'Check their ID: {name}',
   'agent.collect.checkNameDetail': 'This code was emailed, and an email can be forwarded. Hand the parcel over only to the person named.',
   'agent.collect.checkNameTick': 'I checked their ID says {name}',
+  // 2026-11-15 — a counter's load: the receiver's email, the code, and "It arrived".
+  'agent.accept.receiverEmail': 'Receiver’s email',
+  'agent.accept.receiverEmailHint': 'Their delivery code is emailed to them once a driver has the load, and the driver checks the name above.',
+  'agent.freight.codeLine': 'Delivery code: {code}. The receiver gives it to the driver.',
+  'agent.freight.arrived': 'It arrived',
+  'agent.freight.arrivedSaid': 'Said arrived: the driver may deliver without the code.',
+  'agent.freight.arrivedToast': 'Said arrived',
   'agent.collect.handOverGood': 'Hand over — all good',
   'agent.collect.reportProblem': 'Report a problem instead',
   'agent.collect.slotUnknown': 'unknown',

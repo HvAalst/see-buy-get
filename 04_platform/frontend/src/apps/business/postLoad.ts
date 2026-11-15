@@ -42,6 +42,10 @@ export type PostForm = LoadForm & {
   instructions: string;
   contactName: string;
   contactPhone: string;
+  /** 2026-11-15 — who receives it: their delivery code reaches them in the Send app on this number, or by email. */
+  receiverPhone: string;
+  receiverEmail: string;
+  receiverName: string;
   deliveryWindow: string;
   pickupOn: string;
   forClientId: string;
@@ -55,7 +59,7 @@ export type PostForm = LoadForm & {
   work: LoadWorkForm;
 };
 
-export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '', work: EMPTY_WORK };
+export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '' };
 
 /** A new load's first answers, as the one page had them: going within the business's own country, arriving tomorrow. */
 export const startForm = (country: string, now: Date = new Date()): PostForm => ({ ...EMPTY_POST, destCountry: country, deliverOn: nextDay(now) });
@@ -291,6 +295,10 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
     ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
     ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
     ...(form.contactPhone.trim() ? { contactPhone: form.contactPhone.trim() } : {}),
+    // 2026-11-15 — who receives it: a delivery code once a driver has it, given to them (the owner: "yes").
+    ...(form.receiverPhone.trim() ? { buyerMobile: form.receiverPhone.trim() } : {}),
+    ...(form.receiverEmail.trim() ? { receiverEmail: form.receiverEmail.trim() } : {}),
+    ...(form.receiverName.trim() ? { receiverName: form.receiverName.trim() } : {}),
     ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
     ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
     ...(form.forClientId ? { forClientId: form.forClientId } : {}),

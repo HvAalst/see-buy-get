@@ -3145,6 +3145,9 @@ export class BookFreightDto {
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsString() destPudoDid!: string; // a network PUDO — its coordinates + equipment drive routing, pricing and the site-gap advisory
   @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
+  /** 2026-11-15 — who receives it: the delivery code is emailed to them once a driver has it, and the driver checks the name. */
+  @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
   @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
   @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;
