@@ -183,7 +183,7 @@ const byAppointed = (a: AgentPortSlice, b: AgentPortSlice) => b.appointed - a.ap
  * wrong, because being a clearing agent is not a status we award, it is work somebody was appointed to
  * do. A company that has been appointed on a container is an agent, and the evidence is the container.
  */
-export function agentRecordOf(consignments: ImportConsignment[], entityId: string, now: number = Date.now()): AgentRecord {
+export function agentRecordOf(consignments: ImportConsignment[], entityId: string, _now: number = Date.now()): AgentRecord {
   const mine = consignments.filter((c) => c.agentEntityId === entityId && c.appointedAt);
   const ports = new Map<string, AgentPortSlice>();
   const modes = new Map<string, AgentPortSlice>();

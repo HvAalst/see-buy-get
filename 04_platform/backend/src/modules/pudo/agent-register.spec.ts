@@ -4,7 +4,7 @@ import type { Parcel, PudoLedgerEntry } from './pudo.types';
 
 const A = 'did:agent:A';
 
-function parcel(over: Partial<Parcel>): Parcel {
+function parcel(_over: Partial<Parcel>): Parcel {
   return { parcelId: 'P', originAgentDid: A, originZone: 'Z-A', destZone: 'Z-B', destAgentDid: 'did:agent:B', senderMobile: '+254701', receiverMobile: '+254700', size: 'M', status: 'At_PUDO', acceptedAt: '2026-08-01T10:00:00Z', scans: [] } as unknown as Parcel;
 }
 

@@ -84,7 +84,7 @@ describe('the M-Pesa rail', () => {
 
     it('builds the request Daraja actually expects', async () => {
       const rail = new MpesaFundingRail(CONFIG, darajaAnswering({ '/oauth/': TOKEN, '/stkpush/': PUSH_ACCEPTED }));
-      const opened = await rail.open(ask());
+      await rail.open(ask());
       const push = calls.find((c) => c.url.includes('/stkpush/'))!;
       const body = JSON.parse(String(push.init.body));
 

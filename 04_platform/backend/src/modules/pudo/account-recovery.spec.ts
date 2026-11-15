@@ -78,7 +78,6 @@ describe('account recovery', () => {
   let drivers: DriverService;
   let managers: FleetManagerService;
   let otp: OtpService;
-  let codes: EmailCodeService;
   let recovery: AccountRecoveryService;
   let auth: AuthService;
   let notifications: NotificationService;
@@ -110,7 +109,6 @@ describe('account recovery', () => {
     drivers = moduleRef.get(DriverService);
     managers = moduleRef.get(FleetManagerService);
     otp = moduleRef.get(OtpService);
-    codes = moduleRef.get(EmailCodeService);
     recovery = moduleRef.get(AccountRecoveryService);
     auth = moduleRef.get(AuthService);
     notifications = moduleRef.get(NotificationService);
