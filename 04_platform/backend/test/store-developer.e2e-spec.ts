@@ -59,6 +59,9 @@ describe('a store’s developer, over the wire', () => {
     const session = (await http().post('/v1/sbg/store-developers/session').send({ code }).expect(201)).body;
     expect(session).toMatchObject({ vendorId, name: 'Brian Studio', developer: true });
     devToken = session.token.access_token;
+    // 2026-11-16 — a working day (the owner: "an 8 hour link"): the sign-in lasts a shift, so a developer is not sent back
+    // to their email for a new link while they work. Take out still ends it at once.
+    expect(session.token.expires_in).toBeGreaterThanOrEqual(8 * 60 * 60);
     // The same link a second time: refused.
     await http().post('/v1/sbg/store-developers/session').send({ code }).expect(403);
   });
