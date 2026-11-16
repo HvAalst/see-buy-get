@@ -52,6 +52,8 @@ const KIND_ICON: Record<string, IconName> = {
   bag_room: 'bag',
   // 2026-11-15 — a store's developer made a live key, or changed where order updates go.
   store_connection: 'key',
+  // 2026-11-16 — an email sent for somebody came back: a load's receiver, a store's buyer.
+  mail_bounced: 'warning',
   // 2026-11-06 — a hub told which parcels can no longer be ready in time: sort them first.
   sort_first: 'clock',
   pickup_ahead: 'truck',

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
+import { CodeMailBounced } from '../../../shared/CodeMailBounced';
 import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
@@ -287,6 +288,8 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
               </Button>
             )
           )}
+          {/* 2026-11-16 — the code email to the receiver came back: send it to another address. */}
+          {load.codeMailBounced && !load.arrivedSaid ? <CodeMailBounced to={load.codeMailBounced.to} busy={state.busy === `rcvmail:${load.freightId}`} onSend={(email) => void actions.loadReceiverEmail(load.freightId, email)} /> : null}
         </>
       ) : null}
       {load.carrier ? <p class="scr__lede">{t('agent.freight.carrierLine', { driver: load.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: load.carrier.plate ?? '' })}</p> : null}

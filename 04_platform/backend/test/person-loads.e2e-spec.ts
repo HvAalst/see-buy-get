@@ -13,6 +13,7 @@ import { PersonLoadPayService } from '../src/modules/pudo/person-load-pay.servic
 import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
 import { RateLimitGuard } from '../src/foundation/http/rate-limit.guard';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
+import { MailBounces } from '../src/foundation/mail/mail-bounces.service';
 
 /**
  * A PERSON POSTS A LOAD FROM THE SEND APP, over the wire (the owner, 2026-11-13: plan U5, "a person posts a load in the Send
@@ -398,6 +399,45 @@ describe('a person posts a load, over the wire', () => {
     // Refused before a try is counted.
     expect(app.get(DispatchService).requireFreightPublic(l.freightId).deliveryCodeTries ?? 0).toBe(0);
     expect((await deliver({ nameChecked: true })).status).toBe(201);
+  });
+
+  /*
+   * 2026-11-16 — THE CODE EMAIL CAME BACK (the owner: "a bounce deserves a notice"): the person who posted it is told on
+   * their bell, once, with where it went and not the code; the load says so; they name another address — never staff,
+   * never a stranger — and the code is emailed there. An address that came back before is told at once.
+   */
+  it('16b · the code email came back: the poster is told once, names another address, and the code goes there', async () => {
+    const email = `typo-${digits()}@example.com`;
+    const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Achieng Otieno' });
+    const bounces = app.get(MailBounces);
+    bounces.record(email, 'hard', 'mailbox does not exist');
+    bounces.record(email, 'hard', undefined);
+    await new Promise((r) => setTimeout(r, 20));
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(l.person)).expect(200)).body.items as Array<{ kind: string; link?: string; body: string }>;
+    const told = inbox.filter((n) => n.kind === 'mail_bounced');
+    expect(told).toHaveLength(1);
+    expect(told[0].link).toBe(`/?load=${encodeURIComponent(l.freightId)}`);
+    expect(told[0].body).toContain(email);
+    expect(told[0].body).not.toContain(l.code);
+    expect((await myRow(l.person, l.freightId)).codeMailBounced).toEqual({ to: email, at: expect.any(String) });
+    // Staff decide nothing in the sender's name; a stranger does not find the load.
+    await http().post(l.at('receiver-email')).set(bearer(operator)).send({ email: 'staff@example.com' }).expect(403);
+    await http().post(l.at('receiver-email')).set(bearer(await aPerson())).send({ email: 'stranger@example.com' }).expect(404);
+    const fixed = `achieng-${digits()}@example.com`;
+    await http().post(l.at('receiver-email')).set(bearer(l.person)).send({ email: fixed }).expect(201);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(app.get(OutboxMailSender).recent(fixed).find((m) => m.template === 'load-delivery-code')?.text).toContain(l.code);
+    expect((await myRow(l.person, l.freightId)).codeMailBounced).toBeUndefined();
+  });
+
+  it('16c · an address that came back before: the poster is told as the code is emailed, not never', async () => {
+    const email = `gone-${digits()}@example.com`;
+    app.get(MailBounces).record(email, 'hard', 'mailbox does not exist');
+    const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Wanjiku M.' });
+    await new Promise((r) => setTimeout(r, 20));
+    const inbox = (await http().get('/v1/sbg/notifications/inbox').set(bearer(l.person)).expect(200)).body.items as Array<{ kind: string }>;
+    expect(inbox.filter((n) => n.kind === 'mail_bounced')).toHaveLength(1);
+    expect((await myRow(l.person, l.freightId)).codeMailBounced).toMatchObject({ to: email });
   });
 
   it('17 · its receiver has the Send app on that number: told on the bell, the load and its code in their My parcels, no email', async () => {

@@ -119,6 +119,8 @@ export interface PostedFreight {
   /** 2026-11-15 — the delivery code the receiver gives the driver; and whether the counter said it arrived. */
   deliveryCode?: string;
   arrivedSaid?: boolean;
+  /** 2026-11-16 — the email with the code to the receiver came back: to where, and when. */
+  codeMailBounced?: { to: string; at: string };
   /** 2026-11-15 — who has it now: the company carrying it and its vehicle (plan R1). */
   nowWith?: import('../../shared/nowWith').NowWith;
   /** The note this shop's archive keeps for the load, once there is a copy it may read — what its links hang on (the server names it; no screen builds one). */
@@ -1970,6 +1972,20 @@ export function useAgentApp() {
     [client, run, fail, pushToast, t, loadPosted],
   );
 
+  /** 2026-11-16 — the code email to the receiver came back: the counter sends the code to another address. */
+  const loadReceiverEmail = useCallback(
+    async (freightId: string, email: string) => {
+      if (!client) return;
+      await run(`rcvmail:${freightId}`, async () => {
+        const r = await client.api.loadReceiverEmail(freightId, email);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('nowWith.bounced.sent', { to: email }) });
+        await loadPosted();
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted],
+  );
+
   const cancelFreight = useCallback(
     async (freightId: string, reason: string) => {
       if (!client) return;
@@ -2978,6 +2994,7 @@ export function useAgentApp() {
       counterPrice,
       cancelFreight,
       loadArrived,
+      loadReceiverEmail,
       rateFreight,
       setFreightInstructions,
       decideRefusal,

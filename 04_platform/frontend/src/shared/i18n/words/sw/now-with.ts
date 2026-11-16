@@ -26,4 +26,9 @@ export const words: Record<string, string> = {
   "nowWith.arrived.tick": "Niliongea na mpokeaji mwenyewe, na anao",
   "nowWith.arrived.confirm": "Ndiyo, umefika",
   "nowWith.arrived.cancel": "Bado",
+  "nowWith.bounced.title": "Barua pepe yenye msimbo haikufika",
+  "nowWith.bounced.detail": "Ilirudi kutoka {to}. Mpe mpokeaji msimbo mwenyewe, au utume kwa anwani nyingine.",
+  "nowWith.bounced.label": "Anwani nyingine ya barua pepe",
+  "nowWith.bounced.send": "Tuma msimbo huko",
+  "nowWith.bounced.sent": "Msimbo unaenda kwa {to}.",
 };

@@ -237,6 +237,8 @@ export function createAgentApi(sbg: SbgClient) {
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
     /** 2026-11-15 — the receiver lost the code: it arrived. */
     loadArrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } }, body: { spokeToReceiver: true } })),
+    /** 2026-11-16 — the code email to the receiver came back: send the code to another address. */
+    loadReceiverEmail: (freightId: string, email: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/receiver-email', { params: { path: { id: freightId } }, body: { email } })),
     cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
     /** Refused at the door (the user, 2026-10-27): the sender says where the goods go — back, another place, or given up. */
     /** A driver said this load was not paid: the sender answers that it paid, with a reference (2026-10-27). */

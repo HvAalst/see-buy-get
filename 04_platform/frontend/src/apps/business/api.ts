@@ -263,6 +263,8 @@ export interface PostedLoad {
   /** 2026-11-15 — the delivery code the receiver gives the driver, while it is on its way; and whether it was said arrived. */
   deliveryCode?: string;
   arrivedSaid?: boolean;
+  /** 2026-11-16 — the email with the code to the receiver came back: to where, and when. */
+  codeMailBounced?: { to: string; at: string };
   /** 2026-11-15 — who has it now: the company carrying it and its vehicle (plan R1). */
   nowWith?: import('../../shared/nowWith').NowWith;
   rating?: { stars: number; issues: string[]; at: string };

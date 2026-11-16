@@ -803,6 +803,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/dispatch/freight/:id/pay': 'none',
   'GET sbg/dispatch/freight/:id/payment': 'none',
   'POST sbg/dispatch/freight/:id/arrived': 'none',
+  'POST sbg/dispatch/freight/:id/receiver-email': 'none',
   'POST sbg/dispatch/proposals/:id/counter': 'support',
   'POST sbg/dispatch/proposals/:id/take-counter': 'none',
   'POST sbg/dispatch/proposals/:id/decline': 'support',

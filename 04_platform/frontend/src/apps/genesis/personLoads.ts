@@ -77,6 +77,8 @@ export interface PersonLoadRow {
   deliveryCode?: string;
   /** 2026-11-15 — they said it arrived: the driver may deliver without the code. */
   arrivedSaid?: boolean;
+  /** 2026-11-16 — the email with the code to the receiver came back: to where, and when. */
+  codeMailBounced?: { to: string; at: string };
   awaitingPayment?: string;
   /** 2026-11-15 — delivered: the driver's pay held until, whether a problem can still be reported, what was decided. */
   heldUntil?: string;
@@ -125,5 +127,7 @@ export function personLoadApi(sbg: SbgClient) {
     pay: (freightId: string, proposalId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pay', { params: { path: { id: freightId } }, body: { proposalId, phone } })),
     payment: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/payment', { params: { path: { id: freightId } } })),
     arrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } }, body: { spokeToReceiver: true } })),
+    /** 2026-11-16 — the code email to the receiver came back: send the code to another address. */
+    receiverEmail: (freightId: string, email: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/receiver-email', { params: { path: { id: freightId } }, body: { email } })),
   };
 }

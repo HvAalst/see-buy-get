@@ -1311,6 +1311,8 @@ export class Parcel {
   emailCode?: boolean;
   /** The code went to the buyer by email: from then the counter also checks the name on their ID. */
   codeEmailedAt?: string;
+  /** 2026-11-16 — an email to the buyer about it came back: the store was told, once. */
+  buyerMailBouncedAt?: string;
   // The buyer's QR collection token: shown in their app, scanned at the destination PUDO — the handover
   // secret, and the ONLY check standing between a stranger and this parcel. Never printed on the label
   // (it rode on the box until the parcel itself was handing out its own key), never in a public view.

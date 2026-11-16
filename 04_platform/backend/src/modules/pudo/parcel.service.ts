@@ -4283,6 +4283,24 @@ export class ParcelService implements OnApplicationBootstrap {
     this.persist(p);
   }
 
+  /**
+   * 2026-11-16 — a store's parcels whose buyer is written to at this address, still on their way or waiting to be
+   * collected, and the store not yet told an email to it came back (the owner: "a bounce deserves a notice").
+   */
+  buyerMailedTo(address: string): Parcel[] {
+    const a = address.trim().toLowerCase();
+    if (!a) return [];
+    const open: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed'];
+    return [...this.parcels.values()].filter((p) => p.vendorId && !p.buyerMailBouncedAt && p.buyerEmail?.trim().toLowerCase() === a && open.includes(p.status));
+  }
+
+  markBuyerMailBounced(parcelId: string, now: number = Date.now()): void {
+    const p = this.parcels.get(parcelId);
+    if (!p) return;
+    p.buyerMailBouncedAt = new Date(now).toISOString();
+    this.persist(p);
+  }
+
   /** 2026-11-15 — who holds a parcel now, by name (HolderNamesService registers it: it knows the hubs and the fleets). */
   private holderNames?: (leg: CustodyLeg, p: Parcel) => NowWithView | undefined;
 

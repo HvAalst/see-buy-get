@@ -2089,7 +2089,7 @@ export class DispatchService {
         ...(f.reservations ? { reservations: { note: f.reservations.note, at: f.reservations.at, ...(f.reservations.answer ? { answer: f.reservations.answer } : {}) } } : {}),
         ...(f.escrow ? { escrow: true } : {}),
         ...this.holdOf(f.freightId),
-        ...(f.deliveryCode && !['delivered', 'cancelled'].includes(f.status) ? { deliveryCode: f.deliveryCode, ...(f.posterConfirmedAt ? { arrivedSaid: true } : {}) } : {}),
+        ...(f.deliveryCode && !['delivered', 'cancelled'].includes(f.status) ? { deliveryCode: f.deliveryCode, ...(f.posterConfirmedAt ? { arrivedSaid: true } : {}), ...(f.codeMailBouncedAt && f.receiverEmail && !f.posterConfirmedAt ? { codeMailBounced: { to: f.receiverEmail, at: f.codeMailBouncedAt } } : {}) } : {}),
         ...(f.payHold ? { awaitingPayment: f.payHold.until } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
@@ -4577,6 +4577,41 @@ export class DispatchService {
     if (!f) return;
     f.codeEmailedAt = new Date(now).toISOString();
     this.freights.set(f.freightId, f);
+  }
+
+  /**
+   * 2026-11-16 — loads whose delivery code was emailed to this address and is still wanted — not handed over, not said
+   * to have arrived — and whose poster is not yet told the email came back (the owner: "a bounce deserves a notice").
+   */
+  codeMailedTo(address: string): Freight[] {
+    const a = address.trim().toLowerCase();
+    if (!a) return [];
+    return [...this.freights.values()].filter((f) => f.receiverEmail === a && f.codeEmailedAt && f.deliveryCode && !f.codeMailBouncedAt && !f.posterConfirmedAt && f.status !== 'delivered' && f.status !== 'cancelled');
+  }
+
+  markCodeMailBounced(freightId: string, now: number = Date.now()): void {
+    const f = this.freights.get(freightId);
+    if (!f) return;
+    f.codeMailBouncedAt = new Date(now).toISOString();
+    this.freights.set(f.freightId, f);
+  }
+
+  /**
+   * 2026-11-16 — THE POSTER NAMES ANOTHER ADDRESS for the receiver's code: written down, and the code emailed there (or
+   * to the receiver's Send app, as it would have gone at first). Only while the code is still wanted.
+   */
+  newReceiverEmail(freightId: string, email: string): Freight {
+    const f = this.freights.get(freightId);
+    if (!f) throw new GlosError('NOT_FOUND', 'Freight not found');
+    if (!f.deliveryCode || f.posterConfirmedAt || f.status === 'delivered' || f.status === 'cancelled') {
+      throw new GlosError('INVALID_STATE', 'Its delivery code is no longer wanted: it was delivered, said to have arrived, or called off');
+    }
+    f.receiverEmail = email.trim().toLowerCase();
+    delete f.codeMailBouncedAt;
+    delete f.codeEmailedAt;
+    this.freights.set(f.freightId, f);
+    void this.events.publish(GlosEvent.Pudo.DeliveryCodeIssued, { freightId: f.freightId }, { source: 'pudo' }).catch(() => undefined);
+    return this.requireFreightPublic(freightId);
   }
 
   /** The person says it arrived: the driver may deliver without the code. */

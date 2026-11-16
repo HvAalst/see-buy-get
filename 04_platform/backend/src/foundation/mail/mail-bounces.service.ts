@@ -109,6 +109,16 @@ export class MailBounces {
     return bounces.length;
   }
 
+  /**
+   * 2026-11-16 — WHOEVER WROTE ON SOMEBODY'S BEHALF HEARS IT CAME BACK (the owner: "a bounce deserves a notice"): a load's
+   * poster whose receiver's code email bounced, a store whose buyer's did. Told the address; a listener that fails stops
+   * nothing.
+   */
+  onBounce(listener: (address: string, kind: 'hard' | 'soft') => void): void {
+    this.listeners.push(listener);
+  }
+  private readonly listeners: Array<(address: string, kind: 'hard' | 'soft') => void> = [];
+
   /** An address came back. A hard bounce is never softened by a later soft one; a soft one pauses from now. */
   record(address: string, kind: 'hard' | 'soft', reason: string | undefined, now: number = Date.now()): void {
     const key = hashEmail(address);
@@ -122,6 +132,13 @@ export class MailBounces {
       count: (before?.count ?? 0) + 1,
       ...(reason ? { reason } : before?.reason ? { reason: before.reason } : {}),
     });
+    for (const listener of this.listeners) {
+      try {
+        listener(address, hard ? 'hard' : 'soft');
+      } catch (err) {
+        this.logger.warn(`a bounce listener failed: ${(err as Error).message}`);
+      }
+    }
   }
 
   /** Is email to this address stopped right now, and how. */

@@ -3436,6 +3436,11 @@ export class LoadArrivedDto {
   @IsOptional() @IsBoolean() spokeToReceiver?: boolean;
 }
 
+/** 2026-11-16 — the poster names another address for the receiver's delivery code: the first one came back. */
+export class LoadReceiverEmailDto {
+  @IsEmail() @MaxLength(120) email!: string;
+}
+
 export class CancelFreightDto {
   @IsString() @MaxLength(500) reason!: string;
 }

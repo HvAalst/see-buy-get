@@ -26391,6 +26391,45 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/receiver-email": {
+      "post": {
+        "operationId": "Sbg.loadReceiverEmail",
+        "summary": "",
+        "description": "2026-11-16 — THE CODE EMAIL CAME BACK, AND THE POSTER NAMES ANOTHER ADDRESS (the owner: \"a bounce deserves a notice\"):\na person, a business or the counter that booked it — never staff in the sender's name. The code is emailed there.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadReceiverEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Freight"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/proposals/{id}/take-counter": {
       "post": {
         "operationId": "Sbg.takeFreightCounter",
@@ -66508,6 +66547,10 @@
             "type": "string",
             "description": "The code went to the buyer by email: from then the counter also checks the name on their ID."
           },
+          "buyerMailBouncedAt": {
+            "type": "string",
+            "description": "2026-11-16 — an email to the buyer about it came back: the store was told, once."
+          },
           "collectionCode": {
             "type": "string"
           },
@@ -72131,6 +72174,10 @@
             "type": "string",
             "description": "…the code went by email: the driver also checks the receiver's name before handing it over."
           },
+          "codeMailBouncedAt": {
+            "type": "string",
+            "description": "2026-11-16 — …and that email came back: the poster is told, gives the code on themselves, or names another address."
+          },
           "codeForReceiver": {
             "type": "boolean",
             "description": "2026-11-15 — the poster named who receives it: a delivery code once a driver has it, where the receiver can be given it (the owner: \"yes\")."
@@ -76880,6 +76927,21 @@
           "day"
         ]
       },
+      "CodeMailBounced": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "at"
+        ]
+      },
       "NowWithView": {
         "type": "object",
         "properties": {
@@ -77249,6 +77311,14 @@
           },
           "deliveryCode": {
             "type": "string"
+          },
+          "codeMailBounced": {
+            "description": "2026-11-16 — the email with that code to the receiver came back: to where, and when. The poster names another address.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CodeMailBounced"
+              }
+            ]
           },
           "awaitingPayment": {
             "type": "string"
@@ -77841,6 +77911,18 @@
             "type": "boolean"
           }
         }
+      },
+      "LoadReceiverEmailDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "email"
+        ]
       },
       "HoldProblem": {
         "type": "object",

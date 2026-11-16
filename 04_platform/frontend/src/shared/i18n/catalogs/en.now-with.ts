@@ -29,4 +29,10 @@ export const enNowWith = {
   'nowWith.arrived.tick': 'I spoke to the receiver myself, and they have it',
   'nowWith.arrived.confirm': 'Yes, it arrived',
   'nowWith.arrived.cancel': 'Not yet',
+  // 2026-11-16 — the email with a load's code to its receiver came back: the poster sends it to another address.
+  'nowWith.bounced.title': 'The email with the code did not arrive',
+  'nowWith.bounced.detail': 'It came back from {to}. Give the code to the person receiving it yourself, or send it to another address.',
+  'nowWith.bounced.label': 'Another email address',
+  'nowWith.bounced.send': 'Send the code there',
+  'nowWith.bounced.sent': 'The code is on its way to {to}.',
 } as const;

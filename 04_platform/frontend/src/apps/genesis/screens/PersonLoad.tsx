@@ -10,6 +10,7 @@ import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
+import { CodeMailBounced } from '../../../shared/CodeMailBounced';
 
 /**
  * 2026-11-13 — POST A LOAD (unusual loads, U5; part 3a): something too big for a shop — what it is, about how heavy, where from
@@ -231,6 +232,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
   const [payment, setPayment] = useState<LoadPaymentView | null>(null);
   const [arrived, setArrived] = useState(false);
   const [asking, setAsking] = useState(false); // 2026-11-15 — "It arrived" asks them to confirm first
+  const [resentTo, setResentTo] = useState(''); // 2026-11-16 — the code sent to another address, after the first came back
   const waiting = (load.status === 'available' || load.status === 'scheduled') && !load.awaitingPayment;
   const readPayment = async () => {
     if (!load.escrow) return;
@@ -293,6 +295,11 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
               </Button>
             )
           )}
+          {/* 2026-11-16 — the code email to the receiver came back: send it to another address. */}
+          {resentTo ? <p class="hint">{t('nowWith.bounced.sent', { to: resentTo })}</p> : null}
+          {load.codeMailBounced && !arrived && !load.arrivedSaid && !resentTo ? (
+            <CodeMailBounced to={load.codeMailBounced.to} onSend={(email) => void api.receiverEmail(load.freightId, email).then((r) => { if (!r.error) { setResentTo(email); onChanged(); } })} />
+          ) : null}
         </>
       ) : null}
       {payment?.state === 'lapsed' && waiting ? <p class="hint">{t('send.load.lapsed')}</p> : null}

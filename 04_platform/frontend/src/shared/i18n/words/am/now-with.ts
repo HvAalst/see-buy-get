@@ -26,4 +26,9 @@ export const words: Record<string, string> = {
   "nowWith.arrived.tick": "ተቀባዩን ራሴ አነጋግሬዋለሁ፣ ተረክቧል",
   "nowWith.arrived.confirm": "አዎ፣ ደርሷል",
   "nowWith.arrived.cancel": "ገና ነው",
+  "nowWith.bounced.title": "ኮዱን የያዘው ኢሜይል አልደረሰም",
+  "nowWith.bounced.detail": "ከ{to} ተመልሷል። ኮዱን ራስዎ ለተቀባዩ ይስጡ፣ ወይም ወደ ሌላ አድራሻ ይላኩ።",
+  "nowWith.bounced.label": "ሌላ የኢሜይል አድራሻ",
+  "nowWith.bounced.send": "ኮዱን ወደዚያ ላክ",
+  "nowWith.bounced.sent": "ኮዱ ወደ {to} እየሄደ ነው።",
 };

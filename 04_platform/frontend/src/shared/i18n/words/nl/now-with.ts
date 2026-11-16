@@ -26,4 +26,9 @@ export const words: Record<string, string> = {
   "nowWith.arrived.tick": "Ik heb zelf met de ontvanger gesproken, en die heeft het",
   "nowWith.arrived.confirm": "Ja, het is aangekomen",
   "nowWith.arrived.cancel": "Nog niet",
+  "nowWith.bounced.title": "De e-mail met de code is niet aangekomen",
+  "nowWith.bounced.detail": "Hij kwam terug van {to}. Geef de code zelf aan de ontvanger, of stuur hem naar een ander adres.",
+  "nowWith.bounced.label": "Een ander e-mailadres",
+  "nowWith.bounced.send": "Stuur de code daarheen",
+  "nowWith.bounced.sent": "De code is onderweg naar {to}.",
 };

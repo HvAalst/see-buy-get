@@ -1061,6 +1061,8 @@ export class Freight {
   @ApiPropertyOptional() receiverName?: string;
   /** …the code went by email: the driver also checks the receiver's name before handing it over. */
   @ApiPropertyOptional() codeEmailedAt?: string;
+  /** 2026-11-16 — …and that email came back: the poster is told, gives the code on themselves, or names another address. */
+  @ApiPropertyOptional() codeMailBouncedAt?: string;
   /** 2026-11-15 — the poster named who receives it: a delivery code once a driver has it, where the receiver can be given it (the owner: "yes"). */
   @ApiPropertyOptional() codeForReceiver?: boolean;
   /** …booked at a shop's counter, where the number on it is the walk-in sender's: the code reaches the receiver by email only. */
@@ -1605,6 +1607,12 @@ export class KeptBetweenView {
  * buyerPhoneHash, no trackingKey and no claimedBy — a screen that only answers prices has no business
  * holding the identifiers that join a load to a person.
  */
+/** 2026-11-16 — a receiver's code email that came back: the address it went to, and when it came back. */
+export class CodeMailBounced {
+  to: string;
+  at: string;
+}
+
 export class PostedFreightRow {
   freightId: string;
   code: string;
@@ -1639,6 +1647,8 @@ export class PostedFreightRow {
   /** 2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid. */
   @ApiPropertyOptional() escrow?: boolean;
   @ApiPropertyOptional() deliveryCode?: string;
+  /** 2026-11-16 — the email with that code to the receiver came back: to where, and when. The poster names another address. */
+  @ApiPropertyOptional({ type: CodeMailBounced }) codeMailBounced?: CodeMailBounced;
   @ApiPropertyOptional() awaitingPayment?: string;
   /** The money the budget, the prices offered and the one agreed are in: the poster’s company’s (Freight.postedCurrency). */
   @ApiPropertyOptional() currency?: string;

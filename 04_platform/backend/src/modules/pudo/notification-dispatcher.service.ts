@@ -184,6 +184,7 @@ interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MerchantRatingService } from './merchant-rating.service';
+import { ReceiverMailBounces } from './receiver-mail-bounce.service';
 import { BAGS_WAITING_H, MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS, WIDE_OFFER_CAP, WIDE_OFFER_KM, WIDE_OFFER_SWEEP_MS } from './pudo.config';
 import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
 import { licenceDay } from './shop-licence';
@@ -283,7 +284,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     @Optional() private readonly doors?: BusinessDoorService,
     // The store an order came from, and whether its receiver has said anything about it yet (2026-11-05).
     @Optional() private readonly merchants?: MerchantRatingService,
+    // 2026-11-16 — an email to a receiver or a buyer that came back before: whoever it was for is told at once.
+    @Optional() private readonly receiverBounces?: ReceiverMailBounces,
   ) {}
+
+  /** 2026-11-16 — about to write to an address that already came back: the poster or the store is told now, not never. */
+  private toldIfItCameBack(address: string | undefined): void {
+    if (address && this.receiverBounces?.cameBack(address)) this.receiverBounces.bounced(address);
+  }
 
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
   private uncollectedTimer?: ReturnType<typeof setInterval>;
@@ -1791,6 +1799,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         shop: this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the shop you chose',
         trackingUrl: parcel.trackingKey ? `${appUrl('send')}?track=${encodeURIComponent(parcel.trackingKey)}` : appUrl('send'),
       });
+      this.toldIfItCameBack(parcel.buyerEmail);
     } catch (err) {
       this.logger.warn(`order-on-its-way mail failed for ${parcelId}: ${(err as Error).message}`);
     }
@@ -1865,6 +1874,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         ...(f.receiverName ? { name: f.receiverName } : {}),
         openUrl: appUrl('send'),
       });
+      this.toldIfItCameBack(f.receiverEmail);
     } catch (err) {
       this.logger.warn(`delivery code to the receiver failed for ${freightId}: ${(err as Error).message}`);
     }
@@ -1935,6 +1945,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           collectBy: new Date(Date.parse(since) + UNCOLLECTED_H * 3_600_000).toISOString(),
           openUrl: `${appUrl('send')}?parcel=${encodeURIComponent(parcel.parcelId)}`,
         });
+        this.toldIfItCameBack(parcel.buyerEmail);
       }
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       if (!person) return; // no receiver we can name, or one with no account — nothing to push to (they'll see it in-app later)

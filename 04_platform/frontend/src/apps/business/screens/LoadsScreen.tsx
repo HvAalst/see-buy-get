@@ -1,6 +1,7 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
+import { CodeMailBounced } from '../../../shared/CodeMailBounced';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
 import { pageGot, PaperSheet, Sections, usePaper } from '../../../shared/ui';
 import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
@@ -295,6 +296,7 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
 export function LoadDetail({ row, start, business, client, act, onClose, onChanged }: { row: PostedLoad; start?: string; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
   const [asking, setAsking] = useState(false); // 2026-11-15 — "It arrived" asks the sender to confirm first
+  const [resentTo, setResentTo] = useState(''); // 2026-11-16 — the code sent to another address, after the first came back
   const stage = loadStage(row);
   const says = planSays(row, t);
   const handed = deliverySays(row, t);
@@ -446,6 +448,11 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                                 </button>
                               </>
                             )
+                          ) : null}
+                          {/* 2026-11-16 — the code email to the receiver came back: send it to another address. */}
+                          {resentTo ? <span class="chint"> {t('nowWith.bounced.sent', { to: resentTo })}</span> : null}
+                          {row.codeMailBounced && !row.arrivedSaid && !resentTo && act && client ? (
+                            <CodeMailBounced look="console" to={row.codeMailBounced.to} onSend={(email) => void client.shipping.loadReceiverEmail(row.freightId, email).then((r) => { if (!r.error) { setResentTo(email); onChanged(); } })} />
                           ) : null}
                           <span class="chint"> {t('business.loads.codeNote')}</span>
                         </dd>
