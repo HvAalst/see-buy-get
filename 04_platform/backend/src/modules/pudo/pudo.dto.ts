@@ -9,6 +9,7 @@ import { DESTINATION_KINDS } from './destination.types';
 import { BAG_PLACES_MAX, BAG_PLACES_MIN, SORT_PER_DAY_MAX, SORT_PER_DAY_MIN } from './hub-space';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
+import { CODE_WAYS, CodeWay } from '../../foundation/sms/code-routes.types';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
@@ -2395,6 +2396,8 @@ export class AddOwnLoadDto {
 
 export class PhoneRequestDto {
   @IsString() phone!: string;
+  /** 2026-11-16 — the way the person chose for their code: by text (the default), or an app offered in their country (the plan, D2 and D3). */
+  @ApiPropertyOptional({ enum: CODE_WAYS }) @IsOptional() @IsIn(CODE_WAYS) via?: CodeWay;
 }
 
 export class PhoneVerifyDto {

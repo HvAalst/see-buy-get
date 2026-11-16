@@ -170,6 +170,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/code-routes': list({ at: 'countries', row: { field: 'country' } }),
   'POST sbg/code-routes/:country/order': { country: 'param', name: 'country' },
   'POST sbg/code-routes/:country/routes/:route': { country: 'param', name: 'country' },
+  'POST sbg/code-routes/:country/apps/:route': { country: 'param', name: 'country' },
   'POST sbg/connections/router/check': every('the server’s connections — email, texts, storage — serve every country'),
   'PUT sbg/help/:topic/:key/image': every('help pictures are read in every country'),
   'DELETE sbg/help/:topic/:key/image': every('help pictures are read in every country'),

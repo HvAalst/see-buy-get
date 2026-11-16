@@ -30,6 +30,7 @@ const WORDS: Record<SmsFailure, string> = {
  */
 export class TwilioSmsSender implements SmsSender, RouteSender {
   readonly id = 'twilio' as const;
+  readonly kind = 'sms' as const;
 
   constructor(
     private readonly config: TwilioConfig,

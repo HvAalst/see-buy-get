@@ -19,6 +19,7 @@ const ke: CountryRoutes = {
   switchedOn: true,
   order: ['africastalking', 'twilio'],
   off: [],
+  offer: ['whatsapp', 'telegram'],
   changed: false,
   goesBy: 'twilio',
   counts: [
@@ -62,7 +63,7 @@ describe('the Sign-in codes screen', () => {
     expect(html).toContain(t('tower.codes.lede', { s: 60 }).slice(0, 40));
   });
 
-  const body = (writer: boolean) => renderToString(<CodeRoutesBody view={view} writer={writer} busy={null} apiBase="https://seebuyget.com" nameOf={(c) => (c === 'KE' ? 'Kenya' : c)} onMove={() => undefined} onTurn={() => undefined} />);
+  const body = (writer: boolean) => renderToString(<CodeRoutesBody view={view} writer={writer} busy={null} apiBase="https://seebuyget.com" nameOf={(c) => (c === 'KE' ? 'Kenya' : c)} onMove={() => undefined} onTurn={() => undefined} onOffer={() => undefined} />);
 
   it('shows each route, the address Africa’s Talking reports to, each country with where codes go, and the changes', () => {
     const html = body(true);
@@ -79,5 +80,9 @@ describe('the Sign-in codes screen', () => {
     expect(body(true)).toContain(`>${t('tower.codes.up')}<`);
     expect(body(false)).not.toContain(`>${t('tower.codes.turnOff')}<`);
     expect(body(false)).not.toContain(`>${t('tower.codes.up')}<`);
+    // 2026-11-16 — the apps offered here, and the switch to withdraw one (D2, D3).
+    expect(body(true)).toContain(`>${t('tower.codes.withdraw')}<`);
+    expect(body(false)).not.toContain(`>${t('tower.codes.withdraw')}<`);
+    expect(body(true)).toContain(t('tower.codes.offeredNotSetUp'));
   });
 });

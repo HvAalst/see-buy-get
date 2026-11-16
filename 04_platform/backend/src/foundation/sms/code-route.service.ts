@@ -5,16 +5,21 @@ import { GlosError } from '../http/glos-error';
 import { hashPhone } from '../identity/phone';
 import { PresenceService } from '../presence/presence.service';
 import { PersistentMap } from '../store/persistent-map';
-import { AUTO_NEXT_SECONDS, CODE_ROUTES, CodeRouteChange, CodeRouteCount, CodeRouteId, CodeRouteLast, CodeRoutesView, CountryCodeRoutes, RouteState } from './code-routes.types';
+import { ALL_ROUTES, APP_ROUTES, AUTO_NEXT_SECONDS, AnyRouteId, AppRouteId, CODE_ROUTES, CodeRouteChange, CodeRouteCount, CodeRouteId, CodeRouteLast, CodeRoutesView, CodeWay, CountryCodeRoutes, RouteState } from './code-routes.types';
 import { OutgoingSms, SmsSendError } from './sms.types';
+
+/** A text, and — where it carries one — the code itself and how long it works: an app sends the code, not the text. */
+export type OutgoingCode = OutgoingSms & { code?: string; minutes?: number };
 
 /** A provider a code can go by. It throws an `SmsSendError` when it did not take the text, and says the provider's id for it when it did. */
 export interface RouteSender {
-  readonly id: CodeRouteId;
+  readonly id: AnyRouteId;
+  /** A text route (in each country's order), or an app (WhatsApp, Telegram) that goes only by the person's choice. */
+  readonly kind: 'sms' | 'app';
   state(): RouteState;
   /** It tells this server what became of each text: only then may a code move on by itself after a minute. */
   reportsDelivery(): boolean;
-  deliver(sms: OutgoingSms): Promise<{ ref?: string }>;
+  deliver(msg: OutgoingCode): Promise<{ ref?: string }>;
 }
 
 export const ROUTE_SENDERS = Symbol('ROUTE_SENDERS');
@@ -29,15 +34,27 @@ export function defaultOrder(country: string | undefined): CodeRouteId[] {
   return country && LOCAL_FIRST.has(country) ? ['africastalking', 'twilio'] : ['twilio', 'africastalking'];
 }
 
+/**
+ * 2026-11-16 — THE APPS OFFERED AS A CHOICE, before staff change it (the plan, D2 and D3): WhatsApp and Telegram in Kenya,
+ * Uganda, Tanzania, Rwanda and the Netherlands; Telegram alone in Ethiopia, where it is the messaging app and WhatsApp is
+ * weak and has been blocked. An app not set up is offered to nobody.
+ */
+export function defaultOffer(country: string | undefined): AppRouteId[] {
+  if (country === 'ET') return ['telegram'];
+  return country && ['KE', 'UG', 'TZ', 'RW', 'NL'].includes(country) ? ['whatsapp', 'telegram'] : [];
+}
+
 interface Plan {
   order: CodeRouteId[];
   off: CodeRouteId[];
+  /** Apps offered as the person's choice; absent: the default. */
+  offer?: AppRouteId[];
 }
 
 interface Attempt {
   id: string;
   country?: string;
-  route: CodeRouteId;
+  route: AnyRouteId;
   ref?: string;
   /** The number, hashed: never the number. */
   phoneKey: string;
@@ -54,7 +71,9 @@ interface Attempt {
 interface Waiting {
   phone: string;
   body: string;
-  tried: CodeRouteId[];
+  code?: string;
+  minutes?: number;
+  tried: AnyRouteId[];
   until: number;
 }
 
@@ -86,10 +105,10 @@ export class CodeRouteService implements OnModuleDestroy {
   private readonly logger = new Logger(CodeRouteService.name);
   private readonly plans = new PersistentMap<string, Plan>('code-route-plans');
   private readonly attempts = new PersistentMap<string, Attempt>('code-route-attempts');
-  private readonly remembered = new PersistentMap<string, CodeRouteId>('code-route-remembered');
+  private readonly remembered = new PersistentMap<string, AnyRouteId>('code-route-remembered');
   private readonly changes = new PersistentMap<string, CodeRouteChange & { id: string }>('code-route-changes');
   private readonly waiting = new Map<string, Waiting>();
-  private readonly last = new Map<CodeRouteId, CodeRouteLast>();
+  private readonly last = new Map<AnyRouteId, CodeRouteLast>();
   private gate?: (now: number) => void;
   private timer?: ReturnType<typeof setInterval>;
   private sweptAt = 0;
@@ -112,13 +131,13 @@ export class CodeRouteService implements OnModuleDestroy {
     this.gate = gate;
   }
 
-  private sender(id: CodeRouteId): RouteSender | undefined {
+  private sender(id: AnyRouteId): RouteSender | undefined {
     return this.senders.find((s) => s.id === id);
   }
 
-  /** Any route can send from this server. */
+  /** Any text route can send from this server. (An app alone cannot carry every text: a payout notice is no code.) */
   anyReady(): boolean {
-    return this.senders.some((s) => s.state() === 'ready');
+    return this.senders.some((s) => s.kind === 'sms' && s.state() === 'ready');
   }
 
   private orderOf(country: string | undefined): CodeRouteId[] {
@@ -135,23 +154,50 @@ export class CodeRouteService implements OnModuleDestroy {
     const off = this.offIn(country);
     const list = this.orderOf(country).filter((r) => !off.includes(r) && this.sender(r)?.state() === 'ready');
     const known = phoneKey ? this.remembered.get(phoneKey) : undefined;
-    return known && list.includes(known) ? [known, ...list.filter((r) => r !== known)] : list;
+    return known && (list as AnyRouteId[]).includes(known) ? [known as CodeRouteId, ...list.filter((r) => r !== known)] : list;
+  }
+
+  private offerOf(country: string | undefined): AppRouteId[] {
+    const planned = country ? this.plans.get(country)?.offer : undefined;
+    return planned ?? defaultOffer(country);
+  }
+
+  /** The apps a person in this country may choose: offered here and set up, in the order the code screen lists them. */
+  appsFor(country: string | undefined): AppRouteId[] {
+    return this.offerOf(country).filter((r) => this.sender(r)?.state() === 'ready');
+  }
+
+  /** 2026-11-16 — the apps a person may ask their code by, for their number. */
+  ways(phone: string): AppRouteId[] {
+    return this.appsFor(countryOfPhone(phone));
+  }
+
+  /**
+   * THE WAYS ONE CODE IS TRIED, IN ORDER. An app only where the person chose it — now, or by having had a code by it typed in
+   * before — and it is offered and set up; then the country's text routes. A text that is not a code goes by text alone.
+   */
+  private plan(country: string | undefined, phoneKey: string, code: string | undefined, via: CodeWay | undefined): AnyRouteId[] {
+    const texts = this.usable(country, via === 'sms' ? undefined : phoneKey);
+    if (!code) return texts;
+    const apps = this.appsFor(country);
+    const chosen = via && via !== 'sms' ? via : via === 'sms' ? undefined : this.remembered.get(phoneKey);
+    return chosen && (apps as AnyRouteId[]).includes(chosen) ? [chosen, ...texts] : texts;
   }
 
   /**
    * A TEXT, BY THE FIRST ROUTE THAT TAKES IT. Throws the reason when none did: `rejected` only when every route said the
    * number cannot be texted — the person's to put right — and otherwise ours.
    */
-  async send(phone: string, body: string, now: number = Date.now()): Promise<void> {
+  async send(phone: string, body: string, now: number = Date.now(), opts: { code?: string; minutes?: number; via?: CodeWay } = {}): Promise<void> {
     const country = countryOfPhone(phone);
     const phoneKey = hashPhone(phone);
-    const routes = this.usable(country, phoneKey);
+    const routes = this.plan(country, phoneKey, opts.code, opts.via);
     if (!routes.length) throw new SmsSendError('refused', 'no route that can text this country is set up and switched on');
-    const tried: CodeRouteId[] = [];
+    const tried: AnyRouteId[] = [];
     const errors: SmsSendError[] = [];
     for (const route of routes) {
       tried.push(route);
-      const done = await this.tryRoute(route, { phone, body, country, phoneKey, step: tried.length - 1, tried: [...tried] }, now);
+      const done = await this.tryRoute(route, { phone, body, code: opts.code, minutes: opts.minutes, country, phoneKey, step: tried.length - 1, tried: [...tried] }, now);
       if (done === true) return;
       errors.push(done);
     }
@@ -159,16 +205,16 @@ export class CodeRouteService implements OnModuleDestroy {
   }
 
   /** One route, one text: recorded either way. True when it was taken. */
-  private async tryRoute(route: CodeRouteId, t: { phone: string; body: string; country?: string; phoneKey: string; step: number; tried: CodeRouteId[] }, now: number): Promise<true | SmsSendError> {
+  private async tryRoute(route: AnyRouteId, t: { phone: string; body: string; code?: string; minutes?: number; country?: string; phoneKey: string; step: number; tried: AnyRouteId[] }, now: number): Promise<true | SmsSendError> {
     const sender = this.sender(route);
     const id = `cra_${now.toString(36)}_${randomBytes(4).toString('hex')}`;
     const at = new Date(now).toISOString();
     try {
       if (!sender) throw new SmsSendError('refused', 'that route is not built into this server');
-      const { ref } = await sender.deliver({ to: t.phone, body: t.body });
+      const { ref } = await sender.deliver({ to: t.phone, body: t.body, ...(t.code ? { code: t.code } : {}), ...(t.minutes ? { minutes: t.minutes } : {}) });
       this.attempts.set(id, { id, route, phoneKey: t.phoneKey, at, status: 'sent', step: t.step, ...(t.country ? { country: t.country } : {}), ...(ref ? { ref } : {}) });
       this.last.set(route, { at, ok: true });
-      if (sender.reportsDelivery() && ref) this.waiting.set(id, { phone: t.phone, body: t.body, tried: t.tried, until: now + HOLD_MS });
+      if (sender.reportsDelivery() && ref) this.waiting.set(id, { phone: t.phone, body: t.body, ...(t.code ? { code: t.code } : {}), ...(t.minutes ? { minutes: t.minutes } : {}), tried: t.tried, until: now + HOLD_MS });
       return true;
     } catch (err) {
       const why = err instanceof SmsSendError ? err : new SmsSendError('failed', 'the route answered with a fault');
@@ -183,7 +229,7 @@ export class CodeRouteService implements OnModuleDestroy {
    * WHAT A ROUTE SAYS BECAME OF A TEXT. Taken only for a text this server handed that route, by the provider's own id for
    * it, which nobody else holds. Failed, and the code still wanted: it goes the next way now.
    */
-  async report(route: CodeRouteId, ref: string, outcome: 'delivered' | 'failed', now: number = Date.now()): Promise<boolean> {
+  async report(route: AnyRouteId, ref: string, outcome: 'delivered' | 'failed', now: number = Date.now()): Promise<boolean> {
     const attempt = [...this.attempts.values()].find((a) => a.route === route && a.ref === ref);
     if (!attempt || attempt.status !== 'sent') return Boolean(attempt);
     this.attempts.set(attempt.id, { ...attempt, status: outcome, doneAt: new Date(now).toISOString() });
@@ -228,6 +274,7 @@ export class CodeRouteService implements OnModuleDestroy {
     this.waiting.delete(id);
     if (!w || !attempt) return;
     this.attempts.set(id, { ...attempt, advanced: true });
+    // On by text: an app is never reached by moving on, only by the person's choice.
     const next = this.usable(attempt.country).filter((r) => !w.tried.includes(r));
     if (!next.length) return;
     try {
@@ -238,7 +285,7 @@ export class CodeRouteService implements OnModuleDestroy {
     const tried = [...w.tried];
     for (const route of next) {
       tried.push(route);
-      const done = await this.tryRoute(route, { phone: w.phone, body: w.body, country: attempt.country, phoneKey: attempt.phoneKey, step: tried.length - 1, tried: [...tried] }, now);
+      const done = await this.tryRoute(route, { phone: w.phone, body: w.body, code: w.code, minutes: w.minutes, country: attempt.country, phoneKey: attempt.phoneKey, step: tried.length - 1, tried: [...tried] }, now);
       if (done === true) return;
     }
   }
@@ -265,7 +312,7 @@ export class CodeRouteService implements OnModuleDestroy {
     if (order.length !== CODE_ROUTES.length || new Set(order).size !== order.length || order.some((r) => !known.has(r))) {
       throw new GlosError('INVALID_INPUT', 'Name every route once, in the order they are tried', { field: 'order' });
     }
-    this.plans.set(country, { order: [...order], off: this.offIn(country) });
+    this.plans.set(country, { ...this.plans.get(country), order: [...order], off: this.offIn(country) });
     this.note(country, by, { what: 'order', order: [...order] }, now);
     return this.countryView(country, now);
   }
@@ -279,8 +326,22 @@ export class CodeRouteService implements OnModuleDestroy {
       off.push(route);
       if (CODE_ROUTES.every((r) => off.includes(r))) throw new GlosError('INVALID_STATE', 'At least one route stays on: without one, no code reaches this country');
     }
-    this.plans.set(country, { order: this.orderOf(country), off });
+    this.plans.set(country, { ...this.plans.get(country), order: this.orderOf(country), off });
     this.note(country, by, { what: on ? 'on' : 'off', route }, now);
+    return this.countryView(country, now);
+  }
+
+  /** 2026-11-16 — an app offered in a country as the person's choice, or no longer (D2, D3). */
+  setOffer(code: string, route: AppRouteId, on: boolean, by: string, now: number = Date.now()): CountryCodeRoutes {
+    const country = this.country(code);
+    if (!(APP_ROUTES as readonly string[]).includes(route)) throw new GlosError('NOT_FOUND', 'No such app');
+    const offer = this.offerOf(country).filter((r) => r !== route);
+    if (on) offer.push(route);
+    // The order the code screen lists them in is APP_ROUTES', unless a country's default puts one first (Telegram in Ethiopia).
+    const lead = defaultOffer(country);
+    offer.sort((a, b) => (lead.indexOf(a) === -1 ? 9 : lead.indexOf(a)) - (lead.indexOf(b) === -1 ? 9 : lead.indexOf(b)));
+    this.plans.set(country, { ...this.plans.get(country), order: this.orderOf(country), off: this.offIn(country), offer });
+    this.note(country, by, { what: on ? 'offer' : 'withdraw', route }, now);
     return this.countryView(country, now);
   }
 
@@ -289,13 +350,13 @@ export class CodeRouteService implements OnModuleDestroy {
   private countryView(country: string, now: number, switchedOn?: Set<string>): CountryCodeRoutes {
     const since = now - SHOWN_MS;
     const mine = [...this.attempts.values()].filter((a) => a.country === country && Date.parse(a.at) >= since);
-    const counts: CodeRouteCount[] = CODE_ROUTES.map((route) => {
+    const counts: CodeRouteCount[] = ALL_ROUTES.map((route) => {
       const of = mine.filter((a) => a.route === route);
       return { route, asked: of.length, delivered: of.filter((a) => a.status === 'delivered').length, failed: of.filter((a) => a.status === 'failed').length, entered: of.filter((a) => a.enteredAt).length };
     });
     const on = switchedOn ?? this.switchedOn();
     const goesBy = this.usable(country)[0];
-    return { country, switchedOn: on.has(country), order: this.orderOf(country), off: this.offIn(country), changed: this.plans.has(country), ...(goesBy ? { goesBy } : {}), counts };
+    return { country, switchedOn: on.has(country), order: this.orderOf(country), off: this.offIn(country), offer: this.offerOf(country), changed: this.plans.has(country), ...(goesBy ? { goesBy } : {}), counts };
   }
 
   private switchedOn(): Set<string> {

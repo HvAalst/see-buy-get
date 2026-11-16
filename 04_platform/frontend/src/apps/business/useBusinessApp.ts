@@ -1,3 +1,4 @@
+import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { carriedEntry, takeCarryFromAddress, type Carried } from '../../shared/account/carry';
 import { businessConfig } from './api';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
@@ -46,6 +47,9 @@ export interface BusinessState {
   code: string;
   /** A sandbox echoes the phone code; shown so a demo can be run. Never set anywhere else. */
   devCode: string;
+  /** 2026-11-16 — when the code was sent and how: another way is offered a minute later (the plan's D2 to D4). */
+  codeSentAt?: number;
+  codeVia?: CodeWay;
   email: string;
   emailCode: string;
   /** The versions of the terms of use, the data notice and the cookie statement agreed to when the PIN is chosen (2026-10-25). */
@@ -93,7 +97,7 @@ export interface BusinessActions {
   forgetPhone: () => void;
   /** `unlock` (2026-11-02): a ticket a fingerprint or face on this device was just checked for, sent in the PIN's place. */
   submitLogin: (unlock?: string) => Promise<void>;
-  requestCode: () => Promise<void>;
+  requestCode: (via?: CodeWay) => Promise<void>;
   submitCode: () => Promise<void>;
   submitPin: () => Promise<void>;
   loadMine: () => Promise<void>;
@@ -229,12 +233,13 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       await signedIn(r.data);
     },
 
-    requestCode: async () => {
+    requestCode: async (via?: CodeWay) => {
       const s = stateRef.current;
       patch({ busy: true, error: null });
-      const r = await requestOtp(s.phone.trim());
+      const r = await requestOtp(s.phone.trim(), via);
       if (r.error) return patch({ busy: false, error: r.error });
-      patch({ busy: false, step: 'code', code: '', devCode: r.data?.code ?? '' });
+      if (via) rememberWay(via);
+      patch({ busy: false, step: 'code', code: '', devCode: r.data?.code ?? '', codeSentAt: Date.now(), codeVia: via ?? 'sms' });
     },
 
     submitCode: async () => {

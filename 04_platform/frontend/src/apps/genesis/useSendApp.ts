@@ -1,3 +1,4 @@
+import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { carriedEntry, takeCarryFromAddress } from '../../shared/account/carry';
 import { sendConfig } from './api';
 import { captureInvite } from '../../shared/invite';
@@ -111,6 +112,9 @@ export interface SendState {
   authBusy: boolean;
   authError: SbgError | null;
   authDevCode: string | null; // sandbox convenience: the OTP echoed back, shown as a hint
+  /** 2026-11-16 — when the code was sent and how (text, WhatsApp, Telegram): another way is offered a minute later. */
+  authSentAt?: number;
+  authVia?: CodeWay;
   /** The recovery email a first PIN needs, and the code that proves somebody reads it. */
   authEmail: string;
   authEmailCode: string;
@@ -635,18 +639,19 @@ export function useSendApp() {
     setState((s) => ({ ...s, authStep: 'phone', authCode: '', authError: null }));
   }, []);
 
-  const requestCode = useCallback(async () => {
+  const requestCode = useCallback(async (via?: CodeWay) => {
     const phone = cleanPhone(stateRef.current.authPhone);
     if (!phoneReady(phone)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
-    const r = await requestOtp(phone);
+    const r = await requestOtp(phone, via);
     if (epoch !== authEpoch.current) return;
     if (r.error) {
       setState((s) => ({ ...s, authBusy: false, authError: r.error }));
       return;
     }
-    setState((s) => ({ ...s, authBusy: false, authStep: 'code', authCode: '', authDevCode: r.data?.code ?? null }));
+    if (via) rememberWay(via);
+    setState((s) => ({ ...s, authBusy: false, authStep: 'code', authCode: '', authDevCode: r.data?.code ?? null, authSentAt: Date.now(), authVia: via ?? 'sms' }));
   }, []);
 
   const submitCode = useCallback(async (codeOverride?: string) => {

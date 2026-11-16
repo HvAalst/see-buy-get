@@ -15,6 +15,19 @@ export const CODE_ROUTES = ['africastalking', 'twilio'] as const;
 export type CodeRouteId = (typeof CODE_ROUTES)[number];
 
 /**
+ * 2026-11-16 — THE APPS A CODE CAN GO BY, AS THE PERSON'S OWN CHOICE (the plan, D2 and D3): WhatsApp and Telegram. Never the
+ * default — Meta itself advises against it — but offered on the code screen where staff offer them, and the way a person
+ * chose goes first for them next time. Not delivered within a minute, the code goes by text after all.
+ */
+export const APP_ROUTES = ['whatsapp', 'telegram'] as const;
+export type AppRouteId = (typeof APP_ROUTES)[number];
+export const ALL_ROUTES = [...CODE_ROUTES, ...APP_ROUTES] as const;
+export type AnyRouteId = (typeof ALL_ROUTES)[number];
+/** How a person may ask for a code: by text, or by an app offered in their country. */
+export const CODE_WAYS = ['sms', ...APP_ROUTES] as const;
+export type CodeWay = (typeof CODE_WAYS)[number];
+
+/**
  * WHETHER A ROUTE CAN SEND FROM THIS SERVER. `ready` — set up, and this is not a sandbox · `not_set_up` — nothing of it
  * is set · `half_set_up` — some of it is set, not enough to send · `sandbox` — set up, and a sandbox never sends.
  */
@@ -32,7 +45,7 @@ export class CodeRouteLast {
 }
 
 export class CodeRouteStatus {
-  @ApiProperty({ enum: CODE_ROUTES }) id: CodeRouteId;
+  @ApiProperty({ enum: ALL_ROUTES }) id: AnyRouteId;
   @ApiProperty({ enum: ROUTE_STATES }) state: RouteState;
   /** The route tells us when a text was delivered, or not: only then can a code move on by itself after a minute. */
   reportsDelivery: boolean;
@@ -41,7 +54,7 @@ export class CodeRouteStatus {
 
 /** One route in one country, over the last seven days: codes it was given, delivered, not delivered, and typed in. */
 export class CodeRouteCount {
-  @ApiProperty({ enum: CODE_ROUTES }) route: CodeRouteId;
+  @ApiProperty({ enum: ALL_ROUTES }) route: AnyRouteId;
   asked: number;
   delivered: number;
   failed: number;
@@ -57,6 +70,8 @@ export class CountryCodeRoutes {
   @ApiProperty({ enum: CODE_ROUTES, isArray: true }) order: CodeRouteId[];
   /** Routes staff switched off here. */
   @ApiProperty({ enum: CODE_ROUTES, isArray: true }) off: CodeRouteId[];
+  /** 2026-11-16 — the apps offered here as the person's choice, in the order the code screen lists them. */
+  @ApiProperty({ enum: APP_ROUTES, isArray: true }) offer: AppRouteId[];
   /** Staff changed this country from the default order. */
   changed: boolean;
   /** The route a code goes by now: the first that is set up and on. Absent: none is. */
@@ -64,7 +79,7 @@ export class CountryCodeRoutes {
   @ApiProperty({ type: [CodeRouteCount] }) counts: CodeRouteCount[];
 }
 
-export const CODE_ROUTE_CHANGES = ['order', 'on', 'off'] as const;
+export const CODE_ROUTE_CHANGES = ['order', 'on', 'off', 'offer', 'withdraw'] as const;
 export type CodeRouteChangeKind = (typeof CODE_ROUTE_CHANGES)[number];
 
 /** A change staff made, who made it, and when. */
@@ -73,8 +88,13 @@ export class CodeRouteChange {
   by: string;
   country: string;
   @ApiProperty({ enum: CODE_ROUTE_CHANGES }) what: CodeRouteChangeKind;
-  @ApiPropertyOptional({ enum: CODE_ROUTES }) route?: CodeRouteId;
+  @ApiPropertyOptional({ enum: ALL_ROUTES }) route?: AnyRouteId;
   @ApiPropertyOptional({ enum: CODE_ROUTES, isArray: true }) order?: CodeRouteId[];
+}
+
+/** 2026-11-16 — the apps a person may ask their code by, for their number's country: offered there and set up. */
+export class CodeWays {
+  @ApiProperty({ enum: APP_ROUTES, isArray: true }) ways: AppRouteId[];
 }
 
 export class CodeRoutesView {

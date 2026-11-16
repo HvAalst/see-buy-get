@@ -1,3 +1,4 @@
+import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
@@ -151,6 +152,8 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
 function PhoneStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
+  // 2026-11-16 — how the code comes: by text, or an app offered for this number (the plan's D2 and D3).
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
   const blocker = stepBlocker(role, 'phone', state.form, t, notJoinable(state));
   // The country, from the number typed, where none is chosen yet — offered, never forced: the list stays open to change.
   useEffect(() => {
@@ -182,10 +185,11 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
           </label>
           <PhoneField id="phone" value={state.form.phone} onInput={(v) => actions.setForm({ phone: v })} enterKeyHint="send" />
         </div>
+        <CodeWayChoice config={homeConfig()} phone={state.form.phone} value={way} onChange={setWay} />
       </Card>
 
       <div class="scr__cta">
-        <Button onClick={() => void actions.sendCode()} disabled={Boolean(blocker)} busy={state.busy === 'code'}>
+        <Button onClick={() => void actions.sendCode(way)} disabled={Boolean(blocker)} busy={state.busy === 'code'}>
           {t('home.join.phone.cta')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
@@ -218,6 +222,7 @@ function CodeStep({ state, actions }: JoinScreenProps) {
           />
         </div>
         {state.issuedCode ? <p class="hint" style="margin-top:10px">{t('home.join.code.sandbox', { code: state.issuedCode })}</p> : null}
+        <OtherWays config={homeConfig()} phone={state.form.phone} sentAt={state.codeSentAt ?? 0} sentVia={state.codeVia ?? 'sms'} busy={state.busy === 'code'} onSend={(w) => void actions.sendCode(w)} />
       </Card>
 
       <div class="scr__cta">

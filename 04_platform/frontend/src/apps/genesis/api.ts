@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import { dropInvite, heldInvite } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { secretBody } from '../../shared/account/unlock';
@@ -87,8 +88,9 @@ export function classifyParcel(dims: { l: number; w: number; h: number }, kg: nu
  * @Public routes, exactly like sbgLogin. The flow: request a code → verify it → enroll (which
  * consumes the verification and mints a consumer token). A returning user skips straight to pinLogin.
  */
-export function requestOtp(phone: string): Promise<Result<{ sent: boolean; code?: string }>> {
-  return publicRequest(sendConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+/** `via` (2026-11-16): the way the person chose — by text, or an app offered in their country (the plan's D2 and D3). */
+export function requestOtp(phone: string, via?: CodeWay): Promise<Result<{ sent: boolean; code?: string }>> {
+  return publicRequest(sendConfig(), '/v1/sbg/auth/phone/request', { body: { phone, ...(via ? { via } : {}) } });
 }
 
 export function verifyOtp(phone: string, code: string): Promise<Result<{ verified: boolean }>> {

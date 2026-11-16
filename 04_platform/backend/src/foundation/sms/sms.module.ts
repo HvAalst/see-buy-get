@@ -1,5 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { africasTalkingConfig } from './africastalking';
+import { TelegramSender, WhatsAppSender } from './app-route.senders';
+import { telegramConfig } from './telegram';
+import { whatsAppConfig } from './whatsapp';
 import { AfricasTalkingSender } from './africastalking.sender';
 import { CodeRouteService, ROUTE_SENDERS, RouteSender } from './code-route.service';
 import { OutboxSmsSender } from './outbox-sms.sender';
@@ -34,9 +37,16 @@ export function chooseSmsSender(outbox: OutboxSmsSender, provider: TwilioSmsSend
     CodeRouteService,
     { provide: TwilioSmsSender, useFactory: () => new TwilioSmsSender(twilioConfig()) },
     { provide: AfricasTalkingSender, useFactory: () => new AfricasTalkingSender(africasTalkingConfig()) },
+    // 2026-11-16 — the apps a person may choose for their code (the plan, D2 and D3).
+    { provide: WhatsAppSender, useFactory: () => new WhatsAppSender(whatsAppConfig()) },
+    { provide: TelegramSender, useFactory: () => new TelegramSender(telegramConfig()) },
     { provide: SMS_SENDER, useFactory: chooseSmsSender, inject: [OutboxSmsSender, TwilioSmsSender] },
-    { provide: ROUTE_SENDERS, useFactory: (africasTalking: AfricasTalkingSender, twilio: TwilioSmsSender): RouteSender[] => [africasTalking, twilio], inject: [AfricasTalkingSender, TwilioSmsSender] },
+    {
+      provide: ROUTE_SENDERS,
+      useFactory: (africasTalking: AfricasTalkingSender, twilio: TwilioSmsSender, whatsApp: WhatsAppSender, telegram: TelegramSender): RouteSender[] => [africasTalking, twilio, whatsApp, telegram],
+      inject: [AfricasTalkingSender, TwilioSmsSender, WhatsAppSender, TelegramSender],
+    },
   ],
-  exports: [SmsService, OutboxSmsSender, CodeRouteService],
+  exports: [SmsService, OutboxSmsSender, CodeRouteService, WhatsAppSender, TelegramSender],
 })
 export class SmsModule {}

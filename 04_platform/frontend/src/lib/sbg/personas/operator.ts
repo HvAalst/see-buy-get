@@ -1089,6 +1089,8 @@ export function createOperatorApi(sbg: SbgClient) {
     codeRoutes: () => sbg.request((c) => c.GET('/v1/sbg/code-routes', {})),
     setCodeRouteOrder: (country: string, body: { order: Array<'africastalking' | 'twilio'>; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/order', { params: { path: { country } }, body })),
     setCodeRoute: (country: string, route: string, body: { on: boolean; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/routes/{route}', { params: { path: { country, route } }, body })),
+    /** 2026-11-16 — an app (WhatsApp, Telegram) offered in a country as the person's choice for their code, or not (D2, D3). */
+    setCodeRouteApp: (country: string, route: string, body: { on: boolean; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/apps/{route}', { params: { path: { country, route } }, body })),
     checkRouter: () => sbg.request((c) => c.POST('/v1/sbg/connections/router/check', {})),
     approveBusiness: (entityId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/approve', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } })),

@@ -1,3 +1,4 @@
+import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { readCarry } from '../../shared/account/carry';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { joinRestored, joinSnapshot, readJoinMemory, writeJoinMemory } from './joinMemory';
@@ -65,6 +66,9 @@ export interface HomeState {
   form: JoinForm;
   /** The sandbox's echoed OTP, shown so a demo can complete without an SMS gateway. */
   issuedCode: string | null;
+  /** 2026-11-16 — when the code was sent and how: another way is offered a minute later (the plan's D2 to D4). */
+  codeSentAt?: number;
+  codeVia?: CodeWay;
   points: NetworkPoint[];
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
   /** The countries the network can take somebody on in. Empty until loaded — see countriesState. */
@@ -574,17 +578,18 @@ export function useHomeApp() {
   }, []);
 
   /** Step 1 → 2: ask the backend to send (and, in the sandbox, echo) the code. */
-  const sendCode = useCallback(async () => {
+  const sendCode = useCallback(async (via?: CodeWay) => {
     const { role, form } = stateRef.current;
     if (!role || stepBlocker(role, 'phone', form, t)) return;
     await run('code', async () => {
-      const r = await requestCode(normalizePhone(form.phone));
+      const r = await requestCode(normalizePhone(form.phone), via);
       if (r.error) {
         setState((s) => ({ ...s, error: r.error }));
         return;
       }
       const code = r.data?.code ?? r.data?.otp ?? r.data?.verificationCode ?? null;
-      setState((s) => ({ ...s, issuedCode: code, step: 'code', form: { ...s.form, code: code ?? '' } }));
+      if (via) rememberWay(via);
+      setState((s) => ({ ...s, issuedCode: code, step: 'code', form: { ...s.form, code: code ?? '' }, codeSentAt: Date.now(), codeVia: via ?? 'sms' }));
     });
   }, [run]);
 

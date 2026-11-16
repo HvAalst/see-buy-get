@@ -11,11 +11,15 @@ export type RouteStatus = components['schemas']['CodeRouteStatus'];
 export type RouteChange = components['schemas']['CodeRouteChange'];
 export type RouteCount = components['schemas']['CodeRouteCount'];
 export type RouteId = CountryRoutes['order'][number];
+/** 2026-11-16 — every route, the apps (WhatsApp, Telegram) among them. */
+export type AnyRoute = RouteStatus['id'];
+export type AppRoute = CountryRoutes['offer'][number];
+export const APP_ROUTES: AppRoute[] = ['whatsapp', 'telegram'];
 
 type T = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 /** The providers' own names: brands, the same in every language. */
-export const ROUTE_NAME: Record<RouteId, string> = { africastalking: 'Africa’s Talking', twilio: 'Twilio' };
+export const ROUTE_NAME: Record<AnyRoute, string> = { africastalking: 'Africa’s Talking', twilio: 'Twilio', whatsapp: 'WhatsApp', telegram: 'Telegram' };
 
 /** A route moved one place up (-1) or down (1): the new order. At an end, the order as it was. */
 export function moved(order: RouteId[], route: RouteId, by: -1 | 1): RouteId[] {
@@ -56,5 +60,8 @@ export function countLine(n: RouteCount | undefined, t: T): string {
 export function changeLine(c: RouteChange, countryName: (code: string) => string, t: T): string {
   const country = countryName(c.country);
   if (c.what === 'order') return t('tower.codes.change.order', { who: c.by, country, order: (c.order ?? []).map((r) => ROUTE_NAME[r]).join(', ') });
-  return t(c.what === 'on' ? 'tower.codes.change.on' : 'tower.codes.change.off', { who: c.by, country, route: c.route ? ROUTE_NAME[c.route] : '' });
+  const route = c.route ? ROUTE_NAME[c.route] : '';
+  if (c.what === 'offer') return t('tower.codes.change.offer', { who: c.by, country, route });
+  if (c.what === 'withdraw') return t('tower.codes.change.withdraw', { who: c.by, country, route });
+  return t(c.what === 'on' ? 'tower.codes.change.on' : 'tower.codes.change.off', { who: c.by, country, route });
 }

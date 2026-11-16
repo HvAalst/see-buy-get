@@ -1,3 +1,4 @@
+import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
 import { SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
@@ -18,7 +19,7 @@ export interface SignInScreenProps {
   /** Phone + PIN. Resolves to whether it worked. */
   onSignIn: (phone: string, pin: string) => Promise<boolean>;
   /** Send a code to the phone. Resolves to the code in a sandbox, `''` once sent, null on failure. */
-  onSendCode: (phone: string) => Promise<string | null>;
+  onSendCode: (phone: string, via?: CodeWay) => Promise<string | null>;
   /** Verify the code, set the new PIN, sign in. `'email'`: this is a first PIN, and it needs a recovery email. */
   onSetPin: (phone: string, code: string, pin: string, recovery?: { email: string; code: string }) => Promise<'ok' | 'email' | 'email-reset' | 'failed'>;
   error: SbgError | null;
@@ -43,6 +44,9 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   const [pin, setPin] = useState('');
   const [code, setCode] = useState('');
   const [testCode, setTestCode] = useState('');
+  // 2026-11-16 — how the code comes, and when and how it was sent (the plan's D2 to D4).
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
+  const [sent, setSent] = useState<{ at: number; via: CodeWay }>({ at: 0, via: 'sms' });
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
@@ -72,9 +76,10 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       void busyWhile(() => onSignIn(phone, pin));
     } else if (step === 'phone') {
       void busyWhile(async () => {
-        const sent = await onSendCode(phone);
-        if (sent === null) return;
-        setTestCode(sent);
+        const code = await onSendCode(phone, way);
+        if (code === null) return;
+        setSent({ at: Date.now(), via: way });
+        setTestCode(code);
         setCode('');
         setPin('');
         setStep('code');
@@ -109,6 +114,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         {t('driver.signin.phoneLabel')}
       </label>
       <PhoneField id="drv-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy || step === 'code' || step === 'email'} />
+      {step === 'phone' ? <CodeWayChoice config={driverConfig()} phone={phone} value={way} onChange={setWay} /> : null}
     </div>
   );
 
@@ -161,6 +167,21 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
               <CodeBoxes id="drv-code" label={t('driver.signin.codeLabel')} length={6} value={code} onInput={setCode} disabled={busy} />
             </div>
             {testCode ? <p class="hint">{t('driver.signin.testCode', { code: testCode })}</p> : null}
+            <OtherWays
+              config={driverConfig()}
+              phone={phone}
+              sentAt={sent.at}
+              sentVia={sent.via}
+              busy={busy}
+              onSend={(w) =>
+                void busyWhile(async () => {
+                  const again = await onSendCode(phone, w);
+                  if (again === null) return;
+                  setSent({ at: Date.now(), via: w });
+                  setTestCode(again);
+                })
+              }
+            />
             <div class="field">
               <span class="field__label">{t('driver.signin.newPinLabel')}</span>
               <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />

@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import type { StoreReply } from '../../shared/storeReply';
 import { takeCarry as takeCarryShared, type Carried } from '../../shared/account/carry';
 import type { AddressFormat } from '../../shared/account/address';
@@ -34,8 +35,9 @@ export interface OtpRequestView {
   sent?: boolean;
 }
 
-export function requestCode(phone: string): Promise<Result<OtpRequestView>> {
-  return publicRequest<OtpRequestView>(homeConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+/** `via` (2026-11-16): the way the person chose — by text, or an app offered in their country (the plan's D2 and D3). */
+export function requestCode(phone: string, via?: CodeWay): Promise<Result<OtpRequestView>> {
+  return publicRequest<OtpRequestView>(homeConfig(), '/v1/sbg/auth/phone/request', { body: { phone, ...(via ? { via } : {}) } });
 }
 
 /**

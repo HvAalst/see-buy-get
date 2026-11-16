@@ -1,3 +1,4 @@
+import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { energyWord } from '../../shared/vehicleEnergy';
 import { drain, onOutboxSent, outboxItems } from '../../shared/outbox';
 import { onLaunch } from '../../shared/launch';
@@ -755,12 +756,13 @@ export function useDriverApp() {
   }, [client]);
 
   /** First time, or a forgotten PIN: send a code. Resolves to the code itself in a sandbox, `''` when it was sent, null on failure. */
-  const sendPinCode = useCallback(async (phone: string): Promise<string | null> => {
-    const r = await requestPhoneCode(phone.trim());
+  const sendPinCode = useCallback(async (phone: string, via?: CodeWay): Promise<string | null> => {
+    const r = await requestPhoneCode(phone.trim(), via);
     if (r.error) {
       setState((s) => ({ ...s, error: r.error }));
       return null;
     }
+    if (via) rememberWay(via);
     setState((s) => ({ ...s, error: null }));
     return r.data?.code ?? '';
   }, []);

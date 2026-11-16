@@ -3,7 +3,7 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { CodeRouteService } from '../../foundation/sms/code-route.service';
-import { CodeRouteId, CodeRoutesView, CountryCodeRoutes } from '../../foundation/sms/code-routes.types';
+import { AppRouteId, CodeRouteId, CodeRoutesView, CountryCodeRoutes } from '../../foundation/sms/code-routes.types';
 import { CodeRouteOnDto, CodeRouteOrderDto } from './code-routes.dto';
 import { staffOf } from './staff-of';
 
@@ -27,6 +27,13 @@ export class CodeRoutesController {
   @Post(':country/order')
   order(@Param('country') country: string, @Body() dto: CodeRouteOrderDto, @Actor() actor: IntrospectionResult): CountryCodeRoutes {
     return this.routes.setOrder(country, dto.order, staffOf(actor, dto.by).name);
+  }
+
+  /** 2026-11-16 — an app offered in a country as the person's choice for their code, or no longer (D2, D3). */
+  @Roles('operator')
+  @Post(':country/apps/:route')
+  offer(@Param('country') country: string, @Param('route') route: string, @Body() dto: CodeRouteOnDto, @Actor() actor: IntrospectionResult): CountryCodeRoutes {
+    return this.routes.setOffer(country, route as AppRouteId, dto.on, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

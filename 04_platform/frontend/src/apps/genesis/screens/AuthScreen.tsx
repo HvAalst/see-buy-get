@@ -14,6 +14,7 @@ import { recoveryApi } from '../../../shared/account/recovery';
 import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { sendConfig } from '../api';
 import { TestingAsk } from '../../../shared/opening/TestingAsk';
+import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
 
 // Built once: the doors a person uses before they are signed in.
 const recovery = recoveryApi(sendConfig());
@@ -147,6 +148,8 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
 
 function EnrollView({ state, actions, busy }: { state: SendState; actions: SendActions; busy: boolean }) {
   const t = useT();
+  // 2026-11-16 — how the code comes: by text, or an app offered for this number (the plan's D2 and D3).
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
   if (state.authStep === 'code') {
     return (
       <>
@@ -159,9 +162,10 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
             <span class="field__label">{t('send.auth.codeLabel')}</span>
             <CodeBoxes id="auth-otp" label={t('send.auth.codeLabel')} length={6} value={state.authCode} onInput={actions.setAuthCode} disabled={busy} />
             {/* 2026-11-02 — the code's own way round, under the code. Changing the number is Back, in the bar below. */}
-            <Button variant="link" full={false} class="field__aside" onClick={() => void actions.requestCode()}>{t('send.auth.newCode')}</Button>
+            <Button variant="link" full={false} class="field__aside" onClick={() => void actions.requestCode(state.authVia)}>{t('send.auth.newCode')}</Button>
           </div>
           {state.authDevCode ? <p class="hint">{t('send.auth.testCode', { code: state.authDevCode })}</p> : null}
+          <OtherWays config={sendConfig()} phone={state.authPhone} sentAt={state.authSentAt ?? 0} sentVia={state.authVia ?? 'sms'} busy={busy} onSend={(w) => void actions.requestCode(w)} />
         </Card>
         <div class="scr__cta">
           <Button chevron={false} onClick={() => void actions.submitCode()} disabled={!codeReady(state.authCode, 6)} busy={busy}>
@@ -228,9 +232,10 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       <TestingAsk error={state.authError} kind="other" config={sendConfig()} />
       <Card>
         <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
+        <CodeWayChoice config={sendConfig()} phone={state.authPhone} value={way} onChange={setWay} />
       </Card>
       <div class="scr__cta">
-        <Button chevron={false} onClick={() => void actions.requestCode()} disabled={!phoneReady(state.authPhone)} busy={busy}>
+        <Button chevron={false} onClick={() => void actions.requestCode(way)} disabled={!phoneReady(state.authPhone)} busy={busy}>
           {t('send.auth.sendCode')}
         </Button>
       </div>

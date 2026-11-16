@@ -226,6 +226,97 @@
         }
       }
     },
+    "/v1/sms/status/whatsapp": {
+      "get": {
+        "operationId": "SmsStatus.whatsAppVerify",
+        "summary": "",
+        "description": "Meta's check that the address is ours: the verify token we set there, answered with its challenge.",
+        "parameters": [
+          {
+            "name": "hub.mode",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.verify_token",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.challenge",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "SmsStatus.whatsAppReport",
+        "parameters": [
+          {
+            "name": "x-hub-signature-256",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sms/status/telegram": {
+      "post": {
+        "operationId": "SmsStatus.telegramReport",
+        "parameters": [
+          {
+            "name": "x-request-timestamp",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-request-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/rails/funding": {
       "get": {
         "operationId": "Funding.list",
@@ -9191,6 +9282,35 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/phone/ways": {
+      "get": {
+        "operationId": "Sbg.phoneWays",
+        "summary": "",
+        "description": "2026-11-16 — THE APPS A PERSON MAY ASK THEIR CODE BY (the plan, D2 and D3): for their number's country, the ones staff\noffer there and that are set up — WhatsApp, Telegram — in the order the code screen lists them. Nothing about the number\nitself: a country's choices, the same for every number in it. None where codes do not go.",
+        "parameters": [
+          {
+            "name": "phone",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeWays"
                 }
               }
             }
@@ -40825,6 +40945,53 @@
         }
       }
     },
+    "/v1/sbg/code-routes/{country}/apps/{route}": {
+      "post": {
+        "operationId": "CodeRoutes.offer",
+        "summary": "",
+        "description": "2026-11-16 — an app offered in a country as the person's choice for their code, or no longer (D2, D3).",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "route",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRouteOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryCodeRoutes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/code-routes/{country}/routes/{route}": {
       "post": {
         "operationId": "CodeRoutes.onOff",
@@ -55015,12 +55182,39 @@
       "PhoneRequestDto": {
         "type": "object",
         "properties": {
+          "via": {
+            "type": "string",
+            "description": "2026-11-16 — the way the person chose for their code: by text (the default), or an app offered in their country (the plan, D2 and D3).",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "telegram"
+            ]
+          },
           "phone": {
             "type": "string"
           }
         },
         "required": [
           "phone"
+        ]
+      },
+      "CodeWays": {
+        "type": "object",
+        "properties": {
+          "ways": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "whatsapp",
+                "telegram"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ways"
         ]
       },
       "PhoneVerifyDto": {
@@ -92433,7 +92627,9 @@
             "type": "string",
             "enum": [
               "africastalking",
-              "twilio"
+              "twilio",
+              "whatsapp",
+              "telegram"
             ]
           },
           "state": {
@@ -92466,7 +92662,9 @@
             "type": "string",
             "enum": [
               "africastalking",
-              "twilio"
+              "twilio",
+              "whatsapp",
+              "telegram"
             ]
           },
           "asked": {
@@ -92515,6 +92713,17 @@
               ]
             }
           },
+          "offer": {
+            "type": "array",
+            "description": "2026-11-16 — the apps offered here as the person's choice, in the order the code screen lists them.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "whatsapp",
+                "telegram"
+              ]
+            }
+          },
           "goesBy": {
             "type": "string",
             "description": "The route a code goes by now: the first that is set up and on. Absent: none is.",
@@ -92545,6 +92754,7 @@
         "required": [
           "order",
           "off",
+          "offer",
           "counts",
           "country",
           "switchedOn",
@@ -92559,14 +92769,18 @@
             "enum": [
               "order",
               "on",
-              "off"
+              "off",
+              "offer",
+              "withdraw"
             ]
           },
           "route": {
             "type": "string",
             "enum": [
               "africastalking",
-              "twilio"
+              "twilio",
+              "whatsapp",
+              "telegram"
             ]
           },
           "order": {

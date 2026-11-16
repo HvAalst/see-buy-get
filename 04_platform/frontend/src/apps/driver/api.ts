@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import { dropInvite, inviteBody } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { secretBody } from '../../shared/account/unlock';
@@ -106,8 +107,8 @@ export function driverSession(phone: string, pin: string): Promise<Result<Driver
 }
 
 /** First time, or a forgotten PIN: a one-time code to the phone (echoed back only in a sandbox). */
-export function requestPhoneCode(phone: string): Promise<Result<{ sent: boolean; code?: string }>> {
-  return publicRequest(driverConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+export function requestPhoneCode(phone: string, via?: CodeWay): Promise<Result<{ sent: boolean; code?: string }>> {
+  return publicRequest(driverConfig(), '/v1/sbg/auth/phone/request', { body: { phone, ...(via ? { via } : {}) } });
 }
 
 export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ verified: boolean }>> {

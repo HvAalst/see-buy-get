@@ -7,6 +7,7 @@ import { reviewCodeState } from './foundation/runtime/review-code';
 import { standInState } from './foundation/runtime/standin-code';
 import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
+import { readSignedReportsRaw } from './foundation/sms/sms-reports.raw';
 import { flushPersistentMaps } from './foundation/store/persistent-map';
 import { claimTheStore, type StoreClaim } from './foundation/store/one-writer';
 
@@ -46,6 +47,8 @@ async function bootstrap() {
   // The mail provider's notices (a bounce) are believed by a signature over their BYTES: that one address is read
   // raw, before any parser below turns a body into an object and throws the bytes away.
   readProviderEventsRaw(app);
+  // 2026-11-16 — and where WhatsApp and Telegram report what became of a code: believed by a signature over its bytes too.
+  readSignedReportsRaw(app);
   // How large a request may be, route by route, worked out from the files each route takes — a company paper of 8 MB
   // gets the body it needs, everything else 2 MB — and a body over it is refused in our own shape, MEDIA_TOO_LARGE with
   // the size and the most, so the phone can say it (2026-11-02, the owner: "it needs to show or tell"). See body-limits.ts.

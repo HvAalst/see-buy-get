@@ -1,3 +1,4 @@
+import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
@@ -77,12 +78,14 @@ export function SignInScreen({ state, actions, narrow }: { state: BusinessState;
   const confirming = step === 'login' && isNewDevice(state.error) && closedFor !== state.error;
   const error = state.error && !confirming ? state.error.detail || state.error.title : null;
   const unlock = useUnlockFirst(state.phone);
+  // 2026-11-16 — how the code comes: by text, or an app offered for this number (the plan's D2 and D3).
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
 
   const submit = (e: Event) => {
     e.preventDefault();
     if (busy) return;
     if (step === 'login' && phoneReady(state.phone) && digitsReady(state.pin, PIN_LENGTH)) void actions.submitLogin();
-    else if (step === 'phone' && phoneReady(state.phone)) void actions.requestCode();
+    else if (step === 'phone' && phoneReady(state.phone)) void actions.requestCode(way);
     else if (step === 'code' && digitsReady(state.code, 6)) void actions.submitCode();
     else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin) && state.agreement) void actions.submitPin();
     else if (step === 'email' && state.email.trim() && digitsReady(state.emailCode, 6)) void actions.submitPin();
@@ -136,6 +139,7 @@ export function SignInScreen({ state, actions, narrow }: { state: BusinessState;
               </label>
             )
           ) : null}
+          {step === 'phone' ? <CodeWayChoice look="console" config={businessConfig()} phone={state.phone} value={way} onChange={setWay} /> : null}
 
           {step === 'login' ? (
             // 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one tap away.
@@ -168,10 +172,11 @@ export function SignInScreen({ state, actions, narrow }: { state: BusinessState;
               {state.devCode ? <span class="chint">{t('business.signIn.testCode', { code: state.devCode })}</span> : null}
               {/* 2026-11-02 — the code's own way round, under the code. */}
               <p class="twr-signin__alt">
-                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.requestCode()}>
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.requestCode(state.codeVia)}>
                   {t('business.signIn.newCode')}
                 </button>
               </p>
+              <OtherWays look="console" config={businessConfig()} phone={state.phone} sentAt={state.codeSentAt ?? 0} sentVia={state.codeVia ?? 'sms'} busy={busy} onSend={(w) => void actions.requestCode(w)} />
             </div>
           ) : null}
 

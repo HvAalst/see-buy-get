@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import type { LoadWork } from '../../shared/loadWork';
 import { dropInvite, inviteBody } from '../../shared/invite';
 import type { SystemMessage, SystemView } from './system';
@@ -45,8 +46,9 @@ const BUSINESS_TOKEN = 'sbg:business:session';
 
 /* --------------------------------------------------------------- before a token -- */
 
-export function requestOtp(phone: string): Promise<Result<{ sent: boolean; code?: string }>> {
-  return publicRequest(businessConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+/** `via` (2026-11-16): the way the person chose — by text, or an app offered in their country (the plan's D2 and D3). */
+export function requestOtp(phone: string, via?: CodeWay): Promise<Result<{ sent: boolean; code?: string }>> {
+  return publicRequest(businessConfig(), '/v1/sbg/auth/phone/request', { body: { phone, ...(via ? { via } : {}) } });
 }
 
 export function verifyOtp(phone: string, code: string): Promise<Result<{ verified: boolean }>> {

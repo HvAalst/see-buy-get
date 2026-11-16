@@ -22,6 +22,7 @@ const WORDS: Record<SmsFailure, string> = {
  */
 export class AfricasTalkingSender implements RouteSender {
   readonly id = 'africastalking' as const;
+  readonly kind = 'sms' as const;
 
   constructor(
     private readonly config: AfricasTalkingConfig,

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, ErrorNote, PhoneField } from '../ui';
 import { useT } from '../i18n';
 import { publicRequest, type SbgConfig, type SbgError } from '../../lib/sbg';
+import { CodeWayChoice, OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 
 /**
  * Round 40 — A NUMBER, VERIFIED BY ITS CODE, inside a form (a store signing up: the user, "Hubs and stores now"). The number,
@@ -11,7 +12,18 @@ export function PhoneVerify({ config, verified, onVerified, label }: { config: S
   const t = useT();
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
-  const [sent, setSent] = useState<{ phone: string; code?: string } | null>(null);
+  const [sent, setSent] = useState<{ phone: string; code?: string; at?: number; via?: CodeWay } | null>(null);
+  // 2026-11-16 — how the code comes: by text, or an app offered for this number (the plan's D2 to D4).
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
+  const ask = async (via: CodeWay) => {
+    setBusy(true);
+    setError(null);
+    const r = await publicRequest<{ code?: string; otp?: string }>(config, '/v1/sbg/auth/phone/request', { body: { phone: clean, ...(via !== 'sms' ? { via } : {}) } });
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    rememberWay(via);
+    setSent({ phone: clean, at: Date.now(), via, ...(r.data?.code ?? r.data?.otp ? { code: r.data?.code ?? r.data?.otp } : {}) });
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
   const clean = phone.replace(/[\s()-]/g, '');
@@ -36,6 +48,7 @@ export function PhoneVerify({ config, verified, onVerified, label }: { config: S
         <>
           <input id="verify-code" class="input" style="margin-top:8px" inputMode="numeric" autocomplete="one-time-code" maxLength={6} value={code} disabled={busy} onInput={(e) => setCode(e.currentTarget.value)} placeholder={t('account.phoneVerify.codePlaceholder')} />
           {sent.code ? <p class="hint">{t('account.safety.testCode', { code: sent.code })}</p> : null}
+          <OtherWays config={config} phone={sent.phone} sentAt={sent.at ?? 0} sentVia={sent.via ?? 'sms'} busy={busy} onSend={(w) => void ask(w)} />
           <Button
             variant="outline"
             busy={busy}
@@ -57,21 +70,12 @@ export function PhoneVerify({ config, verified, onVerified, label }: { config: S
           </Button>
         </>
       ) : (
-        <Button
-          variant="outline"
-          busy={busy}
-          disabled={busy || !plausible}
-          onClick={async () => {
-            setBusy(true);
-            setError(null);
-            const r = await publicRequest<{ code?: string; otp?: string }>(config, '/v1/sbg/auth/phone/request', { body: { phone: clean } });
-            setBusy(false);
-            if (r.error) return setError(r.error);
-            setSent({ phone: clean, ...(r.data?.code ?? r.data?.otp ? { code: r.data?.code ?? r.data?.otp } : {}) });
-          }}
-        >
-          {t('account.phoneVerify.send')}
-        </Button>
+        <>
+          <CodeWayChoice config={config} phone={clean} value={way} onChange={setWay} />
+          <Button variant="outline" busy={busy} disabled={busy || !plausible} onClick={() => void ask(way)}>
+            {t('account.phoneVerify.send')}
+          </Button>
+        </>
       )}
       <p class="hint">{t('account.phoneVerify.why')}</p>
     </div>

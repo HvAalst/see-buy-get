@@ -193,6 +193,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/code-routes': 'admin',
   'POST sbg/code-routes/:country/order': 'admin',
   'POST sbg/code-routes/:country/routes/:route': 'admin',
+  'POST sbg/code-routes/:country/apps/:route': 'admin',
   'GET sbg/consignment-notes': 'support',
   'GET sbg/consignment-notes/:docId': 'support',
   'GET sbg/consignment-notes/:docId/bundle.zip': 'support',

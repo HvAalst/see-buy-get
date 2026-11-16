@@ -23,6 +23,8 @@ import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.serv
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
+import { CodeRouteService } from '../../foundation/sms/code-route.service';
+import { CodeWays } from '../../foundation/sms/code-routes.types';
 import { SmsSendError } from '../../foundation/sms/sms.types';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
@@ -361,6 +363,8 @@ export class SbgController {
     @Optional() private readonly declarations?: CompanyDeclarationService,
     @Optional() private readonly paperReports?: CompanyPaperReportService,
     @Optional() private readonly sms?: SmsService,
+    // 2026-11-16 — the ways a code may go: the apps offered to a number's country (the plan, D2 and D3).
+    @Optional() private readonly codeRoutes?: CodeRouteService,
     @Optional() private readonly countryNotice?: CountryNoticeService,
     @Optional() private readonly journeyPlans?: JourneyPlanService,
     // A vehicle's upkeep: the odometer read as a shift starts and ends.
@@ -542,7 +546,8 @@ export class SbgController {
     const issued = this.otp.request(dto.phone);
     try {
       // In a sandbox with nothing wired in this is the outbox, which keeps it: the same steps run either way.
-      await this.sms?.sendCode(to, issued.code, OTP_TTL_MINUTES);
+      // 2026-11-16 — by the way the person chose, where it is offered in their country; by text otherwise (the plan, D2 and D3).
+      await this.sms?.sendCode(to, issued.code, OTP_TTL_MINUTES, Date.now(), dto.via);
     } catch (err) {
       this.otp.notSent(dto.phone);
       // The one failure that is the person's: the provider cannot text that number. Everything else is ours.
@@ -550,6 +555,21 @@ export class SbgController {
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, CODE_NOT_SENT), ...(err instanceof SmsSendError && err.kind === 'paused' ? [{ reason: 'paused' }] : []));
     }
     return isSandbox() ? issued : { sent: issued.sent };
+  }
+
+  /**
+   * 2026-11-16 — THE APPS A PERSON MAY ASK THEIR CODE BY (the plan, D2 and D3): for their number's country, the ones staff
+   * offer there and that are set up — WhatsApp, Telegram — in the order the code screen lists them. Nothing about the number
+   * itself: a country's choices, the same for every number in it. None where codes do not go.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
+  @Get('auth/phone/ways')
+  phoneWays(@Query('phone') phone: string): CodeWays {
+    const to = this.otp.phoneFor(phone ?? '');
+    if (this.sms && this.sms.sends() && !this.sms.mayGoTo(to)) return { ways: [] };
+    return { ways: this.codeRoutes?.ways(to) ?? [] };
   }
 
   /** Confirm the code → marks the phone verified for sign-up. */
