@@ -174,9 +174,10 @@ describe('the text that carries a code', () => {
     const read = (status: number, body: unknown) => readTwilioAnswer(status, typeof body === 'string' ? body : JSON.stringify(body));
 
     it('takes a text as sent only on a success that is Twilio’s own answer: a message with an id that does not say it failed', () => {
-      expect(read(201, QUEUED)).toEqual({ ok: true });
-      expect(read(201, ACCEPTED)).toEqual({ ok: true });
-      expect(read(200, QUEUED)).toEqual({ ok: true });
+      // 2026-11-16 — with Twilio's own id for it, which its status callback names (CodeRouteService.report).
+      expect(read(201, QUEUED)).toEqual({ ok: true, ref: QUEUED.sid });
+      expect(read(201, ACCEPTED)).toEqual({ ok: true, ref: ACCEPTED.sid });
+      expect(read(200, QUEUED)).toEqual({ ok: true, ref: QUEUED.sid });
       // A success that is not its answer is not a sent text: a proxy's sign-in page, nothing at all.
       for (const not of ['<html>Sign in to continue</html>', '', 'true', '[]', '{}', JSON.stringify({ status: 'queued' }), JSON.stringify({ sid: '' }), JSON.stringify({ sid: 42 })]) {
         expect([not, read(201, not)]).toEqual([not, { ok: false, kind: 'failed' }]);

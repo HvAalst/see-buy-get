@@ -598,6 +598,9 @@ export class AccountService implements OnApplicationBootstrap {
     this.deviceCodes.delete(challenge);
     const account = this.accounts.get(asked.key ?? asked.email);
     if (!account) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    // 2026-11-16 — the code was typed in: the route that texted it got it there (D4).
+    const textedTo = asked.phone ?? this.codePhoneOf(account);
+    if (textedTo) this.sms?.codeEntered?.(textedTo, now);
     // Round 40 — the number an account without one gave, proven by this code: its codes go there from now on.
     if (asked.needsPhone && asked.phone && !this.codePhoneOf(account)) {
       this.keepCodePhone(account, asked.phone);

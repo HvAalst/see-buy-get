@@ -204,6 +204,28 @@
         }
       }
     },
+    "/v1/sms/status/twilio": {
+      "post": {
+        "operationId": "SmsStatus.twilio",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sms/status/africastalking": {
+      "post": {
+        "operationId": "SmsStatus.africastalking",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/rails/funding": {
       "get": {
         "operationId": "Funding.list",
@@ -40741,6 +40763,106 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RouterCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/code-routes": {
+      "get": {
+        "operationId": "CodeRoutes.view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeRoutesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/code-routes/{country}/order": {
+      "post": {
+        "operationId": "CodeRoutes.order",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRouteOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryCodeRoutes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/code-routes/{country}/routes/{route}": {
+      "post": {
+        "operationId": "CodeRoutes.onOff",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "route",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRouteOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryCodeRoutes"
                 }
               }
             }
@@ -92276,6 +92398,278 @@
         "required": [
           "at",
           "ok"
+        ]
+      },
+      "CodeRouteLast": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "string",
+            "enum": [
+              "unreachable",
+              "refused",
+              "limit",
+              "rejected",
+              "failed",
+              "paused"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "ok"
+        ]
+      },
+      "CodeRouteStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "africastalking",
+              "twilio"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_set_up",
+              "half_set_up",
+              "sandbox"
+            ]
+          },
+          "last": {
+            "$ref": "#/components/schemas/CodeRouteLast"
+          },
+          "reportsDelivery": {
+            "type": "boolean",
+            "description": "The route tells us when a text was delivered, or not: only then can a code move on by itself after a minute."
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "reportsDelivery"
+        ]
+      },
+      "CodeRouteCount": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "enum": [
+              "africastalking",
+              "twilio"
+            ]
+          },
+          "asked": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          },
+          "entered": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "route",
+          "asked",
+          "delivered",
+          "failed",
+          "entered"
+        ]
+      },
+      "CountryCodeRoutes": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "type": "array",
+            "description": "The order routes are tried in.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "africastalking",
+                "twilio"
+              ]
+            }
+          },
+          "off": {
+            "type": "array",
+            "description": "Routes staff switched off here.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "africastalking",
+                "twilio"
+              ]
+            }
+          },
+          "goesBy": {
+            "type": "string",
+            "description": "The route a code goes by now: the first that is set up and on. Absent: none is.",
+            "enum": [
+              "africastalking",
+              "twilio"
+            ]
+          },
+          "counts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeRouteCount"
+            }
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2."
+          },
+          "switchedOn": {
+            "type": "boolean",
+            "description": "Codes go to its numbers at all: the country is switched on."
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "Staff changed this country from the default order."
+          }
+        },
+        "required": [
+          "order",
+          "off",
+          "counts",
+          "country",
+          "switchedOn",
+          "changed"
+        ]
+      },
+      "CodeRouteChange": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "order",
+              "on",
+              "off"
+            ]
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "africastalking",
+              "twilio"
+            ]
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "africastalking",
+                "twilio"
+              ]
+            }
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "at",
+          "by",
+          "country"
+        ]
+      },
+      "CodeRoutesView": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeRouteStatus"
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CountryCodeRoutes"
+            }
+          },
+          "changes": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeRouteChange"
+            }
+          },
+          "since": {
+            "type": "string",
+            "description": "The counts are from this moment on: seven days ago."
+          },
+          "autoNextSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "routes",
+          "countries",
+          "changes",
+          "since",
+          "autoNextSeconds"
+        ]
+      },
+      "CodeRouteOrderDto": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "africastalking",
+                "twilio"
+              ]
+            }
+          },
+          "by": {
+            "type": "string",
+            "description": "Who is at the keyboard, where the sign-in cannot say (a sandbox's shared key).",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "order"
+        ]
+      },
+      "CodeRouteOnDto": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "on"
         ]
       },
       "DocumentLinkTokenDto": {

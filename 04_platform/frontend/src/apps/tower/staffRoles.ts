@@ -69,6 +69,7 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   presence: ['admin'],
   pictures: ['admin'],
   connections: ['admin'],
+  codes: ['admin'],
   staffreads: ['admin'],
   // What everybody agrees to at sign-up: administration writes and publishes it.
   documents: ['admin'],

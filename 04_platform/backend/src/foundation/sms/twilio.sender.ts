@@ -1,3 +1,5 @@
+import type { RouteSender } from './code-route.service';
+import type { RouteState } from './code-routes.types';
 import { OutgoingSms, SmsFailure, SmsSendError, SmsSender } from './sms.types';
 import { TwilioConfig, readTwilioAnswer, toTwilioForm } from './twilio';
 
@@ -26,7 +28,9 @@ const WORDS: Record<SmsFailure, string> = {
  *
  * A redirect is not followed: the credential is for one address.
  */
-export class TwilioSmsSender implements SmsSender {
+export class TwilioSmsSender implements SmsSender, RouteSender {
+  readonly id = 'twilio' as const;
+
   constructor(
     private readonly config: TwilioConfig,
     private readonly timeoutMs: number = TWILIO_TIMEOUT_MS,
@@ -37,7 +41,23 @@ export class TwilioSmsSender implements SmsSender {
     return Boolean(this.config.endpoint && this.config.authorization && this.config.from);
   }
 
+  /** 2026-11-16 — as a route on the console: set up and sending, or why not. */
+  state(): RouteState {
+    if (this.ready()) return 'ready';
+    if (this.config.problem === 'sandbox') return 'sandbox';
+    return this.config.accountSet || this.config.credential || this.config.sender || this.config.problem ? 'half_set_up' : 'not_set_up';
+  }
+
+  /** It reports what became of each text where the site's address is known over https. */
+  reportsDelivery(): boolean {
+    return this.ready() && Boolean(this.config.statusCallback);
+  }
+
   async send(sms: OutgoingSms): Promise<void> {
+    await this.deliver(sms);
+  }
+
+  async deliver(sms: OutgoingSms): Promise<{ ref?: string }> {
     const { endpoint, authorization } = this.config;
     if (!endpoint || !authorization || !this.config.from) throw new SmsSendError('refused', 'the SMS provider is not set up');
     const abort = new AbortController();
@@ -62,5 +82,6 @@ export class TwilioSmsSender implements SmsSender {
     }
     const answer = readTwilioAnswer(status, body);
     if (!answer.ok) throw new SmsSendError(answer.kind, answer.code ? `${WORDS[answer.kind]} (${answer.code})` : WORDS[answer.kind], answer.code);
+    return answer.ref ? { ref: answer.ref } : {};
   }
 }

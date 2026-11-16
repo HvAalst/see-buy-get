@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../countries/catalogue';
 import { PresenceService } from '../presence/presence.service';
 import { isSandbox } from '../runtime/sandbox';
+import { CodeRouteService } from './code-route.service';
 import { OutboxSmsSender } from './outbox-sms.sender';
 import { SMS_SENDER, SmsConnection, SmsLast, SmsSendError, SmsSender } from './sms.types';
 import { twilioConfig } from './twilio';
@@ -88,7 +89,10 @@ export class SmsService {
     @Inject(SMS_SENDER) private readonly sender: SmsSender,
     // Optional so that what builds this by hand keeps compiling: with no register of countries to ask, nothing is fenced.
     @Optional() private readonly presence?: PresenceService,
+    // 2026-11-16 — the routes a code may go by, in the order staff set per country (the plan, D1). Optional for the specs.
+    @Optional() private readonly routes?: CodeRouteService,
   ) {
+    this.routes?.useGate((now) => this.allow(now));
     if (isSandbox() || this.sends()) return;
     // Said at start-up, not found out by the first person who cannot sign up.
     const why = twilioConfig().problem;
@@ -100,7 +104,18 @@ export class SmsService {
 
   /** The outbox keeps; anything in its place sends. Read off the sender, never off a setting. */
   sends(): boolean {
-    return !(this.sender instanceof OutboxSmsSender);
+    return Boolean(this.routes?.anyReady()) || !(this.sender instanceof OutboxSmsSender);
+  }
+
+  /** One text: by the routes where one is set up (CodeRouteService), else by the sender this server started with. */
+  private async text(to: string, body: string, now: number): Promise<void> {
+    if (this.routes?.anyReady()) return this.routes.send(to, body, now);
+    await this.sender.send({ to, body });
+  }
+
+  /** 2026-11-16 — a code that was texted was typed in: its route got it there, and goes first for that number next time. */
+  codeEntered(phone: string, now: number = Date.now()): void {
+    this.routes?.entered(phone, now);
   }
 
   /** The countries that are switched on, as the catalogue has them. Read each time: a country may have changed a minute ago. */
@@ -175,7 +190,7 @@ export class SmsService {
     this.allow(now);
     this.written += 1;
     try {
-      await this.sender.send({ to: phone, body: codeText(code, minutes) });
+      await this.text(phone, codeText(code, minutes), now);
       this.last = { at: new Date().toISOString(), ok: true };
     } catch (err) {
       // Whose it is to put right, where the sender said; a fault of nobody's naming otherwise — and none of its words.
@@ -192,7 +207,7 @@ export class SmsService {
     this.allow(now);
     this.written += 1;
     try {
-      await this.sender.send({ to: phone, body: payoutNumberChangedText(newMasked) });
+      await this.text(phone, payoutNumberChangedText(newMasked), now);
       this.last = { at: new Date().toISOString(), ok: true };
     } catch (err) {
       const why = err instanceof SmsSendError ? err : new SmsSendError('failed', 'the SMS provider answered with a fault');

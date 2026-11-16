@@ -277,6 +277,12 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
               {t('tower.conn.sms.where')}
               {view.sandbox && !view.sms.sends ? ` ${t('tower.conn.sms.whereKept')}` : ''}
             </p>
+            {/* 2026-11-16 — every route a code goes by, and each country's order, steered on their own screen (the plan's D1). */}
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.go('codes')}>
+                {t('tower.conn.sms.routes')}
+              </button>
+            </div>
           </section>
 
           <p class="chint">{t('tower.conn.since', { since: momentWords(view.since) })}</p>

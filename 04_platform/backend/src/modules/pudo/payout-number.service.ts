@@ -123,6 +123,8 @@ export class PayoutNumberService implements OnModuleInit {
       throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
     this.pending.delete(payee.payeeId);
+    // 2026-11-16 — the code was typed in: the route that texted it got it there (D4).
+    this.sms?.codeEntered?.(`+${asked.msisdn}`, now);
     const before = this.numbers.get(payee.payeeId);
     const at = new Date(now).toISOString();
     const masked = maskMsisdn(asked.msisdn);

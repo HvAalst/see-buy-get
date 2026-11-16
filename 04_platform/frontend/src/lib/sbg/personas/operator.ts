@@ -1085,6 +1085,10 @@ export function createOperatorApi(sbg: SbgClient) {
      * and what the last ask met. Staff only. `checkRouter` asks the routing server one question now.
      */
     connections: () => sbg.request((c) => c.GET('/v1/sbg/connections', {})),
+    /** 2026-11-16 — sign-in codes: every route a code goes by, and per country the order staff set (the plan's D1). */
+    codeRoutes: () => sbg.request((c) => c.GET('/v1/sbg/code-routes', {})),
+    setCodeRouteOrder: (country: string, body: { order: Array<'africastalking' | 'twilio'>; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/order', { params: { path: { country } }, body })),
+    setCodeRoute: (country: string, route: string, body: { on: boolean; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/routes/{route}', { params: { path: { country, route } }, body })),
     checkRouter: () => sbg.request((c) => c.POST('/v1/sbg/connections/router/check', {})),
     approveBusiness: (entityId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/approve', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } })),

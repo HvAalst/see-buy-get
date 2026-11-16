@@ -12,8 +12,9 @@ import { OutgoingSms, SmsCredential, SmsFailure, SmsProblem, SmsSenderKind } fro
  *   201 Created with a JSON message that carries a `sid`, its `status` "queued" (or "accepted" with a Messaging Service)
  *   an error is JSON { code, message, more_info, status }
  *
- * WHAT 201 MEANS, AND DOES NOT: Twilio has TAKEN the message. Whether it reached the phone is known only later, by a
- * status callback this server does not listen for. So "sent" here means handed to Twilio, and is said that way.
+ * WHAT 201 MEANS, AND DOES NOT: Twilio has TAKEN the message. Whether it reached the phone is known only later, by its
+ * status callback — since 2026-11-16 sent with every text where the site is known over https (`readTwilioReport`,
+ * CodeRouteService.report). So "sent" here means handed to Twilio, and is said that way.
  *
  * NEVER SENT THROUGH THE REAL PROVIDER FROM HERE: it is tested against a server standing where Twilio stands.
  */
@@ -33,6 +34,18 @@ export interface TwilioConfig {
   endpoint?: string;
   authorization?: string;
   from?: { field: 'From' | 'MessagingServiceSid'; value: string };
+  /** 2026-11-16 — where Twilio reports what became of each text: `<site>/v1/sms/status/twilio`, when the site is known over https. */
+  statusCallback?: string;
+}
+
+/** 2026-11-16 — where a provider posts what became of a text, on this server: the site, then /v1. Over https only. */
+export function statusCallbackFor(route: string, env: Env = process.env): string | undefined {
+  try {
+    const site = new URL(set(env.SBG_PUBLIC_URL));
+    return site.protocol === 'https:' ? `${site.origin}/v1/sms/status/${route}` : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const set = (v: string | undefined) => (v ?? '').trim();
@@ -76,6 +89,7 @@ export function twilioConfig(env: Env = process.env, sandbox: boolean = isSandbo
     endpoint: `${standInAt ?? TWILIO_API}/2010-04-01/Accounts/${encodeURIComponent(account)}/Messages.json`,
     authorization: `Basic ${Buffer.from(basic).toString('base64')}`,
     from: service ? { field: 'MessagingServiceSid', value: service } : { field: 'From', value: number },
+    ...(statusCallbackFor('twilio', env) && !standInAt ? { statusCallback: statusCallbackFor('twilio', env) } : {}),
   };
 }
 
@@ -97,10 +111,11 @@ export function toTwilioForm(config: TwilioConfig, sms: OutgoingSms): string {
   form.set('To', sms.to);
   if (config.from) form.set(config.from.field, config.from.value);
   form.set('Body', sms.body);
+  if (config.statusCallback) form.set('StatusCallback', config.statusCallback);
   return form.toString();
 }
 
-export type TwilioAnswer = { ok: true } | { ok: false; kind: SmsFailure; code?: string };
+export type TwilioAnswer = { ok: true; ref?: string } | { ok: false; kind: SmsFailure; code?: string };
 
 /**
  * Twilio's own error numbers that say THE NUMBER cannot be texted — the person's to put right, not ours. Only the
@@ -133,7 +148,7 @@ export function readTwilioAnswer(status: number, body: string): TwilioAnswer {
 
   if (status >= 200 && status < 300) {
     const taken = typeof answer?.sid === 'string' && answer.sid.length > 0 && answer.status !== 'failed' && answer.status !== 'undelivered' && !code;
-    return taken ? { ok: true } : failed('failed');
+    return taken ? { ok: true, ref: answer!.sid as string } : failed('failed');
   }
   if (code && BAD_NUMBER.has(code)) return failed('rejected');
   if (status === 429 || code === '20429') return failed('limit');
@@ -141,4 +156,18 @@ export function readTwilioAnswer(status: number, body: string): TwilioAnswer {
   // that is not about the number: the sender, the service, a country it was not allowed to text.
   if (status === 400 || status === 401 || status === 403 || status === 404) return failed('refused');
   return failed('failed');
+}
+
+/**
+ * 2026-11-16 — WHAT TWILIO SAYS BECAME OF A TEXT, posted to its status callback: `MessageSid` and `MessageStatus`. Delivered,
+ * or undelivered / failed; undefined while it is queued or on its way.
+ */
+export function readTwilioReport(body: unknown): { ref: string; outcome: 'delivered' | 'failed' } | undefined {
+  const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const ref = typeof b.MessageSid === 'string' ? b.MessageSid : '';
+  const status = typeof b.MessageStatus === 'string' ? b.MessageStatus : '';
+  if (!ref) return undefined;
+  if (status === 'delivered') return { ref, outcome: 'delivered' };
+  if (status === 'undelivered' || status === 'failed') return { ref, outcome: 'failed' };
+  return undefined;
 }

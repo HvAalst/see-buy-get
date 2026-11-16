@@ -3,6 +3,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { randomInt, timingSafeEqual } from 'crypto';
 import { normalizePhone } from '../../foundation/identity/phone';
 import { REVIEW_CODE } from '../../foundation/runtime/review-code';
+import { SmsService } from '../../foundation/sms/sms.service';
 import { PersonService } from './person.service';
 
 /** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
@@ -63,7 +64,11 @@ export class OtpService {
   private readonly byReview = new Set<string>();
 
   // Optional so the specs that build this by hand keep compiling; the review code's last guard reads it.
-  constructor(@Optional() private readonly persons?: PersonService) {}
+  constructor(
+    @Optional() private readonly persons?: PersonService,
+    // 2026-11-16 — a code typed in tells the routes which one got it there (the plan "Sign-in codes beyond Twilio SMS", D4).
+    @Optional() private readonly sms?: SmsService,
+  ) {}
 
   /**
    * Normalize to E.164 via the shared normalizer (foundation/identity/phone). Without this, rate limits
@@ -138,6 +143,7 @@ export class OtpService {
     }
 
     this.codes.delete(p);
+    if (!entry.review) this.sms?.codeEntered?.(p);
     this.verified.set(p, Date.now() + VERIFIED_TTL_MS);
     this.refusals.delete(p); // a fresh verification, a fresh allowance
     if (entry.review) this.byReview.add(p);

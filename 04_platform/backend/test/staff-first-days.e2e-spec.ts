@@ -232,7 +232,9 @@ describe('a new installation’s first days', () => {
       // Everything else is the product's (under sbg) or the server's own front: a new controller that is neither has to
       // be put on one of these two lists by somebody who looked at it.
       // rails/payouts: where M-Pesa says what became of a payout (2026-10-18) — public, admitted by the rail, like funding's.
-      const front = ['auth', 'did', 'health', 'mail', 'rails/funding', 'rails/payouts'];
+      // sms/status: where an SMS provider says what became of a code's text (2026-11-16) — public, and a report counts only for a
+      // text this server handed that provider, by the provider's own id for it.
+      const front = ['auth', 'did', 'health', 'mail', 'rails/funding', 'rails/payouts', 'sms/status'];
       expect([...new Set(others)].filter((b) => !b.startsWith('sbg') && !front.includes(b))).toEqual([]);
     });
 
