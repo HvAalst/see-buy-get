@@ -1,3 +1,4 @@
+import { CodeWayChoice, DeviceCodeAgain, rememberedWay, type CodeWay } from './CodeWays';
 import { useState } from 'preact/hooks';
 import { Button, Card, CodeBoxes, ErrorNote, NeedsSignalNote, PhoneField } from '../ui';
 import { useT, type MessageKey } from '../i18n';
@@ -37,7 +38,7 @@ export function ConfirmDevice({
   busy: boolean;
   error: SbgError | null;
   onConfirm: (code: string) => void;
-  onGivePhone: (phone: string) => void;
+  onGivePhone: (phone: string, via?: CodeWay) => void;
   onBack: () => void;
   /** 2026-11-03 — linked by a phone the account already uses instead of the code (pairing.ts): signed in, as after a code. */
   pair?: { config: SbgConfig; onLinked: (signedIn: Paired) => void };
@@ -45,6 +46,8 @@ export function ConfirmDevice({
   const t = useT();
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
+  // 2026-11-16 — how the code to a number given here comes (the owner: "the same choice").
+  const [way, setWay] = useState<CodeWay>(rememberedWay());
   const who = t(PARTY_WORD[party]);
   // 2026-11-02 — still signed out, so the bar every sign-in screen has stays (the owner: "a sticky footer for as long as
   // the page goes"): Back to the password, Help — the app's own "Trouble signing in?" — this screen read aloud, the apps.
@@ -70,7 +73,7 @@ export function ConfirmDevice({
         class="scr"
         onSubmit={(e) => {
           e.preventDefault();
-          if (ok) onGivePhone(phone.replace(/[\s()-]/g, ''));
+          if (ok) onGivePhone(phone.replace(/[\s()-]/g, ''), way);
         }}
       >
         <h1 class="scr__title">{t('account.bound.needsPhoneTitle', { party: who })}</h1>
@@ -84,6 +87,7 @@ export function ConfirmDevice({
             </label>
             <PhoneField id="device-phone" value={phone} onInput={(v) => setPhone(v)} />
           </div>
+          {pair ? <CodeWayChoice config={pair.config} phone={phone} value={way} onChange={setWay} /> : null}
         </Card>
         <Button type="submit" chevron={false} busy={busy} disabled={busy || !ok}>
           {t('account.bound.sendCode')}
@@ -110,6 +114,8 @@ export function ConfirmDevice({
           <span class="field__label">{t('account.bound.code')}</span>
           <CodeBoxes id="device-code" label={t('account.bound.code')} length={6} value={code} onInput={setCode} disabled={busy} />
           {ask.code ? <p class="hint">{t('account.safety.testCode', { code: ask.code })}</p> : null}
+          {/* 2026-11-16 — the same code, another way, after a minute (the owner: "the same choice"). */}
+          {pair ? <DeviceCodeAgain config={pair.config} challenge={ask.challenge} ways={ask.ways} via={ask.via} /> : null}
         </div>
       </Card>
       <p class="hint">{t('account.bound.why', { party: who })}</p>

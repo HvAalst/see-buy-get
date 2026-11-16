@@ -1,3 +1,4 @@
+import type { CodeWay } from './CodeWays';
 import { publicRequest, type Result, type SbgConfig, type SbgError } from '../../lib/sbg';
 import { readDeviceKey, saveDeviceKey } from './pin';
 import { idDisputeApi, type DisputeOpened, type IdDisputeApi, type IdRegister } from './idDispute';
@@ -12,7 +13,10 @@ import type { MoveAsked, MoveStatus } from './move';
  */
 export interface RecoveryApi {
   /** A code to a phone number (echoed back only in a sandbox). */
-  phoneCode: (phone: string) => Promise<Result<{ sent: boolean; code?: string }>>;
+  /** `via` (2026-11-16): by text, or an app offered for the number; the answer says which way it went. */
+  phoneCode: (phone: string, via?: CodeWay) => Promise<Result<{ sent: boolean; code?: string; via?: CodeWay }>>;
+  /** The app's own settings, for asking which apps are offered for a number (CodeWays). */
+  config: SbgConfig;
   verifyPhone: (phone: string, code: string) => Promise<Result<{ verified: boolean }>>;
   /**
    * THIS DEVICE, CONFIRMED — after the code to the phone has been checked. The key the server hands back is kept on
@@ -44,7 +48,8 @@ export interface RecoveryApi {
 export function recoveryApi(config: SbgConfig): RecoveryApi {
   const post = <T>(path: string, body: unknown) => publicRequest<T>(config, path, { body });
   return {
-    phoneCode: (phone) => post('/v1/sbg/auth/phone/request', { phone }),
+    phoneCode: (phone, via) => post('/v1/sbg/auth/phone/request', { phone, ...(via ? { via } : {}) }),
+    config,
     verifyPhone: (phone, code) => post('/v1/sbg/auth/phone/verify', { phone, code }),
     confirmDevice: async (phone) => {
       const r = await post<{ device: string }>('/v1/sbg/identity/device', { phone });

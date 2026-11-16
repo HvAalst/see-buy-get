@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, Note, RefusalNote, Sheet, PhoneField } from '../ui';
@@ -707,15 +708,17 @@ function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
 
-  const send = async () => {
+  const send = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
-    const r = await api.sendPayoutCode(phone.trim());
+    const r = await api.sendPayoutCode(phone.trim(), via);
     setBusy(false);
     setError(r.error ?? null);
     if (r.error) return;
     setSentTo(r.data?.masked ?? '');
     setCode('');
     setTestCode(r.data?.code ?? '');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
   const save = async () => {
     setBusy(true);
@@ -751,6 +754,8 @@ function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNu
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
           <CodeBoxes id="acct-payout-code" label={t('account.safety.phoneCodeLabel')} length={6} value={code} onInput={(v) => { setCode(v); setError(null); }} disabled={busy} />
           {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+          {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+          <OtherWays config={api.phoneWays} phone={phone} busy={busy} onSend={(w) => send(w)} />
         </div>
       ) : null}
       <Refused error={error} />
@@ -772,9 +777,9 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
 
-  const send = async () => {
+  const send = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
-    const r = await api.sendPhoneCode(phone.trim());
+    const r = await api.sendPhoneCode(phone.trim(), via);
     setBusy(false);
     setError(r.error ?? null);
     if (r.error) return;
@@ -782,6 +787,8 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
     setVerified(false);
     setCode('');
     setTestCode(r.data?.code ?? '');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   const move = async () => {
@@ -829,6 +836,8 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
           <CodeBoxes id="acct-phone-code" label={t('account.safety.phoneCodeLabel')} length={6} value={code} onInput={setCode} disabled={busy || verified} />
           {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+          {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+          <OtherWays config={api.phoneWays} phone={phone} busy={busy} onSend={(w) => send(w)} />
         </div>
       ) : null}
       <div class="field">

@@ -35,13 +35,13 @@ export function defaultOrder(country: string | undefined): CodeRouteId[] {
 }
 
 /**
- * 2026-11-16 — THE APPS OFFERED AS A CHOICE, before staff change it (the plan, D2 and D3): WhatsApp and Telegram in Kenya,
- * Uganda, Tanzania, Rwanda and the Netherlands; Telegram alone in Ethiopia, where it is the messaging app and WhatsApp is
- * weak and has been blocked. An app not set up is offered to nobody.
+ * 2026-11-16 — THE APPS OFFERED AS A CHOICE, before staff change it (the owner: "the choice is for the user in every country";
+ * "I prefer Whatsapp also wired in for Ethiopia"): WhatsApp and Telegram in every country — Telegram listed first in Ethiopia,
+ * where it is the messaging app. Staff may still withdraw one in a country. An app not set up is offered to nobody.
  */
 export function defaultOffer(country: string | undefined): AppRouteId[] {
-  if (country === 'ET') return ['telegram'];
-  return country && ['KE', 'UG', 'TZ', 'RW', 'NL'].includes(country) ? ['whatsapp', 'telegram'] : [];
+  if (!country) return [];
+  return country === 'ET' ? ['telegram', 'whatsapp'] : ['whatsapp', 'telegram'];
 }
 
 interface Plan {
@@ -188,7 +188,8 @@ export class CodeRouteService implements OnModuleDestroy {
    * A TEXT, BY THE FIRST ROUTE THAT TAKES IT. Throws the reason when none did: `rejected` only when every route said the
    * number cannot be texted — the person's to put right — and otherwise ours.
    */
-  async send(phone: string, body: string, now: number = Date.now(), opts: { code?: string; minutes?: number; via?: CodeWay } = {}): Promise<void> {
+  /** The way it went by, once one took it. */
+  async send(phone: string, body: string, now: number = Date.now(), opts: { code?: string; minutes?: number; via?: CodeWay } = {}): Promise<AnyRouteId> {
     const country = countryOfPhone(phone);
     const phoneKey = hashPhone(phone);
     const routes = this.plan(country, phoneKey, opts.code, opts.via);
@@ -198,7 +199,7 @@ export class CodeRouteService implements OnModuleDestroy {
     for (const route of routes) {
       tried.push(route);
       const done = await this.tryRoute(route, { phone, body, code: opts.code, minutes: opts.minutes, country, phoneKey, step: tried.length - 1, tried: [...tried] }, now);
-      if (done === true) return;
+      if (done === true) return route;
       errors.push(done);
     }
     throw errors.every((e) => e.kind === 'rejected') ? errors[0] : (errors.find((e) => e.kind !== 'rejected') ?? errors[0]);

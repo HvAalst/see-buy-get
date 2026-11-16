@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
@@ -694,14 +695,14 @@ export function useVendorApp() {
   );
 
   /** Round 40 — a store with no number yet gives one: the code goes to it. */
-  const giveDevicePhone = useCallback(async (phone: string) => {
+  const giveDevicePhone = useCallback(async (phone: string, via?: CodeWay) => {
     const ask = stateRef.current.deviceAsk;
     if (!ask) return;
     setState((s) => ({ ...s, busy: 'signin', error: null }));
-    const r = await sbgDevicePhone(vendorConfig(), ask.challenge, phone);
+    const r = await sbgDevicePhone(vendorConfig(), ask.challenge, phone, undefined, via);
     if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
     const sent = r.data;
-    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
+    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}), ...(sent.via ? { via: sent.via } : {}), ...(sent.ways?.length ? { ways: sent.ways } : {}) } : null }));
   }, []);
 
   /** 2026-11-03 — linked by a phone the store already uses (pairing.ts): this browser is the store's from now, and signed in. */

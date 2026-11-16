@@ -283,22 +283,26 @@ describe('a code by an app the person chose', () => {
     expect(wa.sent).toHaveLength(1);
   });
 
-  it('an app not offered in the country is not used: WhatsApp in Ethiopia, or one staff withdrew', async () => {
-    const { at, wa, tg, s } = four();
+  it('both apps are the person’s choice in every country — Telegram first in Ethiopia — unless staff withdrew one', async () => {
+    const { wa, tg, s } = four();
+    // The owner, 2026-11-16: “the choice is for the user in every country”; “I prefer Whatsapp also wired in for Ethiopia”.
     expect(s.ways(KE)).toEqual(['whatsapp', 'telegram']);
-    expect(s.ways(ET_NUMBER)).toEqual(['telegram']);
+    expect(s.ways(ET_NUMBER)).toEqual(['telegram', 'whatsapp']);
+    expect(s.ways('+5511987654321')).toEqual(['whatsapp', 'telegram']);
     await s.send(ET_NUMBER, 't', Date.now(), { code: '1', via: 'whatsapp' });
-    expect([wa.sent.length, at.sent.length]).toEqual([0, 1]);
+    expect(wa.sent).toHaveLength(1);
     await s.send(ET_NUMBER, 't', Date.now(), { code: '2', via: 'telegram' });
     expect(tg.sent).toHaveLength(1);
+    wa.sent = [];
     s.setOffer('KE', 'whatsapp', false, 'Amina (staff)');
     expect(s.ways(KE)).toEqual(['telegram']);
     await s.send(KE, 't', Date.now(), { code: '3', via: 'whatsapp' });
     expect(wa.sent).toHaveLength(0);
-    // Offered again, it takes its place again; Telegram stays first in Ethiopia.
+    // Offered again, it takes its place again; withdrawn and offered in Ethiopia, Telegram stays first.
     expect(s.setOffer('KE', 'whatsapp', true, 'Amina (staff)').offer).toEqual(['whatsapp', 'telegram']);
+    s.setOffer('ET', 'whatsapp', false, 'Amina (staff)');
     expect(s.setOffer('ET', 'whatsapp', true, 'Amina (staff)').offer).toEqual(['telegram', 'whatsapp']);
-    expect(s.view().changes.map((c) => c.what).slice(0, 3)).toEqual(['offer', 'offer', 'withdraw']);
+    expect(s.view().changes.map((c) => c.what).slice(0, 4)).toEqual(['offer', 'withdraw', 'offer', 'withdraw']);
   });
 
   it('not on that app, or not delivered within a minute: the same code goes by text', async () => {

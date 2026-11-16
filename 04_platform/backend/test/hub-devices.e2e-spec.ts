@@ -64,6 +64,16 @@ describe('a hub’s own phones, over the wire', () => {
     const stranger = `+2547${digits()}2`;
     expect((await http().post('/v1/sbg/auth/device/phone').send({ challenge: elsewhere.body.params.challenge, phone: stranger })).body.code).toBe('OTP_INVALID');
     expect(app.get(OutboxSmsSender).recent(stranger)).toHaveLength(0);
+    // 2026-11-16 — the same code again, another way, once a minute has passed (the owner: “they should be given the same choice”).
+    expect(elsewhere.body.params.ways).toEqual([]); // a test server sets up no app: only a text to choose
+    expect((await http().post('/v1/sbg/auth/device/again').send({ challenge: elsewhere.body.params.challenge, via: 'sms' })).body.code).toBe('RATE_LIMITED');
+    expect((await http().post('/v1/sbg/auth/device/again').send({ challenge: 'dc_nothing', via: 'sms' })).body.code).toBe('OTP_INVALID');
+    await http().post('/v1/sbg/auth/device/again').send({ challenge: elsewhere.body.params.challenge, via: 'pigeon' }).expect(400);
+    const again = await app.get(AccountService).deviceCodeAgain(elsewhere.body.params.challenge, 'sms', Date.now() + 61_000);
+    expect(again).toMatchObject({ via: 'sms', sentTo: `•••${hub.phone.slice(-3)}`, code: elsewhere.body.params.code });
+    expect(app.get(OutboxSmsSender).recent(hub.phone).filter((m) => m.body.includes(elsewhere.body.params.code))).toHaveLength(2);
+    // Once its ten minutes are over, nothing more goes: the sign-in starts again.
+    await expect(app.get(AccountService).deviceCodeAgain(elsewhere.body.params.challenge, 'sms', Date.now() + 11 * 60_000)).rejects.toMatchObject({ code: 'OTP_INVALID' });
 
     const confirmed = (await http().post('/v1/sbg/auth/device').send({ challenge: elsewhere.body.params.challenge, code: elsewhere.body.params.code }).expect(201)).body;
     const second = confirmed.device as string;

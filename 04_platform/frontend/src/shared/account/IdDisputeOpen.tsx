@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 import { useState } from 'preact/hooks';
 import { Button, CodeBoxes, RefusalNote, PhoneField } from '../ui';
 import { useT } from '../i18n';
@@ -30,9 +31,9 @@ export function IdDisputeOpen({ api, preset }: { api: RecoveryApi; preset?: { re
 
   if (reference) return <IdDisputeCase api={api.idDispute} reference={reference} />;
 
-  const sendCode = async () => {
+  const sendCode = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
-    const r = await api.phoneCode(phone.trim());
+    const r = await api.phoneCode(phone.trim(), via);
     setBusy(false);
     setError(r.error ?? null);
     if (r.error) return;
@@ -40,6 +41,8 @@ export function IdDisputeOpen({ api, preset }: { api: RecoveryApi; preset?: { re
     setVerified(false);
     setCode('');
     setTestCode(r.data?.code ?? '');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   const submit = async () => {
@@ -104,6 +107,8 @@ export function IdDisputeOpen({ api, preset }: { api: RecoveryApi; preset?: { re
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
           <CodeBoxes id="idd-phone-code" label={t('account.safety.phoneCodeLabel')} length={6} value={code} onInput={setCode} disabled={busy || verified} />
           {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+          {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+          {sent ? <OtherWays config={api.config} phone={phone} busy={busy} onSend={(w) => sendCode(w)} /> : null}
         </div>
       ) : null}
       {error ? <RefusalNote error={error} /> : null}

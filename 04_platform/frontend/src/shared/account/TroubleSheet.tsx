@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 import { useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet, PhoneField } from '../ui';
@@ -184,9 +185,9 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
   // Asked only once the server says this account has one on record — somebody who only sends parcels gave us none.
   const [wantsId, setWantsId] = useState(false);
 
-  const sendPhone = async () => {
+  const sendPhone = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
-    const r = await api.phoneCode(phone.trim());
+    const r = await api.phoneCode(phone.trim(), via);
     setBusy(false);
     setError(r.error ?? null);
     if (r.error) return;
@@ -194,6 +195,8 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
     setPhoneVerified(false);
     setPhoneCode('');
     setTestPhoneCode(r.data?.code ?? '');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   const submit = async () => {
@@ -254,6 +257,8 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
           <CodeBoxes id="gone-phone-code" label={t('account.safety.phoneCodeLabel')} length={6} value={phoneCode} onInput={setPhoneCode} disabled={busy || phoneVerified} />
           {testPhoneCode ? <p class="hint">{t('account.safety.testCode', { code: testPhoneCode })}</p> : null}
+          {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+          {phoneSent ? <OtherWays config={api.config} phone={phone} busy={busy} onSend={(w) => sendPhone(w)} /> : null}
         </div>
       ) : null}
       <div class="field">
@@ -287,9 +292,9 @@ function AskStaff({ api }: { api: RecoveryApi }) {
   const [error, setError] = useState<SbgError | null>(null);
   const [asked, setAsked] = useState<MoveAsked | null>(null);
 
-  const sendPhone = async () => {
+  const sendPhone = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
-    const r = await api.phoneCode(phone.trim());
+    const r = await api.phoneCode(phone.trim(), via);
     setBusy(false);
     setError(r.error ?? null);
     if (r.error) return;
@@ -297,6 +302,8 @@ function AskStaff({ api }: { api: RecoveryApi }) {
     setPhoneVerified(false);
     setPhoneCode('');
     setTestPhoneCode(r.data?.code ?? '');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   const submit = async () => {
@@ -361,6 +368,8 @@ function AskStaff({ api }: { api: RecoveryApi }) {
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
           <CodeBoxes id="staff-phone-code" label={t('account.safety.phoneCodeLabel')} length={6} value={phoneCode} onInput={setPhoneCode} disabled={busy || phoneVerified} />
           {testPhoneCode ? <p class="hint">{t('account.safety.testCode', { code: testPhoneCode })}</p> : null}
+          {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+          {phoneSent ? <OtherWays config={api.config} phone={phone} busy={busy} onSend={(w) => sendPhone(w)} /> : null}
         </div>
       ) : null}
       <div class="field">

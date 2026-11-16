@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, CodeBoxes, ErrorNote, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import { useT } from '../i18n';
@@ -74,12 +75,14 @@ export function ChoosePinSheet({ open, onClose, api, phone: typed, onChosen }: C
     return r.data ?? true;
   };
 
-  const sendCode = async () => {
-    const sent = await run(api.phoneCode(number));
+  const sendCode = async (via: CodeWay = rememberedWay()) => {
+    const sent = await run(api.phoneCode(number, via));
     if (!sent) return;
     setEchoed(typeof sent === 'object' ? (sent.code ?? null) : null);
     setCode('');
     setStep('code');
+    if (via !== 'sms') rememberWay(via);
+    return typeof sent === 'object' ? (sent.via ?? via) : via;
   };
   const checkCode = async () => {
     if (await run(api.verifyPhone(number, code))) setStep('pin');
@@ -125,6 +128,8 @@ export function ChoosePinSheet({ open, onClose, api, phone: typed, onChosen }: C
             <span class="field__label">{t('account.device.code')}</span>
             <CodeBoxes id="choose-code" label={t('account.device.code')} length={6} value={code} onInput={setCode} disabled={busy} />
             {echoed ? <p class="hint">{t('account.device.sandbox', { code: echoed })}</p> : null}
+            {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+            <OtherWays config={api.config} phone={number} busy={busy} onSend={(w) => sendCode(w)} />
           </div>
           <Button chevron={false} busy={busy} disabled={code.length !== 6} onClick={() => void checkCode()}>
             {t('account.choosePin.checkCode')}

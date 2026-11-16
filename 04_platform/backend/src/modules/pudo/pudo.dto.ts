@@ -2461,6 +2461,14 @@ export class AccountDeviceDto {
 export class AccountDevicePhoneDto {
   @IsString() @MaxLength(40) challenge!: string;
   @IsString() @MaxLength(24) phone!: string;
+  /** 2026-11-16 — the way the person chose for the code: by text, or an app offered for that number. */
+  @ApiPropertyOptional({ enum: CODE_WAYS }) @IsOptional() @IsIn(CODE_WAYS) via?: CodeWay;
+}
+
+/** 2026-11-16 — a new phone's code sent again, another way. */
+export class AccountDeviceAgainDto {
+  @IsString() @MaxLength(40) challenge!: string;
+  @ApiProperty({ enum: CODE_WAYS }) @IsIn(CODE_WAYS) via!: CodeWay;
 }
 
 /** This phone or browser's key, for the shop's own list of its phones. */

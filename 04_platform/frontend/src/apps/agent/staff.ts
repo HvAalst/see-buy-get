@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import type { Agreement } from '../../shared/documents/documents';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
@@ -52,7 +53,7 @@ export interface StaffAtCounter {
 export function staffDoors(config: SbgConfig) {
   return {
     login: (phone: string, pin: string): Promise<Result<PersonSignIn>> => publicRequest<PersonSignIn>(config, '/v1/sbg/identity/login', { body: { phone: phone.trim(), pin, device: readDeviceKey(phone) } }),
-    codeTo: (phone: string) => publicRequest<{ sent: boolean; code?: string }>(config, '/v1/sbg/auth/phone/request', { body: { phone: phone.trim() } }),
+    codeTo: (phone: string, via?: CodeWay) => publicRequest<{ sent: boolean; code?: string; via?: CodeWay }>(config, '/v1/sbg/auth/phone/request', { body: { phone: phone.trim(), ...(via ? { via } : {}) } }),
     checkCode: (phone: string, code: string) => publicRequest<{ verified: boolean }>(config, '/v1/sbg/auth/phone/verify', { body: { phone: phone.trim(), code } }),
     /** A first PIN wants a recovery email behind it: the server asks, and the address and its code come on a second try. */
     choosePin: async (phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<PersonSignIn>> => {

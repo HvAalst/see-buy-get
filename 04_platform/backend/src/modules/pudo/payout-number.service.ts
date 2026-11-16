@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../foundation/sms/code-routes.types';
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { standInCode } from '../../foundation/runtime/standin-code';
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
@@ -75,7 +76,8 @@ export class PayoutNumberService implements OnModuleInit {
    * Text a code to the number the payee wants to be paid to. Refused, before anything is sent, where the country pays by
    * hand, for a number M-Pesa cannot pay, and for the number it already is.
    */
-  async requestCode(actor: IntrospectionResult | undefined, phone: string, now: number = Date.now()): Promise<PayoutCodeSent> {
+  /** `via` (2026-11-16): the way the payee chose — by text, or an app offered for that number (the owner: "the same choice"). */
+  async requestCode(actor: IntrospectionResult | undefined, phone: string, now: number = Date.now(), via?: CodeWay): Promise<PayoutCodeSent> {
     const payee = this.requirePayee(actor);
     if (payoutWayOf(payee.country) !== 'mpesa') {
       throw new GlosError('INVALID_STATE', `In ${catalogueEntry(payee.country)?.name ?? payee.country} payouts are made by hand: there is no payout number to set.`);
@@ -92,15 +94,16 @@ export class PayoutNumberService implements OnModuleInit {
     const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
     const minutes = CODE_TTL_MS / 60_000;
     this.pending.set(payee.payeeId, { msisdn, code, expires: now + CODE_TTL_MS, attempts: 0 });
+    let used: CodeWay = 'sms';
     try {
       // Handed to the sender whatever it is: a sandbox's keeps it, so what would have been texted can be read back.
-      if (!standIn) await this.sms?.sendCode(to, code, minutes);
+      if (!standIn) used = (await this.sms?.sendCode(to, code, minutes, now, via)) ?? 'sms';
     } catch (err) {
       this.pending.delete(payee.payeeId);
       this.giveBack(payee.payeeId);
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted to that number. Try again in a minute.'));
     }
-    return { sent: texts || Boolean(standIn), masked: maskMsisdn(msisdn), minutes, ...(isSandbox() ? { code } : {}) };
+    return { sent: texts || Boolean(standIn), masked: maskMsisdn(msisdn), minutes, via: used, ...(isSandbox() ? { code } : {}) };
   }
 
   /**

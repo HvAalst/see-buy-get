@@ -1,3 +1,4 @@
+import { CODE_WAYS, CodeWay } from '../../foundation/sms/code-routes.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PAYOUT_WAYS, type PayoutWay } from '../../foundation/payouts/payout-ways';
 
@@ -55,6 +56,8 @@ export class PayoutCodeSent {
   @ApiProperty() masked: string;
   @ApiProperty() minutes: number;
   @ApiPropertyOptional() code?: string;
+  /** 2026-11-16 — the way the code went: by text, or the app the payee chose. */
+  @ApiPropertyOptional({ enum: CODE_WAYS }) via?: CodeWay;
 }
 
 /** The number was saved; whether the old one was told. */

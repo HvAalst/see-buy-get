@@ -1,3 +1,4 @@
+import type { AppWay, CodeWay } from './CodeWays';
 import { saveDeviceKey } from './pin';
 import type { AddressFormat, AddressParts } from './address';
 import { pinDevicesApi, type PinDevicesApi } from './devices';
@@ -114,7 +115,9 @@ export interface AccountApi {
   carry: (phone?: string) => Promise<Result<{ code: string }>>;
   /** The PIN again, and the code sent to the NEW address. The menu redraws from what the server stored. */
   setEmail: (pin: string, email: string, code: string) => Promise<Result<unknown>>;
-  sendPhoneCode: (phone: string) => Promise<Result<Sent>>;
+  sendPhoneCode: (phone: string, via?: CodeWay) => Promise<Result<Sent & { via?: CodeWay }>>;
+  /** 2026-11-16 — the apps offered for a number's code (CodeWays). */
+  phoneWays: (phone: string) => Promise<AppWay[]>;
   confirmPhoneCode: (phone: string, code: string) => Promise<Result<unknown>>;
   /** Move the account to a number already confirmed by code. On success EVERY session is over, this one included. */
   changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
@@ -144,7 +147,7 @@ export interface AccountApi {
    */
   payout: PayoutNumberView | null;
   /** Text a code to the number to be paid to. */
-  sendPayoutCode: (phone: string) => Promise<Result<Sent & { masked: string }>>;
+  sendPayoutCode: (phone: string, via?: CodeWay) => Promise<Result<Sent & { masked: string; via?: CodeWay }>>;
   /** The code back: that number is the payout number from now. A change pauses payouts for a day. */
   savePayoutNumber: (code: string) => Promise<Result<PayoutNumberSaved>>;
 }
@@ -172,6 +175,7 @@ const IDLE: AccountApi = {
   carry: async () => NO_CLIENT,
   setEmail: async () => NO_CLIENT,
   sendPhoneCode: async () => NO_CLIENT,
+  phoneWays: async () => [],
   confirmPhoneCode: async () => NO_CLIENT,
   changeNumber: async () => NO_CLIENT,
   blockOldNumber: async () => NO_CLIENT,
@@ -346,7 +350,14 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
   const sendEmailCode = useCallback((email: string) => post<Sent>('/v1/sbg/identity/email/request', { email }), [post]);
   const carry = useCallback((phone?: string) => post<{ code: string }>('/v1/sbg/account/carry', phone ? { phone } : {}), [post]);
-  const sendPhoneCode = useCallback((phone: string) => post<Sent>('/v1/sbg/auth/phone/request', { phone }), [post]);
+  const sendPhoneCode = useCallback((phone: string, via?: CodeWay) => post<Sent & { via?: CodeWay }>('/v1/sbg/auth/phone/request', { phone, ...(via ? { via } : {}) }), [post]);
+  /** 2026-11-16 — the apps offered for a number's code (CodeWays), read with this sign-in. */
+  const phoneWays = useCallback(async (phone: string): Promise<AppWay[]> => {
+    if (!client) return [];
+    const r: Result<unknown> = await client.request((raw) => raw.GET('/v1/sbg/auth/phone/ways' as never, { params: { query: { phone } } } as never) as never);
+    const ways = (r.data as { ways?: unknown } | null)?.ways;
+    return Array.isArray(ways) ? ways.filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : [];
+  }, [client]);
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
   const changeNumber = useCallback(
     async (pin: string, newPhone: string) => {
@@ -414,7 +425,7 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const devices = useMemo(() => pinDevicesApi(post), [post]);
   const passkey = useMemo(() => passkeyApi(post), [post]);
   const car = useMemo(() => carApi(post), [post]);
-  const sendPayoutCode = useCallback((phone: string) => post<Sent & { masked: string }>('/v1/sbg/payout-number/code', { phone }), [post]);
+  const sendPayoutCode = useCallback((phone: string, via?: CodeWay) => post<Sent & { masked: string; via?: CodeWay }>('/v1/sbg/payout-number/code', { phone, ...(via ? { via } : {}) }), [post]);
   const savePayoutNumber = useCallback(
     async (code: string) => {
       const r = await post<PayoutNumberSaved>('/v1/sbg/payout-number', { code });
@@ -426,5 +437,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
 }

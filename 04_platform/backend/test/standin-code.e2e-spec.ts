@@ -141,7 +141,7 @@ describe('the owner’s stand-in codes, over the wire', () => {
   it('stands down the moment texts leave: the real code goes, as for everybody', async () => {
     const sms = app.get(SmsService);
     const sends = jest.spyOn(sms, 'sends').mockReturnValue(true);
-    const sent = jest.spyOn(sms, 'sendCode').mockResolvedValue(undefined);
+    const sent = jest.spyOn(sms, 'sendCode').mockResolvedValue('sms');
     const mayGoTo = jest.spyOn(sms, 'mayGoTo').mockReturnValue(true);
     try {
       const fresh = `+3163${digits()}`.slice(0, 12);

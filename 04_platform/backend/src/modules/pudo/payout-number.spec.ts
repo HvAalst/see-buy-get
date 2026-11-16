@@ -28,7 +28,10 @@ describe('a payee’s own payout number', () => {
     const sms = {
       sends: () => false,
       mayGoTo: () => true,
-      sendCode: async (to: string, code: string) => void texts.push({ to, kind: 'code', body: code }),
+      sendCode: async (to: string, code: string, _minutes?: number, _now?: number, via?: string) => {
+        texts.push({ to, kind: 'code', body: code, ...(via ? { via } : {}) });
+        return via ?? 'sms';
+      },
       sendPayoutNumberChanged: async (to: string, masked: string) => void texts.push({ to, kind: 'notice', body: masked }),
     } as unknown as SmsService;
     const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms);
@@ -47,6 +50,13 @@ describe('a payee’s own payout number', () => {
     expect(svc.view({ role: 'mdp', did: 'did:hub' } as IntrospectionResult)).toEqual({ way: 'mpesa', country: 'KE' });
     // A fleet in a country that pays by hand has no number to set.
     expect(make('ET').view({ role: 'fleet_manager', did: 'did:fleet', tenant: 'did:fleet' } as IntrospectionResult)).toEqual({ way: 'by_hand', country: 'ET' });
+  });
+
+  it('2026-11-16 — its code goes the way the payee chose, and says which (the owner: “the same choice”)', async () => {
+    const svc = make();
+    const sent = await svc.requestCode(courier, '0712 345 678', T0, 'whatsapp');
+    expect(texts.at(-1)).toMatchObject({ to: '+254712345678', kind: 'code', via: 'whatsapp' });
+    expect(sent.via).toBe('whatsapp');
   });
 
   it('is set by a code texted to that number, and tells the run where to pay — and, after a change, to wait a day', async () => {

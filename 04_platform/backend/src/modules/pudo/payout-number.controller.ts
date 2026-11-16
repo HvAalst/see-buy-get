@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Length, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { CODE_WAYS, CodeWay } from '../../foundation/sms/code-routes.types';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -13,6 +14,12 @@ export class PayoutNumberCodeDto {
   @IsString()
   @MaxLength(40)
   phone: string;
+
+  /** 2026-11-16 — the way the payee chose for the code: by text, or an app offered for that number. */
+  @ApiPropertyOptional({ enum: CODE_WAYS })
+  @IsOptional()
+  @IsIn(CODE_WAYS)
+  via?: CodeWay;
 }
 
 export class PayoutNumberConfirmDto {
@@ -41,7 +48,7 @@ export class PayoutNumberController {
   @RateLimit(20, 15 * 60)
   @Post('code')
   code(@Body() dto: PayoutNumberCodeDto, @Actor() actor: IntrospectionResult): Promise<PayoutCodeSent> {
-    return this.numbers.requestCode(actor, dto.phone);
+    return this.numbers.requestCode(actor, dto.phone, Date.now(), dto.via);
   }
 
   @Roles('driver', 'fleet_manager', 'mdp')

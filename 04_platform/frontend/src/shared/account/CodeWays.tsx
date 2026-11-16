@@ -4,14 +4,16 @@ import { useT } from '../i18n';
 import { Button } from '../ui';
 
 /*
- * 2026-11-16 — HOW A CODE COMES (the plan "Sign-in codes beyond Twilio SMS", D2 to D4): by text, or — where staff offer it in
- * the number's country and it is set up — by WhatsApp or Telegram, the person's own choice (never the default: Meta itself
- * advises against it, and choosing it is the person's agreement to hear from us there). A code chosen by an app that does
- * not arrive within a minute comes by text by itself; after a minute the person may also ask another way. Where no app is
- * offered, nothing here shows: the screens stay as they were.
+ * 2026-11-16 — HOW A CODE COMES (the plan "Sign-in codes beyond Twilio SMS", D2 to D4; the owner, later: "they should be given
+ * the same choice … the choice is for the user in every country"): by text, or by WhatsApp or Telegram where offered for the
+ * number's country and set up — the person's own choice, never the default (Meta itself advises against it, and choosing it is
+ * the person's agreement to hear from us there). A code chosen by an app that does not arrive within a minute comes by text by
+ * itself; after a minute the person may also ask another way. Where no app is offered, nothing here shows.
  */
 export type CodeWay = 'sms' | 'whatsapp' | 'telegram';
 export type AppWay = Exclude<CodeWay, 'sms'>;
+/** Where the offered apps are asked: an app's settings (the public door), or a loader of its own (a signed-in Settings). */
+export type WaysSource = SbgConfig | ((phone: string) => Promise<AppWay[]>);
 
 /** The server's own wait between two codes for one number: another way is offered once it has passed. */
 export const ANOTHER_WAY_AFTER_S = 60;
@@ -36,26 +38,33 @@ export function rememberWay(way: CodeWay): void {
   }
 }
 
+/** Only the apps this screen knows how to name. */
+const appsOnly = (ways: unknown): AppWay[] => (Array.isArray(ways) ? ways.filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : []);
+
+/** The public door: GET auth/phone/ways for this number. */
+export function waysFromServer(config: SbgConfig): (phone: string) => Promise<AppWay[]> {
+  return async (phone) => {
+    const r = await publicRequest<{ ways?: AppWay[] }>(config, `/v1/sbg/auth/phone/ways?phone=${encodeURIComponent(phone)}`, { method: 'GET' });
+    return r.error ? [] : appsOnly(r.data?.ways);
+  };
+}
+
 const asked = new Map<string, Promise<AppWay[]>>();
 
 /** The apps offered for this number's country, in the server's order. Empty until known, and when none is. */
-export function useCodeWays(config: SbgConfig, phone: string): AppWay[] {
+export function useCodeWays(source: WaysSource, phone: string): AppWay[] {
   const clean = phone.replace(/[^\d+]/g, '');
   const [ways, setWays] = useState<AppWay[]>([]);
   useEffect(() => {
     if (clean.replace(/\D/g, '').length < 9) return setWays([]);
     let live = true;
-    if (!asked.has(clean)) {
-      asked.set(
-        clean,
-        publicRequest<{ ways?: AppWay[] }>(config, `/v1/sbg/auth/phone/ways?phone=${encodeURIComponent(clean)}`, { method: 'GET' }).then((r) => (r.error ? [] : (r.data?.ways ?? []).filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram'))),
-      );
-    }
+    if (!asked.has(clean)) asked.set(clean, (typeof source === 'function' ? source : waysFromServer(source))(clean).then(appsOnly, () => []));
     void asked.get(clean)!.then((w) => live && setWays(w));
     return () => {
       live = false;
     };
-  }, [clean, config.baseUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clean]);
   return ways;
 }
 
@@ -63,10 +72,10 @@ export function useCodeWays(config: SbgConfig, phone: string): AppWay[] {
  * BEFORE THE FIRST CODE: how it should come. Shown only where an app is offered for the number; its starting point is the
  * way this phone chose last time.
  */
-export function CodeWayChoice({ config, phone, value, onChange, look = 'app', ways: given }: { config: SbgConfig; phone: string; value: CodeWay; onChange: (way: CodeWay) => void; look?: 'app' | 'console'; /** The apps offered, where the caller knows them (a test); otherwise asked. */ ways?: AppWay[] }) {
+export function CodeWayChoice({ config, phone, value, onChange, look = 'app', ways: given }: { config: WaysSource; phone: string; value: CodeWay; onChange: (way: CodeWay) => void; look?: 'app' | 'console'; /** The apps offered, where the caller knows them (a test, or the server said); otherwise asked. */ ways?: AppWay[] }) {
   const t = useT();
-  const asked = useCodeWays(config, given ? '' : phone);
-  const ways = given ?? asked;
+  const found = useCodeWays(config, given ? '' : phone);
+  const ways = given ?? found;
   if (!ways.length) return null;
   const current: CodeWay = value !== 'sms' && !ways.includes(value) ? 'sms' : value;
   return (
@@ -86,33 +95,68 @@ export function CodeWayChoice({ config, phone, value, onChange, look = 'app', wa
 /**
  * AFTER A CODE WAS SENT: by an app, said so; and after a minute, the other ways — the offered apps not used yet, and a text.
  * Nothing where no app is offered and the code went by text: the screen's own "new code" stays the way to ask again.
+ *
+ * When it was sent and how may be said (`sentAt`, `sentVia`); otherwise it counts from when it first shows, and from each way
+ * asked for here — `onSend` may answer the way the server says it went.
  */
-export function OtherWays({ config, phone, sentAt, sentVia, busy = false, onSend, look = 'app', ways: given }: { config: SbgConfig; phone: string; sentAt: number; sentVia: CodeWay; busy?: boolean; onSend: (way: CodeWay) => void; look?: 'app' | 'console'; /** The apps offered, where the caller knows them (a test); otherwise asked. */ ways?: AppWay[] }) {
+export function OtherWays({
+  config,
+  phone,
+  sentAt,
+  sentVia,
+  busy = false,
+  onSend,
+  look = 'app',
+  ways: given,
+}: {
+  config: WaysSource;
+  phone: string;
+  sentAt?: number;
+  sentVia?: CodeWay;
+  busy?: boolean;
+  onSend: (way: CodeWay) => void | Promise<CodeWay | void | undefined | null>;
+  look?: 'app' | 'console';
+  /** The apps offered, where the caller knows them (a test, or the server said); otherwise asked. */
+  ways?: AppWay[];
+}) {
   const t = useT();
-  const asked = useCodeWays(config, given ? '' : phone);
-  const ways = given ?? asked;
+  const found = useCodeWays(config, given ? '' : phone);
+  const ways = given ?? found;
+  const [since, setSince] = useState(() => sentAt || Date.now());
+  const [last, setLast] = useState<CodeWay>(sentVia ?? 'sms');
   const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (sentAt) setSince(sentAt);
+  }, [sentAt]);
+  useEffect(() => {
+    if (sentVia) setLast(sentVia);
+  }, [sentVia]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  if (!ways.length && sentVia === 'sms') return null;
-  const left = Math.max(0, Math.ceil((sentAt + ANOTHER_WAY_AFTER_S * 1000 - now) / 1000));
-  const others: CodeWay[] = [...ways.filter((w) => w !== sentVia), 'sms'];
+  if (!ways.length && last === 'sms') return null;
+  const left = Math.max(0, Math.ceil((since + ANOTHER_WAY_AFTER_S * 1000 - now) / 1000));
+  const others: CodeWay[] = [...ways.filter((w) => w !== last), 'sms'];
   const note = look === 'console' ? 'chint' : 'hint';
-  const label = (way: CodeWay) => (way === 'sms' ? t(sentVia === 'sms' ? 'account.ways.byTextAgain' : 'account.ways.byTextInstead') : t('account.ways.byApp', { app: APP_NAME[way] }));
+  const label = (way: CodeWay) => (way === 'sms' ? t(last === 'sms' ? 'account.ways.byTextAgain' : 'account.ways.byTextInstead') : t('account.ways.byApp', { app: APP_NAME[way] }));
+  const ask = async (way: CodeWay) => {
+    const went = await onSend(way);
+    setSince(Date.now());
+    if (typeof went === 'string') setLast(went);
+  };
   return (
     <div style="margin-top:12px">
-      {sentVia !== 'sms' ? <p class={note}>{t('account.ways.sentBy', { app: APP_NAME[sentVia] })}</p> : null}
+      {last !== 'sms' ? <p class={note}>{t('account.ways.sentBy', { app: APP_NAME[last] })}</p> : null}
       <p class={note}>{left > 0 ? t('account.ways.wait', { s: left }) : t('account.ways.ready')}</p>
       <div>
         {others.map((way) =>
           look === 'console' ? (
-            <button key={way} type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-right:6px" disabled={busy || left > 0} onClick={() => onSend(way)}>
+            <button key={way} type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-right:6px" disabled={busy || left > 0} onClick={() => void ask(way)}>
               {label(way)}
             </button>
           ) : (
-            <Button key={way} variant="link" full={false} disabled={busy || left > 0} onClick={() => onSend(way)}>
+            <Button key={way} variant="link" full={false} disabled={busy || left > 0} onClick={() => void ask(way)}>
               {label(way)}
             </Button>
           ),
@@ -120,5 +164,32 @@ export function OtherWays({ config, phone, sentAt, sentVia, busy = false, onSend
       </div>
       <p class={note}>{t('account.ways.never')}</p>
     </div>
+  );
+}
+
+/**
+ * 2026-11-16 — A NEW PHONE'S CODE, ANOTHER WAY (the owner: "they should be given the same choice"): a shop, hub or store
+ * signing in on a phone it has not used sees only the end of its number, so the apps offered come with the server's answer
+ * (`ways`), and the same code goes again by the way chosen (POST auth/device/again), a minute after the last.
+ */
+export function DeviceCodeAgain({ config, challenge, ways, via, look = 'app' }: { config: SbgConfig; challenge: string; ways?: AppWay[]; via?: CodeWay; look?: 'app' | 'console' }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <OtherWays
+      config={config}
+      phone=""
+      ways={appsOnly(ways)}
+      sentVia={via}
+      busy={busy}
+      look={look}
+      onSend={async (way) => {
+        setBusy(true);
+        const r = await publicRequest<{ via?: CodeWay }>(config, '/v1/sbg/auth/device/again', { body: { challenge, via: way } });
+        setBusy(false);
+        if (r.error) return null;
+        if (way !== 'sms') rememberWay(way);
+        return r.data?.via ?? way;
+      }}
+    />
   );
 }

@@ -257,8 +257,8 @@ export function sbgConfirmDevice(config: SbgConfig, challenge: string, code: str
 }
 
 /** Round 40 — a hub or a store with no number yet gives one: a code goes to it, and is typed with sbgConfirmDevice. */
-export function sbgDevicePhone(config: SbgConfig, challenge: string, phone: string, f?: typeof fetch): Promise<Result<{ challenge: string; sentTo: string; code?: string }>> {
-  return publicRequest(config, '/v1/sbg/auth/device/phone', { body: { challenge, phone }, fetch: f });
+export function sbgDevicePhone(config: SbgConfig, challenge: string, phone: string, f?: typeof fetch, via?: 'sms' | 'whatsapp' | 'telegram'): Promise<Result<{ challenge: string; sentTo: string; code?: string; via?: 'sms' | 'whatsapp' | 'telegram'; ways?: Array<'whatsapp' | 'telegram'> }>> {
+  return publicRequest(config, '/v1/sbg/auth/device/phone', { body: { challenge, phone, ...(via ? { via } : {}) }, fetch: f });
 }
 
 /**

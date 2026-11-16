@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../i18n';
-import { CodeWayChoice, OtherWays } from './CodeWays';
+import { CodeWayChoice, DeviceCodeAgain, OtherWays } from './CodeWays';
+import { deviceAskOf } from './shopDevice';
 
 /*
  * 2026-11-16 — HOW A CODE COMES (the plan "Sign-in codes beyond Twilio SMS", D2 to D4): by text, or by WhatsApp or Telegram
@@ -56,5 +59,40 @@ describe('another way, after a code was sent', () => {
     expect(html).toContain(t('account.ways.byTextInstead'));
     expect(html).not.toContain(t('account.ways.byApp', { app: 'WhatsApp' }));
     expect(html).toContain('cbtn cbtn--ghost');
+  });
+});
+
+/*
+ * 2026-11-16 — EVERY CODE SCREEN GETS THE SAME CHOICE (the owner: “they should be given the same choice”), a shop’s, hub’s or
+ * store’s new phone too: it sees only the end of its number, so the apps offered come with the server’s answer.
+ */
+describe('a new phone’s code, another way', () => {
+  it('reads the ways offered and the way it went from the server’s answer', () => {
+    const ask = deviceAskOf({ code: 'DEVICE_NOT_KNOWN', status: 403, title: '', params: { challenge: 'dc_1', sentTo: '•••678', via: 'whatsapp', ways: ['whatsapp', 'telegram', 'pigeon'] } } as never);
+    expect(ask).toMatchObject({ challenge: 'dc_1', via: 'whatsapp', ways: ['whatsapp', 'telegram'] });
+    expect(deviceAskOf({ code: 'DEVICE_NOT_KNOWN', status: 403, title: '', params: { challenge: 'dc_2', sentTo: '•••678' } } as never)).not.toHaveProperty('ways');
+  });
+
+  it('shows nothing where no app is offered and it went by text; otherwise the other ways, after a minute', () => {
+    expect(renderToString(<DeviceCodeAgain config={config} challenge="dc_1" ways={[]} via="sms" />)).toBe('');
+    const html = renderToString(<DeviceCodeAgain config={config} challenge="dc_1" ways={['whatsapp', 'telegram']} via="whatsapp" />);
+    expect(html).toContain(t('account.ways.sentBy', { app: 'WhatsApp' }));
+    expect(html).toContain(t('account.ways.byApp', { app: 'Telegram' }));
+    expect(html).toMatch(/<button[^>]*disabled[^>]*><span>By Telegram/);
+  });
+});
+
+describe('every screen that sends a code offers the other ways', () => {
+  it('each of them — sign-up, sign-in, a new phone, a forgotten PIN, a new number, a payout number, counter staff', () => {
+    const screens = [
+      'shared/account/PhoneVerify.tsx', 'shared/account/NewDeviceSheet.tsx', 'shared/account/ChoosePinSheet.tsx', 'shared/account/IdDisputeOpen.tsx',
+      'shared/account/TroubleSheet.tsx', 'shared/account/SettingsSheet.tsx', 'shared/account/ConfirmDevice.tsx',
+      'apps/genesis/screens/AuthScreen.tsx', 'apps/home/screens/JoinScreen.tsx', 'apps/driver/screens/SignInScreen.tsx', 'apps/business/screens/SignInScreen.tsx',
+      'apps/agent/screens/StaffSignIn.tsx', 'apps/agent/screens/SignInScreen.tsx',
+    ];
+    for (const screen of screens) {
+      const src = readFileSync(join('src', screen), 'utf8');
+      expect({ screen, offers: src.includes('<OtherWays') || src.includes('<DeviceCodeAgain') }).toEqual({ screen, offers: true });
+    }
   });
 });

@@ -24,7 +24,7 @@ import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.
 import { MailService } from '../../foundation/mail/mail.service';
 import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
 import { CodeRouteService } from '../../foundation/sms/code-route.service';
-import { CodeWays } from '../../foundation/sms/code-routes.types';
+import { CodeWay, CodeWays } from '../../foundation/sms/code-routes.types';
 import { SmsSendError } from '../../foundation/sms/sms.types';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
@@ -177,7 +177,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, VehicleLoadSpaceDto, VehicleEquipmentDto, SiteToolsDto, HubPriceDto, HubFeeCeilingDto, HubFeeDecisionDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PricingModeDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, LoadArrivedDto, LoadReceiverEmailDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, StoreReplyDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, VehicleLoadSpaceDto, VehicleEquipmentDto, SiteToolsDto, HubPriceDto, HubFeeCeilingDto, HubFeeDecisionDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PricingModeDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, LoadArrivedDto, LoadReceiverEmailDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, AccountDeviceAgainDto, StoreReplyDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -544,17 +544,19 @@ export class SbgController {
     }
     if (texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'We cannot send a code to a number in that country yet.', { field: 'phone' });
     const issued = this.otp.request(dto.phone);
+    // 2026-11-16 — the way it went, said back: a code that went by an app the person chose before is looked for there.
+    let via: CodeWay = 'sms';
     try {
       // In a sandbox with nothing wired in this is the outbox, which keeps it: the same steps run either way.
       // 2026-11-16 — by the way the person chose, where it is offered in their country; by text otherwise (the plan, D2 and D3).
-      await this.sms?.sendCode(to, issued.code, OTP_TTL_MINUTES, Date.now(), dto.via);
+      via = (await this.sms?.sendCode(to, issued.code, OTP_TTL_MINUTES, Date.now(), dto.via)) ?? 'sms';
     } catch (err) {
       this.otp.notSent(dto.phone);
       // The one failure that is the person's: the provider cannot text that number. Everything else is ours.
       if (err instanceof SmsSendError && err.kind === 'rejected') throw new GlosError('PHONE_INVALID', 'We cannot send a text to that number. Check it, or use a mobile number.', { field: 'phone' });
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, CODE_NOT_SENT), ...(err instanceof SmsSendError && err.kind === 'paused' ? [{ reason: 'paused' }] : []));
     }
-    return isSandbox() ? issued : { sent: issued.sent };
+    return isSandbox() ? { ...issued, via } : { sent: issued.sent, via };
   }
 
   /**
@@ -736,7 +738,19 @@ export class SbgController {
   @RateLimit(10, 15 * 60)
   @Post('auth/device/phone')
   addAccountDevicePhone(@Body() dto: AccountDevicePhoneDto) {
-    return this.accounts.addDevicePhone(dto.challenge, dto.phone);
+    return this.accounts.addDevicePhone(dto.challenge, dto.phone, Date.now(), dto.via);
+  }
+
+  /**
+   * 2026-11-16 — THE NEW PHONE'S CODE, ANOTHER WAY (the owner: "they should be given the same choice"): the same code again,
+   * by text or by an app offered for the account's number, a minute after the last. Nothing else about the sign-in changes.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('auth/device/again')
+  accountDeviceAgain(@Body() dto: AccountDeviceAgainDto) {
+    return this.accounts.deviceCodeAgain(dto.challenge, dto.via);
   }
 
   /**

@@ -1,3 +1,4 @@
+import { DeviceCodeAgain } from '../../../shared/account/CodeWays';
 import { SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
@@ -71,6 +72,8 @@ function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; er
           <span class="field__label">{t('agent.signin.deviceCode')}</span>
           <CodeBoxes id="shop-device-code" label={t('agent.signin.deviceCode')} length={6} value={code} onInput={setCode} disabled={busy} />
           {ask.code ? <p class="hint">{t('account.safety.testCode', { code: ask.code })}</p> : null}
+          {/* 2026-11-16 — the same code, another way, after a minute (the owner: "the same choice"). */}
+          <DeviceCodeAgain config={agentConfig()} challenge={ask.challenge} ways={ask.ways} via={ask.via} />
         </div>
       </Card>
       <p class="hint">{t('agent.signin.deviceWhy')}</p>

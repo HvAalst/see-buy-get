@@ -9625,6 +9625,29 @@
         }
       }
     },
+    "/v1/sbg/auth/device/again": {
+      "post": {
+        "operationId": "Sbg.accountDeviceAgain",
+        "summary": "",
+        "description": "2026-11-16 — THE NEW PHONE'S CODE, ANOTHER WAY (the owner: \"they should be given the same choice\"): the same code again,\nby text or by an app offered for the account's number, a minute after the last. Nothing else about the sign-in changes.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeviceAgainDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/forgot": {
       "post": {
         "operationId": "Sbg.authForgot",
@@ -55435,6 +55458,15 @@
       "AccountDevicePhoneDto": {
         "type": "object",
         "properties": {
+          "via": {
+            "type": "string",
+            "description": "2026-11-16 — the way the person chose for the code: by text, or an app offered for that number.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "telegram"
+            ]
+          },
           "challenge": {
             "type": "string",
             "maxLength": 40
@@ -55447,6 +55479,27 @@
         "required": [
           "challenge",
           "phone"
+        ]
+      },
+      "AccountDeviceAgainDto": {
+        "type": "object",
+        "properties": {
+          "via": {
+            "type": "string",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "telegram"
+            ]
+          },
+          "challenge": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "via",
+          "challenge"
         ]
       },
       "ForgotDto": {
@@ -88487,6 +88540,14 @@
           "phone": {
             "type": "string",
             "description": "The M-Pesa number to be paid to, as the payee writes it: 07XX XXX XXX."
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "telegram"
+            ]
           }
         },
         "required": [
@@ -88507,6 +88568,15 @@
           },
           "code": {
             "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "2026-11-16 — the way the code went: by text, or the app the payee chose.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "telegram"
+            ]
           }
         },
         "required": [

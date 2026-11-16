@@ -3,7 +3,7 @@ import { COUNTRY_CATALOGUE, catalogueEntry } from '../countries/catalogue';
 import { PresenceService } from '../presence/presence.service';
 import { isSandbox } from '../runtime/sandbox';
 import { CodeRouteService } from './code-route.service';
-import type { CodeWay } from './code-routes.types';
+import type { AppRouteId, CodeWay } from './code-routes.types';
 import { OutboxSmsSender } from './outbox-sms.sender';
 import { SMS_SENDER, SmsConnection, SmsLast, SmsSendError, SmsSender } from './sms.types';
 import { twilioConfig } from './twilio';
@@ -109,9 +109,18 @@ export class SmsService {
   }
 
   /** One text: by the routes where one is set up (CodeRouteService), else by the sender this server started with. */
-  private async text(to: string, body: string, now: number, code?: { code: string; minutes: number; via?: CodeWay }): Promise<void> {
-    if (this.routes?.anyReady()) return this.routes.send(to, body, now, code ?? {});
+  private async text(to: string, body: string, now: number, code?: { code: string; minutes: number; via?: CodeWay }): Promise<CodeWay> {
+    if (this.routes?.anyReady()) {
+      const used = await this.routes.send(to, body, now, code ?? {});
+      return used === 'whatsapp' || used === 'telegram' ? used : 'sms';
+    }
     await this.sender.send({ to, body });
+    return 'sms';
+  }
+
+  /** 2026-11-16 — the apps a person with this number may choose for a code: offered in its country and set up. */
+  waysFor(phone: string): AppRouteId[] {
+    return this.routes?.ways(phone) ?? [];
   }
 
   /** 2026-11-16 — a code that was texted was typed in: its route got it there, and goes first for that number next time. */
@@ -188,12 +197,13 @@ export class SmsService {
 
   /** The code, texted. Throws an `SmsSendError` when it was not taken. `phone` is E.164. */
   /** `via` (2026-11-16): the way the person chose — by text, or an app offered in their country (the plan, D2 and D3). */
-  async sendCode(phone: string, code: string, minutes: number, now = Date.now(), via?: CodeWay): Promise<void> {
+  async sendCode(phone: string, code: string, minutes: number, now = Date.now(), via?: CodeWay): Promise<CodeWay> {
     this.allow(now);
     this.written += 1;
     try {
-      await this.text(phone, codeText(code, minutes), now, { code, minutes, ...(via ? { via } : {}) });
+      const used = await this.text(phone, codeText(code, minutes), now, { code, minutes, ...(via ? { via } : {}) });
       this.last = { at: new Date().toISOString(), ok: true };
+      return used;
     } catch (err) {
       // Whose it is to put right, where the sender said; a fault of nobody's naming otherwise — and none of its words.
       const why = err instanceof SmsSendError ? err : new SmsSendError('failed', 'the SMS provider answered with a fault');

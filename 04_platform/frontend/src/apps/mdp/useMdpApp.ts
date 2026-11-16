@@ -1,3 +1,4 @@
+import type { CodeWay } from '../../shared/account/CodeWays';
 import { unsentPapersOf } from '../../shared/papers';
 import { paperForUpload } from '../../shared/media';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -331,14 +332,14 @@ export function useMdpApp() {
   }, []);
 
   /** Round 40 — a hub with no number yet gives one: the code goes to it. */
-  const giveDevicePhone = useCallback(async (phone: string) => {
+  const giveDevicePhone = useCallback(async (phone: string, via?: CodeWay) => {
     const ask = stateRef.current.deviceAsk;
     if (!ask) return;
     setState((s) => ({ ...s, busy: 'signin', error: null }));
-    const r = await sbgDevicePhone(mdpConfig(), ask.challenge, phone);
+    const r = await sbgDevicePhone(mdpConfig(), ask.challenge, phone, undefined, via);
     if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
     const sent = r.data;
-    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
+    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}), ...(sent.via ? { via: sent.via } : {}), ...(sent.ways?.length ? { ways: sent.ways } : {}) } : null }));
   }, []);
 
   /** 2026-11-03 — linked by a phone the hub already uses (pairing.ts): this phone is the hub's from now, and signed in. */

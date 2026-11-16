@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
 import { useMemo, useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
 import type { Agreement } from '../../../shared/documents/documents';
@@ -105,14 +106,16 @@ export function StaffSignIn({
     await signedIn(r.data);
   };
 
-  const sendCode = async () => {
+  const sendCode = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
     setError(null);
-    const r = await doors.codeTo(phone);
+    const r = await doors.codeTo(phone, via);
     setBusy(false);
-    if (r.error) return setError(r.error);
+    if (r.error) return void setError(r.error);
     setTestCode(r.data?.code ?? '');
     go('code');
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   const checkCode = async () => {
@@ -275,6 +278,8 @@ export function StaffSignIn({
             <span class="field__label">{t('agent.staff.code')}</span>
             <CodeBoxes id="staff-phone-code" label={t('agent.staff.code')} length={6} value={code} onInput={setCode} disabled={busy} />
             {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+            {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+            <OtherWays config={cfg} phone={phone} busy={busy} onSend={(w) => sendCode(w)} />
             <Button variant="link" full={false} class="field__aside" onClick={() => void sendCode()}>
               {t('agent.staff.newCode')}
             </Button>

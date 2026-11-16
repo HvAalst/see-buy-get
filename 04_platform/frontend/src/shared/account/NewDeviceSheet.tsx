@@ -1,3 +1,4 @@
+import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, CodeBoxes, ErrorNote, Sheet } from '../ui';
 import { useT } from '../i18n';
@@ -37,14 +38,16 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
   const [sent, setSent] = useState(false);
   const askedFor = useRef('');
 
-  const send = async () => {
+  const send = async (via: CodeWay = rememberedWay()) => {
     setBusy(true);
     setError(null);
-    const r = await api.phoneCode(phone.trim());
+    const r = await api.phoneCode(phone.trim(), via);
     setBusy(false);
-    if (r.error) return setError(r.error);
+    if (r.error) return void setError(r.error);
     setSent(true);
     setEchoed(r.data?.code ?? null);
+    if (via !== 'sms') rememberWay(via);
+    return r.data?.via ?? via;
   };
 
   // The code is sent by OPENING this, once per number: nobody should have to ask for the thing the sheet is about.
@@ -84,6 +87,8 @@ export function NewDeviceSheet({ open, onClose, api, phone, onConfirmed }: NewDe
         <span class="field__label">{t(sent ? 'account.device.code' : 'account.device.codeUnsent')}</span>
         <CodeBoxes id="device-code" label={t(sent ? 'account.device.code' : 'account.device.codeUnsent')} length={6} value={code} onInput={setCode} disabled={busy} />
         {echoed ? <p class="hint">{t('account.device.sandbox', { code: echoed })}</p> : null}
+        {/* 2026-11-16 — another way for the code, after a minute (the owner: "the same choice"). */}
+        {sent ? <OtherWays config={api.config} phone={phone} busy={busy} onSend={(w) => send(w)} /> : null}
       </div>
       <Button chevron={false} busy={busy} disabled={code.length !== 6} onClick={() => void confirm()}>
         {t('account.device.confirm')}

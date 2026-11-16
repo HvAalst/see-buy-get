@@ -1,3 +1,4 @@
+import type { AppRouteId, CodeWay } from '../../foundation/sms/code-routes.types';
 import { appUrl, type MailApp } from '../../foundation/mail/mail.templates';
 import { standInCode } from '../../foundation/runtime/standin-code';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -475,6 +476,8 @@ export class AccountService implements OnApplicationBootstrap {
       return new GlosError('DEVICE_NOT_KNOWN', `This ${party} has no phone number yet. Give it one: a code goes to it now, and from then on a new phone or browser is confirmed by a code to that number.`, { challenge, needsPhone: true });
     }
     const ending = phone.replace(/\D/g, '').slice(-3);
+    // 2026-11-16 — which way the code went, and the apps it may be asked again by (the owner: "the same choice").
+    let via: CodeWay | undefined;
     const waiting = [...this.deviceCodes.entries()].find(([, c]) => (c.key ?? c.email) === storeKeyOf(account) && !c.pairOnly && c.expires > now && now - c.sentAt < DEVICE_CODE_COOLDOWN_MS);
     let challenge = waiting?.[0];
     let code = waiting?.[1].code;
@@ -488,7 +491,7 @@ export class AccountService implements OnApplicationBootstrap {
       code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
       this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
       try {
-        if (!standIn) await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
+        if (!standIn) via = await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch (err) {
         this.deviceCodes.delete(challenge);
         return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`), this.pairOnly(account, now));
@@ -497,6 +500,8 @@ export class AccountService implements OnApplicationBootstrap {
     return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this ${party} before. A code went to the ${party}’s number ending ${ending}: type it here.`, {
       challenge,
       sentTo: `•••${ending}`,
+      ...(via ? { via } : {}),
+      ways: this.sms?.waysFor?.(phone) ?? [],
       ...(isSandbox() ? { code } : {}),
     });
   }
@@ -555,7 +560,7 @@ export class AccountService implements OnApplicationBootstrap {
    * Round 40 — AN ACCOUNT WITH NO NUMBER GIVES ONE: the challenge its sign-in was answered with, and the number. A code goes
    * to that number; typed on this phone or browser (confirmDevice), the number is kept and this one is the account's first.
    */
-  async addDevicePhone(challenge: string, phone: string, now: number = Date.now()): Promise<{ challenge: string; sentTo: string; code?: string }> {
+  async addDevicePhone(challenge: string, phone: string, now: number = Date.now(), via?: CodeWay): Promise<{ challenge: string; sentTo: string; code?: string; via?: CodeWay; ways?: AppRouteId[] }> {
     const asked = this.deviceCodes.get(challenge);
     if (!asked || !asked.needsPhone || asked.expires < now) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
     const number = phone?.trim() ?? '';
@@ -566,14 +571,43 @@ export class AccountService implements OnApplicationBootstrap {
     if (!standIn && !texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet.');
     if (!standIn && texts && !this.sms?.mayGoTo(number)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
     const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
+    let used: CodeWay | undefined;
     try {
-      if (!standIn) await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000);
+      if (!standIn) used = await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000, now, via);
     } catch (err) {
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted. Try again in a minute.'));
     }
     Object.assign(asked, { code, phone: number, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
     const ending = number.replace(/\D/g, '').slice(-3);
-    return { challenge, sentTo: `•••${ending}`, ...(isSandbox() ? { code } : {}) };
+    return { challenge, sentTo: `•••${ending}`, ...(used ? { via: used } : {}), ways: this.sms?.waysFor?.(number) ?? [], ...(isSandbox() ? { code } : {}) };
+  }
+
+  /**
+   * 2026-11-16 — A NEW PHONE'S CODE, ANOTHER WAY (the owner: "they should be given the same choice"): the code already sent
+   * to the account's number, sent again by text or by an app offered for it — a minute after the last, as any code. The
+   * code, its expiry and its tries stay as they were.
+   */
+  async deviceCodeAgain(challenge: string, via: CodeWay, now: number = Date.now()): Promise<{ challenge: string; sentTo: string; via: CodeWay; code?: string }> {
+    const asked = this.deviceCodes.get(challenge);
+    if (!asked || asked.pairOnly || !asked.code || asked.expires < now) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
+    if (now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw new GlosError('RATE_LIMITED', 'A code was sent a moment ago: wait a minute before asking again');
+    const account = this.accounts.get(asked.key ?? asked.email);
+    const phone = asked.phone ?? (account ? this.codePhoneOf(account) : undefined);
+    if (!phone) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
+    const ending = phone.replace(/\D/g, '').slice(-3);
+    const texts = this.sms?.sends() ?? false;
+    let used: CodeWay = 'sms';
+    if (!standInCode(phone, texts)) {
+      if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be sent from this server yet.');
+      if (texts && !this.sms?.mayGoTo(phone)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not sent to numbers in that country.');
+      try {
+        used = (await this.sms?.sendCode(phone, asked.code, DEVICE_CODE_TTL_MS / 60_000, now, via)) ?? 'sms';
+      } catch (err) {
+        throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be sent that way. Try again in a minute.'));
+      }
+    }
+    asked.sentAt = now;
+    return { challenge, sentTo: `•••${ending}`, via: used, ...(isSandbox() ? { code: asked.code } : {}) };
   }
 
   /** The code from the account's number, typed on the new phone or browser: it is one of the account's now, and signed in. */

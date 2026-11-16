@@ -1,3 +1,4 @@
+import type { AppWay, CodeWay } from './CodeWays';
 import type { Result, SbgError } from '../../lib/sbg';
 import type { PinDevices, PinDevicesApi } from './devices';
 import { accountPasskeyApi } from './passkey';
@@ -81,6 +82,9 @@ export interface DeviceAsk {
   needsPhone?: boolean;
   /** 2026-11-03 — no code could be texted: the new phone is linked by one the account already uses (pairing.ts), or not at all. */
   pairOnly?: boolean;
+  /** 2026-11-16 — the way the code went, and the apps it may be asked again by (CodeWays). */
+  via?: CodeWay;
+  ways?: AppWay[];
 }
 
 export function deviceAskOf(error: SbgError | null | undefined): DeviceAsk | null {
@@ -89,7 +93,9 @@ export function deviceAskOf(error: SbgError | null | undefined): DeviceAsk | nul
   if ((error?.code === 'SMS_NOT_SENT' || error?.code === 'PHONE_NOT_SERVED') && p.pairOnly === true && typeof p.challenge === 'string') return { challenge: p.challenge, sentTo: '', pairOnly: true };
   if (error?.code !== 'DEVICE_NOT_KNOWN') return null;
   if (typeof p.challenge !== 'string') return null;
-  return { challenge: p.challenge, sentTo: typeof p.sentTo === 'string' ? p.sentTo : '', ...(typeof p.code === 'string' ? { code: p.code } : {}), ...(p.needsPhone === true ? { needsPhone: true } : {}) };
+  const ways = Array.isArray(p.ways) ? (p.ways as unknown[]).filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : [];
+  const via = p.via === 'sms' || p.via === 'whatsapp' || p.via === 'telegram' ? (p.via as CodeWay) : undefined;
+  return { challenge: p.challenge, sentTo: typeof p.sentTo === 'string' ? p.sentTo : '', ...(typeof p.code === 'string' ? { code: p.code } : {}), ...(p.needsPhone === true ? { needsPhone: true } : {}), ...(ways.length ? { ways } : {}), ...(via ? { via } : {}) };
 }
 
 type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;
