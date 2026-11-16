@@ -1,3 +1,4 @@
+import { offerPasskeyAfterCode } from '../../shared/account/PasskeyOffer';
 import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { carriedEntry, takeCarryFromAddress, type Carried } from '../../shared/account/carry';
 import { businessConfig } from './api';
@@ -265,6 +266,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
         if (s.step === 'pin' && field === 'email') return patch({ busy: false, step: 'email', error: null, emailReset: isPinReset(r.error) });
         return patch({ busy: false, error: r.error });
       }
+      // 2026-11-16 — a sign-in that took a code: the fingerprint may be offered once, with the PIN just chosen (the plan's D5).
+      offerPasskeyAfterCode(s.pin);
       await signedIn(r.data);
     },
 

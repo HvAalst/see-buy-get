@@ -1,3 +1,4 @@
+import { PasskeyOffer } from '../../shared/account/PasskeyOffer';
 import { AppsSheet } from '../../shared/ui/AppLauncher';
 import { readPhone } from './api';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -211,6 +212,8 @@ export function App() {
         ) : null}
 
         <main class="cons__main">
+          {/* 2026-11-16 — right after a sign-in that took a code: the fingerprint, offered once (the plan's D5). */}
+          <PasskeyOffer api={account.passkey} look="console" />
           {state.note ? (
             <p class="cnote biz-note" role="status">
               <Icon name="check" size={16} />

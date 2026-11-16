@@ -1,3 +1,4 @@
+import { PasskeyOffer } from '../../shared/account/PasskeyOffer';
 import { AppLayer } from '../../shared/ui/AppLayer';
 import type { SbgClient } from '../../lib/sbg';
 import { AgreementGate } from '../../shared/documents/Agreement';
@@ -149,6 +150,8 @@ export function App() {
         <AppLayer app="driver" chats={actions.chatApi} onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
+        {/* 2026-11-16 — right after a sign-in that took a code: the fingerprint, offered once (the plan's D5). */}
+        <PasskeyOffer api={account.passkey} />
         <NavScreen nav={nav}>
           <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} sbg={sbg} />
         </NavScreen>

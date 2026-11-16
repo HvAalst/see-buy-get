@@ -1,3 +1,4 @@
+import { PasskeyOffer } from '../../shared/account/PasskeyOffer';
 import { AppLayer } from '../../shared/ui/AppLayer';
 import { LoadPostScreen } from './screens/PersonLoad';
 import { useEffect, useState } from 'preact/hooks';
@@ -91,6 +92,8 @@ export function App() {
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
         <AppLayer app="send" chats={state.identity ? actions.chatApi : state.restoring ? undefined : null} onSignIn={() => actions.go('parcels')} onRefresh={state.identity ? actions.loadParcels : undefined} />
         <ConnectivityNote />
+        {/* 2026-11-16 — right after a sign-in that took a code: the fingerprint, offered once (the plan's D5). */}
+        {state.identity ? <PasskeyOffer api={account.passkey} /> : null}
         <NavScreen nav={nav}>
           <Router state={state} actions={actions} account={account} sbg={sbg} guideAsked={guideAsked} onGuideShown={() => setGuideAsked(0)} />
         </NavScreen>

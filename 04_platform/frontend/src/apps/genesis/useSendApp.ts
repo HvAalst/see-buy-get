@@ -1,3 +1,4 @@
+import { offerPasskeyAfterCode } from '../../shared/account/PasskeyOffer';
 import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { carriedEntry, takeCarryFromAddress } from '../../shared/account/carry';
 import { sendConfig } from './api';
@@ -692,6 +693,8 @@ export function useSendApp() {
       setState((s) => ({ ...s, authBusy: false, authError: r.error }));
       return;
     }
+    // 2026-11-16 — a sign-in that took a code: the fingerprint may be offered once, with the PIN just chosen (the plan's D5).
+    offerPasskeyAfterCode(pin);
     await completeSignIn(r.data as AuthResult, phone);
   }, [completeSignIn]);
 

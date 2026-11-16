@@ -1,3 +1,4 @@
+import { offerPasskeyAfterCode } from '../../shared/account/PasskeyOffer';
 import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { energyWord } from '../../shared/vehicleEnergy';
 import { drain, onOutboxSent, outboxItems } from '../../shared/outbox';
@@ -798,7 +799,10 @@ export function useDriverApp() {
       return 'failed';
     }
     verifiedPhone.current = '';
-    return (await signIn(phone, pin)) ? 'ok' : 'failed';
+    const signedIn = await signIn(phone, pin);
+    // 2026-11-16 — a sign-in that took a code: the fingerprint may be offered once, with the PIN just chosen (the plan's D5).
+    if (signedIn) offerPasskeyAfterCode(pin.trim());
+    return signedIn ? 'ok' : 'failed';
   }, [signIn]);
 
   const signOut = useCallback(() => {
