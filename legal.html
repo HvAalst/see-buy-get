@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November).</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November).</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -909,6 +909,51 @@
       "case": "A shop in Kisumu weighs a 6.2 kg parcel the sender declared as 4 kg, on a scale stamped in March. The price follows the 6.2 kg. In November the stamp has run out and the shop weighs another parcel. Which weight may set that price?",
       "meanwhile": "A weight taken on a scale the shop says is approved (the Netherlands) or stamped and in date (Kenya, with the stamp’s photo) is marked “weighed” and sets the price; otherwise the sender’s weight stands as “declared” and the counter weight is shown as a guide. A Kenyan stamp is reminded 30 days before it runs out.",
       "source": "Research of 13 November 2026: Kenya Weights and Measures Act, Cap 513, ss. 26–27 (kenyalaw.org); Nairobi County weights and measures notice (standardmedia.co.ke); Directive 2014/31/EU art. 1(2)(a)–(b); WELMEC country information, the Netherlands."
+    },
+    {
+      "id": "L51",
+      "area": "data",
+      "when": "before-country",
+      "status": "open",
+      "q": "May SeeBuyGet (a company registered in the Netherlands, or in Kenya) send sign-in codes to people in Russia or Iran through the services they now use there, when those services or their owners are under sanctions? Russia: WhatsApp was blocked on 11–12 February 2026 and Telegram almost entirely by April 2026; the state messenger MAX and VK ID admit only verified Russian businesses, and on 13 July 2026 the EU froze VK’s assets and listed the company that runs MAX. Iran: WhatsApp and Telegram are blocked; Bale, whose code service is free, is developed by Bank Melli, which the EU re-listed on 29 September 2025 and the US lists too; Twilio stopped all traffic to Iran on 15 March 2025, and WhatsApp business messages cannot reach +98 numbers.",
+      "moment": "Before any person in Russia or Iran is offered a way to sign in, and before either country is switched on.",
+      "nations": [
+        "RU",
+        "IR",
+        "EU"
+      ],
+      "case": "A driver with a +7 number wants to join. SMS from foreign gateways is filtered in Russia since 2025, WhatsApp and Telegram are blocked, and MAX or VK ID would mean contracting with, and perhaps paying, a listed company. May any of these be used, and does it matter whether the Dutch or the Kenyan company contracts?",
+      "meanwhile": "No code is sent to Russia or Iran by any app: neither country is switched on, and a number there is told codes are not sent to its country. WhatsApp and Telegram are offered everywhere else, and MAX, VK ID and Bale are not built.",
+      "source": "Research of 16 November 2026: Euronews (13 July 2026, EU sanctions on VK); Meduza (10 April 2026, Telegram blocking); CNN (12 February 2026, WhatsApp blocked); dev.max.ru/docs; EU Implementing Regulation 2025/1980 (Covington, October 2025); Twilio error 63058; Digiato (January 2026, Bale code service)."
+    },
+    {
+      "id": "L52",
+      "area": "data",
+      "when": "later",
+      "status": "open",
+      "q": "Can a foreign company confirm a phone number in mainland China at all? WeChat confirms a number only inside a mini programme owned by a certified business (getPhoneNumber, RMB 0.03 a success), which needs a Chinese company or partner to file it, and WhatsApp and Telegram are blocked. Would sending a Chinese resident’s number out of China to our servers be an export of personal information under China’s Personal Information Protection Law, needing a filing or a standard contract?",
+      "moment": "Before China is considered as a country.",
+      "nations": [
+        "all"
+      ],
+      "case": "A shipper in Guangzhou wants to post a load to Kenya and sign in with a +86 number.",
+      "meanwhile": "Nothing is built for China; a +86 number is told codes are not sent to its country.",
+      "source": "Research of 16 November 2026: developers.weixin.qq.com (getPhoneNumber, read 16 November 2026); AppInChina (mini programme filing, undated, a third party)."
+    },
+    {
+      "id": "L53",
+      "area": "data",
+      "when": "before-test",
+      "status": "open",
+      "q": "Which providers that carry a sign-in code must the data notice name, and are they processors or controllers for it? A code now goes, by the person’s choice, through Meta (WhatsApp), Telegram, Twilio or Africa’s Talking, and a Truecaller confirmation would read the number from the person’s Truecaller account. Does a person choosing WhatsApp or Telegram on the code screen count as consent to that provider receiving their number (the Kenya Data Protection Act 2019; the GDPR for the Netherlands), and must the choice say so on the screen?",
+      "moment": "Before the first test in which a code goes by WhatsApp, Telegram or Truecaller.",
+      "nations": [
+        "KE",
+        "NL"
+      ],
+      "case": "A person in Kisumu chooses WhatsApp for their code. Their number goes to Meta with the code; Meta reports back that it was delivered.",
+      "meanwhile": "The choice is never the default, the screen says the code comes by that app only if it is on that number, and only the code itself goes — no name, no parcel. The data notice is to be updated with the providers once they are switched on.",
+      "source": "Meta WhatsApp Business Messaging Policy (23 September 2026); Telegram Gateway terms (core.telegram.org/gateway); the Kenya Data Protection Act 2019; GDPR art. 6, 28."
     }
   ]
 }
@@ -916,7 +961,7 @@
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('data').textContent);
-  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', ID: 'Indonesia', EU: 'European Union', NL: 'The Netherlands' };
+  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', IR: 'Iran', CN: 'China', ID: 'Indonesia', EU: 'European Union', NL: 'The Netherlands' };
   var WHEN = { 'before-test': 'Before the first test', 'before-country': 'Before a country or feature opens', later: 'Later' };
   var STATUS = { open: 'Open', answered: 'Answered in principle', watch: 'To watch' };
   var state = { when: '', nation: '' };
@@ -924,7 +969,7 @@
 
   var nations = [];
   data.questions.forEach(function (q) { q.nations.forEach(function (n) { if (nations.indexOf(n) < 0) nations.push(n); }); });
-  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'ID', 'EU', 'NL'];
+  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'IR', 'CN', 'ID', 'EU', 'NL'];
   nations.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
   var box = document.getElementById('nations');
   [''].concat(nations.filter(function (n) { return n !== 'all'; })).forEach(function (n) {
