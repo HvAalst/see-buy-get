@@ -20,6 +20,7 @@ describe('a store’s developer, over the wire', () => {
   let owner = '';
   let vendorId = '';
   const devEmail = `dev-${digits()}@studio.example`;
+  const ownerEmail = `owner-${digits()}@duka.example`;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -31,7 +32,7 @@ describe('a store’s developer, over the wire', () => {
     const phone = `+2547${digits()}`.slice(0, 13);
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
-    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${digits()}`, email: `owner-${digits()}@duka.example`, password: 'maziwa-lala-2026', ownerPhone: phone }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${digits()}`, email: ownerEmail, password: 'maziwa-lala-2026', ownerPhone: phone }).expect(201)).body;
     owner = made.token.access_token as string;
     vendorId = made.vendorId as string;
   });
@@ -96,12 +97,18 @@ describe('a store’s developer, over the wire', () => {
     expect(after[0].developer).toBeUndefined();
     // 2026-11-15 — the owner's bell: told of the developer's new update address and a live key, not of the test key; and
     // the developer's sign-in, on the store's own DID, cannot open that bell.
-    await http().post(`/v1/sbg/vendors/${vendorId}/api-keys`).set(dev).send({ kind: 'secret', mode: 'live', label: 'Live shop' }).expect(201);
+    const liveKey = (await http().post(`/v1/sbg/vendors/${vendorId}/api-keys`).set(dev).send({ kind: 'secret', mode: 'live', label: 'Live shop' }).expect(201)).body;
     await new Promise((r) => setImmediate(r));
     const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(owner)).expect(200)).body.items as Array<{ kind: string; title: string; link?: string }>;
     expect(bell.filter((n) => n.kind === 'store_connection').map((n) => n.title).sort()).toEqual(['Brian Studio changed where order updates go', 'Brian Studio made a live key']);
     expect(bell.find((n) => n.kind === 'store_connection')?.link).toBe('/?go=connect');
     await http().get('/v1/sbg/notifications/inbox').set(dev).expect(403);
+    // 2026-11-16 — and one email, for the live secret key alone: not the test key, not the address. Never the key.
+    const live = app.get(OutboxMailSender).recent(ownerEmail).filter((m) => m.template === 'store-live-key');
+    expect(live).toHaveLength(1);
+    expect(live[0].text).toContain('Brian Studio');
+    expect(live[0].text).toContain('Live shop');
+    expect(live[0].text + live[0].html).not.toContain(liveKey.secret);
     // Another store reads none of it.
     (app.get(RateLimitGuard) as unknown as { hits: Map<string, unknown> }).hits.clear();
     const phone2 = `+2547${digits()}`.slice(0, 13);

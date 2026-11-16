@@ -2,8 +2,12 @@ import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { isStoreDeveloper } from '../../foundation/auth/for-the-developer';
+import { MailService } from '../../foundation/mail/mail.service';
+import { appUrl } from '../../foundation/mail/mail.templates';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
+import { VendorService } from './vendor.service';
 import type { StoreActivityEntry } from './store-activity.types';
 
 interface StoredEntry extends StoreActivityEntry {
@@ -21,9 +25,24 @@ type NewEntry = Omit<StoreActivityEntry, 'at' | 'developer'>;
  * changed or removed where order updates go. Those two touch real orders; a test key, a test message or the code setting
  * do not, and the owner reads them in the history. What the owner does themselves they are not told about.
  */
+/** A key in words — its kind, last characters and label; never its value. */
+function keyWords(e: NewEntry): string {
+  return [e.kind === 'secret' ? 'secret' : 'publishable', 'key', e.hint ? `…${e.hint}` : '', e.label ? `“${e.label}”` : ''].filter(Boolean).join(' ');
+}
+
+/**
+ * 2026-11-16 — WHAT THE OWNER IS EMAILED (the owner: "take it easy on the notifications … implement the common procedures as
+ * PSPs and code hosts do"): one thing only — their developer made a LIVE SECRET key, the credential that can book real
+ * shipments, as a code host emails "a personal access token has been added". Not a publishable key (public by design), not
+ * the update address, not what the owner does themselves: those are in the History and, some, the bell.
+ */
+export function ownerEmailed(developer: string | undefined, e: NewEntry): boolean {
+  return Boolean(developer) && e.act === 'key_made' && e.mode === 'live' && e.kind === 'secret';
+}
+
 export function ownerNotice(developer: string, e: NewEntry): { title: string; body: string } | null {
   if (e.act === 'key_made' && e.mode === 'live') {
-    const which = [e.kind === 'secret' ? 'secret' : 'publishable', 'key', e.hint ? `…${e.hint}` : '', e.label ? `“${e.label}”` : ''].filter(Boolean).join(' ');
+    const which = keyWords(e);
     return {
       title: `${developer} made a live key`,
       body: `A live ${which} was made on Connect your shop system. With it, your shop system books real shipments. If you did not expect this, revoke it there and take out the developer.`,
@@ -55,8 +74,13 @@ export function ownerNotice(developer: string, e: NewEntry): { title: string; bo
 export class StoreActivityService {
   private readonly entries = new PersistentMap<string, StoredEntry>('store-activity');
 
-  // Optional so a hand-built service keeps compiling: without it the history is still written, and nobody is told.
-  constructor(@Optional() private readonly notifications?: NotificationService) {}
+  // Optional so a hand-built service keeps compiling: without them the history is still written, and nobody is told.
+  constructor(
+    @Optional() private readonly notifications?: NotificationService,
+    @Optional() private readonly mail?: MailService,
+    @Optional() private readonly accounts?: AccountService,
+    @Optional() private readonly vendors?: VendorService,
+  ) {}
 
   note(vendorId: string, actor: IntrospectionResult | undefined, entry: NewEntry, now: number = Date.now()): void {
     const developer = isStoreDeveloper(actor) ? (actor?.actorName ?? 'a developer').replace(/ \(developer\)$/, '') : undefined;
@@ -71,6 +95,21 @@ export class StoreActivityService {
       void this.notifications
         .notify(actor!.did!, { kind: 'store_connection', ...told, link: '/?go=connect', tag: `store-connection:${id}`, data: { vendorId, act: entry.act } })
         .catch(() => undefined);
+    }
+    // A live secret key made by a developer: also an email to the owner's sign-in address, with a link to Connect.
+    if (ownerEmailed(developer, entry) && actor?.did) {
+      const address = this.accounts?.emailForDid(actor.did);
+      if (address && this.mail) {
+        let store = 'your store';
+        try {
+          store = this.vendors?.get(vendorId).name || store;
+        } catch {
+          /* the store's name is a courtesy; the email goes without it */
+        }
+        void this.mail
+          .send('store-live-key', { address }, { store, developer: developer!, key: keyWords(entry), at: new Date(now).toISOString(), link: `${appUrl('vendor')}?go=connect` })
+          .catch(() => undefined);
+      }
     }
   }
 

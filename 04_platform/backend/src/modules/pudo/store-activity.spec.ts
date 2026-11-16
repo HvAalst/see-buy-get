@@ -1,5 +1,8 @@
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
+import type { MailService } from '../../foundation/mail/mail.service';
+import type { AccountService } from './account.service';
 import type { NotificationService } from './notification.service';
+import type { VendorService } from './vendor.service';
 import { StoreActivityService } from './store-activity.service';
 
 /*
@@ -50,5 +53,48 @@ describe('the store owner told what a developer did', () => {
     activity.note(vendorId(), owner, { act: 'key_made', kind: 'secret', mode: 'live', hint: 'x9z8' });
     activity.note(vendorId(), owner, { act: 'address_set', url: 'https://duka.example/hooks' });
     expect(told).toEqual([]);
+  });
+});
+
+/*
+ * 2026-11-16 — THE OWNER EMAILED, ONCE AND RARELY (the owner: "take it easy on the notifications … implement the common
+ * procedures as PSPs and code hosts do"): only when their developer makes a LIVE SECRET key — as a code host emails "a
+ * personal access token has been added". Never the key itself; nothing for a publishable key, the update address, or
+ * what the owner does.
+ */
+describe('the store owner emailed of a developer’s live secret key — and of nothing else', () => {
+  const STORE = 'did:glos:store-duka';
+  const developer = { role: 'genesis', did: STORE, actorName: 'Brian Studio (developer)', revocationKey: 'storedev:sdv_1' } as unknown as IntrospectionResult;
+  const owner = { role: 'genesis', did: STORE } as unknown as IntrospectionResult;
+  const setup = (ownerEmail: string | null = 'owner@duka.example') => {
+    const mails: Array<{ template: string; to: string; params: Record<string, string> }> = [];
+    const mail = { send: async (template: string, to: { address: string }, params: Record<string, string>) => (mails.push({ template, to: to.address, params }), true) } as unknown as MailService;
+    const accounts = { emailForDid: (did: string) => (did === STORE ? (ownerEmail ?? undefined) : undefined) } as unknown as AccountService;
+    const vendors = { get: () => ({ name: 'Duka Bora' }) } as unknown as VendorService;
+    const notifications = { notify: async () => undefined } as unknown as NotificationService;
+    return { mails, activity: new StoreActivityService(notifications, mail, accounts, vendors) };
+  };
+
+  it('a developer’s live secret key: one email to the owner, naming the developer and the key by its last characters', () => {
+    const { mails, activity } = setup();
+    activity.note('ven_1', developer, { act: 'key_made', kind: 'secret', mode: 'live', hint: 'x9z8', label: 'Checkout' });
+    expect(mails).toEqual([expect.objectContaining({ template: 'store-live-key', to: 'owner@duka.example', params: expect.objectContaining({ store: 'Duka Bora', developer: 'Brian Studio', key: 'secret key …x9z8 “Checkout”', link: expect.stringMatching(/\?go=connect$/) }) })]);
+  });
+
+  it('a live publishable key, a test key, the update address, a revoked key, the owner’s own live key: no email', () => {
+    const { mails, activity } = setup();
+    activity.note('ven_1', developer, { act: 'key_made', kind: 'publishable', mode: 'live', hint: 'p1q2' });
+    activity.note('ven_1', developer, { act: 'key_made', kind: 'secret', mode: 'test', hint: 'a1b2' });
+    activity.note('ven_1', developer, { act: 'address_set', url: 'https://studio.example/hooks' });
+    activity.note('ven_1', developer, { act: 'key_revoked', kind: 'secret', mode: 'live', hint: 'x9z8' });
+    activity.note('ven_1', owner, { act: 'key_made', kind: 'secret', mode: 'live', hint: 'o0o0' });
+    expect(mails).toEqual([]);
+  });
+
+  it('a store with no sign-in address: no email, and the history is still written', () => {
+    const { mails, activity } = setup(null);
+    activity.note('ven_2', developer, { act: 'key_made', kind: 'secret', mode: 'live', hint: 'x9z8' });
+    expect(mails).toEqual([]);
+    expect(activity.list('ven_2')).toHaveLength(1);
   });
 });

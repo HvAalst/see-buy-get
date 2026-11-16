@@ -132,6 +132,8 @@ export interface MailParams {
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string; code?: string; name?: string; reissued?: boolean };
   'load-delivery-code': { code: string; load: string; from: string; name?: string; openUrl: string };
   'store-developer-link': { store: string; name: string; link: string; until: string; invited: boolean };
+  /** 2026-11-16 — a store's developer made a live secret key: the owner told by email, as code hosts do for a new token. */
+  'store-live-key': { store: string; developer: string; key: string; at: string; link: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; /** D9 — what the receiver found not as the note says, in words. */ reservations?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
@@ -1503,6 +1505,27 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'warning', title: 'Keep this email to yourself', text: 'Whoever opens the link signs in as the store’s developer. Do not forward it.' },
       ],
       reason: `You are getting this email because ${p.store} named you as its developer on SeeBuyGet.`,
+    }),
+  },
+
+  'store-live-key': {
+    title: 'A store’s developer made a live secret key (store owner)',
+    sentWhen: 'A store’s developer, signed in by their own link, makes a live secret key on “Connect your shop system” — only that: a test key, a publishable key, the update address and the owner’s own changes are in the History and, some, the bell (2026-11-16).',
+    wired: true,
+    // A security notice is still worth reading the next day.
+    sendLater: 24,
+    sample: { store: 'Duka Bora', developer: 'Brian Studio', key: 'secret key …x9z8 “Checkout”', at: '2026-11-16T09:30:00Z', link: 'https://seebuyget.com/vendor/?go=connect' },
+    build: (p) => ({
+      subject: `${p.developer} made a live secret key for ${p.store}`,
+      preheader: 'If you expected this, there is nothing to do.',
+      blocks: [
+        { kind: 'heading', text: 'A live secret key was made' },
+        { kind: 'paragraph', text: `${p.developer}, your developer, made a live secret key for ${p.store} on “Connect your shop system”. With it, a shop system can book real shipments for your store.` },
+        { kind: 'facts', rows: [['Key', p.key], ['Made by', p.developer], ['When', formatWhen(p.at)]] },
+        { kind: 'paragraph', text: 'If you expected this, there is nothing to do. If not, revoke the key and take out the developer on “Connect your shop system”. This email never carries the key itself.' },
+        { kind: 'button', label: 'Open Connect your shop system', href: p.link },
+      ],
+      reason: `You are getting this email because you own ${p.store} on SeeBuyGet. We email you only when your developer makes a live secret key; everything else done there is in its History.`,
     }),
   },
 
