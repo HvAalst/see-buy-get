@@ -92,7 +92,7 @@ describe('a code is texted to the phone, over the wire', () => {
     it('off a sandbox the code is in the text and NOWHERE in the answer', async () => {
       const phone = `+2547${digits()}2`;
       const asked = await offSandbox(() => ask(app, phone).expect(201));
-      expect(asked.body).toEqual({ sent: true });
+      expect(asked.body).toEqual({ sent: true, via: 'sms' });
       expect(arrived).toHaveLength(1);
       expect(JSON.stringify(asked.body) + JSON.stringify(asked.headers)).not.toContain(codeIn(arrived[0]));
       await type(app, phone, codeIn(arrived[0])).expect(201, { verified: true });
@@ -187,7 +187,7 @@ describe('a code is texted to the phone, over the wire', () => {
     it('a sandbox keeps the text and hands the code back, as it always did', async () => {
       const phone = `+2547${digits()}8`;
       const asked = await ask(app, phone).expect(201);
-      expect(asked.body).toEqual({ sent: true, code: expect.stringMatching(/^\d{6}$/) });
+      expect(asked.body).toEqual({ sent: true, via: 'sms', code: expect.stringMatching(/^\d{6}$/) });
       // What would have been texted is kept, and is the same code.
       const kept = app.get(OutboxSmsSender).recent(phone);
       expect(kept).toHaveLength(1);

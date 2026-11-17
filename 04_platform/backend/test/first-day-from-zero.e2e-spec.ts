@@ -250,7 +250,7 @@ describe('the first day of a new installation, as it would be live', () => {
    */
   const joinAsShop = async (shopName: string, zone: string, phone: string, at: { lat: number; lng: number }): Promise<Shop> => {
     const asked = await must(http().post('/v1/sbg/auth/phone/request').send({ phone }));
-    expect(asked).toEqual({ sent: true });
+    expect(asked).toEqual({ sent: true, via: 'sms' });
     await must(http().post('/v1/sbg/auth/phone/verify').send({ phone, code: codeIn(textTo(phone)) }));
     const slug = shopName.toLowerCase().replace(/[^a-z]+/g, '-');
     const account = await must(
