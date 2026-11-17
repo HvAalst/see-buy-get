@@ -1,4 +1,5 @@
 import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
+import { TruecallerOffer } from './Truecaller';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, Note, RefusalNote, Sheet, PhoneField } from '../ui';
@@ -766,6 +767,14 @@ function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNu
   );
 }
 
+/**
+ * A new number may be saved once it is proven — by a code sent and typed, or (2026-11-17) confirmed by Truecaller with no
+ * code sent — and the PIN is typed.
+ */
+export function phoneMoveReady({ sent, verified, code, pin }: { sent: boolean; verified: boolean; code: string; pin: string }): boolean {
+  return (verified || (sent && code.length === 6)) && pin.length === PIN_LENGTH;
+}
+
 function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
   const t = useT();
   const [phone, setPhone] = useState('');
@@ -828,9 +837,17 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
           disabled={busy}
         />
       </div>
-      <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void send()}>
-        {t(sent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
-      </Button>
+      {verified && !sent ? (
+        <p class="hint">{t('account.truecaller.confirmed')}</p>
+      ) : (
+        <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void send()}>
+          {t(sent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
+        </Button>
+      )}
+      {/* 2026-11-17 — or the new number confirmed by Truecaller, no code (the owner: "Ok fix that weakness"). */}
+      {api.truecaller && !sent && !verified ? (
+        <TruecallerOffer config={api.truecaller} phone={phone} disabled={busy || !phone.trim()} onConfirmed={() => setVerified(true)} onFallback={() => void send('sms')} />
+      ) : null}
       {sent ? (
         <div class="field">
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
@@ -845,7 +862,7 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
         <CodeBoxes id="acct-phone-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
       </div>
       <Refused error={error} />
-      <Button chevron={false} busy={busy} disabled={!sent || (!verified && code.length !== 6) || pin.length !== PIN_LENGTH} onClick={() => void move()}>
+      <Button chevron={false} busy={busy} disabled={!phoneMoveReady({ sent, verified, code, pin })} onClick={() => void move()}>
         {t('account.settings.phoneSave')}
       </Button>
     </>

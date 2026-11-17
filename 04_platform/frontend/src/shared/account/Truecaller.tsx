@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { publicRequest, type SbgConfig } from '../../lib/sbg';
+import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import { getLocale, useT } from '../i18n';
 import { Button } from '../ui';
-import { noteTruecallerMiss, useOfferedWays, type TruecallerMiss } from './CodeWays';
+import { noteTruecallerMiss, useOfferedWays, type TruecallerMiss, type WaysSource } from './CodeWays';
 
 /*
  * 2026-11-17 — A NUMBER CONFIRMED BY TRUECALLER, NO CODE (the owner, of the BRICS nations' own apps: "as recommended … build
@@ -18,9 +18,29 @@ export function truecallerUsable(ua: string = globalThis.navigator?.userAgent ??
   return /Android/i.test(ua) && !/;\s*wv\)/.test(ua);
 }
 
+/**
+ * 2026-11-17 — THE DOORS A TRY GOES THROUGH: the public ones before a sign-in (an app's settings), or the same doors through
+ * a signed-in client (a new number in Settings, which has no public settings of its own).
+ */
+export interface TruecallerDoors {
+  ways: WaysSource;
+  start: (phone: string, lang: string) => Promise<Result<{ nonce?: string; link?: string }>>;
+  status: (nonce: string) => Promise<Result<{ state?: string }>>;
+}
+
+export function publicTruecallerDoors(config: SbgConfig): TruecallerDoors {
+  return {
+    ways: config,
+    start: (phone, lang) => publicRequest(config, '/v1/sbg/auth/truecaller/start', { body: { phone, lang } }),
+    status: (nonce) => publicRequest(config, `/v1/sbg/auth/truecaller/${encodeURIComponent(nonce)}`, { method: 'GET' }),
+  };
+}
+
+const doorsOf = (given: SbgConfig | TruecallerDoors): TruecallerDoors => ('start' in given ? given : publicTruecallerDoors(given));
+
 /** Whether this number may be confirmed by Truecaller here: offered for its country, and this phone can open it. */
-export function useTruecallerOffered(config: SbgConfig, phone: string): boolean {
-  return useOfferedWays(config, phone).includes('truecaller') && truecallerUsable();
+export function useTruecallerOffered(source: WaysSource, phone: string): boolean {
+  return useOfferedWays(source, phone).includes('truecaller') && truecallerUsable();
 }
 
 const POLL_MS = 1500;
@@ -46,8 +66,9 @@ const inBrowser: TruecallerDeps = {
 };
 
 /** One try: the server's secret request number and link, Truecaller opened, then asked until it is done. */
-export async function confirmByTruecaller(config: SbgConfig, phone: string, stop: { stopped: boolean } = { stopped: false }, deps: TruecallerDeps = inBrowser): Promise<TruecallerOutcome> {
-  const r = await publicRequest<{ nonce?: string; link?: string }>(config, '/v1/sbg/auth/truecaller/start', { body: { phone, lang: getLocale() } });
+export async function confirmByTruecaller(given: SbgConfig | TruecallerDoors, phone: string, stop: { stopped: boolean } = { stopped: false }, deps: TruecallerDeps = inBrowser): Promise<TruecallerOutcome> {
+  const doors = doorsOf(given);
+  const r = await doors.start(phone, getLocale());
   if (r.error || !r.data?.nonce || !r.data.link) return 'refused';
   const { nonce, link } = r.data;
   deps.open(link);
@@ -58,7 +79,7 @@ export async function confirmByTruecaller(config: SbgConfig, phone: string, stop
   while (deps.now() < until) {
     await deps.wait(POLL_MS);
     if (stop.stopped) return 'cancelled';
-    const s = await publicRequest<{ state?: string }>(config, `/v1/sbg/auth/truecaller/${encodeURIComponent(nonce)}`, { method: 'GET' });
+    const s = await doors.status(nonce);
     const state = s.data?.state;
     if (state && DONE.has(state)) return state as TruecallerOutcome;
   }
@@ -77,7 +98,8 @@ export function TruecallerOffer({
   onConfirmed,
   onFallback,
 }: {
-  config: SbgConfig;
+  /** An app's settings (the public doors), or the doors of a signed-in client. */
+  config: SbgConfig | TruecallerDoors;
   phone: string;
   disabled?: boolean;
   look?: 'app' | 'console';
@@ -86,7 +108,8 @@ export function TruecallerOffer({
 }) {
   const t = useT();
   const clean = phone.replace(/[^\d+]/g, '');
-  const offered = useTruecallerOffered(config, clean);
+  const doors = doorsOf(config);
+  const offered = useTruecallerOffered(doors.ways, clean);
   const [going, setGoing] = useState(false);
   const run = useRef({ stopped: false });
   useEffect(
@@ -102,7 +125,7 @@ export function TruecallerOffer({
     const mine = { stopped: false };
     run.current = mine;
     setGoing(true);
-    const outcome = await confirmByTruecaller(config, clean, mine);
+    const outcome = await confirmByTruecaller(doors, clean, mine);
     // Given up here ("by text instead"), or the screen left: that answer is nobody's any more.
     if (mine.stopped) return;
     setGoing(false);

@@ -13,7 +13,7 @@ import { Button } from '../ui';
 export type CodeWay = 'sms' | 'whatsapp' | 'telegram';
 export type AppWay = Exclude<CodeWay, 'sms'>;
 /** Where the offered apps are asked: an app's settings (the public door), or a loader of its own (a signed-in Settings). */
-export type WaysSource = SbgConfig | ((phone: string) => Promise<AppWay[]>);
+export type WaysSource = SbgConfig | ((phone: string) => Promise<OfferedWay[]>);
 
 /** The server's own wait between two codes for one number: another way is offered once it has passed. */
 export const ANOTHER_WAY_AFTER_S = 60;
@@ -43,13 +43,14 @@ export type OfferedWay = AppWay | 'truecaller';
 
 /** Only the apps this screen knows how to name. */
 const appsOnly = (ways: unknown): AppWay[] => (Array.isArray(ways) ? ways.filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : []);
-const knownOnly = (ways: unknown): OfferedWay[] => (Array.isArray(ways) ? ways.filter((w): w is OfferedWay => w === 'whatsapp' || w === 'telegram' || w === 'truecaller') : []);
+/** The ways a server answer names that a screen knows: the apps, and Truecaller. */
+export const offeredWaysOf = (ways: unknown): OfferedWay[] => (Array.isArray(ways) ? ways.filter((w): w is OfferedWay => w === 'whatsapp' || w === 'telegram' || w === 'truecaller') : []);
 
 /** The public door: GET auth/phone/ways for this number. */
 export function waysFromServer(config: SbgConfig): (phone: string) => Promise<OfferedWay[]> {
   return async (phone) => {
     const r = await publicRequest<{ ways?: OfferedWay[] }>(config, `/v1/sbg/auth/phone/ways?phone=${encodeURIComponent(phone)}`, { method: 'GET' });
-    return r.error ? [] : knownOnly(r.data?.ways);
+    return r.error ? [] : offeredWaysOf(r.data?.ways);
   };
 }
 
@@ -62,7 +63,7 @@ export function useOfferedWays(source: WaysSource, phone: string): OfferedWay[] 
   useEffect(() => {
     if (clean.replace(/\D/g, '').length < 9) return setWays([]);
     let live = true;
-    if (!asked.has(clean)) asked.set(clean, (typeof source === 'function' ? source : waysFromServer(source))(clean).then(knownOnly, () => []));
+    if (!asked.has(clean)) asked.set(clean, (typeof source === 'function' ? source : waysFromServer(source))(clean).then(offeredWaysOf, () => []));
     void asked.get(clean)!.then((w) => live && setWays(w));
     return () => {
       live = false;

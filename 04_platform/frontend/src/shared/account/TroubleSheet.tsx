@@ -1,4 +1,5 @@
 import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
+import { TruecallerOffer } from './Truecaller';
 import { useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet, PhoneField } from '../ui';
@@ -249,9 +250,17 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
           disabled={busy}
         />
       </div>
-      <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
-        {t(phoneSent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
-      </Button>
+      {phoneVerified && !phoneSent ? (
+        <p class="hint">{t('account.truecaller.confirmed')}</p>
+      ) : (
+        <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
+          {t(phoneSent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
+        </Button>
+      )}
+      {/* 2026-11-17 — or the new number confirmed by Truecaller, no code (the owner: "Ok fix that weakness"). */}
+      {!phoneSent && !phoneVerified ? (
+        <TruecallerOffer config={api.config} phone={phone} disabled={busy || !phone.trim()} onConfirmed={() => setPhoneVerified(true)} onFallback={() => void sendPhone('sms')} />
+      ) : null}
       {phoneSent ? (
         <div class="field">
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>
@@ -360,9 +369,17 @@ function AskStaff({ api }: { api: RecoveryApi }) {
           disabled={busy}
         />
       </div>
-      <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
-        {t(phoneSent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
-      </Button>
+      {phoneVerified && !phoneSent ? (
+        <p class="hint">{t('account.truecaller.confirmed')}</p>
+      ) : (
+        <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
+          {t(phoneSent ? 'account.safety.sendAgain' : 'account.safety.sendPhoneCode')}
+        </Button>
+      )}
+      {/* 2026-11-17 — or the new number confirmed by Truecaller, no code (the owner: "Ok fix that weakness"). */}
+      {!phoneSent && !phoneVerified ? (
+        <TruecallerOffer config={api.config} phone={phone} disabled={busy || !phone.trim()} onConfirmed={() => setPhoneVerified(true)} onFallback={() => void sendPhone('sms')} />
+      ) : null}
       {phoneSent ? (
         <div class="field">
           <span class="field__label">{t('account.safety.phoneCodeLabel')}</span>

@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../i18n';
-import { OtherWays, noteTruecallerMiss, truecallerMissFor } from './CodeWays';
-import { TruecallerOffer, confirmByTruecaller, truecallerUsable, type TruecallerDeps } from './Truecaller';
+import { OtherWays, noteTruecallerMiss, offeredWaysOf, truecallerMissFor } from './CodeWays';
+import { TruecallerOffer, confirmByTruecaller, truecallerUsable, type TruecallerDeps, type TruecallerDoors } from './Truecaller';
+import { phoneMoveReady } from './SettingsSheet';
 
 /*
  * 2026-11-17 — A NUMBER CONFIRMED BY TRUECALLER, NO CODE (the owner, of the BRICS nations' own apps: "as recommended … build
@@ -116,12 +117,51 @@ describe('why the code came by text', () => {
   });
 });
 
-describe('every screen that proves a number by a code at sign-up or sign-in offers Truecaller where it can', () => {
-  it('the Send, Home, Driver and Business apps, and a number in a form', () => {
-    const screens = ['apps/genesis/screens/AuthScreen.tsx', 'apps/home/screens/JoinScreen.tsx', 'apps/driver/screens/SignInScreen.tsx', 'apps/business/screens/SignInScreen.tsx', 'shared/account/PhoneVerify.tsx'];
-    for (const screen of screens) {
+describe('every screen that proves a person’s own number by a code offers Truecaller where it can', () => {
+  it('sign-up and sign-in in the Send, Home, Driver and Business apps, a number in a form, Trouble signing in, a new number in Settings', () => {
+    // 2026-11-17 — Trouble signing in and a new number in Settings joined (the owner: "Ok fix that weakness").
+    const screens: Array<[string, number]> = [
+      ['apps/genesis/screens/AuthScreen.tsx', 1], ['apps/home/screens/JoinScreen.tsx', 1], ['apps/driver/screens/SignInScreen.tsx', 1], ['apps/business/screens/SignInScreen.tsx', 1],
+      ['shared/account/PhoneVerify.tsx', 1],
+      // The number gone with the PIN forgotten, and asking staff to move the account: both prove a new number.
+      ['shared/account/TroubleSheet.tsx', 2],
+      ['shared/account/SettingsSheet.tsx', 1],
+    ];
+    for (const [screen, times] of screens) {
       const src = readFileSync(join('src', screen), 'utf8');
-      expect({ screen, offers: src.includes('<TruecallerOffer') }).toEqual({ screen, offers: true });
+      expect({ screen, offers: src.split('<TruecallerOffer').length - 1 }).toEqual({ screen, offers: times });
     }
+  });
+
+  it('a new number in Settings is saved once proven by a code or by Truecaller, with the PIN', () => {
+    expect(phoneMoveReady({ sent: false, verified: true, code: '', pin: '13579' })).toBe(true);
+    expect(phoneMoveReady({ sent: true, verified: false, code: '123456', pin: '13579' })).toBe(true);
+    expect(phoneMoveReady({ sent: true, verified: false, code: '123', pin: '13579' })).toBe(false);
+    expect(phoneMoveReady({ sent: false, verified: false, code: '', pin: '13579' })).toBe(false);
+    expect(phoneMoveReady({ sent: false, verified: true, code: '', pin: '13' })).toBe(false);
+  });
+});
+
+describe('a try through a signed-in client (a new number in Settings)', () => {
+  it('the ways a server names keep Truecaller, for the public door and a signed-in one alike', () => {
+    expect(offeredWaysOf(['whatsapp', 'truecaller', 'pigeon', 'telegram'])).toEqual(['whatsapp', 'truecaller', 'telegram']);
+    expect(offeredWaysOf(undefined)).toEqual([]);
+  });
+
+  it('goes through the doors it is given, and asks no public door', async () => {
+    const fetched: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      fetched.push(url);
+      return new Response('{}', { status: 500 });
+    });
+    const asked: string[] = [];
+    const doors: TruecallerDoors = {
+      ways: async () => ['truecaller'],
+      start: async (phone, lang) => (asked.push(`start ${phone} ${lang}`), { data: { nonce: 'n-signed-in-1', link: 'truecallersdk://x' }, error: null, status: 201 }),
+      status: async (nonce) => (asked.push(`status ${nonce}`), { data: { state: 'confirmed' }, error: null, status: 200 }),
+    };
+    expect(await confirmByTruecaller(doors, '+254712345678', { stopped: false }, phone(false).deps)).toBe('confirmed');
+    expect(asked).toEqual(['start +254712345678 en', 'status n-signed-in-1']);
+    expect(fetched).toEqual([]);
   });
 });

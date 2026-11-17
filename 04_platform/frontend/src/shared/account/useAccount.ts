@@ -1,4 +1,5 @@
-import type { AppWay, CodeWay } from './CodeWays';
+import { offeredWaysOf, type CodeWay, type OfferedWay } from './CodeWays';
+import type { TruecallerDoors } from './Truecaller';
 import { saveDeviceKey } from './pin';
 import type { AddressFormat, AddressParts } from './address';
 import { pinDevicesApi, type PinDevicesApi } from './devices';
@@ -116,8 +117,10 @@ export interface AccountApi {
   /** The PIN again, and the code sent to the NEW address. The menu redraws from what the server stored. */
   setEmail: (pin: string, email: string, code: string) => Promise<Result<unknown>>;
   sendPhoneCode: (phone: string, via?: CodeWay) => Promise<Result<Sent & { via?: CodeWay }>>;
-  /** 2026-11-16 — the apps offered for a number's code (CodeWays). */
-  phoneWays: (phone: string) => Promise<AppWay[]>;
+  /** 2026-11-16 — the apps offered for a number's code (CodeWays) — and, 2026-11-17, Truecaller where offered. */
+  phoneWays: (phone: string) => Promise<OfferedWay[]>;
+  /** 2026-11-17 — a new number confirmed by Truecaller instead of a code, through this sign-in. */
+  truecaller?: TruecallerDoors;
   confirmPhoneCode: (phone: string, code: string) => Promise<Result<unknown>>;
   /** Move the account to a number already confirmed by code. On success EVERY session is over, this one included. */
   changeNumber: (pin: string, newPhone: string) => Promise<Result<unknown>>;
@@ -352,12 +355,20 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const carry = useCallback((phone?: string) => post<{ code: string }>('/v1/sbg/account/carry', phone ? { phone } : {}), [post]);
   const sendPhoneCode = useCallback((phone: string, via?: CodeWay) => post<Sent & { via?: CodeWay }>('/v1/sbg/auth/phone/request', { phone, ...(via ? { via } : {}) }), [post]);
   /** 2026-11-16 — the apps offered for a number's code (CodeWays), read with this sign-in. */
-  const phoneWays = useCallback(async (phone: string): Promise<AppWay[]> => {
+  const phoneWays = useCallback(async (phone: string): Promise<OfferedWay[]> => {
     if (!client) return [];
     const r: Result<unknown> = await client.request((raw) => raw.GET('/v1/sbg/auth/phone/ways' as never, { params: { query: { phone } } } as never) as never);
     const ways = (r.data as { ways?: unknown } | null)?.ways;
-    return Array.isArray(ways) ? ways.filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : [];
+    return offeredWaysOf(ways);
   }, [client]);
+  const truecaller = useMemo<TruecallerDoors>(
+    () => ({
+      ways: phoneWays,
+      start: (phone, lang) => post<{ nonce?: string; link?: string }>('/v1/sbg/auth/truecaller/start', { phone, lang }),
+      status: (nonce) => (client ? client.request((raw) => raw.GET(`/v1/sbg/auth/truecaller/${encodeURIComponent(nonce)}` as never, {} as never) as never) : Promise.resolve(NO_CLIENT)),
+    }),
+    [client, phoneWays, post],
+  );
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
   const changeNumber = useCallback(
     async (pin: string, newPhone: string) => {
@@ -437,5 +448,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
 }
