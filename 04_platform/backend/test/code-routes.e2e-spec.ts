@@ -33,7 +33,7 @@ describe('sign-in codes on the staff console', () => {
 
   it('shows every route, and per country the order, what is off and where codes go now', async () => {
     const view = (await http().get('/v1/sbg/code-routes').set(bearer(staff)).expect(200)).body;
-    expect(view.routes.map((r: { id: string }) => r.id)).toEqual(['africastalking', 'twilio', 'whatsapp', 'telegram']);
+    expect(view.routes.map((r: { id: string }) => r.id)).toEqual(['africastalking', 'twilio', 'whatsapp', 'telegram', 'truecaller']);
     // A sandbox never sends: each route is said as not set up, or set up and held back.
     for (const r of view.routes) expect(['not_set_up', 'half_set_up', 'sandbox']).toContain(r.state);
     expect(view.autoNextSeconds).toBe(60);
@@ -72,7 +72,7 @@ describe('sign-in codes on the staff console', () => {
 /* 2026-11-16 — WhatsApp and Telegram, the person's choice (the plan, D2 and D3). */
   it('staff offer an app in a country, or withdraw it, named; the ways a number may choose come from it', async () => {
     const ke = (await http().post('/v1/sbg/code-routes/KE/apps/whatsapp').set(bearer(staff)).send({ on: false, by: 'Amina Staff' }).expect(201)).body;
-    expect(ke.offer).toEqual(['telegram']);
+    expect(ke.offer).toEqual(['telegram', 'truecaller']);
     await http().post('/v1/sbg/code-routes/KE/apps/pigeon').set(bearer(staff)).send({ on: true, by: 'Amina Staff' }).expect(404);
     const view = (await http().get('/v1/sbg/code-routes').set(bearer(staff)).expect(200)).body;
     expect(view.changes[0]).toMatchObject({ by: 'Amina Staff', what: 'withdraw', route: 'whatsapp' });
@@ -88,5 +88,24 @@ describe('sign-in codes on the staff console', () => {
     await http().post('/v1/sms/status/whatsapp').set('content-type', 'application/json').send(JSON.stringify({ entry: [] })).expect(403);
     await http().post('/v1/sms/status/telegram').set('content-type', 'application/json').set('x-request-timestamp', String(Math.floor(Date.now() / 1000))).set('x-request-signature', 'ab'.repeat(32)).send(JSON.stringify({ request_id: 'r' })).expect(403);
   });
-});
 
+  /* 2026-11-17 — a number confirmed by Truecaller instead of a code (the owner: "as recommended … build it"). */
+  it('Truecaller is offered or withdrawn per country by staff; where it is not set up, a number is not confirmed by it', async () => {
+    const ke = (await http().post('/v1/sbg/code-routes/KE/apps/truecaller').set(bearer(staff)).send({ on: false, by: 'Amina Staff' }).expect(201)).body;
+    expect(ke.offer).toEqual(['whatsapp', 'telegram']);
+    expect((await http().post('/v1/sbg/code-routes/KE/apps/truecaller').set(bearer(staff)).send({ on: true, by: 'Amina Staff' }).expect(201)).body.offer).toEqual(['whatsapp', 'telegram', 'truecaller']);
+    // A sandbox sets it up nowhere: the start is refused, and the page sends a code instead.
+    const r = await http().post('/v1/sbg/auth/truecaller/start').send({ phone: '+254711000890', lang: 'sw' });
+    expect([r.status, r.body.detail]).toEqual([400, expect.stringMatching(/not offered/)]);
+    // A code cannot be asked "by Truecaller": it carries none.
+    await http().post('/v1/sbg/auth/phone/request').send({ phone: '+254711000891', via: 'truecaller' }).expect(400);
+  });
+
+  it('Truecaller’s callback changes nothing for a request number this server never made, and is answered the same', async () => {
+    expect((await http().get('/v1/sbg/auth/truecaller/never-made-nonce-1234').expect(200)).body).toEqual({ state: 'expired' });
+    await http().post('/v1/sbg/auth/truecaller/callback').send({ requestId: 'never-made-nonce-1234', accessToken: 't', endpoint: 'https://attacker.example/p' }).expect(200);
+    await http().post('/v1/sbg/auth/truecaller/callback').send({ requestId: 'never-made-nonce-1234', status: 'flow_invoked' }).expect(200);
+    await http().post('/v1/sbg/auth/truecaller/callback').send({ nothing: true }).expect(200);
+    expect((await http().get('/v1/sbg/auth/truecaller/never-made-nonce-1234').expect(200)).body).toEqual({ state: 'expired' });
+  });
+});

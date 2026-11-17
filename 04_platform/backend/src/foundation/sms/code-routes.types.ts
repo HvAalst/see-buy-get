@@ -21,7 +21,17 @@ export type CodeRouteId = (typeof CODE_ROUTES)[number];
  */
 export const APP_ROUTES = ['whatsapp', 'telegram'] as const;
 export type AppRouteId = (typeof APP_ROUTES)[number];
-export const ALL_ROUTES = [...CODE_ROUTES, ...APP_ROUTES] as const;
+/**
+ * 2026-11-17 — A WAY THAT CONFIRMS A NUMBER WITHOUT A CODE (the owner, of the BRICS nations' own apps: "as recommended … build
+ * it"): Truecaller, on an Android phone, says which number its account holds. Offered per country like the apps; it never
+ * carries a code.
+ */
+export const CONFIRM_ROUTES = ['truecaller'] as const;
+export type ConfirmRouteId = (typeof CONFIRM_ROUTES)[number];
+/** What a country may offer as the person's choice: the apps that carry a code, and the ways that confirm without one. */
+export const OFFER_ROUTES = [...APP_ROUTES, ...CONFIRM_ROUTES] as const;
+export type OfferRouteId = (typeof OFFER_ROUTES)[number];
+export const ALL_ROUTES = [...CODE_ROUTES, ...APP_ROUTES, ...CONFIRM_ROUTES] as const;
 export type AnyRouteId = (typeof ALL_ROUTES)[number];
 /** How a person may ask for a code: by text, or by an app offered in their country. */
 export const CODE_WAYS = ['sms', ...APP_ROUTES] as const;
@@ -42,6 +52,21 @@ export class CodeRouteLast {
   at: string;
   ok: boolean;
   @ApiPropertyOptional({ enum: SMS_FAILURES }) failed?: SmsFailure;
+}
+
+/** 2026-11-17 — a number confirmed by Truecaller: where the person is in it (the page asks until it is done). */
+export const TRUECALLER_STATES = ['waiting', 'opened', 'confirmed', 'rejected', 'other_number', 'failed', 'expired'] as const;
+export type TruecallerState = (typeof TRUECALLER_STATES)[number];
+
+export class TruecallerStart {
+  /** Secret, one per try: the page asks about it until Truecaller is done. */
+  nonce: string;
+  /** What the page opens on the phone. */
+  link: string;
+}
+
+export class TruecallerStatus {
+  @ApiProperty({ enum: TRUECALLER_STATES }) state: TruecallerState;
 }
 
 export class CodeRouteStatus {
@@ -71,7 +96,7 @@ export class CountryCodeRoutes {
   /** Routes staff switched off here. */
   @ApiProperty({ enum: CODE_ROUTES, isArray: true }) off: CodeRouteId[];
   /** 2026-11-16 — the apps offered here as the person's choice, in the order the code screen lists them. */
-  @ApiProperty({ enum: APP_ROUTES, isArray: true }) offer: AppRouteId[];
+  @ApiProperty({ enum: OFFER_ROUTES, isArray: true }) offer: OfferRouteId[];
   /** Staff changed this country from the default order. */
   changed: boolean;
   /** The route a code goes by now: the first that is set up and on. Absent: none is. */
@@ -94,7 +119,7 @@ export class CodeRouteChange {
 
 /** 2026-11-16 — the apps a person may ask their code by, for their number's country: offered there and set up. */
 export class CodeWays {
-  @ApiProperty({ enum: APP_ROUTES, isArray: true }) ways: AppRouteId[];
+  @ApiProperty({ enum: OFFER_ROUTES, isArray: true }) ways: OfferRouteId[];
 }
 
 export class CodeRoutesView {

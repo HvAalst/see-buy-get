@@ -120,7 +120,8 @@ export class SmsService {
 
   /** 2026-11-16 — the apps a person with this number may choose for a code: offered in its country and set up. */
   waysFor(phone: string): AppRouteId[] {
-    return this.routes?.ways(phone) ?? [];
+    // Only the apps that carry a code: a new phone's or a payout number's code cannot be confirmed by Truecaller instead.
+    return (this.routes?.ways(phone) ?? []).filter((w): w is AppRouteId => w === 'whatsapp' || w === 'telegram');
   }
 
   /** 2026-11-16 — a code that was texted was typed in: its route got it there, and goes first for that number next time. */

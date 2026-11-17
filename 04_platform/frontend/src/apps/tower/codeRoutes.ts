@@ -11,15 +11,16 @@ export type RouteStatus = components['schemas']['CodeRouteStatus'];
 export type RouteChange = components['schemas']['CodeRouteChange'];
 export type RouteCount = components['schemas']['CodeRouteCount'];
 export type RouteId = CountryRoutes['order'][number];
-/** 2026-11-16 — every route, the apps (WhatsApp, Telegram) among them. */
+/** 2026-11-16 — every route, the apps (WhatsApp, Telegram) among them — and, 2026-11-17, Truecaller. */
 export type AnyRoute = RouteStatus['id'];
 export type AppRoute = CountryRoutes['offer'][number];
-export const APP_ROUTES: AppRoute[] = ['whatsapp', 'telegram'];
+/** What a country may offer as the person's choice: the apps that carry a code, and Truecaller, which confirms without one. */
+export const APP_ROUTES: AppRoute[] = ['whatsapp', 'telegram', 'truecaller'];
 
 type T = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 /** The providers' own names: brands, the same in every language. */
-export const ROUTE_NAME: Record<AnyRoute, string> = { africastalking: 'Africa’s Talking', twilio: 'Twilio', whatsapp: 'WhatsApp', telegram: 'Telegram' };
+export const ROUTE_NAME: Record<AnyRoute, string> = { africastalking: 'Africa’s Talking', twilio: 'Twilio', whatsapp: 'WhatsApp', telegram: 'Telegram', truecaller: 'Truecaller' };
 
 /** A route moved one place up (-1) or down (1): the new order. At an end, the order as it was. */
 export function moved(order: RouteId[], route: RouteId, by: -1 | 1): RouteId[] {

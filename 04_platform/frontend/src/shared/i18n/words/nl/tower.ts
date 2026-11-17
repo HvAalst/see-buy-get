@@ -3597,5 +3597,6 @@ export const words: Record<string, string> = {
   "tower.codes.change.withdraw": "{who} trok {route} in voor {country}",
   "tower.codes.setup.whatsapp": "In te stellen in de instellingen van de server: WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID en WHATSAPP_TEMPLATE (een goedgekeurde authenticatiesjabloon met een knop om de code te kopiëren). Voor afleverberichten zet je dit webhookadres in Meta met je verificatietoken: {address}, en zet je WHATSAPP_APP_SECRET en WHATSAPP_VERIFY_TOKEN in de instellingen.",
   "tower.codes.setup.telegram": "In te stellen in de instellingen van de server: TELEGRAM_GATEWAY_TOKEN. Afleverberichten komen vanzelf binnen zodra het adres van de site met https begint.",
+  "tower.codes.setup.truecaller": "Bevestigt een nummer zonder code, op Android-telefoons, waar het hieronder wordt aangeboden. In te stellen in de instellingen van de server: TRUECALLER_APP_KEY, de app-sleutel uit het ontwikkelaarsportaal van Truecaller. Zet in dat portaal dit terugmeldadres: {address}.",
   "tower.conn.sms.routes": "Bekijk en stuur elke route op Inlogcodes",
 };

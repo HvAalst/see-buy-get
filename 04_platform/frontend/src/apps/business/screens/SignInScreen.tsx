@@ -1,4 +1,5 @@
 import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
+import { TruecallerOffer } from '../../../shared/account/Truecaller';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
@@ -140,6 +141,7 @@ export function SignInScreen({ state, actions, narrow }: { state: BusinessState;
             )
           ) : null}
           {step === 'phone' ? <CodeWayChoice look="console" config={businessConfig()} phone={state.phone} value={way} onChange={setWay} /> : null}
+          {step === 'phone' ? <TruecallerOffer look="console" config={businessConfig()} phone={state.phone} disabled={busy || !phoneReady(state.phone)} onConfirmed={actions.truecallerConfirmed} onFallback={() => actions.requestCode('sms')} /> : null}
 
           {step === 'login' ? (
             // 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one tap away.

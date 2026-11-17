@@ -1,4 +1,5 @@
 import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
+import { TruecallerOffer } from '../../../shared/account/Truecaller';
 import { SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
@@ -22,6 +23,8 @@ export interface SignInScreenProps {
   onSendCode: (phone: string, via?: CodeWay) => Promise<string | null>;
   /** Verify the code, set the new PIN, sign in. `'email'`: this is a first PIN, and it needs a recovery email. */
   onSetPin: (phone: string, code: string, pin: string, recovery?: { email: string; code: string }) => Promise<'ok' | 'email' | 'email-reset' | 'failed'>;
+  /** 2026-11-17 — the number confirmed by Truecaller instead of a code: the PIN is then chosen without one. */
+  onPhoneConfirmed?: (phone: string) => void;
   error: SbgError | null;
 }
 
@@ -37,7 +40,7 @@ const recovery = recoveryApi(driverConfig());
  * that person, and the app minted itself a token for it. The phone and PIN are the credential now. A driver who
  * has never chosen a PIN (or forgot it, or locked it) proves the phone with a one-time code and chooses one.
  */
-export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInScreenProps) {
+export function SignInScreen({ onSignIn, onSendCode, onSetPin, onPhoneConfirmed, error }: SignInScreenProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('pin');
   const [phone, setPhone] = useState('');
@@ -47,6 +50,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   // 2026-11-16 — how the code comes, and when and how it was sent (the plan's D2 to D4).
   const [way, setWay] = useState<CodeWay>(rememberedWay());
   const [sent, setSent] = useState<{ at: number; via: CodeWay }>({ at: 0, via: 'sms' });
+  // 2026-11-17 — confirmed by Truecaller: the code step asks only for the new PIN.
+  const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
@@ -68,6 +73,27 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
     }
   };
 
+  const sendFirst = (via: CodeWay) =>
+    void busyWhile(async () => {
+      const code = await onSendCode(phone, via);
+      if (code === null) return;
+      setConfirmed(false);
+      setSent({ at: Date.now(), via });
+      setTestCode(code);
+      setCode('');
+      setPin('');
+      setStep('code');
+    });
+
+  const truecallerConfirmed = () => {
+    onPhoneConfirmed?.(phone);
+    setConfirmed(true);
+    setTestCode('');
+    setCode('');
+    setPin('');
+    setStep('code');
+  };
+
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
     // Enter goes no further than the button would: a PIN too easy to guess is said here, not sent (2026-10-25).
@@ -75,15 +101,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
     if (step === 'pin') {
       void busyWhile(() => onSignIn(phone, pin));
     } else if (step === 'phone') {
-      void busyWhile(async () => {
-        const code = await onSendCode(phone, way);
-        if (code === null) return;
-        setSent({ at: Date.now(), via: way });
-        setTestCode(code);
-        setCode('');
-        setPin('');
-        setStep('code');
-      });
+      sendFirst(way);
     } else if (step === 'code') {
       // A first PIN: the server answers that it wants a recovery email, and that is the next thing to fill in.
       void busyWhile(async () => {
@@ -100,6 +118,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   };
 
   const back = () => {
+    setConfirmed(false);
     setStep('pin');
     setPin('');
     setCode('');
@@ -115,11 +134,12 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       </label>
       <PhoneField id="drv-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy || step === 'code' || step === 'email'} />
       {step === 'phone' ? <CodeWayChoice config={driverConfig()} phone={phone} value={way} onChange={setWay} /> : null}
+      {step === 'phone' && onPhoneConfirmed ? <TruecallerOffer config={driverConfig()} phone={phone} disabled={busy || phone.trim() === ''} onConfirmed={truecallerConfirmed} onFallback={() => sendFirst('sms')} /> : null}
     </div>
   );
 
   const ready =
-    step === 'pin' ? phone.trim() !== '' && pin.length === PIN_LENGTH : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === PIN_LENGTH && !pinGuessable(pin) : email.trim() !== '' && emailCode.length === 6;
+    step === 'pin' ? phone.trim() !== '' && pin.length === PIN_LENGTH : step === 'phone' ? phone.trim() !== '' : step === 'code' ? (confirmed || code.length === 6) && pin.length === PIN_LENGTH && !pinGuessable(pin) : email.trim() !== '' && emailCode.length === 6;
 
   return (
     <>
@@ -160,7 +180,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             </div>
           </UnlockFirst>
         ) : null}
-        {step === 'code' ? (
+        {step === 'code' && confirmed ? <p class="hint">{t('account.truecaller.confirmed')}</p> : null}
+        {step === 'code' && !confirmed ? (
           <>
             <div class="field">
               <span class="field__label">{t('driver.signin.codeLabel')}</span>
@@ -182,12 +203,14 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
                 })
               }
             />
-            <div class="field">
-              <span class="field__label">{t('driver.signin.newPinLabel')}</span>
-              <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
-              <PinGuessHint pin={pin} />
-            </div>
           </>
+        ) : null}
+        {step === 'code' ? (
+          <div class="field">
+            <span class="field__label">{t('driver.signin.newPinLabel')}</span>
+            <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
+            <PinGuessHint pin={pin} />
+          </div>
         ) : null}
         {step === 'email' ? null : <p class="card__note">{t('driver.signin.phoneNote')}</p>}
       </Card>

@@ -13,6 +13,7 @@ import type { TowerActions, TowerState } from './useTowerApp';
 const routes: RouteStatus[] = [
   { id: 'africastalking', state: 'not_set_up', reportsDelivery: false },
   { id: 'twilio', state: 'ready', reportsDelivery: true, last: { at: '2026-11-16T10:00:00.000Z', ok: true } },
+  { id: 'truecaller', state: 'not_set_up', reportsDelivery: false },
 ];
 const ke: CountryRoutes = {
   country: 'KE',
@@ -84,5 +85,14 @@ describe('the Sign-in codes screen', () => {
     expect(body(true)).toContain(`>${t('tower.codes.withdraw')}<`);
     expect(body(false)).not.toContain(`>${t('tower.codes.withdraw')}<`);
     expect(body(true)).toContain(t('tower.codes.offeredNotSetUp'));
+  });
+
+  it('2026-11-17 — Truecaller: how it is set up, with the callback address for its portal; offered or not per country', () => {
+    const html = body(true);
+    expect(html).toContain('Truecaller');
+    expect(html).toContain('https://seebuyget.com/v1/sbg/auth/truecaller/callback');
+    expect(html).toContain('TRUECALLER_APP_KEY');
+    // Kenya offers the two apps here, not Truecaller: staff may offer it.
+    expect(html).toContain(`>${t('tower.codes.offer')}<`);
   });
 });

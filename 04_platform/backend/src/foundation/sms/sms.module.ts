@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { africasTalkingConfig } from './africastalking';
 import { TelegramSender, WhatsAppSender } from './app-route.senders';
 import { telegramConfig } from './telegram';
+import { truecallerConfig } from './truecaller';
+import { TruecallerRoute } from './truecaller.route';
 import { whatsAppConfig } from './whatsapp';
 import { AfricasTalkingSender } from './africastalking.sender';
 import { CodeRouteService, ROUTE_SENDERS, RouteSender } from './code-route.service';
@@ -40,13 +42,15 @@ export function chooseSmsSender(outbox: OutboxSmsSender, provider: TwilioSmsSend
     // 2026-11-16 — the apps a person may choose for their code (the plan, D2 and D3).
     { provide: WhatsAppSender, useFactory: () => new WhatsAppSender(whatsAppConfig()) },
     { provide: TelegramSender, useFactory: () => new TelegramSender(telegramConfig()) },
+    // 2026-11-17 — a way that confirms a number without a code, offered per country like the apps.
+    { provide: TruecallerRoute, useFactory: () => new TruecallerRoute(truecallerConfig()) },
     { provide: SMS_SENDER, useFactory: chooseSmsSender, inject: [OutboxSmsSender, TwilioSmsSender] },
     {
       provide: ROUTE_SENDERS,
-      useFactory: (africasTalking: AfricasTalkingSender, twilio: TwilioSmsSender, whatsApp: WhatsAppSender, telegram: TelegramSender): RouteSender[] => [africasTalking, twilio, whatsApp, telegram],
-      inject: [AfricasTalkingSender, TwilioSmsSender, WhatsAppSender, TelegramSender],
+      useFactory: (africasTalking: AfricasTalkingSender, twilio: TwilioSmsSender, whatsApp: WhatsAppSender, telegram: TelegramSender, truecaller: TruecallerRoute): RouteSender[] => [africasTalking, twilio, whatsApp, telegram, truecaller],
+      inject: [AfricasTalkingSender, TwilioSmsSender, WhatsAppSender, TelegramSender, TruecallerRoute],
     },
   ],
-  exports: [SmsService, OutboxSmsSender, CodeRouteService, WhatsAppSender, TelegramSender],
+  exports: [SmsService, OutboxSmsSender, CodeRouteService, WhatsAppSender, TelegramSender, TruecallerRoute],
 })
 export class SmsModule {}

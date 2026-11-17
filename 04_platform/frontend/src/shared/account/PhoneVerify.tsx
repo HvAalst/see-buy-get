@@ -3,6 +3,7 @@ import { Button, ErrorNote, PhoneField } from '../ui';
 import { useT } from '../i18n';
 import { publicRequest, type SbgConfig, type SbgError } from '../../lib/sbg';
 import { CodeWayChoice, OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays';
+import { TruecallerOffer } from './Truecaller';
 
 /**
  * Round 40 — A NUMBER, VERIFIED BY ITS CODE, inside a form (a store signing up: the user, "Hubs and stores now"). The number,
@@ -75,6 +76,8 @@ export function PhoneVerify({ config, verified, onVerified, label }: { config: S
           <Button variant="outline" busy={busy} disabled={busy || !plausible} onClick={() => void ask(way)}>
             {t('account.phoneVerify.send')}
           </Button>
+          {/* 2026-11-17 — or confirmed by Truecaller, no code: the form is told the number at once. */}
+          <TruecallerOffer config={config} phone={clean} disabled={busy || !plausible} onConfirmed={() => onVerified(clean)} onFallback={() => ask('sms')} />
         </>
       )}
       <p class="hint">{t('account.phoneVerify.why')}</p>

@@ -1,4 +1,5 @@
 import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
+import { TruecallerOffer } from '../../../shared/account/Truecaller';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
@@ -186,6 +187,7 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
           <PhoneField id="phone" value={state.form.phone} onInput={(v) => actions.setForm({ phone: v })} enterKeyHint="send" />
         </div>
         <CodeWayChoice config={homeConfig()} phone={state.form.phone} value={way} onChange={setWay} />
+        <TruecallerOffer config={homeConfig()} phone={state.form.phone} disabled={Boolean(blocker) || state.busy === 'code'} onConfirmed={actions.phoneConfirmed} onFallback={() => actions.sendCode('sms')} />
       </Card>
 
       <div class="scr__cta">

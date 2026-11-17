@@ -3597,5 +3597,6 @@ export const words: Record<string, string> = {
   "tower.codes.change.withdraw": "{who} {route}ን ከ{country} አነሳ",
   "tower.codes.setup.whatsapp": "በአገልጋዩ ቅንብሮች ውስጥ ያዘጋጁ፦ WHATSAPP_TOKEN፣ WHATSAPP_PHONE_NUMBER_ID እና WHATSAPP_TEMPLATE (ኮድ መቅጃ ቁልፍ ያለው የጸደቀ የማረጋገጫ አብነት)። ለመድረስ ሪፖርቶች ይህን የwebhook አድራሻ ከማረጋገጫ ቶክንዎ ጋር በMeta ውስጥ ያስገቡ፦ {address}፣ እና WHATSAPP_APP_SECRET እና WHATSAPP_VERIFY_TOKEN በቅንብሮቹ ውስጥ ያስገቡ።",
   "tower.codes.setup.telegram": "በአገልጋዩ ቅንብሮች ውስጥ ያዘጋጁ፦ TELEGRAM_GATEWAY_TOKEN። የጣቢያው አድራሻ በhttps ሲጀምር የመድረስ ሪፖርቶች በራሳቸው ይገባሉ።",
+  "tower.codes.setup.truecaller": "ከታች በቀረበበት ቦታ፣ በAndroid ስልኮች ላይ ቁጥርን ያለ ኮድ ያረጋግጣል። በአገልጋዩ ቅንብሮች ውስጥ ያዋቅሩ፦ TRUECALLER_APP_KEY፣ ከTruecaller የገንቢዎች መግቢያ የሚገኘው የመተግበሪያ ቁልፍ። በዚያ መግቢያ ውስጥ ይህን የመልስ አድራሻ ያስገቡ፦ {address}።",
   "tower.conn.sms.routes": "በመግቢያ ኮዶች ላይ እያንዳንዱን መንገድ ይመልከቱና ይምሩ",
 };

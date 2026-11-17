@@ -671,6 +671,12 @@ export function useSendApp() {
     setState((s) => ({ ...s, authBusy: false, authStep: 'pin', authPin: '', authCode: '' }));
   }, []);
 
+  // 2026-11-17 — the number confirmed by Truecaller instead of a code: on to the PIN, as after a code typed right.
+  const truecallerConfirmed = useCallback(() => {
+    authEpoch.current++;
+    setState((s) => ({ ...s, authBusy: false, authError: null, authStep: 'pin', authPin: '', authCode: '' }));
+  }, []);
+
   const submitEnroll = useCallback(async () => {
     const phone = cleanPhone(stateRef.current.authPhone);
     const pin = stateRef.current.authPin;
@@ -1409,6 +1415,7 @@ export function useSendApp() {
       authBack,
       pickContact,
       requestCode,
+      truecallerConfirmed,
       submitCode,
       submitEnroll,
       submitLogin,

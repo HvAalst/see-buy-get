@@ -3,7 +3,7 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { CodeRouteService } from '../../foundation/sms/code-route.service';
-import { AppRouteId, CodeRouteId, CodeRoutesView, CountryCodeRoutes } from '../../foundation/sms/code-routes.types';
+import { OfferRouteId, CodeRouteId, CodeRoutesView, CountryCodeRoutes } from '../../foundation/sms/code-routes.types';
 import { CodeRouteOnDto, CodeRouteOrderDto } from './code-routes.dto';
 import { staffOf } from './staff-of';
 
@@ -33,7 +33,7 @@ export class CodeRoutesController {
   @Roles('operator')
   @Post(':country/apps/:route')
   offer(@Param('country') country: string, @Param('route') route: string, @Body() dto: CodeRouteOnDto, @Actor() actor: IntrospectionResult): CountryCodeRoutes {
-    return this.routes.setOffer(country, route as AppRouteId, dto.on, staffOf(actor, dto.by).name);
+    return this.routes.setOffer(country, route as OfferRouteId, dto.on, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

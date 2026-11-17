@@ -3582,6 +3582,7 @@ export const enTowerPrices = {
   'tower.codes.change.withdraw': "{who} withdrew {route} in {country}",
   'tower.codes.setup.whatsapp': "Set up in the server’s settings: WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TEMPLATE (an approved authentication template with a copy-code button). For delivery reports, set this webhook address in Meta with your verify token: {address}, and put WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN in the settings.",
   'tower.codes.setup.telegram': "Set up in the server’s settings: TELEGRAM_GATEWAY_TOKEN. Delivery reports come in by themselves once the site’s address starts with https.",
+  'tower.codes.setup.truecaller': "Confirms a number without a code, on Android phones, where offered below. Set up in the server’s settings: TRUECALLER_APP_KEY, the app key from Truecaller’s developer portal. In that portal, set this callback address: {address}.",
   'tower.conn.sms.routes': "See and steer each route on Sign-in codes",
   'tower.density.title': 'Where hubs are needed',
   'tower.hubList.title': 'The hub list',

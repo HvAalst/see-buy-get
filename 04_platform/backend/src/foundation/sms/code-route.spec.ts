@@ -2,6 +2,7 @@ import { readAtAnswer, readAtReport, africasTalkingConfig, toAtForm } from './af
 import { CodeRouteService, RouteSender, defaultOrder } from './code-route.service';
 import type { AnyRouteId, CodeRouteId, RouteState } from './code-routes.types';
 import { SmsSendError } from './sms.types';
+import { TruecallerRoute } from './truecaller.route';
 import { readTwilioReport, twilioConfig, toTwilioForm } from './twilio';
 
 /*
@@ -38,7 +39,7 @@ class FakeRoute implements RouteSender {
 
 const KE = '+254712345678';
 const NL = '+31612345678';
-const make = (routes: FakeRoute[]) => {
+const make = (routes: RouteSender[]) => {
   const s = new CodeRouteService(routes);
   s.onModuleDestroy();
   return s;
@@ -299,10 +300,36 @@ describe('a code by an app the person chose', () => {
     await s.send(KE, 't', Date.now(), { code: '3', via: 'whatsapp' });
     expect(wa.sent).toHaveLength(0);
     // Offered again, it takes its place again; withdrawn and offered in Ethiopia, Telegram stays first.
-    expect(s.setOffer('KE', 'whatsapp', true, 'Amina (staff)').offer).toEqual(['whatsapp', 'telegram']);
+    expect(s.setOffer('KE', 'whatsapp', true, 'Amina (staff)').offer).toEqual(['whatsapp', 'telegram', 'truecaller']);
     s.setOffer('ET', 'whatsapp', false, 'Amina (staff)');
     expect(s.setOffer('ET', 'whatsapp', true, 'Amina (staff)').offer).toEqual(['telegram', 'whatsapp']);
     expect(s.view().changes.map((c) => c.what).slice(0, 4)).toEqual(['offer', 'withdraw', 'offer', 'withdraw']);
+  });
+
+  it('Truecaller is offered in India, Egypt, South Africa and Kenya once set up — and is never handed a code', async () => {
+    // The owner, 2026-11-17, of the BRICS nations' own apps: "as recommended … build it".
+    const at = new FakeRoute('africastalking');
+    const tw = new FakeRoute('twilio');
+    const tc = new TruecallerRoute({ state: 'ready', appKey: 'k', appName: 'SeeBuyGet' });
+    const s = make([at, tw, new FakeRoute('whatsapp'), new FakeRoute('telegram'), tc]);
+    expect(s.ways(KE)).toEqual(['whatsapp', 'telegram', 'truecaller']);
+    expect(s.ways('+919876543210')).toEqual(['whatsapp', 'telegram', 'truecaller']);
+    expect(s.ways('+201001234567')).toContain('truecaller');
+    expect(s.ways('+27821234567')).toContain('truecaller');
+    expect(s.ways(ET_NUMBER)).toEqual(['telegram', 'whatsapp']);
+    expect(s.offers('+5511987654321', 'truecaller')).toBe(false);
+    // Asked to carry a code, it is passed over: the code goes by text.
+    await s.send(KE, 'text', Date.now(), { code: '123456', via: 'truecaller' as never });
+    expect(at.sent.map((m) => m.body)).toEqual(['text']);
+    expect(s.view().routes.find((r) => r.id === 'truecaller')?.last).toBeUndefined();
+    // Withdrawn by staff, not offered; not set up, not offered.
+    s.setOffer('KE', 'truecaller', false, 'Amina (staff)');
+    expect(s.offers(KE, 'truecaller')).toBe(false);
+    const unset = make([at, tw, new TruecallerRoute({ state: 'not_set_up', appName: 'SeeBuyGet' })]);
+    expect(unset.offers('+919876543210', 'truecaller')).toBe(false);
+    // A confirmation is counted with the rest.
+    s.noteConfirm('+919876543210', 'truecaller', true);
+    expect(s.view().routes.find((r) => r.id === 'truecaller')?.last?.ok).toBe(true);
   });
 
   it('not on that app, or not delivered within a minute: the same code goes by text', async () => {

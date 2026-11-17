@@ -5,7 +5,7 @@ import { GlosError } from '../http/glos-error';
 import { hashPhone } from '../identity/phone';
 import { PresenceService } from '../presence/presence.service';
 import { PersistentMap } from '../store/persistent-map';
-import { ALL_ROUTES, APP_ROUTES, AUTO_NEXT_SECONDS, AnyRouteId, AppRouteId, CODE_ROUTES, CodeRouteChange, CodeRouteCount, CodeRouteId, CodeRouteLast, CodeRoutesView, CodeWay, CountryCodeRoutes, RouteState } from './code-routes.types';
+import { ALL_ROUTES, AUTO_NEXT_SECONDS, AnyRouteId, OFFER_ROUTES, OfferRouteId, CODE_ROUTES, CodeRouteChange, CodeRouteCount, CodeRouteId, CodeRouteLast, CodeRoutesView, CodeWay, CountryCodeRoutes, RouteState } from './code-routes.types';
 import { OutgoingSms, SmsSendError } from './sms.types';
 
 /** A text, and — where it carries one — the code itself and how long it works: an app sends the code, not the text. */
@@ -14,8 +14,9 @@ export type OutgoingCode = OutgoingSms & { code?: string; minutes?: number };
 /** A provider a code can go by. It throws an `SmsSendError` when it did not take the text, and says the provider's id for it when it did. */
 export interface RouteSender {
   readonly id: AnyRouteId;
-  /** A text route (in each country's order), or an app (WhatsApp, Telegram) that goes only by the person's choice. */
-  readonly kind: 'sms' | 'app';
+  /** A text route (in each country's order), an app (WhatsApp, Telegram) that goes only by the person's choice, or a way that
+   *  confirms a number without a code (Truecaller) — never handed a text. */
+  readonly kind: 'sms' | 'app' | 'confirm';
   state(): RouteState;
   /** It tells this server what became of each text: only then may a code move on by itself after a minute. */
   reportsDelivery(): boolean;
@@ -39,16 +40,19 @@ export function defaultOrder(country: string | undefined): CodeRouteId[] {
  * "I prefer Whatsapp also wired in for Ethiopia"): WhatsApp and Telegram in every country — Telegram listed first in Ethiopia,
  * where it is the messaging app. Staff may still withdraw one in a country. An app not set up is offered to nobody.
  */
-export function defaultOffer(country: string | undefined): AppRouteId[] {
+export function defaultOffer(country: string | undefined): OfferRouteId[] {
   if (!country) return [];
-  return country === 'ET' ? ['telegram', 'whatsapp'] : ['whatsapp', 'telegram'];
+  const apps: OfferRouteId[] = country === 'ET' ? ['telegram', 'whatsapp'] : ['whatsapp', 'telegram'];
+  // 2026-11-17 — Truecaller where it is most used (the owner: "as recommended"): India, Egypt, South Africa and Kenya.
+  return TRUECALLER_FIRST.has(country) ? [...apps, 'truecaller'] : apps;
 }
+const TRUECALLER_FIRST = new Set(['IN', 'EG', 'ZA', 'KE']);
 
 interface Plan {
   order: CodeRouteId[];
   off: CodeRouteId[];
-  /** Apps offered as the person's choice; absent: the default. */
-  offer?: AppRouteId[];
+  /** Apps (and ways that confirm without a code) offered as the person's choice; absent: the default. */
+  offer?: OfferRouteId[];
 }
 
 interface Attempt {
@@ -157,19 +161,34 @@ export class CodeRouteService implements OnModuleDestroy {
     return known && (list as AnyRouteId[]).includes(known) ? [known as CodeRouteId, ...list.filter((r) => r !== known)] : list;
   }
 
-  private offerOf(country: string | undefined): AppRouteId[] {
+  private offerOf(country: string | undefined): OfferRouteId[] {
     const planned = country ? this.plans.get(country)?.offer : undefined;
     return planned ?? defaultOffer(country);
   }
 
   /** The apps a person in this country may choose: offered here and set up, in the order the code screen lists them. */
-  appsFor(country: string | undefined): AppRouteId[] {
+  appsFor(country: string | undefined): OfferRouteId[] {
     return this.offerOf(country).filter((r) => this.sender(r)?.state() === 'ready');
   }
 
-  /** 2026-11-16 — the apps a person may ask their code by, for their number. */
-  ways(phone: string): AppRouteId[] {
+  /** 2026-11-16 — the apps a person may ask their code by, for their number — and, 2026-11-17, Truecaller where offered. */
+  ways(phone: string): OfferRouteId[] {
     return this.appsFor(countryOfPhone(phone));
+  }
+
+  /** 2026-11-17 — may this number be confirmed by this way (Truecaller): offered in its country and set up. */
+  offers(phone: string, route: OfferRouteId): boolean {
+    return this.ways(phone).includes(route);
+  }
+
+  /** 2026-11-17 — a number confirmed without a code (Truecaller), or not: counted with the rest, and remembered as working. */
+  noteConfirm(phone: string, route: AnyRouteId, ok: boolean, now: number = Date.now()): void {
+    const id = `cra_${now.toString(36)}_${randomBytes(4).toString('hex')}`;
+    const at = new Date(now).toISOString();
+    const country = countryOfPhone(phone);
+    const phoneKey = hashPhone(phone);
+    this.attempts.set(id, { id, route, phoneKey, at, status: ok ? 'delivered' : 'failed', doneAt: at, step: 0, ...(ok ? { enteredAt: at } : {}), ...(country ? { country } : {}) });
+    this.last.set(route, { at, ok });
   }
 
   /**
@@ -181,7 +200,8 @@ export class CodeRouteService implements OnModuleDestroy {
     if (!code) return texts;
     const apps = this.appsFor(country);
     const chosen = via && via !== 'sms' ? via : via === 'sms' ? undefined : this.remembered.get(phoneKey);
-    return chosen && (apps as AnyRouteId[]).includes(chosen) ? [chosen, ...texts] : texts;
+    // Only an app carries a code: a way that confirms without one (Truecaller) is never handed it.
+    return chosen && (apps as AnyRouteId[]).includes(chosen) && this.sender(chosen)?.kind === 'app' ? [chosen, ...texts] : texts;
   }
 
   /**
@@ -333,13 +353,13 @@ export class CodeRouteService implements OnModuleDestroy {
   }
 
   /** 2026-11-16 — an app offered in a country as the person's choice, or no longer (D2, D3). */
-  setOffer(code: string, route: AppRouteId, on: boolean, by: string, now: number = Date.now()): CountryCodeRoutes {
+  setOffer(code: string, route: OfferRouteId, on: boolean, by: string, now: number = Date.now()): CountryCodeRoutes {
     const country = this.country(code);
-    if (!(APP_ROUTES as readonly string[]).includes(route)) throw new GlosError('NOT_FOUND', 'No such app');
+    if (!(OFFER_ROUTES as readonly string[]).includes(route)) throw new GlosError('NOT_FOUND', 'No such app');
     const offer = this.offerOf(country).filter((r) => r !== route);
     if (on) offer.push(route);
-    // The order the code screen lists them in is APP_ROUTES', unless a country's default puts one first (Telegram in Ethiopia).
-    const lead = defaultOffer(country);
+    // The order the code screen lists them in is OFFER_ROUTES', unless a country's default puts one first (Telegram in Ethiopia).
+    const lead = [...defaultOffer(country), ...OFFER_ROUTES.filter((r) => !defaultOffer(country).includes(r))];
     offer.sort((a, b) => (lead.indexOf(a) === -1 ? 9 : lead.indexOf(a)) - (lead.indexOf(b) === -1 ? 9 : lead.indexOf(b)));
     this.plans.set(country, { ...this.plans.get(country), order: this.orderOf(country), off: this.offIn(country), offer });
     this.note(country, by, { what: on ? 'offer' : 'withdraw', route }, now);

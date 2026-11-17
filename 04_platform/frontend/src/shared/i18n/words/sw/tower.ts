@@ -3597,5 +3597,6 @@ export const words: Record<string, string> = {
   "tower.codes.change.withdraw": "{who} aliondoa {route} kwa {country}",
   "tower.codes.setup.whatsapp": "Weka kwenye mipangilio ya seva: WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID na WHATSAPP_TEMPLATE (kiolezo cha uthibitishaji kilichoidhinishwa chenye kitufe cha kunakili msimbo). Kwa taarifa za kufika, weka anwani hii ya webhook kwenye Meta pamoja na tokeni yako ya uthibitisho: {address}, na weka WHATSAPP_APP_SECRET na WHATSAPP_VERIFY_TOKEN kwenye mipangilio.",
   "tower.codes.setup.telegram": "Weka kwenye mipangilio ya seva: TELEGRAM_GATEWAY_TOKEN. Taarifa za kufika huingia zenyewe anwani ya tovuti ikianza na https.",
+  "tower.codes.setup.truecaller": "Inathibitisha namba bila msimbo, kwenye simu za Android, pale inapotolewa hapa chini. Iweke kwenye mipangilio ya seva: TRUECALLER_APP_KEY, ufunguo wa programu kutoka tovuti ya wasanidi programu ya Truecaller. Kwenye tovuti hiyo, weka anwani hii ya kurudisha majibu: {address}.",
   "tower.conn.sms.routes": "Ona na uongoze kila njia kwenye Misimbo ya kuingia",
 };

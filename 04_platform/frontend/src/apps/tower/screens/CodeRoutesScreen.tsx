@@ -73,6 +73,7 @@ function setupLine(r: RouteStatus, apiBase: string, t: ReturnType<typeof useT>):
   if (r.id === 'africastalking') return t('tower.codes.setup.africastalking', { address: `${apiBase}/v1/sms/status/africastalking` });
   if (r.id === 'whatsapp') return t('tower.codes.setup.whatsapp', { address: `${apiBase}/v1/sms/status/whatsapp` });
   if (r.id === 'telegram') return t('tower.codes.setup.telegram');
+  if (r.id === 'truecaller') return t('tower.codes.setup.truecaller', { address: `${apiBase}/v1/sbg/auth/truecaller/callback` });
   return t('tower.codes.setup.twilio');
 }
 

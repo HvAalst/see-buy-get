@@ -2465,6 +2465,12 @@ export class AccountDevicePhoneDto {
   @ApiPropertyOptional({ enum: CODE_WAYS }) @IsOptional() @IsIn(CODE_WAYS) via?: CodeWay;
 }
 
+/** 2026-11-17 — a number to be confirmed by Truecaller instead of a code, and the language its sheet speaks. */
+export class TruecallerStartDto {
+  @IsString() @MaxLength(24) phone!: string;
+  @IsOptional() @IsString() @MaxLength(5) lang?: string;
+}
+
 /** 2026-11-16 — a new phone's code sent again, another way. */
 export class AccountDeviceAgainDto {
   @IsString() @MaxLength(40) challenge!: string;

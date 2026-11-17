@@ -805,6 +805,12 @@ export function useDriverApp() {
     return signedIn ? 'ok' : 'failed';
   }, [signIn]);
 
+  /** 2026-11-17 — the number confirmed by Truecaller instead of a code: the PIN is chosen without one. */
+  const phoneConfirmed = useCallback((phone: string) => {
+    verifiedPhone.current = phone.trim();
+    setState((s) => ({ ...s, error: null }));
+  }, []);
+
   const signOut = useCallback(() => {
     // The papers kept on this phone are the driver's: they go with them.
     if (did) forgetPapers(did);
@@ -2505,6 +2511,7 @@ export function useDriverApp() {
       signIn,
       sendPinCode,
       setPinAndSignIn,
+      phoneConfirmed,
       signOut,
       go,
       setForm,

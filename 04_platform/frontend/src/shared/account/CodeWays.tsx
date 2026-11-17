@@ -38,27 +38,31 @@ export function rememberWay(way: CodeWay): void {
   }
 }
 
+/** 2026-11-17 — what a country may offer: the apps that carry a code, and Truecaller, which confirms a number without one. */
+export type OfferedWay = AppWay | 'truecaller';
+
 /** Only the apps this screen knows how to name. */
 const appsOnly = (ways: unknown): AppWay[] => (Array.isArray(ways) ? ways.filter((w): w is AppWay => w === 'whatsapp' || w === 'telegram') : []);
+const knownOnly = (ways: unknown): OfferedWay[] => (Array.isArray(ways) ? ways.filter((w): w is OfferedWay => w === 'whatsapp' || w === 'telegram' || w === 'truecaller') : []);
 
 /** The public door: GET auth/phone/ways for this number. */
-export function waysFromServer(config: SbgConfig): (phone: string) => Promise<AppWay[]> {
+export function waysFromServer(config: SbgConfig): (phone: string) => Promise<OfferedWay[]> {
   return async (phone) => {
-    const r = await publicRequest<{ ways?: AppWay[] }>(config, `/v1/sbg/auth/phone/ways?phone=${encodeURIComponent(phone)}`, { method: 'GET' });
-    return r.error ? [] : appsOnly(r.data?.ways);
+    const r = await publicRequest<{ ways?: OfferedWay[] }>(config, `/v1/sbg/auth/phone/ways?phone=${encodeURIComponent(phone)}`, { method: 'GET' });
+    return r.error ? [] : knownOnly(r.data?.ways);
   };
 }
 
-const asked = new Map<string, Promise<AppWay[]>>();
+const asked = new Map<string, Promise<OfferedWay[]>>();
 
-/** The apps offered for this number's country, in the server's order. Empty until known, and when none is. */
-export function useCodeWays(source: WaysSource, phone: string): AppWay[] {
+/** Every way offered for this number's country, in the server's order. Empty until known, and when none is. */
+export function useOfferedWays(source: WaysSource, phone: string): OfferedWay[] {
   const clean = phone.replace(/[^\d+]/g, '');
-  const [ways, setWays] = useState<AppWay[]>([]);
+  const [ways, setWays] = useState<OfferedWay[]>([]);
   useEffect(() => {
     if (clean.replace(/\D/g, '').length < 9) return setWays([]);
     let live = true;
-    if (!asked.has(clean)) asked.set(clean, (typeof source === 'function' ? source : waysFromServer(source))(clean).then(appsOnly, () => []));
+    if (!asked.has(clean)) asked.set(clean, (typeof source === 'function' ? source : waysFromServer(source))(clean).then(knownOnly, () => []));
     void asked.get(clean)!.then((w) => live && setWays(w));
     return () => {
       live = false;
@@ -67,6 +71,40 @@ export function useCodeWays(source: WaysSource, phone: string): AppWay[] {
   }, [clean]);
   return ways;
 }
+
+/** The apps offered for this number's country, in the server's order. Empty until known, and when none is. */
+export function useCodeWays(source: WaysSource, phone: string): AppWay[] {
+  return appsOnly(useOfferedWays(source, phone));
+}
+
+/*
+ * 2026-11-17 — WHY A CODE CAME BY TEXT AFTER TRUECALLER WAS TRIED: said once on the code step that follows. Kept in this
+ * page's memory only, for the number it was tried for.
+ */
+export type TruecallerMiss = 'not_installed' | 'rejected' | 'other_number' | 'failed' | 'expired' | 'refused' | 'cancelled';
+const misses = new Map<string, { why: TruecallerMiss; at: number }>();
+const MISS_SHOWN_MS = 10 * 60_000;
+const digitsOf = (phone: string) => phone.replace(/\D/g, '');
+
+export function noteTruecallerMiss(phone: string, why: TruecallerMiss | 'confirmed', now: number = Date.now()): void {
+  if (why === 'confirmed') misses.delete(digitsOf(phone));
+  else misses.set(digitsOf(phone), { why, at: now });
+}
+
+export function truecallerMissFor(phone: string, now: number = Date.now()): TruecallerMiss | null {
+  const m = digitsOf(phone) ? misses.get(digitsOf(phone)) : undefined;
+  return m && now - m.at < MISS_SHOWN_MS ? m.why : null;
+}
+
+const MISS_WORDS = {
+  not_installed: 'account.truecaller.notInstalled',
+  rejected: 'account.truecaller.declined',
+  cancelled: 'account.truecaller.declined',
+  other_number: 'account.truecaller.otherNumber',
+  failed: 'account.truecaller.failed',
+  expired: 'account.truecaller.failed',
+  refused: 'account.truecaller.failed',
+} as const;
 
 /**
  * BEFORE THE FIRST CODE: how it should come. Shown only where an app is offered for the number; its starting point is the
@@ -135,10 +173,13 @@ export function OtherWays({
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  if (!ways.length && last === 'sms') return null;
+  const note = look === 'console' ? 'chint' : 'hint';
+  // 2026-11-17 — Truecaller was tried for this number and did not confirm it: why the code came by text instead.
+  const miss = truecallerMissFor(phone);
+  const missLine = miss ? <p class={note}>{t(MISS_WORDS[miss])}</p> : null;
+  if (!ways.length && last === 'sms') return missLine;
   const left = Math.max(0, Math.ceil((since + ANOTHER_WAY_AFTER_S * 1000 - now) / 1000));
   const others: CodeWay[] = [...ways.filter((w) => w !== last), 'sms'];
-  const note = look === 'console' ? 'chint' : 'hint';
   const label = (way: CodeWay) => (way === 'sms' ? t(last === 'sms' ? 'account.ways.byTextAgain' : 'account.ways.byTextInstead') : t('account.ways.byApp', { app: APP_NAME[way] }));
   const ask = async (way: CodeWay) => {
     const went = await onSend(way);
@@ -147,6 +188,7 @@ export function OtherWays({
   };
   return (
     <div style="margin-top:12px">
+      {missLine}
       {last !== 'sms' ? <p class={note}>{t('account.ways.sentBy', { app: APP_NAME[last] })}</p> : null}
       <p class={note}>{left > 0 ? t('account.ways.wait', { s: left }) : t('account.ways.ready')}</p>
       <div>

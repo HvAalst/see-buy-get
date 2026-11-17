@@ -76,7 +76,7 @@ export function App() {
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
           <AppLayer app="driver" chats={null} />
-          <SignInScreen onSignIn={actions.signIn} onSendCode={actions.sendPinCode} onSetPin={actions.setPinAndSignIn} error={state.error} />
+          <SignInScreen onSignIn={actions.signIn} onSendCode={actions.sendPinCode} onSetPin={actions.setPinAndSignIn} onPhoneConfirmed={actions.phoneConfirmed} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>

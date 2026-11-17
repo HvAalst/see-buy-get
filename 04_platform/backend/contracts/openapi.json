@@ -9318,6 +9318,78 @@
         }
       }
     },
+    "/v1/sbg/auth/truecaller/start": {
+      "post": {
+        "operationId": "Sbg.truecallerStart",
+        "summary": "",
+        "description": "2026-11-17 — A NUMBER CONFIRMED BY TRUECALLER INSTEAD OF A CODE (the owner, of the BRICS nations' own apps: \"as recommended …\nbuild it\"): for a number in a country where it is offered, from an Android phone. The same fences as a code: a country being\ntested lets only its testers in, and a country not switched on is not confirmed at all.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TruecallerStartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruecallerStart"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/truecaller/{nonce}": {
+      "get": {
+        "operationId": "Sbg.truecallerStatus",
+        "summary": "",
+        "description": "Where a Truecaller confirmation is: the page asks until it is done, by the secret request number only it holds.",
+        "parameters": [
+          {
+            "name": "nonce",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruecallerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/truecaller/callback": {
+      "post": {
+        "operationId": "Sbg.truecallerCallback",
+        "summary": "",
+        "description": "Where Truecaller reports: opened, declined, or approved with a token. Set as the callback in its developer portal.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/phone/verify": {
       "post": {
         "operationId": "Sbg.phoneVerify",
@@ -55231,13 +55303,67 @@
               "type": "string",
               "enum": [
                 "whatsapp",
-                "telegram"
+                "telegram",
+                "truecaller"
               ]
             }
           }
         },
         "required": [
           "ways"
+        ]
+      },
+      "TruecallerStartDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "lang": {
+            "type": "string",
+            "maxLength": 5
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "TruecallerStart": {
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "description": "Secret, one per try: the page asks about it until Truecaller is done."
+          },
+          "link": {
+            "type": "string",
+            "description": "What the page opens on the phone."
+          }
+        },
+        "required": [
+          "nonce",
+          "link"
+        ]
+      },
+      "TruecallerStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "opened",
+              "confirmed",
+              "rejected",
+              "other_number",
+              "failed",
+              "expired"
+            ]
+          }
+        },
+        "required": [
+          "state"
         ]
       },
       "PhoneVerifyDto": {
@@ -92699,7 +92825,8 @@
               "africastalking",
               "twilio",
               "whatsapp",
-              "telegram"
+              "telegram",
+              "truecaller"
             ]
           },
           "state": {
@@ -92734,7 +92861,8 @@
               "africastalking",
               "twilio",
               "whatsapp",
-              "telegram"
+              "telegram",
+              "truecaller"
             ]
           },
           "asked": {
@@ -92790,7 +92918,8 @@
               "type": "string",
               "enum": [
                 "whatsapp",
-                "telegram"
+                "telegram",
+                "truecaller"
               ]
             }
           },
@@ -92850,7 +92979,8 @@
               "africastalking",
               "twilio",
               "whatsapp",
-              "telegram"
+              "telegram",
+              "truecaller"
             ]
           },
           "order": {

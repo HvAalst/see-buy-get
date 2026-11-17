@@ -99,6 +99,8 @@ export interface BusinessActions {
   /** `unlock` (2026-11-02): a ticket a fingerprint or face on this device was just checked for, sent in the PIN's place. */
   submitLogin: (unlock?: string) => Promise<void>;
   requestCode: (via?: CodeWay) => Promise<void>;
+  /** 2026-11-17 — the number confirmed by Truecaller instead of a code: on to the PIN. */
+  truecallerConfirmed: () => void;
   submitCode: () => Promise<void>;
   submitPin: () => Promise<void>;
   loadMine: () => Promise<void>;
@@ -242,6 +244,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       if (via) rememberWay(via);
       patch({ busy: false, step: 'code', code: '', devCode: r.data?.code ?? '', codeSentAt: Date.now(), codeVia: via ?? 'sms' });
     },
+
+    truecallerConfirmed: () => patch({ busy: false, error: null, step: 'pin', pin: '', code: '' }),
 
     submitCode: async () => {
       const s = stateRef.current;

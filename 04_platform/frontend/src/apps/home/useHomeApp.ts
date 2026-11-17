@@ -593,6 +593,13 @@ export function useHomeApp() {
     });
   }, [run]);
 
+  /** 2026-11-17 — step 1 → 3: the number confirmed by Truecaller instead of a code, so the code step is passed. */
+  const phoneConfirmed = useCallback(() => {
+    const { role, form } = stateRef.current;
+    if (!role || stepBlocker(role, 'phone', form, t)) return;
+    setState((s) => ({ ...s, error: null, step: nextStep(role.kind, 'code') }));
+  }, []);
+
   /** Step 2 → 3: the backend marks the number verified, which signup then requires. */
   const confirmCode = useCallback(async () => {
     const { role, form } = stateRef.current;
@@ -882,7 +889,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, sendDriverPapers, uploadShopPaper, sendShopPapers, signUpAnother, resendPapers, submitFleet },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, phoneConfirmed, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, sendDriverPapers, uploadShopPaper, sendShopPapers, signUpAnother, resendPapers, submitFleet },
   };
 }
 

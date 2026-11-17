@@ -15,6 +15,7 @@ import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst
 import { sendConfig } from '../api';
 import { TestingAsk } from '../../../shared/opening/TestingAsk';
 import { CodeWayChoice, OtherWays, rememberedWay, type CodeWay } from '../../../shared/account/CodeWays';
+import { TruecallerOffer } from '../../../shared/account/Truecaller';
 
 // Built once: the doors a person uses before they are signed in.
 const recovery = recoveryApi(sendConfig());
@@ -233,6 +234,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       <Card>
         <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
         <CodeWayChoice config={sendConfig()} phone={state.authPhone} value={way} onChange={setWay} />
+        <TruecallerOffer config={sendConfig()} phone={state.authPhone} disabled={busy || !phoneReady(state.authPhone)} onConfirmed={actions.truecallerConfirmed} onFallback={() => actions.requestCode('sms')} />
       </Card>
       <div class="scr__cta">
         <Button chevron={false} onClick={() => void actions.requestCode(way)} disabled={!phoneReady(state.authPhone)} busy={busy}>
