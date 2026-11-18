@@ -109,6 +109,8 @@ export interface ParcelRow {
   returnOf?: { parcelId: string; atMdpId: string; at: string };
   /** 2026-11-06 — against the time it was promised, while on its way under a plan: late, or on time. */
   due?: 'late' | 'on_time';
+  /** 2026-11-18 — set aside for the route abroad: to hand to its carrier, or under customs control — never sorted (step 2c). */
+  abroadAside?: 'carrier' | 'customs';
 }
 
 /** A box called off here, going to its store's door as a load: kept aside for that load's driver (2026-10-27). */

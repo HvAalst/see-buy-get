@@ -102,5 +102,10 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-routes/NL/KE/prices').send({ S: 1, M: 1, L: 1 }).expect(401);
     await http().post('/v1/sbg/border-routes/NL/KE/arrival').send({ airport: 'NBO' }).expect(401);
     await http().get('/v1/sbg/agents/any/abroad').expect(401);
+    // 2c — the hub's own doors for parcels abroad.
+    await http().get('/v1/sbg/mdps/any/abroad').expect(401);
+    await http().post('/v1/sbg/mdps/any/abroad/hand').send({ parcelIds: ['PUD-1'], reference: 'HAWB-1' }).expect(401);
+    await http().post('/v1/sbg/mdps/any/abroad/PUD-1/receive').expect(401);
+    await http().post('/v1/sbg/mdps/any/abroad/PUD-1/customs').send({ outcome: 'released' }).expect(401);
   });
 });

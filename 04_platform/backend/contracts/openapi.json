@@ -7945,6 +7945,158 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/abroad": {
+      "get": {
+        "operationId": "BorderParcels.abroad",
+        "summary": "",
+        "description": "The parcels abroad this hub has to act on.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadAtHubView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/abroad/hand": {
+      "post": {
+        "operationId": "BorderParcels.hand",
+        "summary": "",
+        "description": "Handed to the route's carrier, under its reference: one consignment, one carrier.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandToCarrierDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadAtHubView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/abroad/{parcelId}/receive": {
+      "post": {
+        "operationId": "BorderParcels.receive",
+        "summary": "",
+        "description": "Received from the route's carrier at the arrival airport's customs warehouse: under customs control from now.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/abroad/{parcelId}/customs": {
+      "post": {
+        "operationId": "BorderParcels.customs",
+        "summary": "",
+        "description": "What customs decided: released, or held with what it asks and its reference.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomsOutcomeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/trailers": {
       "get": {
         "operationId": "Trailer.list",
@@ -54254,6 +54406,149 @@
           "text"
         ]
       },
+      "AbroadClearanceView": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "reference"
+        ]
+      },
+      "AbroadParcelRow": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "to_hand",
+              "coming",
+              "customs",
+              "held"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "carrier": {
+            "type": "string"
+          },
+          "departure": {
+            "type": "string"
+          },
+          "arrival": {
+            "type": "string"
+          },
+          "seal": {
+            "type": "string"
+          },
+          "contents": {
+            "type": "string"
+          },
+          "itemCount": {
+            "type": "number"
+          },
+          "value": {
+            "type": "number"
+          },
+          "valueCurrency": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "held": {
+            "$ref": "#/components/schemas/AbroadClearanceView"
+          }
+        },
+        "required": [
+          "parcelId",
+          "step",
+          "from",
+          "to",
+          "toName",
+          "carrier",
+          "departure",
+          "arrival",
+          "seal",
+          "contents",
+          "itemCount",
+          "value",
+          "valueCurrency"
+        ]
+      },
+      "AbroadAtHubView": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AbroadParcelRow"
+            }
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "HandToCarrierDto": {
+        "type": "object",
+        "properties": {
+          "parcelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelIds",
+          "reference"
+        ]
+      },
+      "CustomsOutcomeDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "released",
+              "held"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
       "TrailerDto": {
         "type": "object",
         "properties": {
@@ -67642,6 +67937,69 @@
                 "type": "string"
               }
             }
+          },
+          "handed": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "reference": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "arrived": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "clearance": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "required": true,
+                "type": "object"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "amount": {
+                "required": false,
+                "type": "number"
+              },
+              "currency": {
+                "required": false,
+                "type": "string"
+              },
+              "reference": {
+                "required": false,
+                "type": "string"
+              },
+              "paidAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
           }
         },
         "required": [
@@ -67656,7 +68014,10 @@
           "invoicePhotoRef",
           "senderName",
           "receiverName",
-          "papers"
+          "papers",
+          "handed",
+          "arrived",
+          "clearance"
         ]
       },
       "ParcelScan": {
@@ -94926,7 +95287,8 @@
               "shop",
               "driver",
               "hub",
-              "receiver"
+              "receiver",
+              "carrier"
             ]
           },
           "name": {

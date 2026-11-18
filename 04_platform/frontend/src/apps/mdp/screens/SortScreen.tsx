@@ -9,6 +9,8 @@ import { useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
 import { RelabelCard } from './RelabelCard';
 import { HandoverCard } from './HandoverCard';
+import { AbroadCard } from './AbroadCard';
+import { setAsideIds } from '../abroad';
 import { DueTag, dueById } from './DueTag';
 
 export interface SortScreenProps {
@@ -30,7 +32,8 @@ export function SortScreen({ state, actions, sbg }: SortScreenProps) {
   const filling = fillingBags(state.totes);
   // Round 35 — held under the tamper protocol: listed apart, never offered to sort.
   const held = state.inbound.filter((p) => p.held && p.atMdpId === state.hub?.mdpId);
-  const heldIds = new Set(held.map((p) => p.parcelId));
+  // 2026-11-18 — …and set aside for the route abroad (step 2c): handed to its carrier, or under customs control, never sorted.
+  const heldIds = setAsideIds(state.inbound, state.hub?.mdpId);
   const sortable = state.queue.filter((id) => !heldIds.has(id));
   // 2026-11-06 — late, or on time, beside each (the owner: "when we show 'late' we can also show 'on time'").
   const due = dueById(state.inbound);
@@ -46,6 +49,8 @@ export function SortScreen({ state, actions, sbg }: SortScreenProps) {
       <RelabelCard state={state} actions={actions} />
       {/* …or going to its store's own door as a load: kept aside, handed to that load's driver by their pass. */}
       <HandoverCard state={state} actions={actions} />
+      {/* 2026-11-18 — parcels abroad: handed to the route's carrier where it leaves; received and cleared where it arrives. */}
+      <AbroadCard sbg={sbg ?? null} mdpId={state.hub?.mdpId} onChanged={() => void actions.refresh()} />
 
       {last?.counterSlot ? (
         // 2026-11-09 — for this hub's own counter: onto its shelf by hand, no bag.

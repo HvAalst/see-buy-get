@@ -53,6 +53,9 @@ export class HolderNamesService implements OnModuleInit {
         const { name, vehicle } = this.carrier(leg.holderId);
         return { kind: 'carrier', since, ...(name ? { name } : {}), ...(vehicle ? { vehicle } : {}) };
       }
+      // 2026-11-18 — a route's carrier across a border (step 2c): the company, by the name the route gives it.
+      case 'carrier':
+        return { kind: 'carrier', since, ...(leg.holderId ? { name: leg.holderId } : {}) };
       default:
         return undefined;
     }

@@ -24,7 +24,8 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder, inCustoms, abroadAsideAt } from './pudo.types';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -688,6 +689,8 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
       : {}),
     // Round 35 — held under the tamper protocol: the shop and the hub holding it see that it is set apart, and why.
     ...(p.held ? { held: p.held } : {}),
+    // 2026-11-18 — set aside for the route abroad (step 2c): to hand to its carrier, or under customs control — never sorted.
+    ...(abroadAsideAt(p) ? { abroadAside: abroadAsideAt(p) } : {}),
     // Called off at a hub (2026-10-27): the box it is, under its old label — the hub puts this one's label over that one.
     ...(p.returnOf ? { returnOf: p.returnOf } : {}),
     // A person's goods turned round at a hub (2026-10-27): what the counter takes in cash from them, as they collect it.
@@ -2914,8 +2917,129 @@ export class ParcelService implements OnApplicationBootstrap {
    * found and where, and what to do meanwhile.
    */
   refuseIfHeld(parcel: Parcel): void {
+    // 2026-11-18 — under customs control at its arrival warehouse (parcels across a border, step 2c): nowhere until customs
+    // releases it, or until what customs asks is paid.
+    if (inCustoms(parcel)) {
+      const b = parcel.border!;
+      const c = b.clearance;
+      const why = c?.outcome === 'held' ? `held by customs until ${c.amount?.toFixed(2)} ${c.currency} is paid (customs reference ${c.reference})` : 'customs has not decided on it yet';
+      throw new GlosError('UNIT_HELD', `Parcel ${parcel.parcelId} is under customs control at ${b.arrival.name}: ${why}. Keep it on the customs shelf: it goes on once customs releases it, or once what it owes is paid.`, { parcelId: parcel.parcelId, customs: true });
+    }
     if (!parcel.held) return;
     throw new GlosError('UNIT_HELD', `Parcel ${parcel.parcelId} is held: ${FINDING_WORDS[parcel.held.finding]} (${parcel.held.where}, ${parcel.held.since.slice(0, 10)}). Keep it apart and do not open it further: operations has been told and releases it.`, { exceptionId: parcel.held.exceptionId, parcelId: parcel.parcelId });
+  }
+
+  /**
+   * 2026-11-18 — A PARCEL ABROAD AT THE HUB IT LEAVES FROM (step 2c): it goes with the route's carrier, never in a bag for one of
+   * our drivers — refused by name wherever it would be bagged or sorted there.
+   */
+  refuseIfForCarrier(parcel: Parcel, hubId: string): void {
+    const b = parcel.border;
+    if (!b || b.handed || b.departure.mdpId !== hubId) return;
+    throw new GlosError('SET_ASIDE', `${parcel.parcelId} goes abroad from here with ${b.carrier.name}: set it aside, and hand it to them under “Parcels abroad”.`, { parcelId: parcel.parcelId, abroad: true });
+  }
+
+  /**
+   * 2026-11-18 — HANDED TO THE ROUTE'S CARRIER at its departure hub (the plan "Parcels across a border", step 2c): the forwarder
+   * or haulier takes it on the route's own leg, under its reference — one consignment, so one carrier. Only parcels abroad on
+   * this hub's floor, leaving from here, not in a bag, not handed already and not held: every one asked first, then all written.
+   */
+  handToRouteCarrier(parcelIds: string[], hub: { mdpId: string; name: string }, reference: string, now: number = Date.now()): Parcel[] {
+    const ref = String(reference ?? '').trim();
+    if (ref.length < 3) throw new GlosError('FIELD_REQUIRED', 'The carrier’s reference for them is needed: the number on its air waybill or consignment note', { field: 'reference' });
+    const parcels = [...new Set(parcelIds.map((id) => String(id).trim().toUpperCase()))].map((id) => this.require(id));
+    if (!parcels.length) throw new GlosError('FIELD_REQUIRED', 'Which parcels: none was given', { field: 'parcelIds' });
+    for (const p of parcels) {
+      this.refuseIfLost(p);
+      this.refuseIfHeld(p);
+      const b = p.border;
+      if (!b) throw new GlosError('INVALID_STATE', `${p.parcelId} is not booked abroad: sort it as its label says`);
+      if (b.departure.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} leaves from ${b.departure.name}, not from ${hub.name}`);
+      if (b.handed) throw new GlosError('INVALID_STATE', `${p.parcelId} was handed to ${b.carrier.name} already, under ${b.handed.reference}`);
+      if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${p.parcelId} is not on ${hub.name}’s floor (${p.status})`);
+      if (p.toteId) throw new GlosError('INVALID_STATE', `${p.parcelId} is in a bag: take it out first — it goes to the carrier as it is`);
+    }
+    if (new Set(parcels.map((p) => p.border!.carrier.entityId)).size > 1) throw new GlosError('INVALID_INPUT', 'These parcels go with different carriers: hand each carrier its own, under its own reference', { field: 'parcelIds' });
+    const step: Step = { at: new Date(now).toISOString() };
+    for (const p of parcels) {
+      const b = p.border!;
+      const note = `handed to ${b.carrier.name} · ${ref}`;
+      b.handed = { at: step.at, by: hub.name, reference: ref };
+      p.status = 'On_Bus';
+      // The carrier is no driver of ours: the badge of the last one who carried it is not who has it now.
+      p.driverBadgeId = undefined;
+      if (!p.handedToBusAt) p.handedToBusAt = step.at;
+      this.handTo(p, 'carrier', b.carrier.name, note, step);
+      this.scan(p, 'On_Bus', hub.name, note, step);
+      this.parcels.set(p.parcelId, p);
+    }
+    return parcels;
+  }
+
+  /**
+   * 2026-11-18 — RECEIVED FROM THE ROUTE'S CARRIER at the arrival airport's customs warehouse (step 2c): the warehouse answers for
+   * it from here, and it stays under customs control — on no path out — until customs releases it, or it is held and paid.
+   */
+  receiveFromRouteCarrier(parcelId: string, hub: { mdpId: string; name: string }, now: number = Date.now()): Parcel {
+    const p = this.require(String(parcelId).trim().toUpperCase());
+    this.refuseIfLost(p);
+    const b = p.border;
+    if (!b) throw new GlosError('INVALID_STATE', `${p.parcelId} is not a parcel from abroad: sort it as its label says`);
+    if (b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} arrives at ${b.arrival.name}, not at ${hub.name}: set it aside`);
+    if (b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} was received here already`);
+    if (!b.handed) throw new GlosError('INVALID_STATE', `${p.parcelId} was never handed to ${b.carrier.name}: it cannot have come with them — set it aside, and tell operations`);
+    this.refuseIfHeld(p); // a tamper hold found on the way: set apart, not received
+    const step: Step = { at: new Date(now).toISOString() };
+    const note = `received from ${b.carrier.name} · under customs control`;
+    b.arrived = { at: step.at, by: hub.name };
+    p.status = 'At_MDP';
+    p.atMdpId = hub.mdpId;
+    p.toteId = undefined;
+    this.handTo(p, 'hub', hub.name, note, step);
+    this.scan(p, 'At_MDP', hub.name, note, step);
+    this.routeKeeper?.arrived(p, hub.mdpId, hub.name);
+    this.parcels.set(p.parcelId, p);
+    return p;
+  }
+
+  /**
+   * 2026-11-18 — WHAT CUSTOMS DECIDED, as the warehouse records it (step 2c): released — it goes on as any parcel on the floor —
+   * or held, with what customs asks to be paid, in the arrival country's money, and customs' reference; then it leaves only
+   * once that is paid (step 3). Recorded once: customs' decision stands.
+   */
+  recordClearance(parcelId: string, hub: { mdpId: string; name: string }, input: { outcome: 'released' | 'held'; amount?: number; reference?: string }, now: number = Date.now()): Parcel {
+    const p = this.require(String(parcelId).trim().toUpperCase());
+    const b = p.border;
+    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
+    if (!b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} has not been received here from ${b.carrier.name} yet`);
+    if (b.clearance) throw new GlosError('INVALID_STATE', `Customs’ decision on ${p.parcelId} was recorded already: ${b.clearance.outcome === 'held' ? 'held' : 'released'}, ${b.clearance.at.slice(0, 16).replace('T', ' ')}`);
+    const at = new Date(now).toISOString();
+    const reference = input.reference?.trim() || undefined;
+    let note: string;
+    if (input.outcome === 'held') {
+      const amount = Math.round(Number(input.amount) * 100) / 100;
+      if (!(amount > 0)) throw new GlosError('FIELD_REQUIRED', 'What customs asks to be paid for it is needed', { field: 'amount' });
+      if (!reference || reference.length < 3) throw new GlosError('FIELD_REQUIRED', 'Customs’ reference for it is needed, as on their notice', { field: 'reference' });
+      const currency = currencyForJurisdiction(b.to);
+      b.clearance = { outcome: 'held', at, by: hub.name, amount, currency, reference };
+      note = `held by customs · ${amount.toFixed(2)} ${currency} to pay · ${reference}`;
+    } else {
+      b.clearance = { outcome: 'released', at, by: hub.name, ...(reference ? { reference } : {}) };
+      note = `released by customs${reference ? ` · ${reference}` : ''}`;
+    }
+    this.scan(p, p.status, hub.name, note, { at });
+    this.parcels.set(p.parcelId, p);
+    return p;
+  }
+
+  /** 2026-11-18 — the parcels abroad a hub has to act on (step 2c): to hand to a carrier, coming from one, under customs control. */
+  abroadAt(mdpId: string): Parcel[] {
+    return this.list().filter((p) => {
+      const b = p.border;
+      if (!b) return false;
+      if (b.departure.mdpId === mdpId && !b.handed) return p.status === 'At_MDP' && p.atMdpId === mdpId;
+      return b.arrival.mdpId === mdpId && Boolean(b.handed) && (!b.arrived || inCustoms(p));
+    });
   }
 
   /** Held where it is, with a line on its record: it was set apart, and operations told. */

@@ -1268,6 +1268,7 @@ export class MdpService {
     this.workingWhereBagIs(this.totes.requireByCode(code).locationId); // a bag at a hub that may not work takes nothing
     const parcel = this.parcels.get(parcelId);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
+    this.parcels.refuseIfForCarrier(parcel, this.totes.requireByCode(code).locationId); // 2026-11-18 — abroad from here: to the route's carrier
     // S31: this worker chose a specific bag — refuse to drop in a parcel whose cargo is incompatible with the
     // bag's current contents (cement dust into a fresh-produce bag). The bag stays internally compatible, so
     // loadBag can trust it later. sortParcel auto-routes around this; here the bag is explicit, so we throw.
@@ -1564,6 +1565,7 @@ export class MdpService {
     }
     if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
+    this.parcels.refuseIfForCarrier(parcel, mdpId); // 2026-11-18 — abroad from here: to the route's carrier, not into a bag
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
 
     // 2026-11-06 — ITS NEXT STOP BY ITS PLAN, where that can still be used (movement unification). Where it cannot — a hub

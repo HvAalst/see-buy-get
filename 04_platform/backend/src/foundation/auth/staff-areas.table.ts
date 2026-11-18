@@ -1082,6 +1082,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/mdps/:id/papers-decision': 'vetting',
   'POST sbg/mdps/:id/parcels/:parcelId/tamper': 'none',
   'POST sbg/mdps/:id/parcels/:parcelId/weight': 'none',
+  // 2026-11-18 — parcels abroad at a hub (parcels across a border, step 2c): the hub's own floor, not staff
+  'GET sbg/mdps/:id/abroad': 'none',
+  'POST sbg/mdps/:id/abroad/hand': 'none',
+  'POST sbg/mdps/:id/abroad/:parcelId/receive': 'none',
+  'POST sbg/mdps/:id/abroad/:parcelId/customs': 'none',
   'POST sbg/mdps/:id/sort': 'support',
   'POST sbg/mdps/:id/totes': 'support',
   'POST sbg/media': 'any',

@@ -6,7 +6,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { VendorService } from './vendor.service';
-import { ParcelService } from './parcel.service';
+import { ParcelService, operationalParcelView } from './parcel.service';
 import { ToteService } from './tote.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
@@ -28,6 +28,7 @@ import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { JourneyPlanService } from './journey-plan.service';
+import { RoutePlanService } from './route-plan.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { BORDER_DWELL_H, BORDER_ROUTE_LEG_H, taxOn, withPlatformFee } from './pudo.config';
@@ -51,6 +52,7 @@ import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { evidencePhotos } from '../../../test/content-photo';
 import type { BookedRoute } from './border-routes.types';
+import { inCustoms } from './pudo.types';
 
 /*
  * 2026-11-18 — A PARCEL ABROAD AT THE COUNTER (the plan "Parcels across a border", step 2b). A shop takes a parcel in for a shop
@@ -67,6 +69,8 @@ describe('a parcel abroad at the counter', () => {
   let gate: WalletGateService;
   let media: MediaService;
   let plans: JourneyPlanService;
+  let totes: ToteService;
+  let keeper: RoutePlanService;
   let photoBy: (ownerDid: string) => string;
 
   beforeEach(async () => {
@@ -77,7 +81,7 @@ describe('a parcel abroad at the counter', () => {
         BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
-        ConnectorRegistry, RestCarrierConnector, MobileSdkConnector, JourneyPlanService,
+        ConnectorRegistry, RestCarrierConnector, MobileSdkConnector, JourneyPlanService, RoutePlanService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, PresenceService, BooksService, FxService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -96,6 +100,8 @@ describe('a parcel abroad at the counter', () => {
     gate = moduleRef.get(WalletGateService);
     media = moduleRef.get(MediaService);
     plans = moduleRef.get(JourneyPlanService);
+    totes = moduleRef.get(ToteService);
+    keeper = moduleRef.get(RoutePlanService);
     moduleRef.get(BooksService).reset();
   });
 
@@ -223,6 +229,82 @@ describe('a parcel abroad at the counter', () => {
     const plan = plans.freeze('PUD-ABPL')!;
     expect(plan.hops.map((h) => h.id)).toEqual([from.did, departure.mdpId, arrival.mdpId, to.did]);
     expect(plan.offPlan).toBeUndefined();
+  });
+
+  /*
+   * 2026-11-18 — STEP 2c: AT THE HUBS. Where it leaves, it goes with the route's carrier, never in a bag for one of our drivers;
+   * where it arrives, the customs warehouse receives it and records what customs decided — and until customs releases it, or it
+   * is held and paid, it leaves by no path.
+   */
+  describe('at the hubs (step 2c)', () => {
+    /** A parcel abroad taken in, its plan kept, and brought by a driver's bag to the hub it leaves from. */
+    function atDeparture(id: string) {
+      const trip = kenyaToEthiopia();
+      const quote = routing.quoteAbroad(trip.from.did, trip.to.did, 'M', trip.route);
+      parcels.accept({ parcelId: id, agentDid: trip.from.did, destPudoDid: trip.to.did, destZone: 'AddisAbaba', size: 'M', senderMobile: '+254700111', receiverMobile: '+251900111', dropoffPhotoRef: photoBy(trip.from.did), abroadRoute: trip.route, abroadQuote: quote, abroad: declaration(trip.from.did) });
+      plans.freeze(id);
+      parcels.setTransit(id, 'On_Bus', 'BADGE-77', 'onto the bus');
+      parcels.setTransit(id, 'At_MDP', trip.departure.name, 'dropped at the hub');
+      parcels.get(id).atMdpId = trip.departure.mdpId;
+      keeper.arrived(parcels.get(id), trip.departure.mdpId, trip.departure.name);
+      return trip;
+    }
+
+    it('where it leaves: set aside from the sort and from every bag, and handed to the route’s carrier under its reference', () => {
+      const { departure, arrival } = atDeparture('PUD-AB2C1');
+      expect(() => mdps.sortParcel(departure.mdpId, 'PUD-AB2C1')).toThrow(/goes abroad from here with Kilimanjaro Air Cargo: set it aside/);
+      const bag = totes.register(departure.mdpId);
+      expect(() => mdps.fillTote(bag.code, 'PUD-AB2C1')).toThrow(/goes abroad from here with Kilimanjaro Air Cargo/);
+      expect(operationalParcelView(parcels.get('PUD-AB2C1')).abroadAside).toBe('carrier');
+      expect(parcels.abroadAt(departure.mdpId).map((p) => p.parcelId)).toEqual(['PUD-AB2C1']);
+      expect(() => parcels.handToRouteCarrier(['PUD-AB2C1'], departure, ' ')).toThrow(/carrier’s reference/);
+      expect(() => parcels.handToRouteCarrier(['PUD-AB2C1'], arrival, 'HAWB-778812')).toThrow(/leaves from JKIA Hub, not from Bole Warehouse/);
+      const [p] = parcels.handToRouteCarrier(['pud-ab2c1'], departure, 'HAWB-778812');
+      expect(p).toMatchObject({ status: 'On_Bus', border: { handed: { reference: 'HAWB-778812', by: 'JKIA Hub' } } });
+      expect(p.custody?.find((l) => !l.to)).toMatchObject({ holderKind: 'carrier', holderId: 'Kilimanjaro Air Cargo' });
+      // The driver who brought it to the hub no longer has it.
+      expect(parcels.onBusWith('BADGE-77').map((x) => x.parcelId)).not.toContain('PUD-AB2C1');
+      expect(() => parcels.handToRouteCarrier(['PUD-AB2C1'], departure, 'HAWB-778812')).toThrow(/handed to Kilimanjaro Air Cargo already/);
+      // Not the hub's to act on there any more; the warehouse expects it.
+      expect(parcels.abroadAt(departure.mdpId)).toEqual([]);
+      expect(parcels.abroadAt(arrival.mdpId).map((x) => x.parcelId)).toEqual(['PUD-AB2C1']);
+    });
+
+    it('where it arrives: received from the carrier, under customs control, and on no path out until customs decides', () => {
+      const { departure, arrival } = atDeparture('PUD-AB2C2');
+      expect(() => parcels.receiveFromRouteCarrier('PUD-AB2C2', arrival)).toThrow(/never handed to Kilimanjaro Air Cargo/);
+      parcels.handToRouteCarrier(['PUD-AB2C2'], departure, 'HAWB-778813');
+      expect(() => parcels.receiveFromRouteCarrier('PUD-AB2C2', departure)).toThrow(/arrives at Bole Warehouse, not at JKIA Hub/);
+      const p = parcels.receiveFromRouteCarrier('PUD-AB2C2', arrival);
+      expect(p).toMatchObject({ status: 'At_MDP', atMdpId: arrival.mdpId });
+      expect(p.plan?.hops[p.plan.at!].id).toBe(arrival.mdpId);
+      expect(inCustoms(p)).toBe(true);
+      expect(operationalParcelView(p).abroadAside).toBe('customs');
+      expect(() => mdps.sortParcel(arrival.mdpId, 'PUD-AB2C2')).toThrow(/under customs control at Bole Warehouse: customs has not decided on it yet/);
+      expect(() => parcels.receiveFromRouteCarrier('PUD-AB2C2', arrival)).toThrow(/received here already/);
+      // Held: what customs asks, in the arrival country's money, and its reference — both needed.
+      expect(() => parcels.recordClearance('PUD-AB2C2', departure, { outcome: 'released' })).toThrow(/does not clear customs at JKIA Hub/);
+      expect(() => parcels.recordClearance('PUD-AB2C2', arrival, { outcome: 'held', reference: 'ET-CUS-0042' })).toThrow(/What customs asks to be paid/);
+      expect(() => parcels.recordClearance('PUD-AB2C2', arrival, { outcome: 'held', amount: 1200.5 })).toThrow(/Customs’ reference/);
+      const held = parcels.recordClearance('PUD-AB2C2', arrival, { outcome: 'held', amount: 1200.5, reference: 'ET-CUS-0042' });
+      expect(held.border?.clearance).toMatchObject({ outcome: 'held', amount: 1200.5, currency: 'ETB', reference: 'ET-CUS-0042', by: 'Bole Warehouse' });
+      expect(() => mdps.sortParcel(arrival.mdpId, 'PUD-AB2C2')).toThrow(/held by customs until 1200.50 ETB is paid \(customs reference ET-CUS-0042\)/);
+      expect(() => parcels.recordClearance('PUD-AB2C2', arrival, { outcome: 'released' })).toThrow(/recorded already: held/);
+      expect(parcels.abroadAt(arrival.mdpId).map((x) => x.parcelId)).toEqual(['PUD-AB2C2']);
+      // Paid (step 3): no longer under customs control.
+      held.border!.clearance!.paidAt = new Date().toISOString();
+      expect(inCustoms(held)).toBe(false);
+    });
+
+    it('released by customs, it goes on from the warehouse as any parcel on the floor', () => {
+      const { departure, arrival, to } = atDeparture('PUD-AB2C3');
+      parcels.handToRouteCarrier(['PUD-AB2C3'], departure, 'HAWB-778814');
+      parcels.receiveFromRouteCarrier('PUD-AB2C3', arrival);
+      parcels.recordClearance('PUD-AB2C3', arrival, { outcome: 'released' });
+      expect(inCustoms(parcels.get('PUD-AB2C3'))).toBe(false);
+      expect(parcels.abroadAt(arrival.mdpId)).toEqual([]);
+      expect(mdps.sortParcel(arrival.mdpId, 'PUD-AB2C3').nextDestination.id).toBe(to.did);
+    });
   });
 });
 

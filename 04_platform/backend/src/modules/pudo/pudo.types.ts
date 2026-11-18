@@ -397,7 +397,8 @@ export class Birthplace {
 }
 
 /** Who can be holding a parcel. The network is never an owner — it is one of these holders, in turn. */
-export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver';
+/** 'carrier' (2026-11-18): a route's carrier across a border — a forwarder or haulier, not one of our drivers (step 2c). */
+export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver' | 'carrier';
 
 /**
  * One stretch of TIME during which one party physically held the parcel. An open leg (no `to`) is who has
@@ -1051,6 +1052,30 @@ export class ParcelBorder {
   receiverName: string;
   /** The customs papers the counter prints for the pouch: what it holds, its value, who sends and who receives it. */
   papers: { svg: string };
+  /** 2c — handed to the route's carrier at its departure hub, under the carrier's reference (its air waybill or consignment note). */
+  handed?: { at: string; by: string; reference: string };
+  /** 2c — received from the carrier at the arrival airport's customs warehouse: under customs control from then. */
+  arrived?: { at: string; by: string };
+  /** 2c — what customs decided there: released, or held with what it asks to be paid, in the arrival country's money, and its reference. */
+  clearance?: { outcome: 'released' | 'held'; at: string; by: string; amount?: number; currency?: string; reference?: string; paidAt?: string };
+}
+
+/**
+ * 2026-11-18 — UNDER CUSTOMS CONTROL (step 2c): received at the arrival warehouse, and neither released by customs nor held and
+ * paid. Such a parcel leaves the warehouse by no path — the one check every movement already asks (ParcelService.refuseIfHeld).
+ */
+export function inCustoms(p: Pick<Parcel, 'border'>): boolean {
+  const b = p.border;
+  if (!b?.arrived) return false;
+  return !(b.clearance?.outcome === 'released' || (b.clearance?.outcome === 'held' && b.clearance.paidAt));
+}
+
+/** 2026-11-18 — set aside at a hub for the route abroad (step 2c): to hand to the route's carrier, or under customs control. */
+export function abroadAsideAt(p: Pick<Parcel, 'border' | 'atMdpId' | 'status'>): 'carrier' | 'customs' | undefined {
+  const b = p.border;
+  if (!b || p.status !== 'At_MDP') return undefined;
+  if (b.departure.mdpId === p.atMdpId && !b.handed) return 'carrier';
+  return inCustoms(p) ? 'customs' : undefined;
 }
 
 export class PhygitalLabel {

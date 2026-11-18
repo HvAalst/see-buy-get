@@ -105,6 +105,12 @@ export function createMdpApi(sbg: SbgClient) {
     space: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } } })),
     /** 2026-11-13 — a parcel weighed on the hub's floor (site tools, T2): kept against it, its sender told, where it differs. */
     weigh: (mdpId: string, parcelId: string, kg: number) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/parcels/{parcelId}/weight', { params: { path: { id: mdpId, parcelId } }, body: { kg } })),
+    /** 2026-11-18 — parcels abroad at this hub (parcels across a border, step 2c): to hand to a carrier, coming, under customs control. */
+    abroad: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/abroad', { params: { path: { id: mdpId } } })),
+    handAbroad: (mdpId: string, parcelIds: string[], reference: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/hand', { params: { path: { id: mdpId } }, body: { parcelIds, reference } })),
+    receiveAbroad: (mdpId: string, parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/{parcelId}/receive', { params: { path: { id: mdpId, parcelId } } })),
+    customsAbroad: (mdpId: string, parcelId: string, body: { outcome: 'released' | 'held'; amount?: number; reference?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/{parcelId}/customs', { params: { path: { id: mdpId, parcelId } }, body })),
     /** 2026-11-13 — the hub's tools (site-tools): what it said, and what that lets it take; and its owner says them. */
     tools: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/tools', { params: { path: { id: mdpId } } })),
     setTools: (mdpId: string, body: unknown) => sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/tools', { params: { path: { id: mdpId } }, body: body as never })),
