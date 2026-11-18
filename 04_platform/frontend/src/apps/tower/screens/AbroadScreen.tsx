@@ -86,7 +86,7 @@ export function AbroadScreen({ state, actions }: { state: TowerState; actions: T
             </div>
             {view.routes.length === 0 ? <p class="cons__empty">{t('tower.abroad.noRoutes')}</p> : null}
             {view.routes.map((r) => (
-              <RouteRow key={`${r.from}-${r.to}`} r={r} nameOf={nameOf} writer={writer} busy={busy} onAct={act} />
+              <RouteRow key={`${r.from}-${r.to}`} r={r} nameOf={nameOf} writer={writer} busy={busy} onAct={act} setUp={client ? { api: client.api, by, change } : undefined} />
             ))}
             {writer ? (
               <div class="cnote" style="margin-top:12px">
@@ -97,8 +97,8 @@ export function AbroadScreen({ state, actions }: { state: TowerState; actions: T
                   <CountrySelect value={from} onChange={setFrom} label={t('tower.abroad.from')} options={atlas} />
                   <CountrySelect value={to} onChange={setTo} label={t('tower.abroad.to')} options={atlas} />
                 </div>
-                <button type="button" class="cbtn" style="margin-top:8px" disabled={!from || !to || busy !== null} onClick={() => act(from, to, 'propose')}>
-                  {t('tower.abroad.propose')}
+                <button type="button" class="cbtn" style="margin-top:8px" disabled={!from || !to || busy !== null || !client} onClick={() => client && void change(`${from}-${to}:prepare`, () => client.api.prepareBorderRoute(from, to) as Promise<Answer>)}>
+                  {t('tower.abroad.setUp')}
                 </button>
               </div>
             ) : null}
@@ -141,9 +141,17 @@ export function AbroadScreen({ state, actions }: { state: TowerState; actions: T
 
 const emptyArrival = (country: string): BorderArrival => ({ country, airports: [], hubs: [], agents: [] });
 
-/** One route: its state, what it needs, and what this reader may do with it. */
-export function RouteRow({ r, nameOf, writer, busy, onAct }: { r: BorderRoute; nameOf: (code: string) => string; writer: boolean; busy: string | null; onAct: (from: string, to: string, act: Act) => void }) {
+type SetUp = { api: NonNullable<ReturnType<TowerActions['client']>>['api']; by: { by?: string }; change: (key: string, write: () => Promise<Answer>) => Promise<boolean> };
+
+/** One route: its state, what it needs, where it leaves, who carries it, its prices, and what this reader may do with it. */
+export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderRoute; nameOf: (code: string) => string; writer: boolean; busy: string | null; onAct: (from: string, to: string, act: Act) => void; setUp?: SetUp }) {
   const t = useT();
+  const [airport, setAirport] = useState(r.departure?.airport ?? '');
+  const [hub, setHub] = useState(r.departure?.mdpId ?? '');
+  const [carrier, setCarrier] = useState(r.carrier?.entityId ?? '');
+  const [prices, setPrices] = useState({ S: r.prices ? String(r.prices.S) : '', M: r.prices ? String(r.prices.M) : '', L: r.prices ? String(r.prices.L) : '' });
+  const editable = writer && setUp && r.state === 'off';
+  const price = (n: number) => (r.prices ? formatMoney(n, r.prices.currency) : '');
   const tag = routeStateTag(r, t);
   const from = nameOf(r.from);
   const to = nameOf(r.to);
@@ -163,6 +171,63 @@ export function RouteRow({ r, nameOf, writer, busy, onAct }: { r: BorderRoute; n
           </li>
         ))}
       </ul>
+      <p class="chint" style="margin-top:8px">
+        <b>{t('tower.abroad.departure')}</b> · {r.departure ? t('tower.abroad.departureLine', { airport: r.departure.airport, hub: r.departure.name }) : t('tower.abroad.departureNone')}
+      </p>
+      <p class="chint">
+        <b>{t('tower.abroad.carrier')}</b> · {r.carrier ? r.carrier.name : t('tower.abroad.carrier.none')}
+      </p>
+      <p class="chint">
+        <b>{t('tower.abroad.prices')}</b> · {r.prices ? t('tower.abroad.prices.line', { S: price(r.prices.S), M: price(r.prices.M), L: price(r.prices.L) }) : t('tower.abroad.prices.none')}
+      </p>
+      {writer && r.state !== 'off' ? <p class="chint">{t('tower.abroad.locked')}</p> : null}
+      {editable ? (
+        <div style="margin-top:6px">
+          {r.departureHubs.length === 0 ? (
+            <p class="chint">{t('tower.abroad.dep.noHubs', { from })}</p>
+          ) : (
+            <>
+              <ConsolePick label={t('tower.abroad.dep.airport')} value={airport} onChange={setAirport} placeholder="—" options={r.departureAirports.map((code) => ({ value: code, label: code }))} />
+              <ConsolePick label={t('tower.abroad.dep.hub')} value={hub} onChange={setHub} placeholder="—" options={r.departureHubs.map((h) => ({ value: h.id, label: h.name }))} />
+              <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !airport || !hub} onClick={() => void setUp.change(`${r.from}-${r.to}:departure`, () => setUp.api.setBorderDeparture(r.from, r.to, { airport, mdpId: hub, ...setUp.by }) as Promise<Answer>)}>
+                {t('tower.abroad.dep.save')}
+              </button>
+            </>
+          )}
+          {r.carriers.length === 0 ? (
+            <p class="chint">{t('tower.abroad.carrier.noCarriers', { from })}</p>
+          ) : (
+            <>
+              <ConsolePick label={t('tower.abroad.carrier.pick')} value={carrier} onChange={setCarrier} placeholder="—" options={r.carriers.map((c) => ({ value: c.id, label: c.name }))} />
+              <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !carrier} onClick={() => void setUp.change(`${r.from}-${r.to}:carrier`, () => setUp.api.setBorderCarrier(r.from, r.to, { entityId: carrier, ...setUp.by }) as Promise<Answer>)}>
+                {t('tower.abroad.carrier.save')}
+              </button>
+            </>
+          )}
+          {r.currency ? (
+            <>
+              <div class="cgrid2">
+                {(['S', 'M', 'L'] as const).map((size) => (
+                  <label key={size} class="cfield">
+                    <span class="cfield__label">{t(size === 'S' ? 'tower.abroad.prices.small' : size === 'M' ? 'tower.abroad.prices.medium' : 'tower.abroad.prices.large')} ({r.currency})</span>
+                    <input class="cinput" inputMode="decimal" value={prices[size]} onInput={(e) => setPrices({ ...prices, [size]: e.currentTarget.value })} />
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                class="cbtn cbtn--ghost"
+                disabled={busy !== null || !(Number(prices.S) > 0 && Number(prices.M) > 0 && Number(prices.L) > 0)}
+                onClick={() => void setUp.change(`${r.from}-${r.to}:prices`, () => setUp.api.setBorderPrices(r.from, r.to, { S: Number(prices.S), M: Number(prices.M), L: Number(prices.L), ...setUp.by }) as Promise<Answer>)}
+              >
+                {t('tower.abroad.prices.save')}
+              </button>
+            </>
+          ) : (
+            <p class="chint">{t('tower.abroad.prices.noCompany', { from })}</p>
+          )}
+        </div>
+      ) : null}
       {r.mine ? <p class="chint">{t('tower.abroad.mine')}</p> : null}
       {writer ? (
         <p style="margin-top:8px">

@@ -4,7 +4,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import type { Signer } from '../../foundation/entity/same-person';
 import { BorderRouteService } from './border-route.service';
-import { BorderAirportDto, BorderArrivalView, BorderByDto, BorderClearerDto, BorderFeeDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
+import { BorderAirportDto, BorderArrivalView, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
 import { staffOf } from './staff-of';
 
 /**
@@ -46,6 +46,31 @@ export class BorderRoutesController {
   @Post('border-routes/:from/:to/off')
   off(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderByDto, @Actor() actor: IntrospectionResult): BorderRouteView {
     return this.borders.switchOff(from, to, staffOf(actor, dto.by));
+  }
+
+  /** 2026-11-18 — step 2a: a route set up before it is proposed, and where it leaves, who carries it, what it costs. */
+  @Roles('operator')
+  @Post('border-routes/:from/:to')
+  prepare(@Param('from') from: string, @Param('to') to: string): BorderRouteView {
+    return this.borders.prepare(from, to);
+  }
+
+  @Roles('operator')
+  @Post('border-routes/:from/:to/departure')
+  departure(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderDepartureDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setDeparture(from, to, { airport: dto.airport, mdpId: dto.mdpId }, staffOf(actor, dto.by).name);
+  }
+
+  @Roles('operator')
+  @Post('border-routes/:from/:to/carrier')
+  carrier(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderCarrierDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setCarrier(from, to, dto.entityId, staffOf(actor, dto.by).name);
+  }
+
+  @Roles('operator')
+  @Post('border-routes/:from/:to/prices')
+  prices(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderPricesDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setPrices(from, to, { S: dto.S, M: dto.M, L: dto.L }, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

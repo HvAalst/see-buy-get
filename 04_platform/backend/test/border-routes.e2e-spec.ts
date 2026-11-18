@@ -54,9 +54,21 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-arrivals/KE/fee').set(bearer(staff)).send({ amount: 0, by: 'Amina Staff' }).expect(400);
   });
 
+  it('2a — a route is set up first; where it leaves, who carries it and its prices are checked', async () => {
+    const made = (await http().post('/v1/sbg/border-routes/NL/KE').set(bearer(staff)).send({}).expect(201)).body;
+    expect(made).toMatchObject({ from: 'NL', to: 'KE', state: 'off', departureAirports: expect.arrayContaining(['AMS']) });
+    await http().post('/v1/sbg/border-routes/NL/KE/departure').set(bearer(staff)).send({ airport: 'NBO', mdpId: 'x', by: 'Amina Staff' }).expect(404);
+    await http().post('/v1/sbg/border-routes/NL/KE/departure').set(bearer(staff)).send({ airport: 'AMS', mdpId: 'no-such-hub', by: 'Amina Staff' }).expect(404);
+    await http().post('/v1/sbg/border-routes/NL/KE/carrier').set(bearer(staff)).send({ entityId: 'nobody', by: 'Amina Staff' }).expect(404);
+    await http().post('/v1/sbg/border-routes/NL/KE/prices').set(bearer(staff)).send({ S: 0, M: 1, L: 1, by: 'Amina Staff' }).expect(400);
+    const view = (await http().get('/v1/sbg/border-routes').set(bearer(staff)).expect(200)).body;
+    expect(view.routes.find((r: { from: string; to: string }) => r.from === 'NL' && r.to === 'KE').conditions.map((c: { key: string }) => c.key)).toEqual(['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
+  });
+
   it('nobody but staff reads or changes it', async () => {
     await http().get('/v1/sbg/border-routes').expect(401);
     await http().post('/v1/sbg/border-routes/NL/KE/propose').send({}).expect(401);
     await http().post('/v1/sbg/border-arrivals/KE/fee').send({ amount: 100 }).expect(401);
+    await http().post('/v1/sbg/border-routes/NL/KE/prices').send({ S: 1, M: 1, L: 1 }).expect(401);
   });
 });

@@ -15,7 +15,10 @@ const route = (o: Partial<BorderRoute>): BorderRoute => ({
   to: 'KE',
   state: 'off',
   mine: false,
-  conditions: (['open-from', 'open-to', 'sells-from', 'sells-to', 'clearer', 'fee', 'airport'] as const).map((key) => ({ key, met: true })),
+  conditions: (['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport'] as const).map((key) => ({ key, met: true })),
+  departureAirports: ['AMS', 'MST', 'EIN'],
+  departureHubs: [],
+  carriers: [],
   ...o,
 });
 const nameOf = (c: string) => ({ NL: 'Netherlands', KE: 'Kenya' })[c] ?? c;
@@ -65,5 +68,45 @@ describe('an arrival country and the changes', () => {
   it('lists each change as who did what, where', () => {
     expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'airport-block', country: 'NL', airport: 'MST' }, nameOf, t)).toBe(t('tower.abroad.change.airport-block', { who: 'Amina Staff', airport: 'MST', country: 'Netherlands' }));
     expect(abroadChangeLine({ at: 'x', by: 'Brian Staff', what: 'approve', country: 'NL', to: 'KE' }, nameOf, t)).toBe('Brian Staff switched on Netherlands to Kenya');
+  });
+});
+
+/*
+ * 2026-11-18 — step 2a: where a route leaves, who carries it and its prices (D13, D14, D10): shown on its row; set while it
+ * is off; locked while it waits or is on.
+ */
+describe('where a route leaves, who carries it, its prices', () => {
+  const setUp = { api: {} as never, by: {}, change: async () => true };
+  const full = route({
+    departure: { airport: 'AMS', mdpId: 'mdp-ams', name: 'Schiphol Hub', by: 'A', at: 'x' },
+    carrier: { entityId: 'fwd-nl', name: 'Holland Air Forwarding', by: 'A', at: 'x' },
+    prices: { S: 12, M: 19.5, L: 29, currency: 'EUR', by: 'A', at: 'x' },
+    departureHubs: [{ id: 'mdp-ams', name: 'Schiphol Hub' }],
+    carriers: [{ id: 'fwd-nl', name: 'Holland Air Forwarding' }],
+    currency: 'EUR',
+  });
+
+  it('says them on the row', () => {
+    const html = renderToString(<RouteRow r={full} nameOf={nameOf} writer busy={null} onAct={() => {}} />);
+    expect(html).toContain(t('tower.abroad.departureLine', { airport: 'AMS', hub: 'Schiphol Hub' }));
+    expect(html).toContain('Holland Air Forwarding');
+    expect(html).toMatch(/Small €12\.00 · Medium €19\.50 · Large €29\.00/);
+  });
+
+  it('offers to set them while the route is off; locks them while it waits or is on', () => {
+    const off = renderToString(<RouteRow r={full} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(off).toContain(`>${t('tower.abroad.dep.save')}<`);
+    expect(off).toContain(`>${t('tower.abroad.prices.save')}<`);
+    const on = renderToString(<RouteRow r={{ ...full, state: 'on' }} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(on).not.toContain(`>${t('tower.abroad.dep.save')}<`);
+    expect(on).toContain(t('tower.abroad.locked'));
+    expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'prices', country: 'NL', to: 'KE' }, nameOf, t)).toBe(t('tower.abroad.change.prices', { who: 'Amina Staff', from: 'Netherlands', to: 'Kenya' }));
+  });
+
+  it('says plainly what cannot be named yet: no hub, no carrier, no company to price for', () => {
+    const bare = renderToString(<RouteRow r={route({})} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(bare).toContain(t('tower.abroad.dep.noHubs', { from: 'Netherlands' }));
+    expect(bare).toContain(t('tower.abroad.carrier.noCarriers', { from: 'Netherlands' }));
+    expect(bare).toContain(t('tower.abroad.prices.noCompany', { from: 'Netherlands' }));
   });
 });

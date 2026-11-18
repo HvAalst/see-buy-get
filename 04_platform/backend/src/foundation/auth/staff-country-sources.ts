@@ -178,6 +178,11 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'POST sbg/border-routes/:from/:to/approve': every('a route joins two countries'),
   'POST sbg/border-routes/:from/:to/decline': every('a route joins two countries'),
   'POST sbg/border-routes/:from/:to/off': every('a route joins two countries'),
+  // 2026-11-18 — step 2a: where a route leaves, who carries it and what it costs are the sending country's to set.
+  'POST sbg/border-routes/:from/:to': { country: 'param', name: 'from' },
+  'POST sbg/border-routes/:from/:to/departure': { country: 'param', name: 'from' },
+  'POST sbg/border-routes/:from/:to/carrier': { country: 'param', name: 'from' },
+  'POST sbg/border-routes/:from/:to/prices': { country: 'param', name: 'from' },
   'POST sbg/border-arrivals/:country/airports/:airport': { country: 'param', name: 'country' },
   'POST sbg/border-arrivals/:country/airports/:airport/warehouse': { country: 'param', name: 'country' },
   'POST sbg/border-arrivals/:country/clearer': { country: 'param', name: 'country' },

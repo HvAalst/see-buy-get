@@ -1104,6 +1104,12 @@ export function createOperatorApi(sbg: SbgClient) {
           : act === 'decline'
             ? sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/decline', { params: { path: { from, to } }, body }))
             : sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/off', { params: { path: { from, to } }, body })),
+    /** 2026-11-18 — step 2a: a route set up before it is proposed; where it leaves, who carries it, what it costs. */
+    prepareBorderRoute: (from: string, to: string) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}', { params: { path: { from, to } } })),
+    setBorderDeparture: (from: string, to: string, body: { airport: string; mdpId: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/departure', { params: { path: { from, to } }, body })),
+    setBorderCarrier: (from: string, to: string, body: { entityId: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/carrier', { params: { path: { from, to } }, body })),
+    setBorderPrices: (from: string, to: string, body: { S: number; M: number; L: number; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/prices', { params: { path: { from, to } }, body })),
     setBorderAirport: (country: string, airport: string, body: { open: boolean; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/airports/{airport}', { params: { path: { country, airport } }, body })),
     setBorderWarehouse: (country: string, airport: string, body: { mdpId: string; tstLicence: string; validUntil?: string; agreement: string; by?: string }) =>

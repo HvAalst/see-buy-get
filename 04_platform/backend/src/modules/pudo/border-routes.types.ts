@@ -15,7 +15,7 @@ export const BORDER_ROUTE_STATES = ['off', 'waiting', 'on'] as const;
 export type BorderRouteState = (typeof BORDER_ROUTE_STATES)[number];
 
 /** What a route needs before it may be switched on, each said by name when it is missing. */
-export const BORDER_CONDITIONS = ['open-from', 'open-to', 'sells-from', 'sells-to', 'clearer', 'fee', 'airport'] as const;
+export const BORDER_CONDITIONS = ['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport'] as const;
 export type BorderCondition = (typeof BORDER_CONDITIONS)[number];
 
 export const CLEARER_KINDS = ['agent', 'company'] as const;
@@ -83,6 +83,41 @@ export class BorderArrivalView {
   @ApiProperty({ type: [BorderOption] }) agents: BorderOption[];
 }
 
+/**
+ * 2026-11-18 — STEP 2a: WHERE A ROUTE LEAVES, WHO CARRIES IT, WHAT IT COSTS (the owner: D13 "Named per route", D14 "A carrier
+ * from the directory", D10 "air or road carriage uses a route price"). Set by the sending country's staff.
+ */
+export const ROUTE_SIZES = ['S', 'M', 'L'] as const;
+export type RouteSize = (typeof ROUTE_SIZES)[number];
+
+export class BorderDeparture {
+  /** The airport in the sending country the parcels leave from. */
+  @ApiProperty() airport: string;
+  /** The hub of ours that hands them to the carrier there. */
+  @ApiProperty() mdpId: string;
+  @ApiProperty() name: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+export class BorderCarrier {
+  /** A forwarder or haulier from the directory. */
+  @ApiProperty() entityId: string;
+  @ApiProperty() name: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+export class BorderPrices {
+  /** The international leg for a small, a medium and a large parcel, in the sending company's money. */
+  @ApiProperty() S: number;
+  @ApiProperty() M: number;
+  @ApiProperty() L: number;
+  @ApiProperty() currency: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
 export class BorderConditionView {
   @ApiProperty({ enum: BORDER_CONDITIONS }) key: BorderCondition;
   @ApiProperty() met: boolean;
@@ -99,6 +134,15 @@ export class BorderRouteView {
   /** Said per reader: the person who proposed it may not approve it. */
   @ApiProperty() mine: boolean;
   @ApiProperty({ type: [BorderConditionView] }) conditions: BorderConditionView[];
+  @ApiPropertyOptional({ type: BorderDeparture }) departure?: BorderDeparture;
+  @ApiPropertyOptional({ type: BorderCarrier }) carrier?: BorderCarrier;
+  @ApiPropertyOptional({ type: BorderPrices }) prices?: BorderPrices;
+  /** What may be named here: the sending country's airports, its approved hubs, the forwarders and hauliers in its directory. */
+  @ApiProperty({ type: [String] }) departureAirports: string[];
+  @ApiProperty({ type: [BorderOption] }) departureHubs: BorderOption[];
+  @ApiProperty({ type: [BorderOption] }) carriers: BorderOption[];
+  /** The money its prices are in: the sending company's. Absent where none stands. */
+  @ApiPropertyOptional() currency?: string;
 }
 
 export class BorderChange {
@@ -140,6 +184,21 @@ export class BorderClearerDto extends BorderByDto {
   /** The agent's company; for our own company, left out (it is the country's). */
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) entityId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(3) @MaxLength(60) registration?: string;
+}
+
+export class BorderDepartureDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(3) @MaxLength(3) airport!: string;
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) mdpId!: string;
+}
+
+export class BorderCarrierDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) entityId!: string;
+}
+
+export class BorderPricesDto extends BorderByDto {
+  @ApiProperty() @IsNumber() @Min(0.01) S!: number;
+  @ApiProperty() @IsNumber() @Min(0.01) M!: number;
+  @ApiProperty() @IsNumber() @Min(0.01) L!: number;
 }
 
 export class BorderFeeDto extends BorderByDto {

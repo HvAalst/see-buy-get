@@ -27,10 +27,11 @@ describe('a route across a border', () => {
     const sister = (c: string) => ({ entityId: `sbg-${c.toLowerCase()}`, name: `SeeBuyGet ${c}`, kind: 'sister', jurisdiction: c, currency: c === 'KE' ? 'KES' : 'EUR' });
     const agent = { entityId: 'agent-1', name: 'Swift Clearing Ltd', kind: 'business', jurisdiction: 'KE', status: 'active' };
     const forwarder = { entityId: 'fwd-1', name: 'Freight Only Ltd', kind: 'business', jurisdiction: 'KE', status: 'active' };
+    const nlForwarder = { entityId: 'fwd-nl', name: 'Holland Air Forwarding', kind: 'business', jurisdiction: 'NL', status: 'active' };
     const entities = {
       forJurisdiction: (c: string) => (companies.includes(c) ? sister(c) : undefined),
-      find: (id: string) => [agent, forwarder].find((e) => e.entityId === id),
-      companies: () => [agent, forwarder, ...companies.map(sister)],
+      find: (id: string) => [agent, forwarder, nlForwarder].find((e) => e.entityId === id),
+      companies: () => [agent, forwarder, nlForwarder, ...companies.map(sister)],
     } as unknown as EntityService;
     const hubs = [
       { mdpId: 'mdp-nbo', name: 'Embakasi Hub', country: 'KE', approved: true },
@@ -47,8 +48,12 @@ describe('a route across a border', () => {
     return new BorderRouteService(presence, entities, mdps, directory);
   };
 
-  /** Everything Kenya needs as an arrival country: Nairobi open with its warehouse, our company clearing, the fee. */
+  /** Everything Kenya needs as an arrival country — Nairobi open with its warehouse, our company clearing, the fee — and the
+   *  route's own: leaving from Schiphol through our hub there, carried by a forwarder from the directory, priced per size. */
   const readyKenya = (svc: BorderRouteService) => {
+    svc.setDeparture('NL', 'KE', { airport: 'AMS', mdpId: 'mdp-ams' }, 'Amina Staff', NOW);
+    svc.setCarrier('NL', 'KE', 'fwd-nl', 'Amina Staff', NOW);
+    svc.setPrices('NL', 'KE', { S: 12, M: 19.5, L: 29 }, 'Amina Staff', NOW);
     svc.setWarehouse('KE', 'NBO', { mdpId: 'mdp-nbo', tstLicence: 'TST-KE-0042', validUntil: '2027-06-30', agreement: 'KRA/JKIA/2026/17' }, 'Amina Staff', NOW);
     svc.setAirport('KE', 'NBO', true, 'Amina Staff', NOW);
     svc.setClearer('KE', { kind: 'company', registration: 'KRA-CR-881' }, 'Amina Staff', NOW);
@@ -57,10 +62,10 @@ describe('a route across a border', () => {
 
   it('is refused while anything is missing, each thing by name', () => {
     const svc = setup();
-    expect(svc.missing('NL', 'KE', NOW)).toEqual(['clearer', 'fee', 'airport']);
-    expect(() => svc.propose('NL', 'KE', AMINA, NOW)).toThrow(/nobody clears in KE yet.*clearance fee in KE is not set.*no airport in KE is open/);
+    expect(svc.missing('NL', 'KE', NOW)).toEqual(['departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
+    expect(() => svc.propose('NL', 'KE', AMINA, NOW)).toThrow(/no departure airport and hub in NL.*no carrier.*prices for a small.*nobody clears in KE yet.*clearance fee in KE is not set.*no airport in KE is open/);
     const closed = setup({ open: ['NL'], companies: ['KE'] });
-    expect(closed.missing('NL', 'KE', NOW)).toEqual(['open-to', 'sells-from', 'clearer', 'fee', 'airport']);
+    expect(closed.missing('NL', 'KE', NOW)).toEqual(['open-to', 'sells-from', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
     // Being tested is not open to everyone.
     expect(setup({ testing: ['KE'] }).missing('NL', 'KE', NOW)).toContain('open-to');
   });
@@ -86,7 +91,33 @@ describe('a route across a border', () => {
       ['clearer', 'Amina Staff'],
       ['airport-open', 'Amina Staff'],
       ['warehouse', 'Amina Staff'],
+      ['prices', 'Amina Staff'],
+      ['carrier', 'Amina Staff'],
+      ['departure', 'Amina Staff'],
     ]);
+  });
+
+  it('2a — names where it leaves, who carries it and its prices, in the sending country; kept when it is switched off', () => {
+    const svc = setup();
+    expect(svc.prepare('NL', 'KE', NOW)).toMatchObject({ state: 'off', departureAirports: expect.arrayContaining(['AMS', 'MST', 'EIN']), departureHubs: [{ id: 'mdp-ams', name: 'Schiphol Hub' }], carriers: [{ id: 'fwd-nl', name: 'Holland Air Forwarding' }], currency: 'EUR' });
+    // The departure is in the sending country: its airport, and an approved hub of ours there.
+    expect(() => svc.setDeparture('NL', 'KE', { airport: 'NBO', mdpId: 'mdp-ams' }, 'Amina Staff', NOW)).toThrow(/not an airport we hold for NL/);
+    expect(() => svc.setDeparture('NL', 'KE', { airport: 'AMS', mdpId: 'mdp-nbo' }, 'Amina Staff', NOW)).toThrow(/not in NL/);
+    // The carrier is a forwarder or haulier from the sending country's directory — not a clearing agent, not another country's.
+    expect(() => svc.setCarrier('NL', 'KE', 'agent-1', 'Amina Staff', NOW)).toThrow(/No forwarder or haulier/);
+    expect(() => svc.setCarrier('NL', 'KE', 'fwd-1', 'Amina Staff', NOW)).toThrow(/No forwarder or haulier/);
+    // The prices are the sending company's, in its money.
+    expect(svc.setPrices('NL', 'KE', { S: 12.004, M: 19.5, L: 29 }, 'Amina Staff', NOW).prices).toMatchObject({ S: 12, M: 19.5, L: 29, currency: 'EUR' });
+    expect(() => svc.setPrices('NL', 'KE', { S: 0, M: 1, L: 1 }, 'Amina Staff', NOW)).toThrow(/above nothing/);
+    expect(() => setup({ companies: ['KE'] }).setPrices('NL', 'KE', { S: 1, M: 1, L: 1 }, 'Amina Staff', NOW)).toThrow(/No company of ours sells in NL/);
+    readyKenya(svc);
+    svc.propose('NL', 'KE', AMINA, NOW);
+    // Not changed while waiting or on: what was approved is what parcels are booked on.
+    expect(() => svc.setPrices('NL', 'KE', { S: 1, M: 1, L: 1 }, 'Amina Staff', NOW)).toThrow(/waiting for approval: switch it off or withdraw it/);
+    svc.approve('NL', 'KE', BRIAN, NOW);
+    expect(() => svc.setCarrier('NL', 'KE', 'fwd-nl', 'Amina Staff', NOW)).toThrow(/is on: switch it off/);
+    svc.switchOff('NL', 'KE', AMINA, NOW);
+    expect(svc.routeOf('NL', 'KE')).toMatchObject({ state: 'off', departure: { airport: 'AMS', mdpId: 'mdp-ams' }, carrier: { entityId: 'fwd-nl' }, prices: { M: 19.5 } });
   });
 
   it('a proposal is asked again at approval: what lapsed since refuses it', () => {

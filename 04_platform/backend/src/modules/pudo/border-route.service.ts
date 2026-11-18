@@ -12,6 +12,9 @@ import { MdpService } from './mdp.service';
 import {
   BORDER_CONDITIONS,
   type BorderAirport,
+  type BorderCarrier,
+  type BorderDeparture,
+  type BorderPrices,
   type BorderArrivalView,
   type BorderChange,
   type BorderClearer,
@@ -32,6 +35,10 @@ interface Route {
   proposedAt?: string;
   approvedBy?: string;
   approvedAt?: string;
+  /** 2026-11-18 — step 2a: where it leaves, who carries it, what the international leg costs. */
+  departure?: BorderDeparture;
+  carrier?: BorderCarrier;
+  prices?: BorderPrices;
 }
 
 interface Arrival {
@@ -48,6 +55,9 @@ const MISSING: Record<BorderCondition, (from: string, to: string) => string> = {
   'open-to': (_f, t) => `${t} is not open to everyone yet`,
   'sells-from': (f) => `no company of ours sells in ${f}, so the first legs cannot be priced or paid`,
   'sells-to': (_f, t) => `no company of ours stands in ${t} for the last leg and the clearance fee`,
+  departure: (f) => `no departure airport and hub in ${f} are named for this route`,
+  carrier: () => 'no carrier from the directory is named for this route',
+  price: () => 'the route’s prices for a small, a medium and a large parcel are not set',
   clearer: (_f, t) => `nobody clears in ${t} yet: name a clearing agent who has accepted, or our company with its customs registration`,
   fee: (_f, t) => `the clearance fee in ${t} is not set`,
   airport: (_f, t) => `no airport in ${t} is open with a customs warehouse agreed and licensed`,
@@ -119,7 +129,7 @@ export class BorderRouteService {
     if (r?.state === 'on') throw new GlosError('INVALID_STATE', `${from} to ${to} is already on`);
     if (r?.state === 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is already waiting for a second person`);
     this.refuseMissing(from, to, now);
-    const route: Route = { from, to, state: 'waiting', proposedBy: by, proposedAt: new Date(now).toISOString() };
+    const route: Route = { ...(r ? setUp(r) : { from, to, state: 'off' as const }), state: 'waiting', proposedBy: by, proposedAt: new Date(now).toISOString() };
     this.routes.set(key(from, to), route);
     this.log({ what: 'propose', by: by.name, country: from, to }, now);
     return this.routeView(route, by, now);
@@ -143,7 +153,7 @@ export class BorderRouteService {
     const [from, to] = this.pair(fromCode, toCode);
     const r = this.routes.get(key(from, to));
     if (!r || r.state !== 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is not waiting for approval`);
-    const route: Route = { from, to, state: 'off' };
+    const route: Route = setUp(r);
     this.routes.set(key(from, to), route);
     this.log({ what: 'decline', by: by.name, country: from, to }, now);
     return this.routeView(route, by, now);
@@ -154,10 +164,80 @@ export class BorderRouteService {
     const [from, to] = this.pair(fromCode, toCode);
     const r = this.routes.get(key(from, to));
     if (!r || r.state !== 'on') throw new GlosError('INVALID_STATE', `${from} to ${to} is not on`);
-    const route: Route = { from, to, state: 'off' };
+    const route: Route = setUp(r);
     this.routes.set(key(from, to), route);
     this.log({ what: 'off', by: by.name, country: from, to }, now);
     return this.routeView(route, by, now);
+  }
+
+  /* ------------------------------------------------------------------ the sending end (step 2a) -- */
+
+  /** A route set up before it is proposed: off, with nothing named yet. Idempotent. */
+  prepare(fromCode: string, toCode: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    const r = this.routes.get(key(from, to)) ?? { from, to, state: 'off' as const };
+    this.routes.set(key(from, to), r);
+    return this.routeView(r, undefined, now);
+  }
+
+  /** Where the route leaves (D13): an airport in the sending country, and our approved hub there that hands parcels to the carrier. */
+  setDeparture(fromCode: string, toCode: string, input: { airport: string; mdpId: string }, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    const airport = this.airportOf(from, input.airport);
+    const hub = this.mdps.find(input.mdpId);
+    if (!hub) throw new GlosError('NOT_FOUND', 'No such hub', { field: 'mdpId' });
+    if (this.mdps.countryOf(hub) !== from) throw new GlosError('INVALID_INPUT', `${hub.name} is not in ${from}: the parcels leave from a hub in the sending country`, { field: 'mdpId' });
+    if (!this.mdps.isApproved(hub)) throw new GlosError('INVALID_STATE', `${hub.name} is not approved yet`, { field: 'mdpId' });
+    return this.change(from, to, (r) => ({ ...r, departure: { airport, mdpId: hub.mdpId, name: hub.name, by, at: new Date(now).toISOString() } }), { what: 'departure', by, country: from, to, airport }, now);
+  }
+
+  /** Who carries the international leg (D14): a forwarder or haulier from the directory. */
+  setCarrier(fromCode: string, toCode: string, entityId: string, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    const carrier = this.carriersIn(from).find((c) => c.id === entityId);
+    if (!carrier) throw new GlosError('NOT_FOUND', `No forwarder or haulier by that name in ${from}'s directory`, { field: 'entityId' });
+    return this.change(from, to, (r) => ({ ...r, carrier: { entityId: carrier.id, name: carrier.name, by, at: new Date(now).toISOString() } }), { what: 'carrier', by, country: from, to }, now);
+  }
+
+  /** The international leg's price per size (D10: air or road carriage uses a route price), in the sending company's money. */
+  setPrices(fromCode: string, toCode: string, input: { S: number; M: number; L: number }, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    const ours = this.entities.forJurisdiction(from);
+    if (!ours?.currency) throw new GlosError('INVALID_STATE', `No company of ours sells in ${from} to set prices in its money`, { field: 'S' });
+    const cents = (n: number, field: string) => {
+      if (!Number.isFinite(n) || n <= 0) throw new GlosError('INVALID_INPUT', 'A price above nothing', { field });
+      return Math.round(n * 100) / 100;
+    };
+    const prices: BorderPrices = { S: cents(input.S, 'S'), M: cents(input.M, 'M'), L: cents(input.L, 'L'), currency: ours.currency, by, at: new Date(now).toISOString() };
+    return this.change(from, to, (r) => ({ ...r, prices }), { what: 'prices', by, country: from, to }, now);
+  }
+
+  /** The route as it is set up — for booking a parcel on it (step 2b). Undefined: no such route. */
+  routeOf(from: string, to: string): Readonly<Pick<Route, 'from' | 'to' | 'state' | 'departure' | 'carrier' | 'prices'>> | undefined {
+    const r = this.routes.get(key(from, to));
+    return r ? { from: r.from, to: r.to, state: r.state, ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}) } : undefined;
+  }
+
+  /**
+   * A route on is changed only by switching it off first: what parcels were booked on stays what they were promised,
+   * and a changed route is asked again by two people.
+   */
+  private change(from: string, to: string, apply: (r: Route) => Route, entry: Omit<BorderChange, 'at'>, now: number): BorderRouteView {
+    const r = this.routes.get(key(from, to)) ?? { from, to, state: 'off' as const };
+    if (r.state !== 'off') throw new GlosError('INVALID_STATE', `${from} to ${to} is ${r.state === 'on' ? 'on' : 'waiting for approval'}: switch it off or withdraw it before changing it`);
+    const next = apply(r);
+    this.routes.set(key(from, to), next);
+    this.log(entry, now);
+    return this.routeView(next, undefined, now);
+  }
+
+  private carriersIn(country: string): Array<{ id: string; name: string }> {
+    if (!this.directory) return [];
+    return this.entities
+      .companies()
+      .filter((e) => e.kind === 'business' && e.jurisdiction === country && e.status !== 'draft' && this.directory!.kindsOfCompany(e).some((k) => k === 'forwarder' || k === 'haulier'))
+      .map((e) => ({ id: e.entityId, name: e.name }))
+      .sort((x, y) => x.name.localeCompare(y.name));
   }
 
   /* ------------------------------------------------------------------ the arrival end -- */
@@ -260,6 +340,12 @@ export class BorderRouteService {
         return Boolean(this.entities.forJurisdiction(from));
       case 'sells-to':
         return Boolean(this.entities.forJurisdiction(to));
+      case 'departure':
+        return Boolean(this.routes.get(key(from, to))?.departure);
+      case 'carrier':
+        return Boolean(this.routes.get(key(from, to))?.carrier);
+      case 'price':
+        return Boolean(this.routes.get(key(from, to))?.prices);
       case 'clearer':
         return Boolean(a?.clearer?.acceptedAt);
       case 'fee':
@@ -287,7 +373,7 @@ export class BorderRouteService {
     if (!this.directory) return [];
     return this.entities
       .companies()
-      .filter((e) => e.jurisdiction === country && e.status !== 'draft' && this.directory!.kindsOfCompany(e).includes('clearing_agent'))
+      .filter((e) => e.kind === 'business' && e.jurisdiction === country && e.status !== 'draft' && this.directory!.kindsOfCompany(e).includes('clearing_agent'))
       .map((e) => ({ id: e.entityId, name: e.name }))
       .sort((x, y) => x.name.localeCompare(y.name));
   }
@@ -333,6 +419,19 @@ export class BorderRouteService {
       ...(r.approvedAt ? { approvedAt: r.approvedAt } : {}),
       mine: Boolean(r.state === 'waiting' && r.proposedBy && reader && sameSigner(r.proposedBy, reader)),
       conditions: BORDER_CONDITIONS.map((c) => ({ key: c, met: this.met(c, r.from, r.to, now) })),
+      ...(r.departure ? { departure: r.departure } : {}),
+      ...(r.carrier ? { carrier: r.carrier } : {}),
+      ...(r.prices ? { prices: r.prices } : {}),
+      departureAirports: Object.entries(AIRPORT_COUNTRY)
+        .filter(([, c]) => c === r.from)
+        .map(([code]) => code),
+      departureHubs: this.mdps
+        .list()
+        .filter((m) => this.mdps.countryOf(m) === r.from && this.mdps.isApproved(m))
+        .map((m) => ({ id: m.mdpId, name: m.name }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+      carriers: this.carriersIn(r.from),
+      ...(this.entities.forJurisdiction(r.from)?.currency ? { currency: this.entities.forJurisdiction(r.from)!.currency } : {}),
     };
   }
 
@@ -362,3 +461,6 @@ export class BorderRouteService {
 }
 
 const key = (from: string, to: string) => `${from}-${to}`;
+
+/** What a route is, without who switched it: kept when it is declined or switched off. */
+const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}) });

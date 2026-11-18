@@ -41343,6 +41343,178 @@
         }
       }
     },
+    "/v1/sbg/border-routes/{from}/{to}": {
+      "post": {
+        "operationId": "BorderRoutes.prepare",
+        "summary": "",
+        "description": "2026-11-18 — step 2a: a route set up before it is proposed, and where it leaves, who carries it, what it costs.",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/departure": {
+      "post": {
+        "operationId": "BorderRoutes.departure",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/carrier": {
+      "post": {
+        "operationId": "BorderRoutes.carrier",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderCarrierDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/prices": {
+      "post": {
+        "operationId": "BorderRoutes.prices",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderPricesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-arrivals/{country}/airports/{airport}": {
       "post": {
         "operationId": "BorderRoutes.airport",
@@ -93471,6 +93643,9 @@
               "open-to",
               "sells-from",
               "sells-to",
+              "departure",
+              "carrier",
+              "price",
               "clearer",
               "fee",
               "airport"
@@ -93483,6 +93658,106 @@
         "required": [
           "key",
           "met"
+        ]
+      },
+      "BorderDeparture": {
+        "type": "object",
+        "properties": {
+          "airport": {
+            "type": "string",
+            "description": "The airport in the sending country the parcels leave from."
+          },
+          "mdpId": {
+            "type": "string",
+            "description": "The hub of ours that hands them to the carrier there."
+          },
+          "name": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "airport",
+          "mdpId",
+          "name",
+          "by",
+          "at"
+        ]
+      },
+      "BorderCarrier": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "A forwarder or haulier from the directory."
+          },
+          "name": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "by",
+          "at"
+        ]
+      },
+      "BorderPrices": {
+        "type": "object",
+        "properties": {
+          "S": {
+            "type": "number",
+            "description": "The international leg for a small, a medium and a large parcel, in the sending company's money."
+          },
+          "M": {
+            "type": "number"
+          },
+          "L": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "S",
+          "M",
+          "L",
+          "currency",
+          "by",
+          "at"
+        ]
+      },
+      "BorderOption": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ]
       },
       "BorderRouteView": {
@@ -93523,6 +93798,38 @@
             "items": {
               "$ref": "#/components/schemas/BorderConditionView"
             }
+          },
+          "departure": {
+            "$ref": "#/components/schemas/BorderDeparture"
+          },
+          "carrier": {
+            "$ref": "#/components/schemas/BorderCarrier"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/BorderPrices"
+          },
+          "departureAirports": {
+            "description": "What may be named here: the sending country's airports, its approved hubs, the forwarders and hauliers in its directory.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "departureHubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          },
+          "carriers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money its prices are in: the sending company's. Absent where none stands."
           }
         },
         "required": [
@@ -93530,7 +93837,10 @@
           "to",
           "state",
           "mine",
-          "conditions"
+          "conditions",
+          "departureAirports",
+          "departureHubs",
+          "carriers"
         ]
       },
       "BorderWarehouse": {
@@ -93659,21 +93969,6 @@
           "at"
         ]
       },
-      "BorderOption": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ]
-      },
       "BorderArrivalView": {
         "type": "object",
         "properties": {
@@ -93785,6 +94080,75 @@
             "maxLength": 80
           }
         }
+      },
+      "BorderDepartureDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "airport": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "mdpId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "airport",
+          "mdpId"
+        ]
+      },
+      "BorderCarrierDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "entityId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "entityId"
+        ]
+      },
+      "BorderPricesDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "S": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "M": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "L": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "S",
+          "M",
+          "L"
+        ]
       },
       "BorderAirportDto": {
         "type": "object",

@@ -200,6 +200,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/border-routes/:from/:to/approve': 'admin',
   'POST sbg/border-routes/:from/:to/decline': 'admin',
   'POST sbg/border-routes/:from/:to/off': 'admin',
+  // 2026-11-18 — step 2a: a route set up, where it leaves, who carries it, what it costs.
+  'POST sbg/border-routes/:from/:to': 'admin',
+  'POST sbg/border-routes/:from/:to/departure': 'admin',
+  'POST sbg/border-routes/:from/:to/carrier': 'admin',
+  'POST sbg/border-routes/:from/:to/prices': 'admin',
   'POST sbg/border-arrivals/:country/airports/:airport': 'admin',
   'POST sbg/border-arrivals/:country/airports/:airport/warehouse': 'admin',
   'POST sbg/border-arrivals/:country/clearer': 'admin',
