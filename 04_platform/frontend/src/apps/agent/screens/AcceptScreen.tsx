@@ -1,12 +1,13 @@
 import { AskToOpen } from '../../../shared/opening/AskToOpen';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField, WeightInput } from '../../../shared/ui';
+import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, NeedsSignalNote, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField, WeightInput } from '../../../shared/ui';
+import { useConnectivity } from '../../../shared/connectivity';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, weighedFor } from '../logic';
+import { BODY_HINTS, NATURES, abroadRouteFor, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, weighedFor } from '../logic';
 import { FreightBooking } from './FreightBooking';
-import type { NetworkPoint, TakeInTerms } from '../types';
+import type { AbroadRoute, NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState, TakenInPlace } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 import { TakenInLabel } from './TakenInLabel';
@@ -51,7 +52,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   // So the parcel-accept block is just the missing walk-up fields; the freight branch owns its own block.
   const isDedicated = Boolean(state.acceptDerived?.dedicated);
   // P3 — the terms are part of what must be complete before the goods are accepted, not a legend beside it.
-  const blockReason = acceptMissing(f, t) ?? termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t);
+  // 2026-11-18 — to a shop in another country a route is on to (step 2b): declared here, and only with a signal.
+  const abroad = abroadRouteFor(state.acceptPoints, f.destPudoDid, state.agent?.country, state.abroadRoutes);
+  const { online } = useConnectivity();
+  const blockReason = acceptMissing(f, t, Boolean(abroad)) ?? termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t) ?? (abroad && !online ? t('agent.accept.abroad.needsSignal') : null);
   const terms = state.takeInTermsState === 'ready' ? state.takeInTerms : null;
   const termsAloud = terms ? `${takeInTermsNotice(terms, t).title}. ${takeInTermsNotice(terms, t).detail} ` : '';
   // A walk-up too big for the bus is booked as freight once it is measured and has a shop to go to.
@@ -302,6 +306,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         <p class="card__note">{t('agent.accept.photoNote')}</p>
       </Card>
 
+      {abroad ? <AbroadCard route={abroad} state={state} actions={actions} /> : null}
+
       {/* P3 — said out loud before acceptance: whose promise, who answers, and the cover. Directly above the
           button, so it is the last thing read before the goods change hands. */}
       {state.takeInTermsState === 'error' ? (
@@ -472,7 +478,9 @@ function OtherShops({ state, actions }: { state: AgentState; actions: AgentActio
   const f = state.accept;
   const near = f.destMode === 'address' ? state.acceptNear : null;
   // The accepting shop is not in the list of OTHER shops: it is the row of its own above (collected here).
-  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, state.agent?.country);
+  const own = state.agent?.country;
+  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, own, (state.abroadRoutes ?? []).map((r) => r.to));
+  const abroadName = (p: NetworkPoint) => (p.country && own && p.country !== own ? ((state.abroadRoutes ?? []).find((r) => r.to === p.country)?.name ?? p.country) : null);
   const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
   const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
 
@@ -528,7 +536,7 @@ function OtherShops({ state, actions }: { state: AgentState; actions: AgentActio
       {points.length ? (
         <div class="rows" role="list" style="margin-top:10px">
           {points.map((p) => (
-            <DestRow key={p.did} point={p} picked={f.destPudoDid === p.did} away={pointDistance(p, near)} onPick={() => pick(p)} />
+            <DestRow key={p.did} point={p} picked={f.destPudoDid === p.did} away={pointDistance(p, near)} abroad={abroadName(p)} onPick={() => pick(p)} />
           ))}
         </div>
       ) : state.acceptPointsState === 'ready' ? (
@@ -551,6 +559,48 @@ export function PlaceNote({ place }: { place?: TakenInPlace }) {
   ) : null;
 }
 
+/**
+ * 2026-11-18 — A PARCEL ABROAD (parcels across a border, step 2b): where it leaves and arrives and who pays what there; then
+ * what the counter checks with the sender and writes for customs — what is inside and how many, the value and its money from
+ * the invoice, a photo of each, the seal put on it in front of them, and both names as the customs papers give them.
+ */
+export function AbroadCard({ route, state, actions }: { route: AbroadRoute; state: AgentState; actions: AgentActions }) {
+  const t = useT();
+  const a = state.accept.abroad;
+  const field = (id: string, label: string, value: string, set: (v: string) => void, extra: Record<string, string | number> = {}) => (
+    <div class="field" style="margin-top:12px">
+      <label class="field__label" for={id}>
+        {label}
+      </label>
+      <input id={id} class="input" value={value} onInput={(e) => set(e.currentTarget.value)} autoComplete="off" {...extra} />
+    </div>
+  );
+  return (
+    <Card label={t('agent.accept.abroad.title', { country: route.name })}>
+      <p class="card__note">{t('agent.accept.abroad.route', { departure: route.departure, arrival: route.arrival })}</p>
+      <Note tone="info" icon="box" title={t('agent.accept.abroad.check')} detail="" />
+      {field('abroad-contents', t('agent.accept.abroad.contents'), a.contents, (v) => actions.setAbroad({ contents: v }), { placeholder: t('agent.accept.abroad.contentsPh'), maxLength: 200 })}
+      {field('abroad-items', t('agent.accept.abroad.items'), a.items, (v) => actions.setAbroad({ items: v }), { inputMode: 'numeric', maxLength: 3 })}
+      <div class="reg__dates">
+        <div style="flex:2">{field('abroad-value', t('agent.accept.abroad.value'), a.value, (v) => actions.setAbroad({ value: v }), { inputMode: 'decimal', maxLength: 12 })}</div>
+        <div style="flex:1">{field('abroad-currency', t('agent.accept.abroad.currency'), a.currency, (v) => actions.setAbroad({ currency: v.toUpperCase() }), { maxLength: 3, autocapitalize: 'characters' })}</div>
+      </div>
+      <p class="card__note">{t('agent.accept.abroad.currencyHint')}</p>
+      <div style="margin-top:12px">
+        <PhotoField id="abroad-invoice" value={a.invoicePhotoRef} label={t('agent.accept.abroad.invoicePhoto')} upload={(file) => actions.uploadPhoto('invoice', file)} onCapture={(ref) => actions.setAbroad({ invoicePhotoRef: ref })} />
+      </div>
+      <div style="margin-top:12px">
+        <PhotoField id="abroad-inside" value={a.contentsPhotoRef} label={t('agent.accept.abroad.contentsPhoto')} upload={(file) => actions.uploadPhoto('content', file)} onCapture={(ref) => actions.setAbroad({ contentsPhotoRef: ref })} />
+      </div>
+      {field('abroad-seal', t('agent.accept.abroad.seal'), a.seal, (v) => actions.setAbroad({ seal: v }), { maxLength: 40, autocapitalize: 'characters' })}
+      {field('abroad-sender', t('agent.accept.abroad.senderName'), a.senderName, (v) => actions.setAbroad({ senderName: v }), { maxLength: 80, autocapitalize: 'words' })}
+      {field('abroad-receiver', t('agent.accept.abroad.receiverName'), a.receiverName, (v) => actions.setAbroad({ receiverName: v }), { maxLength: 80, autocapitalize: 'words' })}
+      <p class="card__note">{t('agent.accept.abroad.namesNote')}</p>
+      <NeedsSignalNote title={t('agent.accept.abroad.needsSignal')} detail={t('agent.accept.abroad.needsSignalDetail')} />
+    </Card>
+  );
+}
+
 /** P3 — whose promise these goods are under, in the words the server's answer supplies. */
 function TermsNote({ terms }: { terms: TakeInTerms }) {
   const t = useT();
@@ -558,7 +608,7 @@ function TermsNote({ terms }: { terms: TakeInTerms }) {
   return <Note tone={n.tone} icon={n.icon} title={n.title} detail={n.detail} />;
 }
 
-function DestRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {
+function DestRow({ point, picked, away, abroad, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; abroad?: string | null; onPick: () => void }) {
   const t = useT();
   const closed = point.openState === 'closed';
   return (
@@ -568,7 +618,7 @@ function DestRow({ point, picked, away, onPick }: { point: NetworkPoint; picked:
       </span>
       <span class="row__body">
         <span class="row__t">{point.shopName}</span>
-        <span class="row__s">{closed ? t('agent.accept.closedNow') : `${away ? `${away} · ` : ''}${t('agent.zone', { zone: point.zone })}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
+        <span class="row__s">{closed ? t('agent.accept.closedNow') : `${abroad ? `${t('agent.accept.abroad.rowTag', { country: abroad })} · ` : ''}${away ? `${away} · ` : ''}${t('agent.zone', { zone: point.zone })}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
       </span>
       <span class="row__end">{closed ? <Pill tone="idle" dot>{t('agent.closed')}</Pill> : <Icon name="chevronRight" size={22} />}</span>
     </button>

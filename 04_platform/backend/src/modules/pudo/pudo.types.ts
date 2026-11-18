@@ -1030,6 +1030,29 @@ export class CheckoutHandoff {
   at: string;
 }
 
+/**
+ * 2026-11-18 — A PARCEL BOOKED AT A COUNTER ON A ROUTE ACROSS A BORDER (the plan "Parcels across a border", step 2b): the route
+ * as it stood when it was booked — where it leaves, where it arrives, who carries it, its price for this size — and what the
+ * counter checked and wrote in front of the sender: the seal it put on it, the photo of the goods' invoice, who sends it and who
+ * receives it, as the customs papers name them. Kept, so a route changed later does not change a parcel already on it.
+ */
+export class ParcelBorder {
+  from: string;
+  to: string;
+  departure: { airport: string; mdpId: string; name: string };
+  arrival: { airport: string; mdpId: string; name: string };
+  carrier: { entityId: string; name: string };
+  /** The route's price for its size, in `currency` — inside the parcel's price (D15). */
+  routePrice: number;
+  currency: string;
+  seal: string;
+  invoicePhotoRef: string;
+  senderName: string;
+  receiverName: string;
+  /** The customs papers the counter prints for the pouch: what it holds, its value, who sends and who receives it. */
+  papers: { svg: string };
+}
+
 export class PhygitalLabel {
   parcelId: string;
   qrPayload: string; // what the printed QR encodes
@@ -1587,6 +1610,8 @@ export class Parcel {
    * promise worked out afresh every time is always on time. Absent where no route could be planned.
    */
   plan?: JourneyPlan;
+  /** 2026-11-18 — booked at a counter on a route across a border (step 2b): the route as it stood, and the counter's checks. */
+  border?: ParcelBorder;
   scans: ParcelScan[];
 }
 

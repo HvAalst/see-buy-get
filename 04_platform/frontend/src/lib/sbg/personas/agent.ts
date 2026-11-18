@@ -177,6 +177,8 @@ export function createAgentApi(sbg: SbgClient) {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
       /** How long it took at the counter, by this app's clock — for the pilot's numbers. */
       takeInSeconds?: number;
+      /** 2026-11-18 — to a shop in another country, on a route that is on: its declaration (step 2b). */
+      abroad?: { contents: string; itemCount: number; declaredValue: number; currency: string; invoicePhotoRef: string; contentsPhotoRef: string; seal: string; senderName: string; receiverName: string };
     }) =>
       // Round 23 — dated now, when the counter takes it in: a take-in kept with no signal is sent later with this body as it is.
       sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body: { ...body, observedAt: new Date().toISOString() } })),
@@ -307,6 +309,8 @@ export function createAgentApi(sbg: SbgClient) {
     classify: (l: number, w: number, h: number, kg: number) => sbg.request((c) => c.POST('/v1/sbg/size/classify', { body: { l, w, h, kg } })),
     /** 2026-11-08 — what this counter keeps to price a walk-up with no signal (zone pricing, step 3b): its own shop only. */
     counterPrices: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/counter-prices', { params: { path: { did } } })),
+    /** 2026-11-18 — where this counter can send a parcel abroad: the countries a route is on to (step 2b). */
+    abroadRoutes: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/abroad', { params: { path: { did } } })),
     /** 2026-11-08 — what a walk-up costs, as a person pays it (rounded to the country's cash step): said before it is taken in. */
     walkUpQuote: (origin: string, dest: string, m: { l: number; w: number; h: number; kg: number }, fragile?: boolean) =>
       sbg.request((c) =>

@@ -113,7 +113,9 @@ export class JourneyPlanService implements OnModuleInit {
       const fromHub = parcel.handInMdpId ? this.routing.hubEnd(parcel.handInMdpId) : undefined;
       const from = fromHub ?? dock;
       const takenIn = from ? NaN : parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
-      const j = this.routing.planJourney({ ...(from ? { from } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}) });
+      // 2026-11-18 — a parcel abroad goes by the route it was booked on: its departure hub, then its arrival airport's warehouse (step 2b).
+      const via = parcel.border ? { departureMdpId: parcel.border.departure.mdpId, arrivalMdpId: parcel.border.arrival.mdpId } : undefined;
+      const j = this.routing.planJourney({ ...(from ? { from } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}), ...(via ? { via } : {}) });
       const plan: JourneyPlan = {
         hops: j.hops.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone })),
         mdpRouted: j.mdpRouted,
@@ -125,7 +127,8 @@ export class JourneyPlanService implements OnModuleInit {
       // The stops it was PRICED on, where they are not the ones planned now (a hub full when it was taken in, say): kept, and
       // said — the price stands, and the plan is what it now travels by.
       const priced = (parcel.stopFees ?? []).map((f) => f.id);
-      const planned = plan.hops.filter((h) => h.type !== 'dock').map((h) => h.id);
+      // A parcel abroad was priced on its stops in the sending country only (D15): the arrival country's are the receiver's part.
+      const planned = j.hops.filter((h) => h.type !== 'dock' && (!parcel.border || h.country === parcel.border.from)).map((h) => h.id);
       if (priced.length && (priced.length !== planned.length || priced.some((id, i) => id !== planned[i]))) {
         plan.pricedVia = priced;
         plan.offPlan = [{ at: new Date(now).toISOString(), kind: 'system', where: plan.hops[0].id, whereLabel: plan.hops[0].label, took: planned.join(' > '), tookLabel: plan.hops.map((h) => h.label).join(' → '), reason: 'priced_other_way', by: 'system' }];

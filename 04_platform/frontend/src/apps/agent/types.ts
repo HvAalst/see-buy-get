@@ -265,11 +265,19 @@ export interface ParcelView {
 }
 
 /** A destination PUDO the counter can pick from the public directory (Map/Address intake picker). */
+/** 2026-11-18 — a country this counter can send a parcel to: a route is on there from its own (step 2b). */
+export interface AbroadRoute {
+  to: string;
+  name: string;
+  departure: string;
+  arrival: string;
+}
+
 export interface NetworkPoint {
   did: string;
   shopName: string;
   zone: string;
-  /** The country the shop stands in. A counter walk-up cannot cross a border, so the picker filters on it. */
+  /** The country the shop stands in: a walk-up goes to another only where a route across the border is on (step 2b). */
   country?: string;
   location?: { lat: number; lng: number };
   landmark?: string;

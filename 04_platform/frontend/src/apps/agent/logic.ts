@@ -15,7 +15,7 @@ import { dangerousGoodsValue, isDangerousNature } from '../../shared/dangerousGo
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
-import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, TakeInTerms } from './types';
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, AbroadRoute, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, TakeInTerms } from './types';
 
 /* ---------------------------------------------------------- take-in terms -- */
 
@@ -315,6 +315,58 @@ export interface DimsForm {
   kg: string;
 }
 
+/**
+ * 2026-11-18 — A PARCEL ABROAD (parcels across a border, step 2b): what the counter checks with the sender and writes for
+ * customs — what is inside and how many, the value and its money from the invoice, the two photos, the seal, both names.
+ */
+export interface AbroadForm {
+  contents: string;
+  items: string;
+  value: string;
+  currency: string;
+  invoicePhotoRef: string;
+  contentsPhotoRef: string;
+  seal: string;
+  senderName: string;
+  receiverName: string;
+}
+
+export const EMPTY_ABROAD: AbroadForm = { contents: '', items: '', value: '', currency: '', invoicePhotoRef: '', contentsPhotoRef: '', seal: '', senderName: '', receiverName: '' };
+
+/** The route a picked shop is reached by, where it stands in another country a route is on to; else nothing. */
+export function abroadRouteFor(points: NetworkPoint[] | null, destDid: string, ownCountry: string | undefined, routes: AbroadRoute[] = []): AbroadRoute | null {
+  const dest = (points ?? []).find((p) => p.did === destDid);
+  if (!dest?.country || !ownCountry || dest.country === ownCountry) return null;
+  return routes.find((r) => r.to === dest.country) ?? null;
+}
+
+/** What the declaration still needs, in the order the counter does it; nothing once it is complete. */
+export function abroadMissing(a: AbroadForm, t: Translate): string | null {
+  if (a.contents.trim().length < 3) return t('agent.logic.acceptAbroadContents');
+  if (!(Number.parseInt(a.items, 10) >= 1)) return t('agent.logic.acceptAbroadItems');
+  if (!(num(a.value) > 0) || !/^[A-Za-z]{3}$/.test(a.currency.trim())) return t('agent.logic.acceptAbroadValue');
+  if (!a.invoicePhotoRef) return t('agent.logic.acceptAbroadInvoice');
+  if (!a.contentsPhotoRef) return t('agent.logic.acceptAbroadInside');
+  if (a.seal.trim().length < 3) return t('agent.logic.acceptAbroadSeal');
+  if (a.senderName.trim().length < 2 || a.receiverName.trim().length < 2) return t('agent.logic.acceptAbroadNames');
+  return null;
+}
+
+/** The declaration as the server takes it. */
+export function abroadBody(a: AbroadForm): { contents: string; itemCount: number; declaredValue: number; currency: string; invoicePhotoRef: string; contentsPhotoRef: string; seal: string; senderName: string; receiverName: string } {
+  return {
+    contents: a.contents.trim(),
+    itemCount: Number.parseInt(a.items, 10),
+    declaredValue: Math.round(num(a.value) * 100) / 100,
+    currency: a.currency.trim().toUpperCase(),
+    invoicePhotoRef: a.invoicePhotoRef,
+    contentsPhotoRef: a.contentsPhotoRef,
+    seal: a.seal.trim(),
+    senderName: a.senderName.trim(),
+    receiverName: a.receiverName.trim(),
+  };
+}
+
 /** The redesigned walk-up intake: MEASURE the parcel (tier derived), pick a destination PUDO by Map or
  *  Address, plus nature, phones and a photo. No manual S/M/L/HEAVY, no typed zone. */
 export interface AcceptForm {
@@ -331,6 +383,8 @@ export interface AcceptForm {
   senderMobile: string;
   receiverMobile: string;
   photoRef: string;
+  /** 2026-11-18 — to a shop in another country: its declaration (step 2b). */
+  abroad: AbroadForm;
   // F2 — the counter-freight fields (only used when the DERIVED class is dedicated/P4+; a bus-sized load
   // ignores them). A too-big walk-up is booked as freight instead of refused: a cash budget cap, immediate or
   // planned pickup, and an optional customer phone.
@@ -508,6 +562,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   senderMobile: '',
   receiverMobile: '',
   photoRef: '',
+  abroad: EMPTY_ABROAD,
   budgetCap: '',
   freightWhen: 'now',
   freightDate: '',
@@ -565,13 +620,13 @@ export function sizeMeta(size: ParcelSize, t: Translate): { label: string; hint:
  * Destination PUDOs the counter can pick: open ones first; with a reference point (a geocoded address),
  * NEAREST first; otherwise A→Z. Mirrors the Send app's picker so a shop and a sender rank shops the same.
  */
-export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null, country?: string): NetworkPoint[] {
+export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null, country?: string, abroadTo: string[] = []): NetworkPoint[] {
   return (points ?? [])
     .filter((p) => p.did !== excludeDid) // never offer the accepting shop as its own destination (origin ≠ dest)
-    // A counter walk-up declares no contents or value, so it cannot cross a border — the server refuses it
-    // (CUSTOMS_INCOMPLETE). Found in the browser: a Nairobi counter was offered shops in Dar es Salaam.
+    // A walk-up crosses a border only where a route is on to that country (2026-11-18, step 2b), declared at the counter;
+    // elsewhere the server refuses it. Found in the browser: a Nairobi counter was offered shops in Dar es Salaam.
     // Unknown on either side is kept rather than hidden; the server still says no where it must.
-    .filter((p) => !country || !p.country || p.country === country)
+    .filter((p) => !country || !p.country || p.country === country || abroadTo.includes(p.country))
     .sort((a, b) => {
       if (a.openState !== b.openState) return a.openState === 'open' ? -1 : 1;
       if (near) {
@@ -593,12 +648,13 @@ export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined
  * What still blocks the accept. Ordered by the physical flow at the counter, so the first
  * missing thing is the next thing to do — the CTA subtitle reads it out.
  */
-export function acceptMissing(f: AcceptForm, t: Translate): string | null {
+export function acceptMissing(f: AcceptForm, t: Translate, abroad = false): string | null {
   if (!f.parcelId.trim()) return t('agent.logic.acceptScanFirst');
   if (!parseDims(f.dims)) return t('agent.logic.acceptMeasure');
   if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
   if (!f.photoRef) return t('agent.logic.acceptPhoto');
-  return null;
+  // 2026-11-18 — a parcel abroad: its declaration, after the parcel's own photo (step 2b).
+  return abroad ? abroadMissing(f.abroad, t) : null;
 }
 
 /* ----------------------------------------------------------- book freight (F2) -- */

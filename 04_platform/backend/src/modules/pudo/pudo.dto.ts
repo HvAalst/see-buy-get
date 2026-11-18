@@ -226,6 +226,26 @@ class DimensionsDto {
   @IsNumber() @Min(0.1) h!: number;
 }
 
+/**
+ * 2026-11-18 — A PARCEL TO A SHOP IN ANOTHER COUNTRY, on a route that is on (the plan "Parcels across a border", step 2b): what
+ * the counter checked in front of the sender and wrote down for customs. The value is the goods' invoice's (D11), in its money.
+ */
+export class AbroadDeclarationDto {
+  /** What is in it, as the sender and the counter saw it. */
+  @IsString() @MinLength(3) @MaxLength(200) contents!: string;
+  @IsInt() @Min(1) @Max(500) itemCount!: number;
+  @IsNumber() @Min(0.01) @Max(100_000_000) declaredValue!: number;
+  /** The invoice's money: a currency some country settles in. */
+  @IsString() @Matches(/^[A-Za-z]{3}$/) currency!: string;
+  @IsString() invoicePhotoRef!: string;
+  @IsString() contentsPhotoRef!: string;
+  /** The number on the seal put on it at the counter, in front of the sender (D7). */
+  @IsString() @MinLength(3) @MaxLength(40) seal!: string;
+  /** Who sends it and who receives it, as the customs papers name them. */
+  @IsString() @MinLength(2) @MaxLength(80) senderName!: string;
+  @IsString() @MinLength(2) @MaxLength(80) receiverName!: string;
+}
+
 export class AcceptParcelDto {
   /** 2026-11-08 — the price the counter showed the sender, where its country's price card priced it: refused if it has moved. */
   @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
@@ -250,6 +270,8 @@ export class AcceptParcelDto {
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
   /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /** 2026-11-18 — to a shop in another country, on a route that is on: its declaration (step 2b). */
+  @IsOptional() @ValidateNested() @Type(() => AbroadDeclarationDto) abroad?: AbroadDeclarationDto;
 }
 
 /** The driver's pass, shown: the bus's list is read with it (the handover itself checks it again). */

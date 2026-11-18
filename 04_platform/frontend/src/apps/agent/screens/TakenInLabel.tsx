@@ -14,6 +14,8 @@ export function TakenInLabel({ label, onThermal, busy }: { label: TakenIn; onThe
   // function in slide up"). In hand since the take-in, so nothing is fetched.
   const paper = usePaper();
   const openLabel = () => paper.show(t('common.doc.label'), async () => labelGot(label.svg, `${t('common.doc.label')} — ${label.parcelId}`, t('common.doc.labelGone')));
+  // 2026-11-18 — a parcel abroad: its customs papers, for the pouch (parcels across a border, step 2b).
+  const openPapers = () => paper.show(t('agent.accept.abroad.papersTitle'), async () => labelGot(label.papersSvg, `${t('agent.accept.abroad.papersTitle')} — ${label.parcelId}`, t('agent.accept.abroad.papersGone')));
   return (
     <>
       <PaperSheet state={paper} />
@@ -30,6 +32,14 @@ export function TakenInLabel({ label, onThermal, busy }: { label: TakenIn; onThe
               {t('agent.accept.thermalLabel')}
             </Button>
           ) : null}
+        </>
+      ) : null}
+      {label.papersSvg ? (
+        <>
+          <Button variant="outline" chevron={false} onClick={openPapers}>
+            {t('agent.accept.abroad.papers')}
+          </Button>
+          <p class="hint">{t('agent.accept.abroad.papersHint')}</p>
         </>
       ) : null}
       {label.trackingKey ? <p class="hint" style="margin-top:8px">{t('agent.accept.trackingKey', { key: label.trackingKey })}</p> : null}

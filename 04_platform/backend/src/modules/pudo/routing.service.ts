@@ -11,7 +11,7 @@ import type { Vehicle } from './fleet.types';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { BAG_CAPACITY_UNITS, BORDER_DWELL_H, chargedByOf, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BAG_CAPACITY_UNITS, BORDER_DWELL_H, BORDER_ROUTE_LEG_H, chargedByOf, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
@@ -25,6 +25,14 @@ import { CatchmentService } from './catchment.service';
 import { RoadMapService } from './road-map.service';
 import { BusinessRateService } from './business-rate.service';
 import type { ZonePrice } from './price-card.types';
+import type { BookedRoute } from './border-routes.types';
+import { haversineKm } from './geo';
+
+/** 2026-11-18 — a journey across a border by its route (step 2b): the hub it leaves from, and the warehouse hub it arrives at. */
+export interface BorderVia {
+  departureMdpId: string;
+  arrivalMdpId: string;
+}
 
 /**
  * WHICH CARRIERS PRICE A QUOTE (the user, 2026-10-25). What the parcel weighs and whether it is fragile — only vehicles
@@ -208,6 +216,8 @@ export interface ShipmentQuote {
   insurance: ResolvedInsurance;
   flexible: QuoteLeg;
   locked: QuoteLeg;
+  /** 2026-11-18 — priced by a route across a border (step 2b; D15): the two countries, its airports and its carrier. */
+  border?: { from: string; to: string; departure: string; arrival: string; carrier: string };
 }
 
 /**
@@ -365,6 +375,70 @@ export class RoutingService {
   quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     this.doorFor(undefined, destAgentDid);
     return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), size, sellerEntityId, measured, carriers);
+  }
+
+  /**
+   * 2026-11-18 — A PARCEL'S PRICE ON A ROUTE ACROSS A BORDER (the plan, step 2b; the owner's D15): the route's price for its size —
+   * the whole way to the arrival airport, the first leg included — with the shop's own fee and our fee on top, and the tax, as
+   * for any parcel; to the country's cash step where its price card has one. The arrival country's part — the clearance fee and
+   * the last leg — is the receiver's, paid there (D2, D12), so it is not in it. Its stops are those in the sending country: the
+   * hubs on the way are paid their own fees out of it, as on a card.
+   */
+  quoteAbroad(originAgentDid: string, destAgentDid: string, size: ParcelSize, route: BookedRoute, carriers: QuoteCarriers = {}): ShipmentQuote {
+    this.doorFor(originAgentDid, destAgentDid);
+    if (size === 'HEAVY') throw new GlosError('CARGO_REQUIRES_DEDICATED', 'A route across a border carries small, medium and large parcels: a heavy one goes as freight');
+    const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, via: { departureMdpId: route.departure.mdpId, arrivalMdpId: route.arrival.mdpId } });
+    const origin = this.agents.get(originAgentDid);
+    const sellerId = this.agents.entityIdOrNone(origin);
+    if (!sellerId) throw new GlosError('FORBIDDEN', `Nobody of ours can sell this journey: ${origin.shopName} stands where no company of ours does`);
+    const currency = this.currencyOf(sellerId);
+    if (currency !== route.prices.currency) throw new GlosError('INVALID_STATE', `The route’s prices are in ${route.prices.currency}, and ${origin.shopName} sells in ${currency}`);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const nodes: QuoteNode[] = plan.hops
+      .filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock' && h.country === route.from)
+      .map((h) => {
+        const isHub = h.type === 'mdp';
+        const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
+        const own = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
+        const native = r2(site.pricePerParcel);
+        const money = own ? this.currencyOf(own) : this.priceableCurrencyOf(h.country);
+        return { type: h.type, id: h.id, label: h.label, entityId: own ?? sellerId, country: h.country, currency: money, nativeFee: native, fee: this.fx.convertForQuote(native, money, currency), ...(own ? {} : { purchased: true }) };
+      });
+    const nodeFees = r2(nodes.reduce((sum, n) => sum + n.fee, 0));
+    const shopFee = nodes[0]?.type === 'pudo' && nodes[0].id === originAgentDid ? nodes[0].fee : 0;
+    const routePrice = route.prices[size];
+    const stack = this.entities.ratesFor(sellerId, SIZE_LANE[size]);
+    const taxRule = this.entities.taxFor(sellerId, SIZE_LANE[size]);
+    const base = r2(shopFee + routePrice);
+    let total = withPlatformFee(base, stack.totalPct);
+    let { tax, gross } = taxOn(total, taxRule.ratePct);
+    const step = carriers.consumer ? (this.priceCards?.inForceFor(route.from, carriers.at ?? Date.now())?.card.cashStep ?? 0) : 0;
+    if (step > 0) ({ total, tax, gross } = cashRounded(base, gross, taxRule.ratePct, step));
+    const leg: QuoteLeg = { transport: routePrice, base, fee: r2(total - base), total, tax, gross, provision: r2(base * stack.costOfRiskPct) };
+    const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
+    return {
+      hops: plan.hops,
+      nodes,
+      legs,
+      entityIds: [...new Set(nodes.map((n) => n.entityId))],
+      sellerEntityId: sellerId,
+      currency,
+      crossesBorder: true,
+      crossings: crossingsOn(plan.hops),
+      totalKm: Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10,
+      nodeFees,
+      size,
+      transportFactor: SIZE_TRANSPORT_FACTOR[size],
+      factorBasis: 'band',
+      perKm: { min: 0, max: 0, from: 'company', carriers: 0 },
+      platformFeePct: stack.totalPct,
+      rates: stack,
+      tax: taxRule,
+      insurance: this.entities.insuranceFor(sellerId, SIZE_LANE[size]),
+      flexible: leg,
+      locked: leg,
+      border: { from: route.from, to: route.to, departure: route.departure.airport, arrival: route.arrival.airport, carrier: route.carrier.name },
+    };
   }
 
   /**
@@ -648,7 +722,7 @@ export class RoutingService {
    * the destination's opening hours — a parcel is never "ready for pickup" while the shop is closed.
    * `startAt`: when the journey began, where that was earlier than now (a take-in kept with no signal — round 23).
    */
-  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number; siteKg?: number }) {
+  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number; siteKg?: number; via?: BorderVia }) {
     const dest = this.agents.get(input.destAgentDid);
     // A journey may start at a place that is not a node (a store's dock). When one is given it is used as
     // it stands; otherwise the origin is a PUDO — named, or the nearest one with room.
@@ -661,12 +735,13 @@ export class RoutingService {
       origin = { type: 'pudo', id: a.did, label: a.shopName, zone: a.zone, country: this.agents.countryOf(a), location: a.location };
     }
 
-    const route = this.buildRoute(origin, dest, { kg: input.siteKg });
+    const route = input.via ? this.buildBorderRoute(origin, dest, input.via, { kg: input.siteKg }) : this.buildRoute(origin, dest, { kg: input.siteKg });
     // 2026-11-13 — every shop and hub on the way takes a parcel of this weight (the owner: "shop and hub tools", T3), or named.
     this.assertSitesTake(route, input.siteKg);
     // 2026-11-12 — THE OWNER'S D3: "Routing never raises the price … stops along the road map are carried by the network". The
     // price is worked out on the route as it would be with no road map: its two ends and their hubs, never the stops on the way.
-    const plain = route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false, kg: input.siteKg }) : route;
+    // A route across a border is priced by its own price (D15), never by the road: its stops stand as planned.
+    const plain = !input.via && route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false, kg: input.siteKg }) : route;
     const viaMdp = route.some((h) => h.type === 'mdp');
     if (!viaMdp && origin.zone !== dest.zone) {
       // Cross-zone with no hub → require a direct zone-pair corridor (the pre-MDP behaviour).
@@ -681,8 +756,10 @@ export class RoutingService {
     let cursor = (input.startAt ?? Date.now()) + DISPATCH_BUFFER_H * 3_600_000;
     const legs = route.slice(0, -1).map((from, i) => {
       const to = route[i + 1];
-      const distanceKm = Math.round(this.router.roadKm(from.location, to.location) * 10) / 10;
-      const transitH = distanceKm / VEHICLE_SPEED_KMH[vehicle];
+      // 2026-11-18 — the route's own leg across the border (step 2b): flown or driven by its carrier, as far as the crow flies.
+      const byRoute = Boolean(input.via && from.id === input.via.departureMdpId && to.id === input.via.arrivalMdpId);
+      const distanceKm = Math.round((byRoute ? haversineKm(from.location, to.location) : this.router.roadKm(from.location, to.location)) * 10) / 10;
+      const transitH = byRoute ? BORDER_ROUTE_LEG_H : distanceKm / VEHICLE_SPEED_KMH[vehicle];
       // A leg that leaves one country for another stops at a post and waits. It is the one leg on a
       // continental route that genuinely does not move, and reading it as if it did was the lie.
       const crossesBorder = from.country !== to.country;
@@ -704,6 +781,7 @@ export class RoutingService {
         crossesBorder,
         /** The wait at the post, called out separately from the driving so the ETA can be argued with. */
         borderDwellH: crossesBorder ? BORDER_DWELL_H : 0,
+        ...(byRoute ? { byRoute: true as const } : {}),
         distanceKm,
         departAt: new Date(departAt).toISOString(),
         arriveAt: new Date(arriveAt).toISOString(),
@@ -754,6 +832,29 @@ export class RoutingService {
         assertSiteTakes({ name: hub.name, kind: 'hub' }, this.mdps.toolsOf(hub).limits, kg);
       }
     }
+  }
+
+  /**
+   * 2026-11-18 — A JOURNEY ACROSS A BORDER BY ITS ROUTE (the plan "Parcels across a border", step 2b): to the route's departure
+   * hub as any journey goes to a hub — through the hub serving the shop and the road map's stops between, where there are any —
+   * then the route's own leg to its arrival airport's warehouse hub, then on to the shop as a journey handed in at that hub goes.
+   */
+  private buildBorderRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, via: BorderVia, opts: { kg?: number } = {}): RouteHop[] {
+    const departure = this.mdps.require(via.departureMdpId);
+    const arrival = this.mdps.require(via.arrivalMdpId);
+    const hop = (hub: typeof departure, zone: string): RouteHop => ({ type: 'mdp', id: hub.mdpId, label: hub.name, zone: hub.zones[0] ?? zone, country: this.mdps.countryOf(hub), location: hub.location });
+    const out: RouteHop[] = [{ type: origin.type, id: origin.id, label: origin.label, zone: origin.zone, country: origin.country, location: origin.location }];
+    if (!(origin.type === 'mdp' && origin.id === departure.mdpId)) {
+      const served = this.catchments?.hubForPoint(origin.country, origin.location, undefined, opts.kg);
+      const first = origin.type === 'mdp' ? this.mdps.require(origin.id) : ((served ? this.mdps.list().find((m) => m.mdpId === served) : undefined) ?? this.mdps.mdpForZone(origin.zone));
+      if (first && first.mdpId !== departure.mdpId) {
+        if (origin.type !== 'mdp') out.push(hop(first, origin.zone));
+        for (const id of this.roadMaps?.pathFor(first.mdpId, departure.mdpId)?.slice(1, -1) ?? []) out.push(hop(this.mdps.require(id), origin.zone));
+      }
+      out.push(hop(departure, origin.zone));
+    }
+    const on = this.buildRoute({ type: 'mdp', id: arrival.mdpId, label: arrival.name, zone: arrival.zones[0] ?? dest.zone, country: this.mdps.countryOf(arrival), location: arrival.location }, dest, opts);
+    return [...out, ...on];
   }
 
   private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, opts: { road?: boolean; kg?: number } = {}): RouteHop[] {

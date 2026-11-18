@@ -34,7 +34,7 @@ import { signal } from '../../shared/feedback';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { CustodyCapView } from '../../shared/custodyCap';
-import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, weighedFor, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, weighedFor, type AcceptForm, type DimsForm, abroadBody, abroadMissing, abroadRouteFor, type AbroadForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
@@ -70,6 +70,7 @@ import type {
   OfferQuote,
   MyBookingRow,
   OfferRow,
+  AbroadRoute,
 } from './types';
 
 export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight' | 'tamper';
@@ -289,6 +290,8 @@ export interface AgentState {
   /** The destination-PUDO directory for the walk-up picker (Map/Address). */
   acceptPoints: NetworkPoint[];
   acceptPointsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** 2026-11-18 — the countries this counter can send a parcel to: a route is on there (step 2b). */
+  abroadRoutes: AbroadRoute[];
   /** The derived tier + cargo class for the measured dims (null until all four are entered). */
   acceptDerived: ClassifyView | null;
   /** 2026-11-08 — a walk-up's price as the sender pays it, said before it is taken in: from the country's price card, or a parcel collected here. */
@@ -422,6 +425,7 @@ const INITIAL: AgentState = {
   accept: { ...EMPTY_ACCEPT },
   acceptPoints: [],
   acceptPointsState: 'idle',
+  abroadRoutes: [],
   acceptDerived: null,
   acceptPrice: null,
   counterPrices: null,
@@ -466,6 +470,8 @@ export interface TakenIn {
   told?: number;
   /** 2026-11-05 — pre-drop-off: where it goes now — a shelf slot until it is bagged, or the open bag for its next stop. */
   place?: TakenInPlace;
+  /** 2026-11-18 — a parcel abroad: its customs papers, to print for the pouch (step 2b). */
+  papersSvg?: string;
 }
 
 /** 2026-11-05 — where a parcel just taken in goes, as the server placed it. */
@@ -966,6 +972,13 @@ export function useAgentApp() {
     setState((s) => ({ ...s, takeInTerms: narrow<TakeInTerms>(r.data), takeInTermsState: 'ready' }));
   }, [client, did]);
 
+  /** 2026-11-18 — where this counter can send a parcel abroad (step 2b): asked each time the take-in opens; a failure keeps none. */
+  const loadAbroadRoutes = useCallback(async () => {
+    if (!client || !did) return;
+    const r = await client.api.abroadRoutes(did);
+    setState((s) => ({ ...s, abroadRoutes: r.error ? [] : (narrow<{ routes?: AbroadRoute[] }>(r.data)?.routes ?? []) }));
+  }, [client, did]);
+
   /** 2026-11-08 — the counter's price list (step 3b). A failure keeps the one it had: the read cache answers with no signal. */
   const loadCounterPrices = useCallback(async () => {
     if (!client || !did) return;
@@ -1153,6 +1166,7 @@ export function useAgentApp() {
         void loadAcceptPoints();
         void loadTakeInTerms();
         void loadCounterPrices();
+        void loadAbroadRoutes();
       }
       if (screen === 'consignments') void loadConsignments();
       if (screen === 'freight') void loadPosted();
@@ -1312,8 +1326,9 @@ export function useAgentApp() {
     void client.api.walkUpQuote(did, dest, parsed, f.fragile || undefined).then((r) => {
       if (epoch !== priceEpoch.current) return;
       if (r.error && isOffline(r.error)) return onPhone();
-      const q = r.error ? null : narrow<{ zone?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
-      setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
+      const q = r.error ? null : narrow<{ zone?: unknown; border?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
+      // 2026-11-18 — a parcel abroad is priced by its route (step 2b): said, as a card's price is.
+      setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone || q.border) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
     });
   }, [client, did, state.accept.destPudoDid, state.acceptDerived, state.accept.fragile, state.accept.dims, state.counterPrices]);
 
@@ -1333,6 +1348,12 @@ export function useAgentApp() {
   /** "By area", corrected by eye: a tap on the map marks the place the shops are ordered around (2026-10-25). */
   const markDestNear = useCallback((point: GeoPoint) => {
     setState((s) => ({ ...s, acceptNear: point, acceptGeoNote: t('agent.toast.geoMarked') }));
+  }, []);
+
+  /** 2026-11-18 — a parcel abroad: its declaration, field by field (step 2b). */
+  const setAbroad = useCallback((p: Partial<AbroadForm>) => {
+    takeInStarted.current ??= Date.now();
+    setState((s) => ({ ...s, accept: { ...s.accept, abroad: { ...s.accept.abroad, ...p } } }));
   }, []);
 
   const pickDest = useCallback((point: { did: string; zone: string; shopName: string }) => {
@@ -1366,12 +1387,12 @@ export function useAgentApp() {
     if (!client || !q) return;
     const epoch = ++geocodeEpoch.current;
     setState((s) => ({ ...s, acceptGeoBusy: true, acceptGeoNote: null }));
-    // Looked for in the shop's own country: a walk-up at the counter cannot cross a border, and "Westlands" is also a
+    // Looked for in the shop's own country — and the countries a route is on to (step 2b) — as "Westlands" is also a
     // suburb of Johannesburg.
     // A record from before shops had a country leaves it out; the shop list, from the server, says it for every shop.
-    const { agent, acceptPoints } = stateRef.current;
+    const { agent, acceptPoints, abroadRoutes } = stateRef.current;
     const own = agent?.country ?? acceptPoints.find((p) => p.did === agent?.did)?.country;
-    const g = await geocodePlace(q, own ? [own] : []);
+    const g = await geocodePlace(q, own ? [own, ...abroadRoutes.map((r) => r.to)] : []);
     if (epoch !== geocodeEpoch.current) return;
     if (!g) {
       setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: t('agent.toast.geoNotFound') }));
@@ -1795,6 +1816,11 @@ export function useAgentApp() {
     // P3 — the same gate the button shows: no take-in on terms nobody has been shown (or told).
     const terms = stateRef.current.takeInTerms;
     if (termsBlock(terms, stateRef.current.takeInTermsState, stateRef.current.termsTold, t)) return;
+    // 2026-11-18 — a parcel abroad (step 2b): declared, and only with a signal — its price and papers come from SeeBuyGet.
+    const { acceptPoints, abroadRoutes, agent } = stateRef.current;
+    const abroad = abroadRouteFor(acceptPoints, f.destPudoDid, agent?.country, abroadRoutes);
+    if (abroad && abroadMissing(f.abroad, t)) return;
+    if (abroad && isOfflineNow()) return; // the button says so, and waits for a signal
     await run('accept', async () => {
       const r = await client.api.accept({
         agentDid: did,
@@ -1817,6 +1843,7 @@ export function useAgentApp() {
         ...(terms && !terms.cashAccepted ? { paymentMode: 'prepaid' as const } : {}),
         // 2026-11-08 — the price the sender was told: refused, and said anew, if it has moved since.
         ...(stateRef.current.acceptPrice ? { expectedTotal: stateRef.current.acceptPrice.gross } : {}),
+        ...(abroad ? { abroad: abroadBody(f.abroad) } : {}),
       });
       if (r.error) {
         const now = (r.error as { params?: { now?: unknown } }).params?.now;
@@ -1834,12 +1861,12 @@ export function useAgentApp() {
       }
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
-      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string; originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data);
+      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string }; originAgentDid?: string; destAgentDid?: string; binSlot?: string; shipmentCost?: number; currency?: string; originSlot?: string; goesInBag?: { code: string; label: string }; border?: { papers?: { svg?: string } } }>(r.data);
       // Collected here (2026-11-05): on the shelf already, and taken in for its route's price, in cash.
       const here = p && p.destAgentDid && p.originAgentDid === p.destAgentDid ? { binSlot: p.binSlot, cashDue: p.shipmentCost, currency: p.currency } : undefined;
       // A walk-up priced from the country's card: the cash to take, said again on the label sheet.
       const cash = p && !here && p.shipmentCost != null ? { amount: p.shipmentCost, currency: p.currency } : undefined;
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(cash ? { cash } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}) } : null }));
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(cash ? { cash } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}), ...(p.border?.papers?.svg ? { papersSvg: p.border.papers.svg } : {}) } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
@@ -2942,6 +2969,7 @@ export function useAgentApp() {
       setDestMode,
       markDestNear,
       pickDest,
+      setAbroad,
       geocodeAddress,
       geocodePlace,
       setHandover,

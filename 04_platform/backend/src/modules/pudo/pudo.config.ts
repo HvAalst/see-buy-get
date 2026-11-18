@@ -144,6 +144,12 @@ export const NETWORK_JURISDICTION = DEFAULT_VENDOR_COUNTRY;
  */
 export const BORDER_DWELL_H = 4;
 /**
+ * 2026-11-18 — THE LEG A ROUTE ACROSS A BORDER CARRIES (the plan "Parcels across a border", step 2b): from its departure hub to
+ * its arrival airport's warehouse, by the route's carrier — the forwarder's acceptance, the flight or the road, the handling at
+ * arrival. Our figure, said, until the route's own parcels have measured it; the wait at customs comes on top (BORDER_DWELL_H).
+ */
+export const BORDER_ROUTE_LEG_H = 48;
+/**
  * How long a QUOTED price is held for, once a merchant has a name to redeem it by.
  *
  * Long enough for a real checkout — a buyer still has an address to type and a card to find — and short

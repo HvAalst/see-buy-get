@@ -11,7 +11,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { DidService } from '../../foundation/did/did.service';
 import { AgentService } from './agent.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
@@ -24,7 +24,7 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -32,6 +32,7 @@ import { CargoService } from './cargo.service';
 import { CargoNature } from './cargo.types';
 import { declareFor } from './customs';
 import type { ShipmentQuote } from './routing.service';
+import type { BookedRoute } from './border-routes.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
@@ -730,6 +731,10 @@ interface AcceptInput {
   destPudoDid?: string; // optional: nominate the destination PUDO up front (enables MDP pre-sort routing)
   /** 2026-11-05 — a parcel collected at the shop taking it in: its price, from the route (one stop, the shop's fee once). */
   sameShopQuote?: ShipmentQuote;
+  /** 2026-11-18 — to a shop in another country (step 2b): the route it is booked on and its price by it (the controller works both out), and its declaration. */
+  abroadRoute?: BookedRoute;
+  abroadQuote?: ShipmentQuote;
+  abroad?: { contents: string; itemCount: number; declaredValue: number; currency: string; invoicePhotoRef: string; contentsPhotoRef: string; seal: string; senderName: string; receiverName: string };
   observedAt?: string; // round 23: when the counter took it in, by its phone's clock (a take-in kept with no signal)
 }
 
@@ -1534,6 +1539,64 @@ export class ParcelService implements OnApplicationBootstrap {
     return testing.length ? { test: true } : {};
   }
 
+  /**
+   * 2026-11-18 — A PARCEL ABROAD AT THE COUNTER (step 2b): nothing for a parcel staying in the country; for one to another, the
+   * route, its price and its declaration, or refused by name — no route on, no declaration, not cash, an invoice in no money,
+   * the same photo given twice, a photo we do not hold. Asked before anything is written.
+   */
+  private abroadOf(input: AcceptInput, agent: ReturnType<AgentService['get']>): { route: BookedRoute; quote: ShipmentQuote; customs: CustomsDeclaration; declaration: NonNullable<AcceptInput['abroad']>; border: Omit<ParcelBorder, 'papers'> } | undefined {
+    if (!input.destPudoDid) return undefined;
+    const dest = this.agents.get(input.destPudoDid);
+    const from = this.agents.countryOf(agent);
+    const to = this.agents.countryOf(dest);
+    if (to === from) return undefined;
+    const name = (c: string) => catalogueEntry(c)?.name ?? c;
+    if (!input.abroadRoute || !input.abroadQuote) {
+      throw new GlosError('CUSTOMS_INCOMPLETE', `${dest.shopName} is in another country, and no route from ${name(from)} to ${name(to)} is on: parcels cannot be sent there from this counter yet`, { fromCountry: from, toCountry: to });
+    }
+    const d = input.abroad;
+    if (!d) throw new GlosError('CUSTOMS_INCOMPLETE', `${dest.shopName} is in another country, so this parcel needs its declaration first: what it holds, what it is worth from its invoice, and its seal`, { missing: ['declaration'] });
+    if ((input.paymentMode ?? 'cash') !== 'cash') throw new GlosError('INVALID_INPUT', 'A parcel abroad is paid at this counter, in cash', { field: 'paymentMode' });
+    if (!isKnownCurrency(d.currency)) throw new GlosError('INVALID_INPUT', `${d.currency} is not a currency any country settles in: write the one on the invoice`, { field: 'abroad.currency' });
+    if (new Set([input.dropoffPhotoRef, d.invoicePhotoRef, d.contentsPhotoRef]).size !== 3) {
+      throw new GlosError('PHOTO_REQUIRED', 'The parcel, its invoice and what is inside are three photos: take each of them', { field: 'abroad.invoicePhotoRef' });
+    }
+    this.media.requireHeld(d.invoicePhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'abroad.invoicePhotoRef');
+    this.media.requireHeld(d.contentsPhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'abroad.contentsPhotoRef');
+    const route = input.abroadRoute;
+    const customs = declareFor({
+      crossings: input.abroadQuote.crossings,
+      items: [{ name: d.contents.trim(), qty: d.itemCount }],
+      declaredValue: d.declaredValue,
+      currency: d.currency.trim().toUpperCase(),
+      exporterId: hashPhone(input.senderMobile) || input.agentDid,
+      importerRef: hashPhone(input.receiverMobile) || undefined,
+      namedPlace: `${dest.shopName}, ${dest.zone}`,
+      at: new Date().toISOString(),
+      context: 'This parcel',
+    });
+    const size = input.abroadQuote.size === 'HEAVY' ? 'L' : input.abroadQuote.size;
+    return {
+      route,
+      quote: input.abroadQuote,
+      customs,
+      declaration: d,
+      border: {
+        from: route.from,
+        to: route.to,
+        departure: { ...route.departure },
+        arrival: { ...route.arrival },
+        carrier: { ...route.carrier },
+        routePrice: route.prices[size],
+        currency: route.prices.currency,
+        seal: d.seal.trim(),
+        invoicePhotoRef: d.invoicePhotoRef,
+        senderName: d.senderName.trim(),
+        receiverName: d.receiverName.trim(),
+      },
+    };
+  }
+
   accept(input: AcceptInput): Parcel {
     if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
     if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
@@ -1547,25 +1610,17 @@ export class ParcelService implements OnApplicationBootstrap {
     // anything is written, so the counter can say the new one. Not a take-in kept with no signal (step 3b): it happened, the
     // cash changed hands then, and it is priced at the card in force at that moment — a refusal now would only stop the
     // phone's queue. The counter compares the two when it is told the take-in arrived.
-    const priced = (sameShop ? input.sameShopQuote : input.walkInQuote)?.locked.gross;
+    const priced = (sameShop ? input.sameShopQuote : (input.abroadQuote ?? input.walkInQuote))?.locked.gross;
     const late = whenSeen(input.observedAt).receivedAt != null;
     if (!late && input.expectedTotal != null && priced != null && Math.abs(priced - input.expectedTotal) > 0.005) {
       throw new GlosError('PRICE_CHANGED', `The price is now ${priced}, not ${input.expectedTotal}: tell the sender the new price`, { expected: input.expectedTotal, now: priced });
     }
     const agent = this.agents.get(input.agentDid);
-    // A counter take-in declares a size and a photo, never a contents list and a value, so a parcel handed
-    // over this counter cannot be papered for a border. Compared shop-to-shop rather than through a quote,
-    // because this flow prices from the wholesale rate and never asks for one.
-    if (input.destPudoDid) {
-      const dest = this.agents.get(input.destPudoDid);
-      if (this.agents.countryOf(dest) !== this.agents.countryOf(agent)) {
-        throw new GlosError(
-          'CUSTOMS_INCOMPLETE',
-          `${dest.shopName} is in another country, and a counter take-in cannot declare contents and value for a border — a store can ship there today`,
-          { fromCountry: this.agents.countryOf(agent), toCountry: this.agents.countryOf(dest) },
-        );
-      }
-    }
+    // 2026-11-18 — A PARCEL ABROAD (the plan "Parcels across a border", step 2b). To a shop in another country only on a route
+    // that is on, priced by it (the controller works both out), declared at this counter — what it holds, what it is worth from
+    // its invoice, the seal put on it, who sends and who receives it — and paid here in cash. Refused by name before anything is
+    // written. Compared shop to shop, as before: a counter with no route there still cannot paper a parcel for a border.
+    const abroad = this.abroadOf(input, agent);
     /**
      * THE DOOR: may goods be taken in here at all, and under WHOSE promise?
      *
@@ -1578,6 +1633,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // The terms the counter was shown (P3) — the same computation, so the stamp below is what was said.
     const terms = this.takeInTerms(input.agentDid);
     const promise = terms.promise;
+    // A parcel abroad is ours to price and to collect for: the route needs a company of ours selling here.
+    if (abroad && promise !== 'ours') throw new GlosError('FORBIDDEN', `A parcel abroad is taken in where a company of ours sells, and none does in ${catalogueEntry(this.agents.countryOf(agent))?.name ?? this.agents.countryOf(agent)} today`);
     if (promise === 'none') {
       // One refusal, in words about THIS shop and THIS country — not about daughter companies, and not
       // at the far end of a money path the shopkeeper cannot see.
@@ -1695,6 +1752,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
     // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
     if (sameShop && input.sameShopQuote) Object.assign(parcel, this.pricedFrom(input.sameShopQuote));
+    // 2026-11-18 — a parcel abroad keeps its price by its route, its declaration, and the route as it stood (step 2b).
+    else if (abroad) Object.assign(parcel, this.pricedFrom(abroad.quote), { customs: abroad.customs, contentPhotoRef: abroad.declaration.contentsPhotoRef, border: { ...abroad.border, papers: { svg: '' } } });
     // A walk-up priced from its country's card keeps that price and what it was made of, as a booking does.
     else if (input.walkInQuote) Object.assign(parcel, this.pricedFrom(input.walkInQuote));
     // A same-shop parcel goes on this shop's shelf now: the slot FIRST, before the parcel is kept — a full shelf refuses
@@ -1703,11 +1762,16 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-05 — any other walk-up is told where it goes, as a booking is: the open bag for its next stop, or a shelf slot.
     else this.placeTakenIn(parcel, input.agentDid);
     parcel.label = this.label(parcel);
+    if (parcel.border) parcel.border.papers = { svg: this.borderPapers(parcel) };
     this.parcels.set(parcel.parcelId, parcel);
     // The account each number is certainly for today, so the parcel stays theirs when the number does not.
     this.keep(parcel.parcelId, { sender: this.accountAt(parcel.senderPhoneHash), receiver: this.accountAt(parcel.receiverPhoneHash) });
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
     this.media.adopt(input.dropoffPhotoRef, input.agentDid, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
+    if (abroad) {
+      this.media.adopt(abroad.declaration.invoicePhotoRef, input.agentDid, { type: 'parcel', id: parcel.parcelId }, 'invoice');
+      this.media.adopt(abroad.declaration.contentsPhotoRef, input.agentDid, { type: 'parcel', id: parcel.parcelId }, 'content');
+    }
 
     /**
      * OUR MONEY MOVES ONLY WHERE OUR PROMISE STANDS.
@@ -1716,7 +1780,7 @@ export class ParcelService implements OnApplicationBootstrap {
      * to a float we do not hold, no labour accrued by a company that does not operate there. What the
      * network still does is the thing it went there to do — hold the custody chain, and prove it.
      */
-    if (promise === 'ours' && mode === 'cash' && (sameShop || input.walkInQuote) && parcel.shipmentCost != null) {
+    if (promise === 'ours' && mode === 'cash' && (sameShop || abroad || input.walkInQuote) && parcel.shipmentCost != null) {
       // Collected in cash against the price its route gave — the shop's fee once, our fee, the tax — and remitted, tax and
       // all, as a Send parcel's is; then the shop is paid its take-in, which meets its own fee (takeInPayOf).
       const due = parcel.shipmentCost ?? 0;
@@ -3438,6 +3502,13 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="120" y="110" font-family="Arial" font-size="9" fill="#6E7684">Created ${labelDate(parcel.acceptedAt)}</text>`,
       // A parcel crossing a border carries its papers: said where the counter and the border post both look first (round 13).
       ...(parcel.customs ? [`<text x="120" y="122" font-family="Arial" font-size="9" font-weight="bold" fill="#B42318">Customs papers in the pouch</text>`] : []),
+      // 2026-11-18 — a parcel abroad at a counter (step 2b): its seal, and the airports it leaves from and arrives at.
+      ...(parcel.border
+        ? [
+            `<text x="308" y="142" font-family="Arial" font-size="9" text-anchor="end" fill="#0B1F5C">Seal ${esc(parcel.border.seal)}</text>`,
+            `<text x="308" y="156" font-family="Arial" font-size="9" font-weight="bold" text-anchor="end" fill="#0B1F5C">${esc(parcel.border.departure.airport)} → ${esc(parcel.border.arrival.airport)}</text>`,
+          ]
+        : []),
       `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`,
       `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`,
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
@@ -3446,6 +3517,43 @@ export class ParcelService implements OnApplicationBootstrap {
       `</svg>`,
     ].join('');
     return { parcelId: parcel.parcelId, qrPayload, svg };
+  }
+
+  /**
+   * 2026-11-18 — THE CUSTOMS PAPERS OF A PARCEL ABROAD (step 2b), printed at the counter for the pouch: what it holds and what it
+   * is worth from its invoice, who sends and who receives it, the seal, the route's airports and carrier. In English, the
+   * language of the forms they stand in for; duties and taxes said as the receiver's (DAP).
+   */
+  private borderPapers(parcel: Parcel): string {
+    const b = parcel.border!;
+    const c = parcel.customs;
+    const esc = (s: string) => s.replace(/[<>&"']/g, (x) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[x] as string);
+    const origin = parcel.originAgentDid ? this.agents.get(parcel.originAgentDid) : undefined;
+    const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
+    const country = (code: string) => catalogueEntry(code)?.name ?? code;
+    const rows: Array<[string, string]> = [
+      ['Parcel', `${parcel.parcelId} · ${parcel.trackingKey ?? ''}`],
+      ['From', `${b.senderName}, at ${origin?.shopName ?? ''}, ${country(b.from)}`],
+      ['To', `${b.receiverName}, at ${dest?.shopName ?? parcel.destZone}, ${country(b.to)}`],
+      ['Contents', c ? `${c.contents} (${c.itemCount} item${c.itemCount === 1 ? '' : 's'})` : ''],
+      ['Value', c ? `${c.declaredValue.toFixed(2)} ${c.currency}, from the invoice` : ''],
+      ['Seal', b.seal],
+      ['Route', `${b.departure.airport} → ${b.arrival.airport}, by ${b.carrier.name}`],
+      ['Duties', 'Import taxes and duties are the receiver’s (DAP)'],
+      ['Declared', labelDate(parcel.acceptedAt)],
+    ];
+    const h = 64 + rows.length * 20;
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="${h}" viewBox="0 0 320 ${h}">`,
+      `<rect width="320" height="${h}" fill="#fff" stroke="#0B1F5C"/>`,
+      `<text x="12" y="26" font-family="Arial" font-size="14" font-weight="bold" fill="#0B1F5C">Customs declaration</text>`,
+      `<text x="12" y="44" font-family="Arial" font-size="9" fill="#4A5261">SeeBuyGet · goods carried for others · keep in the pouch</text>`,
+      ...rows.flatMap(([k, v], i) => [
+        `<text x="12" y="${70 + i * 20}" font-family="Arial" font-size="9" fill="#6E7684">${esc(k)}</text>`,
+        `<text x="72" y="${70 + i * 20}" font-family="Arial" font-size="10" fill="#0B1F5C">${esc(v.length > 52 ? `${v.slice(0, 51)}…` : v)}</text>`,
+      ]),
+      `</svg>`,
+    ].join('');
   }
 
   /** Round 29 — GS1's part of a store parcel's label: its SSCC as a person reads it and as a scanner does (package-labels.ts). */

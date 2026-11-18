@@ -17819,6 +17819,35 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/abroad": {
+      "get": {
+        "operationId": "Sbg.abroadRoutes",
+        "summary": "",
+        "description": "2026-11-18 — WHERE THIS COUNTER CAN SEND A PARCEL ABROAD (step 2b): the countries a route is on to from its own, with the\nairports it goes by — what the take-in screen offers shops in. Owner-scoped, as the take-in terms are.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CounterAbroadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/book-freight": {
       "post": {
         "operationId": "Sbg.bookFreight",
@@ -66918,6 +66947,66 @@
           "h"
         ]
       },
+      "AbroadDeclarationDto": {
+        "type": "object",
+        "properties": {
+          "contents": {
+            "type": "string",
+            "description": "What is in it, as the sender and the counter saw it.",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "itemCount": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "declaredValue": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 100000000
+          },
+          "currency": {
+            "type": "string",
+            "description": "The invoice's money: a currency some country settles in.",
+            "pattern": "/^[A-Za-z]{3}$/"
+          },
+          "invoicePhotoRef": {
+            "type": "string"
+          },
+          "contentsPhotoRef": {
+            "type": "string"
+          },
+          "seal": {
+            "type": "string",
+            "description": "The number on the seal put on it at the counter, in front of the sender (D7).",
+            "minLength": 3,
+            "maxLength": 40
+          },
+          "senderName": {
+            "type": "string",
+            "description": "Who sends it and who receives it, as the customs papers name them.",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "receiverName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "contents",
+          "itemCount",
+          "declaredValue",
+          "currency",
+          "invoicePhotoRef",
+          "contentsPhotoRef",
+          "seal",
+          "senderName",
+          "receiverName"
+        ]
+      },
       "AcceptParcelDto": {
         "type": "object",
         "properties": {
@@ -66998,6 +67087,14 @@
           "observedAt": {
             "type": "string",
             "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
+          },
+          "abroad": {
+            "description": "2026-11-18 — to a shop in another country, on a route that is on: its declaration (step 2b).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AbroadDeclarationDto"
+              }
+            ]
           }
         },
         "required": [
@@ -67460,6 +67557,106 @@
           "holderId",
           "holderKind",
           "from"
+        ]
+      },
+      "ParcelBorder": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "departure": {
+            "type": "object",
+            "properties": {
+              "airport": {
+                "required": true,
+                "type": "string"
+              },
+              "mdpId": {
+                "required": true,
+                "type": "string"
+              },
+              "name": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "arrival": {
+            "type": "object",
+            "properties": {
+              "airport": {
+                "required": true,
+                "type": "string"
+              },
+              "mdpId": {
+                "required": true,
+                "type": "string"
+              },
+              "name": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "carrier": {
+            "type": "object",
+            "properties": {
+              "entityId": {
+                "required": true,
+                "type": "string"
+              },
+              "name": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "routePrice": {
+            "type": "number",
+            "description": "The route's price for its size, in `currency` — inside the parcel's price (D15)."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "seal": {
+            "type": "string"
+          },
+          "invoicePhotoRef": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string"
+          },
+          "receiverName": {
+            "type": "string"
+          },
+          "papers": {
+            "type": "object",
+            "properties": {
+              "svg": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "departure",
+          "arrival",
+          "carrier",
+          "routePrice",
+          "currency",
+          "seal",
+          "invoicePhotoRef",
+          "senderName",
+          "receiverName",
+          "papers"
         ]
       },
       "ParcelScan": {
@@ -68054,6 +68251,14 @@
             "type": "object",
             "description": "THE PROMISE, KEPT — the route it should take and when it should be ready to collect, as planned the moment it\nentered custody at its first shop (JourneyPlanService). Frozen then and never rewritten, so it can be held\nagainst what happened (`planVsActual`). The tracking page used to work its plan out again at every read, and a\npromise worked out afresh every time is always on time. Absent where no route could be planned."
           },
+          "border": {
+            "description": "2026-11-18 — booked at a counter on a route across a border (step 2b): the route as it stood, and the counter's checks.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelBorder"
+              }
+            ]
+          },
           "scans": {
             "type": "array",
             "items": {
@@ -68083,6 +68288,43 @@
           "payAtCollection",
           "doorHold",
           "scans"
+        ]
+      },
+      "CounterAbroadRoute": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "departure": {
+            "type": "string"
+          },
+          "arrival": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "name",
+          "departure",
+          "arrival"
+        ]
+      },
+      "CounterAbroadView": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CounterAbroadRoute"
+            }
+          }
+        },
+        "required": [
+          "routes"
         ]
       },
       "LoadEnd": {
@@ -83316,7 +83558,8 @@
               "job_card",
               "gs1_licence",
               "tamper",
-              "filed"
+              "filed",
+              "invoice"
             ]
           },
           "dataUrl": {

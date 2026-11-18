@@ -11,6 +11,7 @@ import { DirectoryService } from './directory.service';
 import { MdpService } from './mdp.service';
 import {
   BORDER_CONDITIONS,
+  type BookedRoute,
   type BorderAirport,
   type BorderArrivalAirport,
   type BorderCarrier,
@@ -226,6 +227,46 @@ export class BorderRouteService {
   routeOf(from: string, to: string): Readonly<Pick<Route, 'from' | 'to' | 'state' | 'departure' | 'carrier' | 'prices' | 'arrival'>> | undefined {
     const r = this.routes.get(key(from, to));
     return r ? { from: r.from, to: r.to, state: r.state, ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}) } : undefined;
+  }
+
+  /**
+   * 2026-11-18 — A PARCEL BOOKED ON THE ROUTE (the plan, step 2b): the route as it stands now, for the parcel to keep — or refused
+   * by name, before anything is written: not on, or its arrival airport no longer open with its licensed warehouse (a licence
+   * can run out while a route is on).
+   */
+  bookable(fromCode: string, toCode: string, now: number = Date.now()): BookedRoute {
+    const from = this.country(fromCode);
+    const to = this.country(toCode);
+    const name = (c: string) => catalogueEntry(c)?.name ?? c;
+    const r = this.routes.get(key(from, to));
+    if (!r || r.state !== 'on') throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} are not sent from ${name(from)} yet: no route between them is on`, { from, to });
+    const w = r.arrival ? this.warehouseAt(to, r.arrival.airport, now) : undefined;
+    if (!r.departure || !r.carrier || !r.prices || !r.arrival || !w || !this.openAirports(to, now).includes(r.arrival.airport)) {
+      throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} cannot be booked now: the route’s arrival airport is not open with its licensed customs warehouse`, { from, to });
+    }
+    return {
+      from,
+      to,
+      departure: { airport: r.departure.airport, mdpId: r.departure.mdpId, name: r.departure.name },
+      arrival: { airport: r.arrival.airport, mdpId: w.mdpId, name: w.name },
+      carrier: { entityId: r.carrier.entityId, name: r.carrier.name },
+      prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L, currency: r.prices.currency },
+    };
+  }
+
+  /** The routes on from a country, for a counter there to offer (step 2b): where to, and what each size costs on the route. */
+  onFrom(fromCode: string, now: number = Date.now()): BookedRoute[] {
+    const from = this.country(fromCode);
+    return [...this.routes.values()]
+      .filter((r) => r.from === from && r.state === 'on')
+      .flatMap((r) => {
+        try {
+          return [this.bookable(r.from, r.to, now)];
+        } catch {
+          return [];
+        }
+      })
+      .sort((a, b) => a.to.localeCompare(b.to));
   }
 
   /** The customs warehouse hub at an airport, while its licence holds — where a parcel on the route waits for customs (step 2c). */

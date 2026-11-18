@@ -107,6 +107,47 @@ export class BorderArrivalAirport {
   @ApiProperty() at: string;
 }
 
+/** 2026-11-18 — a country a counter can send a parcel to (step 2b): a route on from its own, and the airports it goes by. */
+export class CounterAbroadRoute {
+  @ApiProperty() to: string;
+  @ApiProperty() name: string;
+  @ApiProperty() departure: string;
+  @ApiProperty() arrival: string;
+}
+
+export class CounterAbroadView {
+  @ApiProperty({ type: [CounterAbroadRoute] }) routes: CounterAbroadRoute[];
+}
+
+/** 2026-11-18 — a stop of a route as a parcel booked on it keeps it: an airport and the hub of ours there. */
+export class BookedStop {
+  @ApiProperty() airport: string;
+  @ApiProperty() mdpId: string;
+  @ApiProperty() name: string;
+}
+
+export class BookedCarrier {
+  @ApiProperty() entityId: string;
+  @ApiProperty() name: string;
+}
+
+export class BookedPrices {
+  @ApiProperty() S: number;
+  @ApiProperty() M: number;
+  @ApiProperty() L: number;
+  @ApiProperty() currency: string;
+}
+
+/** 2026-11-18 — what a parcel booked on a route keeps of it (the plan, step 2b): the route as it stood when it was booked. */
+export class BookedRoute {
+  @ApiProperty() from: string;
+  @ApiProperty() to: string;
+  @ApiProperty({ type: BookedStop }) departure: BookedStop;
+  @ApiProperty({ type: BookedStop }) arrival: BookedStop;
+  @ApiProperty({ type: BookedCarrier }) carrier: BookedCarrier;
+  @ApiProperty({ type: BookedPrices }) prices: BookedPrices;
+}
+
 export class BorderCarrier {
   /** A forwarder or haulier from the directory. */
   @ApiProperty() entityId: string;

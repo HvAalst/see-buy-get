@@ -116,8 +116,10 @@ export function sendAsMine(fromKey: string): void {
  * making it can see with their own eyes and does not need us to confirm. Nothing that moves money on its
  * own, nothing that grants access, and nothing whose answer the person is waiting to read.
  */
-const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
-  { method: 'POST', test: /^\/v1\/sbg\/parcels\/accept$/, label: 'Parcel taken in at the counter' },
+const QUEUEABLE: Array<{ method: string; test: RegExp; label: string; unless?: (body: unknown) => boolean }> = [
+  // 2026-11-18 — …except a parcel abroad (parcels across a border, step 2b): its price, its route and its papers come from
+  // SeeBuyGet while the sender stands there, so with no signal it is not taken in at all.
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/accept$/, label: 'Parcel taken in at the counter', unless: (body) => Boolean(body && typeof body === 'object' && 'abroad' in body) },
   { method: 'POST', test: /^\/v1\/sbg\/parcels\/handover$/, label: 'Handed to the bus' },
   { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/intake$/, label: 'Parcel taken in' },
   { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/arrive$/, label: 'Parcel arrived' },
@@ -476,6 +478,7 @@ export function offlineFetch(base: typeof fetch, apiOrigin: () => string): typeo
     try {
       return await base(input, { ...init, headers });
     } catch (err) {
+      if (QUEUEABLE.find((q) => q.method === method && q.test.test(path))?.unless?.(body)) throw err;
       // Only a genuine failure to reach the network queues. A refusal that arrived is an answer, and an
       // answer — even a bad one — must reach the caller rather than being quietly written to disk.
       enqueue({ id: `ob_${key}`, key, method, path, body, label, at: new Date().toISOString() });

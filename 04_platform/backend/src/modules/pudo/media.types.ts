@@ -72,6 +72,8 @@ export const MEDIA_KINDS = [
    * and onto the dispute clock with them when a claim or a problem is reported.
    */
   'filed',
+  /** 2026-11-18 — the goods' invoice or receipt, photographed at the counter for a parcel abroad: what its value is declared from (D11). */
+  'invoice',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -186,6 +188,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   job_card: 'vehicle-record',
   gs1_licence: 'dispute-evidence',
   tamper: 'shipment-proof', // round 35 — what was found under the tamper protocol, kept with the unit's other proof
+  invoice: 'shipment-proof', // 2026-11-18 — the invoice a parcel abroad is declared from: kept with its other proof
   filed: 'shipment-proof', // 2026-11-02 — filed from a conversation: on the record's clock, moved to the dispute clock with the rest
 };
 

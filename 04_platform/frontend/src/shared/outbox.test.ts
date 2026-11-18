@@ -159,6 +159,17 @@ describe('the outbox', () => {
       expect(outboxItems()[0]).toMatchObject({ path: '/v1/sbg/parcels/accept', body: { parcelId: 'PUD-7' } });
     });
 
+    it('does NOT queue a parcel abroad: its price, route and papers come while the sender stands there (2026-11-18)', async () => {
+      const base = (async () => {
+        throw new TypeError('Failed to fetch');
+      }) as unknown as typeof fetch;
+      await expect(wrap(base)(`${ORIGIN}/v1/sbg/parcels/accept`, { method: 'POST', body: JSON.stringify({ parcelId: 'PUD-AB', abroad: { contents: 'Shoes' } }) })).rejects.toThrow('Failed to fetch');
+      expect(outboxCount()).toBe(0);
+      // The same take-in at home is kept, as before.
+      expect((await wrap(base)(`${ORIGIN}/v1/sbg/parcels/accept`, { method: 'POST', body: JSON.stringify({ parcelId: 'PUD-HOME' }) })).status).toBe(202);
+      expect(outboxCount()).toBe(1);
+    });
+
     it('does NOT queue a refusal that actually arrived', async () => {
       // An answer — even a bad one — must reach the caller rather than being quietly written to disk.
       const base = (async () => new Response(JSON.stringify({ detail: 'no' }), { status: 409 })) as unknown as typeof fetch;

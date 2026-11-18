@@ -4,7 +4,7 @@ import { selectablePoints, takeInTermsNotice, termsBlock } from './logic';
 import type { NetworkPoint, TakeInTerms } from './types';
 
 describe('the destination picker at a counter', () => {
-  it('never offers a shop in another country — a walk-up cannot cross a border', () => {
+  it('never offers a shop in another country no route is on to — a walk-up crosses a border only on one', () => {
     const pt = (did: string, country?: string): NetworkPoint => ({ did, shopName: did, zone: 'Z', country, openState: 'open', pricePerParcel: 1 });
     const pts = [pt('nairobi', 'KE'), pt('dar', 'TZ'), pt('legacy')];
     expect(selectablePoints(pts, undefined, null, 'KE').map((p) => p.did)).toEqual(['legacy', 'nairobi']);

@@ -53,6 +53,8 @@ import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester,
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
+import { BorderRouteService } from './border-route.service';
+import type { BookedRoute, CounterAbroadView } from './border-routes.types';
 import type { Response } from 'express';
 import { zplOut } from '../../foundation/label/zpl';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -432,6 +434,8 @@ export class SbgController {
     @Optional() private readonly loadPay?: PersonLoadPayService,
     // 2026-11-15 — who did what on a store's Connect page: keys, the update address, the secret (the owner).
     @Optional() private readonly storeActivity?: StoreActivityService,
+    // 2026-11-18 — routes across a border (the plan "Parcels across a border", step 2b): a parcel abroad at the counter.
+    @Optional() private readonly borderRoutes?: BorderRouteService,
   ) {}
 
   /**
@@ -4022,8 +4026,10 @@ export class SbgController {
     const sameShopQuote = dto.destPudoDid && dto.destPudoDid === agentDid ? this.sameShopQuote(agentDid, dto) : undefined;
     // 2026-11-08 — and where its country's price card is in force, a walk-up to another shop is priced from the card too: the
     // counter collects that price in cash, as for a booking. Elsewhere it is the flat price it always was.
-    const walkInQuote = !sameShopQuote && dto.destPudoDid ? this.walkInQuote(agentDid, dto) : undefined;
-    const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}), ...(walkInQuote ? { walkInQuote } : {}) });
+    // 2026-11-18 — to a shop in another country (step 2b): only on a route that is on — refused by name otherwise — priced by it.
+    const abroad = !sameShopQuote && dto.destPudoDid ? this.abroadQuote(agentDid, dto) : undefined;
+    const walkInQuote = !sameShopQuote && !abroad && dto.destPudoDid ? this.walkInQuote(agentDid, dto) : undefined;
+    const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}), ...(walkInQuote ? { walkInQuote } : {}), ...(abroad ? { abroadRoute: abroad.route, abroadQuote: abroad.quote } : {}) });
     // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it. Counted in
     // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
     this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
@@ -4049,6 +4055,36 @@ export class SbgController {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * 2026-11-18 — A WALK-UP TO A SHOP IN ANOTHER COUNTRY (step 2b): the route it goes on, as it stands, and its price by it (D15) —
+   * or nothing for a parcel staying in the country. A route that is not on, or whose arrival airport has closed, is refused by
+   * name here, before the parcel is looked at.
+   */
+  private abroadQuote(agentDid: string, dto: AcceptParcelDto): { route: BookedRoute; quote: ShipmentQuote } | undefined {
+    const from = this.agents.countryOf(this.agents.get(agentDid));
+    const to = this.agents.countryOf(this.agents.get(dto.destPudoDid!));
+    if (from === to || !this.borderRoutes) return undefined;
+    const at = whenSeen(dto.observedAt).at;
+    const route = this.borderRoutes.bookable(from, to, at);
+    const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
+    const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
+    return { route, quote: this.routing.quoteAbroad(agentDid, dto.destPudoDid!, size, route, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true, at }) };
+  }
+
+  /**
+   * 2026-11-18 — WHERE THIS COUNTER CAN SEND A PARCEL ABROAD (step 2b): the countries a route is on to from its own, with the
+   * airports it goes by — what the take-in screen offers shops in. Owner-scoped, as the take-in terms are.
+   */
+  @Scopes('agent:read:self')
+  @Get('agents/:did/abroad')
+  @AtTheCounter()
+  abroadRoutes(@Param('did') did: string, @Actor() actor: IntrospectionResult): CounterAbroadView {
+    this.assertAgentOwner(did, actor);
+    const from = this.agents.countryOf(this.agents.get(did));
+    const routes = this.borderRoutes?.onFrom(from) ?? [];
+    return { routes: routes.map((r) => ({ to: r.to, name: catalogueEntry(r.to)?.name ?? r.to, departure: r.departure.airport, arrival: r.arrival.airport })) };
   }
 
   /** A parcel's price where it is handed in and collected at the one shop: its size as the counter measured it, one stop. */
@@ -4986,7 +5022,13 @@ export class SbgController {
     this.agents.assertNamedAtMint(origin);
     this.agents.assertNamedAtMint(dest);
     const dims = m ? { l: Number(l), w: Number(w), h: Number(h) } : undefined;
-    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor, { ...this.carriersFrom(kg, fragile, near), ...(dims ? { dims } : {}), ...(consumer === 'true' ? { consumer: true } : {}) }));
+    const carriers = { ...this.carriersFrom(kg, fragile, near), ...(dims ? { dims } : {}), ...(consumer === 'true' ? { consumer: true } : {}) };
+    const sized = m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M');
+    // 2026-11-18 — two shops in two countries a route is on between: priced by the route (step 2b; D15), as the counter will be.
+    const from = this.agents.countryOf(this.agents.get(origin));
+    const to = this.agents.countryOf(this.agents.get(dest));
+    if (from !== to && this.borderRoutes?.isOn(from, to)) return publicQuote(this.routing.quoteAbroad(origin, dest, sized, this.borderRoutes.bookable(from, to), carriers));
+    return publicQuote(this.routing.quoteShipment(origin, dest, sized, m?.factor, carriers));
   }
 
   /** What a quote's query says about the parcel and the asker: its weight, whether it is fragile, where "near me" is. */

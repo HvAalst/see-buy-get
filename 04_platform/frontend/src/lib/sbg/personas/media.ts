@@ -2,6 +2,8 @@ import type { SbgClient } from '../client';
 
 /** The media kinds the upload contract accepts (mirrors the backend UploadMediaDto enum). */
 export type MediaKind =
+  /** 2026-11-18 — the goods' invoice or receipt, for a parcel abroad (parcels across a border, step 2b). */
+  | 'invoice'
   | 'dropoff'
   | 'pod'
   | 'dispute'

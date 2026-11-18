@@ -189,6 +189,31 @@ describe('a route across a border', () => {
     expect(() => setup({ companies: ['NL'] }).setClearer('KE', { kind: 'company', registration: 'R-1' }, 'Amina Staff', NOW)).toThrow(/No company of ours stands in KE/);
   });
 
+  it('2b — a parcel is booked on a route only while it is on and its arrival airport open; it keeps the route as it stood', () => {
+    const svc = setup();
+    readyKenya(svc);
+    expect(() => svc.bookable('NL', 'KE', NOW)).toThrow(/Parcels to Kenya are not sent from Netherlands yet: no route between them is on/);
+    expect(svc.onFrom('NL', NOW)).toEqual([]);
+    svc.propose('NL', 'KE', AMINA, NOW);
+    expect(() => svc.bookable('NL', 'KE', NOW)).toThrow(/no route between them is on/);
+    svc.approve('NL', 'KE', BRIAN, NOW);
+    const booked = svc.bookable('nl', 'ke', NOW);
+    expect(booked).toEqual({
+      from: 'NL',
+      to: 'KE',
+      departure: { airport: 'AMS', mdpId: 'mdp-ams', name: 'Schiphol Hub' },
+      arrival: { airport: 'NBO', mdpId: 'mdp-nbo', name: 'Embakasi Hub' },
+      carrier: { entityId: 'fwd-nl', name: 'Holland Air Forwarding' },
+      prices: { S: 12, M: 19.5, L: 29, currency: 'EUR' },
+    });
+    expect(svc.onFrom('NL', NOW).map((r) => r.to)).toEqual(['KE']);
+    expect(svc.onFrom('KE', NOW)).toEqual([]);
+    // The warehouse's licence runs out while the route is on: nothing more is booked on it, and the counter is not offered it.
+    const later = Date.parse('2027-07-01T10:00:00Z');
+    expect(() => svc.bookable('NL', 'KE', later)).toThrow(/arrival airport is not open with its licensed customs warehouse/);
+    expect(svc.onFrom('NL', later)).toEqual([]);
+  });
+
   it('the clearance fee is in the arrival company’s money; a route needs two countries', () => {
     const svc = setup();
     expect(svc.setFee('KE', 349.999, 'Amina Staff', NOW).fee).toMatchObject({ amount: 350, currency: 'KES' });
