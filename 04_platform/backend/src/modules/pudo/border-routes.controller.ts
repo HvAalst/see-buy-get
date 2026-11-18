@@ -4,7 +4,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import type { Signer } from '../../foundation/entity/same-person';
 import { BorderRouteService } from './border-route.service';
-import { BorderAirportDto, BorderArrivalView, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
+import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
 import { staffOf } from './staff-of';
 
 /**
@@ -59,6 +59,12 @@ export class BorderRoutesController {
   @Post('border-routes/:from/:to/departure')
   departure(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderDepartureDto, @Actor() actor: IntrospectionResult): BorderRouteView {
     return this.borders.setDeparture(from, to, { airport: dto.airport, mdpId: dto.mdpId }, staffOf(actor, dto.by).name);
+  }
+
+  @Roles('operator')
+  @Post('border-routes/:from/:to/arrival')
+  arrival(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderArrivalAirportDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setArrival(from, to, dto.airport, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

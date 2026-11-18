@@ -17,6 +17,7 @@ const route = (o: Partial<BorderRoute>): BorderRoute => ({
   mine: false,
   conditions: (['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport'] as const).map((key) => ({ key, met: true })),
   departureAirports: ['AMS', 'MST', 'EIN'],
+  arrivalAirports: ['NBO', 'MBA', 'KIS'],
   departureHubs: [],
   carriers: [],
   ...o,
@@ -101,6 +102,18 @@ describe('where a route leaves, who carries it, its prices', () => {
     expect(on).not.toContain(`>${t('tower.abroad.dep.save')}<`);
     expect(on).toContain(t('tower.abroad.locked'));
     expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'prices', country: 'NL', to: 'KE' }, nameOf, t)).toBe(t('tower.abroad.change.prices', { who: 'Amina Staff', from: 'Netherlands', to: 'Kenya' }));
+  });
+
+  it('D16 — names where it arrives; says so when that airport is not open yet', () => {
+    const named = renderToString(<RouteRow r={{ ...full, arrival: { airport: 'NBO', by: 'A', at: 'x' } }} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(named).toContain(`>${t('tower.abroad.arrival.save')}<`);
+    const shown = renderToString(<RouteRow r={{ ...full, arrival: { airport: 'NBO', by: 'A', at: 'x' } }} nameOf={nameOf} writer={false} busy={null} onAct={() => {}} />);
+    expect(shown).toContain(`${t('tower.abroad.arrival')}</b> · NBO`);
+    expect(named).not.toContain(t('tower.abroad.arrival.closed', { airport: 'NBO' }));
+    const closed = { ...full, arrival: { airport: 'MBA', by: 'A', at: 'x' }, conditions: full.conditions.map((c) => ({ ...c, met: c.key !== 'airport' })) };
+    expect(renderToString(<RouteRow r={closed} nameOf={nameOf} writer busy={null} onAct={() => {}} />)).toContain(t('tower.abroad.arrival.closed', { airport: 'MBA' }));
+    expect(renderToString(<RouteRow r={route({})} nameOf={nameOf} writer busy={null} onAct={() => {}} />)).toContain(t('tower.abroad.arrival.none'));
+    expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'arrival', country: 'NL', to: 'KE', airport: 'NBO' }, nameOf, t)).toBe('Amina Staff named where Netherlands to Kenya arrives: NBO');
   });
 
   it('says plainly what cannot be named yet: no hub, no carrier, no company to price for', () => {

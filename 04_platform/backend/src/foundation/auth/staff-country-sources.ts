@@ -182,6 +182,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'POST sbg/border-routes/:from/:to': { country: 'param', name: 'from' },
   'POST sbg/border-routes/:from/:to/departure': { country: 'param', name: 'from' },
   'POST sbg/border-routes/:from/:to/carrier': { country: 'param', name: 'from' },
+  'POST sbg/border-routes/:from/:to/arrival': { country: 'param', name: 'from' },
   'POST sbg/border-routes/:from/:to/prices': { country: 'param', name: 'from' },
   'POST sbg/border-arrivals/:country/airports/:airport': { country: 'param', name: 'country' },
   'POST sbg/border-arrivals/:country/airports/:airport/warehouse': { country: 'param', name: 'country' },

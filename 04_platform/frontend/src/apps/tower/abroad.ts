@@ -42,6 +42,6 @@ export function clearerLine(a: BorderArrival, when: (iso: string) => string, t: 
 /** A change, as the log says it: who did what, where. */
 export function abroadChangeLine(c: BorderChange, nameOf: (code: string) => string, t: T): string {
   const params = { who: c.by, from: nameOf(c.country), to: c.to ? nameOf(c.to) : '', country: nameOf(c.country), airport: c.airport ?? '' };
-  const known = ['propose', 'approve', 'decline', 'off', 'airport-open', 'airport-block', 'warehouse', 'clearer', 'clearer-accepted', 'fee', 'departure', 'carrier', 'prices'];
+  const known = ['propose', 'approve', 'decline', 'off', 'airport-open', 'airport-block', 'warehouse', 'clearer', 'clearer-accepted', 'fee', 'departure', 'arrival', 'carrier', 'prices'];
   return known.includes(c.what) ? t(`tower.abroad.change.${c.what}` as MessageKey, params) : `${c.by}: ${c.what}`;
 }

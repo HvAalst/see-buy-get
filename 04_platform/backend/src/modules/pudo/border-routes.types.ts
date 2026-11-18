@@ -100,6 +100,13 @@ export class BorderDeparture {
   @ApiProperty() at: string;
 }
 
+/** 2026-11-18 — D16: the airport in the arrival country the route arrives at, among the open ones. */
+export class BorderArrivalAirport {
+  @ApiProperty() airport: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
 export class BorderCarrier {
   /** A forwarder or haulier from the directory. */
   @ApiProperty() entityId: string;
@@ -137,6 +144,9 @@ export class BorderRouteView {
   @ApiPropertyOptional({ type: BorderDeparture }) departure?: BorderDeparture;
   @ApiPropertyOptional({ type: BorderCarrier }) carrier?: BorderCarrier;
   @ApiPropertyOptional({ type: BorderPrices }) prices?: BorderPrices;
+  @ApiPropertyOptional({ type: BorderArrivalAirport }) arrival?: BorderArrivalAirport;
+  /** The arrival country's airports, for naming where it arrives. */
+  @ApiProperty({ type: [String] }) arrivalAirports: string[];
   /** What may be named here: the sending country's airports, its approved hubs, the forwarders and hauliers in its directory. */
   @ApiProperty({ type: [String] }) departureAirports: string[];
   @ApiProperty({ type: [BorderOption] }) departureHubs: BorderOption[];
@@ -189,6 +199,10 @@ export class BorderClearerDto extends BorderByDto {
 export class BorderDepartureDto extends BorderByDto {
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(3) airport!: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) mdpId!: string;
+}
+
+export class BorderArrivalAirportDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(3) @MaxLength(3) airport!: string;
 }
 
 export class BorderCarrierDto extends BorderByDto {

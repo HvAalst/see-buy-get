@@ -149,6 +149,8 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
   const [airport, setAirport] = useState(r.departure?.airport ?? '');
   const [hub, setHub] = useState(r.departure?.mdpId ?? '');
   const [carrier, setCarrier] = useState(r.carrier?.entityId ?? '');
+  const [arrival, setArrival] = useState(r.arrival?.airport ?? '');
+  const arrivalOpen = r.conditions.find((c) => c.key === 'airport')?.met ?? false;
   const [prices, setPrices] = useState({ S: r.prices ? String(r.prices.S) : '', M: r.prices ? String(r.prices.M) : '', L: r.prices ? String(r.prices.L) : '' });
   const editable = writer && setUp && r.state === 'off';
   const price = (n: number) => (r.prices ? formatMoney(n, r.prices.currency) : '');
@@ -175,6 +177,10 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
         <b>{t('tower.abroad.departure')}</b> · {r.departure ? t('tower.abroad.departureLine', { airport: r.departure.airport, hub: r.departure.name }) : t('tower.abroad.departureNone')}
       </p>
       <p class="chint">
+        <b>{t('tower.abroad.arrival')}</b> · {r.arrival ? r.arrival.airport : t('tower.abroad.arrival.none')}
+      </p>
+      {r.arrival && !arrivalOpen ? <p class="cerr">{t('tower.abroad.arrival.closed', { airport: r.arrival.airport })}</p> : null}
+      <p class="chint">
         <b>{t('tower.abroad.carrier')}</b> · {r.carrier ? r.carrier.name : t('tower.abroad.carrier.none')}
       </p>
       <p class="chint">
@@ -194,6 +200,10 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
               </button>
             </>
           )}
+          <ConsolePick label={t('tower.abroad.arrival.pick', { to })} value={arrival} onChange={setArrival} placeholder="—" options={r.arrivalAirports.map((code) => ({ value: code, label: code }))} />
+          <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !arrival} onClick={() => void setUp.change(`${r.from}-${r.to}:arrival`, () => setUp.api.setBorderArrival(r.from, r.to, { airport: arrival, ...setUp.by }) as Promise<Answer>)}>
+            {t('tower.abroad.arrival.save')}
+          </button>
           {r.carriers.length === 0 ? (
             <p class="chint">{t('tower.abroad.carrier.noCarriers', { from })}</p>
           ) : (

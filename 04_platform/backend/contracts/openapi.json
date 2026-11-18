@@ -41425,6 +41425,51 @@
         }
       }
     },
+    "/v1/sbg/border-routes/{from}/{to}/arrival": {
+      "post": {
+        "operationId": "BorderRoutes.arrival",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderArrivalAirportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-routes/{from}/{to}/carrier": {
       "post": {
         "operationId": "BorderRoutes.carrier",
@@ -93745,6 +93790,25 @@
           "at"
         ]
       },
+      "BorderArrivalAirport": {
+        "type": "object",
+        "properties": {
+          "airport": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "airport",
+          "by",
+          "at"
+        ]
+      },
       "BorderOption": {
         "type": "object",
         "properties": {
@@ -93808,6 +93872,16 @@
           "prices": {
             "$ref": "#/components/schemas/BorderPrices"
           },
+          "arrival": {
+            "$ref": "#/components/schemas/BorderArrivalAirport"
+          },
+          "arrivalAirports": {
+            "description": "The arrival country's airports, for naming where it arrives.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "departureAirports": {
             "description": "What may be named here: the sending country's airports, its approved hubs, the forwarders and hauliers in its directory.",
             "type": "array",
@@ -93838,6 +93912,7 @@
           "state",
           "mine",
           "conditions",
+          "arrivalAirports",
           "departureAirports",
           "departureHubs",
           "carriers"
@@ -94103,6 +94178,24 @@
         "required": [
           "airport",
           "mdpId"
+        ]
+      },
+      "BorderArrivalAirportDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "airport": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          }
+        },
+        "required": [
+          "airport"
         ]
       },
       "BorderCarrierDto": {

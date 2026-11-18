@@ -53,6 +53,7 @@ describe('a route across a border', () => {
   const readyKenya = (svc: BorderRouteService) => {
     svc.setDeparture('NL', 'KE', { airport: 'AMS', mdpId: 'mdp-ams' }, 'Amina Staff', NOW);
     svc.setCarrier('NL', 'KE', 'fwd-nl', 'Amina Staff', NOW);
+    svc.setArrival('NL', 'KE', 'NBO', 'Amina Staff', NOW);
     svc.setPrices('NL', 'KE', { S: 12, M: 19.5, L: 29 }, 'Amina Staff', NOW);
     svc.setWarehouse('KE', 'NBO', { mdpId: 'mdp-nbo', tstLicence: 'TST-KE-0042', validUntil: '2027-06-30', agreement: 'KRA/JKIA/2026/17' }, 'Amina Staff', NOW);
     svc.setAirport('KE', 'NBO', true, 'Amina Staff', NOW);
@@ -63,7 +64,7 @@ describe('a route across a border', () => {
   it('is refused while anything is missing, each thing by name', () => {
     const svc = setup();
     expect(svc.missing('NL', 'KE', NOW)).toEqual(['departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
-    expect(() => svc.propose('NL', 'KE', AMINA, NOW)).toThrow(/no departure airport and hub in NL.*no carrier.*prices for a small.*nobody clears in KE yet.*clearance fee in KE is not set.*no airport in KE is open/);
+    expect(() => svc.propose('NL', 'KE', AMINA, NOW)).toThrow(/no departure airport and hub in NL.*no carrier.*prices for a small.*nobody clears in KE yet.*clearance fee in KE is not set.*arrival airport in KE is not named/);
     const closed = setup({ open: ['NL'], companies: ['KE'] });
     expect(closed.missing('NL', 'KE', NOW)).toEqual(['open-to', 'sells-from', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
     // Being tested is not open to everyone.
@@ -92,9 +93,25 @@ describe('a route across a border', () => {
       ['airport-open', 'Amina Staff'],
       ['warehouse', 'Amina Staff'],
       ['prices', 'Amina Staff'],
+      ['arrival', 'Amina Staff'],
       ['carrier', 'Amina Staff'],
       ['departure', 'Amina Staff'],
     ]);
+  });
+
+  it('D16 — the route names its arrival airport; only that one, open with its licensed warehouse, counts', () => {
+    const svc = setup();
+    readyKenya(svc);
+    expect(svc.missing('NL', 'KE', NOW)).toEqual([]);
+    // Mombasa is named instead: it is not open, so the route is not ready — Nairobi being open does not count for it.
+    svc.setArrival('NL', 'KE', 'MBA', 'Amina Staff', NOW);
+    expect(svc.missing('NL', 'KE', NOW)).toEqual(['airport']);
+    expect(() => svc.setArrival('NL', 'KE', 'AMS', 'Amina Staff', NOW)).toThrow(/not an airport we hold for KE/);
+    svc.setArrival('NL', 'KE', 'NBO', 'Amina Staff', NOW);
+    expect(svc.routeOf('NL', 'KE')?.arrival?.airport).toBe('NBO');
+    expect(svc.warehouseAt('KE', 'NBO', NOW)).toMatchObject({ mdpId: 'mdp-nbo', tstLicence: 'TST-KE-0042' });
+    expect(svc.warehouseAt('KE', 'NBO', Date.parse('2027-07-01T10:00:00Z'))).toBeUndefined();
+    expect(svc.view(undefined, NOW).routes[0].arrivalAirports).toEqual(expect.arrayContaining(['NBO', 'MBA', 'KIS']));
   });
 
   it('2a — names where it leaves, who carries it and its prices, in the sending country; kept when it is switched off', () => {
@@ -125,7 +142,7 @@ describe('a route across a border', () => {
     readyKenya(svc);
     svc.propose('NL', 'KE', AMINA, NOW);
     svc.setAirport('KE', 'NBO', false, 'Amina Staff', NOW);
-    expect(() => svc.approve('NL', 'KE', BRIAN, NOW)).toThrow(/no airport in KE is open/);
+    expect(() => svc.approve('NL', 'KE', BRIAN, NOW)).toThrow(/arrival airport in KE is not named, or not open/);
     expect(svc.decline('NL', 'KE', AMINA, NOW).state).toBe('off');
   });
 

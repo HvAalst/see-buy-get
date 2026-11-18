@@ -32,7 +32,7 @@ describe('parcels across a border, on the console', () => {
     const r = await http().post('/v1/sbg/border-routes/NL/KE/propose').set(bearer(staff)).send({ by: 'Amina Staff' });
     expect(r.status).toBe(400);
     expect(r.body.detail).toMatch(/cannot be switched on yet/);
-    expect(r.body.detail).toMatch(/no airport in KE is open/);
+    expect(r.body.detail).toMatch(/arrival airport in KE is not named/);
     await http().post('/v1/sbg/border-routes/KE/KE/propose').set(bearer(staff)).send({ by: 'Amina Staff' }).expect(400);
     await http().post('/v1/sbg/border-routes/NL/KE/approve').set(bearer(staff)).send({ by: 'Brian Staff' }).expect(400);
   });
@@ -60,6 +60,9 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-routes/NL/KE/departure').set(bearer(staff)).send({ airport: 'NBO', mdpId: 'x', by: 'Amina Staff' }).expect(404);
     await http().post('/v1/sbg/border-routes/NL/KE/departure').set(bearer(staff)).send({ airport: 'AMS', mdpId: 'no-such-hub', by: 'Amina Staff' }).expect(404);
     await http().post('/v1/sbg/border-routes/NL/KE/carrier').set(bearer(staff)).send({ entityId: 'nobody', by: 'Amina Staff' }).expect(404);
+    expect(made.arrivalAirports).toEqual(expect.arrayContaining(['NBO']));
+    await http().post('/v1/sbg/border-routes/NL/KE/arrival').set(bearer(staff)).send({ airport: 'AMS', by: 'Amina Staff' }).expect(404);
+    expect((await http().post('/v1/sbg/border-routes/NL/KE/arrival').set(bearer(staff)).send({ airport: 'NBO', by: 'Amina Staff' }).expect(201)).body.arrival).toMatchObject({ airport: 'NBO' });
     await http().post('/v1/sbg/border-routes/NL/KE/prices').set(bearer(staff)).send({ S: 0, M: 1, L: 1, by: 'Amina Staff' }).expect(400);
     const view = (await http().get('/v1/sbg/border-routes').set(bearer(staff)).expect(200)).body;
     expect(view.routes.find((r: { from: string; to: string }) => r.from === 'NL' && r.to === 'KE').conditions.map((c: { key: string }) => c.key)).toEqual(['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
@@ -70,5 +73,6 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-routes/NL/KE/propose').send({}).expect(401);
     await http().post('/v1/sbg/border-arrivals/KE/fee').send({ amount: 100 }).expect(401);
     await http().post('/v1/sbg/border-routes/NL/KE/prices').send({ S: 1, M: 1, L: 1 }).expect(401);
+    await http().post('/v1/sbg/border-routes/NL/KE/arrival').send({ airport: 'NBO' }).expect(401);
   });
 });

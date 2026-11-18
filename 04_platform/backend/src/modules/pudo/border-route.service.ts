@@ -12,6 +12,7 @@ import { MdpService } from './mdp.service';
 import {
   BORDER_CONDITIONS,
   type BorderAirport,
+  type BorderArrivalAirport,
   type BorderCarrier,
   type BorderDeparture,
   type BorderPrices,
@@ -39,6 +40,8 @@ interface Route {
   departure?: BorderDeparture;
   carrier?: BorderCarrier;
   prices?: BorderPrices;
+  /** 2026-11-18 — D16: the arrival airport it names. */
+  arrival?: BorderArrivalAirport;
 }
 
 interface Arrival {
@@ -60,7 +63,7 @@ const MISSING: Record<BorderCondition, (from: string, to: string) => string> = {
   price: () => 'the route’s prices for a small, a medium and a large parcel are not set',
   clearer: (_f, t) => `nobody clears in ${t} yet: name a clearing agent who has accepted, or our company with its customs registration`,
   fee: (_f, t) => `the clearance fee in ${t} is not set`,
-  airport: (_f, t) => `no airport in ${t} is open with a customs warehouse agreed and licensed`,
+  airport: (_f, t) => `the route’s arrival airport in ${t} is not named, or not open with its licensed customs warehouse`,
 };
 
 const SHOWN_CHANGES = 40;
@@ -191,6 +194,13 @@ export class BorderRouteService {
     return this.change(from, to, (r) => ({ ...r, departure: { airport, mdpId: hub.mdpId, name: hub.name, by, at: new Date(now).toISOString() } }), { what: 'departure', by, country: from, to, airport }, now);
   }
 
+  /** Where the route arrives (D16): an airport in the arrival country. It counts once it is open with its licensed warehouse. */
+  setArrival(fromCode: string, toCode: string, airportCode: string, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    const airport = this.airportOf(to, airportCode);
+    return this.change(from, to, (r) => ({ ...r, arrival: { airport, by, at: new Date(now).toISOString() } }), { what: 'arrival', by, country: from, to, airport }, now);
+  }
+
   /** Who carries the international leg (D14): a forwarder or haulier from the directory. */
   setCarrier(fromCode: string, toCode: string, entityId: string, by: string, now: number = Date.now()): BorderRouteView {
     const [from, to] = this.pair(fromCode, toCode);
@@ -213,9 +223,15 @@ export class BorderRouteService {
   }
 
   /** The route as it is set up — for booking a parcel on it (step 2b). Undefined: no such route. */
-  routeOf(from: string, to: string): Readonly<Pick<Route, 'from' | 'to' | 'state' | 'departure' | 'carrier' | 'prices'>> | undefined {
+  routeOf(from: string, to: string): Readonly<Pick<Route, 'from' | 'to' | 'state' | 'departure' | 'carrier' | 'prices' | 'arrival'>> | undefined {
     const r = this.routes.get(key(from, to));
-    return r ? { from: r.from, to: r.to, state: r.state, ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}) } : undefined;
+    return r ? { from: r.from, to: r.to, state: r.state, ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}) } : undefined;
+  }
+
+  /** The customs warehouse hub at an airport, while its licence holds — where a parcel on the route waits for customs (step 2c). */
+  warehouseAt(country: string, airport: string, now: number = Date.now()): BorderWarehouse | undefined {
+    const w = this.arrivals.get(country)?.warehouses[airport];
+    return this.licensed(w, now) ? w : undefined;
   }
 
   /**
@@ -350,8 +366,11 @@ export class BorderRouteService {
         return Boolean(a?.clearer?.acceptedAt);
       case 'fee':
         return Boolean(a?.fee);
-      case 'airport':
-        return this.openAirports(to, now).length > 0;
+      case 'airport': {
+        // D16: the airport this route names, open with its licensed warehouse — not just any airport in the country.
+        const named = this.routes.get(key(from, to))?.arrival?.airport;
+        return Boolean(named && this.openAirports(to, now).includes(named));
+      }
     }
   }
 
@@ -422,6 +441,10 @@ export class BorderRouteService {
       ...(r.departure ? { departure: r.departure } : {}),
       ...(r.carrier ? { carrier: r.carrier } : {}),
       ...(r.prices ? { prices: r.prices } : {}),
+      ...(r.arrival ? { arrival: r.arrival } : {}),
+      arrivalAirports: Object.entries(AIRPORT_COUNTRY)
+        .filter(([, c]) => c === r.to)
+        .map(([code]) => code),
       departureAirports: Object.entries(AIRPORT_COUNTRY)
         .filter(([, c]) => c === r.from)
         .map(([code]) => code),
@@ -463,4 +486,4 @@ export class BorderRouteService {
 const key = (from: string, to: string) => `${from}-${to}`;
 
 /** What a route is, without who switched it: kept when it is declined or switched off. */
-const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}) });
+const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}) });
