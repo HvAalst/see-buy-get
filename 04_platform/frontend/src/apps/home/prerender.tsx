@@ -6,7 +6,9 @@ import { DIRECTORY_PATH, directoryCountryPath, directoryPageOf, type DirectoryBu
 import { countryNameIn } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n';
 import { FAQ } from './screens/WelcomeScreen';
-import type { TownPage } from './api';
+import { TOWN_PRICE_SIZES, type TownPage, type TownPrices } from './api';
+
+const TOWN_SIZE_WORD = { S: 'home.town.small', M: 'home.town.medium', L: 'home.town.large' } as const;
 import type { PublishedDocument } from '../../shared/documents/documents';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
@@ -107,10 +109,26 @@ function loadOpenCountries(): Promise<OpenCountry[]> {
   return openOnce;
 }
 
+/**
+ * 2026-11-18 — WHAT IT COSTS FROM EACH TOWN (the owner: example prices per country, "yes"), read ONCE; each town page carries
+ * only its own. A build that cannot reach the server builds the town pages without prices: the browser fetches them.
+ */
+let pricesOnce: Promise<TownPrices[]> | null = null;
+function loadTownPrices(): Promise<TownPrices[]> {
+  pricesOnce ??= fetch(`${API}/v1/sbg/network/prices`, { signal: AbortSignal.timeout(20_000) })
+    .then((r) => (r.ok ? (r.json() as Promise<{ items?: TownPrices[] }>) : { items: [] }))
+    .then((d) => (Array.isArray(d.items) ? d.items : []))
+    .catch(() => {
+      console.warn(`[prerender] could not reach ${API} for the town prices — building the town pages without them`);
+      return [];
+    });
+  return pricesOnce;
+}
+
 export async function prerender(data: { url: string }): Promise<{
   html: string;
   links?: Set<string>;
-  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>>; directory?: DirectoryBuilt; openCountries: OpenCountry[] };
+  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>>; directory?: DirectoryBuilt; openCountries: OpenCountry[]; prices?: TownPrices };
   head: { lang: string; title: string; elements: Set<HeadElement> };
 }> {
   const towns = await loadTowns();
@@ -125,14 +143,16 @@ export async function prerender(data: { url: string }): Promise<{
   const index = dirPage?.kind === 'index' || url === '/' ? await loadDirectory() : null;
   const countryView = dirPage?.kind === 'country' ? await loadDirectoryCountry(dirPage.country) : null;
   const directory: DirectoryBuilt | undefined = dirPage ? { ...(index ? { index } : {}), ...(countryView ? { country: countryView } : {}) } : undefined;
-  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents, ...(directory ? { directory } : {}) };
-  const html = renderToString(<App />);
-
   const slug = townSlugFromPath(url);
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
+  // A town page carries its own prices, and only those.
+  const prices = town ? (await loadTownPrices()).find((p) => p.slug === town.slug) : undefined;
+  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents, ...(directory ? { directory } : {}), ...(prices ? { prices } : {}) };
+  const html = renderToString(<App />);
+
   const help = helpPageOf(url);
   const info = infoPageOf(url);
-  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead(openCountries);
+  const head = town ? townHead(town, prices) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead(openCountries);
   return {
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
@@ -142,7 +162,7 @@ export async function prerender(data: { url: string }): Promise<{
     // From the directory, a page per country that has firms listed.
     ...(dirPage?.kind === 'index' && index ? { links: new Set(index.countries.map((c) => directoryCountryPath(c.country))) } : {}),
     // Where it runs rides along, so the nightly check (scripts/pages-stale.mjs) sees a country opened since the build.
-    data: { towns, documents, ...(directory ? { directory } : {}), openCountries },
+    data: { towns, documents, ...(directory ? { directory } : {}), openCountries, ...(prices ? { prices } : {}) },
     head: { lang: 'en', ...head },
   };
 }
@@ -291,9 +311,25 @@ function helpHead(page: NonNullable<ReturnType<typeof helpPageOf>>): { title: st
 }
 
 /** A town page: its shops as an ItemList of stores, each with its map position and public page where it has one. */
-function townHead(town: TownPage): { title: string; elements: Set<HeadElement> } {
+function townHead(town: TownPage, prices?: TownPrices): { title: string; elements: Set<HeadElement> } {
   const title = t('home.town.metaTitle', { town: town.town });
   const description = t('home.town.metaDescription', { town: town.town, n: town.shops.length });
+  // 2026-11-18 — what it costs from here, as offers a machine reads: each size to each town, its lowest price ("from").
+  const offers = prices?.to.length
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'OfferCatalog',
+        name: t('home.town.pricesTitle', { town: town.town }),
+        itemListElement: prices.to.flatMap((row) =>
+          TOWN_PRICE_SIZES.filter((s) => row.from[s] !== undefined).map((s) => ({
+            '@type': 'Offer',
+            name: t('home.town.offerName', { size: t(TOWN_SIZE_WORD[s]), from: town.town, to: row.town }),
+            priceSpecification: { '@type': 'PriceSpecification', minPrice: row.from[s], priceCurrency: prices.currency },
+            itemOffered: { '@type': 'Service', name: t('home.landing.serviceName'), areaServed: [{ '@type': 'City', name: town.town }, { '@type': 'City', name: row.town }] },
+          })),
+        ),
+      }
+    : null;
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
@@ -312,7 +348,7 @@ function townHead(town: TownPage): { title: string; elements: Set<HeadElement> }
     })),
   };
   // With the trailing slash: a static host serves this page from /towns/<slug>/index.html, at that address.
-  return { title, elements: new Set([...common(title, description, `/towns/${town.slug}/`), ldScript(ld)]) };
+  return { title, elements: new Set([...common(title, description, `/towns/${town.slug}/`), ldScript(offers ? [ld, offers] : ld)]) };
 }
 
 /**

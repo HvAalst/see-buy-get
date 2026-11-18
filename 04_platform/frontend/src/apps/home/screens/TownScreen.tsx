@@ -1,8 +1,57 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon, Pill } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import { fetchTowns, type TownPage } from '../api';
-import { prerenderedTowns } from '../prerendered';
+import { formatMoney, useT } from '../../../shared/i18n';
+import { TOWN_PRICE_SIZES, fetchTownPrices, fetchTowns, type TownPage, type TownPrices } from '../api';
+import { prerenderedTownPrices, prerenderedTowns } from '../prerendered';
+
+const SIZE_WORD = { S: 'home.town.small', M: 'home.town.medium', L: 'home.town.large' } as const;
+
+/** A counter price: whole where it is whole (KES 300), with its cents where it has them (€4.50). */
+export const townPrice = (amount: number, currency: string) => formatMoney(amount, currency, Number.isInteger(amount) ? 0 : undefined);
+
+/**
+ * 2026-11-18 — WHAT IT COSTS FROM HERE (the owner: example prices per country, "yes"): to another shop in the town and to
+ * the country's busiest towns, the lowest price for each size, as paid at the counter. A real table, so a machine reads it
+ * as one. Nothing where no company of ours sells: there is no price to show.
+ */
+export function TownPricesTable({ page, prices }: { page: TownPage; prices: TownPrices | null }) {
+  const t = useT();
+  if (!prices || prices.slug !== page.slug || !prices.to.length) return null;
+  return (
+    <section class="town__prices" aria-labelledby="town-prices-h">
+      <h2 id="town-prices-h" class="town__h">
+        {t('home.town.pricesTitle', { town: page.town })}
+      </h2>
+      <div class="town__scroll">
+        <table class="town__table">
+          <thead>
+            <tr>
+              <th scope="col">{t('home.town.pricesTo')}</th>
+              {TOWN_PRICE_SIZES.map((s) => (
+                <th key={s} scope="col" class="town__n">
+                  {t(SIZE_WORD[s])}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {prices.to.map((row) => (
+              <tr key={row.slug}>
+                <th scope="row">{row.slug === page.slug ? t('home.town.within', { town: page.town }) : row.town}</th>
+                {TOWN_PRICE_SIZES.map((s) => (
+                  <td key={s} class="town__n">
+                    {row.from[s] !== undefined ? townPrice(row.from[s]!, prices.currency) : '–'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">{t('home.town.pricesNote')}</p>
+    </section>
+  );
+}
 
 /**
  * PARCEL SHOPS IN ONE TOWN — `/towns/<slug>`, a page of its own.
@@ -15,13 +64,18 @@ export function TownScreen({ slug }: { slug: string }) {
   const t = useT();
   const [towns, setTowns] = useState<TownPage[]>(() => prerenderedTowns());
   const [failed, setFailed] = useState(false);
+  const [prices, setPrices] = useState<TownPrices | null>(() => prerenderedTownPrices());
 
   useEffect(() => {
     void fetchTowns().then((r) => {
       if (r.error || !r.data) return setFailed(true);
       setTowns(r.data.items);
     });
-  }, []);
+    // Fresh prices too: a price card may have changed since the build. Not reached: the build's stay.
+    void fetchTownPrices().then((r) => {
+      if (!r.error && r.data) setPrices(r.data.items.find((p) => p.slug === slug) ?? null);
+    });
+  }, [slug]);
 
   const page = towns.find((p) => p.slug === slug);
   if (!page) {
@@ -80,6 +134,8 @@ export function TownScreen({ slug }: { slug: string }) {
           );
         })}
       </ul>
+
+      <TownPricesTable page={page} prices={prices} />
 
       <p class="hint">{t('home.town.howTo')}</p>
       <a class="land__link" href="/">

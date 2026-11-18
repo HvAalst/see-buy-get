@@ -80,7 +80,7 @@ export interface NetworkPulse {
 @Injectable()
 export class NetworkPulseService {
   private cached?: { at: number; pulse: NetworkPulse };
-  private cachedTowns?: { at: number; towns: TownPage[] };
+  private cachedTowns?: { at: number; towns: TownPage[]; ids: Map<string, string[]> };
 
   constructor(
     private readonly agents: AgentService,
@@ -102,30 +102,51 @@ export class NetworkPulseService {
    * outside could see: the name, the landmark, open or closed, the rating once it means something, its public page.
    */
   towns(now: number = Date.now()): TownPage[] {
-    if (this.cachedTowns && now - this.cachedTowns.at < CACHE_MS) return this.cachedTowns.towns;
-    const byTown = new Map<string, TownPage>();
+    return this.townsWithIds(now).towns;
+  }
+
+  /**
+   * 2026-11-18 — THE SAME TOWNS, WITH EACH SHOP'S ID in the page's order (open first), for pricing from one town to
+   * another (TownPricesService). Never served: a public page names a shop by its name and its public handle only.
+   */
+  townShopIds(now: number = Date.now()): Array<{ slug: string; town: string; country: string; ids: string[] }> {
+    const { towns, ids } = this.townsWithIds(now);
+    return towns.map((p) => ({ slug: p.slug, town: p.town, country: p.country, ids: ids.get(p.slug) ?? [] }));
+  }
+
+  private townsWithIds(now: number): { towns: TownPage[]; ids: Map<string, string[]> } {
+    if (this.cachedTowns && now - this.cachedTowns.at < CACHE_MS) return this.cachedTowns;
+    const byTown = new Map<string, { page: TownPage; shops: Array<{ shop: TownShop; did: string }> }>();
     // Trading, and not at rest: a shop whose owner muted the account is not one anybody can use today.
     // Nor one in a country that is not open yet (COMING, 2026-10-25): it trades from the day it opens.
     for (const a of this.agents.list().filter((x) => x.status === 'ACTIVE' && !this.agents.isResting(x.did) && !this.agents.publicHidden(x))) {
       const town = a.zone.trim();
       if (!town) continue;
-      const page = byTown.get(town.toLowerCase()) ?? { town, slug: townSlug(town), country: this.agents.countryOf(a), shops: [] };
+      const entry = byTown.get(town.toLowerCase()) ?? { page: { town, slug: townSlug(town), country: this.agents.countryOf(a), shops: [] }, shops: [] };
       const r = this.ratings.agentRating(a.did);
-      page.shops.push({
-        shopName: a.shopName,
-        landmark: a.landmark,
-        openState: a.openState,
-        ...(r.count >= 3 && !r.isNew ? { rating: { average: r.average, count: r.count } } : {}),
-        ...(this.handles?.forId(a.did)?.handle ? { handle: this.handles.forId(a.did)!.handle } : {}),
-        ...(a.location ? { location: a.location } : {}),
+      entry.shops.push({
+        did: a.did,
+        shop: {
+          shopName: a.shopName,
+          landmark: a.landmark,
+          openState: a.openState,
+          ...(r.count >= 3 && !r.isNew ? { rating: { average: r.average, count: r.count } } : {}),
+          ...(this.handles?.forId(a.did)?.handle ? { handle: this.handles.forId(a.did)!.handle } : {}),
+          ...(a.location ? { location: a.location } : {}),
+        },
       });
-      byTown.set(town.toLowerCase(), page);
+      byTown.set(town.toLowerCase(), entry);
     }
+    const ids = new Map<string, string[]>();
     const towns = [...byTown.values()]
-      .map((p) => ({ ...p, shops: p.shops.sort((x, y) => Number(y.openState === 'open') - Number(x.openState === 'open') || x.shopName.localeCompare(y.shopName)) }))
+      .map(({ page, shops }) => {
+        const sorted = shops.sort((x, y) => Number(y.shop.openState === 'open') - Number(x.shop.openState === 'open') || x.shop.shopName.localeCompare(y.shop.shopName));
+        ids.set(page.slug, sorted.map((s) => s.did));
+        return { ...page, shops: sorted.map((s) => s.shop) };
+      })
       .sort((a, b) => b.shops.length - a.shops.length || a.town.localeCompare(b.town));
-    this.cachedTowns = { at: now, towns };
-    return towns;
+    this.cachedTowns = { at: now, towns, ids };
+    return this.cachedTowns;
   }
 
   /** Uncached — what `pulse` serves. */

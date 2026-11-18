@@ -69,6 +69,12 @@ export function openKey(rows) {
   );
 }
 
+/** 2026-11-18 — a town page's prices as it shows them: the money, and each town's lowest price per size. */
+export function pricesKey(prices) {
+  if (!prices || !Array.isArray(prices.to)) return '';
+  return JSON.stringify([prices.currency, prices.to.map((r) => [r.slug, r.from?.S ?? null, r.from?.M ?? null, r.from?.L ?? null])]);
+}
+
 async function main() {
   SITE = (process.argv[2] ?? process.env.SBG_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
   if (!/^https?:\/\//.test(SITE)) throw new Error('give the site, like https://seebuyget.com');
@@ -79,6 +85,13 @@ async function main() {
   if (!front) reasons.push('the front page carries no build data');
   const towns = await get('/v1/sbg/network/towns');
   if (front && townsKey(front.towns) !== townsKey(towns.items)) reasons.push('the towns or their shops changed');
+  // 2026-11-18 — what it costs from each town: a price card changed since the build, or a town priced (or not) since.
+  const prices = (await get('/v1/sbg/network/prices').catch(() => ({ items: [] }))).items ?? [];
+  for (const town of towns.items ?? []) {
+    const live = prices.find((p) => p.slug === town.slug) ?? null;
+    const built = builtData(await get(`/towns/${town.slug}/`, 'text').catch(() => ''))?.prices ?? null;
+    if (pricesKey(live) !== pricesKey(built)) reasons.push(`${town.town}: its prices changed`);
+  }
   // Where it runs: a country opened (or closed) since the build. The built list holds only open ones, so it is read as is.
   const countries = await get('/v1/sbg/countries');
   if (front && openKey(front.openCountries) !== openKey(countries)) reasons.push('the countries SeeBuyGet runs in changed');

@@ -387,3 +387,54 @@
   border-radius: var(--r-ctl);
   margin-bottom: 8px;
 }
+
+/* 2026-11-18 — what it costs from a town: a real table (a machine reads it as one), figures right-aligned and tabular so a
+   column compares at a glance; on a narrow phone it scrolls inside its own box, never the page. */
+.town__prices {
+  margin-top: 22px;
+}
+
+.town__h {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 10px;
+}
+
+.town__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+}
+
+.town__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.town__table th,
+.town__table td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--bd-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.town__table thead th {
+  border-top: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.town__table tbody th {
+  font-weight: 700;
+  white-space: normal;
+}
+
+.town__table .town__n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

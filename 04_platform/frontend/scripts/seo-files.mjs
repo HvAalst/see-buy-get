@@ -16,6 +16,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { datesFor, pageHash, publishedDates } from './page-dates.mjs';
+import { townLine } from './llms-lines.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
@@ -72,6 +73,15 @@ const townName = (p) => {
   return (html.match(/<h1[^>]*>Parcel shops in ([^<]+)<\/h1>/)?.[1] ?? p.replace('/towns/', '').replace(/\/$/, '')).trim();
 };
 const towns = found.filter((p) => p.startsWith('/towns/'));
+/** A town page's prices, from the data it was built with (only its own are in it), or null. */
+const townPrices = (p) => {
+  const m = /<script[^>]*id="prerender-data"[^>]*>([\s\S]*?)<\/script>/.exec(readFileSync(join(DIST, p, 'index.html'), 'utf8'));
+  try {
+    return m ? (JSON.parse(m[1]).prices ?? null) : null;
+  } catch {
+    return null;
+  }
+};
 writeFileSync(
   join(DIST, 'llms.txt'),
   [
@@ -95,7 +105,8 @@ writeFileSync(
     `- [Cookies](${abs('/cookies/')}): SeeBuyGet sets none; what its apps keep in your browser instead`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
     `- [Everything above as plain text](${abs('/llms-full.txt')}): these pages and every help article`,
-    ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => `- [${townName(p)}](${abs(p)})`)] : []),
+    // 2026-11-18 — each town with a small parcel's lowest prices from there, as its page shows them (llms-lines.mjs).
+    ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => townLine(townName(p), abs(p), townPrices(p)))] : []),
     '',
     '## Earning with the network',
     '- Where a SeeBuyGet company runs in the country, shops earn a fee on every parcel they take in or hand out; drivers and riders per load; sort hubs per parcel sorted; online stores ship to shops for click-and-collect.',

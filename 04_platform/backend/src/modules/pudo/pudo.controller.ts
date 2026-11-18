@@ -18,6 +18,7 @@ import { DestinationService } from './destination.service';
 import { FleetMoveService } from './fleet-move.service';
 import { FleetOfferService } from './fleet-offer.service';
 import { NetworkPulseService } from './network-pulse.service';
+import { TownPricesService } from './town-prices.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
@@ -358,6 +359,8 @@ export class SbgController {
     @Optional() private readonly fleetMove?: FleetMoveService,
     @Optional() private readonly fleetOffers?: FleetOfferService,
     @Optional() private readonly pulse?: NetworkPulseService,
+    // 2026-11-18 — what it costs from each town, for the town pages.
+    @Optional() private readonly townPrices?: TownPricesService,
     @Optional() private readonly contracts?: CarriageContractService,
     @Optional() private readonly businesses?: BusinessService,
     @Optional() private readonly companyPapers?: CompanyPapersWatch,
@@ -5388,6 +5391,18 @@ export class SbgController {
   networkTowns() {
     if (!this.pulse) throw new GlosError('NOT_FOUND', 'The town pages are not available on this server');
     return { items: this.pulse.towns() };
+  }
+
+  /**
+   * 2026-11-18 — WHAT IT COSTS FROM EACH TOWN to the country's other towns (the owner: example prices per country, "yes"):
+   * priced as the Send app prices, only where a company of ours sells. Read by the town pages and their build.
+   */
+  @Public()
+  @Header('Cache-Control', 'public, max-age=300')
+  @Get('network/prices')
+  networkPrices() {
+    if (!this.townPrices) throw new GlosError('NOT_FOUND', 'The town prices are not available on this server');
+    return { items: this.townPrices.prices() };
   }
 
   @Public()

@@ -1,4 +1,4 @@
-import type { TownPage } from './api';
+import type { TownPage, TownPrices } from './api';
 import type { PublishedDocument } from '../../shared/documents/documents';
 import type { Notice } from './pages';
 
@@ -38,6 +38,19 @@ export function prerenderedDocument(which: Notice): PublishedDocument | null {
     const el = globalThis.document?.getElementById('prerender-data');
     const data = el?.textContent ? (JSON.parse(el.textContent) as { documents?: Partial<Record<Notice, PublishedDocument>> }) : null;
     return data?.documents?.[which] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 2026-11-18 — a town page's prices as the build read them (only that town's are in its page), or null. */
+export function prerenderedTownPrices(): TownPrices | null {
+  const g = (globalThis as { __SBG_PRERENDER__?: { prices?: TownPrices } }).__SBG_PRERENDER__;
+  if (g) return g.prices ?? null;
+  try {
+    const el = globalThis.document?.getElementById('prerender-data');
+    const data = el?.textContent ? (JSON.parse(el.textContent) as { prices?: TownPrices }) : null;
+    return data?.prices && Array.isArray(data.prices.to) ? data.prices : null;
   } catch {
     return null;
   }

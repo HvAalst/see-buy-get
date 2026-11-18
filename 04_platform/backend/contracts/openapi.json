@@ -20634,6 +20634,19 @@
         }
       }
     },
+    "/v1/sbg/network/prices": {
+      "get": {
+        "operationId": "Sbg.networkPrices",
+        "summary": "",
+        "description": "2026-11-18 — WHAT IT COSTS FROM EACH TOWN to the country's other towns (the owner: example prices per country, \"yes\"):\npriced as the Send app prices, only where a company of ours sells. Read by the town pages and their build.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/network/points": {
       "get": {
         "operationId": "Sbg.networkPoints",

@@ -309,6 +309,30 @@ export function fetchTowns(): Promise<Result<{ items: TownPage[] }>> {
   return publicRequest<{ items: TownPage[] }>(homeConfig(), '/v1/sbg/network/towns');
 }
 
+/**
+ * 2026-11-18 — what it costs from a town (the owner: example prices per country, "yes"): to itself and the country's busiest
+ * towns, the lowest price between their shops for each size, as a person pays it at the counter. Only where a company of
+ * ours sells.
+ */
+export type TownPriceSize = 'S' | 'M' | 'L';
+export const TOWN_PRICE_SIZES: readonly TownPriceSize[] = ['S', 'M', 'L'];
+export interface TownPriceRow {
+  slug: string;
+  town: string;
+  from: Partial<Record<TownPriceSize, number>>;
+}
+export interface TownPrices {
+  slug: string;
+  town: string;
+  country: string;
+  currency: string;
+  to: TownPriceRow[];
+}
+
+export function fetchTownPrices(): Promise<Result<{ items: TownPrices[] }>> {
+  return publicRequest<{ items: TownPrices[] }>(homeConfig(), '/v1/sbg/network/prices');
+}
+
 export function fetchPulse(): Promise<Result<NetworkPulse>> {
   return publicRequest<NetworkPulse>(homeConfig(), '/v1/sbg/network/pulse');
 }

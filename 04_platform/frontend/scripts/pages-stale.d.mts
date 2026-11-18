@@ -4,3 +4,4 @@ export function townsKey(towns: unknown): string;
 export function entriesKey(entries: unknown): string;
 export function countriesKey(countries: unknown): string;
 export function openKey(rows: unknown): string;
+export function pricesKey(prices: unknown): string;

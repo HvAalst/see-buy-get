@@ -108,6 +108,15 @@ describe('the network, measured for the front page', () => {
     expect(townSlug('Région Ébène  2')).toBe('region-ebene-2');
   });
 
+  it('2026-11-18 — knows each town’s shops by id, in the page’s order, for pricing — never on the page', () => {
+    const svc = make([shop('b', 'Dar es Salaam', { openState: 'closed' }), shop('a', 'Dar es Salaam'), shop('c', 'Arusha'), shop('d', 'Arusha', { status: 'DRAFT' })], []);
+    expect(svc.townShopIds(NOW)).toEqual([
+      { slug: 'dar-es-salaam', town: 'Dar es Salaam', country: 'KE', ids: ['a', 'b'] },
+      { slug: 'arusha', town: 'Arusha', country: 'KE', ids: ['c'] },
+    ]);
+    expect(JSON.stringify(svc.towns(NOW))).not.toMatch(/"ids"|"did"/);
+  });
+
   it('serves the same figures for five minutes, then counts again', () => {
     const parcels: unknown[] = [];
     const svc = make([shop('a', 'Nairobi')], parcels);
