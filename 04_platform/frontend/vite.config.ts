@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type PluginOption } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA, type ManifestOptions } from 'vite-plugin-pwa';
+import { sendHead } from './scripts/send-head.mjs';
 
 // `type: module` package — no __dirname, derive it.
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -452,6 +453,14 @@ function pushSwPlugin(): Plugin {
  * folders, the widget's embed/, the legacy pages — is left untouched. A leaf app needs none of this;
  * `emptyOutDir` already does it there.
  */
+/**
+ * 2026-11-18 — THE SEND PAGE'S HEAD, written at build time (scripts/send-head.mjs): its own address, a description, structured
+ * data with the tracking address, the share card that exists, and a summary a crawler reads before any script runs.
+ */
+function sendHeadPlugin(): Plugin {
+  return { name: 'sbg-send-head', transformIndexHtml: (html) => sendHead(html, process.env.SBG_PUBLIC_URL ?? '') };
+}
+
 function cleanRootAssetsPlugin(): Plugin {
   return {
     name: 'sbg-clean-root-assets',
@@ -605,6 +614,7 @@ export default defineConfig({
       APP_ID === 'home' ? { prerender: { enabled: true, renderTarget: '#app', prerenderScript: resolve(APP_DIR, 'prerender.tsx').replace(/\\/g, '/') } } : undefined,
     ),
     cleanRootAssetsPlugin(),
+    ...(APP_ID === 'genesis' ? [sendHeadPlugin()] : []),
     ...(INSTALLABLE ? installablePlugins() : []),
   ],
 

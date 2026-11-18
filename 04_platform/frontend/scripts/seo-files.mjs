@@ -47,7 +47,9 @@ function pages(dir, out = []) {
   return out;
 }
 
-const found = pages(DIST).sort((a, b) => (a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b)));
+// 2026-11-18 — and the Send app's page: public (prices, booking, tracking), with a head of its own (send-head.mjs), but
+// skipped with the other apps' folders above.
+const found = [...pages(DIST), ...(existsSync(join(DIST, 'send', 'index.html')) ? ['/send/'] : [])].sort((a, b) => (a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b)));
 const today = new Date().toISOString().slice(0, 10);
 
 const robots = [

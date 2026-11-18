@@ -21,4 +21,8 @@ import { initI18n } from '../../shared/i18n';
  */
 const host = document.getElementById('app');
 initI18n(); // adopt the saved/device language + stamp <html lang/dir> before first paint
-if (host) render(<App />, host);
+// 2026-11-18 — the page arrives with a short summary for readers that run no script (scripts/send-head.mjs): the app takes its place.
+if (host) {
+  host.textContent = '';
+  render(<App />, host);
+}
