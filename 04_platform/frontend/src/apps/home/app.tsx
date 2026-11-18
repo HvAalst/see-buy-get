@@ -2,7 +2,8 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { Icon, TopBar } from '../../shared/ui';
 import { useEffect, useState } from 'preact/hooks';
 import { Suspense } from 'preact/compat';
-import { useT } from '../../shared/i18n';
+import { useLocale, useT, wordsReady } from '../../shared/i18n';
+import { hasLanguages, isPageLocale, pathIn, splitLocale } from './sitePaths';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
 import { InfoScreen } from './screens/InfoScreen';
@@ -30,8 +31,17 @@ export function App() {
   const [, helpArrived] = useState(0);
   useEffect(() => {
     if (state.screen === 'help' && !helpScreen()) void loadHelpPage().then(() => helpArrived((n) => n + 1));
-    if (state.screen === 'directory' && !directoryScreen()) void loadDirectoryPage().then(() => helpArrived((n) => n + 1));
+    if (state.screen === 'directory' && !directoryScreen()) void loadDirectoryPage().then(() => wordsReady()).then(() => helpArrived((n) => n + 1));
   }, [state.screen]);
+  // 2026-11-18 — a page built in every language keeps its address in the language it is read in (/sw/about/ in Kiswahili),
+  // so a reload, a bookmark or a shared link opens it in that language.
+  const locale = useLocale();
+  useEffect(() => {
+    const { rest } = splitLocale(location.pathname);
+    if (!hasLanguages(rest)) return;
+    const want = pathIn(isPageLocale(locale) ? locale : 'en', rest);
+    if (want !== location.pathname) history.replaceState(history.state, '', `${want}${location.search}${location.hash}`);
+  }, [locale]);
 
   /**
    * A subtitle says WHERE YOU ARE. Every one below is a state — joining as a driver, browsing the

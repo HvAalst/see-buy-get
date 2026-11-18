@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { datesFor, pageHash, publishedDates } from './page-dates.mjs';
 import { townLine } from './llms-lines.mjs';
+import { languageOf, sitemapXml } from './sitemap.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
@@ -105,6 +106,8 @@ writeFileSync(
     `- [Cookies](${abs('/cookies/')}): SeeBuyGet sets none; what its apps keep in your browser instead`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
     `- [Everything above as plain text](${abs('/llms-full.txt')}): these pages and every help article`,
+    // 2026-11-18 — the same pages in Kiswahili, Dutch and Amharic, where the build made them.
+    ...(found.some((p) => languageOf(p) !== 'en') ? [`- The same pages in [Kiswahili](${abs('/sw/')}), [Dutch](${abs('/nl/')}) and [Amharic](${abs('/am/')}); the terms, the data notice and the cookie statement are in English only`] : []),
     // 2026-11-18 — each town with a small parcel's lowest prices from there, as its page shows them (llms-lines.mjs).
     ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => townLine(townName(p), abs(p), townPrices(p)))] : []),
     '',
@@ -182,8 +185,8 @@ if (SITE) {
   const hashes = Object.fromEntries(found.map((p) => [p, pageHash(readFileSync(join(DIST, p, 'index.html'), 'utf8'))]));
   const dates = datesFor(hashes, await publishedDates(SITE), today);
   writeFileSync(join(DIST, 'page-dates.json'), `${JSON.stringify({ pages: dates }, null, 1)}\n`);
-  const urls = found.map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${dates[p].date}</lastmod>${p === '/' ? '<priority>1.0</priority>' : ''}</url>`);
-  writeFileSync(join(DIST, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
+  // 2026-11-18 — and each page's other languages (sitemap.mjs).
+  writeFileSync(join(DIST, 'sitemap.xml'), sitemapXml(found, dates, SITE));
   console.log(`seo-files: robots.txt, and sitemap.xml with ${found.length} page(s)`);
 } else {
   console.log(`seo-files: robots.txt written; no sitemap.xml — set SBG_PUBLIC_URL to the site's address (found ${found.length} page(s))`);

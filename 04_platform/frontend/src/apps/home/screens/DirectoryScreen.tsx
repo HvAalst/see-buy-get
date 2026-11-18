@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { PlaceMap } from '../../../shared/ui/PlaceMap';
-import { addEnglish, formatDate, useLocale, useT } from '../../../shared/i18n';
+import { addEnglish, formatDate, useLocale, useT, wordsOf } from '../../../shared/i18n';
+import { keepLanguage } from '../sitePaths';
 import { enDirectory } from '../../../shared/i18n/catalogs/en.directory';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { forPath } from '../pages';
@@ -29,6 +30,8 @@ import '../directory.css';
 
 // The directory's words come with its code, never in the front page's first download.
 addEnglish(enDirectory);
+// 2026-11-18 — and in the reader's language: they were never asked for, so a directory read in Kiswahili stayed English.
+wordsOf('directory');
 
 /**
  * THE LOGISTICS DIRECTORY (the user, 2026-10-30: "a directory much similar to that of fiata.org but in our own style";
@@ -167,7 +170,7 @@ function SearchAll() {
     setState('looking');
     const timer = setTimeout(() => {
       try {
-        globalThis.history?.replaceState(null, '', searchPath(words, kind));
+        globalThis.history?.replaceState(null, '', keepLanguage(searchPath(words, kind)));
       } catch {
         /* an address that cannot be changed: the search still answers */
       }

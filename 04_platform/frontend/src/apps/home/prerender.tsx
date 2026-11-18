@@ -4,7 +4,8 @@ import { App } from './app';
 import { loadDirectoryPage, loadHelpPage } from './lazyScreens';
 import { DIRECTORY_PATH, directoryCountryPath, directoryPageOf, type DirectoryBuilt, type DirectoryCountryView, type DirectoryIndex, type DirectoryPage } from './directory';
 import { countryNameIn } from '../../shared/documents/documents';
-import { t } from '../../shared/i18n';
+import { setLocale, t, wordsReady } from '../../shared/i18n';
+import { ALL_PAGE_LOCALES, OG_LOCALE, PAGE_LOCALES, hasLanguages, localizeHrefs, pathIn, splitLocale, type PageLocale } from './sitePaths';
 import { FAQ } from './screens/WelcomeScreen';
 import { TOWN_PRICE_SIZES, type TownPage, type TownPrices } from './api';
 
@@ -137,35 +138,58 @@ export async function prerender(data: { url: string }): Promise<{
   // The help page's code is fetched on demand in the browser (lazyScreens.ts); here it is brought in before rendering.
   await loadHelpPage();
   const url = data.url || '/';
+  // 2026-11-18 — the language is the address's (/sw/about/ is the About page in Kiswahili); `rest` is the page.
+  const { locale, rest } = splitLocale(url);
   // A directory page: its code and words first (lazyScreens.ts), and what the server lists for it.
-  const dirPage = directoryPageOf(url);
+  const dirPage = directoryPageOf(rest);
   if (dirPage) await loadDirectoryPage();
-  const index = dirPage?.kind === 'index' || url === '/' ? await loadDirectory() : null;
+  // Every word the page shows, in its language, before it is drawn: the plugin builds one page at a time.
+  BUILD_LOCALE = locale;
+  setLocale(locale);
+  await wordsReady(locale);
+  const index = dirPage?.kind === 'index' || rest === '/' ? await loadDirectory() : null;
   const countryView = dirPage?.kind === 'country' ? await loadDirectoryCountry(dirPage.country) : null;
   const directory: DirectoryBuilt | undefined = dirPage ? { ...(index ? { index } : {}), ...(countryView ? { country: countryView } : {}) } : undefined;
-  const slug = townSlugFromPath(url);
+  const slug = townSlugFromPath(rest);
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
   // A town page carries its own prices, and only those.
   const prices = town ? (await loadTownPrices()).find((p) => p.slug === town.slug) : undefined;
   (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents, ...(directory ? { directory } : {}), ...(prices ? { prices } : {}) };
-  const html = renderToString(<App />);
+  // A page in another language links to the same language.
+  const html = localizeHrefs(renderToString(<App />), locale);
 
-  const help = helpPageOf(url);
-  const info = infoPageOf(url);
+  const help = helpPageOf(rest);
+  const info = infoPageOf(rest);
   const head = town ? townHead(town, prices) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead(openCountries);
+  const L = (p: string) => pathIn(locale, p);
   return {
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
-    // plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, DIRECTORY_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.terms.path, NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
-    ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
+    // plugin renders each of them in turn. From the English front page, also the front page in each other language, and
+    // from that, the same pages in its language (never the terms, the data notice or the cookies: English only).
+    ...(rest === '/'
+      ? {
+          links: new Set([
+            ...towns.map((p) => L(`/towns/${p.slug}`)),
+            L(HELP_PATH),
+            L(ABOUT_PATH),
+            L(DIRECTORY_PATH),
+            ...AUDIENCES.map((a) => L(forPath(a.who))),
+            ...(locale === 'en' ? [NOTICES.terms.path, NOTICES.privacy.path, NOTICES.cookies.path, ...PAGE_LOCALES.map((l) => pathIn(l, '/'))] : []),
+          ]),
+        }
+      : {}),
+    ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => L(articlePath(a.id))), L(CONTACT_PATH)]) } : {}),
     // From the directory, a page per country that has firms listed.
-    ...(dirPage?.kind === 'index' && index ? { links: new Set(index.countries.map((c) => directoryCountryPath(c.country))) } : {}),
+    ...(dirPage?.kind === 'index' && index ? { links: new Set(index.countries.map((c) => L(directoryCountryPath(c.country)))) } : {}),
     // Where it runs rides along, so the nightly check (scripts/pages-stale.mjs) sees a country opened since the build.
     data: { towns, documents, ...(directory ? { directory } : {}), openCountries, ...(prices ? { prices } : {}) },
-    head: { lang: 'en', ...head },
+    head: { lang: locale, ...head },
   };
 }
+
+/** The language the page being built is in: set at the start of each page (the plugin builds one at a time). */
+let BUILD_LOCALE: PageLocale = 'en';
 
 const meta = (props: Record<string, string>): HeadElement => ({ type: 'meta', props });
 const ldScript = (ld: unknown): HeadElement => ({ type: 'script', props: { type: 'application/ld+json', children: JSON.stringify(ld) } });
@@ -180,22 +204,35 @@ const ldScript = (ld: unknown): HeadElement => ({ type: 'script', props: { type:
  */
 export const SHARE_IMAGE = { path: '/img/share-card.png', width: 1200, height: 630, type: 'image/png' } as const;
 
-/** What every page says about itself, plus the absolute addresses when the site's own address is known. */
+/**
+ * What every page says about itself, plus the absolute addresses when the site's own address is known. `path` is the page
+ * without a language; its own address is in the language being built. 2026-11-18 — a page built in every language says
+ * where each of them is (hreflang), English being the one for any other reader (x-default).
+ */
 function common(title: string, description: string, path: string): HeadElement[] {
+  const here = pathIn(BUILD_LOCALE, path);
+  const versions = hasLanguages(path);
   return [
     meta({ name: 'description', content: description }),
     meta({ property: 'og:type', content: 'website' }),
     meta({ property: 'og:site_name', content: 'SeeBuyGet' }),
     meta({ property: 'og:title', content: title }),
     meta({ property: 'og:description', content: description }),
-    // The pages are written in British English; Open Graph names a language with its country.
-    meta({ property: 'og:locale', content: 'en_GB' }),
+    // The pages are written in British English, and in Kiswahili, Dutch and Amharic; Open Graph names a language with a country.
+    meta({ property: 'og:locale', content: OG_LOCALE[BUILD_LOCALE] }),
+    ...(versions ? ALL_PAGE_LOCALES.filter((l) => l !== BUILD_LOCALE).map((l) => meta({ property: 'og:locale:alternate', content: OG_LOCALE[l] })) : []),
     // A large picture only where there is one to show; without the site's address there is none.
     meta({ name: 'twitter:card', content: SITE ? 'summary_large_image' : 'summary' }),
     ...(SITE
       ? [
-          { type: 'link', props: { rel: 'canonical', href: `${SITE}${path}` } },
-          meta({ property: 'og:url', content: `${SITE}${path}` }),
+          { type: 'link', props: { rel: 'canonical', href: `${SITE}${here}` } },
+          ...(versions
+            ? [
+                ...ALL_PAGE_LOCALES.map((l) => ({ type: 'link', props: { rel: 'alternate', hreflang: l, href: `${SITE}${pathIn(l, path)}` } })),
+                { type: 'link', props: { rel: 'alternate', hreflang: 'x-default', href: `${SITE}${path}` } },
+              ]
+            : []),
+          meta({ property: 'og:url', content: `${SITE}${here}` }),
           meta({ property: 'og:image', content: `${SITE}${SHARE_IMAGE.path}` }),
           meta({ property: 'og:image:type', content: SHARE_IMAGE.type }),
           meta({ property: 'og:image:width', content: String(SHARE_IMAGE.width) }),
@@ -211,7 +248,7 @@ function frontHead(open: OpenCountry[] = []): { title: string; elements: Set<Hea
   const description = t('home.landing.metaDescription');
   // 2026-11-18 — where it runs, and where to reach us: the countries open to everyone, and the help's own contact page —
   // never a typed number or address (each country sets its own office, and a hub's contact is public only if ticked).
-  const areaServed = open.length ? { areaServed: open.map((c) => ({ '@type': 'Country', name: c.name, identifier: c.country })) } : {};
+  const areaServed = open.length ? { areaServed: open.map((c) => ({ '@type': 'Country', name: BUILD_LOCALE === 'en' ? c.name : countryNameIn(c.country, BUILD_LOCALE) || c.name, identifier: c.country })) } : {};
   const ld = [
     {
       '@context': 'https://schema.org',
@@ -302,8 +339,8 @@ function helpHead(page: NonNullable<ReturnType<typeof helpPageOf>>): { title: st
     const title = t('help.ui.articleMetaTitle', { title: a.title });
     const apps = a.apps.filter((x): x is PublicApp => x !== 'console').map((x) => t(GUIDE_APPS[x]));
     const ld = a.steps?.length
-      ? { '@context': 'https://schema.org', '@type': 'HowTo', name: a.title, description: a.summary, inLanguage: 'en', ...(apps.length ? { tool: apps.map((name) => ({ '@type': 'HowToTool', name })) } : {}), step: a.steps.map((text, i) => ({ '@type': 'HowToStep', position: i + 1, text })) }
-      : { '@context': 'https://schema.org', '@type': 'Article', headline: a.title, description: a.summary, inLanguage: 'en' };
+      ? { '@context': 'https://schema.org', '@type': 'HowTo', name: a.title, description: a.summary, inLanguage: BUILD_LOCALE, ...(apps.length ? { tool: apps.map((name) => ({ '@type': 'HowToTool', name })) } : {}), step: a.steps.map((text, i) => ({ '@type': 'HowToStep', position: i + 1, text })) }
+      : { '@context': 'https://schema.org', '@type': 'Article', headline: a.title, description: a.summary, inLanguage: BUILD_LOCALE };
     return { title, elements: new Set([...common(title, a.summary, path), ldScript([ld, crumbs({ name: a.title, path })])]) };
   }
   const title = t('help.ui.metaTitle');
@@ -373,7 +410,7 @@ function directoryHead(page: DirectoryPage, built: DirectoryBuilt): { title: str
     return { title, elements: new Set([...common(title, description, DIRECTORY_PATH), ldScript(ld)]) };
   }
   const view = built.country;
-  const name = countryNameIn(page.country, 'en') || view?.name || page.country;
+  const name = countryNameIn(page.country, BUILD_LOCALE) || view?.name || page.country;
   const path = directoryCountryPath(page.country);
   const entries = view?.entries ?? [];
   const title = t('directory.countryMetaTitle', { country: name });

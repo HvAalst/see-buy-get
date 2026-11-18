@@ -100,6 +100,7 @@ export const words: Record<string, string> = {
   "front.foot.colUse": "SeeBuyGetን ይጠቀሙ",
   "front.foot.colHelp": "እገዛ",
   "front.foot.colData": "ውሎችና መረጃዎ",
+  "front.foot.language": "ቋንቋ",
   "front.foot.terms": "የአጠቃቀም ውሎች",
   "front.foot.write": "ይጻፉልን",
   "front.foot.directory": "የሎጂስቲክስ ማውጫ",

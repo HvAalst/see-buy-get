@@ -1,4 +1,5 @@
 import type { TownPage, TownPrices } from './api';
+import { splitLocale } from './sitePaths';
 import type { PublishedDocument } from '../../shared/documents/documents';
 import type { Notice } from './pages';
 
@@ -56,9 +57,14 @@ export function prerenderedTownPrices(): TownPrices | null {
   }
 }
 
-/** The path being shown: the build's route while prerendering, the address bar in a browser. */
-export function currentPath(): string {
+/** The address shown, language and all: the build's route while prerendering, the address bar in a browser. */
+export function currentAddress(): string {
   return (globalThis as BuildGlobals).__SBG_PRERENDER__?.url ?? globalThis.location?.pathname ?? '/';
+}
+
+/** The page being shown, without the language its address is in (2026-11-18: /sw/about/ is the About page). */
+export function currentPath(): string {
+  return splitLocale(currentAddress()).rest;
 }
 
 /** `/towns/dar-es-salaam` → `dar-es-salaam`. */

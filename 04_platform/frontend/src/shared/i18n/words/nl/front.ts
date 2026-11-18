@@ -100,6 +100,7 @@ export const words: Record<string, string> = {
   "front.foot.colUse": "Gebruik SeeBuyGet",
   "front.foot.colHelp": "Help",
   "front.foot.colData": "Voorwaarden en je gegevens",
+  "front.foot.language": "Taal",
   "front.foot.terms": "Gebruiksvoorwaarden",
   "front.foot.write": "Schrijf ons",
   "front.foot.directory": "Logistieke gids",

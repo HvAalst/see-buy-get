@@ -124,6 +124,7 @@ export const enFront = {
   'front.foot.colUse': 'Use SeeBuyGet',
   'front.foot.colHelp': 'Help',
   'front.foot.colData': 'Terms and your data',
+  'front.foot.language': 'Language',
   'front.foot.terms': 'Terms of use',
   'front.foot.write': 'Write to us',
   'front.foot.directory': 'Logistics directory',

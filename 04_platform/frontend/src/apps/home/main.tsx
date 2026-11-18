@@ -3,7 +3,8 @@ import { hydrate, render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';
 import { loadDirectoryPage, loadHelpPage } from './lazyScreens';
-import { getLocale, initI18n } from '../../shared/i18n';
+import { getLocale, initI18n, setLocale, wordsReady } from '../../shared/i18n';
+import { splitLocale } from './sitePaths';
 
 /**
  * Front-door PWA entry — ships at the web ROOT.
@@ -18,6 +19,9 @@ import { getLocale, initI18n } from '../../shared/i18n';
  */
 const host = document.getElementById('app');
 initI18n(); // adopt the saved/device language + stamp <html lang/dir> before first paint
+// 2026-11-18 — a page at /sw/…, /nl/… or /am/… is in that language: the address is the reader's choice.
+const fromAddress = splitLocale(location.pathname);
+if (fromAddress.locale !== 'en') setLocale(fromAddress.locale);
 /*
  * The front page arrives as finished HTML (prerender.tsx), rendered in English. Where this device reads English, the
  * app takes over that markup (hydrate); in any other language it draws afresh, so nobody reads English text that
@@ -34,8 +38,14 @@ function mount(el: HTMLElement): void {
  * A HELP PAGE BRINGS ITS OWN CODE AND WORDS FIRST — they are not in the homepage's download (lazyScreens.ts) — so the
  * page is taken over whole, never half. Until then the finished HTML is already on screen and readable.
  */
+/*
+ * 2026-11-18 — in another language, the finished HTML (built in that language) stays on screen until the language's words
+ * have come, so the page is never drawn in English for a moment first.
+ */
+const start = (el: HTMLElement) => (getLocale() !== 'en' && el.firstElementChild ? void wordsReady().then(() => mount(el), () => mount(el)) : mount(el));
 if (host) {
-  if (/^\/help(\/|$)/.test(location.pathname)) void loadHelpPage().then(() => mount(host), () => mount(host));
-  else if (/^\/directory(\/|$)/.test(location.pathname)) void loadDirectoryPage().then(() => mount(host), () => mount(host));
-  else mount(host);
+  const page = fromAddress.rest;
+  if (/^\/help(\/|$)/.test(page)) void loadHelpPage().then(() => start(host), () => start(host));
+  else if (/^\/directory(\/|$)/.test(page)) void loadDirectoryPage().then(() => start(host), () => start(host));
+  else start(host);
 }

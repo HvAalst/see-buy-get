@@ -100,6 +100,7 @@ export const words: Record<string, string> = {
   "front.foot.colUse": "Tumia SeeBuyGet",
   "front.foot.colHelp": "Msaada",
   "front.foot.colData": "Masharti na data yako",
+  "front.foot.language": "Lugha",
   "front.foot.terms": "Masharti ya matumizi",
   "front.foot.write": "Tuandikie",
   "front.foot.directory": "Saraka ya usafirishaji",

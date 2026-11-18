@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact';
 import { Icon, ReadAloud } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { setLocale, useLocale, useT } from '../../../shared/i18n';
+import { currentPath } from '../prerendered';
+import { ALL_PAGE_LOCALES, LANGUAGE_NAME, hasLanguages, isPageLocale, pathIn, withSlash } from '../sitePaths';
 import '../public.css';
 
 /**
@@ -24,6 +26,9 @@ export function PublicShell({
   theme?: 'light' | 'dark';
 }) {
   const t = useT();
+  const locale = useLocale();
+  const here = isPageLocale(locale) ? locale : 'en';
+  const page = hasLanguages(currentPath()) ? withSlash(currentPath()) : '/';
   return (
     <div class={`pub${help ? ' pub--help' : ''}`} data-theme={help ? theme ?? 'light' : undefined}>
       <header class="pub__top">
@@ -89,6 +94,18 @@ export function PublicShell({
               <a href="/privacy/">{t('front.foot.data')}</a>
               <a href="/cookies/">{t('front.foot.cookies')}</a>
             </div>
+          </nav>
+          {/* 2026-11-18 — THE SAME PAGE IN EVERY LANGUAGE, each by its own name, at its own address: a reader finds theirs,
+              and a search engine finds the pages (the owner: "Is SBG optimized for GEO?"). A page with no versions offers
+              the front page in each. */}
+          <nav class="pub__langs" aria-label={t('front.foot.language')}>
+            <span class="pub__footh">{t('front.foot.language')}</span>
+            {ALL_PAGE_LOCALES.map((l) => (
+              // The choice is kept as it is clicked: English, chosen on a page in Kiswahili, opens in English.
+              <a key={l} href={pathIn(l, page)} hreflang={l} lang={l} aria-current={l === here ? 'true' : undefined} onClick={() => setLocale(l)}>
+                {LANGUAGE_NAME[l]}
+              </a>
+            ))}
           </nav>
           <div class="pub__footend">
             <span>{t('front.foot.line')}</span>
