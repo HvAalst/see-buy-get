@@ -56,6 +56,19 @@ export function countriesKey(countries) {
   return JSON.stringify((countries ?? []).map((c) => [c.country, c.total, c.forwarder, c.clearing_agent, c.depot, c.haulier, c.at?.lat ?? null, c.at?.lng ?? null]));
 }
 
+/**
+ * 2026-11-18 — where SeeBuyGet runs, as the pages name it: the countries open to everyone (joinable, not coming, not being
+ * tested), the same rule as the build's (src/apps/home/pages.ts, openCountriesOf).
+ */
+export function openKey(rows) {
+  return JSON.stringify(
+    (Array.isArray(rows) ? rows : [])
+      .filter((c) => c && typeof c.country === 'string' && (c.joinable === undefined ? true : c.joinable === true && !c.coming && !c.testing))
+      .map((c) => c.country)
+      .sort(),
+  );
+}
+
 async function main() {
   SITE = (process.argv[2] ?? process.env.SBG_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
   if (!/^https?:\/\//.test(SITE)) throw new Error('give the site, like https://seebuyget.com');
@@ -66,6 +79,9 @@ async function main() {
   if (!front) reasons.push('the front page carries no build data');
   const towns = await get('/v1/sbg/network/towns');
   if (front && townsKey(front.towns) !== townsKey(towns.items)) reasons.push('the towns or their shops changed');
+  // Where it runs: a country opened (or closed) since the build. The built list holds only open ones, so it is read as is.
+  const countries = await get('/v1/sbg/countries');
+  if (front && openKey(front.openCountries) !== openKey(countries)) reasons.push('the countries SeeBuyGet runs in changed');
   for (const which of ['terms', 'privacy', 'cookies']) {
     const live = await get(`/v1/sbg/documents/${which}`).catch(() => null);
     const was = front?.documents?.[which]?.number ?? null;

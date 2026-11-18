@@ -3,3 +3,4 @@ export function builtData(html: string): { towns?: unknown[]; documents?: Record
 export function townsKey(towns: unknown): string;
 export function entriesKey(entries: unknown): string;
 export function countriesKey(countries: unknown): string;
+export function openKey(rows: unknown): string;

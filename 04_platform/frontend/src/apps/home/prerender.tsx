@@ -10,7 +10,7 @@ import type { TownPage } from './api';
 import type { PublishedDocument } from '../../shared/documents/documents';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
-import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, pageKey, range, type InfoPage, type Notice } from './pages';
+import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, openCountriesOf, pageKey, range, type InfoPage, type Notice, type OpenCountry } from './pages';
 import { GUIDE_APPS, siteArticleById, siteArticles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
@@ -91,14 +91,31 @@ function loadDirectoryCountry(country: string): Promise<DirectoryCountryView | n
     .catch(() => null);
 }
 
+/**
+ * 2026-11-18 — WHERE SEEBUYGET RUNS (the owner: "Is SBG optimized for GEO?"): the countries open to everyone, read ONCE from
+ * the server's own list, for what a machine reads about who we are. A build that cannot reach it names no country.
+ */
+let openOnce: Promise<OpenCountry[]> | null = null;
+function loadOpenCountries(): Promise<OpenCountry[]> {
+  openOnce ??= fetch(`${API}/v1/sbg/countries`, { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? r.json() : []))
+    .then(openCountriesOf)
+    .catch(() => {
+      console.warn(`[prerender] could not reach ${API} for the countries — building without where SeeBuyGet runs`);
+      return [];
+    });
+  return openOnce;
+}
+
 export async function prerender(data: { url: string }): Promise<{
   html: string;
   links?: Set<string>;
-  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>>; directory?: DirectoryBuilt };
+  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>>; directory?: DirectoryBuilt; openCountries: OpenCountry[] };
   head: { lang: string; title: string; elements: Set<HeadElement> };
 }> {
   const towns = await loadTowns();
   const documents = await loadDocuments();
+  const openCountries = await loadOpenCountries();
   // The help page's code is fetched on demand in the browser (lazyScreens.ts); here it is brought in before rendering.
   await loadHelpPage();
   const url = data.url || '/';
@@ -115,7 +132,7 @@ export async function prerender(data: { url: string }): Promise<{
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
   const help = helpPageOf(url);
   const info = infoPageOf(url);
-  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead();
+  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead(openCountries);
   return {
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
@@ -124,7 +141,8 @@ export async function prerender(data: { url: string }): Promise<{
     ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
     // From the directory, a page per country that has firms listed.
     ...(dirPage?.kind === 'index' && index ? { links: new Set(index.countries.map((c) => directoryCountryPath(c.country))) } : {}),
-    data: { towns, documents, ...(directory ? { directory } : {}) },
+    // Where it runs rides along, so the nightly check (scripts/pages-stale.mjs) sees a country opened since the build.
+    data: { towns, documents, ...(directory ? { directory } : {}), openCountries },
     head: { lang: 'en', ...head },
   };
 }
@@ -168,9 +186,12 @@ function common(title: string, description: string, path: string): HeadElement[]
   ];
 }
 
-function frontHead(): { title: string; elements: Set<HeadElement> } {
+function frontHead(open: OpenCountry[] = []): { title: string; elements: Set<HeadElement> } {
   const title = t('home.landing.metaTitle');
   const description = t('home.landing.metaDescription');
+  // 2026-11-18 — where it runs, and where to reach us: the countries open to everyone, and the help's own contact page —
+  // never a typed number or address (each country sets its own office, and a hub's contact is public only if ticked).
+  const areaServed = open.length ? { areaServed: open.map((c) => ({ '@type': 'Country', name: c.name, identifier: c.country })) } : {};
   const ld = [
     {
       '@context': 'https://schema.org',
@@ -178,6 +199,8 @@ function frontHead(): { title: string; elements: Set<HeadElement> } {
       name: 'SeeBuyGet',
       ...(SITE ? { url: `${SITE}/`, logo: `${SITE}/icons/icon-512.png` } : {}),
       description,
+      ...areaServed,
+      ...(SITE ? { contactPoint: { '@type': 'ContactPoint', contactType: 'customer support', url: `${SITE}${CONTACT_PATH}` } } : {}),
     },
     {
       '@context': 'https://schema.org',
@@ -186,6 +209,7 @@ function frontHead(): { title: string; elements: Set<HeadElement> } {
       serviceType: t('home.landing.serviceType'),
       provider: { '@type': 'Organization', name: 'SeeBuyGet' },
       description: t('home.welcome.lede'),
+      ...areaServed,
     },
     {
       '@context': 'https://schema.org',

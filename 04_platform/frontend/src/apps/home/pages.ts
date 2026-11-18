@@ -66,6 +66,22 @@ export function infoPageOf(path: string): InfoPage | null {
 export const pageKey = (who: Audience, part: string) => `pages.for.${who}.${part}` as MessageKey;
 export const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
+/**
+ * 2026-11-18 — WHERE SEEBUYGET RUNS, AS A MACHINE READS IT (the owner: "Is SBG optimized for GEO?"): the countries open to
+ * everyone — goods move there and anybody may join — read from the server's own list (GET countries), never typed. Not a
+ * country that is coming (sign-ups only), nor one being tested (its testers only).
+ */
+export interface OpenCountry {
+  country: string;
+  name: string;
+}
+export function openCountriesOf(rows: unknown): OpenCountry[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((c): c is { country: string; name?: string } => Boolean(c) && typeof c.country === 'string' && c.joinable === true && !c.coming && !c.testing)
+    .map((c) => ({ country: c.country, name: String(c.name || c.country) }));
+}
+
 /** The countries a list of town pages is in, by name in the reader's language, in order of first appearance. */
 export function countriesOf(towns: Array<{ country: string }>, locale: string): string {
   const codes = [...new Set(towns.map((t) => t.country).filter(Boolean))];

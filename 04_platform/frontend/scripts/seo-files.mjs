@@ -15,6 +15,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { datesFor, pageHash, publishedDates } from './page-dates.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
@@ -166,7 +167,11 @@ if (fullParts.length) {
 }
 
 if (SITE) {
-  const urls = found.map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod>${p === '/' ? '<priority>1.0</priority>' : ''}</url>`);
+  // 2026-11-18 — each page's date is the day its content last changed (page-dates.mjs), kept in page-dates.json for the next build.
+  const hashes = Object.fromEntries(found.map((p) => [p, pageHash(readFileSync(join(DIST, p, 'index.html'), 'utf8'))]));
+  const dates = datesFor(hashes, await publishedDates(SITE), today);
+  writeFileSync(join(DIST, 'page-dates.json'), `${JSON.stringify({ pages: dates }, null, 1)}\n`);
+  const urls = found.map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${dates[p].date}</lastmod>${p === '/' ? '<priority>1.0</priority>' : ''}</url>`);
   writeFileSync(join(DIST, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
   console.log(`seo-files: robots.txt, and sitemap.xml with ${found.length} page(s)`);
 } else {
