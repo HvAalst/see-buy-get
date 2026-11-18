@@ -3625,7 +3625,7 @@ export const words: Record<string, string> = {
   "tower.abroad.new": "Njia mpya",
   "tower.abroad.from": "Kutoka",
   "tower.abroad.to": "Kwenda",
-  "tower.abroad.travellers": "Wasafiri hubeba vifurushi kwenye njia tu baada ya mwanasheria kujibu L54 hadi L56; hilo linakuja katika hatua ya baadaye.",
+  "tower.abroad.travellers": "Wasafiri hubeba vifurushi kwenye njia tu baada ya mwanasheria kujibu maswali yanayowahusu; hilo linakuja katika hatua ya baadaye.",
   "tower.abroad.arrivals": "Nchi za kuwasili",
   "tower.abroad.arrivalPick": "Weka nchi ya kuwasili",
   "tower.abroad.noArrivals": "Hakuna nchi ya kuwasili iliyowekwa bado. Chagua moja ili kufungua viwanja vyake vya ndege.",

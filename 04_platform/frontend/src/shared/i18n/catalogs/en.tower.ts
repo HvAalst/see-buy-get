@@ -3610,7 +3610,7 @@ export const enTowerPrices = {
   'tower.abroad.new': "A new route",
   'tower.abroad.from': "From",
   'tower.abroad.to': "To",
-  'tower.abroad.travellers': "Travellers carry parcels on a route only after the lawyer has answered L54 to L56; that comes in a later step.",
+  'tower.abroad.travellers': "Travellers carry parcels on a route only after the lawyer has answered the questions about them; that comes in a later step.",
   'tower.abroad.arrivals': "Arrival countries",
   'tower.abroad.arrivalPick': "Set up an arrival country",
   'tower.abroad.noArrivals': "No arrival country set up yet. Choose one to open its airports.",

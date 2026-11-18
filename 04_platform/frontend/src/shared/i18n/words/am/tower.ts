@@ -3625,7 +3625,7 @@ export const words: Record<string, string> = {
   "tower.abroad.new": "አዲስ መስመር",
   "tower.abroad.from": "ከ",
   "tower.abroad.to": "ወደ",
-  "tower.abroad.travellers": "ተጓዦች ጥቅሎችን በመስመር ላይ የሚይዙት ጠበቃው L54 እስከ L56 ድረስ ከመለሰ በኋላ ብቻ ነው፤ ይህ በኋላ ደረጃ ይመጣል።",
+  "tower.abroad.travellers": "ተጓዦች ጥቅሎችን በመስመር ላይ የሚይዙት ጠበቃው ስለእነሱ ያሉትን ጥያቄዎች ከመለሰ በኋላ ብቻ ነው፤ ይህ በኋላ ደረጃ ይመጣል።",
   "tower.abroad.arrivals": "የመድረሻ አገሮች",
   "tower.abroad.arrivalPick": "የመድረሻ አገር አዘጋጅ",
   "tower.abroad.noArrivals": "እስካሁን የተዘጋጀ የመድረሻ አገር የለም። አየር ማረፊያዎቹን ለመክፈት አንዱን ይምረጡ።",

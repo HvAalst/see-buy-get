@@ -3625,7 +3625,7 @@ export const words: Record<string, string> = {
   "tower.abroad.new": "Een nieuwe route",
   "tower.abroad.from": "Van",
   "tower.abroad.to": "Naar",
-  "tower.abroad.travellers": "Reizigers nemen alleen pakketten mee op een route nadat de jurist L54 tot en met L56 heeft beantwoord; dat komt in een latere stap.",
+  "tower.abroad.travellers": "Reizigers nemen alleen pakketten mee op een route nadat de jurist de vragen over hen heeft beantwoord; dat komt in een latere stap.",
   "tower.abroad.arrivals": "Aankomstlanden",
   "tower.abroad.arrivalPick": "Een aankomstland instellen",
   "tower.abroad.noArrivals": "Nog geen aankomstland ingesteld. Kies er een om de luchthavens te openen.",
