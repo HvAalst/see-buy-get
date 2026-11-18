@@ -41145,6 +41145,368 @@
         }
       }
     },
+    "/v1/sbg/border-routes": {
+      "get": {
+        "operationId": "BorderRoutes.view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRoutesView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/propose": {
+      "post": {
+        "operationId": "BorderRoutes.propose",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderByDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/approve": {
+      "post": {
+        "operationId": "BorderRoutes.approve",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderByDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/decline": {
+      "post": {
+        "operationId": "BorderRoutes.decline",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderByDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/off": {
+      "post": {
+        "operationId": "BorderRoutes.off",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderByDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-arrivals/{country}/airports/{airport}": {
+      "post": {
+        "operationId": "BorderRoutes.airport",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "airport",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderAirportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-arrivals/{country}/airports/{airport}/warehouse": {
+      "post": {
+        "operationId": "BorderRoutes.warehouse",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "airport",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderWarehouseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-arrivals/{country}/clearer": {
+      "post": {
+        "operationId": "BorderRoutes.clearer",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderClearerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-arrivals/{country}/fee": {
+      "post": {
+        "operationId": "BorderRoutes.fee",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/document-links/look": {
       "post": {
         "operationId": "DocumentLink.look",
@@ -93097,6 +93459,428 @@
         },
         "required": [
           "on"
+        ]
+      },
+      "BorderConditionView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "open-from",
+              "open-to",
+              "sells-from",
+              "sells-to",
+              "clearer",
+              "fee",
+              "airport"
+            ]
+          },
+          "met": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "met"
+        ]
+      },
+      "BorderRouteView": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "off",
+              "waiting",
+              "on"
+            ]
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedAt": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Said per reader: the person who proposed it may not approve it."
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderConditionView"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "state",
+          "mine",
+          "conditions"
+        ]
+      },
+      "BorderWarehouse": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string",
+            "description": "The hub that holds a parcel the traveller cannot take further: one of ours, in the airport's country."
+          },
+          "name": {
+            "type": "string"
+          },
+          "tstLicence": {
+            "type": "string",
+            "description": "The customs licence for temporary storage it holds, as customs wrote it."
+          },
+          "validUntil": {
+            "type": "string",
+            "description": "Until when that licence runs, where customs says (YYYY-MM-DD). Past it, the airport counts as having no warehouse."
+          },
+          "agreement": {
+            "type": "string",
+            "description": "The agreement with customs at this airport that names the warehouse: its reference."
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "tstLicence",
+          "agreement",
+          "by",
+          "at"
+        ]
+      },
+      "BorderAirport": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Its three-letter code."
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open for parcels arriving from abroad. Blocked by default: staff open each one."
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/BorderWarehouse"
+          },
+          "lapsed": {
+            "type": "boolean",
+            "description": "The warehouse's licence has run out: the airport takes no parcels until it is renewed."
+          }
+        },
+        "required": [
+          "code",
+          "open",
+          "lapsed"
+        ]
+      },
+      "BorderClearer": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "company"
+            ]
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The clearing agent's company, or our own company in that country."
+          },
+          "name": {
+            "type": "string"
+          },
+          "registration": {
+            "type": "string",
+            "description": "Our company's registration as a customs representative; absent for an agent."
+          },
+          "acceptedAt": {
+            "type": "string",
+            "description": "When the agent accepted (its own act, on its side); our company needs none. Absent: waiting for the agent."
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "entityId",
+          "name",
+          "by",
+          "at"
+        ]
+      },
+      "BorderFee": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "by",
+          "at"
+        ]
+      },
+      "BorderOption": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "BorderArrivalView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "airports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderAirport"
+            }
+          },
+          "clearer": {
+            "$ref": "#/components/schemas/BorderClearer"
+          },
+          "fee": {
+            "$ref": "#/components/schemas/BorderFee"
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money a fee here is in: its company's. Absent where no company of ours stands."
+          },
+          "hubs": {
+            "description": "The hubs that may be named as a warehouse here: approved, in this country.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          },
+          "agents": {
+            "description": "The clearing agents in this country that may be named.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          }
+        },
+        "required": [
+          "country",
+          "airports",
+          "hubs",
+          "agents"
+        ]
+      },
+      "BorderChange": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string",
+            "description": "What changed, in a word: propose, approve, decline, off, airport-open, airport-block, warehouse, clearer, fee."
+          },
+          "country": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "airport": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "what",
+          "country"
+        ]
+      },
+      "BorderRoutesView": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderRouteView"
+            }
+          },
+          "arrivals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderArrivalView"
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderChange"
+            }
+          }
+        },
+        "required": [
+          "routes",
+          "arrivals",
+          "changes"
+        ]
+      },
+      "BorderByDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          }
+        }
+      },
+      "BorderAirportDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "open"
+        ]
+      },
+      "BorderWarehouseDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "mdpId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "tstLicence": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60
+          },
+          "validUntil": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "agreement": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "mdpId",
+          "tstLicence",
+          "agreement"
+        ]
+      },
+      "BorderClearerDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "company"
+            ]
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The agent's company; for our own company, left out (it is the country's).",
+            "maxLength": 80
+          },
+          "registration": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "BorderFeeDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "amount"
         ]
       },
       "DocumentLinkTokenDto": {

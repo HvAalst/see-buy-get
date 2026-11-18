@@ -171,6 +171,17 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'POST sbg/code-routes/:country/order': { country: 'param', name: 'country' },
   'POST sbg/code-routes/:country/routes/:route': { country: 'param', name: 'country' },
   'POST sbg/code-routes/:country/apps/:route': { country: 'param', name: 'country' },
+  // 2026-11-18 — parcels across a border: a route joins two countries, so it is changed by network-wide staff only; an
+  // arrival country's own setup is that country's; the list shows a scoped reader what touches their country.
+  'GET sbg/border-routes': list({ at: 'routes', row: { field: ['from', 'to'] } }, { at: 'arrivals', row: { field: 'country' } }, { at: 'changes', row: { field: ['country', 'to'] } }),
+  'POST sbg/border-routes/:from/:to/propose': every('a route joins two countries'),
+  'POST sbg/border-routes/:from/:to/approve': every('a route joins two countries'),
+  'POST sbg/border-routes/:from/:to/decline': every('a route joins two countries'),
+  'POST sbg/border-routes/:from/:to/off': every('a route joins two countries'),
+  'POST sbg/border-arrivals/:country/airports/:airport': { country: 'param', name: 'country' },
+  'POST sbg/border-arrivals/:country/airports/:airport/warehouse': { country: 'param', name: 'country' },
+  'POST sbg/border-arrivals/:country/clearer': { country: 'param', name: 'country' },
+  'POST sbg/border-arrivals/:country/fee': { country: 'param', name: 'country' },
   'POST sbg/connections/router/check': every('the server’s connections — email, texts, storage — serve every country'),
   'PUT sbg/help/:topic/:key/image': every('help pictures are read in every country'),
   'DELETE sbg/help/:topic/:key/image': every('help pictures are read in every country'),

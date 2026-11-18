@@ -14,6 +14,7 @@ import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { CodeRoutesScreen } from './screens/CodeRoutesScreen';
+import { AbroadScreen } from './screens/AbroadScreen';
 import { StaffReadsScreen } from './screens/StaffReadsScreen';
 import { DocumentsScreen } from './screens/DocumentsScreen';
 import { LanguagesScreen } from './screens/LanguagesScreen';
@@ -180,7 +181,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'codes', 'staffreads', 'risks', 'messages', 'documents', 'languages'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'abroad', 'movers', 'rates', 'connections', 'codes', 'staffreads', 'risks', 'messages', 'documents', 'languages'] as Screen[]) : []),
     // 2026-11-09 — staff always: the first company is created there (it was offered only once two existed, so on a
     // server with the group alone nobody could create one — the owner: "'the companies' doesn't have the option").
     ...(offersCompanies(isOperator, state.entities?.length ?? 0) ? (['companies'] as Screen[]) : []),
@@ -357,6 +358,8 @@ export function App() {
             <PilotScreen actions={actions} />
           ) : state.screen === 'borders' ? (
             <BordersScreen state={state} actions={actions} />
+          ) : state.screen === 'abroad' ? (
+            <AbroadScreen state={state} actions={actions} />
           ) : state.screen === 'company' ? (
             <CompanyRecordScreen state={state} actions={actions} />
           ) : state.screen === 'companies' ? (

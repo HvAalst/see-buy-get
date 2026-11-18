@@ -47,7 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     screens: ['messages', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
-  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'zones', 'zoneprices', 'hubdensity', 'corridors', 'borders', 'presence', 'documents', 'languages', 'pictures', 'connections', 'codes', 'staffreads'] },
+  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'zones', 'zoneprices', 'hubdensity', 'corridors', 'borders', 'abroad', 'presence', 'documents', 'languages', 'pictures', 'connections', 'codes', 'staffreads'] },
 ];
 
 /**
@@ -93,6 +93,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   connections: { labelKey: 'tower.nav.connections', icon: 'repeat' },
   // 2026-11-16 — the routes a sign-in code goes by, steered per country (the plan "Sign-in codes beyond Twilio SMS", D1).
   codes: { labelKey: 'tower.nav.codes', icon: 'key' },
+  abroad: { labelKey: 'tower.nav.abroad', icon: 'globe' },
   staffreads: { labelKey: 'tower.nav.staffreads', icon: 'lock' },
   // 2026-10-25 — the terms of use, the data notice and the cookie statement: every version, published by two.
   documents: { labelKey: 'tower.nav.documents', icon: 'edit' },

@@ -1091,6 +1091,26 @@ export function createOperatorApi(sbg: SbgClient) {
     setCodeRoute: (country: string, route: string, body: { on: boolean; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/routes/{route}', { params: { path: { country, route } }, body })),
     /** 2026-11-16 — an app (WhatsApp, Telegram) offered in a country as the person's choice for their code, or not (D2, D3). */
     setCodeRouteApp: (country: string, route: string, body: { on: boolean; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/code-routes/{country}/apps/{route}', { params: { path: { country, route } }, body })),
+    /**
+     * 2026-11-18 — parcels across a border (the plan's step 1): every route and what it still needs, and each arrival
+     * country's airports, customs warehouses, clearer and fee. Two people switch a route on; one switches it off.
+     */
+    borderRoutes: () => sbg.request((c) => c.GET('/v1/sbg/border-routes', {})),
+    borderRoute: (from: string, to: string, act: 'propose' | 'approve' | 'decline' | 'off', body: { by?: string }) =>
+      act === 'propose'
+        ? sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/propose', { params: { path: { from, to } }, body }))
+        : act === 'approve'
+          ? sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/approve', { params: { path: { from, to } }, body }))
+          : act === 'decline'
+            ? sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/decline', { params: { path: { from, to } }, body }))
+            : sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/off', { params: { path: { from, to } }, body })),
+    setBorderAirport: (country: string, airport: string, body: { open: boolean; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/airports/{airport}', { params: { path: { country, airport } }, body })),
+    setBorderWarehouse: (country: string, airport: string, body: { mdpId: string; tstLicence: string; validUntil?: string; agreement: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/airports/{airport}/warehouse', { params: { path: { country, airport } }, body })),
+    setBorderClearer: (country: string, body: { kind: 'agent' | 'company'; entityId?: string; registration?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/clearer', { params: { path: { country } }, body })),
+    setBorderFee: (country: string, body: { amount: number; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/fee', { params: { path: { country } }, body })),
     checkRouter: () => sbg.request((c) => c.POST('/v1/sbg/connections/router/check', {})),
     approveBusiness: (entityId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/businesses/{entityId}/approve', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } })),

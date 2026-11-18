@@ -1,0 +1,147 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+
+/*
+ * 2026-11-18 — PARCELS ACROSS A BORDER, STEP 1: THE ROUTES ON THE CONSOLE (the plan "Parcels across a border: the traveller
+ * and the customs hold", D1–D9 "As recommended"; the owner on D1: "staff can block and open airports of a single country
+ * (for example Schiphol yes, Maastricht airport block)"; and on the plan: "an agreement with customs at each arrival
+ * airport names the warehouse where a parcel is held … to hold the temporary storage (TST) licence").
+ *
+ * A ROUTE is one country pair in one direction: off, waiting for a second person, or on. What it needs at the ARRIVAL end
+ * belongs to that country and serves every route into it: which of its airports are open, the customs warehouse agreed
+ * at each, who clears there, and our clearance fee there.
+ */
+export const BORDER_ROUTE_STATES = ['off', 'waiting', 'on'] as const;
+export type BorderRouteState = (typeof BORDER_ROUTE_STATES)[number];
+
+/** What a route needs before it may be switched on, each said by name when it is missing. */
+export const BORDER_CONDITIONS = ['open-from', 'open-to', 'sells-from', 'sells-to', 'clearer', 'fee', 'airport'] as const;
+export type BorderCondition = (typeof BORDER_CONDITIONS)[number];
+
+export const CLEARER_KINDS = ['agent', 'company'] as const;
+export type ClearerKind = (typeof CLEARER_KINDS)[number];
+
+export class BorderWarehouse {
+  /** The hub that holds a parcel the traveller cannot take further: one of ours, in the airport's country. */
+  @ApiProperty() mdpId: string;
+  @ApiProperty() name: string;
+  /** The customs licence for temporary storage it holds, as customs wrote it. */
+  @ApiProperty() tstLicence: string;
+  /** Until when that licence runs, where customs says (YYYY-MM-DD). Past it, the airport counts as having no warehouse. */
+  @ApiPropertyOptional() validUntil?: string;
+  /** The agreement with customs at this airport that names the warehouse: its reference. */
+  @ApiProperty() agreement: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+export class BorderAirport {
+  /** Its three-letter code. */
+  @ApiProperty() code: string;
+  /** Open for parcels arriving from abroad. Blocked by default: staff open each one. */
+  @ApiProperty() open: boolean;
+  @ApiPropertyOptional({ type: BorderWarehouse }) warehouse?: BorderWarehouse;
+  /** The warehouse's licence has run out: the airport takes no parcels until it is renewed. */
+  @ApiProperty() lapsed: boolean;
+}
+
+export class BorderClearer {
+  @ApiProperty({ enum: CLEARER_KINDS }) kind: ClearerKind;
+  /** The clearing agent's company, or our own company in that country. */
+  @ApiProperty() entityId: string;
+  @ApiProperty() name: string;
+  /** Our company's registration as a customs representative; absent for an agent. */
+  @ApiPropertyOptional() registration?: string;
+  /** When the agent accepted (its own act, on its side); our company needs none. Absent: waiting for the agent. */
+  @ApiPropertyOptional() acceptedAt?: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+export class BorderFee {
+  @ApiProperty() amount: number;
+  @ApiProperty() currency: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+export class BorderOption {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
+}
+
+export class BorderArrivalView {
+  @ApiProperty() country: string;
+  @ApiProperty({ type: [BorderAirport] }) airports: BorderAirport[];
+  @ApiPropertyOptional({ type: BorderClearer }) clearer?: BorderClearer;
+  @ApiPropertyOptional({ type: BorderFee }) fee?: BorderFee;
+  /** The money a fee here is in: its company's. Absent where no company of ours stands. */
+  @ApiPropertyOptional() currency?: string;
+  /** The hubs that may be named as a warehouse here: approved, in this country. */
+  @ApiProperty({ type: [BorderOption] }) hubs: BorderOption[];
+  /** The clearing agents in this country that may be named. */
+  @ApiProperty({ type: [BorderOption] }) agents: BorderOption[];
+}
+
+export class BorderConditionView {
+  @ApiProperty({ enum: BORDER_CONDITIONS }) key: BorderCondition;
+  @ApiProperty() met: boolean;
+}
+
+export class BorderRouteView {
+  @ApiProperty() from: string;
+  @ApiProperty() to: string;
+  @ApiProperty({ enum: BORDER_ROUTE_STATES }) state: BorderRouteState;
+  @ApiPropertyOptional() proposedBy?: string;
+  @ApiPropertyOptional() proposedAt?: string;
+  @ApiPropertyOptional() approvedBy?: string;
+  @ApiPropertyOptional() approvedAt?: string;
+  /** Said per reader: the person who proposed it may not approve it. */
+  @ApiProperty() mine: boolean;
+  @ApiProperty({ type: [BorderConditionView] }) conditions: BorderConditionView[];
+}
+
+export class BorderChange {
+  @ApiProperty() at: string;
+  @ApiProperty() by: string;
+  /** What changed, in a word: propose, approve, decline, off, airport-open, airport-block, warehouse, clearer, fee. */
+  @ApiProperty() what: string;
+  @ApiProperty() country: string;
+  @ApiPropertyOptional() to?: string;
+  @ApiPropertyOptional() airport?: string;
+}
+
+export class BorderRoutesView {
+  @ApiProperty({ type: [BorderRouteView] }) routes: BorderRouteView[];
+  @ApiProperty({ type: [BorderArrivalView] }) arrivals: BorderArrivalView[];
+  @ApiProperty({ type: [BorderChange] }) changes: BorderChange[];
+}
+
+/* ------------------------------------------------------------------ what staff send -- */
+
+export class BorderByDto {
+  /** Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop). */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) by?: string;
+}
+
+export class BorderAirportDto extends BorderByDto {
+  @ApiProperty() @IsBoolean() open!: boolean;
+}
+
+export class BorderWarehouseDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) mdpId!: string;
+  @ApiProperty() @IsString() @MinLength(3) @MaxLength(60) tstLicence!: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) validUntil?: string;
+  @ApiProperty() @IsString() @MinLength(3) @MaxLength(80) agreement!: string;
+}
+
+export class BorderClearerDto extends BorderByDto {
+  @ApiProperty({ enum: CLEARER_KINDS }) @IsIn(CLEARER_KINDS) kind!: ClearerKind;
+  /** The agent's company; for our own company, left out (it is the country's). */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) entityId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(3) @MaxLength(60) registration?: string;
+}
+
+export class BorderFeeDto extends BorderByDto {
+  @ApiProperty() @IsNumber() @Min(0.01) amount!: number;
+}

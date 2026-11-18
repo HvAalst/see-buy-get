@@ -70,6 +70,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   pictures: ['admin'],
   connections: ['admin'],
   codes: ['admin'],
+  // 2026-11-18 — parcels across a border (step 1): routes, airports, warehouses, clearers and fees are administration's.
+  abroad: ['admin'],
   staffreads: ['admin'],
   // What everybody agrees to at sign-up: administration writes and publishes it.
   documents: ['admin'],

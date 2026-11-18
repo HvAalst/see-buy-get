@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest';
+import { renderToString } from 'preact-render-to-string';
+import { t } from '../../shared/i18n';
+import { abroadChangeLine, clearerLine, routeActs, routeStateTag, type BorderArrival, type BorderRoute } from './abroad';
+import { RouteRow } from './screens/AbroadScreen';
+import { SCREEN_ROLES } from './staffRoles';
+import { NAV_GROUPS } from './nav';
+
+/*
+ * 2026-11-18 — PARCELS ACROSS A BORDER ON THE CONSOLE (the plan, step 1). A route shows what it still needs, each thing
+ * by name; it is proposed only when nothing is missing, approved only by somebody else, and switched off by one person.
+ */
+const route = (o: Partial<BorderRoute>): BorderRoute => ({
+  from: 'NL',
+  to: 'KE',
+  state: 'off',
+  mine: false,
+  conditions: (['open-from', 'open-to', 'sells-from', 'sells-to', 'clearer', 'fee', 'airport'] as const).map((key) => ({ key, met: true })),
+  ...o,
+});
+const nameOf = (c: string) => ({ NL: 'Netherlands', KE: 'Kenya' })[c] ?? c;
+
+describe('a route on the console', () => {
+  it('says what it still needs, each thing by name, and offers nothing until it has it all', () => {
+    const missing = route({ conditions: route({}).conditions.map((c) => ({ ...c, met: c.key !== 'airport' && c.key !== 'fee' })) });
+    const html = renderToString(<RouteRow r={missing} nameOf={nameOf} writer busy={null} onAct={() => {}} />);
+    expect(html).toContain('Netherlands to Kenya');
+    expect(html).toContain('✗ ' + t('tower.abroad.cond.airport', { from: 'Netherlands', to: 'Kenya' }));
+    expect(html).toContain('✓ ' + t('tower.abroad.cond.clearer', { from: 'Netherlands', to: 'Kenya' }));
+    expect(routeActs(missing)).toEqual([]);
+    expect(html).not.toContain(`>${t('tower.abroad.propose')}<`);
+  });
+
+  it('proposed when ready; approved only by somebody else; switched off by one', () => {
+    expect(routeActs(route({}))).toEqual(['propose']);
+    expect(routeActs(route({ state: 'waiting', mine: true }))).toEqual(['decline']);
+    expect(routeActs(route({ state: 'waiting', mine: false }))).toEqual(['approve', 'decline']);
+    expect(routeActs(route({ state: 'on' }))).toEqual(['off']);
+    const mine = renderToString(<RouteRow r={route({ state: 'waiting', mine: true, proposedBy: 'Amina Staff', proposedAt: '2026-11-18T10:00:00Z' })} nameOf={nameOf} writer busy={null} onAct={() => {}} />);
+    expect(mine).toContain(t('tower.abroad.mine'));
+    expect(mine).toContain(`>${t('tower.abroad.withdraw')}<`);
+    expect(mine).not.toContain(`>${t('tower.abroad.approve')}<`);
+    expect(routeStateTag(route({ state: 'waiting' }), t).tag).toBe(t('tower.abroad.state.waiting'));
+  });
+
+  it('a reader without administration sees it and changes nothing', () => {
+    const html = renderToString(<RouteRow r={route({ state: 'on' })} nameOf={nameOf} writer={false} busy={null} onAct={() => {}} />);
+    expect(html).not.toContain(`>${t('tower.abroad.off')}<`);
+    expect(SCREEN_ROLES.abroad).toEqual(['admin']);
+    expect(NAV_GROUPS.find((g) => g.key === 'setup')?.screens).toContain('abroad');
+  });
+});
+
+describe('an arrival country and the changes', () => {
+  const arrival = (o: Partial<BorderArrival>): BorderArrival => ({ country: 'KE', airports: [], hubs: [], agents: [], ...o });
+
+  it('says who clears: nobody, an agent waiting to accept or accepted, or our company with its registration', () => {
+    const when = () => 'today';
+    expect(clearerLine(arrival({}), when, t)).toBe(t('tower.abroad.clearer.none'));
+    expect(clearerLine(arrival({ clearer: { kind: 'agent', entityId: 'a', name: 'Swift Clearing', by: 'A', at: 'x' } }), when, t)).toBe(t('tower.abroad.clearer.agentWaiting', { name: 'Swift Clearing' }));
+    expect(clearerLine(arrival({ clearer: { kind: 'agent', entityId: 'a', name: 'Swift Clearing', acceptedAt: 'y', by: 'A', at: 'x' } }), when, t)).toBe(t('tower.abroad.clearer.agentAccepted', { name: 'Swift Clearing', when: 'today' }));
+    expect(clearerLine(arrival({ clearer: { kind: 'company', entityId: 'sbg-ke', name: 'SeeBuyGet Kenya', registration: 'KRA-CR-881', by: 'A', at: 'x' } }), when, t)).toContain('KRA-CR-881');
+  });
+
+  it('lists each change as who did what, where', () => {
+    expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'airport-block', country: 'NL', airport: 'MST' }, nameOf, t)).toBe(t('tower.abroad.change.airport-block', { who: 'Amina Staff', airport: 'MST', country: 'Netherlands' }));
+    expect(abroadChangeLine({ at: 'x', by: 'Brian Staff', what: 'approve', country: 'NL', to: 'KE' }, nameOf, t)).toBe('Brian Staff switched on Netherlands to Kenya');
+  });
+});
