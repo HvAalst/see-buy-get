@@ -409,6 +409,8 @@ export const words: Record<string, string> = {
   "driver.loads.positionKept": "የስልክዎ አቀማመጥ ከዚህ ፎቶ እና ከሰዓቱ ጋር ይቀመጣል፣ ርክክቡ የት እንደተፈጸመ ለማሳየት። አቀማመጥ የለም? ቢሆንም ይቀጥላል።",
   "driver.loads.remarksLabel": "ተቀባዩ የጻፈው ነገር አለ? (አማራጭ)",
   "driver.loads.remarksHint": "ቃላቸው በጭነት ሰነዱ ላይ እንደ ተቀባዩ አስተያየት ይገባል።",
+  "driver.loads.paidSeen": "ጭነት ላኪው {amount} ከፍሎኛል",
+  "driver.loads.paidSeenHint": "በስልክ ተከፍሎዎታል? በጭነት ላኪው ስክሪን ላይ ሳይሆን በራስዎ ስልክ ላይ ይመልከቱ፤ የክፍያ መልዕክት በሐሰት ሊሠራ ይችላል። ገና አልተከፈለዎትም? ጭነቱን ማስረከብ አለማስረከብዎን እርስዎ ይወስናሉ፤ መከፈሉን ወይም አለመከፈሉን በኋላ ማሳወቅ ይችላሉ።",
   "driver.loads.addReceiver": "ዕቃውን የተቀበለውን ሰው ስም ይጻፉ።",
   "driver.loads.addPodPhoto": "የደረሰውን ዕቃ ፎቶ ያክሉ።",
   "driver.found.toggle": "ተቀባዩ በሰነዱ ላይ ካለው የተለየ ነገር አገኘ",

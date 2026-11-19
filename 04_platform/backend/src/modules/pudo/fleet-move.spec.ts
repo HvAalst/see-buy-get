@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { runAsSystemsCall, type ApiRuleChange } from '../../foundation/http/api-rules';
 import { AgentService } from './agent.service';
@@ -64,6 +66,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
 import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
@@ -1272,6 +1275,82 @@ describe('a driver changing fleet', () => {
       const { freight } = aDeliveredHaul(d.driver.did, d.truck.vehicleId, kilima.did);
       expect(freight.settlement).toBeUndefined();
       expect(owedTo(kilima.did)).toBeGreaterThan(before);
+    });
+
+    /*
+     * 2026-11-19 — PAID AS THE GOODS CHANGE HANDS (the payments plan, part 1). On a load the shipper pays directly, the driver
+     * says at the handover that the price agreed was paid: sent with the delivery, so it waits with it where there is no
+     * signal; dated at the handover; the shipper is told. A load SeeBuyGet pays the carrier for has no such payment.
+     */
+    describe('paid, said at the handover', () => {
+      function aBusinessLoadOnTheRoad(name: string) {
+        const carrier = aFleet(name);
+        const d = aDriver(carrier.did);
+        const business = entities.createBusiness({ name: `Abebe Import ${++seq}`, jurisdiction: 'KE', profile: { activities: ['shipper'], registrationNo: `R-${seq}`, createdBy: 'Abebe', createdByPersonDid: 'did:glos:abebe' } });
+        const at = { lat: -1.2, lng: 36.8 };
+        const f = dispatch.registerFreight({ description: 'Coffee, 40 bags', pickupLocation: at, pickupLabel: 'Warehouse', destLabel: 'Port', destLocation: at, weightKg: 200, packaging: 'palletised', postedByDid: business.did, postedByName: 'Abebe Kebede' });
+        fleet.couple(d.driver.did, d.truck.vehicleId);
+        dispatch.assign(f.freightId, d.driver.did, { managerDid: carrier.did });
+        dispatch.pickupFreight(f.freightId, d.driver.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.driver.did) });
+        return { f, d };
+      }
+      const handover = (driverDid: string) => ({ confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(driverDid) });
+
+      it('the driver says it with the delivery: the price agreed, dated at the handover, by the driver — and the shipper is told', () => {
+        const { f, d } = aBusinessLoadOnTheRoad('Kilima Paid');
+        const told = jest.spyOn(events, 'publish');
+        // No signal at the door: the delivery waited on the phone and reached us half an hour after the goods changed hands.
+        const handed = new Date(Date.now() + 1_000).toISOString();
+        const reached = Date.now() + 30 * 60_000;
+        const done = dispatch.deliverFreight(f.freightId, d.driver.did, { ...handover(d.driver.did), observedAt: handed, paidSeen: true }, reached);
+        fleet.uncouple(d.driver.did);
+        expect(done.status).toBe('delivered');
+        expect(done.deliveredAt).toBe(handed);
+        expect(done.paidDirect).toEqual({ at: handed, amount: done.lockedPrice, currency: expect.any(String), by: 'driver' });
+        expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.paidDirect).toEqual(done.paidDirect);
+        expect(told).toHaveBeenCalledWith(GlosEvent.Pudo.FreightPaidDirect, expect.objectContaining({ freightId: f.freightId, by: 'driver', amount: done.lockedPrice }), expect.anything());
+        told.mockRestore();
+      });
+
+      it('not said, nothing is said: the questions after the delivery carry on', () => {
+        const { f, d } = aBusinessLoadOnTheRoad('Kilima Unsaid');
+        const done = dispatch.deliverFreight(f.freightId, d.driver.did, handover(d.driver.did));
+        fleet.uncouple(d.driver.did);
+        expect(done.status).toBe('delivered');
+        expect(done.paidDirect).toBeUndefined();
+      });
+
+      it('a delivery refused writes nothing — the payment included', () => {
+        const { f, d } = aBusinessLoadOnTheRoad('Kilima Refused');
+        expect(() => dispatch.deliverFreight(f.freightId, d.driver.did, { ...handover(d.driver.did), receiverName: '', paidSeen: true })).toThrow(/Record who received the goods/);
+        const still = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+        expect(still.status).toBe('in_transit');
+        expect(still.paidDirect).toBeUndefined();
+        fleet.uncouple(d.driver.did);
+      });
+
+      it('a load SeeBuyGet pays the carrier for has no such payment: delivered, and nothing said', () => {
+        const kilima = aFleet('Kilima Billed');
+        const d = aDriver(kilima.did);
+        const vendor = vendors.register({ name: `Shipper ${++seq}` });
+        vendors.topUp(vendor.vendorId, 500);
+        const at = { lat: -1.2, lng: 36.8 };
+        const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
+        fleet.couple(d.driver.did, d.truck.vehicleId);
+        dispatch.assign(f.freightId, d.driver.did, { managerDid: kilima.did });
+        dispatch.pickupFreight(f.freightId, d.driver.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.driver.did) });
+        const done = dispatch.deliverFreight(f.freightId, d.driver.did, { ...handover(d.driver.did), paidSeen: true });
+        fleet.uncouple(d.driver.did);
+        expect(done.status).toBe('delivered');
+        expect(done.settlement).toBeUndefined();
+        expect(done.paidDirect).toBeUndefined();
+      });
+
+      it('the delivery door passes it on, and the request may carry it', () => {
+        const src = (p: string) => readFileSync(join(__dirname, p), 'utf8');
+        expect(src('pudo.controller.ts')).toMatch(/freightDeliver\([\s\S]{0,1200}\.\.\.\(dto\.paidSeen \? \{ paidSeen: true \} : \{\}\)/);
+        expect(src('pudo.dto.ts')).toMatch(/export class FreightActionDto \{[\s\S]{0,2400}@IsOptional\(\) @IsBoolean\(\) paidSeen\?: boolean;/);
+      });
     });
   });
 });

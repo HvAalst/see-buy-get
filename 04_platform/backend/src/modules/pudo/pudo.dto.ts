@@ -3416,6 +3416,11 @@ export class FreightActionDto {
   @IsOptional() @IsString() @MaxLength(12) deliveryCode?: string;
   /** 2026-11-15 — the code was emailed to the receiver: the driver checked their name (plan R2). */
   @IsOptional() @IsBoolean() nameChecked?: boolean;
+  /**
+   * 2026-11-19 — at delivery, on a load the shipper pays directly: the driver says the shipper paid the price agreed, as the
+   * goods change hands (the payments plan, part 1). Sent with the delivery, so it waits with it where there is no signal.
+   */
+  @IsOptional() @IsBoolean() paidSeen?: boolean;
   /** FP3 — at delivery: who received the goods, the photo of them as put down, and what the receiver said (box 24). */
   @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
   @IsOptional() @IsString() podPhotoId?: string;

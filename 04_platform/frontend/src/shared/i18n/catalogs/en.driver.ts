@@ -487,6 +487,9 @@ export const enDriver = {
   'driver.loads.positionKept': 'Your phone’s position is kept with this photo and the time, to show where it happened. No position? It goes ahead all the same.',
   'driver.loads.remarksLabel': 'Did the receiver note anything? (optional)',
   'driver.loads.remarksHint': 'Their words go on the consignment note as the receiver’s remarks.',
+  // 2026-11-19 — at the handover, on a load the shipper pays directly: paid, said as the goods change hands (the payments plan).
+  'driver.loads.paidSeen': 'The shipper paid me {amount}',
+  'driver.loads.paidSeenHint': 'Paid by phone? Look on your own phone, not on the shipper’s screen: a payment message can be faked. Not paid yet? You decide whether to hand it over, and you can say later whether it was paid.',
   'driver.loads.addReceiver': 'Type the name of the person who received the goods.',
   'driver.loads.addPodPhoto': 'Add a photo of the goods as delivered.',
   // D9 — what the receiver found at the handover: on the note beside their name; the delivery still stands.

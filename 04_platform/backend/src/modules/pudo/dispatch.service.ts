@@ -3596,7 +3596,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string; terminalReceipt?: string; position?: HandoverPositionDto; deliveryCode?: string; nameChecked?: boolean }, now: number = Date.now()): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string; terminalReceipt?: string; position?: HandoverPositionDto; deliveryCode?: string; nameChecked?: boolean; paidSeen?: boolean }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -3699,6 +3699,10 @@ export class DispatchService {
     void this.events
       .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(exceptions.length ? { exceptions: exceptions.map(({ kind, count }) => ({ kind, count })) } : {}), ...(timing ? { timing, orderedFor: f.deliverOn } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: { packages: f.refusal.part.packages, of: f.refusal.part.of, decideBy: f.refusal.decideBy, pickupLabel: f.pickupLabel } } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
+    // 2026-11-19 — PAID AS THE GOODS CHANGED HANDS (the payments plan, part 1): on a load the shipper pays directly, the
+    // driver said at the handover that the price agreed was paid. Said once, dated at the handover, and the shipper is told,
+    // as when it is said afterwards. A load SeeBuyGet pays the carrier for has no such payment, so nothing is said there.
+    if (check?.paidSeen && f.settlement === 'between_parties' && f.lockedPrice != null) return this.confirmPaidDirect(f.freightId, 'driver', Date.parse(f.deliveredAt));
     return f;
   }
 

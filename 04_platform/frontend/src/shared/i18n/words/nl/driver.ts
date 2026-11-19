@@ -409,6 +409,8 @@ export const words: Record<string, string> = {
   "driver.loads.positionKept": "De positie van je telefoon wordt bij deze foto en het tijdstip bewaard, om te laten zien waar het gebeurde. Geen positie? Het gaat toch door.",
   "driver.loads.remarksLabel": "Heeft de ontvanger iets opgemerkt? (optioneel)",
   "driver.loads.remarksHint": "Hun woorden komen op de vrachtbrief als opmerkingen van de ontvanger.",
+  "driver.loads.paidSeen": "De verlader heeft me {amount} betaald",
+  "driver.loads.paidSeenHint": "Betaald via de telefoon? Kijk op je eigen telefoon, niet op het scherm van de verlader: een betaalbericht kan nep zijn. Nog niet betaald? Jij beslist of je de lading afgeeft, en je kunt later zeggen of er betaald is.",
   "driver.loads.addReceiver": "Typ de naam van de persoon die de goederen heeft ontvangen.",
   "driver.loads.addPodPhoto": "Voeg een foto van de goederen zoals afgeleverd toe.",
   "driver.found.toggle": "De ontvanger vond iets dat niet is zoals de vrachtbrief zegt",

@@ -499,7 +499,11 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   // 2026-11-13 — a load paid first: the code the sender gave whoever receives it (part 3b).
   const [deliveryCode, setDeliveryCode] = useState('');
   const [nameChecked, setNameChecked] = useState(false); // 2026-11-15 — the code was emailed: their name checked (R2)
+  const [paidSeen, setPaidSeen] = useState(false); // 2026-11-19 — paid, said as the goods change hands (the payments plan, part 1)
   useEffect(() => {
+    setDeliveryCode('');
+    setNameChecked(false);
+    setPaidSeen(false);
     setCounted('');
     setReceipt('');
     setSealReads({});
@@ -662,6 +666,17 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   ) : null}
                 </div>
               ) : null}
+              {/* 2026-11-19 — a load the shipper pays directly: paid, said as the goods change hands (the payments plan, part 1). It
+                  never holds the delivery back: when to hand over unpaid is the driver's call, and "not paid" can still be said later. */}
+              {claim.paidByShipper && !claim.paidDirect && claim.lockedPrice != null ? (
+                <div class="field" style="margin-top:14px">
+                  <label class="checkline">
+                    <input type="checkbox" checked={paidSeen} disabled={busy} onChange={(e) => setPaidSeen(e.currentTarget.checked)} />
+                    <span>{t('driver.loads.paidSeen', { amount: cash(claim.lockedPrice, state.session.currency) })}</span>
+                  </label>
+                  <p class="hint">{t('driver.loads.paidSeenHint')}</p>
+                </div>
+              ) : null}
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
                   {t('driver.loads.remarksLabel')}
@@ -685,7 +700,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}), ...(shed?.side === 'collection' && countedN !== null ? { countedPieces: countedN } : {}) });
                 } else {
                   const exceptions = foundOpen ? foundBody(found) : undefined;
-                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}), ...(claim.deliveryCodeNeeded ? { deliveryCode } : {}), ...(claim.checkName && nameChecked ? { nameChecked: true } : {}) });
+                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}), ...(claim.deliveryCodeNeeded ? { deliveryCode } : {}), ...(claim.checkName && nameChecked ? { nameChecked: true } : {}), ...(paidSeen && claim.paidByShipper && !claim.paidDirect ? { paidSeen: true } : {}) });
                 }
                 onClose();
               }}

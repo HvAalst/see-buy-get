@@ -8619,7 +8619,7 @@ export class SbgController {
   @Roles('driver', 'operator')
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto, @Actor() actor: IntrospectionResult) {
-    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...(dto.deliveryCode ? { deliveryCode: dto.deliveryCode } : {}), ...(dto.nameChecked ? { nameChecked: true } : {}), ...phoneAtHandover(actor, dto.position) });
+    return this.dispatch.deliverFreight(id, actingDid(actor, dto.driverDid), { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks, exceptions: dto.exceptions, sealsAtDelivery: dto.sealsAtDelivery, observedAt: dto.observedAt, ...(dto.terminalReceipt ? { terminalReceipt: dto.terminalReceipt } : {}), ...(dto.deliveryCode ? { deliveryCode: dto.deliveryCode } : {}), ...(dto.nameChecked ? { nameChecked: true } : {}), ...(dto.paidSeen ? { paidSeen: true } : {}), ...phoneAtHandover(actor, dto.position) });
   }
 
   /**

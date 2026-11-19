@@ -409,6 +409,8 @@ export const words: Record<string, string> = {
   "driver.loads.positionKept": "Mahali simu yako ilipo huhifadhiwa pamoja na picha hii na saa, kuonyesha ilipofanyika. Hakuna mahali? Inaendelea hata hivyo.",
   "driver.loads.remarksLabel": "Mpokeaji alitoa maoni yoyote? (si lazima)",
   "driver.loads.remarksHint": "Maneno yake yanaandikwa kwenye hati ya mzigo kama maoni ya mpokeaji.",
+  "driver.loads.paidSeen": "Mtumaji wa mzigo amenilipa {amount}",
+  "driver.loads.paidSeenHint": "Umelipwa kwa simu? Angalia kwenye simu yako mwenyewe, si kwenye skrini ya mtumaji wa mzigo: ujumbe wa malipo unaweza kughushiwa. Bado hujalipwa? Wewe ndiye unaamua kama utaukabidhi, na unaweza kusema baadaye kama ulilipwa.",
   "driver.loads.addReceiver": "Andika jina la mtu aliyepokea bidhaa.",
   "driver.loads.addPodPhoto": "Ongeza picha ya bidhaa zilivyofikishwa.",
   "driver.found.toggle": "Mpokeaji amekuta kitu si kama hati inavyosema",
