@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November; who may do what in Ethiopia, and holding other people’s money, L57–L58, 19 November).</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November; who may do what in Ethiopia, and holding other people’s money, L57–L58, 19 November; a partner that pays behind our interface, and Mollie for Dutch drivers, L59–L60, 19 November).</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -1031,6 +1031,36 @@
       "case": "A person in Nakuru pays KES 3,000 by M-Pesa to have a sofa moved. Our Kenyan company holds it until the receiver gives the delivery code, then pays the driver KES 2,700 and keeps its fee. In Addis Ababa, a shop tops up ETB 5,000 by telebirr and draws on it for each parcel it takes in.",
       "meanwhile": "No country takes money in production yet. A country’s company may hold money only once two people have raised that country to its highest level, and a money licence on its record that lapses switches holding money off. Money enters our books only on a provider’s confirmation and leaves only on one. Businesses’ payments to each other are never handled (a quotation, confirmed paid by name), and the value of goods is never collected on delivery.",
       "source": "The Ethiopia check, 19 November 2026: the National Bank of Ethiopia’s list of licensed payment instrument issuers and operators (nbe.gov.et, newest entry 17 November 2025); Chapa’s developer documentation (split payment, transfers); Ethio Telecom’s bulk payment from a trust-fund balance; Safaricom Ethiopia’s SDK (business-to-customer payouts); the NBE notice against business payments into personal accounts (24 October 2025); Proclamation No. 1282/2023 (nbe.gov.et, 27 April 2023); Directive ONPS/10/2025 as reported (Addis Insight, 27 May 2025)."
+    },
+    {
+      "id": "L59",
+      "area": "licences",
+      "when": "before-country",
+      "status": "open",
+      "q": "May SeeBuyGet run its interface on a licensed partner’s company registration? The partner, a local courier, is the contracting carrier and the seller: senders pay into its accounts, and it pays every shop, hub and driver. Our software drives its payment accounts and payouts automatically, and our name faces the customer, with the partner named as the carrier on the label, the receipt and the terms. In Ethiopia: (1) Does the partner’s courier licence from the Ethiopian Communications Authority cover parcels sold through our interface? (2) Does operating its merchant and payout accounts by API, on its instruction, make SeeBuyGet a payment service, or a courier itself? (3) Does a foreign company running a reserved activity through a local company’s registration count as running it itself? (4) How may the partner pay our fee abroad, for example against a monthly invoice from our Dutch company?",
+      "moment": "Before a partner country takes in a parcel for money, and before a partner’s provider keys are put into SeeBuyGet.",
+      "nations": [
+        "ET",
+        "all"
+      ],
+      "case": "A sender in Bahir Dar pays ETB 450 by telebirr into the partner’s merchant account for a parcel to Addis Ababa. As each leg is done, SeeBuyGet pays the first shop, the driver, the hub and the last shop their shares from the partner’s account, and invoices the partner its fee each month.",
+      "meanwhile": "A partner country takes nothing in for money until this is answered. The partner’s records of what it owes each hand are built first, and move no money.",
+      "source": "The owner’s decision of 19 November 2026 (“Option A, but fully automated. We lift on their company registration in my opinion. The interface is with us.”); the provider check of 19 November 2026: telebirr’s bulk payment for registered organisations, M-PESA Ethiopia’s business-to-customer payouts, Chapa’s transfers; Investment Regulation No. 474/2020 (reserved areas; Clifford Chance briefing, January 2021)."
+    },
+    {
+      "id": "L60",
+      "area": "money",
+      "when": "before-country",
+      "status": "open",
+      "q": "The Netherlands: with Mollie Connect a driver connects their own Mollie account to SeeBuyGet. At the handover we create a payment for the agreed price on the driver’s account; the shipper pays into the driver’s Mollie balance, and Mollie tells us the outcome. Does that keep SeeBuyGet outside the payment services rules (the Wft and PSD2), given that De Nederlandsche Bank exempts a technical provider that never comes into possession of the funds? Would taking a fee for ourselves out of each payment (Mollie’s application fee) change that? Must we tell the driver anything beyond Mollie’s own terms?",
+      "moment": "Before the first Dutch driver connects a Mollie account.",
+      "nations": [
+        "NL",
+        "EU"
+      ],
+      "case": "A driver in Utrecht, registered with the Chamber of Commerce, delivers a pallet for €180. At the handover the shipper pays by iDEAL from a QR code on the driver’s phone. The €180 lands in the driver’s Mollie balance, and the load shows “Paid, confirmed by Mollie”.",
+      "meanwhile": "No fee is taken: a load SeeBuyGet only matches is settled between the parties. Mollie, which holds the payment licence, carries the money; SeeBuyGet only starts the payment and reads its outcome.",
+      "source": "Mollie Connect documentation (docs.mollie.com: Connect overview, 26 August 2026; application fees, 3 November 2026; Connect terms, effective 7 September 2026); De Nederlandsche Bank, payment services not requiring authorisation (8 August 2016)."
     }
   ]
 }
