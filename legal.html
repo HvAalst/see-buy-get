@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November).</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November; who may do what in Ethiopia, and holding other people’s money, L57–L58, 19 November).</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -1001,6 +1001,36 @@
       "case": "A sealed parcel carried by a traveller is opened by customs in Nairobi and holds medicine that needs a permit, declared on the list as clothing.",
       "meanwhile": "The sending shop checks and photographs every parcel with the traveller present and seals it; the traveller may refuse any parcel, and carries none they have not seen.",
       "source": "The Kenya Narcotic Drugs and Psychotropic Substances (Control) Act; the Dutch Opiumwet and Algemene douanewet; aviation security practice on carrying items for others."
+    },
+    {
+      "id": "L57",
+      "area": "licences",
+      "when": "before-country",
+      "status": "open",
+      "q": "Which licences, and which ownership, does SeeBuyGet’s company in Ethiopia need? (1) The Ethiopian Communications Authority’s courier service licence (Communications Service Proclamation No. 1148/2019), national or within one city, when its shops take parcels in and independent drivers carry them for it. Does a platform that only matches a load with a driver, the shipper paying the driver directly, need one at all? (2) May a company owned from the Netherlands hold that licence and do this work, when Investment Regulation No. 474/2020, as published, reserves “brokerage services”, “trade auxiliary services” and road transport (except freight over 25 tonnes and cold chain) for domestic investors? Does a fee for matching a load count as brokerage, and is that list still in force after the openings of 2024–2026 (freight forwarding was opened to foreign investors on 25 May 2026)? (3) Must each independent driver who carries goods for hire hold a licence of their own under Road Transport Proclamation No. 1274/2022, and must we check it?",
+      "moment": "Before SeeBuyGet’s company in Ethiopia is set up, and before any parcel or load is taken for money there. The words in our terms do not decide it: what the company does does — who contracts with the sender, who sets the price, who answers for the parcel.",
+      "nations": [
+        "ET"
+      ],
+      "case": "A shop in Addis Ababa takes a 3 kg parcel for Hawassa, and an independent motorcyclist carries it to the hub. The same day a pickup driver finds a 2-tonne load of teff on the board and is paid by the shipper directly, at the price agreed on SeeBuyGet.",
+      "meanwhile": "Ethiopia is not open for sign-up, and no company of ours stands there. A driver who chooses Ethiopia is told that whoever they carry for pays them directly and the network holds no money for them. The country’s list of what it takes to open already names the courier licence.",
+      "source": "The Ethiopia check, 19 November 2026: the ECA’s services page (eca.et, read 19 November 2026); Investment Regulation No. 474/2020 (Clifford Chance briefing, January 2021); freight forwarding opened to foreign investors (LexAfrica, 9 July 2026); Road Transport Proclamation No. 1274/2022; a ride-hailing app called illegal in Addis Ababa although it presented itself as technology (The Reporter, 10 November 2018)."
+    },
+    {
+      "id": "L58",
+      "area": "money",
+      "when": "before-country",
+      "status": "open",
+      "q": "Holding other people’s money. Our company in a country takes money that it pays on later: a shop’s prepaid balance, a parcel paid for at the counter before it is carried, a person’s payment for a load kept until the receiver gives the delivery code (built for Kenya), and a driver’s earnings until the payout run. Does that need a licence as a payment service, or as an issuer of stored value? From the Central Bank of Kenya (National Payment System Act 2011)? From the National Bank of Ethiopia (National Payment System Proclamation No. 1282/2023 and its directives)? In the Netherlands (the payment services rules, PSD2, with their exemption for a commercial agent)? Or is all of it simply the price of the carriage we sell? If a licence is needed, may a licensed provider hold the money for us instead — and what then where, as in Ethiopia, no provider offers escrow and every one of them pays into the merchant’s own account?",
+      "moment": "Before shops top up a balance, or a person pays a load’s price ahead, in any country where our company takes money.",
+      "nations": [
+        "KE",
+        "ET",
+        "NL"
+      ],
+      "case": "A person in Nakuru pays KES 3,000 by M-Pesa to have a sofa moved. Our Kenyan company holds it until the receiver gives the delivery code, then pays the driver KES 2,700 and keeps its fee. In Addis Ababa, a shop tops up ETB 5,000 by telebirr and draws on it for each parcel it takes in.",
+      "meanwhile": "No country takes money in production yet. A country’s company may hold money only once two people have raised that country to its highest level, and a money licence on its record that lapses switches holding money off. Money enters our books only on a provider’s confirmation and leaves only on one. Businesses’ payments to each other are never handled (a quotation, confirmed paid by name), and the value of goods is never collected on delivery.",
+      "source": "The Ethiopia check, 19 November 2026: the National Bank of Ethiopia’s list of licensed payment instrument issuers and operators (nbe.gov.et, newest entry 17 November 2025); Chapa’s developer documentation (split payment, transfers); Ethio Telecom’s bulk payment from a trust-fund balance; Safaricom Ethiopia’s SDK (business-to-customer payouts); the NBE notice against business payments into personal accounts (24 October 2025); Proclamation No. 1282/2023 (nbe.gov.et, 27 April 2023); Directive ONPS/10/2025 as reported (Addis Insight, 27 May 2025)."
     }
   ]
 }
