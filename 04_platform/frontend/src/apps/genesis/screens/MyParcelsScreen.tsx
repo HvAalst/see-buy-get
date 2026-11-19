@@ -15,6 +15,7 @@ import { PhotoField } from './PhotoField';
 import { DoorBlock, doorUnderWay } from './DoorDelivery';
 import { PersonLoadsGroup } from './PersonLoad';
 import { HoldBlock } from './HoldBlock';
+import { abroadNote } from '../abroad';
 import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
@@ -422,6 +423,9 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
         />
       ) : null}
 
+      {/* 2026-11-19 — a parcel abroad at customs: held, with what to pay, to whom and by when; or released, with our part at the shop. */}
+      <AbroadNoteOf parcel={parcel} />
+
       {/* …or to their own door, paid first by mobile money (2026-10-27: "Mobile money first"). */}
       {parcel.returnOf ? <DoorBlock parcel={parcel} state={state} actions={actions} /> : null}
       {/* 2026-11-15 — delivered to their door: the driver's pay held 24 hours, and a problem reported within them (the hold). */}
@@ -637,4 +641,11 @@ function openParcelView(state: SendState): ConsumerParcelView | null {
   if (state.openParcelDetail?.parcelId === state.openParcelId) return state.openParcelDetail;
   const all = [...(state.parcels?.received ?? []), ...(state.parcels?.sent ?? [])];
   return all.find((p) => p.parcelId === state.openParcelId) ?? null;
+}
+
+/** 2026-11-19 — a parcel abroad at customs, said to its sender or its receiver (parcels across a border, step 3). */
+function AbroadNoteOf({ parcel }: { parcel: { abroad?: Parameters<typeof abroadNote>[0]; relation: 'sent' | 'received' } }) {
+  const t = useT();
+  const n = abroadNote(parcel.abroad, parcel.relation, t);
+  return n ? <Note tone={n.tone} icon={n.icon} title={n.title} detail={n.detail} /> : null;
 }

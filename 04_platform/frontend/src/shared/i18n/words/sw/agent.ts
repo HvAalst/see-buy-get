@@ -44,6 +44,8 @@ export const words: Record<string, string> = {
   "agent.collect.holdingTitle": "Chukua {amount} kwa siku za ziada",
   "agent.collect.holdingDetail": "Kifurushi hiki kilisubiri kupita muda wake wa bure. Chukua pesa kabla ya kukikabidhi.",
   "agent.release.wayBackTitle": "Chukua {amount} taslimu: gharama ya kurudi kwake",
+  "agent.release.abroadTitle": "Chukua {amount} taslimu: forodha na safari ya mwisho",
+  "agent.release.abroadDetail": "Kifurushi hiki kimetoka nje ya nchi. Mpokeaji analipa ada yetu ya forodha na safari ya mwisho hapa. Chukua pesa kabla ya kukikabidhi: zinakatwa kwenye salio lako unapofanya hivyo.",
   "agent.release.wayBackDetail": "Hizi ni bidhaa za mtumaji mwenyewe, zilizoondolewa kwenye kituo na kurudishwa hapa. Chukua pesa kabla ya kuzikabidhi: kiasi hicho kinakatwa kwenye float yako unapofanya hivyo.",
   "agent.status.delivered": "Kimechukuliwa",
   "agent.status.disputed": "Tatizo limeripotiwa",

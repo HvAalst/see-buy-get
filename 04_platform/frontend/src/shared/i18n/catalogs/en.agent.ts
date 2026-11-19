@@ -69,6 +69,8 @@ export const enAgent = {
   'agent.collect.holdingTitle': 'Collect {amount} for the extra days',
   'agent.collect.holdingDetail': 'This parcel waited past its free time. Take the money before you hand it over.',
   'agent.release.wayBackTitle': 'Collect {amount} in cash: its way back',
+  'agent.release.abroadTitle': 'Collect {amount} in cash: clearance and the last leg',
+  'agent.release.abroadDetail': 'This parcel came from abroad. The receiver pays our clearance fee and the last leg here. Take the money before you hand it over: it comes off your float as you do.',
   'agent.release.wayBackDetail': 'These are the sender’s own goods, withdrawn at a hub and sent back here. Take the money before you hand them over: it comes off your float as you do.',
   'agent.status.delivered': 'Collected',
   'agent.status.disputed': 'Problem reported',

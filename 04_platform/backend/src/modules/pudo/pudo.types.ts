@@ -1057,7 +1057,26 @@ export class ParcelBorder {
   /** 2c — received from the carrier at the arrival airport's customs warehouse: under customs control from then. */
   arrived?: { at: string; by: string };
   /** 2c — what customs decided there: released, or held with what it asks to be paid, in the arrival country's money, and its reference. */
-  clearance?: { outcome: 'released' | 'held'; at: string; by: string; amount?: number; currency?: string; reference?: string; paidAt?: string };
+  clearance?: {
+    outcome: 'released' | 'held';
+    at: string;
+    by: string;
+    amount?: number;
+    currency?: string;
+    reference?: string;
+    /** 2026-11-19 — held: who the receiver pays it to (the clearing agent, by default — D17), and by when (BORDER_HOLD_DAYS). */
+    payee?: string;
+    payBy?: string;
+    paidAt?: string;
+    paidBy?: string;
+    /** Not paid by `payBy`: its sender is asked what to do (step 3). */
+    lapsedAt?: string;
+  };
+  /**
+   * 2026-11-19 — WHAT THE RECEIVER OWES US (step 3; D12, D18): our clearance fee and the last leg from the warehouse to their
+   * shop, priced by the arrival country's company when customs decided, and paid at collection, at their shop.
+   */
+  due?: { fee: number; lastLeg: number; total: number; tax: number; provision: number; currency: string; sellerEntityId: string; at: string };
 }
 
 /**
@@ -1111,10 +1130,23 @@ export interface RunningLate {
   where: 'shop' | 'road' | 'hub';
 }
 
+export interface AbroadParcelView {
+  to: string;
+  stage: 'on_way' | 'customs' | 'held' | 'released';
+  held?: { amount: number; currency: string; reference: string; payee?: string; payBy?: string; lapsed?: boolean };
+  due?: { amount: number; currency: string; paid: boolean };
+}
+
 export interface ConsumerParcelView {
   parcelId: string;
   /** 2026-11-15 — who has it now, by name: a shop, a hub, or on the road a company and its kind of vehicle (plan R1). */
   nowWith?: NowWithView;
+  /**
+   * 2026-11-19 — A PARCEL ABROAD (parcels across a border, step 3): where it stands at customs, and what is paid and to whom —
+   * held: what customs asks, its reference, who it is paid to and by when; then our clearance fee and the last leg, paid at the
+   * shop. To its sender and its receiver alike.
+   */
+  abroad?: AbroadParcelView;
   /** 2026-11-06 — its pickup shop closed: the shops the driver with it can take it to, to choose from; and where it went. */
   shopChoice?: { closed: string; picks: Array<{ did: string; name: string; km: number }>; inBag: boolean; chosen?: string; settled?: { did: string; name: string } };
   did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner

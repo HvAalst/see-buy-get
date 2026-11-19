@@ -260,6 +260,8 @@ export interface ParcelView {
    * keeps. Absent when nothing is owed; the same figures the person's own app shows them.
    */
   payAtCollection?: { amount: number; currency: string };
+  /** 2026-11-19 — from abroad: the cash at release is our clearance fee and the last leg (parcels across a border, step 3). */
+  crossedFrom?: string;
   holdingOwed?: number;
   holdingCurrency?: string;
 }

@@ -109,6 +109,8 @@ export function createMdpApi(sbg: SbgClient) {
     abroad: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/abroad', { params: { path: { id: mdpId } } })),
     handAbroad: (mdpId: string, parcelIds: string[], reference: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/hand', { params: { path: { id: mdpId } }, body: { parcelIds, reference } })),
     receiveAbroad: (mdpId: string, parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/{parcelId}/receive', { params: { path: { id: mdpId, parcelId } } })),
+    /** 2026-11-19 — a held parcel's duty paid to the clearing agent, and customs released it (step 3). */
+    paidAbroad: (mdpId: string, parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/{parcelId}/paid', { params: { path: { id: mdpId, parcelId } } })),
     customsAbroad: (mdpId: string, parcelId: string, body: { outcome: 'released' | 'held'; amount?: number; reference?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/abroad/{parcelId}/customs', { params: { path: { id: mdpId, parcelId } }, body })),
     /** 2026-11-13 — the hub's tools (site-tools): what it said, and what that lets it take; and its owner says them. */

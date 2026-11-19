@@ -8097,6 +8097,43 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/abroad/{parcelId}/paid": {
+      "post": {
+        "operationId": "BorderParcels.paid",
+        "summary": "",
+        "description": "2026-11-19 — a held parcel's duty paid to the clearing agent, and customs released it (D17): it goes on.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/trailers": {
       "get": {
         "operationId": "Trailer.list",
@@ -54417,6 +54454,15 @@
           },
           "reference": {
             "type": "string"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "payBy": {
+            "type": "string"
+          },
+          "lapsed": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -67995,8 +68041,61 @@
                 "required": false,
                 "type": "string"
               },
+              "payee": {
+                "required": false,
+                "type": "string"
+              },
+              "payBy": {
+                "required": false,
+                "type": "string"
+              },
               "paidAt": {
                 "required": false,
+                "type": "string"
+              },
+              "paidBy": {
+                "required": false,
+                "type": "string"
+              },
+              "lapsedAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "due": {
+            "type": "object",
+            "properties": {
+              "fee": {
+                "required": true,
+                "type": "number"
+              },
+              "lastLeg": {
+                "required": true,
+                "type": "number"
+              },
+              "total": {
+                "required": true,
+                "type": "number"
+              },
+              "tax": {
+                "required": true,
+                "type": "number"
+              },
+              "provision": {
+                "required": true,
+                "type": "number"
+              },
+              "currency": {
+                "required": true,
+                "type": "string"
+              },
+              "sellerEntityId": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
                 "type": "string"
               }
             }
@@ -68017,7 +68116,8 @@
           "papers",
           "handed",
           "arrived",
-          "clearance"
+          "clearance",
+          "due"
         ]
       },
       "ParcelScan": {
@@ -94522,6 +94622,29 @@
           "carriers"
         ]
       },
+      "BorderPaymentView": {
+        "type": "object",
+        "properties": {
+          "dutyBy": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "company"
+            ]
+          },
+          "ourPartBy": {
+            "type": "string",
+            "enum": [
+              "collection",
+              "link"
+            ]
+          }
+        },
+        "required": [
+          "dutyBy",
+          "ourPartBy"
+        ]
+      },
       "BorderWarehouse": {
         "type": "object",
         "properties": {
@@ -94654,6 +94777,9 @@
           "country": {
             "type": "string"
           },
+          "payment": {
+            "$ref": "#/components/schemas/BorderPaymentView"
+          },
           "airports": {
             "type": "array",
             "items": {
@@ -94687,6 +94813,7 @@
         },
         "required": [
           "country",
+          "payment",
           "airports",
           "hubs",
           "agents"

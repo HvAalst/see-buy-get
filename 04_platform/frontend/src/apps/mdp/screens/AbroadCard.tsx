@@ -166,6 +166,9 @@ export function AbroadCard({ sbg, mdpId, onChanged }: { sbg: SbgClient | null; m
               <li key={r.parcelId}>
                 <span class="mono relabel__ids">{abroadLine(r, t)}</span>
                 <span class="hint relabel__ids">{heldAbroadLine(r, t)}</span>
+                <Button full={false} chevron={false} busy={busy === `paid:${r.parcelId}`} onClick={() => void act(`paid:${r.parcelId}`, () => api.paidAbroad(mdpId, r.parcelId) as Promise<{ error?: SbgError | null }>)}>
+                  {t('mdp.abroad.paid')}
+                </Button>
               </li>
             ))}
           </ul>

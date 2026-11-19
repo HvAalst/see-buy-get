@@ -70,8 +70,15 @@ export class BorderOption {
   @ApiProperty() name: string;
 }
 
+/** 2026-11-19 — how a receiver pays in this country (D17, D18): who collects duty on a held parcel, and how our part is paid. */
+export class BorderPaymentView {
+  @ApiProperty({ enum: ['agent', 'company'] }) dutyBy: 'agent' | 'company';
+  @ApiProperty({ enum: ['collection', 'link'] }) ourPartBy: 'collection' | 'link';
+}
+
 export class BorderArrivalView {
   @ApiProperty() country: string;
+  @ApiProperty({ type: BorderPaymentView }) payment: BorderPaymentView;
   @ApiProperty({ type: [BorderAirport] }) airports: BorderAirport[];
   @ApiPropertyOptional({ type: BorderClearer }) clearer?: BorderClearer;
   @ApiPropertyOptional({ type: BorderFee }) fee?: BorderFee;

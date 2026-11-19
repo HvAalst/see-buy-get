@@ -149,6 +149,8 @@ export const BORDER_DWELL_H = 4;
  * arrival. Our figure, said, until the route's own parcels have measured it; the wait at customs comes on top (BORDER_DWELL_H).
  */
 export const BORDER_ROUTE_LEG_H = 48;
+/** 2026-11-19 — a parcel held by customs is paid for within this many days of the hold, or it goes back to its sender (D5). */
+export const BORDER_HOLD_DAYS = 14;
 /**
  * How long a QUOTED price is held for, once a merchant has a name to redeem it by.
  *

@@ -395,6 +395,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     );
     // 2026-11-15 — on the road to its shop: its receiver is told once (plan R1: the bell only at the moments that matter).
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.onParcelOnItsWay(e.payload.parcelId));
+    // 2026-11-19 — a parcel abroad at customs: its receiver and its sender told what was decided and what they pay (step 3).
+    this.events.subscribe<{ parcelId: string; step: 'released' | 'held' | 'paid' | 'lapsed' }>(GlosEvent.Pudo.ParcelCustomsDecided, (e) => this.onCustomsDecided(e.payload.parcelId, e.payload.step));
     // 2026-11-15 — a load's delivery code made: its named receiver is given it, in the Send app or by email (plan R2).
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.DeliveryCodeIssued, (e) => this.onDeliveryCodeIssued(e.payload.freightId));
     // 2026-11-15 — a load naming its receiver is on a vehicle: a code, where the receiver can be given it (the owner: "yes").
@@ -1916,6 +1918,46 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`on-its-way notify failed for ${parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 2026-11-19 — A PARCEL ABROAD AT CUSTOMS (parcels across a border, step 3). The receiver is told what customs decided and what
+   * they pay: held — what customs asks, to whom (the clearing agent, D17) and by when, and then our part at their shop; released or
+   * paid — our clearance fee and the last leg, paid when they collect it (D12, D18). The sender is told of a hold, and asked what
+   * is done with it when it was not paid in time (D5: back to them at their cost). In the bell; never a text.
+   */
+  private async onCustomsDecided(parcelId: string, step: 'released' | 'held' | 'paid' | 'lapsed'): Promise<void> {
+    try {
+      const p = this.parcels.get(parcelId);
+      const b = p.border;
+      const c = b?.clearance;
+      if (!b || !c) return;
+      const shop = this.shopName(p.destAgentDid) ?? 'their shop';
+      const ours = b.due ? `${b.due.total.toFixed(2)} ${b.due.currency}` : undefined;
+      const owe = c.amount != null ? `${c.amount.toFixed(2)} ${c.currency ?? ''}`.trim() : '';
+      const payBy = c.payBy ? c.payBy.slice(0, 10) : '';
+      const receiver = accountFor(this.parcels.receiverOf(p), this.persons);
+      const sender = accountFor(this.parcels.senderOf(p), this.persons);
+      const tell = async (to: typeof receiver, title: string, body: string) => {
+        if (!to) return;
+        await this.notifications.notify(to.personDid, { kind: 'parcel_customs', title, body, link: `/?parcel=${parcelId}`, tag: `customs:${step}:${parcelId}`, data: { parcelId, step } });
+      };
+      if (step === 'held') {
+        await tell(
+          receiver,
+          'Your parcel from abroad is held by customs',
+          `Customs at ${b.arrival.name} asks ${owe} for it (reference ${c.reference}). Pay it ${c.payee ? `to ${c.payee}` : 'to the clearing agent'} by ${payBy}.${ours ? ` Then it comes to ${shop}, where you pay ${ours}: our clearance fee and the last leg.` : ''} Not paid by then, it goes back to the sender.`,
+        );
+        await tell(sender, 'Your parcel abroad is held by customs', `The receiver is asked to pay ${owe} to customs by ${payBy}. If they do not, you are asked what to do with it: coming back to you is at your cost.`);
+      } else if (step === 'released' || step === 'paid') {
+        await tell(receiver, step === 'paid' ? 'Customs released your parcel' : 'Your parcel from abroad passed customs', `It comes to ${shop}.${ours ? ` You pay ${ours} when you collect it: our clearance fee and the last leg.` : ''}`);
+      } else if (step === 'lapsed') {
+        await tell(sender, 'Your parcel abroad was not paid for in time', `The receiver did not pay customs by ${payBy}. Tell us what is done with it: coming back to you is at your cost.`);
+        await tell(receiver, 'The parcel held by customs was not paid in time', `It was not paid by ${payBy}, so it goes back to the sender.`);
+      }
+    } catch (err) {
+      this.logger.warn(`customs notify failed for ${parcelId}: ${(err as Error).message}`);
     }
   }
 

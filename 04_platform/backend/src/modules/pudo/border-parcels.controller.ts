@@ -8,8 +8,11 @@ import { Roles } from '../../foundation/auth/scopes.decorator';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MdpService } from './mdp.service';
+import { RoutingService } from './routing.service';
+import { BorderRouteService } from './border-route.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { ParcelService } from './parcel.service';
-import { inCustoms, type Parcel } from './pudo.types';
+import { inCustoms, type Parcel, type ParcelBorder } from './pudo.types';
 
 /*
  * 2026-11-18 — PARCELS ACROSS A BORDER, STEP 2c: AT THE HUBS (the plan "Parcels across a border"). At the hub a route leaves
@@ -26,6 +29,10 @@ export class AbroadClearanceView {
   @ApiProperty() amount: number;
   @ApiProperty() currency: string;
   @ApiProperty() reference: string;
+  /** 2026-11-19 — who the receiver pays it to (D17), and by when; not paid by then, the sender is asked what to do. */
+  @ApiPropertyOptional() payee?: string;
+  @ApiPropertyOptional() payBy?: string;
+  @ApiPropertyOptional() lapsed?: boolean;
 }
 
 /** A parcel abroad as a hub's floor acts on it. */
@@ -88,7 +95,7 @@ export function abroadRow(p: Parcel): AbroadParcelRow {
     value: p.customs?.declaredValue ?? 0,
     valueCurrency: p.customs?.currency ?? '',
     ...(b.handed ? { reference: b.handed.reference } : {}),
-    ...(c?.outcome === 'held' && inCustoms(p) ? { held: { amount: c.amount ?? 0, currency: c.currency ?? '', reference: c.reference ?? '' } } : {}),
+    ...(c?.outcome === 'held' && inCustoms(p) ? { held: { amount: c.amount ?? 0, currency: c.currency ?? '', reference: c.reference ?? '', ...(c.payee ? { payee: c.payee } : {}), ...(c.payBy ? { payBy: c.payBy } : {}), ...(c.lapsedAt ? { lapsed: true } : {}) } } : {}),
   };
 }
 
@@ -97,6 +104,10 @@ export class BorderParcelsController {
   constructor(
     private readonly mdps: MdpService,
     private readonly parcels: ParcelService,
+    // 2026-11-19 — step 3: what the receiver owes us, priced by the arrival company; who duty is paid to.
+    private readonly routing: RoutingService,
+    private readonly borders: BorderRouteService,
+    private readonly entities: EntityService,
   ) {}
 
   /** The parcels abroad this hub has to act on. */
@@ -132,7 +143,33 @@ export class BorderParcelsController {
   @AtTheCounter()
   customs(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: CustomsOutcomeDto, @Actor() actor: IntrospectionResult): AbroadParcelRow {
     const hub = this.hubOf(id, actor);
-    return abroadRow(this.parcels.recordClearance(parcelId, hub, dto));
+    const p = this.parcels.get(String(parcelId).trim().toUpperCase());
+    const payee = dto.outcome === 'held' && p.border ? this.borders.payeeIn(p.border.to) : undefined;
+    return abroadRow(this.parcels.recordClearance(parcelId, hub, dto, Date.now(), { ...(p.border ? { due: this.dueFor(p) } : {}), ...(payee ? { payee } : {}) }));
+  }
+
+  /** 2026-11-19 — a held parcel's duty paid to the clearing agent, and customs released it (D17): it goes on. */
+  @Roles('mdp')
+  @Post('mdps/:id/abroad/:parcelId/paid')
+  @AtTheCounter()
+  paid(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): AbroadParcelRow {
+    const hub = this.hubOf(id, actor);
+    return abroadRow(this.parcels.confirmDutyPaid(parcelId, hub));
+  }
+
+  /**
+   * 2026-11-19 — WHAT THE RECEIVER OWES US (step 3; D12, D18): our clearance fee in the arrival country, and the last leg from the
+   * warehouse to their shop as that country's company prices it — fixed when customs decides, paid at collection.
+   */
+  private dueFor(p: Parcel): NonNullable<ParcelBorder['due']> {
+    const b = p.border!;
+    const seller = this.entities.forJurisdiction(b.to);
+    if (!seller) throw new GlosError('INVALID_STATE', `No company of ours stands in ${b.to} to price the last leg`);
+    const q = this.routing.quoteShipmentFrom(this.routing.hubEnd(b.arrival.mdpId), p.destAgentDid!, p.size, seller.entityId, undefined, { consumer: true, kg: p.weightKg });
+    const fee = this.borders.feeIn(b.to);
+    if (fee && fee.currency !== q.currency) throw new GlosError('INVALID_STATE', `The clearance fee is in ${fee.currency} and the last leg in ${q.currency}`);
+    const amount = fee?.amount ?? 0;
+    return { fee: amount, lastLeg: q.locked.gross, total: Math.round((amount + q.locked.gross) * 100) / 100, tax: q.locked.tax, provision: q.locked.provision, currency: q.currency, sellerEntityId: seller.entityId, at: new Date().toISOString() };
   }
 
   private hubOf(id: string, actor: IntrospectionResult) {

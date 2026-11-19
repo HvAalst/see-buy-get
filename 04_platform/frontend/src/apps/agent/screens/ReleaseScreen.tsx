@@ -123,7 +123,14 @@ export function ReleaseScreen({ state, actions, sbg = null }: ReleaseScreenProps
         <Card title={t('agent.release.confirmHandover')} label={p.parcelId}>
           {p.binSlot ? <p class="t-body">{t('agent.release.fetchShelf', { slot: p.binSlot })}</p> : null}
           {/* Money owed BEFORE the code and the hand-over button, never after them — as for an order collected by its code. */}
-          {p.payAtCollection ? <Note tone="warn" icon="wallet" title={t('agent.release.wayBackTitle', { amount: money(p.payAtCollection.amount, p.payAtCollection.currency) })} detail={t('agent.release.wayBackDetail')} /> : null}
+          {p.payAtCollection ? (
+            <Note
+              tone="warn"
+              icon="wallet"
+              title={t(p.crossedFrom ? 'agent.release.abroadTitle' : 'agent.release.wayBackTitle', { amount: money(p.payAtCollection.amount, p.payAtCollection.currency) })}
+              detail={t(p.crossedFrom ? 'agent.release.abroadDetail' : 'agent.release.wayBackDetail')}
+            />
+          ) : null}
           {p.holdingOwed ? <Note tone="warn" icon="clock" title={t('agent.collect.holdingTitle', { amount: money(p.holdingOwed, p.holdingCurrency) })} detail={t('agent.collect.holdingDetail')} /> : null}
           <div class="field" style="margin-top:8px">
             <span class="field__label">{t('agent.release.enterCode')}</span>

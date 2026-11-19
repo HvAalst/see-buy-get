@@ -269,6 +269,28 @@ export class BorderRouteService {
       .sort((a, b) => a.to.localeCompare(b.to));
   }
 
+  /**
+   * 2026-11-19 — HOW A RECEIVER PAYS IN A COUNTRY (D17, D18: "the country will decide"): by default the clearing agent collects
+   * duty on a held parcel, and our part is paid at collection. The other ways — our company collecting duty, a payment link —
+   * wait for a way for receivers there to pay us online, which no country has yet.
+   */
+  paymentIn(country: string): { dutyBy: 'agent' | 'company'; ourPartBy: 'collection' | 'link' } {
+    void country;
+    return { dutyBy: 'agent', ourPartBy: 'collection' };
+  }
+
+  /** 2026-11-19 — who a receiver in a country pays duty to on a held parcel: its clearing agent (D17), by name. */
+  payeeIn(countryCode: string): string | undefined {
+    const c = this.arrivals.get(this.country(countryCode))?.clearer;
+    return c ? c.name : undefined;
+  }
+
+  /** 2026-11-19 — our clearance fee in a country, in its company's money (D8). */
+  feeIn(countryCode: string): { amount: number; currency: string } | undefined {
+    const f = this.arrivals.get(this.country(countryCode))?.fee;
+    return f ? { amount: f.amount, currency: f.currency } : undefined;
+  }
+
   /** The customs warehouse hub at an airport, while its licence holds — where a parcel on the route waits for customs (step 2c). */
   warehouseAt(country: string, airport: string, now: number = Date.now()): BorderWarehouse | undefined {
     const w = this.arrivals.get(country)?.warehouses[airport];
@@ -455,6 +477,7 @@ export class BorderRouteService {
       }));
     return {
       country,
+      payment: this.paymentIn(country),
       airports,
       ...(a.clearer ? { clearer: a.clearer } : {}),
       ...(a.fee ? { fee: a.fee } : {}),

@@ -45,6 +45,10 @@ describe('parcels abroad at a hub', () => {
     expect(abroadLine(row('PUD-1', 'to_hand'), t)).toBe('PUD-1 · to Ethiopia · NBO → ADD · seal SL-1');
     expect(heldAbroadLine(row('PUD-2', 'held', { held: { amount: 1200.5, currency: 'ETB', reference: 'ET-CUS-0042' } }), t)).toBe('1200.50 ETB to pay · customs reference ET-CUS-0042');
     expect(heldAbroadLine(row('PUD-3', 'customs'), t)).toBe('');
+    // 2026-11-19 — to whom and by when (step 3); not paid in time, the sender is asked.
+    const held = { amount: 80, currency: 'ETB', reference: 'ET-CUS-1', payee: 'Addis Clearing Ltd', payBy: '2026-12-03T10:00:00.000Z' };
+    expect(heldAbroadLine(row('PUD-4', 'held', { held }), t)).toBe('80.00 ETB to pay · customs reference ET-CUS-1 · paid to Addis Clearing Ltd by 2026-12-03');
+    expect(heldAbroadLine(row('PUD-5', 'held', { held: { ...held, lapsed: true } }), t)).toBe('80.00 ETB to pay · customs reference ET-CUS-1 · not paid in time: the sender is asked what to do');
   });
 
   it('never offers to sort a parcel set aside for the route abroad, nor one held, on this floor', () => {

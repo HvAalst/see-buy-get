@@ -107,5 +107,6 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/mdps/any/abroad/hand').send({ parcelIds: ['PUD-1'], reference: 'HAWB-1' }).expect(401);
     await http().post('/v1/sbg/mdps/any/abroad/PUD-1/receive').expect(401);
     await http().post('/v1/sbg/mdps/any/abroad/PUD-1/customs').send({ outcome: 'released' }).expect(401);
+    await http().post('/v1/sbg/mdps/any/abroad/PUD-1/paid').expect(401);
   });
 });

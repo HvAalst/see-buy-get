@@ -25,9 +25,12 @@ export function abroadLine(r: AbroadRow, t: Translate): string {
   return t('mdp.abroad.row', { parcel: r.parcelId, country: r.toName, departure: r.departure, arrival: r.arrival, seal: r.seal });
 }
 
-/** A held parcel: what customs asks, and its reference. */
+/** A held parcel: what customs asks, and its reference; to whom and by when (step 3); or not paid in time. */
 export function heldAbroadLine(r: AbroadRow, t: Translate): string {
-  return r.held ? t('mdp.abroad.heldLine', { amount: r.held.amount.toFixed(2), currency: r.held.currency, reference: r.held.reference }) : '';
+  if (!r.held) return '';
+  const line = t('mdp.abroad.heldLine', { amount: r.held.amount.toFixed(2), currency: r.held.currency, reference: r.held.reference });
+  if (r.held.lapsed) return `${line} · ${t('mdp.abroad.lapsed')}`;
+  return r.held.payee && r.held.payBy ? `${line} · ${t('mdp.abroad.payTo', { payee: r.held.payee, date: r.held.payBy.slice(0, 10) })}` : line;
 }
 
 /** The parcels on this floor never offered to sort: held under the tamper protocol, or set aside for the route abroad. */

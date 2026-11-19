@@ -1,3 +1,4 @@
+import type { AbroadView } from './abroad';
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 import type { NowWith } from '../../shared/nowWith';
 import type { ChargedBy } from '../../shared/sizePrice';
@@ -360,6 +361,8 @@ export interface ConsumerParcelView {
   /** 2026-11-15 — who has it now, by name (plan R1). */
   nowWith?: NowWith;
   payAtCollection?: { amount: number; currency: string };
+  /** 2026-11-19 — a parcel abroad: where it stands at customs, what is paid and to whom (parcels across a border, step 3). */
+  abroad?: AbroadView;
 }
 
 /** S32d — a diverted dedicated-freight job the buyer is a party to (the freight analogue of a parcel twin).

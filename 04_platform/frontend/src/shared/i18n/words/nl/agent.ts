@@ -44,6 +44,8 @@ export const words: Record<string, string> = {
   "agent.collect.holdingTitle": "Ontvang {amount} voor de extra dagen",
   "agent.collect.holdingDetail": "Dit pakket heeft langer gewacht dan de gratis tijd. Ontvang het geld voordat je het meegeeft.",
   "agent.release.wayBackTitle": "Ontvang {amount} contant: de weg terug",
+  "agent.release.abroadTitle": "Ontvang {amount} contant: inklaring en het laatste stuk",
+  "agent.release.abroadDetail": "Dit pakket komt uit het buitenland. De ontvanger betaalt hier onze inklaringskosten en het laatste stuk. Neem het geld aan voordat je het overhandigt: het gaat dan van je saldo af.",
   "agent.release.wayBackDetail": "Dit zijn de eigen goederen van de afzender, ingetrokken bij een hub en hierheen teruggestuurd. Ontvang het geld voordat je ze meegeeft: het gaat van je tegoed af zodra je dat doet.",
   "agent.status.delivered": "Opgehaald",
   "agent.status.disputed": "Probleem gemeld",

@@ -139,7 +139,7 @@ export function AbroadScreen({ state, actions }: { state: TowerState; actions: T
   );
 }
 
-const emptyArrival = (country: string): BorderArrival => ({ country, airports: [], hubs: [], agents: [] });
+const emptyArrival = (country: string): BorderArrival => ({ country, payment: { dutyBy: 'agent', ourPartBy: 'collection' }, airports: [], hubs: [], agents: [] });
 
 type SetUp = { api: NonNullable<ReturnType<TowerActions['client']>>['api']; by: { by?: string }; change: (key: string, write: () => Promise<Answer>) => Promise<boolean> };
 
@@ -285,6 +285,12 @@ function ArrivalPanel({
       <p>
         <b>{nameOf(c)}</b> <span class="chint">({c})</span>
       </p>
+
+      {/* 2026-11-19 — how a receiver pays here (D17, D18): the country's defaults; the other ways open once receivers can pay us online. */}
+      <p class="chint" style="margin-top:8px">
+        <b>{t('tower.abroad.payment')}</b> · {t(a.payment.dutyBy === 'agent' ? 'tower.abroad.payment.dutyAgent' : 'tower.abroad.payment.dutyCompany')} · {t(a.payment.ourPartBy === 'collection' ? 'tower.abroad.payment.atCollection' : 'tower.abroad.payment.byLink')}
+      </p>
+      <p class="chint">{t('tower.abroad.payment.note')}</p>
 
       <p class="chint" style="margin-top:8px">
         <b>{t('tower.abroad.airports')}</b>

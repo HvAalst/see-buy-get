@@ -36,6 +36,13 @@ describe('the counter is told what to take in cash before the hand-over', () => 
     expect(html.indexOf(t('agent.release.wayBackTitle', { amount: money(180, 'KES') }))).toBeLessThan(html.indexOf(t('agent.release.enterCode')));
   });
 
+  it('a parcel from abroad: our clearance fee and the last leg, said as that — not as a way back (2026-11-19)', () => {
+    const html = at({ payAtCollection: { amount: 1850, currency: 'ETB' }, crossedFrom: 'KE' });
+    expect(html).toContain(t('agent.release.abroadTitle', { amount: money(1850, 'ETB') }));
+    expect(html).toContain(t('agent.release.abroadDetail'));
+    expect(html).not.toContain(t('agent.release.wayBackDetail'));
+  });
+
   it('past its free days: the holding fee as well', () => {
     const html = at({ status: 'Unclaimed', payAtCollection: { amount: 180, currency: 'KES' }, holdingOwed: 40, holdingCurrency: 'KES' });
     expect(html).toContain(t('agent.release.wayBackTitle', { amount: money(180, 'KES') }));

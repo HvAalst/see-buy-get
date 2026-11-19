@@ -56,7 +56,7 @@ describe('a route on the console', () => {
 });
 
 describe('an arrival country and the changes', () => {
-  const arrival = (o: Partial<BorderArrival>): BorderArrival => ({ country: 'KE', airports: [], hubs: [], agents: [], ...o });
+  const arrival = (o: Partial<BorderArrival>): BorderArrival => ({ country: 'KE', payment: { dutyBy: 'agent', ourPartBy: 'collection' }, airports: [], hubs: [], agents: [], ...o });
 
   it('says who clears: nobody, an agent waiting to accept or accepted, or our company with its registration', () => {
     const when = () => 'today';

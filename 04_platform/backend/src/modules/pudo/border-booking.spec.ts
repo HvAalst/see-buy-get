@@ -29,6 +29,9 @@ import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { RoutePlanService } from './route-plan.service';
+import { BorderParcelsController } from './border-parcels.controller';
+import type { BorderRouteService } from './border-route.service';
+import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { BORDER_DWELL_H, BORDER_ROUTE_LEG_H, taxOn, withPlatformFee } from './pudo.config';
@@ -304,6 +307,83 @@ describe('a parcel abroad at the counter', () => {
       expect(inCustoms(parcels.get('PUD-AB2C3'))).toBe(false);
       expect(parcels.abroadAt(arrival.mdpId)).toEqual([]);
       expect(mdps.sortParcel(arrival.mdpId, 'PUD-AB2C3').nextDestination.id).toBe(to.did);
+    });
+  });
+
+  /*
+   * 2026-11-19 — STEP 3: THE RECEIVER PAYS (D17, D18 — the defaults). Held: customs' amount is paid to the clearing agent directly,
+   * by a day 14 days on, the warehouse says when it is; not paid by then, the sender is asked. Released or paid: our clearance fee
+   * and the last leg — priced by the arrival country's company when customs decided — are paid in cash at the receiver's shop.
+   */
+  describe('the receiver pays (step 3)', () => {
+    /** At the arrival warehouse, received from the carrier — and the hub's own doors, as the Hub app calls them. */
+    function atWarehouse(id: string) {
+      const trip = kenyaToEthiopia();
+      const quote = routing.quoteAbroad(trip.from.did, trip.to.did, 'M', trip.route);
+      parcels.accept({ parcelId: id, agentDid: trip.from.did, destPudoDid: trip.to.did, destZone: 'AddisAbaba', size: 'M', senderMobile: '+254700111', receiverMobile: '+251900111', dropoffPhotoRef: photoBy(trip.from.did), abroadRoute: trip.route, abroadQuote: quote, abroad: declaration(trip.from.did) });
+      plans.freeze(id);
+      parcels.setTransit(id, 'On_Bus', 'BADGE-77', 'onto the bus');
+      parcels.setTransit(id, 'At_MDP', trip.departure.name, 'dropped at the hub');
+      parcels.get(id).atMdpId = trip.departure.mdpId;
+      keeper.arrived(parcels.get(id), trip.departure.mdpId, trip.departure.name);
+      parcels.handToRouteCarrier([id], trip.departure, `HAWB-${id}`);
+      parcels.receiveFromRouteCarrier(id, trip.arrival);
+      const borders = { payeeIn: () => 'Addis Clearing Ltd', feeIn: () => ({ amount: 500, currency: 'ETB' }) } as unknown as BorderRouteService;
+      const doors = new BorderParcelsController(mdps, parcels, routing, borders, entities);
+      const hub = { did: trip.arrival.did } as IntrospectionResult;
+      return { ...trip, doors, hub };
+    }
+
+    it('held: what customs asks is paid to the clearing agent by a day 14 days on; our part, priced by the arrival company, at the shop', () => {
+      const { arrival, departure, doors, hub } = atWarehouse('PUD-AB3H');
+      const before = Date.now();
+      const row = doors.customs(arrival.mdpId, 'PUD-AB3H', { outcome: 'held', amount: 1200.5, reference: 'ET-CUS-0042' }, hub);
+      expect(row).toMatchObject({ step: 'held', held: { amount: 1200.5, currency: 'ETB', reference: 'ET-CUS-0042', payee: 'Addis Clearing Ltd' } });
+      const p = parcels.get('PUD-AB3H');
+      const payBy = Date.parse(p.border!.clearance!.payBy!);
+      expect(payBy - before).toBeGreaterThanOrEqual(14 * 86_400_000 - 5_000);
+      expect(payBy - before).toBeLessThan(14 * 86_400_000 + 60_000);
+      // Our part: the clearance fee and the last leg from the warehouse to the shop, in the arrival company's money.
+      const due = p.border!.due!;
+      expect(due).toMatchObject({ fee: 500, currency: 'ETB', sellerEntityId: entities.requireForJurisdiction('ET').entityId });
+      expect(due.lastLeg).toBeGreaterThan(0);
+      expect(due.total).toBe(Math.round((500 + due.lastLeg) * 100) / 100);
+      expect(p.payAtCollection).toMatchObject({ amount: due.total, currency: 'ETB' });
+      // Paid to the clearing agent, and customs released it: the warehouse says so, once.
+      expect(() => doors.paid(departure.mdpId, 'PUD-AB3H', { did: departure.did } as IntrospectionResult)).toThrow(/does not clear customs at JKIA Hub/);
+      doors.paid(arrival.mdpId, 'PUD-AB3H', hub);
+      expect(inCustoms(parcels.get('PUD-AB3H'))).toBe(false);
+      expect(() => doors.paid(arrival.mdpId, 'PUD-AB3H', hub)).toThrow(/said paid already/);
+      expect(parcels.abroadAt(arrival.mdpId)).toEqual([]);
+    });
+
+    it('not paid by its day: marked once, the sender asked — it stays under customs control', () => {
+      const { arrival, doors, hub } = atWarehouse('PUD-AB3L');
+      doors.customs(arrival.mdpId, 'PUD-AB3L', { outcome: 'held', amount: 80, reference: 'ET-CUS-0043' }, hub);
+      expect(parcels.lapseUnpaidHolds(Date.now() + 13 * 86_400_000)).toEqual([]);
+      expect(parcels.lapseUnpaidHolds(Date.now() + 15 * 86_400_000)).toEqual(['PUD-AB3L']);
+      expect(parcels.lapseUnpaidHolds(Date.now() + 16 * 86_400_000)).toEqual([]);
+      expect(parcels.get('PUD-AB3L').border?.clearance?.lapsedAt).toBeDefined();
+      expect(inCustoms(parcels.get('PUD-AB3L'))).toBe(true);
+      expect(parcels.abroadAt(arrival.mdpId).map((p) => p.parcelId)).toEqual(['PUD-AB3L']);
+      expect(doors.abroad(arrival.mdpId, hub).rows[0].held).toMatchObject({ lapsed: true });
+    });
+
+    it('released: our part is taken in cash at the receiver’s shop as the parcel is handed over — the float asked first', () => {
+      const { arrival, to, doors, hub } = atWarehouse('PUD-AB3R');
+      doors.customs(arrival.mdpId, 'PUD-AB3R', { outcome: 'released' }, hub);
+      const p = parcels.get('PUD-AB3R');
+      expect(p.border?.clearance?.payee).toBeUndefined();
+      const due = p.payAtCollection!;
+      parcels.setTransit('PUD-AB3R', 'On_Bus', 'BADGE-88', 'onto the bus to its shop');
+      parcels.arrive('PUD-AB3R', to.did);
+      // A float that cannot take it is told to top up, before the code is tried.
+      expect(() => parcels.pickup('PUD-AB3R', to.did, 'wrong')).toThrow(/Top up first: .* is due on this parcel/);
+      gate.topUp(to.did, 50_000);
+      parcels.pickup('PUD-AB3R', to.did, p.otp!);
+      const charged = gate.entries({ did: to.did }).filter((e) => e.reference === 'PUD-AB3R' && e.sign === '-');
+      expect(charged.map((e) => e.amount)).toEqual([due.amount]);
+      expect(parcels.get('PUD-AB3R')).toMatchObject({ status: 'Delivered', payAtCollection: { paidAt: expect.any(String) } });
     });
   });
 });

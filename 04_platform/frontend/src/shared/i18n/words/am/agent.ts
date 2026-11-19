@@ -44,6 +44,8 @@ export const words: Record<string, string> = {
   "agent.collect.holdingTitle": "ለተጨማሪ ቀናት {amount} ይሰብስቡ",
   "agent.collect.holdingDetail": "ይህ ጥቅል ከነጻው ጊዜው በላይ ቆይቷል። ከማስረከብዎ በፊት ገንዘቡን ይውሰዱ።",
   "agent.release.wayBackTitle": "{amount} በጥሬ ገንዘብ ይሰብስቡ፦ የመመለሻው ወጪ",
+  "agent.release.abroadTitle": "{amount} በጥሬ ገንዘብ ይቀበሉ፦ የጉምሩክ ማስፈጸሚያና የመጨረሻው ጉዞ",
+  "agent.release.abroadDetail": "ይህ ጥቅል ከውጭ አገር መጥቷል። ተቀባዩ የጉምሩክ ማስፈጸሚያ ክፍያችንንና የመጨረሻውን ጉዞ እዚህ ይከፍላል። ከማስረከብዎ በፊት ገንዘቡን ይቀበሉ፤ ሲያስረክቡ ከቀሪ ሂሳብዎ ይቀነሳል።",
   "agent.release.wayBackDetail": "እነዚህ የላኪው የራሱ ዕቃዎች ናቸው፣ በማዕከል የተነሱና ወደዚህ የተመለሱ። ከማስረከብዎ በፊት ገንዘቡን ይውሰዱ፦ ሲያስረክቡ ከዋሌትዎ ላይ ይቀነሳል።",
   "agent.status.delivered": "ተወስዷል",
   "agent.status.disputed": "ችግር ተዘግቧል",

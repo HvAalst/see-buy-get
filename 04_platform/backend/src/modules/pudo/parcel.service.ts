@@ -26,6 +26,7 @@ import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
 import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder, inCustoms, abroadAsideAt } from './pudo.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
+import { BORDER_HOLD_DAYS } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -193,6 +194,19 @@ function peerSendPriceOf(quote: ShipmentQuote): Partial<Parcel> {
     ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
     ceilingTax: quote.flexible.tax,
     ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
+  };
+}
+
+/** 2026-11-19 — a parcel abroad as its sender and receiver read it (step 3). */
+function abroadViewOf(p: Parcel): NonNullable<ConsumerParcelView['abroad']> {
+  const b = p.border!;
+  const c = b.clearance;
+  const stage = !b.arrived ? 'on_way' : !c ? 'customs' : inCustoms(p) ? 'held' : 'released';
+  return {
+    to: b.to,
+    stage,
+    ...(stage === 'held' && c ? { held: { amount: c.amount ?? 0, currency: c.currency ?? '', reference: c.reference ?? '', ...(c.payee ? { payee: c.payee } : {}), ...(c.payBy ? { payBy: c.payBy } : {}), ...(c.lapsedAt ? { lapsed: true } : {}) } } : {}),
+    ...(b.due ? { due: { amount: b.due.total, currency: b.due.currency, paid: Boolean(p.payAtCollection?.paidAt) } } : {}),
   };
 }
 
@@ -691,6 +705,8 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
     ...(p.held ? { held: p.held } : {}),
     // 2026-11-18 — set aside for the route abroad (step 2c): to hand to its carrier, or under customs control — never sorted.
     ...(abroadAsideAt(p) ? { abroadAside: abroadAsideAt(p) } : {}),
+    // 2026-11-19 — from abroad (step 3): what the counter takes at release is our clearance fee and the last leg.
+    ...(p.border ? { crossedFrom: p.border.from } : {}),
     // Called off at a hub (2026-10-27): the box it is, under its old label — the hub puts this one's label over that one.
     ...(p.returnOf ? { returnOf: p.returnOf } : {}),
     // A person's goods turned round at a hub (2026-10-27): what the counter takes in cash from them, as they collect it.
@@ -1384,6 +1400,8 @@ export class ParcelService implements OnApplicationBootstrap {
       // 2026-11-15 — who has it now, named as we contract with them (plan R1): to its sender and its receiver alike.
       ...this.nowWithOf(p),
       ...(runningLate(p) ? { runningLate: runningLate(p) } : {}),
+      // 2026-11-19 — a parcel abroad: where it stands at customs, and what is paid and to whom (step 3).
+      ...(p.border ? { abroad: abroadViewOf(p) } : {}),
       // The receiver's OWN photos + free-text reason are theirs alone — the sender's sent-twin sees the
       // status flip to Disputed, never the buyer's evidence or the words they wrote for the control tower.
       podPhotoRef: relation === 'received' ? p.buyerPodPhotoRef : undefined,
@@ -3007,7 +3025,15 @@ export class ParcelService implements OnApplicationBootstrap {
    * or held, with what customs asks to be paid, in the arrival country's money, and customs' reference; then it leaves only
    * once that is paid (step 3). Recorded once: customs' decision stands.
    */
-  recordClearance(parcelId: string, hub: { mdpId: string; name: string }, input: { outcome: 'released' | 'held'; amount?: number; reference?: string }, now: number = Date.now()): Parcel {
+  recordClearance(
+    parcelId: string,
+    hub: { mdpId: string; name: string },
+    input: { outcome: 'released' | 'held'; amount?: number; reference?: string },
+    now: number = Date.now(),
+    // 2026-11-19 — step 3: what the receiver owes us, worked out by the controller (the arrival company prices the last leg), and
+    // who a held parcel's duty is paid to (D17).
+    owed: { due?: NonNullable<ParcelBorder['due']>; payee?: string } = {},
+  ): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
     if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
@@ -3021,15 +3047,61 @@ export class ParcelService implements OnApplicationBootstrap {
       if (!(amount > 0)) throw new GlosError('FIELD_REQUIRED', 'What customs asks to be paid for it is needed', { field: 'amount' });
       if (!reference || reference.length < 3) throw new GlosError('FIELD_REQUIRED', 'Customs’ reference for it is needed, as on their notice', { field: 'reference' });
       const currency = currencyForJurisdiction(b.to);
-      b.clearance = { outcome: 'held', at, by: hub.name, amount, currency, reference };
-      note = `held by customs · ${amount.toFixed(2)} ${currency} to pay · ${reference}`;
+      const payBy = new Date(now + BORDER_HOLD_DAYS * 86_400_000).toISOString();
+      b.clearance = { outcome: 'held', at, by: hub.name, amount, currency, reference, ...(owed.payee ? { payee: owed.payee } : {}), payBy };
+      note = `held by customs · ${amount.toFixed(2)} ${currency} to pay${owed.payee ? ` to ${owed.payee}` : ''} by ${payBy.slice(0, 10)} · ${reference}`;
     } else {
       b.clearance = { outcome: 'released', at, by: hub.name, ...(reference ? { reference } : {}) };
       note = `released by customs${reference ? ` · ${reference}` : ''}`;
     }
+    // Paid when it is collected (D12, D18), the one way a parcel is paid at its shop: the float asked before the code, the cash
+    // charged to it at the release (pickup).
+    if (owed.due) {
+      b.due = owed.due;
+      p.payAtCollection = { amount: owed.due.total, currency: owed.due.currency, tax: owed.due.tax, provision: owed.due.provision };
+    }
     this.scan(p, p.status, hub.name, note, { at });
     this.parcels.set(p.parcelId, p);
+    void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: input.outcome }, { source: 'pudo' }).catch(() => undefined);
     return p;
+  }
+
+  /**
+   * 2026-11-19 — A HELD PARCEL'S DUTY PAID, AND CUSTOMS RELEASED IT (step 3; D17: the receiver pays the clearing agent directly,
+   * nothing of it through us): the warehouse says so, and it goes on as any parcel on the floor. Once.
+   */
+  confirmDutyPaid(parcelId: string, hub: { mdpId: string; name: string }, now: number = Date.now()): Parcel {
+    const p = this.require(String(parcelId).trim().toUpperCase());
+    const b = p.border;
+    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
+    if (b.clearance?.outcome !== 'held') throw new GlosError('INVALID_STATE', `${p.parcelId} is not held by customs`);
+    if (b.clearance.paidAt) throw new GlosError('INVALID_STATE', `${p.parcelId} was said paid already, ${b.clearance.paidAt.slice(0, 16).replace('T', ' ')}`);
+    const at = new Date(now).toISOString();
+    b.clearance.paidAt = at;
+    b.clearance.paidBy = hub.name;
+    this.scan(p, p.status, hub.name, `duty paid · released by customs${b.clearance.reference ? ` · ${b.clearance.reference}` : ''}`, { at });
+    this.parcels.set(p.parcelId, p);
+    void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: 'paid' }, { source: 'pudo' }).catch(() => undefined);
+    return p;
+  }
+
+  /**
+   * 2026-11-19 — NOT PAID IN TIME (step 3; D5: "14 days from arrival, then back to the sender at the sender's cost"): a held
+   * parcel whose day to pay has passed is marked so, once, and its sender asked what is done with it — the sender decides and
+   * pays the way back, as with refused goods. It stays under customs control meanwhile.
+   */
+  lapseUnpaidHolds(now: number = Date.now()): string[] {
+    const lapsed: string[] = [];
+    for (const p of this.list()) {
+      const c = p.border?.clearance;
+      if (c?.outcome !== 'held' || c.paidAt || c.lapsedAt || !c.payBy || Date.parse(c.payBy) > now) continue;
+      c.lapsedAt = new Date(now).toISOString();
+      this.scan(p, p.status, 'system', `not paid by ${c.payBy.slice(0, 10)} · the sender is asked what to do`, { at: c.lapsedAt });
+      this.parcels.set(p.parcelId, p);
+      lapsed.push(p.parcelId);
+      void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: 'lapsed' }, { source: 'pudo' }).catch(() => undefined);
+    }
+    return lapsed;
   }
 
   /** 2026-11-18 — the parcels abroad a hub has to act on (step 2c): to hand to a carrier, coming from one, under customs control. */
