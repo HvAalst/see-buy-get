@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November; who may do what in Ethiopia, and holding other people’s money, L57–L58, 19 November; a partner that pays behind our interface, and Mollie for Dutch drivers, L59–L60, 19 November).</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 10 November 2026 (the Moyale border between Kenya and Ethiopia, L41–L47; the Netherlands’ conditional duties, L48; towing a trailer and a weight that sets a price, L49–L50, 13 November; sign-in codes in Russia, Iran and China, and the providers that carry them, L51–L53, 16 November; a parcel carried across a border by a traveller, L54–L56, 18 November; who may do what in Ethiopia, and holding other people’s money, L57–L58, 19 November; a partner that pays behind our interface, and Mollie for Dutch drivers, L59–L60, 19 November; L59 made a decision tree and L60 answered, 20 November).</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -1037,11 +1037,10 @@
       "area": "licences",
       "when": "before-country",
       "status": "open",
-      "q": "May SeeBuyGet run its interface on a licensed partner’s company registration? The partner, a local courier, is the contracting carrier and the seller: senders pay into its accounts, and it pays every shop, hub and driver. Our software drives its payment accounts and payouts automatically, and our name faces the customer, with the partner named as the carrier on the label, the receipt and the terms. In Ethiopia: (1) Does the partner’s courier licence from the Ethiopian Communications Authority cover parcels sold through our interface? (2) Does operating its merchant and payout accounts by API, on its instruction, make SeeBuyGet a payment service, or a courier itself? (3) Does a foreign company running a reserved activity through a local company’s registration count as running it itself? (4) How may the partner pay our fee abroad, for example against a monthly invoice from our Dutch company?",
+      "q": "Ethiopia, a licensed partner behind our interface: three questions, asked in order of impact — a stop answer makes the ones after it moot. The partner, a local courier, is the contracting carrier and the seller; senders pay into its accounts by phone; our software drives its accounts and pays every shop, hub and driver from them; our name faces the customer, with the partner named as the carrier on the label, the receipt and the terms. (1) Highest impact: is running the business on the partner’s registration treated as SeeBuyGet running a reserved activity without a licence of its own? Yes: parcels stop, and wait on L57 (our own licences and ownership). (2) If not: does driving the partner’s provider accounts by API make SeeBuyGet a payment service, or a holder of other people’s money (with L58)? Yes: SeeBuyGet keeps the records only, and the partner pays out itself. (3) If not: does the partner’s courier licence from the Ethiopian Communications Authority cover parcels sold through our interface? No: another partner is chosen, one whose licence does. All three clear: the partner’s money moves through our software, and our fee is a monthly invoice from our Dutch company, paid abroad.",
       "moment": "Before a partner country takes in a parcel for money, and before a partner’s provider keys are put into SeeBuyGet.",
       "nations": [
-        "ET",
-        "all"
+        "ET"
       ],
       "case": "A sender in Bahir Dar pays ETB 450 by telebirr into the partner’s merchant account for a parcel to Addis Ababa. As each leg is done, SeeBuyGet pays the first shop, the driver, the hub and the last shop their shares from the partner’s account, and invoices the partner its fee each month.",
       "meanwhile": "A partner country takes nothing in for money until this is answered. The partner’s records of what it owes each hand are built first, and move no money.",
@@ -1051,7 +1050,7 @@
       "id": "L60",
       "area": "money",
       "when": "before-country",
-      "status": "open",
+      "status": "answered",
       "q": "The Netherlands: with Mollie Connect a driver connects their own Mollie account to SeeBuyGet. At the handover we create a payment for the agreed price on the driver’s account; the shipper pays into the driver’s Mollie balance, and Mollie tells us the outcome. Does that keep SeeBuyGet outside the payment services rules (the Wft and PSD2), given that De Nederlandsche Bank exempts a technical provider that never comes into possession of the funds? Would taking a fee for ourselves out of each payment (Mollie’s application fee) change that? Must we tell the driver anything beyond Mollie’s own terms?",
       "moment": "Before the first Dutch driver connects a Mollie account.",
       "nations": [
@@ -1059,7 +1058,8 @@
         "EU"
       ],
       "case": "A driver in Utrecht, registered with the Chamber of Commerce, delivers a pallet for €180. At the handover the shipper pays by iDEAL from a QR code on the driver’s phone. The €180 lands in the driver’s Mollie balance, and the load shows “Paid, confirmed by Mollie”.",
-      "meanwhile": "No fee is taken: a load SeeBuyGet only matches is settled between the parties. Mollie, which holds the payment licence, carries the money; SeeBuyGet only starts the payment and reads its outcome.",
+      "meanwhile": "Mollie, which holds the payment licence, carries the money; SeeBuyGet only starts the payment, reads its outcome, and takes a small fee for server costs through Mollie.",
+      "answer": "Answered by the owner, 19 November 2026: allowed for SeeBuyGet as a BV, the fee included. The fee is taxable income, so each driver gets a monthly invoice for the fees with BTW, marked paid when issued, because the fee was already taken from the payments. Still for the accountant: which tax applies to the fee, and the BTW on it.",
       "source": "Mollie Connect documentation (docs.mollie.com: Connect overview, 26 August 2026; application fees, 3 November 2026; Connect terms, effective 7 September 2026); De Nederlandsche Bank, payment services not requiring authorisation (8 August 2016)."
     }
   ]
