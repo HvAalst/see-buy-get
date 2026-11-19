@@ -480,6 +480,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/parcels/:id/route': 'support',
   'GET sbg/parcels/:id/withdraw': 'support',
   'GET sbg/payout-number': 'none',
+  // 2026-11-19 — a carrier's own Mollie account, from its own Settings (the payments plan, part 2): staff connect nobody's.
+  'GET sbg/mollie': 'none',
+  'POST sbg/mollie/connect': 'none',
+  'DELETE sbg/mollie': 'none',
   'GET sbg/pilot': 'admin',
   'GET sbg/presence': 'any',
   'GET sbg/presence/:jurisdiction': 'any',

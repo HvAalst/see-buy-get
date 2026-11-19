@@ -17,6 +17,7 @@ import { HelpLink } from '../guide/HelpLink';
 import { AppsSheet } from '../ui/AppLauncher';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
+import { mollieBackOf, withoutMollieBack, type MollieBack } from './mollie';
 import type { PinDevicesApi } from './devices';
 import { useT, type MessageKey } from '../i18n';
 import { publicPageUrl } from '../../lib/sbg/config';
@@ -89,6 +90,18 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
   // 2026-11-02 — the bell's first notice opens the guide here, on one tap (`?guide=1`, shared/launch.ts; the owner: "a
   // tooltip on how to get more out of the app"). Installed already, the guide opens without its install step.
   useEffect(() => (installs ? onLaunch('guide', () => setSheet('install')) : undefined), [installs]);
+  // 2026-11-19 — BACK FROM MOLLIE'S SIGN-IN (the payments plan, part 2): Settings opens on Mollie once, saying how it ended,
+  // and the address loses those words, so a reload does not say it again.
+  const [mollieBack, setMollieBack] = useState<MollieBack | null>(() => (typeof location === 'undefined' ? null : mollieBackOf(location.search)));
+  useEffect(() => {
+    if (!mollieBack) return;
+    setSheet('settings');
+    try {
+      history.replaceState(history.state, '', withoutMollieBack(location.href));
+    } catch {
+      /* an address that cannot be changed is only said twice */
+    }
+  }, []);
 
   // A drop-down that only closes by pressing its own button is a trap on a phone, where the rest of the
   // screen is the obvious way out. Escape too: a keyboard user must never be parked inside it.
@@ -218,7 +231,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
       {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
       {/* 2026-11-02 — messages in the car are the Driver app's alone (shown there only inside the Play app). */}
-      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} car={app === 'driver' ? api.car : undefined} />
+      <SettingsSheet open={sheet === 'settings'} onClose={() => { setSheet(null); setMollieBack(null); }} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} car={app === 'driver' ? api.car : undefined} mollieBack={mollieBack} />
     </div>
   );
 }

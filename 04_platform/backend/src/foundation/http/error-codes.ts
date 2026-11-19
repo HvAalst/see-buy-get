@@ -259,6 +259,8 @@ export const ERROR_CODES = {
   // The code could not be texted: the provider was not there, refused us, or is not set up. Nothing the person did,
   // and nothing was counted against their number — asking again is the answer, so it is retryable.
   SMS_NOT_SENT: { status: 503, title: 'The code could not be sent', retryable: true },
+  // 2026-11-19 — a payment provider (Mollie) did not answer in time: nothing was asked of the money, so asking again is safe.
+  PROVIDER_UNAVAILABLE: { status: 503, title: 'The payment provider did not answer', retryable: true },
 } as const;
 /* eslint-enable @typescript-eslint/no-unused-vars */
 

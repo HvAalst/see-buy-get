@@ -15,6 +15,7 @@ import { DocumentsModule } from './foundation/documents/documents.module';
 import { BooksModule } from './foundation/books/books.module';
 import { PayoutsModule } from './foundation/payouts/payouts.module';
 import { FundingModule } from './foundation/funding/funding.module';
+import { MollieModule } from './foundation/mollie/mollie.module';
 import { MoneyModule } from './foundation/money/money.module';
 import { AuthModule } from './foundation/auth/auth.module';
 import { HealthModule } from './health/health.module';
@@ -54,6 +55,7 @@ import { SseModule } from './modules/sse/sse.module';
     BooksModule,
     PayoutsModule,
     FundingModule,
+    MollieModule,
     MoneyModule,
     AuthModule,
     HealthModule,

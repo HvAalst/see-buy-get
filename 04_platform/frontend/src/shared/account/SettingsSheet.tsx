@@ -23,10 +23,12 @@ import { PasskeyForm, passkeyRowSub, usePasskeyHere } from './PasskeySettings';
 import { CarForm, useCarHere } from './CarSettings';
 import { carRowSub, type CarApi } from './carMessages';
 import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
+import { MollieForm } from './MollieSettings';
+import { mollieSub, showsMollie, type MollieBack } from './mollie';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi, ClosingStanding } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'car' | 'payout' | 'mute' | 'close' | 'closed';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'car' | 'payout' | 'mollie' | 'mute' | 'close' | 'closed';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -51,11 +53,13 @@ export interface SettingsSheetProps {
    * the Play app, to a driver whose PIN works on this phone (CarSettings.tsx).
    */
   car?: CarApi;
+  /** 2026-11-19 — back from Mollie's sign-in: the sheet opens on Mollie, saying how it ended (AccountMenu reads the address). */
+  mollieBack?: MollieBack | null;
 }
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
 export function hasSettings(api: AccountApi, onChangePassword?: () => void, devices?: PinDevicesApi): boolean {
-  return Boolean(api.account?.hasPin || onChangePassword || devices || api.account?.idDispute || hasContract(api.contract) || hasPayoutNumber(api.payout));
+  return Boolean(api.account?.hasPin || onChangePassword || devices || api.account?.idDispute || hasContract(api.contract) || hasPayoutNumber(api.payout) || showsMollie(api.mollie));
 }
 
 /**
@@ -72,7 +76,7 @@ export function hasSettings(api: AccountApi, onChangePassword?: () => void, devi
  * holding a signed-in phone is its owner. Somebody who signs in with a password only has no PIN and is not shown
  * rows that could do nothing for them but refuse.
  */
-export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices, car }: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices, car, mollieBack }: SettingsSheetProps) {
   const t = useT();
   const [view, setView] = useState<View>('list');
   const [saved, setSaved] = useState(false);
@@ -85,7 +89,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const [payoutSaved, setPayoutSaved] = useState<PayoutNumberSaved | null>(null);
   useEffect(() => {
     if (open) {
-      setView('list');
+      setView(mollieBack ? 'mollie' : 'list');
       setSaved(false);
       setStopped(false);
       setStopError(null);
@@ -113,7 +117,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const carSub = car ? carRowSub(carState, t as never) : null;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'car' ? t('account.car.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'mollie' ? t('account.mollie.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'car' ? t('account.car.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -180,6 +184,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {carSub ? <Row icon="speaker" label={t('account.car.title')} sub={carSub} onClick={() => setView('car')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
+            {/* 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT (the payments plan, part 2): a shipper pays it at the handover. */}
+            {showsMollie(api.mollie) ? <Row icon="wallet" label={t('account.mollie.title')} sub={mollieSub(api.mollie, t as never)} onClick={() => setView('mollie')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
             {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
             {/* TO REST IT (the user, 2026-10-22: "an account can be muted by the user") — and to wake it again. */}
@@ -222,6 +228,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
+      {view === 'mollie' ? <MollieForm api={api} back={mollieBack ?? null} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'passkey' ? <PasskeyForm api={passkeyApi} state={passkey} /> : null}
       {view === 'car' && car ? <CarForm api={car} state={carState} /> : null}

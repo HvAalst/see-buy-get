@@ -10,6 +10,7 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import type { ContractView } from './contract';
 import { idDisputeApi, type DisputeAgainstMe, type IdDisputeApi } from './idDispute';
 import type { PayoutNumberSaved, PayoutNumberView } from './payoutNumber';
+import type { MollieConnectedView, MollieView } from './mollie';
 
 /**
  * THE ACCOUNT, THE SAME IN EVERY APP.
@@ -153,6 +154,15 @@ export interface AccountApi {
   sendPayoutCode: (phone: string, via?: CodeWay) => Promise<Result<Sent & { masked: string; via?: CodeWay }>>;
   /** The code back: that number is the payout number from now. A change pauses payouts for a day. */
   savePayoutNumber: (code: string) => Promise<Result<PayoutNumberSaved>>;
+  /**
+   * 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT (the payments plan, part 2): read only in an app that asks for it (a courier's,
+   * a fleet office's). Null until read, and where Mollie is not for this sign-in.
+   */
+  mollie: MollieView | null;
+  /** Through the Connect app: off to Mollie's own sign-in. With our test key: connected at once. */
+  connectMollie: () => Promise<Result<{ url?: string; connected?: MollieConnectedView }>>;
+  /** The leave given back to Mollie, and the connection forgotten. */
+  disconnectMollie: () => Promise<Result<MollieView>>;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -194,9 +204,12 @@ const IDLE: AccountApi = {
   payout: null,
   sendPayoutCode: async () => NO_CLIENT,
   savePayoutNumber: async () => NO_CLIENT,
+  mollie: null,
+  connectMollie: async () => NO_CLIENT,
+  disconnectMollie: async () => NO_CLIENT,
 };
 
-export function useAccount(client: SbgClient | null, enabled = true): AccountApi {
+export function useAccount(client: SbgClient | null, enabled = true, opts: { mollie?: boolean } = {}): AccountApi {
   const [account, setAccount] = useState<AccountView | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -447,6 +460,31 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     [post],
   );
 
+  // 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT: read only where the app asks for it (a courier's app, a fleet office's).
+  const [mollie, setMollie] = useState<MollieView | null>(null);
+  const wantsMollie = Boolean(opts.mollie);
+  const loadMollie = useCallback(async () => {
+    if (!client || !wantsMollie) return;
+    const r: Result<unknown> = await client.request((raw) => raw.GET('/v1/sbg/mollie' as never, {} as never) as never);
+    setMollie(r.error || !r.data ? null : narrow<MollieView>(r.data));
+  }, [client, wantsMollie]);
+  useEffect(() => {
+    if (enabled && client && wantsMollie) void loadMollie();
+  }, [enabled, client, wantsMollie, loadMollie]);
+  const connectMollie = useCallback(async () => {
+    const r = await post<{ url?: string; connected?: MollieConnectedView }>('/v1/sbg/mollie/connect', {});
+    // Through the Connect app the carrier goes to Mollie's own sign-in, and comes back to this app with how it ended.
+    if (!r.error && r.data?.url) globalThis.location?.assign(r.data.url);
+    else if (!r.error) await loadMollie();
+    return r;
+  }, [post, loadMollie]);
+  const disconnectMollie = useCallback(async () => {
+    if (!client) return NO_CLIENT as Result<MollieView>;
+    const r = (await client.request((raw) => raw.DELETE('/v1/sbg/mollie' as never, {} as never) as never)) as Result<MollieView>;
+    if (!r.error && r.data) setMollie(narrow<MollieView>(r.data));
+    return r;
+  }, [client]);
+
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber, mollie, connectMollie, disconnectMollie };
 }

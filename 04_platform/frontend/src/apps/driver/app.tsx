@@ -40,7 +40,8 @@ export function App() {
   const { state, actions, notifications, sbg } = useDriverApp();
   // The person behind the driver record — their photo, PIN, address and page. Loaded once the token
   // exists, which is also exactly when there is a bar to put the avatar in.
-  const account = useAccount(sbg, state.phase === 'ready');
+  // 2026-11-19 — a courier connects its own Mollie account here (the payments plan, part 2).
+  const account = useAccount(sbg, state.phase === 'ready', { mollie: true });
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
   // Who they drive for belongs to the person, so it is a row in the account menu; a fleet's offer is answered in a sheet.

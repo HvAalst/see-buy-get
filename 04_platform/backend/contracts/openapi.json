@@ -38133,6 +38133,71 @@
         }
       }
     },
+    "/v1/sbg/mollie": {
+      "get": {
+        "operationId": "Mollie.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MollieConnectionView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Mollie.disconnect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MollieConnectionView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mollie/connect": {
+      "post": {
+        "operationId": "Mollie.connect",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MollieConnectStarted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mollie/oauth/callback": {
+      "get": {
+        "operationId": "Mollie.callback",
+        "summary": "",
+        "description": "Mollie's sign-in sends the carrier back here: the code exchanged, then on to its own app with how it ended.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/shop/staff": {
       "get": {
         "operationId": "ShopStaff.list",
@@ -90392,6 +90457,94 @@
           "way",
           "country"
         ]
+      },
+      "MollieConnectedView": {
+        "type": "object",
+        "properties": {
+          "via": {
+            "type": "string",
+            "enum": [
+              "oauth",
+              "test_key"
+            ]
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "profileName": {
+            "type": "string"
+          },
+          "testmode": {
+            "type": "boolean",
+            "description": "Test payments only: our test key, or the Connect app before the owner says live."
+          },
+          "connectedAt": {
+            "type": "string"
+          },
+          "lostAt": {
+            "type": "string"
+          },
+          "canReceivePayments": {
+            "type": "boolean"
+          },
+          "onboarding": {
+            "type": "string",
+            "enum": [
+              "needs-data",
+              "in-review",
+              "completed"
+            ]
+          },
+          "dashboardUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "via",
+          "testmode",
+          "connectedAt"
+        ]
+      },
+      "MollieConnectionView": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "description": "Why not, as a short code the app says in words: `country` (not the Netherlands), `fleet` (its office connects), `off` (not set up here yet).",
+            "enum": [
+              "country",
+              "fleet",
+              "off"
+            ]
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "oauth",
+              "test_key"
+            ]
+          },
+          "connected": {
+            "$ref": "#/components/schemas/MollieConnectedView"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "MollieConnectStarted": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "connected": {
+            "$ref": "#/components/schemas/MollieConnectedView"
+          }
+        }
       },
       "ShopStaffView": {
         "type": "object",

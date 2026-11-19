@@ -42,7 +42,8 @@ export function App() {
   const { state, actions , sbg } = useFleetApp();
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
-  const account = useAccount(sbg, state.phase === 'ready');
+  // 2026-11-19 — a fleet's office connects the fleet's Mollie account here (the payments plan, part 2).
+  const account = useAccount(sbg, state.phase === 'ready', { mollie: true });
   // The paperwork behind the money: every consignment note this fleet carried, frozen at each signature.
   // Loaded only once the office opens it — a carrier's archive is history, not something to fetch at boot.
   const archive = useArchive(sbg, state.phase === 'ready' && state.screen === 'notes');
