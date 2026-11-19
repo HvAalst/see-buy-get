@@ -92,6 +92,7 @@ export const words: Record<string, string> = {
   "send.parcels.abroad.released": "Door de douane in {country}",
   "send.parcels.abroad.payAtShop": "Je betaalt {amount} als je het ophaalt: onze inklaringskosten en het laatste stuk.",
   "send.parcels.abroad.onToShop": "Het gaat verder naar de winkel van de ontvanger.",
+  "send.parcels.abroad.how": "Hoe een pakket uit het buitenland werkt",
   "send.parcels.withdrawnSender": "Het komt terug naar jou, naar de winkel waar je het hebt ingeleverd, als {id}. Het staat onder Ontvangen, met een eigen code.",
   "send.parcels.withdrawnReceiver": "Het gaat terug naar de afzender. Het komt niet naar jou.",
   "send.parcels.comesBackPay": "Betaal {amount} contant als je het ophaalt",

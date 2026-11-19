@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { formatDate, formatMoney, t } from '../../shared/i18n';
 import { abroadNote, type AbroadView } from './abroad';
+import { renderToString } from 'preact-render-to-string';
+import { h } from 'preact';
+import { AbroadNoteOf } from './screens/MyParcelsScreen';
 
 /*
  * 2026-11-19 — A PARCEL ABROAD IN THE SEND APP (parcels across a border, step 3): its receiver is told what customs asks, to whom
@@ -42,5 +45,12 @@ describe('a parcel abroad, read by its sender and its receiver', () => {
     expect(abroadNote({ to: 'ET', stage: 'released', due }, 'received', t)?.detail).toBe(t('send.parcels.abroad.payAtShop', { amount: formatMoney(1850, 'ETB') }));
     expect(abroadNote({ to: 'ET', stage: 'released', due: { ...due, paid: true } }, 'received', t)).toBeNull();
     expect(abroadNote({ to: 'ET', stage: 'released', due }, 'sent', t)?.detail).toBe(t('send.parcels.abroad.onToShop'));
+  });
+
+  it('links the page that explains it to every party, under the note — and nothing where there is no note', () => {
+    const html = renderToString(h(AbroadNoteOf, { parcel: { abroad: { to: 'ET', stage: 'customs' }, relation: 'received' } }));
+    expect(html).toContain('help/parcel-from-abroad/');
+    expect(html).toContain(t('send.parcels.abroad.how'));
+    expect(renderToString(h(AbroadNoteOf, { parcel: { abroad: { to: 'ET', stage: 'on_way' }, relation: 'received' } }))).toBe('');
   });
 });

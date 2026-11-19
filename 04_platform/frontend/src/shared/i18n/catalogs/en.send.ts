@@ -120,6 +120,7 @@ export const enSend = {
   'send.parcels.abroad.released': 'Passed customs in {country}',
   'send.parcels.abroad.payAtShop': 'You pay {amount} when you collect it: our clearance fee and the last leg.',
   'send.parcels.abroad.onToShop': 'It goes on to the receiver’s shop.',
+  'send.parcels.abroad.how': 'How a parcel from abroad works',
   'send.parcels.withdrawnSender': 'It comes back to you, to the shop you handed it in at, as {id}. It is under Received, with its own code.',
   'send.parcels.withdrawnReceiver': 'It goes back to its sender. It will not come to you.',
   'send.parcels.comesBackPay': 'Pay {amount} in cash when you collect it',

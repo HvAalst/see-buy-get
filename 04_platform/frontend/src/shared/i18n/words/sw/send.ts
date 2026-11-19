@@ -92,6 +92,7 @@ export const words: Record<string, string> = {
   "send.parcels.abroad.released": "Imepita forodha nchini {country}",
   "send.parcels.abroad.payAtShop": "Unalipa {amount} ukiichukua: ada yetu ya forodha na safari ya mwisho.",
   "send.parcels.abroad.onToShop": "Inaendelea hadi duka la mpokeaji.",
+  "send.parcels.abroad.how": "Jinsi kifurushi kutoka nje ya nchi kinavyofanya kazi",
   "send.parcels.withdrawnSender": "Kinarudi kwako, kwenye duka ulipokikabidhi, kama {id}. Kiko chini ya Vilivyopokelewa, na msimbo wake mwenyewe.",
   "send.parcels.withdrawnReceiver": "Kinarudi kwa mtumaji wake. Hakitakuja kwako.",
   "send.parcels.comesBackPay": "Lipa {amount} kwa pesa taslimu unapokichukua",

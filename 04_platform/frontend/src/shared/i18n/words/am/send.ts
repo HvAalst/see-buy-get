@@ -92,6 +92,7 @@ export const words: Record<string, string> = {
   "send.parcels.abroad.released": "በ{country} ጉምሩክን አልፏል",
   "send.parcels.abroad.payAtShop": "ሲወስዱት {amount} ይከፍላሉ፦ የጉምሩክ ማስፈጸሚያ ክፍያችንና የመጨረሻው ጉዞ።",
   "send.parcels.abroad.onToShop": "ወደ ተቀባዩ ሱቅ ይቀጥላል።",
+  "send.parcels.abroad.how": "ከውጭ አገር የሚመጣ ጥቅል እንዴት እንደሚሠራ",
   "send.parcels.withdrawnSender": "ወደ እርስዎ፣ ወደ አስረከቡበት ሱቅ፣ በ{id} ቁጥር ይመለሳል። በተቀበልኳቸው ውስጥ ከራሱ ኮድ ጋር ይገኛል።",
   "send.parcels.withdrawnReceiver": "ወደ ላኪው ይመለሳል። ወደ እርስዎ አይመጣም።",
   "send.parcels.comesBackPay": "ሲወስዱት {amount} በጥሬ ገንዘብ ይክፈሉ",

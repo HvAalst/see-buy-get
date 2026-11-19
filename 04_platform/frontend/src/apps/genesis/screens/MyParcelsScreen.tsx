@@ -644,8 +644,18 @@ function openParcelView(state: SendState): ConsumerParcelView | null {
 }
 
 /** 2026-11-19 — a parcel abroad at customs, said to its sender or its receiver (parcels across a border, step 3). */
-function AbroadNoteOf({ parcel }: { parcel: { abroad?: Parameters<typeof abroadNote>[0]; relation: 'sent' | 'received' } }) {
+export function AbroadNoteOf({ parcel }: { parcel: { abroad?: Parameters<typeof abroadNote>[0]; relation: 'sent' | 'received' } }) {
   const t = useT();
   const n = abroadNote(parcel.abroad, parcel.relation, t);
-  return n ? <Note tone={n.tone} icon={n.icon} title={n.title} detail={n.detail} /> : null;
+  if (!n) return null;
+  return (
+    <>
+      <Note tone={n.tone} icon={n.icon} title={n.title} detail={n.detail} />
+      <p class="hint">
+        <a href={`${frontDoorUrl()}help/parcel-from-abroad/`} target="_blank" rel="noopener">
+          {t('send.parcels.abroad.how')}
+        </a>
+      </p>
+    </>
+  );
 }
