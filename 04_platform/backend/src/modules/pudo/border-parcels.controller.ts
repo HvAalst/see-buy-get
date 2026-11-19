@@ -75,6 +75,22 @@ export class CustomsOutcomeDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) reference?: string;
 }
 
+/**
+ * 2026-11-19 — WHAT THE RECEIVER OWES US (step 3; D12, D18): our clearance fee in the arrival country, and the last leg from the
+ * warehouse to their shop as that country's company prices it — fixed when customs decides, paid at collection. Whoever records
+ * customs' decision — the warehouse, or the clearing agent (step 4) — fixes it the same way.
+ */
+export function dueOf(p: Parcel, deps: { routing: RoutingService; borders: BorderRouteService; entities: EntityService }): NonNullable<ParcelBorder['due']> {
+  const b = p.border!;
+  const seller = deps.entities.forJurisdiction(b.to);
+  if (!seller) throw new GlosError('INVALID_STATE', `No company of ours stands in ${b.to} to price the last leg`);
+  const q = deps.routing.quoteShipmentFrom(deps.routing.hubEnd(b.arrival.mdpId), p.destAgentDid!, p.size, seller.entityId, undefined, { consumer: true, kg: p.weightKg });
+  const fee = deps.borders.feeIn(b.to);
+  if (fee && fee.currency !== q.currency) throw new GlosError('INVALID_STATE', `The clearance fee is in ${fee.currency} and the last leg in ${q.currency}`);
+  const amount = fee?.amount ?? 0;
+  return { fee: amount, lastLeg: q.locked.gross, total: Math.round((amount + q.locked.gross) * 100) / 100, tax: q.locked.tax, provision: q.locked.provision, currency: q.currency, sellerEntityId: seller.entityId, at: new Date().toISOString() };
+}
+
 /** A parcel abroad, as the hub reads it. */
 export function abroadRow(p: Parcel): AbroadParcelRow {
   const b = p.border!;
@@ -105,9 +121,9 @@ export class BorderParcelsController {
     private readonly mdps: MdpService,
     private readonly parcels: ParcelService,
     // 2026-11-19 — step 3: what the receiver owes us, priced by the arrival company; who duty is paid to.
-    private readonly routing: RoutingService,
-    private readonly borders: BorderRouteService,
-    private readonly entities: EntityService,
+    readonly routing: RoutingService,
+    readonly borders: BorderRouteService,
+    readonly entities: EntityService,
   ) {}
 
   /** The parcels abroad this hub has to act on. */
@@ -157,19 +173,8 @@ export class BorderParcelsController {
     return abroadRow(this.parcels.confirmDutyPaid(parcelId, hub));
   }
 
-  /**
-   * 2026-11-19 — WHAT THE RECEIVER OWES US (step 3; D12, D18): our clearance fee in the arrival country, and the last leg from the
-   * warehouse to their shop as that country's company prices it — fixed when customs decides, paid at collection.
-   */
   private dueFor(p: Parcel): NonNullable<ParcelBorder['due']> {
-    const b = p.border!;
-    const seller = this.entities.forJurisdiction(b.to);
-    if (!seller) throw new GlosError('INVALID_STATE', `No company of ours stands in ${b.to} to price the last leg`);
-    const q = this.routing.quoteShipmentFrom(this.routing.hubEnd(b.arrival.mdpId), p.destAgentDid!, p.size, seller.entityId, undefined, { consumer: true, kg: p.weightKg });
-    const fee = this.borders.feeIn(b.to);
-    if (fee && fee.currency !== q.currency) throw new GlosError('INVALID_STATE', `The clearance fee is in ${fee.currency} and the last leg in ${q.currency}`);
-    const amount = fee?.amount ?? 0;
-    return { fee: amount, lastLeg: q.locked.gross, total: Math.round((amount + q.locked.gross) * 100) / 100, tax: q.locked.tax, provision: q.locked.provision, currency: q.currency, sellerEntityId: seller.entityId, at: new Date().toISOString() };
+    return dueOf(p, this);
   }
 
   private hubOf(id: string, actor: IntrospectionResult) {

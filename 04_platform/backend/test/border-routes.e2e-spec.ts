@@ -108,5 +108,10 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/mdps/any/abroad/PUD-1/receive').expect(401);
     await http().post('/v1/sbg/mdps/any/abroad/PUD-1/customs').send({ outcome: 'released' }).expect(401);
     await http().post('/v1/sbg/mdps/any/abroad/PUD-1/paid').expect(401);
+    // 4 — a clearing agent's own doors.
+    await http().get('/v1/sbg/business/me/clearing').expect(401);
+    await http().post('/v1/sbg/business/me/clearing/KE/accept').expect(401);
+    await http().post('/v1/sbg/business/me/clearing/parcels/PUD-1/customs').send({ outcome: 'released' }).expect(401);
+    await http().post('/v1/sbg/business/me/clearing/parcels/PUD-1/paid').expect(401);
   });
 });

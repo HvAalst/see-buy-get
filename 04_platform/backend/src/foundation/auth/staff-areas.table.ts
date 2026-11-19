@@ -1088,6 +1088,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/mdps/:id/abroad/:parcelId/receive': 'none',
   'POST sbg/mdps/:id/abroad/:parcelId/customs': 'none',
   'POST sbg/mdps/:id/abroad/:parcelId/paid': 'none',
+  // 2026-11-19 — a clearing agent's own side (parcels across a border, step 4): its business's own sign-in, not staff
+  'GET sbg/business/me/clearing': 'none',
+  'POST sbg/business/me/clearing/:country/accept': 'none',
+  'POST sbg/business/me/clearing/parcels/:parcelId/customs': 'none',
+  'POST sbg/business/me/clearing/parcels/:parcelId/paid': 'none',
   'POST sbg/mdps/:id/sort': 'support',
   'POST sbg/mdps/:id/totes': 'support',
   'POST sbg/media': 'any',

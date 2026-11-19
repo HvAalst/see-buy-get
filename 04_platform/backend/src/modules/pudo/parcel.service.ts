@@ -197,6 +197,11 @@ function peerSendPriceOf(quote: ShipmentQuote): Partial<Parcel> {
   };
 }
 
+/** 2026-11-19 — whether a parcel abroad clears where it is said to: at its arrival warehouse, or in its arrival country (step 4). */
+function clearsHere(b: NonNullable<Parcel['border']>, where: { mdpId: string; name: string } | { country: string; name: string }): boolean {
+  return 'mdpId' in where ? b.arrival.mdpId === where.mdpId : b.to === where.country;
+}
+
 /** 2026-11-19 — a parcel abroad as its sender and receiver read it (step 3). */
 function abroadViewOf(p: Parcel): NonNullable<ConsumerParcelView['abroad']> {
   const b = p.border!;
@@ -3027,7 +3032,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   recordClearance(
     parcelId: string,
-    hub: { mdpId: string; name: string },
+    // 2026-11-19 — the warehouse hub, or the clearing agent of its arrival country (step 4): who says what customs decided.
+    hub: { mdpId: string; name: string } | { country: string; name: string },
     input: { outcome: 'released' | 'held'; amount?: number; reference?: string },
     now: number = Date.now(),
     // 2026-11-19 — step 3: what the receiver owes us, worked out by the controller (the arrival company prices the last leg), and
@@ -3036,8 +3042,8 @@ export class ParcelService implements OnApplicationBootstrap {
   ): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
-    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
-    if (!b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} has not been received here from ${b.carrier.name} yet`);
+    if (!b || !clearsHere(b, hub)) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
+    if (!b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} has not been received at ${b.arrival.name} from ${b.carrier.name} yet`);
     if (b.clearance) throw new GlosError('INVALID_STATE', `Customs’ decision on ${p.parcelId} was recorded already: ${b.clearance.outcome === 'held' ? 'held' : 'released'}, ${b.clearance.at.slice(0, 16).replace('T', ' ')}`);
     const at = new Date(now).toISOString();
     const reference = input.reference?.trim() || undefined;
@@ -3070,10 +3076,10 @@ export class ParcelService implements OnApplicationBootstrap {
    * 2026-11-19 — A HELD PARCEL'S DUTY PAID, AND CUSTOMS RELEASED IT (step 3; D17: the receiver pays the clearing agent directly,
    * nothing of it through us): the warehouse says so, and it goes on as any parcel on the floor. Once.
    */
-  confirmDutyPaid(parcelId: string, hub: { mdpId: string; name: string }, now: number = Date.now()): Parcel {
+  confirmDutyPaid(parcelId: string, hub: { mdpId: string; name: string } | { country: string; name: string }, now: number = Date.now()): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
-    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
+    if (!b || !clearsHere(b, hub)) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
     if (b.clearance?.outcome !== 'held') throw new GlosError('INVALID_STATE', `${p.parcelId} is not held by customs`);
     if (b.clearance.paidAt) throw new GlosError('INVALID_STATE', `${p.parcelId} was said paid already, ${b.clearance.paidAt.slice(0, 16).replace('T', ' ')}`);
     const at = new Date(now).toISOString();
@@ -3102,6 +3108,15 @@ export class ParcelService implements OnApplicationBootstrap {
       void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: 'lapsed' }, { source: 'pudo' }).catch(() => undefined);
     }
     return lapsed;
+  }
+
+  /** 2026-11-19 — the parcels into these countries a clearing agent has to act on (step 4): coming from abroad, or under customs control. */
+  abroadInto(countries: string[]): Parcel[] {
+    if (!countries.length) return [];
+    return this.list().filter((p) => {
+      const b = p.border;
+      return Boolean(b && countries.includes(b.to) && b.handed && (!b.arrived || inCustoms(p)));
+    });
   }
 
   /** 2026-11-18 — the parcels abroad a hub has to act on (step 2c): to hand to a carrier, coming from one, under customs control. */

@@ -394,6 +394,20 @@ export class BorderRouteService {
     return this.arrivalView(country, now);
   }
 
+  /** 2026-11-19 — the arrival countries a company is named to clear in (step 4), accepted or not yet. */
+  clearsFor(entityId: string): Array<{ country: string; name: string; acceptedAt?: string }> {
+    return [...this.arrivals.values()]
+      .filter((a) => a.clearer?.kind === 'agent' && a.clearer.entityId === entityId)
+      .map((a) => ({ country: a.country, name: catalogueEntry(a.country)?.name ?? a.country, ...(a.clearer!.acceptedAt ? { acceptedAt: a.clearer!.acceptedAt } : {}) }))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  }
+
+  /** 2026-11-19 — whether a company is the clearing agent named for a country and has accepted (step 4). */
+  clearsIn(entityId: string, countryCode: string): boolean {
+    const c = this.arrivals.get(catalogueEntry(countryCode)?.code ?? countryCode)?.clearer;
+    return c?.kind === 'agent' && c.entityId === entityId && Boolean(c.acceptedAt);
+  }
+
   /** Our clearance fee in this country (D8), in its company's money, shown to the receiver before they pay. */
   setFee(countryCode: string, amount: number, by: string, now: number = Date.now()): BorderArrivalView {
     const country = this.country(countryCode);

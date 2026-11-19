@@ -30,6 +30,8 @@ import { FleetManagerService } from './fleet-manager.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { RoutePlanService } from './route-plan.service';
 import { BorderParcelsController } from './border-parcels.controller';
+import { ClearingController } from './clearing.controller';
+import type { BusinessService } from './business.service';
 import type { BorderRouteService } from './border-route.service';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
@@ -384,6 +386,82 @@ describe('a parcel abroad at the counter', () => {
       const charged = gate.entries({ did: to.did }).filter((e) => e.reference === 'PUD-AB3R' && e.sign === '-');
       expect(charged.map((e) => e.amount)).toEqual([due.amount]);
       expect(parcels.get('PUD-AB3R')).toMatchObject({ status: 'Delivered', payAtCollection: { paidAt: expect.any(String) } });
+    });
+  });
+  /*
+   * 2026-11-19 — STEP 4: THE CLEARING AGENT'S SIDE. Named by staff for an arrival country, its owner accepts in the Business app;
+   * from then its people see the parcels into that country and record what customs decided, and when a held one is paid — the
+   * same acts as the warehouse. A viewer reads; a business that does not clear there, or staff, is refused.
+   */
+  describe('the clearing agent (step 4)', () => {
+    function agentAtWarehouse(id: string) {
+      const trip = kenyaToEthiopia();
+      const quote = routing.quoteAbroad(trip.from.did, trip.to.did, 'M', trip.route);
+      parcels.accept({ parcelId: id, agentDid: trip.from.did, destPudoDid: trip.to.did, destZone: 'AddisAbaba', size: 'M', senderMobile: '+254700111', receiverMobile: '+251900111', dropoffPhotoRef: photoBy(trip.from.did), abroadRoute: trip.route, abroadQuote: quote, abroad: declaration(trip.from.did) });
+      plans.freeze(id);
+      parcels.setTransit(id, 'On_Bus', 'BADGE-77', 'onto the bus');
+      parcels.setTransit(id, 'At_MDP', trip.departure.name, 'dropped at the hub');
+      parcels.get(id).atMdpId = trip.departure.mdpId;
+      keeper.arrived(parcels.get(id), trip.departure.mdpId, trip.departure.name);
+      parcels.handToRouteCarrier([id], trip.departure, `HAWB-${id}`);
+      let accepted = false;
+      const borders = {
+        clearsFor: (entityId: string) => (entityId === 'agent-et' ? [{ country: 'ET', name: 'Ethiopia', ...(accepted ? { acceptedAt: '2026-11-19T08:00:00.000Z' } : {}) }] : []),
+        clearsIn: (entityId: string, country: string) => accepted && entityId === 'agent-et' && country === 'ET',
+        acceptAsClearer: (country: string, entityId: string) => {
+          if (country !== 'ET' || entityId !== 'agent-et') throw new Error('You are not the clearing agent named for ' + country);
+          accepted = true;
+        },
+        payeeIn: () => 'Addis Clearing Ltd',
+        feeIn: () => ({ amount: 500, currency: 'ETB' }),
+      } as unknown as BorderRouteService;
+      const acting = (role: string, entityId = 'agent-et') => ({ member: { name: 'Hana', role, personDid: 'did:p:hana' }, entity: { entityId, name: entityId === 'agent-et' ? 'Addis Clearing Ltd' : 'Other Agent' } });
+      const businesses = {
+        requireMember: (actor: { tenant: string; role: string; memberRole: string }) => acting(actor.memberRole, actor.tenant),
+        requireOwner: (a: { member: { role: string } }) => {
+          if (a.member.role !== 'owner') throw new Error('Only an owner of the business can do that');
+        },
+        mayAct: (a: { member: { role: string } }) => a.member.role !== 'viewer',
+      } as unknown as BusinessService;
+      const doors = new ClearingController(businesses, borders, parcels, routing, entities);
+      const as = (memberRole: string, tenant = 'agent-et') => ({ role: 'business', tenant, memberRole }) as unknown as IntrospectionResult;
+      return { ...trip, doors, as };
+    }
+
+    it('accepted by its owner, it sees the parcels into its country, coming and under customs control', () => {
+      const { doors, as, arrival } = agentAtWarehouse('PUD-AB4A');
+      expect(doors.view(as('owner'))).toEqual({ countries: [{ country: 'ET', name: 'Ethiopia', accepted: false }], rows: [] });
+      expect(() => doors.customs('PUD-AB4A', { outcome: 'released' }, as('owner'))).toThrow(/Addis Clearing Ltd does not clear customs for PUD-AB4A/);
+      expect(() => doors.accept('ET', as('booker'))).toThrow(/Only an owner/);
+      const v = doors.accept('ET', as('owner'));
+      expect(v.countries[0]).toMatchObject({ accepted: true });
+      expect(v.rows.map((r) => [r.parcelId, r.step])).toEqual([['PUD-AB4A', 'coming']]);
+      parcels.receiveFromRouteCarrier('PUD-AB4A', arrival);
+      expect(doors.view(as('booker')).rows.map((r) => [r.parcelId, r.step])).toEqual([['PUD-AB4A', 'customs']]);
+      // Only the parcels into the countries it clears in; and a decision said for another country is refused by the parcel itself.
+      expect(parcels.abroadInto(['KE'])).toEqual([]);
+      expect(parcels.abroadInto(['ET']).map((x) => x.parcelId)).toEqual(['PUD-AB4A']);
+      expect(() => parcels.recordClearance('PUD-AB4A', { country: 'KE', name: 'Someone' }, { outcome: 'released' })).toThrow(/does not clear customs at Someone/);
+      // Staff read parcels abroad on the console, not here.
+      expect(() => doors.view({ role: 'operator' } as IntrospectionResult)).toThrow(/staff read parcels abroad on the console/);
+    });
+
+    it('records what customs decided and when it is paid — the warehouse’s acts, under its own name; a viewer reads', () => {
+      const { doors, as, arrival } = agentAtWarehouse('PUD-AB4B');
+      doors.accept('ET', as('owner'));
+      expect(() => doors.customs('PUD-AB4B', { outcome: 'held', amount: 90, reference: 'ET-CUS-0050' }, as('booker'))).toThrow(/has not been received at Bole Warehouse/);
+      parcels.receiveFromRouteCarrier('PUD-AB4B', arrival);
+      expect(() => doors.customs('PUD-AB4B', { outcome: 'held', amount: 90, reference: 'ET-CUS-0050' }, as('viewer'))).toThrow(/A viewer reads this/);
+      const row = doors.customs('PUD-AB4B', { outcome: 'held', amount: 90, reference: 'ET-CUS-0050' }, as('booker'));
+      expect(row).toMatchObject({ step: 'held', held: { amount: 90, currency: 'ETB', payee: 'Addis Clearing Ltd' } });
+      const p = parcels.get('PUD-AB4B');
+      expect(p.border?.clearance?.by).toBe('Addis Clearing Ltd (Hana)');
+      expect(p.payAtCollection?.amount).toBe(p.border?.due?.total);
+      // Another agent, even accepted elsewhere, does not clear this one.
+      expect(() => doors.paid('PUD-AB4B', as('owner', 'agent-other'))).toThrow(/Other Agent does not clear customs for PUD-AB4B/);
+      doors.paid('PUD-AB4B', as('booker'));
+      expect(inCustoms(parcels.get('PUD-AB4B'))).toBe(false);
+      expect(doors.view(as('owner')).rows).toEqual([]);
     });
   });
 });

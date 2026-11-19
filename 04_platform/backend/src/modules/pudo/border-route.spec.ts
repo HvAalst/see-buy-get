@@ -214,6 +214,19 @@ describe('a route across a border', () => {
     expect(svc.onFrom('NL', later)).toEqual([]);
   });
 
+  it('4 — the countries a clearing agent is named for, and whether it has accepted there', () => {
+    const svc = setup();
+    expect(svc.clearsFor('agent-1')).toEqual([]);
+    svc.setClearer('KE', { kind: 'agent', entityId: 'agent-1' }, 'Amina Staff', NOW);
+    expect(svc.clearsFor('agent-1')).toEqual([{ country: 'KE', name: 'Kenya' }]);
+    expect(svc.clearsIn('agent-1', 'KE')).toBe(false);
+    svc.acceptAsClearer('KE', 'agent-1', NOW);
+    expect(svc.clearsFor('agent-1')[0].acceptedAt).toBeDefined();
+    expect(svc.clearsIn('agent-1', 'ke')).toBe(true);
+    expect(svc.clearsIn('fwd-1', 'KE')).toBe(false);
+    expect(svc.clearsFor('fwd-1')).toEqual([]);
+  });
+
   it('the clearance fee is in the arrival company’s money; a route needs two countries', () => {
     const svc = setup();
     expect(svc.setFee('KE', 349.999, 'Amina Staff', NOW).fee).toMatchObject({ amount: 350, currency: 'KES' });

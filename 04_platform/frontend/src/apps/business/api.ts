@@ -12,6 +12,7 @@ import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { secretBody } from '../../shared/account/unlock';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import { inboundApi, type InboundApi } from './inbound';
+import { clearingApi, type ClearingApi } from './clearing';
 import { exportsApi, type ExportsApi } from './exports';
 import type { QuoteView } from '../../shared/quote';
 import type { AddressFormat, AddressParts } from '../../shared/account/address';
@@ -400,6 +401,8 @@ export interface BusinessClient {
   notifications: NotificationsApi;
   /** Inbound, reading A: its receiving points, and what is coming in to them. */
   inbound: InboundApi;
+  /** 2026-11-19 — a clearing agent's own side: the countries it clears in, the parcels at customs there (step 4). */
+  clearing: ClearingApi;
   /** Exports to the port (2026-10-27): the booking's cut-off, the legs to the terminal, the weight, the papers, the file. */
   exports: ExportsApi;
   client: SeededAppClient;
@@ -496,6 +499,7 @@ export function createBusinessClient(): BusinessClient {
     shipping: createAgentApi(client.sbg),
     notifications: createNotificationsApi(client.sbg),
     inbound: inboundApi(client.sbg),
+    clearing: clearingApi(client.sbg),
     exports: exportsApi(client.sbg),
     client,
     postLoad: (load) => call((c) => c.POST('/v1/sbg/dispatch/freight' as never, { body: load } as never) as never),

@@ -30,6 +30,7 @@ import { RunsScreen, type RunAskedFor } from './screens/RunsScreen';
 import { ClientsScreen } from './screens/ClientsScreen';
 import { ContractsScreen } from './screens/ContractsScreen';
 import { InboundScreen } from './screens/InboundScreen';
+import { ClearingScreen } from './screens/ClearingScreen';
 import { ExportsScreen } from './screens/ExportsScreen';
 import { ParcelsScreen } from './screens/ParcelsScreen';
 import '../../shared/screens.css';
@@ -38,7 +39,7 @@ import '../tower/tower.css';
 import './business.css';
 
 /** Every section, for Back and for a shortcut's `?go=` (shared/nav.ts); one the business does not do opens its home. */
-const SECTIONS = screensOf<Section>({ home: true, loads: true, runs: true, parcels: true, contracts: true, clients: true, exports: true, imports: true, yard: true, inbound: true, people: true, details: true });
+const SECTIONS = screensOf<Section>({ home: true, loads: true, runs: true, parcels: true, contracts: true, clients: true, exports: true, imports: true, clearing: true, yard: true, inbound: true, people: true, details: true });
 
 const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
@@ -49,6 +50,7 @@ const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   clients: { label: 'business.nav.clients', icon: 'bag' },
   exports: { label: 'business.nav.exports', icon: 'send' },
   imports: { label: 'business.nav.imports', icon: 'box' },
+  clearing: { label: 'business.nav.clearing', icon: 'globe' },
   yard: { label: 'business.nav.yard', icon: 'grid' },
   inbound: { label: 'business.nav.inbound', icon: 'box' },
   people: { label: 'business.nav.people', icon: 'person' },
@@ -241,6 +243,8 @@ export function App() {
             <ExportsScreen business={business} client={client} asked={asked?.section === 'exports' ? asked.record : null} onAsked={answered} />
           ) : section === 'imports' ? (
             <ImportsScreen state={{ who }} actions={towerActions as never} asked={asked?.section === 'imports' ? asked.record : null} onAsked={answered} />
+          ) : section === 'clearing' ? (
+            <ClearingScreen business={business} client={client} />
           ) : section === 'yard' ? (
             <DepotsScreen state={{ who }} actions={towerActions as never} />
           ) : section === 'inbound' ? (

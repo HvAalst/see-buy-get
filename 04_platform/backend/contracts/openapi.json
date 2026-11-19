@@ -8134,6 +8134,121 @@
         }
       }
     },
+    "/v1/sbg/business/me/clearing": {
+      "get": {
+        "operationId": "Clearing.view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearingView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/clearing/{country}/accept": {
+      "post": {
+        "operationId": "Clearing.accept",
+        "summary": "",
+        "description": "Its owner accepts clearing in a country it was named for: from then the routes into it count it as their clearer.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearingView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/clearing/parcels/{parcelId}/customs": {
+      "post": {
+        "operationId": "Clearing.customs",
+        "summary": "",
+        "description": "What customs decided on a parcel into a country it clears in.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomsOutcomeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/clearing/parcels/{parcelId}/paid": {
+      "post": {
+        "operationId": "Clearing.paid",
+        "summary": "",
+        "description": "A held parcel's duty paid, and customs released it.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/trailers": {
       "get": {
         "operationId": "Trailer.list",
@@ -54593,6 +54708,49 @@
         },
         "required": [
           "outcome"
+        ]
+      },
+      "ClearingCountryView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "acceptedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "name",
+          "accepted"
+        ]
+      },
+      "ClearingView": {
+        "type": "object",
+        "properties": {
+          "countries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearingCountryView"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AbroadParcelRow"
+            }
+          }
+        },
+        "required": [
+          "countries",
+          "rows"
         ]
       },
       "TrailerDto": {

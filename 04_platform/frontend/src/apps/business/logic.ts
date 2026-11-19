@@ -4,7 +4,7 @@ import { arrivalWords, crossingWords, passageWords, type When } from '../../shar
 import type { LoadAbout } from '../../shared/launch';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'loads' | 'runs' | 'parcels' | 'contracts' | 'clients' | 'exports' | 'imports' | 'yard' | 'inbound' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'parcels' | 'contracts' | 'clients' | 'exports' | 'imports' | 'clearing' | 'yard' | 'inbound' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -30,6 +30,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     // the clearing agent appointed on one, which reads its papers there.
     ...(has('shipper') || has('expeditor') || has('clearing_agent') ? (['exports'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
+    // 2026-11-19 — a clearing agent: the parcels abroad it clears at the arrival end (parcels across a border, step 4).
+    ...(has('clearing_agent') ? (['clearing'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
     // Inbound, reading A — a business receiving goods at its own places: what is coming in, and the codes its suppliers write.
     ...(has('receiver') ? (['inbound'] as Section[]) : []),
@@ -53,7 +55,7 @@ export interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { key: 'shipments', label: 'business.group.shipments', sections: ['home', 'loads', 'parcels', 'exports', 'imports'] },
+  { key: 'shipments', label: 'business.group.shipments', sections: ['home', 'loads', 'parcels', 'exports', 'imports', 'clearing'] },
   { key: 'partners', label: 'business.group.partners', sections: ['contracts', 'clients'] },
   { key: 'places', label: 'business.group.places', sections: ['inbound', 'yard'] },
   { key: 'company', label: 'business.group.company', sections: ['people', 'details'] },
