@@ -2,6 +2,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { useBackLayer } from '../nav';
 import { useSheetDrag } from './sheetDrag';
+import { useKeyboardFit } from './sheetKeyboard';
 
 export interface SheetProps {
   open: boolean;
@@ -64,6 +65,8 @@ export function Sheet({ open, onClose, title, children, dismissible = true, full
   // under it — nor moved by a pull.
   useBackLayer(open, () => onCloseRef.current(), dismissible);
   useSheetDrag(panelRef, backdropRef, open && dismissible, () => onCloseRef.current());
+  // 2026-11-19 — above the keyboard while a field in it is typed in (sheetKeyboard.ts; the owner: the keyboard hid its foot).
+  useKeyboardFit(panelRef, open);
 
   useEffect(() => {
     if (!open) return;

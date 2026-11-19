@@ -76,8 +76,18 @@ export class BorderPaymentView {
   @ApiProperty({ enum: ['collection', 'link'] }) ourPartBy: 'collection' | 'link';
 }
 
+/** 2026-11-19 — what a new receiver pays on top when someone else takes a parcel not paid in time (D20), in the company's money. */
+export class BorderReaddressFees {
+  @ApiProperty() storagePerDay: number;
+  @ApiProperty() handlingFee: number;
+  @ApiProperty() currency: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
 export class BorderArrivalView {
   @ApiProperty() country: string;
+  @ApiPropertyOptional({ type: BorderReaddressFees }) readdress?: BorderReaddressFees;
   @ApiProperty({ type: BorderPaymentView }) payment: BorderPaymentView;
   @ApiProperty({ type: [BorderAirport] }) airports: BorderAirport[];
   @ApiPropertyOptional({ type: BorderClearer }) clearer?: BorderClearer;
@@ -265,4 +275,10 @@ export class BorderPricesDto extends BorderByDto {
 
 export class BorderFeeDto extends BorderByDto {
   @ApiProperty() @IsNumber() @Min(0.01) amount!: number;
+}
+
+/** 2026-11-19 — D20: what a new receiver pays on top, set by the arrival country's company. */
+export class BorderReaddressDto extends BorderByDto {
+  @ApiProperty() @IsNumber() @Min(0) storagePerDay!: number;
+  @ApiProperty() @IsNumber() @Min(0) handlingFee!: number;
 }

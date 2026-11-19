@@ -116,7 +116,7 @@ export function App() {
   const open = state.phase === 'ready' && Boolean(state.business) && !state.settingUp;
   useEffect(() => {
     if (!asked || !open || !state.business) return;
-    if (!sectionsFor(state.business.activities).includes(asked.section)) {
+    if (!sectionsFor(state.business.activities, Boolean(state.business.clearsIn?.length)).includes(asked.section)) {
       setAsked(null);
       setLoadSaid(t('business.linked.notHere'));
       return;
@@ -135,10 +135,10 @@ export function App() {
   if (state.phase === 'choose' || !state.business || state.settingUp) return <ChooseScreen state={state} actions={actions} />;
 
   const business = state.business;
-  const sections = sectionsFor(business.activities);
+  const sections = sectionsFor(business.activities, Boolean(business.clearsIn?.length));
   const section = sections.includes(state.section) ? state.section : 'home';
   // The menu in groups (2026-10-29): shipments first, by the way the goods go; then partners, places, the company.
-  const groups = navGroupsFor(business.activities);
+  const groups = navGroupsFor(business.activities, Boolean(business.clearsIn?.length));
   const marked = navSectionOf(section);
   const shipments = groups.find((g) => g.key === 'shipments')?.sections ?? [];
   const others = groups.filter((g) => g.key !== 'shipments');

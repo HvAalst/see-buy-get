@@ -29,7 +29,7 @@ export const DAMAGE_REPORT_STATEMENT =
 
 /** Who held the parcel, named as who the network CONTRACTS with: a shop's trading name, a fleet's company — never one of a fleet's drivers. */
 export class DamageReportHolder {
-  @ApiProperty({ enum: ['sender', 'shop', 'driver', 'hub', 'receiver', 'carrier'] }) kind: CustodyKind;
+  @ApiProperty({ enum: ['sender', 'shop', 'driver', 'hub', 'receiver', 'carrier', 'customs'] }) kind: CustodyKind;
   name: string;
 }
 

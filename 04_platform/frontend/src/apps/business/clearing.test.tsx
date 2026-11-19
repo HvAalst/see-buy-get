@@ -36,6 +36,17 @@ describe('customs clearing in the Business app', () => {
     expect(navGroupsFor(['clearing_agent']).find((g) => g.key === 'shipments')?.sections).toContain('clearing');
   });
 
+  it('is shown to a business named as a clearer, whatever it said it does', () => {
+    expect(sectionsFor(['shipper'], true)).toContain('clearing');
+    expect(navGroupsFor(['importer'], true).find((g) => g.key === 'shipments')?.sections).toContain('clearing');
+  });
+
+  it('a parcel given up by its sender: said so, the warehouse hands it to customs', () => {
+    const html = panel({ countries: [{ country: 'ET', name: 'Ethiopia', accepted: true }], rows: [row('PUD-7', 'given_up')] });
+    expect(html).toContain(t('business.clearing.givenUp'));
+    expect(html).toContain(t('business.clearing.givenUpLine'));
+  });
+
   it('a country it is named for is accepted by an owner; anyone else is told so', () => {
     const view: ClearingView = { countries: [{ country: 'ET', name: 'Ethiopia', accepted: false }], rows: [] };
     const owner = panel(view);
@@ -68,6 +79,6 @@ describe('customs clearing in the Business app', () => {
   it('coming from abroad: with which carrier, under what reference; nothing waiting, said so', () => {
     expect(panel({ countries: [{ country: 'ET', name: 'Ethiopia', accepted: true }], rows: [row('PUD-4', 'coming', { reference: 'HAWB-9' })] })).toContain(t('business.clearing.comingWith', { carrier: 'Kilimanjaro Air Cargo', reference: 'HAWB-9' }));
     expect(panel({ countries: [{ country: 'ET', name: 'Ethiopia', accepted: true }], rows: [] })).toContain(t('business.clearing.nothing'));
-    expect(clearingGroups([row('A', 'coming'), row('B', 'customs'), row('C', 'held')])).toEqual({ coming: [row('A', 'coming')], customs: [row('B', 'customs')], held: [row('C', 'held')] });
+    expect(clearingGroups([row('A', 'coming'), row('B', 'customs'), row('C', 'held'), row('D', 'given_up')])).toEqual({ coming: [row('A', 'coming')], customs: [row('B', 'customs')], held: [row('C', 'held')], givenUp: [row('D', 'given_up')] });
   });
 });

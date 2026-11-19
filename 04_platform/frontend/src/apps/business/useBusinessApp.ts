@@ -159,7 +159,7 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       busy: false,
       error: null,
       // Keep the section across a reload of the same business; a different business starts at the top.
-      section: s.business?.entityId === business.entityId && sectionsFor(business.activities).includes(s.section) ? s.section : 'home',
+      section: s.business?.entityId === business.entityId && sectionsFor(business.activities, Boolean(business.clearsIn?.length)).includes(s.section) ? s.section : 'home',
     }));
   }, []);
 

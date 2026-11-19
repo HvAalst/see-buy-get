@@ -9,7 +9,7 @@ import type { ParcelRow } from './types';
 export type AbroadRow = components['schemas']['AbroadParcelRow'];
 
 /** The parcels to hand over, by the carrier taking them; the rest by what is to be done. */
-export function abroadGroups(rows: AbroadRow[]): { toHand: Array<{ carrier: string; rows: AbroadRow[] }>; coming: AbroadRow[]; customs: AbroadRow[]; held: AbroadRow[] } {
+export function abroadGroups(rows: AbroadRow[]): { toHand: Array<{ carrier: string; rows: AbroadRow[] }>; coming: AbroadRow[]; customs: AbroadRow[]; held: AbroadRow[]; givenUp: AbroadRow[] } {
   const byCarrier = new Map<string, AbroadRow[]>();
   for (const r of rows.filter((x) => x.step === 'to_hand')) byCarrier.set(r.carrier, [...(byCarrier.get(r.carrier) ?? []), r]);
   return {
@@ -17,6 +17,8 @@ export function abroadGroups(rows: AbroadRow[]): { toHand: Array<{ carrier: stri
     coming: rows.filter((r) => r.step === 'coming'),
     customs: rows.filter((r) => r.step === 'customs'),
     held: rows.filter((r) => r.step === 'held'),
+    // 2026-11-19 — given up by its sender (D19): to hand to customs to dispose of.
+    givenUp: rows.filter((r) => r.step === 'given_up'),
   };
 }
 
@@ -30,6 +32,7 @@ export function heldAbroadLine(r: AbroadRow, t: Translate): string {
   if (!r.held) return '';
   const line = t('mdp.abroad.heldLine', { amount: r.held.amount.toFixed(2), currency: r.held.currency, reference: r.held.reference });
   if (r.held.lapsed) return `${line} · ${t('mdp.abroad.lapsed')}`;
+  if (r.someoneElse) return `${line} · ${t('mdp.abroad.someoneElse', { date: (r.held.payBy ?? '').slice(0, 10) })}`;
   return r.held.payee && r.held.payBy ? `${line} · ${t('mdp.abroad.payTo', { payee: r.held.payee, date: r.held.payBy.slice(0, 10) })}` : line;
 }
 

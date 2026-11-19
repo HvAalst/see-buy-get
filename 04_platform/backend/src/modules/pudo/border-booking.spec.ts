@@ -31,6 +31,8 @@ import { JourneyPlanService } from './journey-plan.service';
 import { RoutePlanService } from './route-plan.service';
 import { BorderParcelsController } from './border-parcels.controller';
 import { ClearingController } from './clearing.controller';
+import type { PersonService } from './person.service';
+import { hashPhone } from '../../foundation/identity/phone';
 import type { BusinessService } from './business.service';
 import type { BorderRouteService } from './border-route.service';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -330,10 +332,13 @@ describe('a parcel abroad at the counter', () => {
       keeper.arrived(parcels.get(id), trip.departure.mdpId, trip.departure.name);
       parcels.handToRouteCarrier([id], trip.departure, `HAWB-${id}`);
       parcels.receiveFromRouteCarrier(id, trip.arrival);
-      const borders = { payeeIn: () => 'Addis Clearing Ltd', feeIn: () => ({ amount: 500, currency: 'ETB' }) } as unknown as BorderRouteService;
-      const doors = new BorderParcelsController(mdps, parcels, routing, borders, entities);
+      const borders = { payeeIn: () => 'Addis Clearing Ltd', feeIn: () => ({ amount: 500, currency: 'ETB' }), readdressIn: () => ({ storagePerDay: 50, handlingFee: 300, currency: 'ETB' }) } as unknown as BorderRouteService;
+      // The Send app's sign-in: its sender, unless a test says somebody else is asking.
+      const asking = { who: { phoneHash: hashPhone('+254700111'), personDid: 'did:p:sender' } };
+      const persons = { requireByDid: () => asking.who } as unknown as PersonService;
+      const doors = new BorderParcelsController(mdps, parcels, routing, borders, entities, persons);
       const hub = { did: trip.arrival.did } as IntrospectionResult;
-      return { ...trip, doors, hub };
+      return { ...trip, doors, hub, asking };
     }
 
     it('held: what customs asks is paid to the clearing agent by a day 14 days on; our part, priced by the arrival company, at the shop', () => {
@@ -369,6 +374,68 @@ describe('a parcel abroad at the counter', () => {
       expect(inCustoms(parcels.get('PUD-AB3L'))).toBe(true);
       expect(parcels.abroadAt(arrival.mdpId).map((p) => p.parcelId)).toEqual(['PUD-AB3L']);
       expect(doors.abroad(arrival.mdpId, hub).rows[0].held).toMatchObject({ lapsed: true });
+    });
+
+    /*
+     * 2026-11-19 — D19, D20: NOT PAID IN TIME, ITS SENDER CHOOSES. Someone else in the destination country takes it (once): the
+     * receiver is now them, the release code is made again, they have 14 more days, and at the shop they pay the warehouse days
+     * and the extra handling besides our fee and the last leg. Or it is given up, and the warehouse hands it to customs.
+     */
+    it('not paid in time: its sender names someone else there — a new code, 14 more days, the warehouse days and handling on top', () => {
+      const { arrival, doors, hub, asking } = atWarehouse('PUD-AB3S');
+      doors.customs(arrival.mdpId, 'PUD-AB3S', { outcome: 'held', amount: 80, reference: 'ET-CUS-0060' }, hub);
+      const actor = { did: 'did:p:sender' } as IntrospectionResult;
+      expect(() => doors.choose('PUD-AB3S', { choice: 'give_up' }, actor)).toThrow(/whose day to pay has passed/);
+      // Its day to pay passed yesterday.
+      parcels.get('PUD-AB3S').border!.clearance!.payBy = new Date(Date.now() - 86_400_000).toISOString();
+      expect(parcels.lapseUnpaidHolds()).toEqual(['PUD-AB3S']);
+      // Only its sender chooses.
+      const sender = asking.who;
+      asking.who = { phoneHash: hashPhone('+254799999'), personDid: 'did:p:other' };
+      expect(() => doors.choose('PUD-AB3S', { choice: 'give_up' }, actor)).toThrow(/No such parcel/);
+      asking.who = sender;
+      // Someone else: not the receiver it went to, nor the sender, and a real number.
+      expect(() => doors.choose('PUD-AB3S', { choice: 'someone_else', receiverMobile: '+251900111' }, actor)).toThrow(/not the receiver it was sent to, nor you/);
+      expect(() => doors.choose('PUD-AB3S', { choice: 'someone_else', receiverMobile: '+254700111' }, actor)).toThrow(/not the receiver it was sent to, nor you/);
+      const before = parcels.get('PUD-AB3S');
+      const oldCode = before.otp;
+      const dueBefore = before.border!.due!;
+      const view = doors.choose('PUD-AB3S', { choice: 'someone_else', receiverMobile: '+251911222333' }, actor);
+      const p = parcels.get('PUD-AB3S');
+      expect(p.receiverPhoneHash).toBe(hashPhone('+251911222333'));
+      expect(p.otp).not.toBe(oldCode);
+      expect(p.border?.clearance).toMatchObject({ decision: { choice: 'someone_else' } });
+      expect(p.border?.clearance?.lapsedAt).toBeUndefined();
+      expect(Date.parse(p.border!.clearance!.payBy!) - Date.now()).toBeGreaterThan(13.9 * 86_400_000);
+      // On top: one day at the warehouse at 50, and 300 for the handling.
+      expect(p.border?.due).toMatchObject({ storage: 50, handling: 300, total: Math.round((dueBefore.fee + dueBefore.lastLeg + 350) * 100) / 100 });
+      expect(p.payAtCollection?.amount).toBe(p.border?.due?.total);
+      expect(view.abroad).toMatchObject({ stage: 'held', decision: 'someone_else' });
+      expect(view.abroad?.choices).toBeUndefined();
+      expect(doors.abroad(arrival.mdpId, hub).rows[0]).toMatchObject({ step: 'held', someoneElse: true });
+      // Not paid by them either: only giving it up is left.
+      parcels.lapseUnpaidHolds(Date.now() + 30 * 86_400_000);
+      expect(parcels.consumerParcel('PUD-AB3S', sender).abroad?.choices).toEqual(['give_up']);
+      expect(() => doors.choose('PUD-AB3S', { choice: 'someone_else', receiverMobile: '+251911444555' }, actor)).toThrow(/once already: it can only be given up now/);
+    });
+
+    it('given up: the warehouse hands it to customs to dispose of, and it is no longer ours', () => {
+      const { arrival, departure, doors, hub } = atWarehouse('PUD-AB3G');
+      doors.customs(arrival.mdpId, 'PUD-AB3G', { outcome: 'held', amount: 80, reference: 'ET-CUS-0061' }, hub);
+      expect(() => doors.dispose(arrival.mdpId, 'PUD-AB3G', hub)).toThrow(/was not given up by its sender/);
+      parcels.lapseUnpaidHolds(Date.now() + 15 * 86_400_000);
+      const view = doors.choose('PUD-AB3G', { choice: 'give_up' }, { did: 'did:p:sender' } as IntrospectionResult);
+      expect(view.abroad).toMatchObject({ stage: 'given_up', decision: 'give_up' });
+      expect(doors.abroad(arrival.mdpId, hub).rows.map((r) => [r.parcelId, r.step])).toEqual([['PUD-AB3G', 'given_up']]);
+      expect(() => doors.dispose(departure.mdpId, 'PUD-AB3G', { did: departure.did } as IntrospectionResult)).toThrow(/does not clear customs at JKIA Hub/);
+      doors.dispose(arrival.mdpId, 'PUD-AB3G', hub);
+      const p = parcels.get('PUD-AB3G');
+      expect(p.status).toBe('Voided');
+      expect(p.custody?.at(-1)).toMatchObject({ holderKind: 'customs', holderId: 'customs at ADD', to: expect.any(String) });
+      expect(p.payAtCollection).toBeUndefined();
+      expect(inCustoms(p)).toBe(false);
+      expect(doors.abroad(arrival.mdpId, hub).rows).toEqual([]);
+      expect(() => doors.dispose(arrival.mdpId, 'PUD-AB3G', hub)).toThrow(/handed to customs already/);
     });
 
     it('released: our part is taken in cash at the receiver’s shop as the parcel is handed over — the float asked first', () => {

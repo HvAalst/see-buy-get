@@ -398,7 +398,8 @@ export class Birthplace {
 
 /** Who can be holding a parcel. The network is never an owner — it is one of these holders, in turn. */
 /** 'carrier' (2026-11-18): a route's carrier across a border — a forwarder or haulier, not one of our drivers (step 2c). */
-export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver' | 'carrier';
+/** 'customs' (2026-11-19): a parcel given up by its sender, handed to customs at its arrival warehouse to dispose of (D19). */
+export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver' | 'carrier' | 'customs';
 
 /**
  * One stretch of TIME during which one party physically held the parcel. An open leg (no `to`) is who has
@@ -1071,12 +1072,28 @@ export class ParcelBorder {
     paidBy?: string;
     /** Not paid by `payBy`: its sender is asked what to do (step 3). */
     lapsedAt?: string;
+    /** 2026-11-19 — what its sender chose (D19): someone else there takes it (once), or it is given up. */
+    decision?: { choice: 'someone_else' | 'give_up'; at: string };
+    /** Given up, and handed to customs at the warehouse to dispose of: no longer ours. */
+    disposedAt?: string;
   };
   /**
    * 2026-11-19 — WHAT THE RECEIVER OWES US (step 3; D12, D18): our clearance fee and the last leg from the warehouse to their
    * shop, priced by the arrival country's company when customs decided, and paid at collection, at their shop.
    */
-  due?: { fee: number; lastLeg: number; total: number; tax: number; provision: number; currency: string; sellerEntityId: string; at: string };
+  due?: {
+    fee: number;
+    lastLeg: number;
+    /** 2026-11-19 — someone else took it (D20): the warehouse days, and the extra handling, on top. */
+    storage?: number;
+    handling?: number;
+    total: number;
+    tax: number;
+    provision: number;
+    currency: string;
+    sellerEntityId: string;
+    at: string;
+  };
 }
 
 /**
@@ -1085,7 +1102,7 @@ export class ParcelBorder {
  */
 export function inCustoms(p: Pick<Parcel, 'border'>): boolean {
   const b = p.border;
-  if (!b?.arrived) return false;
+  if (!b?.arrived || b.clearance?.disposedAt) return false;
   return !(b.clearance?.outcome === 'released' || (b.clearance?.outcome === 'held' && b.clearance.paidAt));
 }
 
@@ -1132,7 +1149,10 @@ export interface RunningLate {
 
 export interface AbroadParcelView {
   to: string;
-  stage: 'on_way' | 'customs' | 'held' | 'released';
+  stage: 'on_way' | 'customs' | 'held' | 'released' | 'given_up';
+  /** 2026-11-19 — not paid in time: what its sender may choose now (D19); and what they chose. */
+  choices?: Array<'someone_else' | 'give_up'>;
+  decision?: 'someone_else' | 'give_up';
   held?: { amount: number; currency: string; reference: string; payee?: string; payBy?: string; lapsed?: boolean };
   due?: { amount: number; currency: string; paid: boolean };
 }

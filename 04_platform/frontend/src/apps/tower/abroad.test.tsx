@@ -114,6 +114,7 @@ describe('where a route leaves, who carries it, its prices', () => {
     expect(renderToString(<RouteRow r={closed} nameOf={nameOf} writer busy={null} onAct={() => {}} />)).toContain(t('tower.abroad.arrival.closed', { airport: 'MBA' }));
     expect(renderToString(<RouteRow r={route({})} nameOf={nameOf} writer busy={null} onAct={() => {}} />)).toContain(t('tower.abroad.arrival.none'));
     expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'arrival', country: 'NL', to: 'KE', airport: 'NBO' }, nameOf, t)).toBe('Amina Staff named where Netherlands to Kenya arrives: NBO');
+    expect(abroadChangeLine({ at: 'x', by: 'Amina Staff', what: 'readdress', country: 'KE' }, nameOf, t)).toBe('Amina Staff set the warehouse and extra handling fees in Kenya');
   });
 
   it('says plainly what cannot be named yet: no hub, no carrier, no company to price for', () => {

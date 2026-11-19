@@ -113,6 +113,8 @@ export interface BusinessView {
   name: string;
   country: string;
   activities: BusinessActivity[];
+  /** 2026-11-19 — the arrival countries it is named to clear customs in for parcels abroad (step 4). */
+  clearsIn?: string[];
   registrationNo: string;
   taxNo?: string;
   /** The sender's address on its consignment notes. */

@@ -4,7 +4,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import type { Signer } from '../../foundation/entity/same-person';
 import { BorderRouteService } from './border-route.service';
-import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
+import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderReaddressDto, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
 import { staffOf } from './staff-of';
 
 /**
@@ -59,6 +59,13 @@ export class BorderRoutesController {
   @Post('border-routes/:from/:to/departure')
   departure(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderDepartureDto, @Actor() actor: IntrospectionResult): BorderRouteView {
     return this.borders.setDeparture(from, to, { airport: dto.airport, mdpId: dto.mdpId }, staffOf(actor, dto.by).name);
+  }
+
+  /** 2026-11-19 — what a new receiver pays on top when someone else takes a parcel not paid in time (D20). */
+  @Roles('operator')
+  @Post('border-arrivals/:country/readdress')
+  readdress(@Param('country') country: string, @Body() dto: BorderReaddressDto, @Actor() actor: IntrospectionResult): BorderArrivalView {
+    return this.borders.setReaddressFees(country, { storagePerDay: dto.storagePerDay, handlingFee: dto.handlingFee }, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

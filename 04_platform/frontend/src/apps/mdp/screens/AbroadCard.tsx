@@ -155,6 +155,25 @@ export function AbroadCard({ sbg, mdpId, onChanged }: { sbg: SbgClient | null; m
         </section>
       ) : null}
 
+      {g.givenUp.length ? (
+        <section style="margin-bottom:16px">
+          <p class="t-body">
+            <b>{t('mdp.abroad.givenUpTitle')}</b>
+          </p>
+          <p class="hint">{t('mdp.abroad.givenUpLede')}</p>
+          <ul class="relabel">
+            {g.givenUp.map((r) => (
+              <li key={r.parcelId}>
+                <span class="mono relabel__ids">{abroadLine(r, t)}</span>
+                <Button full={false} chevron={false} busy={busy === `dispose:${r.parcelId}`} onClick={() => void act(`dispose:${r.parcelId}`, () => api.disposeAbroad(mdpId, r.parcelId) as Promise<{ error?: SbgError | null }>)}>
+                  {t('mdp.abroad.dispose')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {g.held.length ? (
         <section>
           <p class="t-body">

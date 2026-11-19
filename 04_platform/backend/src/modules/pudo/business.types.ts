@@ -119,6 +119,8 @@ export class BusinessView {
   @ApiProperty() name: string;
   @ApiProperty() country: string;
   @ApiProperty({ enum: BUSINESS_ACTIVITIES, isArray: true }) activities: BusinessActivity[];
+  /** 2026-11-19 — the arrival countries it is named to clear customs in for parcels abroad, where any (step 4). */
+  @ApiPropertyOptional({ type: [String] }) clearsIn?: string[];
   @ApiProperty() registrationNo: string;
   @ApiPropertyOptional() taxNo?: string;
   /** The sender's address on its consignment notes. */

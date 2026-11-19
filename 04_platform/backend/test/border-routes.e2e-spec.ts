@@ -113,5 +113,9 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/business/me/clearing/KE/accept').expect(401);
     await http().post('/v1/sbg/business/me/clearing/parcels/PUD-1/customs').send({ outcome: 'released' }).expect(401);
     await http().post('/v1/sbg/business/me/clearing/parcels/PUD-1/paid').expect(401);
+    // D19 — the hand-over to customs, the sender's choice, the console's fees.
+    await http().post('/v1/sbg/mdps/any/abroad/PUD-1/dispose').expect(401);
+    await http().post('/v1/sbg/identity/parcels/PUD-1/abroad-choice').send({ choice: 'give_up' }).expect(401);
+    await http().post('/v1/sbg/border-arrivals/KE/readdress').send({ storagePerDay: 50, handlingFee: 200 }).expect(401);
   });
 });

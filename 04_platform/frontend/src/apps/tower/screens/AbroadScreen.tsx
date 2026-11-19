@@ -277,6 +277,8 @@ function ArrivalPanel({
   const [agent, setAgent] = useState(a.clearer?.kind === 'agent' ? a.clearer.entityId : '');
   const [registration, setRegistration] = useState('');
   const [fee, setFee] = useState(a.fee ? String(a.fee.amount) : '');
+  const [storage, setStorage] = useState(a.readdress ? String(a.readdress.storagePerDay) : '');
+  const [handling, setHandling] = useState(a.readdress ? String(a.readdress.handlingFee) : '');
   const api = client?.api;
   const c = a.country;
 
@@ -410,6 +412,34 @@ function ArrivalPanel({
         ) : (
           <p class="chint">{t('tower.abroad.fee.noCompany')}</p>
         )
+      ) : null}
+
+      {/* 2026-11-19 — D20: what a new receiver pays on top when someone else takes a parcel not paid in time. */}
+      <p class="chint" style="margin-top:12px">
+        <b>{t('tower.abroad.readdress')}</b> ·{' '}
+        {a.readdress ? t('tower.abroad.readdress.line', { storage: formatMoney(a.readdress.storagePerDay, a.readdress.currency), handling: formatMoney(a.readdress.handlingFee, a.readdress.currency) }) : t('tower.abroad.readdress.none')}
+      </p>
+      {writer && api && a.currency ? (
+        <div style="margin-top:6px">
+          <div class="cgrid2">
+            <label class="cfield">
+              <span class="cfield__label">{t('tower.abroad.readdress.storage', { currency: a.currency })}</span>
+              <input class="cinput" inputMode="decimal" value={storage} onInput={(e) => setStorage(e.currentTarget.value)} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('tower.abroad.readdress.handling', { currency: a.currency })}</span>
+              <input class="cinput" inputMode="decimal" value={handling} onInput={(e) => setHandling(e.currentTarget.value)} />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="cbtn cbtn--ghost"
+            disabled={busy !== null || !(Number(storage) >= 0 && storage !== '') || !(Number(handling) >= 0 && handling !== '')}
+            onClick={() => void change(`${c}:readdress`, () => api.setBorderReaddress(c, { storagePerDay: Number(storage), handlingFee: Number(handling), ...by }) as Promise<Answer>)}
+          >
+            {t('tower.abroad.readdress.save')}
+          </button>
+        </div>
       ) : null}
     </div>
   );

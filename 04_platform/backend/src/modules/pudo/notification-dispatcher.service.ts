@@ -396,7 +396,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // 2026-11-15 — on the road to its shop: its receiver is told once (plan R1: the bell only at the moments that matter).
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.onParcelOnItsWay(e.payload.parcelId));
     // 2026-11-19 — a parcel abroad at customs: its receiver and its sender told what was decided and what they pay (step 3).
-    this.events.subscribe<{ parcelId: string; step: 'released' | 'held' | 'paid' | 'lapsed' }>(GlosEvent.Pudo.ParcelCustomsDecided, (e) => this.onCustomsDecided(e.payload.parcelId, e.payload.step));
+    this.events.subscribe<{ parcelId: string; step: 'released' | 'held' | 'paid' | 'lapsed' | 'someone_else' | 'given_up' }>(GlosEvent.Pudo.ParcelCustomsDecided, (e) => this.onCustomsDecided(e.payload.parcelId, e.payload.step));
     // 2026-11-15 — a load's delivery code made: its named receiver is given it, in the Send app or by email (plan R2).
     this.events.subscribe<{ freightId: string }>(GlosEvent.Pudo.DeliveryCodeIssued, (e) => this.onDeliveryCodeIssued(e.payload.freightId));
     // 2026-11-15 — a load naming its receiver is on a vehicle: a code, where the receiver can be given it (the owner: "yes").
@@ -1927,7 +1927,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * paid — our clearance fee and the last leg, paid when they collect it (D12, D18). The sender is told of a hold, and asked what
    * is done with it when it was not paid in time (D5: back to them at their cost). In the bell; never a text.
    */
-  private async onCustomsDecided(parcelId: string, step: 'released' | 'held' | 'paid' | 'lapsed'): Promise<void> {
+  private async onCustomsDecided(parcelId: string, step: 'released' | 'held' | 'paid' | 'lapsed' | 'someone_else' | 'given_up'): Promise<void> {
     try {
       const p = this.parcels.get(parcelId);
       const b = p.border;
@@ -1953,8 +1953,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       } else if (step === 'released' || step === 'paid') {
         await tell(receiver, step === 'paid' ? 'Customs released your parcel' : 'Your parcel from abroad passed customs', `It comes to ${shop}.${ours ? ` You pay ${ours} when you collect it: our clearance fee and the last leg.` : ''}`);
       } else if (step === 'lapsed') {
-        await tell(sender, 'Your parcel abroad was not paid for in time', `The receiver did not pay customs by ${payBy}. Tell us what is done with it: coming back to you is at your cost.`);
-        await tell(receiver, 'The parcel held by customs was not paid in time', `It was not paid by ${payBy}, so it goes back to the sender.`);
+        // 2026-11-19 — D19: the sender chooses, in the Send app — someone else there takes it, or it is given up.
+        await tell(sender, 'Your parcel abroad was not paid for in time', `The receiver did not pay customs by ${payBy}. Open it to choose: someone else in that country takes it, or you give it up.`);
+        await tell(receiver, 'The parcel held by customs was not paid in time', `It was not paid by ${payBy}. Its sender now decides what happens to it.`);
+      } else if (step === 'someone_else') {
+        // The new receiver: what customs asks, by when, and what they then pay at the shop (D20). The new code is in the app.
+        await tell(receiver, 'A parcel from abroad is held by customs for you', `Customs at ${b.arrival.name} asks ${owe} for it (reference ${c.reference}). Pay it ${c.payee ? `to ${c.payee}` : 'to the clearing agent'} by ${payBy}.${ours ? ` Then it comes to ${shop}, where you pay ${ours}: our clearance fee, the warehouse days, the extra handling and the last leg.` : ''}`);
+        await tell(sender, 'Someone else will take your parcel', `They have until ${payBy} to pay customs. Give them the new release code from your Send app: the old one no longer opens it.`);
+      } else if (step === 'given_up') {
+        await tell(sender, 'You gave up your parcel abroad', 'The warehouse hands it to customs to dispose of.');
       }
     } catch (err) {
       this.logger.warn(`customs notify failed for ${parcelId}: ${(err as Error).message}`);

@@ -74,6 +74,9 @@ export function createConsumerApi(sbg: SbgClient) {
      */
     /** 2026-11-06 — its pickup shop closed: the receiver chooses one of the shops the driver with it picked. */
     /** 2026-11-13 — the sender's side, beside a weight a hub found (site tools, T2). */
+    /** 2026-11-19 — a held parcel not paid in time: its sender names someone else there, or gives it up (D19). */
+    abroadChoice: (id: string, body: { choice: 'someone_else'; receiverMobile: string } | { choice: 'give_up' }) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/abroad-choice', { params: { path: { id } }, body })),
     weightAnswer: (id: string, text: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/weight-answer', { params: { path: { id } }, body: { text } })),
     choosePickupShop: (id: string, shopDid: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/pickup-shop', { params: { path: { id } }, body: { shopDid } })),
 

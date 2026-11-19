@@ -8,7 +8,10 @@ import type { IconName } from '../../shared/ui';
  */
 export interface AbroadView {
   to: string;
-  stage: 'on_way' | 'customs' | 'held' | 'released';
+  stage: 'on_way' | 'customs' | 'held' | 'released' | 'given_up';
+  /** 2026-11-19 — not paid in time: what its sender may choose (D19); and what was chosen. */
+  choices?: Array<'someone_else' | 'give_up'>;
+  decision?: 'someone_else' | 'give_up';
   held?: { amount: number; currency: string; reference: string; payee?: string; payBy?: string; lapsed?: boolean };
   due?: { amount: number; currency: string; paid: boolean };
 }
@@ -19,6 +22,7 @@ export function abroadNote(a: AbroadView | undefined, relation: 'sent' | 'receiv
   const country = countryNameIn(a.to, getLocale());
   const ours = a.due && !a.due.paid ? formatMoney(a.due.amount, a.due.currency) : '';
   const w = (key: string, params: Record<string, string | number> = {}) => t(key as MessageKey, params);
+  if (a.stage === 'given_up') return { tone: 'info', icon: 'info', title: w('send.parcels.abroad.givenUp'), detail: w(relation === 'sent' ? 'send.parcels.abroad.givenUpSender' : 'send.parcels.abroad.givenUpReceiver') };
   if (a.stage === 'customs') return { tone: 'info', icon: 'info', title: w('send.parcels.abroad.customs', { country }), detail: w('send.parcels.abroad.customsDetail') };
   if (a.stage === 'held' && a.held) {
     const h = a.held;
@@ -26,6 +30,11 @@ export function abroadNote(a: AbroadView | undefined, relation: 'sent' | 'receiv
     const date = h.payBy ? formatDate(h.payBy) : '';
     const payee = h.payee ?? w('send.parcels.abroad.theAgent');
     if (h.lapsed) return { tone: 'warn', icon: 'warning', title: w('send.parcels.abroad.lapsed'), detail: w(relation === 'sent' ? 'send.parcels.abroad.lapsedSender' : 'send.parcels.abroad.lapsedReceiver') };
+    // 2026-11-19 — named by its sender to take it (D20): what customs asks, and then everything at the shop.
+    if (relation === 'received' && a.decision === 'someone_else') {
+      return { tone: 'warn', icon: 'wallet', title: w('send.parcels.abroad.held', { amount }), detail: `${w('send.parcels.abroad.heldReceiver', { payee, date, reference: h.reference })}${ours ? ` ${w('send.parcels.abroad.thenOursMore', { amount: ours })}` : ''}` };
+    }
+    if (relation === 'sent' && a.decision === 'someone_else') return { tone: 'info', icon: 'info', title: w('send.parcels.abroad.held', { amount }), detail: w('send.parcels.abroad.someoneElseSender', { date }) };
     if (relation === 'sent') return { tone: 'warn', icon: 'warning', title: w('send.parcels.abroad.held', { amount }), detail: w('send.parcels.abroad.heldSender', { amount, date }) };
     return {
       tone: 'warn',

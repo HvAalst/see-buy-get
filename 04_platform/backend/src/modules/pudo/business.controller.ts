@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { BusinessHookService } from './business-hooks.service';
+import { BorderRouteService } from './border-route.service';
 import { BusinessClientService } from './business-client.service';
 import { BusinessClient } from './business-client.types';
 import { ShipperCodesService, clientCoder } from './shipper-codes.service';
@@ -35,7 +36,16 @@ export class BusinessController {
     @Optional() private readonly codes?: ShipperCodesService,
     // 2026-10-25 — the person setting a business up has agreed to what counts now, or agrees with this.
     @Optional() private readonly agreements?: AgreementService,
+    // 2026-11-19 — where it is named to clear customs for parcels abroad: its app shows it Customs clearing (step 4).
+    @Optional() private readonly borders?: BorderRouteService,
   ) {}
+
+  /** The business as its app reads it — and the arrival countries it is named to clear in, where it is, whatever it said it does. */
+  private viewOf(acting: { entity: { entityId: string }; member: { personDid?: string } }): BusinessView {
+    const view = this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    const clears = this.borders?.clearsFor(acting.entity.entityId).map((c) => c.country) ?? [];
+    return clears.length ? { ...view, clearsIn: clears } : view;
+  }
 
   /** Round 20 — a client as the forwarder reads it: with the GS1 prefix entered for it, and how many codes are left. */
   private withGs1(c: BusinessClient): BusinessClient {
@@ -87,7 +97,7 @@ export class BusinessController {
   @Get('business/me')
   me(@Actor() actor: IntrospectionResult): BusinessView {
     const acting = this.businesses.requireMember(actor);
-    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    return this.viewOf(acting);
   }
 
   @Roles('business')
@@ -95,7 +105,7 @@ export class BusinessController {
   update(@Body() dto: UpdateBusinessDto, @Actor() actor: IntrospectionResult): BusinessView {
     const acting = this.businesses.requireMember(actor);
     this.businesses.update(acting, dto);
-    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    return this.viewOf(acting);
   }
 
   @Roles('business')
@@ -133,7 +143,7 @@ export class BusinessController {
   setGs1(@Body() dto: BusinessGs1Dto, @Actor() actor: IntrospectionResult): BusinessView {
     const acting = this.businesses.requireMember(actor);
     this.businesses.setGs1(acting, { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit });
-    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    return this.viewOf(acting);
   }
 
   /** Stop giving packages GS1 codes. The codes loads already have stay with them. */
@@ -142,7 +152,7 @@ export class BusinessController {
   clearGs1(@Actor() actor: IntrospectionResult): BusinessView {
     const acting = this.businesses.requireMember(actor);
     this.businesses.setGs1(acting, null);
-    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    return this.viewOf(acting);
   }
 
   /** Ask SeeBuyGet to check the business, once its papers are on record. */
@@ -151,7 +161,7 @@ export class BusinessController {
   askForCheck(@Actor() actor: IntrospectionResult): BusinessView {
     const acting = this.businesses.requireMember(actor);
     this.businesses.askForCheck(acting);
-    return this.businesses.view(acting.entity.entityId, acting.member.personDid!);
+    return this.viewOf(acting);
   }
 
   /* ------------------------------------------------- B4: an expeditor's clients -- */

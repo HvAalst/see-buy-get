@@ -29,6 +29,6 @@ export function clearingApi(sbg: SbgClient): ClearingApi {
 }
 
 /** The rows by what is to be done with them. */
-export function clearingGroups(rows: ClearingRow[]): { coming: ClearingRow[]; customs: ClearingRow[]; held: ClearingRow[] } {
-  return { coming: rows.filter((r) => r.step === 'coming'), customs: rows.filter((r) => r.step === 'customs'), held: rows.filter((r) => r.step === 'held') };
+export function clearingGroups(rows: ClearingRow[]): { coming: ClearingRow[]; customs: ClearingRow[]; held: ClearingRow[]; givenUp: ClearingRow[] } {
+  return { coming: rows.filter((r) => r.step === 'coming'), customs: rows.filter((r) => r.step === 'customs'), held: rows.filter((r) => r.step === 'held'), givenUp: rows.filter((r) => r.step === 'given_up') };
 }

@@ -214,6 +214,15 @@ describe('a route across a border', () => {
     expect(svc.onFrom('NL', later)).toEqual([]);
   });
 
+  it('D20 — what a new receiver pays on top is set by the arrival company, in its money', () => {
+    const svc = setup();
+    expect(svc.readdressIn('KE')).toBeUndefined();
+    expect(svc.setReaddressFees('KE', { storagePerDay: 49.999, handlingFee: 300 }, 'Amina Staff', NOW).readdress).toMatchObject({ storagePerDay: 50, handlingFee: 300, currency: 'KES' });
+    expect(svc.readdressIn('ke')).toEqual({ storagePerDay: 50, handlingFee: 300, currency: 'KES' });
+    expect(() => svc.setReaddressFees('KE', { storagePerDay: -1, handlingFee: 0 }, 'Amina Staff', NOW)).toThrow(/nothing or more/);
+    expect(() => setup({ companies: ['NL'] }).setReaddressFees('KE', { storagePerDay: 1, handlingFee: 1 }, 'Amina Staff', NOW)).toThrow(/No company of ours stands in KE/);
+  });
+
   it('4 — the countries a clearing agent is named for, and whether it has accepted there', () => {
     const svc = setup();
     expect(svc.clearsFor('agent-1')).toEqual([]);

@@ -1108,6 +1108,9 @@ export function createOperatorApi(sbg: SbgClient) {
     prepareBorderRoute: (from: string, to: string) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}', { params: { path: { from, to } } })),
     setBorderDeparture: (from: string, to: string, body: { airport: string; mdpId: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/departure', { params: { path: { from, to } }, body })),
+    /** 2026-11-19 — D20: what a new receiver pays on top in an arrival country. */
+    setBorderReaddress: (country: string, body: { storagePerDay: number; handlingFee: number; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/readdress', { params: { path: { country } }, body })),
     setBorderArrival: (from: string, to: string, body: { airport: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/arrival', { params: { path: { from, to } }, body })),
     setBorderCarrier: (from: string, to: string, body: { entityId: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/carrier', { params: { path: { from, to } }, body })),
     setBorderPrices: (from: string, to: string, body: { S: number; M: number; L: number; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/prices', { params: { path: { from, to } }, body })),

@@ -206,10 +206,14 @@ function clearsHere(b: NonNullable<Parcel['border']>, where: { mdpId: string; na
 function abroadViewOf(p: Parcel): NonNullable<ConsumerParcelView['abroad']> {
   const b = p.border!;
   const c = b.clearance;
-  const stage = !b.arrived ? 'on_way' : !c ? 'customs' : inCustoms(p) ? 'held' : 'released';
+  const stage = c?.decision?.choice === 'give_up' ? 'given_up' : !b.arrived ? 'on_way' : !c ? 'customs' : inCustoms(p) ? 'held' : 'released';
+  // Not paid in time, and not given up: its sender may name someone else there (once), or give it up (D19).
+  const choices: Array<'someone_else' | 'give_up'> | undefined = c?.lapsedAt && stage === 'held' ? (c.decision ? ['give_up'] : ['someone_else', 'give_up']) : undefined;
   return {
     to: b.to,
     stage,
+    ...(choices ? { choices } : {}),
+    ...(c?.decision ? { decision: c.decision.choice } : {}),
     ...(stage === 'held' && c ? { held: { amount: c.amount ?? 0, currency: c.currency ?? '', reference: c.reference ?? '', ...(c.payee ? { payee: c.payee } : {}), ...(c.payBy ? { payBy: c.payBy } : {}), ...(c.lapsedAt ? { lapsed: true } : {}) } } : {}),
     ...(b.due ? { due: { amount: b.due.total, currency: b.due.currency, paid: Boolean(p.payAtCollection?.paidAt) } } : {}),
   };
@@ -3088,6 +3092,83 @@ export class ParcelService implements OnApplicationBootstrap {
     this.scan(p, p.status, hub.name, `duty paid · released by customs${b.clearance.reference ? ` · ${b.clearance.reference}` : ''}`, { at });
     this.parcels.set(p.parcelId, p);
     void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: 'paid' }, { source: 'pudo' }).catch(() => undefined);
+    return p;
+  }
+
+  /**
+   * 2026-11-19 — WHAT ITS SENDER CHOOSES FOR A HELD PARCEL NOT PAID IN TIME (D19, D20). Someone else in the destination country
+   * takes it — once: the receiver is now them, the release code is made again (the old one opens nothing), they have the days to
+   * pay customs again, and at their shop they pay, besides our clearance fee and the last leg, the warehouse days and the extra
+   * handling (`extra`, worked out by the controller). Or it is given up: the warehouse hands it to customs to dispose of. Only its
+   * sender, only after the day has passed, and once each. Asked before anything is written.
+   */
+  decideLapsed(parcelId: string, reader: Reader | string, input: { choice: 'someone_else'; receiverMobile: string } | { choice: 'give_up' }, extra?: { storage: number; handling: number }, now: number = Date.now()): Parcel {
+    const p = this.require(String(parcelId).trim().toUpperCase());
+    if (!isFor(this.senderOf(p), readerOf(reader))) throw new GlosError('NOT_FOUND', 'No such parcel');
+    const c = p.border?.clearance;
+    if (!c || c.outcome !== 'held' || c.paidAt || c.disposedAt || !c.lapsedAt) throw new GlosError('INVALID_STATE', `${p.parcelId} is not a held parcel whose day to pay has passed`);
+    if (c.decision?.choice === 'give_up') throw new GlosError('INVALID_STATE', `${p.parcelId} was given up already`);
+    const at = new Date(now).toISOString();
+    if (input.choice === 'give_up') {
+      c.decision = { choice: 'give_up', at };
+      this.scan(p, p.status, 'sender', 'given up by the sender · the warehouse hands it to customs to dispose of', { at });
+    } else {
+      if (c.decision?.choice === 'someone_else') throw new GlosError('INVALID_STATE', `Someone else was named for ${p.parcelId} once already: it can only be given up now`);
+      const hash = hashPhone(input.receiverMobile);
+      if (!hash) throw new GlosError('INVALID_INPUT', 'The new receiver’s phone number, with its country code', { field: 'receiverMobile' });
+      if (hash === p.receiverPhoneHash || hash === p.senderPhoneHash) throw new GlosError('INVALID_INPUT', 'Someone else: not the receiver it was sent to, nor you', { field: 'receiverMobile' });
+      c.decision = { choice: 'someone_else', at };
+      delete c.lapsedAt;
+      c.payBy = new Date(now + BORDER_HOLD_DAYS * 86_400_000).toISOString();
+      p.receiverMobile = input.receiverMobile.trim();
+      p.receiverPhoneHash = hash;
+      // The account of the new number, where there is one — the side is the new receiver's from now (it only ever adds).
+      const kept = this.keptBy.get(p.parcelId) ?? {};
+      const account = this.accountAt(hash);
+      this.keptBy.set(p.parcelId, { ...(kept.sender ? { sender: kept.sender } : {}), ...(account ? { receiver: account } : {}) });
+      // A new code: the one the first receiver was given opens nothing.
+      let otp = releaseOtp();
+      while (otp === p.otp) otp = releaseOtp();
+      p.otp = otp;
+      p.otpAttempts = 0;
+      delete p.otpLockedAt;
+      if (p.border!.due) {
+        const d = p.border!.due;
+        const storage = Math.round((extra?.storage ?? 0) * 100) / 100;
+        const handling = Math.round((extra?.handling ?? 0) * 100) / 100;
+        d.storage = storage;
+        d.handling = handling;
+        d.total = Math.round((d.fee + d.lastLeg + storage + handling) * 100) / 100;
+        p.payAtCollection = { amount: d.total, currency: d.currency, tax: d.tax, provision: d.provision };
+      }
+      this.scan(p, p.status, 'sender', `someone else named to take it · ${BORDER_HOLD_DAYS} days to pay customs · a new release code`, { at });
+    }
+    this.parcels.set(p.parcelId, p);
+    void this.events.publish(GlosEvent.Pudo.ParcelCustomsDecided, { parcelId: p.parcelId, step: input.choice === 'give_up' ? 'given_up' : 'someone_else' }, { source: 'pudo' }).catch(() => undefined);
+    return p;
+  }
+
+  /**
+   * 2026-11-19 — GIVEN UP, HANDED TO CUSTOMS (D19): the warehouse hands a parcel its sender gave up to customs to dispose of. It is
+   * no longer ours: the chain ends with customs, and the parcel with it.
+   */
+  handToCustomsForDisposal(parcelId: string, hub: { mdpId: string; name: string }, now: number = Date.now()): Parcel {
+    const p = this.require(String(parcelId).trim().toUpperCase());
+    const b = p.border;
+    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
+    if (b.clearance?.decision?.choice !== 'give_up') throw new GlosError('INVALID_STATE', `${p.parcelId} was not given up by its sender`);
+    if (b.clearance.disposedAt) throw new GlosError('INVALID_STATE', `${p.parcelId} was handed to customs already`);
+    if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${p.parcelId} is not on ${hub.name}’s floor`);
+    const step: Step = { at: new Date(now).toISOString() };
+    const note = `given up by the sender · handed to customs at ${b.arrival.airport} to dispose of`;
+    b.clearance.disposedAt = step.at;
+    this.handTo(p, 'customs', `customs at ${b.arrival.airport}`, note, step);
+    this.endCustody(p);
+    p.status = 'Voided';
+    delete p.payAtCollection;
+    this.scan(p, 'Voided', hub.name, note, step);
+    this.media.anchorParcelTerminal(p.parcelId);
+    this.parcels.set(p.parcelId, p);
     return p;
   }
 

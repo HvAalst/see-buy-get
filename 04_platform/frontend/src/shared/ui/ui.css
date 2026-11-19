@@ -459,6 +459,9 @@
   box-shadow: var(--sh-lg);
   padding: 10px calc(20px + var(--sa-l)) calc(20px + var(--sa-b)) calc(20px + var(--sa-r));
   max-height: 88dvh;
+  /* 2026-11-19 — standing on the keyboard, no taller than what is still seen (sheetKeyboard.ts sets these while open). */
+  bottom: var(--kb, 0px);
+  max-height: calc(var(--vvh, 100dvh) * 0.88);
   overflow-y: auto;
   animation: sbg-sheet-up 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -530,9 +533,9 @@
 /* 2026-11-12 — THE WHOLE SCREEN, FOR A MAP (the owner: "a full screen slide up sheet"): it still slides up and is pulled
    down to close; the map takes what the title and the buttons leave. */
 .sheet--full {
-  top: 0;
+  top: var(--vvt, 0px);
   max-height: none;
-  height: 100dvh;
+  height: var(--vvh, 100dvh);
   border-radius: 0;
   padding-top: calc(10px + var(--sa-t, 0px));
 }

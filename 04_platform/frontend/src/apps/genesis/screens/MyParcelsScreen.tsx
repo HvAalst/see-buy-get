@@ -16,6 +16,7 @@ import { DoorBlock, doorUnderWay } from './DoorDelivery';
 import { PersonLoadsGroup } from './PersonLoad';
 import { HoldBlock } from './HoldBlock';
 import { abroadNote } from '../abroad';
+import { LapsedChoice } from './LapsedChoice';
 import { nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { disputeOutcomeWords, isOffLadder, ladderFor, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
@@ -425,6 +426,8 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
 
       {/* 2026-11-19 — a parcel abroad at customs: held, with what to pay, to whom and by when; or released, with our part at the shop. */}
       <AbroadNoteOf parcel={parcel} />
+      {/* 2026-11-19 — not paid in time: its sender chooses (D19). */}
+      {parcel.relation === 'sent' && parcel.abroad?.choices?.length ? <LapsedChoice parcelId={parcel.parcelId} choices={parcel.abroad.choices} client={client} onDone={() => void actions.openParcel(parcel.parcelId)} /> : null}
 
       {/* …or to their own door, paid first by mobile money (2026-10-27: "Mobile money first"). */}
       {parcel.returnOf ? <DoorBlock parcel={parcel} state={state} actions={actions} /> : null}

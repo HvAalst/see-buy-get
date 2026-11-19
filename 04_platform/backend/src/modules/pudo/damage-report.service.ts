@@ -715,7 +715,7 @@ export function sourceWords(p: Pick<DamageReportPhoto, 'source' | 'phoneDate' | 
   const proof = p.proofOf ? ` ${PROOF_WORDS[p.proofOf] ?? ''}` : '';
   return `${proof ? `Proof${proof} · ` : ''}${where}${p.by ? ` · filed by ${FILED_BY_WORDS[p.by] ?? p.by}` : ''}${p.filedAt ? `, ${when(p.filedAt)}` : ''}`;
 }
-const HANDS_WORDS: Record<CustodyKind, string> = { sender: 'Sender', shop: 'Shop', driver: 'Carrier', hub: 'Sorting hub', receiver: 'Receiver', carrier: 'Carrier across the border' };
+const HANDS_WORDS: Record<CustodyKind, string> = { sender: 'Sender', shop: 'Shop', driver: 'Carrier', hub: 'Sorting hub', receiver: 'Receiver', carrier: 'Carrier across the border', customs: 'Customs' };
 const THROUGH_WORDS: Record<string, string> = { store: 'A store’s order', counter: 'Handed in at a shop’s counter', app: 'Sent from the sender’s own phone' };
 
 function esc(s: unknown): string {

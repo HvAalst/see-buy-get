@@ -1088,6 +1088,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/mdps/:id/abroad/:parcelId/receive': 'none',
   'POST sbg/mdps/:id/abroad/:parcelId/customs': 'none',
   'POST sbg/mdps/:id/abroad/:parcelId/paid': 'none',
+  // 2026-11-19 — D19: a parcel given up, handed to customs (the hub's floor); the sender's choice (the Send app); the console's fees
+  'POST sbg/mdps/:id/abroad/:parcelId/dispose': 'none',
+  'POST sbg/identity/parcels/:id/abroad-choice': 'none',
+  'POST sbg/border-arrivals/:country/readdress': 'admin',
   // 2026-11-19 — a clearing agent's own side (parcels across a border, step 4): its business's own sign-in, not staff
   'GET sbg/business/me/clearing': 'none',
   'POST sbg/business/me/clearing/:country/accept': 'none',

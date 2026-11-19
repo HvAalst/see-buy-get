@@ -14,7 +14,7 @@ export type Section = 'home' | 'loads' | 'runs' | 'parcels' | 'contracts' | 'cli
  * teaches somebody that the app is empty. Imports for anybody whose goods or clients come through a border: the
  * importer, the clearing agent, and the expeditor who handles both for clients.
  */
-export function sectionsFor(activities: BusinessActivity[]): Section[] {
+export function sectionsFor(activities: BusinessActivity[], clears = false): Section[] {
   const has = (a: BusinessActivity) => activities.includes(a);
   return [
     'home',
@@ -31,7 +31,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     ...(has('shipper') || has('expeditor') || has('clearing_agent') ? (['exports'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
     // 2026-11-19 — a clearing agent: the parcels abroad it clears at the arrival end (parcels across a border, step 4).
-    ...(has('clearing_agent') ? (['clearing'] as Section[]) : []),
+    // …and any business staff named to clear in a country, whatever it said it does: it must be able to accept and to act.
+    ...(has('clearing_agent') || clears ? (['clearing'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
     // Inbound, reading A — a business receiving goods at its own places: what is coming in, and the codes its suppliers write.
     ...(has('receiver') ? (['inbound'] as Section[]) : []),
@@ -61,8 +62,8 @@ const NAV_GROUPS: NavGroup[] = [
   { key: 'company', label: 'business.group.company', sections: ['people', 'details'] },
 ];
 
-export function navGroupsFor(activities: BusinessActivity[]): NavGroup[] {
-  const shown = sectionsFor(activities);
+export function navGroupsFor(activities: BusinessActivity[], clears = false): NavGroup[] {
+  const shown = sectionsFor(activities, clears);
   return NAV_GROUPS.map((g) => ({ ...g, sections: g.sections.filter((s) => shown.includes(s)) })).filter((g) => g.sections.length > 0);
 }
 

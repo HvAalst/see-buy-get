@@ -51,6 +51,8 @@ interface Arrival {
   warehouses: Record<string, BorderWarehouse>;
   clearer?: BorderClearer;
   fee?: BorderFee;
+  /** 2026-11-19 — D20: the warehouse days and the extra handling a new receiver pays on top. */
+  readdress?: { storagePerDay: number; handlingFee: number; currency: string; by: string; at: string };
 }
 
 /** What the console says when a condition is missing — the refusal names each one. */
@@ -394,6 +396,28 @@ export class BorderRouteService {
     return this.arrivalView(country, now);
   }
 
+  /**
+   * 2026-11-19 — WHAT A NEW RECEIVER PAYS ON TOP (D20): when a held parcel's sender names someone else to take it, the warehouse
+   * days and the extra handling, set by the arrival country's company in its money. Nothing set, nothing charged for them.
+   */
+  setReaddressFees(countryCode: string, input: { storagePerDay: number; handlingFee: number }, by: string, now: number = Date.now()): BorderArrivalView {
+    const country = this.country(countryCode);
+    const ours = this.entities.forJurisdiction(country);
+    if (!ours?.currency) throw new GlosError('INVALID_STATE', `No company of ours stands in ${country} to set fees in its money`, { field: 'storagePerDay' });
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    if (!Number.isFinite(input.storagePerDay) || input.storagePerDay < 0 || !Number.isFinite(input.handlingFee) || input.handlingFee < 0) throw new GlosError('INVALID_INPUT', 'Fees of nothing or more', { field: 'storagePerDay' });
+    const a = this.arrival(country);
+    this.arrivals.set(country, { ...a, readdress: { storagePerDay: r2(input.storagePerDay), handlingFee: r2(input.handlingFee), currency: ours.currency, by, at: new Date(now).toISOString() } });
+    this.log({ what: 'readdress', by, country }, now);
+    return this.arrivalView(country, now);
+  }
+
+  /** 2026-11-19 — those fees in a country, where set. */
+  readdressIn(countryCode: string): { storagePerDay: number; handlingFee: number; currency: string } | undefined {
+    const r = this.arrivals.get(this.country(countryCode))?.readdress;
+    return r ? { storagePerDay: r.storagePerDay, handlingFee: r.handlingFee, currency: r.currency } : undefined;
+  }
+
   /** 2026-11-19 — the arrival countries a company is named to clear in (step 4), accepted or not yet. */
   clearsFor(entityId: string): Array<{ country: string; name: string; acceptedAt?: string }> {
     return [...this.arrivals.values()]
@@ -495,6 +519,7 @@ export class BorderRouteService {
       airports,
       ...(a.clearer ? { clearer: a.clearer } : {}),
       ...(a.fee ? { fee: a.fee } : {}),
+      ...(a.readdress ? { readdress: a.readdress } : {}),
       ...(ours?.currency ? { currency: ours.currency } : {}),
       hubs: this.mdps
         .list()

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { PersonService } from './person.service';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -22,7 +23,7 @@ import { inCustoms, type Parcel, type ParcelBorder } from './pudo.types';
  * sign-in, its floor's people under their own name, as for a parcel weighed there.
  */
 
-export const ABROAD_STEPS = ['to_hand', 'coming', 'customs', 'held'] as const;
+export const ABROAD_STEPS = ['to_hand', 'coming', 'customs', 'held', 'given_up'] as const;
 export type AbroadStep = (typeof ABROAD_STEPS)[number];
 
 export class AbroadClearanceView {
@@ -55,6 +56,8 @@ export class AbroadParcelRow {
   @ApiPropertyOptional() reference?: string;
   /** Held: what customs asks, and its reference. */
   @ApiPropertyOptional({ type: AbroadClearanceView }) held?: AbroadClearanceView;
+  /** 2026-11-19 — not paid in time, its sender named someone else there to take it (D19). */
+  @ApiPropertyOptional() someoneElse?: boolean;
 }
 
 export class AbroadAtHubView {
@@ -65,6 +68,13 @@ export class HandToCarrierDto {
   @ApiProperty({ type: [String] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsString({ each: true }) parcelIds!: string[];
   /** The carrier's reference for them: the number on its air waybill or consignment note. */
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(60) reference!: string;
+}
+
+/** 2026-11-19 — what a held parcel's sender chooses once its day to pay has passed (D19). */
+export class AbroadChoiceDto {
+  @ApiProperty({ enum: ['someone_else', 'give_up'] }) @IsIn(['someone_else', 'give_up']) choice!: 'someone_else' | 'give_up';
+  /** Someone else: the new receiver's phone number, in the destination country. */
+  @ApiPropertyOptional() @ValidateIf((o: AbroadChoiceDto) => o.choice === 'someone_else') @IsString() @MinLength(6) @MaxLength(20) receiverMobile?: string;
 }
 
 export class CustomsOutcomeDto {
@@ -95,7 +105,7 @@ export function dueOf(p: Parcel, deps: { routing: RoutingService; borders: Borde
 export function abroadRow(p: Parcel): AbroadParcelRow {
   const b = p.border!;
   const c = b.clearance;
-  const step: AbroadStep = !b.handed ? 'to_hand' : !b.arrived ? 'coming' : c?.outcome === 'held' ? 'held' : 'customs';
+  const step: AbroadStep = c?.decision?.choice === 'give_up' ? 'given_up' : !b.handed ? 'to_hand' : !b.arrived ? 'coming' : c?.outcome === 'held' ? 'held' : 'customs';
   return {
     parcelId: p.parcelId,
     step,
@@ -111,6 +121,7 @@ export function abroadRow(p: Parcel): AbroadParcelRow {
     value: p.customs?.declaredValue ?? 0,
     valueCurrency: p.customs?.currency ?? '',
     ...(b.handed ? { reference: b.handed.reference } : {}),
+    ...(c?.decision?.choice === 'someone_else' ? { someoneElse: true } : {}),
     ...(c?.outcome === 'held' && inCustoms(p) ? { held: { amount: c.amount ?? 0, currency: c.currency ?? '', reference: c.reference ?? '', ...(c.payee ? { payee: c.payee } : {}), ...(c.payBy ? { payBy: c.payBy } : {}), ...(c.lapsedAt ? { lapsed: true } : {}) } } : {}),
   };
 }
@@ -124,6 +135,8 @@ export class BorderParcelsController {
     readonly routing: RoutingService,
     readonly borders: BorderRouteService,
     readonly entities: EntityService,
+    // 2026-11-19 — the sender of a held parcel not paid in time chooses from the Send app (D19).
+    private readonly persons: PersonService,
   ) {}
 
   /** The parcels abroad this hub has to act on. */
@@ -162,6 +175,37 @@ export class BorderParcelsController {
     const p = this.parcels.get(String(parcelId).trim().toUpperCase());
     const payee = dto.outcome === 'held' && p.border ? this.borders.payeeIn(p.border.to) : undefined;
     return abroadRow(this.parcels.recordClearance(parcelId, hub, dto, Date.now(), { ...(p.border ? { due: this.dueFor(p) } : {}), ...(payee ? { payee } : {}) }));
+  }
+
+  /** 2026-11-19 — a parcel its sender gave up, handed to customs to dispose of (D19): no longer ours. */
+  @Roles('mdp')
+  @Post('mdps/:id/abroad/:parcelId/dispose')
+  @AtTheCounter()
+  dispose(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): AbroadParcelRow {
+    const hub = this.hubOf(id, actor);
+    return abroadRow(this.parcels.handToCustomsForDisposal(parcelId, hub));
+  }
+
+  /**
+   * 2026-11-19 — THE SENDER'S CHOICE FOR A HELD PARCEL NOT PAID IN TIME (D19, D20): someone else in the destination country takes
+   * it — who pays, besides our fee and the last leg, the warehouse days and the extra handling as the arrival company set them —
+   * or it is given up. From the Send app, its sender only.
+   */
+  @Roles('consumer')
+  @Post('identity/parcels/:id/abroad-choice')
+  choose(@Param('id') id: string, @Body() dto: AbroadChoiceDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    const p = this.parcels.get(String(id).trim().toUpperCase());
+    if (dto.choice === 'give_up') {
+      this.parcels.decideLapsed(p.parcelId, person, { choice: 'give_up' });
+    } else {
+      const b = p.border;
+      const fees = b ? this.borders.readdressIn(b.to) : undefined;
+      if (fees && b?.due && fees.currency !== b.due.currency) throw new GlosError('INVALID_STATE', `The warehouse fees are in ${fees.currency} and what is owed in ${b.due.currency}`);
+      const days = b?.arrived ? Math.max(1, Math.ceil((Date.now() - Date.parse(b.arrived.at)) / 86_400_000)) : 0;
+      this.parcels.decideLapsed(p.parcelId, person, { choice: 'someone_else', receiverMobile: dto.receiverMobile ?? '' }, { storage: days * (fees?.storagePerDay ?? 0), handling: fees?.handlingFee ?? 0 });
+    }
+    return this.parcels.consumerParcel(p.parcelId, person);
   }
 
   /** 2026-11-19 — a held parcel's duty paid to the clearing agent, and customs released it (D17): it goes on. */

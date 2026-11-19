@@ -188,6 +188,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'POST sbg/border-arrivals/:country/airports/:airport/warehouse': { country: 'param', name: 'country' },
   'POST sbg/border-arrivals/:country/clearer': { country: 'param', name: 'country' },
   'POST sbg/border-arrivals/:country/fee': { country: 'param', name: 'country' },
+  'POST sbg/border-arrivals/:country/readdress': { country: 'param', name: 'country' },
   'POST sbg/connections/router/check': every('the server’s connections — email, texts, storage — serve every country'),
   'PUT sbg/help/:topic/:key/image': every('help pictures are read in every country'),
   'DELETE sbg/help/:topic/:key/image': every('help pictures are read in every country'),

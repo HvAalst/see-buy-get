@@ -8097,6 +8097,82 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/abroad/{parcelId}/dispose": {
+      "post": {
+        "operationId": "BorderParcels.dispose",
+        "summary": "",
+        "description": "2026-11-19 — a parcel its sender gave up, handed to customs to dispose of (D19): no longer ours.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbroadParcelRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/abroad-choice": {
+      "post": {
+        "operationId": "BorderParcels.choose",
+        "summary": "",
+        "description": "2026-11-19 — THE SENDER'S CHOICE FOR A HELD PARCEL NOT PAID IN TIME (D19, D20): someone else in the destination country takes\nit — who pays, besides our fee and the last leg, the warehouse days and the extra handling as the arrival company set them —\nor it is given up. From the Send app, its sender only.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbroadChoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/abroad/{parcelId}/paid": {
       "post": {
         "operationId": "BorderParcels.paid",
@@ -41758,6 +41834,45 @@
         }
       }
     },
+    "/v1/sbg/border-arrivals/{country}/readdress": {
+      "post": {
+        "operationId": "BorderRoutes.readdress",
+        "summary": "",
+        "description": "2026-11-19 — what a new receiver pays on top when someone else takes a parcel not paid in time (D20).",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderReaddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-routes/{from}/{to}/arrival": {
       "post": {
         "operationId": "BorderRoutes.arrival",
@@ -54598,7 +54713,8 @@
               "to_hand",
               "coming",
               "customs",
-              "held"
+              "held",
+              "given_up"
             ]
           },
           "from": {
@@ -54639,6 +54755,9 @@
           },
           "held": {
             "$ref": "#/components/schemas/AbroadClearanceView"
+          },
+          "someoneElse": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -54708,6 +54827,24 @@
         },
         "required": [
           "outcome"
+        ]
+      },
+      "AbroadChoiceDto": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "someone_else",
+              "give_up"
+            ]
+          },
+          "receiverMobile": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choice"
         ]
       },
       "ClearingCountryView": {
@@ -68218,6 +68355,23 @@
               "lapsedAt": {
                 "required": false,
                 "type": "string"
+              },
+              "decision": {
+                "type": "object",
+                "properties": {
+                  "choice": {
+                    "required": true,
+                    "type": "object"
+                  },
+                  "at": {
+                    "required": true,
+                    "type": "string"
+                  }
+                }
+              },
+              "disposedAt": {
+                "required": false,
+                "type": "string"
               }
             }
           },
@@ -68230,6 +68384,14 @@
               },
               "lastLeg": {
                 "required": true,
+                "type": "number"
+              },
+              "storage": {
+                "required": false,
+                "type": "number"
+              },
+              "handling": {
+                "required": false,
                 "type": "number"
               },
               "total": {
@@ -85121,6 +85283,13 @@
               ]
             }
           },
+          "clearsIn": {
+            "description": "2026-11-19 — the arrival countries it is named to clear customs in for parcels abroad, where any (step 4).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "registrationNo": {
             "type": "string"
           },
@@ -94780,6 +94949,33 @@
           "carriers"
         ]
       },
+      "BorderReaddressFees": {
+        "type": "object",
+        "properties": {
+          "storagePerDay": {
+            "type": "number"
+          },
+          "handlingFee": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "storagePerDay",
+          "handlingFee",
+          "currency",
+          "by",
+          "at"
+        ]
+      },
       "BorderPaymentView": {
         "type": "object",
         "properties": {
@@ -94935,6 +95131,9 @@
           "country": {
             "type": "string"
           },
+          "readdress": {
+            "$ref": "#/components/schemas/BorderReaddressFees"
+          },
           "payment": {
             "$ref": "#/components/schemas/BorderPaymentView"
           },
@@ -95067,6 +95266,28 @@
         "required": [
           "airport",
           "mdpId"
+        ]
+      },
+      "BorderReaddressDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "storagePerDay": {
+            "type": "number",
+            "minimum": 0
+          },
+          "handlingFee": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "storagePerDay",
+          "handlingFee"
         ]
       },
       "BorderArrivalAirportDto": {
@@ -95573,7 +95794,8 @@
               "driver",
               "hub",
               "receiver",
-              "carrier"
+              "carrier",
+              "customs"
             ]
           },
           "name": {

@@ -4,6 +4,7 @@ import { abroadNote, type AbroadView } from './abroad';
 import { renderToString } from 'preact-render-to-string';
 import { h } from 'preact';
 import { AbroadNoteOf } from './screens/MyParcelsScreen';
+import { LapsedChoice } from './screens/LapsedChoice';
 
 /*
  * 2026-11-19 — A PARCEL ABROAD IN THE SEND APP (parcels across a border, step 3): its receiver is told what customs asks, to whom
@@ -53,4 +54,23 @@ describe('a parcel abroad, read by its sender and its receiver', () => {
     expect(html).toContain(t('send.parcels.abroad.how'));
     expect(renderToString(h(AbroadNoteOf, { parcel: { abroad: { to: 'ET', stage: 'on_way' }, relation: 'received' } }))).toBe('');
   });
+
+  it('not paid in time, the sender chose (D19): given up, said to both; someone else, the new receiver told everything they pay', () => {
+    expect(abroadNote({ to: 'ET', stage: 'given_up', decision: 'give_up' }, 'sent', t)?.detail).toBe(t('send.parcels.abroad.givenUpSender'));
+    expect(abroadNote({ to: 'ET', stage: 'given_up', decision: 'give_up' }, 'received', t)?.detail).toBe(t('send.parcels.abroad.givenUpReceiver'));
+    const named: AbroadView = { to: 'ET', stage: 'held', decision: 'someone_else', held, due };
+    expect(abroadNote(named, 'received', t)?.detail).toContain(t('send.parcels.abroad.thenOursMore', { amount: formatMoney(1850, 'ETB') }));
+    expect(abroadNote(named, 'sent', t)?.detail).toBe(t('send.parcels.abroad.someoneElseSender', { date: formatDate(held.payBy) }));
+  });
+
+  it('the sender’s choice: someone else by their number, or give it up after a second word — only give it up once someone else was named', () => {
+    const both = renderToString(h(LapsedChoice, { parcelId: 'PUD-9', choices: ['someone_else', 'give_up'], client: null, onDone: () => undefined }));
+    expect(both).toContain(t('send.parcels.abroad.someoneElse'));
+    expect(both).toContain('id="abroad-new-PUD-9"');
+    expect(both).toContain(t('send.parcels.abroad.giveUp'));
+    const once = renderToString(h(LapsedChoice, { parcelId: 'PUD-9', choices: ['give_up'], client: null, onDone: () => undefined }));
+    expect(once).not.toContain(t('send.parcels.abroad.someoneElse'));
+    expect(once).toContain(t('send.parcels.abroad.giveUp'));
+  });
+
 });

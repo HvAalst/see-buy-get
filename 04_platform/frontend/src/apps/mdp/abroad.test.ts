@@ -51,6 +51,12 @@ describe('parcels abroad at a hub', () => {
     expect(heldAbroadLine(row('PUD-5', 'held', { held: { ...held, lapsed: true } }), t)).toBe('80.00 ETB to pay · customs reference ET-CUS-1 · not paid in time: the sender is asked what to do');
   });
 
+  it('given up by the sender: to hand to customs; named someone else: when they pay by (D19)', () => {
+    expect(abroadGroups([row('G', 'given_up'), row('H', 'held')]).givenUp.map((r) => r.parcelId)).toEqual(['G']);
+    const held = { amount: 80, currency: 'ETB', reference: 'ET-CUS-1', payBy: '2026-12-17T10:00:00.000Z' };
+    expect(heldAbroadLine(row('PUD-6', 'held', { held, someoneElse: true }), t)).toBe('80.00 ETB to pay · customs reference ET-CUS-1 · the sender named someone else: they pay by 2026-12-17');
+  });
+
   it('never offers to sort a parcel set aside for the route abroad, nor one held, on this floor', () => {
     const p = (parcelId: string, o: Partial<ParcelRow> = {}): ParcelRow => ({ parcelId, size: 'M', status: 'At_MDP', destZone: 'Z', atMdpId: 'mdp-1', ...o });
     const inbound = [p('plain'), p('carrier', { abroadAside: 'carrier' }), p('customs', { abroadAside: 'customs' }), p('elsewhere', { abroadAside: 'customs', atMdpId: 'mdp-2' })];

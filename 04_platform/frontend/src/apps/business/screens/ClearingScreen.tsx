@@ -172,6 +172,7 @@ export function ClearingPanel(p: {
                   <span class="crow__sub">
                     {r.held ? t('business.clearing.heldLine', { amount: r.held.amount.toFixed(2), currency: r.held.currency, reference: r.held.reference, date: (r.held.payBy ?? '').slice(0, 10) }) : ''}
                     {r.held?.lapsed ? ` · ${t('business.clearing.lapsed')}` : ''}
+                    {r.someoneElse && !r.held?.lapsed ? ` · ${t('business.clearing.someoneElse')}` : ''}
                   </span>
                 </span>
                 {p.mayAct ? (
@@ -181,6 +182,26 @@ export function ClearingPanel(p: {
                     </button>
                   </span>
                 ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {g.givenUp.length ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('business.clearing.givenUp')}</span>
+          </div>
+          <div class="crows">
+            {g.givenUp.map((r) => (
+              <div class="crow" key={r.parcelId}>
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name mono">{line(r)}</span>
+                  </span>
+                  <span class="crow__sub">{t('business.clearing.givenUpLine')}</span>
+                </span>
               </div>
             ))}
           </div>
