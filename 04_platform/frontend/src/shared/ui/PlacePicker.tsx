@@ -138,6 +138,7 @@ export function PlacePicker({
           }}
           dropped={pin}
           start={here.point ? { point: here.point, zoom: 14 } : undefined}
+          findHere={false}
         />
         <p class="card__note">{noteText(note ?? (pin ? { kind: 'pinned' } : { kind: 'idle' }))}</p>
         {here.state === 'asking' ? <Note tone="info" icon="pin" title={t('place.sheet.locating')} /> : null}

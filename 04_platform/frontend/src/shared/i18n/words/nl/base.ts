@@ -150,6 +150,7 @@ export const words: Record<string, string> = {
   "place.sheet.use": "Gebruik deze plek",
   "place.sheet.locating": "Zoeken waar je bent…",
   "place.sheet.locOff": "Zet locatie aan voor deze app om te vinden waar je bent — of tik op de kaart om de plek te zetten.",
+  "place.map.locShow": "Laat zien waar ik ben",
   "notify.showLess": "Toon minder",
   "opening.title": "SeeBuyGet is nog niet open in {country}",
   "opening.ask.button": "Vraag SeeBuyGet om te openen in {country}",

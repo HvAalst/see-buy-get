@@ -1069,6 +1069,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         onDrop={(location) => actions.setForm({ location })}
         dropped={f.location}
         start={start}
+        findHere={false}
         nearest={8}
       />
       {/* 2026-11-12 — where the phone is: found, abroad, or location to turn on (the owner: "or ask me to turn on locations"). */}

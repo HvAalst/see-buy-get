@@ -1,6 +1,8 @@
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { haversineKm, type GeoPoint } from '../geo';
+import { useT } from '../i18n';
+import { canLocate, currentPosition } from '../position';
 import { PlaceMapPlot } from './PlaceMapPlot';
 import { Icon } from './Icon';
 
@@ -76,6 +78,48 @@ export interface PlaceMapProps {
    * number signing up was shown Nairobi). A point and how close: a country's middle at 6.
    */
   start?: { point: GeoPoint; zoom: number };
+  /**
+   * 2026-11-19 — Ask the phone where it is as the map opens, and look there (see `asksWhereYouAre`). Unset: a map a pin is
+   * put on (`onDrop`) asks; `false` for a screen that finds the phone itself.
+   */
+  findHere?: boolean;
+}
+
+/** The whole world: where a map looks when nothing better is known — never one country's city for everybody. */
+export const WORLD_VIEW = { point: { lat: 15, lng: 15 }, zoom: 2 };
+/** How close a map opened where the phone is looks: the streets around it. */
+export const HERE_ZOOM = 14;
+
+/**
+ * 2026-11-19 — A MAP A PIN IS PUT ON OPENS WHERE THE PHONE IS (the owner, in the Business app's "Save a new place": "the map
+ * opens nairobi, but I am in the Netherlands. It could open somewhat around my current location or else it can ask me to turn
+ * it on"). Asked once, as the map opens, when there is nothing on it to look at yet — no pin, no place marked, no line. A map
+ * with something on it frames that instead, and asks nothing. Pure, for the test.
+ */
+export function asksWhereYouAre(p: Pick<PlaceMapProps, 'findHere' | 'onDrop' | 'pins' | 'lines' | 'reference' | 'dropped'>): boolean {
+  if (!(p.findHere ?? Boolean(p.onDrop))) return false;
+  return !(p.pins?.length || p.lines?.length || p.reference || p.dropped);
+}
+
+/** Ask where the phone is: the point, or `off` — refused, not to be had in time, or no way to ask at all. */
+export async function whereYouAre(can: () => boolean = canLocate, ask: (timeoutMs: number) => Promise<GeoPoint | null> = currentPosition): Promise<{ state: 'idle' | 'off'; point?: GeoPoint }> {
+  if (!can()) return { state: 'off' };
+  const point = await ask(10_000);
+  return point ? { state: 'idle', point } : { state: 'off' };
+}
+
+/**
+ * The line under the map about where the phone is: finding it, or how to turn location on — until a pin is down, also one
+ * tapped before the phone answered; after that it is noise.
+ */
+export function hereNote(state: 'idle' | 'asking' | 'off', dropped: GeoPoint | null | undefined): 'locating' | 'off' | null {
+  if (dropped) return null;
+  return state === 'asking' ? 'locating' : state === 'off' ? 'off' : null;
+}
+
+/** Where a map with nothing to frame looks: where the phone is, else where its screen said, else the whole world. */
+export function viewWithNothingToFrame(here: GeoPoint | null | undefined, start: PlaceMapProps['start']): { point: GeoPoint; zoom: number } {
+  return here ? { point: here, zoom: HERE_ZOOM } : (start ?? WORLD_VIEW);
 }
 
 /** How far a pin may be and still be framed with a marked place: past this, the place is shown alone, close up. */
@@ -138,6 +182,7 @@ type MapComponent = (props: PlaceMapProps) => JSX.Element;
  * map pays nothing for it. Falls back to the plot (with a note) when offline or if the map fails to load.
  */
 export function PlaceMap(props: PlaceMapProps) {
+  const t = useT();
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [mode, setMode] = useState<MapMode>(() => initialMapMode(typeof navigator === 'undefined' ? true : navigator.onLine, readMode()));
   const [MapComp, setMapComp] = useState<MapComponent | null>(null);
@@ -153,6 +198,25 @@ export function PlaceMap(props: PlaceMapProps) {
       window.removeEventListener('offline', goOffline);
     };
   }, []);
+
+  // Where the phone is, asked once as the map opens with nothing on it; refused or not to be had, how to turn it on.
+  const [here, setHere] = useState<{ state: 'idle' | 'asking' | 'off'; point?: GeoPoint }>(() => ({ state: asksWhereYouAre(props) ? 'asking' : 'idle' }));
+  const alive = useRef(true);
+  const findHere = useCallback(() => {
+    setHere({ state: 'asking' });
+    void whereYouAre().then((found) => {
+      if (alive.current) setHere(found);
+    });
+  }, []);
+  useEffect(() => {
+    alive.current = true;
+    if (here.state === 'asking') findHere();
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const shown: PlaceMapProps = { ...props, start: viewWithNothingToFrame(here.point, props.start) };
+  const note = hereNote(here.state, props.dropped);
 
   const wantMap = mode === 'map' && online && !mapError;
 
@@ -196,7 +260,7 @@ export function PlaceMap(props: PlaceMapProps) {
         </button>
       </div>
 
-      {showMap ? <MapComp {...props} /> : <PlaceMapPlot {...props} />}
+      {showMap ? <MapComp {...shown} /> : <PlaceMapPlot {...shown} />}
 
       {/* One reason at a time: offline is the recoverable case; a load failure is the terminal one. */}
       {mode === 'map' && !online ? (
@@ -206,6 +270,20 @@ export function PlaceMap(props: PlaceMapProps) {
           Map unavailable — showing the simple view.{' '}
           <button type="button" class="linkbtn" onClick={() => globalThis.location?.reload()}>
             Reload to try the map again
+          </button>
+        </p>
+      ) : null}
+      {/* Until a pin is down: finding where the phone is, or how to let it say. */}
+      {note === 'locating' ? (
+        <p class="pmap-note" role="status">
+          {t('place.sheet.locating')}
+        </p>
+      ) : null}
+      {note === 'off' ? (
+        <p class="pmap-note">
+          {t('place.sheet.locOff')}{' '}
+          <button type="button" class="linkbtn" onClick={findHere}>
+            {t('place.map.locShow')}
           </button>
         </p>
       ) : null}

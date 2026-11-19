@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { framedPoints, type PlaceMapProps } from './PlaceMap';
+import { framedPoints, WORLD_VIEW, type PlaceMapProps } from './PlaceMap';
 
 /**
  * The real OpenStreetMap tile map — the online half of PlaceMap (G3a). Loaded LAZILY (PlaceMap imports
@@ -10,10 +10,10 @@ import { framedPoints, type PlaceMapProps } from './PlaceMap';
  * HTML, no external marker PNGs and no emoji), so the map matches the app and the design contract. The
  * props are identical to the dot-plot, so the two are interchangeable.
  *
- * The Nairobi default view is only a fallback for the empty state; with any pin/reference the map fits
- * to the points.
+ * With nothing to frame it looks where it is told (`start`: where the phone is, or what its screen said) — else the whole
+ * world, never one country's city for everybody (2026-11-19: it opened on Nairobi for somebody in the Netherlands). With
+ * any pin/reference the map fits to the points.
  */
-const NAIROBI: L.LatLngExpression = [-1.2864, 36.8172];
 
 export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest, maxZoom, start }: PlaceMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -32,7 +32,8 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
   // Init the map once, tear it down on unmount.
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return;
-    const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true }).setView(start ? [start.point.lat, start.point.lng] : NAIROBI, start ? start.zoom : 11);
+    const first = start ?? WORLD_VIEW;
+    const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true }).setView([first.point.lat, first.point.lng], first.zoom);
     // OpenStreetMap's own tiles, at the one address it asks for now (the a/b/c ones are retired), credited with the link
     // to its copyright page, as its tile policy asks — the addresses typed into the Send app are found in the same data.
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {

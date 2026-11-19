@@ -150,6 +150,7 @@ export const words: Record<string, string> = {
   "place.sheet.use": "ይህን ቦታ ተጠቀም",
   "place.sheet.locating": "ያሉበትን በመፈለግ ላይ…",
   "place.sheet.locOff": "ያሉበትን ለማግኘት ለዚህ መተግበሪያ አካባቢን ያብሩ — ወይም ቦታውን ለማስቀመጥ ካርታውን ይንኩ።",
+  "place.map.locShow": "ያለሁበትን አሳይ",
   "notify.showLess": "ያነሰ ይመልከቱ",
   "opening.title": "SeeBuyGet በ{country} ገና ሥራ አልጀመረም",
   "opening.ask.button": "SeeBuyGet በ{country} እንዲከፈት ይጠይቁ",

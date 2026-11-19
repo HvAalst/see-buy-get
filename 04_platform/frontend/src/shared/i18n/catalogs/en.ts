@@ -210,6 +210,8 @@ export const en = {
   'place.sheet.use': 'Use this place',
   'place.sheet.locating': 'Finding where you are…',
   'place.sheet.locOff': 'Turn on location for this app to find where you are — or tap the map to place it.',
+  // 2026-11-19 — under a map a pin is put on, after the phone could not say where it is: ask it again, and look there.
+  'place.map.locShow': 'Show where I am',
   'notify.showLess': 'Show less',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',

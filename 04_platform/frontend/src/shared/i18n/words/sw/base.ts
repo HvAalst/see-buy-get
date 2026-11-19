@@ -150,6 +150,7 @@ export const words: Record<string, string> = {
   "place.sheet.use": "Tumia mahali hapa",
   "place.sheet.locating": "Inatafuta ulipo…",
   "place.sheet.locOff": "Washa mahali kwa programu hii ili kupata ulipo — au gusa ramani kupaweka.",
+  "place.map.locShow": "Onyesha nilipo",
   "notify.showLess": "Onyesha chache",
   "opening.title": "SeeBuyGet bado haijafunguliwa nchini {country}",
   "opening.ask.button": "Omba SeeBuyGet ifungue nchini {country}",
