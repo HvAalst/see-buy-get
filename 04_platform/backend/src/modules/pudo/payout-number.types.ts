@@ -3,6 +3,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PAYOUT_WAYS, type PayoutWay } from '../../foundation/payouts/payout-ways';
 
 /**
+ * 2026-11-20 — how a payee's own number is used: M-Pesa where we pay (Kenya), by hand elsewhere — and, in a country where a
+ * partner contracts and pays (Partnered), the partner pays every hand to the number it set (the payments plan, 4c).
+ */
+export const NUMBER_WAYS = [...PAYOUT_WAYS, 'partner'] as const;
+export type NumberWay = (typeof NUMBER_WAYS)[number];
+
+/**
  * A PAYEE'S OWN PAYOUT NUMBER (the user, 2026-10-18: "for the countries where it does work; a number they set").
  *
  * Where the payee's country pays by M-Pesa, money goes to a number the payee set and confirmed itself, with a code
@@ -42,7 +49,8 @@ export class PayoutNumberRecord {
 
 /** What the payee's own Settings shows. */
 export class PayoutNumberView {
-  @ApiProperty({ enum: PAYOUT_WAYS, description: 'How payees in this country are paid.' }) way: PayoutWay;
+  @ApiProperty({ enum: NUMBER_WAYS, description: 'How payees in this country are paid: by M-Pesa, by hand, or by the partner to this number.' }) way: NumberWay;
+  @ApiPropertyOptional({ description: 'Who pays to this number, where a partner does: its name.' }) paidBy?: string;
   @ApiProperty() country: string;
   @ApiPropertyOptional({ description: 'Why this account has no payout number of its own (a fleet driver, a shop).' }) notPayee?: string;
   @ApiPropertyOptional() masked?: string;

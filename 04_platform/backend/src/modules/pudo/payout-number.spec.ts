@@ -92,4 +92,45 @@ describe('a payee’s own payout number', () => {
     await expect(byHand.requestCode({ role: 'fleet_manager', did: 'did:fleet', tenant: 'did:fleet' } as IntrospectionResult, '0712345678', T0)).rejects.toThrow(/made by hand/);
     expect(texts).toEqual([]);
   });
+
+  /*
+   * 2026-11-20 — WHERE A PARTNER CONTRACTS AND PAYS (the payments plan, 4c): every hand is paid by the partner, by phone, to a
+   * number of its own — a shop too, which has no float there — in its own country's way of writing it, confirmed by a code, and
+   * paused for a day after a change, as an M-Pesa number is.
+   */
+  it('where a partner contracts: every hand sets a number of its own country — a shop too — and the partner pays to it', async () => {
+    texts.length = 0;
+    const payouts = { registerDestinations: () => undefined } as unknown as PayoutService;
+    const drivers = { get: (did: string) => ({ did, jurisdiction: 'ET' }) } as unknown as DriverService;
+    const managers = { get: (did: string) => ({ did, jurisdiction: 'ET' }) } as unknown as FleetManagerService;
+    const mdps = { list: () => [{ did: 'did:hub-addis', mdpId: 'mdp_addis' }], countryOf: () => 'ET' } as unknown as MdpService;
+    const sms = {
+      sends: () => false,
+      mayGoTo: () => true,
+      sendCode: async (to: string, code: string) => (texts.push({ to, kind: 'code', body: code }), 'sms'),
+      sendPayoutNumberChanged: async (to: string, masked: string) => void texts.push({ to, kind: 'notice', body: masked }),
+    } as unknown as SmsService;
+    const agents = { get: (did: string) => ({ did, shopName: 'Bole Duka' }), countryOf: (a: { did: string }) => (a.did.includes('nairobi') ? 'KE' : 'ET') };
+    const partners = { partnerAt: (c: string) => (c === 'ET' ? { entityId: 'partner-et', name: 'Addis Courier PLC' } : undefined) };
+    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never);
+    const shop = { role: 'agent', did: 'did:shop-addis', actorName: 'Almaz' } as IntrospectionResult;
+    expect(svc.view(shop)).toEqual({ way: 'partner', paidBy: 'Addis Courier PLC', country: 'ET' });
+    expect(svc.view({ role: 'mdp', did: 'did:hub-addis' } as IntrospectionResult)).toMatchObject({ way: 'partner', paidBy: 'Addis Courier PLC' });
+    // A shop where no partner contracts is still paid into its float.
+    expect(svc.view({ role: 'agent', did: 'did:shop-nairobi' } as IntrospectionResult).notPayee).toMatch(/float/);
+    // The country's own numbers, said with its own code.
+    await expect(svc.requestCode(shop, '+254 712 345 678', T0)).rejects.toThrow('Not a mobile number in Ethiopia: write it with its country code, +251…');
+    await svc.requestCode(shop, '+251 911 000 123', T0);
+    expect(texts.at(-1)).toMatchObject({ to: '+251911000123', kind: 'code' });
+    await svc.confirm(shop, texts.at(-1)!.body, T0 + 1000);
+    expect(svc.partnerDestination('did:shop-addis', T0 + 2000)).toEqual({ numberId: expect.any(String), masked: '251911***123' });
+    // Changed: the old number told, and nothing paid to the new one for a day.
+    await svc.requestCode(shop, '0911 000 456', T0 + 2 * 60_000);
+    expect(texts.at(-1)).toMatchObject({ to: '+251911000456' });
+    await svc.confirm(shop, texts.at(-1)!.body, T0 + 3 * 60_000);
+    expect(texts.at(-1)).toMatchObject({ to: '+251911000123', kind: 'notice' });
+    expect(svc.partnerDestination('did:shop-addis', T0 + 4 * 60_000)).toEqual({ reason: 'number_new' });
+    expect(svc.partnerDestination('did:shop-addis', T0 + 3 * 60_000 + 24 * H + 1)).toMatchObject({ masked: '251911***456' });
+    expect(svc.partnerDestination('did:nobody', T0)).toEqual({ reason: 'no_number' });
+  });
 });

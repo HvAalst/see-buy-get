@@ -78,6 +78,7 @@ export class PartnerOwedRow {
   @ApiPropertyOptional({ description: 'A step undone: what was owed for it, taken back (the amount below zero).' }) takenBack?: boolean;
   @ApiPropertyOptional({ enum: PARTNER_WORKS, description: 'Which work, exactly.' }) work?: PartnerWork;
   @ApiPropertyOptional({ description: 'What the partner’s own list said for that work when it was owed.' }) listed?: number;
+  @ApiPropertyOptional({ description: '4c — paid to the hand, by the partner’s daily payout.' }) paid?: boolean;
 }
 
 export class PartnerOwedTotal {
@@ -102,6 +103,7 @@ export class PartnerOwedSum {
   @ApiProperty() partnerName: string;
   @ApiProperty() currency: string;
   @ApiProperty() amount: number;
+  @ApiPropertyOptional({ description: '4c — of it, what the partner has paid out to the hand already.' }) paid?: number;
 }
 
 /** A hand's own: what each partner owes it, named, with the steps. */
@@ -190,7 +192,7 @@ export class PartnerLedgerService {
   }
 
   /** A partner's record: newest first, with what it owes each hand in all. */
-  ledgerOf(partnerEntityId: string, opts: { payeeId?: string; limit?: number } = {}): PartnerLedgerView {
+  ledgerOf(partnerEntityId: string, opts: { payeeId?: string; limit?: number; paidLineIds?: Set<string> } = {}): PartnerLedgerView {
     const partner = this.entities.get(partnerEntityId);
     const mine = [...this.lines.values()].filter((l) => l.partnerEntityId === partnerEntityId && (!opts.payeeId || l.payeeId === opts.payeeId)).sort((a, b) => b.at.localeCompare(a.at));
     const totals = new Map<string, PartnerOwedTotal>();
@@ -208,22 +210,23 @@ export class PartnerLedgerService {
       owed: round2(mine.reduce((s, l) => s + l.amount, 0)),
       // A hand whose every step was taken back is owed nothing, and is not listed as owed.
       byPayee: [...totals.values()].filter((t) => t.steps > 0 || t.amount !== 0).sort((a, b) => b.amount - a.amount),
-      lines: mine.slice(0, opts.limit ?? 500).map(rowOf),
+      lines: mine.slice(0, opts.limit ?? 500).map((l) => rowOf(l, opts.paidLineIds)),
     };
   }
 
   /** A hand's own: every line any partner owes it, named — a fleet's for the work of its drivers. */
-  owedTo(payeeIds: string[]): MyPartnerOwed {
+  owedTo(payeeIds: string[], paidLineIds?: Set<string>): MyPartnerOwed {
     const ids = new Set(payeeIds);
     const mine = [...this.lines.values()].filter((l) => ids.has(l.payeeId)).sort((a, b) => b.at.localeCompare(a.at));
-    const totals = new Map<string, { partnerName: string; currency: string; amount: number }>();
+    const totals = new Map<string, { partnerName: string; currency: string; amount: number; paid?: number }>();
     for (const l of mine) {
       const key = `${l.partnerEntityId}|${l.currency}`;
       const t = totals.get(key) ?? { partnerName: l.partnerName, currency: l.currency, amount: 0 };
       t.amount = round2(t.amount + l.amount);
+      if (paidLineIds?.has(l.lineId)) t.paid = round2((t.paid ?? 0) + l.amount);
       totals.set(key, t);
     }
-    return { lines: mine.slice(0, 200).map(rowOf), ...(totals.size ? { totals: [...totals.values()] } : {}) };
+    return { lines: mine.slice(0, 200).map((l) => rowOf(l, paidLineIds)), ...(totals.size ? { totals: [...totals.values()] } : {}) };
   }
 
   /** 2026-11-20 — a partner's lines as they are kept, oldest first, since a moment: what its fraud checks read (3b). */
@@ -237,7 +240,7 @@ export class PartnerLedgerService {
   }
 }
 
-function rowOf(l: PartnerOwedLine): PartnerOwedRow {
+function rowOf(l: PartnerOwedLine, paidLineIds?: Set<string>): PartnerOwedRow {
   return {
     lineId: l.lineId,
     partnerName: l.partnerName,
@@ -251,5 +254,6 @@ function rowOf(l: PartnerOwedLine): PartnerOwedRow {
     ...(l.undoes ? { takenBack: true } : {}),
     ...(l.work ? { work: l.work } : {}),
     ...(typeof l.listed === 'number' ? { listed: l.listed } : {}),
+    ...(paidLineIds?.has(l.lineId) ? { paid: true } : {}),
   };
 }

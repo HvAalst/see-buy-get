@@ -131,11 +131,13 @@ describe('a partner’s own people', () => {
     const agents = { get: () => ({ shopName: 'Duka la Kampala' }) };
     const mdps = { require: () => ({ name: 'Kampala Sort' }) };
     const drivers = { get: () => { throw new Error('no such driver'); } };
-    const doors = new PartnerAppController(members, ledger as never, agents as never, mdps as never, drivers as never, {} as never);
+    // 4c — what its payouts have paid is marked on the record it reads.
+    const payouts = { paidLineIds: () => new Set<string>() };
+    const doors = new PartnerAppController(members, ledger as never, agents as never, mdps as never, drivers as never, {} as never, payouts as never);
     // Each hand by its name; one that cannot be found is left without one, and nothing else is in the answer.
     expect(doors.owed(asPartner(selam.personDid))).toMatchObject({ partnerEntityId: partnerId, owed: 40, names: { 'did:glos:shop-k': 'Duka la Kampala', mdp_k: 'Kampala Sort' } });
     expect(Object.keys(doors.owed(asPartner(selam.personDid)).names)).toEqual(['did:glos:shop-k', 'mdp_k']);
-    expect(ledger.ledgerOf).toHaveBeenCalledWith(partnerId);
+    expect(ledger.ledgerOf).toHaveBeenCalledWith(partnerId, { paidLineIds: expect.any(Set) });
   });
 });
 
@@ -159,7 +161,8 @@ describe('the partner’s live view', () => {
 
   it('wired: the event that a step was owed reaches the partner’s screens', () => {
     const live = read('live.service.ts');
-    expect(live).toMatch(/if \(e\.type === GlosEvent\.Pudo\.PartnerOwed\) this\.toPartner\(\(e\.payload as \{ partnerEntityId\?: string \} \| undefined\)\?\.partnerEntityId, 'owed'\);/);
+    // …and, 4c, that a payout was made, paid or is waiting.
+    expect(live).toMatch(/if \(e\.type === GlosEvent\.Pudo\.PartnerOwed \|\| e\.type === GlosEvent\.Pudo\.PartnerPayout\) this\.toPartner\(\(e\.payload as \{ partnerEntityId\?: string \} \| undefined\)\?\.partnerEntityId, 'owed'\);/);
     expect(GlosEvent.Pudo.PartnerOwed).toBe('pudo.partner_owed');
     expect(read('live.controller.ts')).toMatch(/@Roles\('fleet_manager', 'entity_admin', 'operator', 'partner'\)\s*@Sse\('live'\)/);
   });
@@ -176,7 +179,9 @@ describe('wired', () => {
     const doors = read('partner-app.controller.ts');
     expect(doors.match(/@Roles\('operator'\)\s*@(Get|Post|Delete)\('entities\/:entityId\/partner-members/g)).toHaveLength(3);
     expect(doors.match(/@Roles\('consumer'\)\s*@(Get|Post)\('partner\//g)).toHaveLength(4);
-    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(2);
+    // 4c — and its own payouts.
+    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(3);
+    expect(STAFF_AREAS['GET sbg/partner/me/payouts']).toBe('none');
     expect(read('account-closing.service.ts')).toMatch(/this\.partnerMembers\?\.forgetPerson\(personDid, phoneHash, now\);/);
     expect(read('pudo.module.ts')).toMatch(/PartnerChecksService, PartnerMemberService,/);
     expect(read('pudo.module.ts')).toMatch(/PartnerLedgerController, PartnerAppController,/);

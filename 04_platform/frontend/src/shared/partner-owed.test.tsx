@@ -28,6 +28,15 @@ describe('what the partner owes you', () => {
     expect(html.indexOf('owes you')).toBeLessThan(html.indexOf('Work on a parcel'));
   });
 
+  it('4c — what the partner has paid already, and what it still owes; a step paid says so; and that it pays once a day', () => {
+    const some = renderToString(<PartnerOwedList owed={{ lines: [line({ paid: true }), line({ lineId: 'po_2', reference: 'PUD-2' })], totals: [{ partnerName: 'Addis Courier PLC', currency: 'ETB', amount: 80, paid: 40 }] }} t={tt} />);
+    expect(some).toMatch(/Addis Courier PLC has paid you [^<]*40[^<]*, and owes you [^<]*40[^<]* more/);
+    expect(some.match(/ · paid/g)).toHaveLength(1);
+    expect(some).toContain('It pays once a day, to the payout number you set in Settings.');
+    const all = renderToString(<PartnerOwedList owed={{ lines: [line({ paid: true })], totals: [{ partnerName: 'Addis Courier PLC', currency: 'ETB', amount: 40, paid: 40 }] }} t={tt} />);
+    expect(all).toMatch(/Addis Courier PLC has paid you all it owes: [^<]*40/);
+  });
+
   it('nothing where nothing is owed', () => {
     expect(renderToString(<PartnerOwedList owed={{ lines: [] }} t={tt} />)).toBe('');
     expect(renderToString(<PartnerOwedList owed={null} t={tt} />)).toBe('');

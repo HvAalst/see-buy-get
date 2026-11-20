@@ -16,6 +16,8 @@ export const PAYMENT_HUB_PROVIDERS = 'PAYMENT_HUB_PROVIDERS';
 export const PROMPT_LAPSES_AFTER_MS = 15 * 60_000;
 /** How often the prompts still waiting are asked of their provider. */
 const LOOK_EVERY_MS = 5_000;
+/** A refund that did not go (the account short, the provider unreachable) is asked again this often. */
+export const REFUND_AGAIN_AFTER_MS = 60 * 60_000;
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -40,6 +42,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   private waiting?: Set<string>;
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
+  private refundsLookedAt = 0;
 
   constructor(
     private readonly entities: EntityService,
@@ -147,7 +150,9 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     const p = this.payments.get(paymentId);
     if (!p) throw new GlosError('NOT_FOUND', `No payment ${paymentId}`);
     if (p.state !== 'asked') return p;
-    if (now - Date.parse(p.askedAt) > PROMPT_LAPSES_AFTER_MS) return this.apply(paymentId, { state: 'failed', why: 'expired' }, now);
+    // A prompt nobody answers lapses; money sent out, or given back, never does by itself — taken for failed, it would be
+    // sent again while it may have gone. Its provider is asked until it answers.
+    if (p.kind === 'in' && now - Date.parse(p.askedAt) > PROMPT_LAPSES_AFTER_MS) return this.apply(paymentId, { state: 'failed', why: 'expired' }, now);
     const provider = this.providers.get(p.provider);
     if (!provider) return p;
     const answer = await provider.status(this.account(p.ownerEntityId), { ...(p.providerRef ? { providerRef: p.providerRef } : {}), ourRef: p.paymentId }, now).catch(() => undefined);
@@ -160,6 +165,10 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     this.running = true;
     try {
       for (const id of [...this.waitingSet()]) await this.settle(id, now);
+      if (now - this.refundsLookedAt >= REFUND_AGAIN_AFTER_MS) {
+        this.refundsLookedAt = now;
+        await this.refundsAgain(now);
+      }
     } finally {
       this.running = false;
     }
@@ -235,6 +244,64 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       this.logger.warn(`a refund went unanswered by ${paid.provider}: ${(err as Error).message}`);
     }
     return answer ? this.apply(back.paymentId, answer, now) : back;
+  }
+
+  /**
+   * 2026-11-20 — MONEY OUT, from the company's account to a payee's phone (the payments plan, 4c: what the partner owes a hand,
+   * paid once a day). Kept before the provider is asked, as every payment is; a payout the account cannot cover fails with
+   * "insufficient", and the caller decides when to ask again — never this, so one sum is never sent twice.
+   */
+  async payout(ownerEntityId: string, req: { reference: string; amount: number; payeePhone: string; description: string }, now: number = Date.now()): Promise<HubPayment> {
+    const amount = round2(req.amount);
+    if (!(amount > 0)) throw new GlosError('VALIDATION_FAILED', 'A payout is for more than nothing');
+    const digits = (req.payeePhone ?? '').replace(/\D/g, '');
+    if (digits.length < 9) throw new GlosError('VALIDATION_FAILED', 'Give the whole phone number the payout goes to');
+    const a = this.account(ownerEntityId);
+    const out: HubPayment = {
+      paymentId: `hp_${randomBytes(9).toString('base64url')}`,
+      kind: 'out',
+      ownerEntityId,
+      provider: a.provider,
+      reference: req.reference,
+      amount,
+      currency: a.currency,
+      phoneEnds: digits.slice(-3),
+      phoneHash: hashPhone(req.payeePhone),
+      state: 'asked',
+      test: !a.live,
+      askedAt: new Date(now).toISOString(),
+    };
+    this.payments.set(out.paymentId, out);
+    this.waitingSet().add(out.paymentId);
+    this.told(out);
+    let answer: ProviderAnswer | undefined;
+    try {
+      answer = await this.provider(a.provider).payout(a, { ourRef: out.paymentId, amount, currency: a.currency, payeePhone: req.payeePhone, description: req.description }, now);
+    } catch (err) {
+      this.logger.warn(`a payout went unanswered by ${a.provider}: ${(err as Error).message}`);
+    }
+    return answer ? this.apply(out.paymentId, answer, now) : out;
+  }
+
+  /**
+   * A refund that did not go — the account short, or the provider unreachable — is asked again, once an hour, until it goes
+   * (P4-d: the sender gets the money back; 4c: when the balance allows).
+   */
+  async refundsAgain(now: number = Date.now()): Promise<HubPayment[]> {
+    const all = [...this.payments.values()];
+    const given = new Set(all.filter((x) => x.kind === 'refund' && x.state !== 'failed' && x.refundOf).map((x) => x.refundOf as string));
+    const lastFailed = new Map<string, HubPayment>();
+    for (const x of all) {
+      if (x.kind !== 'refund' || x.state !== 'failed' || !x.refundOf || given.has(x.refundOf)) continue;
+      const seen = lastFailed.get(x.refundOf);
+      if (!seen || x.askedAt > seen.askedAt) lastFailed.set(x.refundOf, x);
+    }
+    const out: HubPayment[] = [];
+    for (const [paidId, failed] of lastFailed) {
+      if (now - Date.parse(failed.settledAt ?? failed.askedAt) < REFUND_AGAIN_AFTER_MS) continue;
+      out.push(await this.refund(paidId, `${failed.reference}: given back, asked again`, now));
+    }
+    return out;
   }
 
   /** A company's payments, newest first. */

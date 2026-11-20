@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GlosEvent } from '../events/glos-events';
 import { STAFF_AREAS } from '../auth/staff-areas.table';
-import { PaymentHubService, PROMPT_LAPSES_AFTER_MS } from './payment-hub.service';
+import { PaymentHubService, PROMPT_LAPSES_AFTER_MS, REFUND_AGAIN_AFTER_MS } from './payment-hub.service';
 import { STAND_IN_ANSWERS_AFTER_MS, STAND_IN_LAPSES_AFTER_MS } from './stand-in.provider';
 import type { HubProvider, OpenedAccount, ProviderAnswer } from './hub.types';
 
@@ -220,6 +220,36 @@ describe('the payment hub', () => {
     await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
     // Asked again with an earlier clock, as a second server or a test might: still paid, still held.
     expect((await hub.accountView(PARTNER.entityId, T0)).balance).toBe(70);
+  });
+
+  it('money out (4c): kept before the provider is asked; paid from what the account holds, refused beyond it — and no fee on it', async () => {
+    const { hub } = aHub();
+    hub.setFee(PARTNER.entityId, 3, 'Staff Ann', T0);
+    await expect(hub.payout(PARTNER.entityId, { reference: 'pp_1', amount: 10, payeePhone: '+251911000222', description: 'x' }, T0)).resolves.toMatchObject({ kind: 'out', state: 'failed', why: 'insufficient' });
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-O1', amount: 100, payerPhone: '+251911000123', description: 'x' }, T0);
+    await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    const out = await hub.payout(PARTNER.entityId, { reference: 'pp_2', amount: 60, payeePhone: '+251911000222', description: 'x' }, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    expect(out).toMatchObject({ kind: 'out', state: 'paid', amount: 60, phoneEnds: '222', reference: 'pp_2' });
+    expect(out.fee).toBeUndefined();
+    expect((await hub.accountView(PARTNER.entityId, T0 + STAND_IN_ANSWERS_AFTER_MS)).balance).toBe(40);
+    await expect(hub.payout(PARTNER.entityId, { reference: 'pp_3', amount: 0, payeePhone: '+251911000222', description: 'x' }, T0)).rejects.toThrow(/more than nothing/);
+  });
+
+  it('a refund that did not go is asked again an hour later, once it can go — never twice', async () => {
+    const { hub } = aHub();
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-RA', amount: 100, payerPhone: '+251911000123', description: 'x' }, T0);
+    await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    // Paid out first, so the account cannot give it back.
+    await hub.payout(PARTNER.entityId, { reference: 'pp_x', amount: 100, payeePhone: '+251911000222', description: 'x' }, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    const first = await hub.refund(p.paymentId, 'voided', T0 + 10_000);
+    expect(first).toMatchObject({ state: 'failed', why: 'insufficient' });
+    expect(await hub.refundsAgain(T0 + 20_000)).toEqual([]);
+    // Money in again; an hour after the failed try, it goes — and only once.
+    const q = await hub.collect(PARTNER.entityId, { reference: 'PUD-RB', amount: 200, payerPhone: '+251911000124', description: 'x' }, T0 + 30_000);
+    await hub.settle(q.paymentId, T0 + 30_000 + STAND_IN_ANSWERS_AFTER_MS);
+    const again = await hub.refundsAgain(T0 + 10_000 + REFUND_AGAIN_AFTER_MS);
+    expect(again.map((x) => [x.refundOf, x.state])).toEqual([[p.paymentId, 'paid']]);
+    expect(await hub.refundsAgain(T0 + 10_000 + 3 * REFUND_AGAIN_AFTER_MS)).toEqual([]);
   });
 
   it('its staff doors are for staff who keep the money, and the server says at boot what the hub reaches', () => {

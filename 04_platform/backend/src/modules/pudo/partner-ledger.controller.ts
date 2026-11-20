@@ -11,6 +11,7 @@ import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.serv
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { MyPartnerOwed, PartnerLedgerService, PartnerLedgerView } from './partner-ledger.service';
+import { PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
 import { PartnerChecksService, PartnerChecksView, PartnerFlagLookedDto, PartnerFlagRow, PartnerReviewRow } from './partner-checks.service';
 
 /**
@@ -27,6 +28,7 @@ export class PartnerLedgerController {
     private readonly mdps: MdpService,
     private readonly checks: PartnerChecksService,
     private readonly hub: PaymentHubService,
+    private readonly payouts: PartnerPayoutService,
   ) {}
 
   /** A partner's record, for our staff: every line it owes, and what it owes each hand in all. */
@@ -35,7 +37,7 @@ export class PartnerLedgerController {
   @Get('entities/:entityId/partner-owed')
   ofPartner(@Param('entityId') entityId: string, @Query('payeeId') payeeId?: string): PartnerLedgerView {
     this.requirePartner(entityId);
-    return this.ledger.ledgerOf(entityId, { ...(payeeId ? { payeeId } : {}) });
+    return this.ledger.ledgerOf(entityId, { ...(payeeId ? { payeeId } : {}), paidLineIds: this.payouts.paidLineIds() });
   }
 
   /** 3b — the checks on a partner's figures, for our staff: what is still to look at, what was looked at, the last AI review. */
@@ -94,6 +96,22 @@ export class PartnerLedgerController {
     return this.hub.accountView(entityId);
   }
 
+  /** 4c — a partner's payouts to its hands, for our staff: what waits and why, what was paid. */
+  @Roles('operator')
+  @Get('entities/:entityId/partner-payouts')
+  payoutsOf(@Param('entityId') entityId: string): PartnerPayoutsView {
+    this.requirePartner(entityId);
+    return this.payouts.viewOf(entityId);
+  }
+
+  /** Pay the partner's hands now, rather than at the day's hour — by name: to try it, or after the account was topped up. */
+  @Roles('operator')
+  @Post('entities/:entityId/partner-payouts/run')
+  payNow(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): Promise<PartnerPayoutsView> {
+    this.requirePartner(entityId);
+    return this.payouts.payNow(entityId, auditActor(actor));
+  }
+
   private requirePartner(entityId: string): void {
     const entity = this.entities.get(entityId);
     if (entity.kind !== 'partner') throw new GlosError('NOT_FOUND', `${entity.name} is not a partner company`);
@@ -103,7 +121,7 @@ export class PartnerLedgerController {
   @Roles('agent', 'mdp', 'driver', 'fleet_manager')
   @Get('partner-owed/mine')
   mine(@Actor() actor: IntrospectionResult): MyPartnerOwed {
-    return this.ledger.owedTo(this.payeeIdsOf(actor));
+    return this.ledger.owedTo(this.payeeIdsOf(actor), this.payouts.paidLineIds());
   }
 
   private payeeIdsOf(actor: IntrospectionResult | undefined): string[] {

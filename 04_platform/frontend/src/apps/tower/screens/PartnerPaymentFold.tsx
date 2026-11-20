@@ -31,6 +31,63 @@ export interface HubPaymentRow {
   refundOf?: string;
 }
 
+/** 2026-11-20 — a partner's payouts to its hands (4c): what waits, and why; what was paid. */
+export type PayoutWait = 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable';
+export interface PartnerPayoutsView {
+  currency: string;
+  waiting: number;
+  waitingAmount: number;
+  shortAmount: number;
+  paidAmount: number;
+  rows: Array<{ payoutId: string; payeeId: string; payeeKind: 'shop' | 'hub' | 'driver' | 'fleet'; amount: number; currency: string; steps: number; state: 'waiting' | 'paid'; why?: PayoutWait; day: string; paidAt?: string; askedBy?: string }>;
+}
+
+const WAIT: Record<PayoutWait, MessageKey> = {
+  no_number: 'tower.partner.pay.wait.no_number',
+  number_new: 'tower.partner.pay.wait.number_new',
+  balance: 'tower.partner.pay.wait.balance',
+  refused: 'tower.partner.pay.wait.refused',
+  unreachable: 'tower.partner.pay.wait.unreachable',
+};
+const PAYEE: Record<PartnerPayoutsView['rows'][number]['payeeKind'], MessageKey> = { shop: 'tower.partner.kind.shop', hub: 'tower.partner.kind.hub', driver: 'tower.partner.kind.driver', fleet: 'tower.partner.kind.fleet' };
+
+/** The partner's payouts, for our staff: what waits and why, what was paid — and paying out now, by name. */
+export function PayoutsBody({ payouts, t, busy, onPayNow }: { payouts: PartnerPayoutsView; t: Translate; busy?: boolean; onPayNow?: () => void }) {
+  const cur = payouts.currency;
+  return (
+    <>
+      <p class="cfield__label">{t('tower.partner.pay.payoutsTitle')}</p>
+      <p class="chint">{t('tower.partner.pay.payoutsLede')}</p>
+      <p class="chint">{t('tower.partner.pay.payoutsSum', { n: payouts.waiting, amount: cash(payouts.waitingAmount, cur), paid: cash(payouts.paidAmount, cur) })}</p>
+      {onPayNow ? (
+        <button type="button" class="cbtn cbtn--sm" disabled={busy} onClick={onPayNow}>
+          {t('tower.partner.pay.payNow')}
+        </button>
+      ) : null}
+      {payouts.rows.length ? (
+        <div class="crows">
+          {payouts.rows.slice(0, 20).map((r) => (
+            <div class="crow" key={r.payoutId}>
+              <span class="crow__body">
+                <span class="crow__top">
+                  <span class="crow__name">
+                    {t(PAYEE[r.payeeKind])} · {r.payeeId}
+                  </span>
+                  <span class={`ctag ${r.state === 'paid' ? 'ctag--ok' : 'ctag--warn'}`}>{r.state === 'paid' ? t('tower.partner.pay.payoutPaid') : t('tower.partner.pay.payoutWaits', { why: t(WAIT[r.why ?? 'unreachable']) })}</span>
+                </span>
+                <span class="crow__sub">
+                  {cash(r.amount, r.currency)} · {t('tower.partner.pay.steps', { n: r.steps })} · {r.day}
+                  {r.askedBy ? ` · ${t('tower.partner.pay.payoutBy', { by: r.askedBy })}` : ''}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export interface PaymentAccountRead {
   account: { provider: HubProviderId; test: boolean; currency: string; ready: HubProviderId[]; balance?: number; feePct?: number; feeSetBy?: string; feeSetAt?: string; feeOwed: number };
   payments: HubPaymentRow[];
@@ -141,17 +198,20 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: Paym
 
 type Load = (entityId: string) => Promise<Result<unknown>>;
 
-export function PartnerPaymentFold({ entityId, load, tryIt, setFee }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>>; setFee: (entityId: string, pct: number) => Promise<Result<unknown>> }) {
+export function PartnerPaymentFold({ entityId, load, tryIt, setFee, loadPayouts, payNow }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>>; setFee: (entityId: string, pct: number) => Promise<Result<unknown>>; loadPayouts: Load; payNow: (entityId: string) => Promise<Result<unknown>> }) {
   const t = useT();
   const [read, setRead] = useState<PaymentAccountRead | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  const refresh = () =>
-    load(entityId).then((r) => {
-      const next = r.error || !r.data ? null : narrow<PaymentAccountRead>(r.data);
-      setRead(next);
-      return next;
-    });
+  const [payouts, setPayouts] = useState<PartnerPayoutsView | null>(null);
+  const refresh = async () => {
+    const paid = await loadPayouts(entityId);
+    setPayouts(paid.error || !paid.data ? null : narrow<PartnerPayoutsView>(paid.data));
+    const r = await load(entityId);
+    const next = r.error || !r.data ? null : narrow<PaymentAccountRead>(r.data);
+    setRead(next);
+    return next;
+  };
   useEffect(() => {
     void refresh();
   }, [entityId]);
@@ -170,6 +230,14 @@ export function PartnerPaymentFold({ entityId, load, tryIt, setFee }: { entityId
     if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
     await refresh();
   };
+  const payOut = async () => {
+    setBusy(true);
+    setFailed(null);
+    const r = await payNow(entityId);
+    setBusy(false);
+    if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
+    await refresh();
+  };
   const fee = async (pct: number) => {
     setBusy(true);
     setFailed(null);
@@ -184,6 +252,7 @@ export function PartnerPaymentFold({ entityId, load, tryIt, setFee }: { entityId
     <ConsoleFold title={t('tower.partner.pay.title')} hint={hint}>
       {failed ? <p class="cerr">{failed}</p> : null}
       <PaymentAccountBody read={read} t={t} busy={busy} onTry={(phone, amount) => void tryPayment(phone, amount)} onFee={(pct) => void fee(pct)} />
+      {payouts ? <PayoutsBody payouts={payouts} t={t} busy={busy} onPayNow={() => void payOut()} /> : null}
     </ConsoleFold>
   );
 }

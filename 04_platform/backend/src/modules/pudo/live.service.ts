@@ -58,7 +58,7 @@ export class LiveService implements OnModuleInit, OnModuleDestroy {
     this.stopListening = this.events?.subscribeAll((e) => {
       if (e.type !== GlosEvent.Pudo.DriverMoved) this.toConsole('changed');
       // 2026-11-20 — a step the partner owes, or one taken back: told to that partner's own screens, and nobody else's (3c).
-      if (e.type === GlosEvent.Pudo.PartnerOwed) this.toPartner((e.payload as { partnerEntityId?: string } | undefined)?.partnerEntityId, 'owed');
+      if (e.type === GlosEvent.Pudo.PartnerOwed || e.type === GlosEvent.Pudo.PartnerPayout) this.toPartner((e.payload as { partnerEntityId?: string } | undefined)?.partnerEntityId, 'owed');
     });
   }
 

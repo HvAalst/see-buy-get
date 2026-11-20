@@ -6,7 +6,10 @@ import type { Translate } from '../i18n';
  */
 
 export interface PayoutNumberView {
-  way: 'mpesa' | 'by_hand';
+  /** 2026-11-20 — 'partner': a partner contracts in this country and pays every hand to its own number (4c). */
+  way: 'mpesa' | 'by_hand' | 'partner';
+  /** Who pays to the number, where a partner does. */
+  paidBy?: string;
   country: string;
   notPayee?: string;
   masked?: string;
@@ -20,7 +23,7 @@ export interface PayoutNumberSaved extends PayoutNumberView {
 
 /** Settings has a payout-number row only for a payee whose country pays to a number of its own. */
 export function hasPayoutNumber(view: PayoutNumberView | null | undefined): boolean {
-  return Boolean(view && view.way === 'mpesa' && !view.notPayee);
+  return Boolean(view && (view.way === 'mpesa' || view.way === 'partner') && !view.notPayee);
 }
 
 /** The line under the row: not set (nothing is paid), paused after a change, or the number, masked. */

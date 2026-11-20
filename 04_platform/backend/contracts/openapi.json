@@ -38653,6 +38653,64 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/partner-payouts": {
+      "get": {
+        "operationId": "PartnerLedger.payoutsOf",
+        "summary": "",
+        "description": "4c — a partner's payouts to its hands, for our staff: what waits and why, what was paid.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPayoutsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/partner-payouts/run": {
+      "post": {
+        "operationId": "PartnerLedger.payNow",
+        "summary": "",
+        "description": "Pay the partner's hands now, rather than at the day's hour — by name: to try it, or after the account was topped up.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPayoutsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/partner-owed/mine": {
       "get": {
         "operationId": "PartnerLedger.mine",
@@ -38878,6 +38936,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PartnerMeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/me/payouts": {
+      "get": {
+        "operationId": "PartnerApp.myPayouts",
+        "summary": "",
+        "description": "4c — the partner's own payouts to its hands: what waits, and why (the account short above all), and what was paid.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPayoutsView"
                 }
               }
             }
@@ -91175,9 +91253,14 @@
             "type": "string",
             "enum": [
               "mpesa",
-              "by_hand"
+              "by_hand",
+              "partner"
             ],
-            "description": "How payees in this country are paid."
+            "description": "How payees in this country are paid: by M-Pesa, by hand, or by the partner to this number."
+          },
+          "paidBy": {
+            "type": "string",
+            "description": "Who pays to this number, where a partner does: its name."
           },
           "country": {
             "type": "string"
@@ -91272,9 +91355,14 @@
             "type": "string",
             "enum": [
               "mpesa",
-              "by_hand"
+              "by_hand",
+              "partner"
             ],
-            "description": "How payees in this country are paid."
+            "description": "How payees in this country are paid: by M-Pesa, by hand, or by the partner to this number."
+          },
+          "paidBy": {
+            "type": "string",
+            "description": "Who pays to this number, where a partner does: its name."
           },
           "country": {
             "type": "string"
@@ -91651,6 +91739,10 @@
           "listed": {
             "type": "number",
             "description": "What the partner’s own list said for that work when it was owed."
+          },
+          "paid": {
+            "type": "boolean",
+            "description": "4c — paid to the hand, by the partner’s daily payout."
           }
         },
         "required": [
@@ -92034,6 +92126,110 @@
           "pct"
         ]
       },
+      "PartnerPayoutRow": {
+        "type": "object",
+        "properties": {
+          "payoutId": {
+            "type": "string"
+          },
+          "payeeId": {
+            "type": "string"
+          },
+          "payeeKind": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "hub",
+              "driver",
+              "fleet"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "paid"
+            ]
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "no_number",
+              "number_new",
+              "balance",
+              "refused",
+              "unreachable"
+            ]
+          },
+          "numberMasked": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "Paid out now by our staff, by name, rather than at the day’s hour."
+          }
+        },
+        "required": [
+          "payoutId",
+          "payeeId",
+          "payeeKind",
+          "amount",
+          "currency",
+          "steps",
+          "state",
+          "day"
+        ]
+      },
+      "PartnerPayoutsView": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "waitingAmount": {
+            "type": "number"
+          },
+          "shortAmount": {
+            "type": "number",
+            "description": "Of what waits, what waits for the partner’s account to hold enough."
+          },
+          "paidAmount": {
+            "type": "number"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerPayoutRow"
+            }
+          }
+        },
+        "required": [
+          "currency",
+          "waiting",
+          "waitingAmount",
+          "shortAmount",
+          "paidAmount",
+          "rows"
+        ]
+      },
       "PartnerOwedSum": {
         "type": "object",
         "properties": {
@@ -92045,6 +92241,10 @@
           },
           "amount": {
             "type": "number"
+          },
+          "paid": {
+            "type": "number",
+            "description": "4c — of it, what the partner has paid out to the hand already."
           }
         },
         "required": [

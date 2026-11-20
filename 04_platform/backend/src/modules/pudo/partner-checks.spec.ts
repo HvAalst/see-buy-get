@@ -227,7 +227,7 @@ describe('wired', () => {
     expect(doors).toMatch(/@Roles\('operator'\)\s*@Get\('entities\/:entityId\/partner-checks'\)/);
     expect(doors).toMatch(/@Roles\('operator'\)\s*@Post\('entities\/:entityId\/partner-checks\/:flagId\/looked'\)[\s\S]{0,300}auditActor\(actor\)/);
     expect(doors).toMatch(/@Roles\('operator'\)\s*@Post\('entities\/:entityId\/partner-checks\/review'\)[\s\S]{0,300}\{ asked: true \}/);
-    expect(read('pudo.module.ts')).toMatch(/PartnerLedgerService, PartnerChecksService,/);
+    expect(read('pudo.module.ts')).toMatch(/PartnerLedgerService, PartnerPayoutService, PartnerChecksService,/);
   });
 
   it('every shop step says which work it was, and a driver’s road and bag the bag it was for', () => {

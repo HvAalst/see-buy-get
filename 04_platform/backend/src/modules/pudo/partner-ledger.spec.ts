@@ -164,6 +164,22 @@ describe('wired', () => {
     expect(read('hub-arrival.service.ts')).toMatch(/this\.gate\.receivingLabour\([^;]*this\.mdps\.countryOf\(hub\)\);/);
   });
 
+  it('4c — what a payout has paid is marked: each line paid, and per partner what of the total the hand has been paid', () => {
+    const w = aWorld();
+    w.gate.payLabour('did:glos:shop-addis', 40, 'PUD-1', 'parcel');
+    w.gate.payLabour('did:glos:shop-addis', 25, 'PUD-2', 'parcel');
+    const [second, first] = w.ledger.owedTo(['did:glos:shop-addis']).lines;
+    const paid = new Set([first.lineId]);
+    const mine = w.ledger.owedTo(['did:glos:shop-addis'], paid);
+    expect(mine.lines.find((l) => l.lineId === first.lineId)?.paid).toBe(true);
+    expect(mine.lines.find((l) => l.lineId === second.lineId)?.paid).toBeUndefined();
+    expect(mine.totals).toEqual([{ partnerName: 'Addis Courier PLC', currency: 'ETB', amount: 65, paid: first.amount }]);
+    // Our staff, and the partner, read the same marks on its record.
+    expect(w.ledger.ledgerOf(PARTNER.entityId, { paidLineIds: paid }).lines.filter((l) => l.paid).map((l) => l.lineId)).toEqual([first.lineId]);
+    // Nothing paid: nothing said of it.
+    expect(w.ledger.owedTo(['did:glos:shop-addis']).totals?.[0].paid).toBeUndefined();
+  });
+
   it('its record is read by staff who keep the money; a hand reads its own', () => {
     expect(STAFF_AREAS['GET sbg/entities/:entityId/partner-owed']).toBe('money');
     expect(STAFF_AREAS['GET sbg/partner-owed/mine']).toBe('none');

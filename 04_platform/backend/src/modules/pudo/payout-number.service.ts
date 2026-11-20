@@ -17,6 +17,10 @@ import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { PAYOUT_NUMBER_HOLD_MS, PayoutCodeSent, PayoutNumberRecord, PayoutNumberSaved, PayoutNumberView } from './payout-number.types';
 import { NETWORK_JURISDICTION } from './pudo.config';
+import { normalizePhone } from '../../foundation/identity/phone';
+import { AgentService } from './agent.service';
+import { PartnerLedgerService } from './partner-ledger.service';
+import type { NumberWay } from './payout-number.types';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -51,7 +55,25 @@ export class PayoutNumberService implements OnModuleInit {
     private readonly managers: FleetManagerService,
     private readonly mdps: MdpService,
     @Optional() private readonly sms?: SmsService,
+    // 2026-11-20 — a shop is a payee where a partner pays it (4c); and where a partner contracts, it pays every hand by phone.
+    @Optional() private readonly agents?: AgentService,
+    @Optional() private readonly partners?: PartnerLedgerService,
   ) {}
+
+  /** How a payee in this country is paid: M-Pesa where we pay by it, by the partner where one contracts, by hand elsewhere. */
+  wayOf(country: string): NumberWay {
+    if (payoutWayOf(country) === 'mpesa') return 'mpesa';
+    return this.partners?.partnerAt(country) ? 'partner' : 'by_hand';
+  }
+
+  /** A mobile number of this country, as digits with its country code — or nothing for a number that is not one. */
+  private numberIn(country: string, phone: string): string | undefined {
+    const dial = catalogueEntry(country)?.dialCode;
+    if (!dial) return undefined;
+    const e164 = normalizePhone(phone, dial);
+    const digits = e164.replace(/\D/g, '');
+    return e164.startsWith(dial) && digits.length >= 9 && digits.length <= 15 ? digits : undefined;
+  }
 
   onModuleInit(): void {
     this.payouts.registerDestinations({
@@ -68,7 +90,7 @@ export class PayoutNumberService implements OnModuleInit {
 
   view(actor: IntrospectionResult | undefined, now: number = Date.now()): PayoutNumberView {
     const who = this.payeeOf(actor);
-    if ('notPayee' in who) return { way: payoutWayOf(who.country), country: who.country, notPayee: who.notPayee };
+    if ('notPayee' in who) return { way: this.wayOf(who.country), country: who.country, notPayee: who.notPayee };
     return this.viewOf(who, now);
   }
 
@@ -79,11 +101,13 @@ export class PayoutNumberService implements OnModuleInit {
   /** `via` (2026-11-16): the way the payee chose — by text, or an app offered for that number (the owner: "the same choice"). */
   async requestCode(actor: IntrospectionResult | undefined, phone: string, now: number = Date.now(), via?: CodeWay): Promise<PayoutCodeSent> {
     const payee = this.requirePayee(actor);
-    if (payoutWayOf(payee.country) !== 'mpesa') {
+    const way = this.wayOf(payee.country);
+    if (way === 'by_hand') {
       throw new GlosError('INVALID_STATE', `In ${catalogueEntry(payee.country)?.name ?? payee.country} payouts are made by hand: there is no payout number to set.`);
     }
-    const msisdn = normaliseMsisdn(phone);
-    if (!msisdn) throw new GlosError('PHONE_INVALID', 'Not a Kenyan mobile number M-Pesa can pay. Write it as 07XX XXX XXX or 01XX XXX XXX.', { field: 'phone' });
+    const msisdn = way === 'mpesa' ? normaliseMsisdn(phone) : this.numberIn(payee.country, phone);
+    if (!msisdn && way === 'mpesa') throw new GlosError('PHONE_INVALID', 'Not a Kenyan mobile number M-Pesa can pay. Write it as 07XX XXX XXX or 01XX XXX XXX.', { field: 'phone' });
+    if (!msisdn) throw new GlosError('PHONE_INVALID', `Not a mobile number in ${catalogueEntry(payee.country)?.name ?? payee.country}: write it with its country code, ${catalogueEntry(payee.country)?.dialCode ?? '+'}…`, { field: 'phone' });
     if (this.numbers.get(payee.payeeId)?.msisdn === msisdn) throw new GlosError('INVALID_STATE', 'That is already your payout number.');
     const to = `+${msisdn}`;
     const texts = this.sms?.sends() ?? false;
@@ -166,6 +190,17 @@ export class PayoutNumberService implements OnModuleInit {
     return { numberId: record.numberId, masked: maskMsisdn(record.msisdn) };
   }
 
+  /**
+   * 2026-11-20 — WHERE A PARTNER PAYS THIS HAND (4c): its own number, confirmed with a code — or why not today: none set yet,
+   * or changed less than a day ago (the pause that catches a number put on somebody else's account).
+   */
+  partnerDestination(payeeId: string, now: number = Date.now()): PayoutDestination | PayoutDestinationRefusal {
+    const record = this.numbers.get(payeeId);
+    if (!record) return { reason: 'no_number' };
+    if (record.heldUntil && Date.parse(record.heldUntil) > now) return { reason: 'number_new' };
+    return { numberId: record.numberId, masked: maskMsisdn(record.msisdn) };
+  }
+
   /** The whole number — for the rail, at the moment it sends, and only for the number the payout was raised to. */
   fullNumber(payeeId: string, numberId: string): string | undefined {
     const record = this.numbers.get(payeeId);
@@ -175,8 +210,10 @@ export class PayoutNumberService implements OnModuleInit {
   private viewOf(payee: Payee, now: number): PayoutNumberView {
     const record = this.numbers.get(payee.payeeId);
     const held = record?.heldUntil && Date.parse(record.heldUntil) > now ? record.heldUntil : undefined;
+    const way = this.wayOf(payee.country);
     return {
-      way: payoutWayOf(payee.country),
+      way,
+      ...(way === 'partner' ? { paidBy: this.partners?.partnerAt(payee.country)?.name } : {}),
       country: payee.country,
       ...(record ? { masked: maskMsisdn(record.msisdn), confirmedAt: record.confirmedAt } : {}),
       ...(held ? { heldUntil: held } : {}),
@@ -206,6 +243,13 @@ export class PayoutNumberService implements OnModuleInit {
       const hub = this.mdps.list().find((m) => m.did === actor.did);
       if (!hub) throw new GlosError('NOT_FOUND', 'No hub is signed in');
       return { payeeId: hub.mdpId, country: this.mdps.countryOf(hub) };
+    }
+    // 2026-11-20 — a shop where a partner contracts is paid by the partner, to its own number (4c); elsewhere, into its float.
+    if (role === 'agent' && actor?.did && this.agents) {
+      const shop = this.agents.get(actor.did);
+      const country = this.agents.countryOf(shop);
+      if (this.wayOf(country) === 'partner') return { payeeId: shop.did, country };
+      return { notPayee: 'This account is not paid out: a shop is paid into its float.', country };
     }
     return { notPayee: 'This account is not paid out: a shop is paid into its float.', country: NETWORK_JURISDICTION };
   }

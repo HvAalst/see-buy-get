@@ -113,10 +113,21 @@ export function createPersonClient(): PersonClient {
 
 /* ------------------------------------------------------------ reading for a partner -- */
 
+/** 2026-11-20 — the partner's payouts to its hands (4c): what waits, and why; what was paid. */
+export interface PartnerPayouts {
+  currency: string;
+  waiting: number;
+  waitingAmount: number;
+  shortAmount: number;
+  paidAmount: number;
+  rows: Array<{ payoutId: string; payeeId: string; payeeKind: PartnerOwedRow['payeeKind']; amount: number; currency: string; steps: number; state: 'waiting' | 'paid'; why?: 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable'; day: string; paidAt?: string }>;
+}
+
 export interface PartnerClient {
   client: SeededAppClient;
   me(): Promise<Result<PartnerMe>>;
   owed(): Promise<Result<PartnerOwed>>;
+  payouts(): Promise<Result<PartnerPayouts>>;
 }
 
 export function createPartnerClient(): PartnerClient {
@@ -126,6 +137,7 @@ export function createPartnerClient(): PartnerClient {
     client,
     me: () => call((c) => c.GET('/v1/sbg/partner/me', {}) as never),
     owed: () => call((c) => c.GET('/v1/sbg/partner/me/owed', {}) as never),
+    payouts: () => call((c) => c.GET('/v1/sbg/partner/me/payouts', {}) as never),
   };
 }
 

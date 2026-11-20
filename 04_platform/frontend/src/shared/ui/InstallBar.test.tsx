@@ -100,7 +100,7 @@ describe('the call to install, in every app that installs', () => {
   it('stands first on the Partner app’s home too, pinned under the mast, with its guide in the menu (2026-11-20)', () => {
     const home = readFileSync(join('src', 'apps', 'partner', 'screens', 'HomeScreen.tsx'), 'utf8');
     expect(home).toMatch(/return \(\s*<>\s*\{install \? <InstallBar app="partner" \/> : null\}\s*<header class="cons__head">/);
-    expect(home).toMatch(/<OwedBody owed=\{state\.owed\} failed=\{state\.owedFailed\} live=\{state\.live\} t=\{t\} install \/>/);
+    expect(home).toMatch(/<OwedBody owed=\{state\.owed\} payouts=\{state\.payouts\} failed=\{state\.owedFailed\} live=\{state\.live\} t=\{t\} install \/>/);
     const css = readFileSync(join('src', 'apps', 'partner', 'partner.css'), 'utf8');
     expect(css).toMatch(/\.pa \.installbar \{\s*top: var\(--c-mast-h\);/);
     expect(css).toMatch(/\.pa \.cons__main:has\(> \.installbar\) \{\s*overflow-x: clip;/);

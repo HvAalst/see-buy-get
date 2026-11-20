@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from './i18n';
-import { PaymentAccountBody, paymentState, type HubPaymentRow, type PaymentAccountRead } from '../apps/tower/screens/PartnerPaymentFold';
+import { PaymentAccountBody, PayoutsBody, paymentState, type HubPaymentRow, type PartnerPayoutsView, type PaymentAccountRead } from '../apps/tower/screens/PartnerPaymentFold';
 
 /*
  * 2026-11-20 — THE PARTNER'S PAYMENT ACCOUNT, SEEN (the payments plan, step 4a). What is held to here: staff see which provider
@@ -82,6 +82,31 @@ describe('the fold, for our staff', () => {
     expect(set).not.toContain('Set the fee');
   });
 
+  it('its payouts (4c): what waits and why, what was paid, by whom when now — and paying out now', () => {
+    const view: PartnerPayoutsView = {
+      currency: 'ETB',
+      waiting: 2,
+      waitingAmount: 340,
+      shortAmount: 300,
+      paidAmount: 65,
+      rows: [
+        { payoutId: 'pp_1', payeeId: 'did:glos:courier', payeeKind: 'driver', amount: 300, currency: 'ETB', steps: 1, state: 'waiting', why: 'balance', day: '2026-11-20' },
+        { payoutId: 'pp_2', payeeId: 'mdp_addis', payeeKind: 'hub', amount: 40, currency: 'ETB', steps: 2, state: 'waiting', why: 'no_number', day: '2026-11-20' },
+        { payoutId: 'pp_3', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', amount: 65, currency: 'ETB', steps: 3, state: 'paid', day: '2026-11-20', askedBy: 'Amina Otieno' },
+      ],
+    };
+    const html = renderToString(<PayoutsBody payouts={view} t={tt} onPayNow={() => undefined} />);
+    expect(html).toContain('Payouts to its hands');
+    expect(html).toMatch(/2 wait: [^<]*340[^<]*\. Paid so far: [^<]*65/);
+    expect(html).toContain('Pay out now');
+    expect(html).toContain('Waits: the account does not hold enough');
+    expect(html).toContain('Waits: no payout number yet');
+    expect(html).toContain('>Paid<');
+    expect(html).toContain('3 steps');
+    expect(html).toContain('paid out now by Amina Otieno');
+    expect(renderToString(<PayoutsBody payouts={{ ...view, rows: [] }} t={tt} />)).not.toContain('Pay out now');
+  });
+
   it('sits on a partner’s own company record, its words in every language', () => {
     const screen = readFileSync(join('src', 'apps/tower/screens/CompanyRecordScreen.tsx'), 'utf8');
     expect(screen).toMatch(/kind === 'partner' && client && entityId \? <PartnerPaymentFold /);
@@ -90,6 +115,9 @@ describe('the fold, for our staff', () => {
     expect(api).toMatch(/tryPartnerPayment: \(entityId: string, phone: string, amount: number\) =>\s*sbg\.request\(\(c\) => c\.POST\('\/v1\/sbg\/entities\/\{entityId\}\/payment-account\/try'/);
     expect(api).toMatch(/setPartnerFee: \(entityId: string, pct: number\) => sbg\.request\(\(c\) => c\.POST\('\/v1\/sbg\/entities\/\{entityId\}\/payment-account\/fee'/);
     expect(screen).toContain('setFee={(id, pct) => client.api.setPartnerFee(id, pct)}');
+    expect(screen).toContain('loadPayouts={(id) => client.api.partnerPayouts(id)} payNow={(id) => client.api.payPartnerNow(id)}');
+    expect(api).toMatch(/partnerPayouts: \(entityId: string\) => sbg\.request\(\(c\) => c\.GET\('\/v1\/sbg\/entities\/\{entityId\}\/partner-payouts'/);
+    expect(api).toMatch(/payPartnerNow: \(entityId: string\) => sbg\.request\(\(c\) => c\.POST\('\/v1\/sbg\/entities\/\{entityId\}\/partner-payouts\/run'/);
     for (const locale of ['sw', 'nl', 'am']) {
       const words = readFileSync(join('src', `shared/i18n/words/${locale}/tower.ts`), 'utf8');
       expect(words).toContain('"tower.partner.pay.tryHint"');

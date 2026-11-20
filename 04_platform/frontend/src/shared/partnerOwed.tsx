@@ -25,13 +25,15 @@ export interface PartnerOwedRow {
   work?: PartnerWork;
   /** What the partner’s own list said for that work when it was owed. */
   listed?: number;
+  /** 4c — paid to the hand by the partner’s daily payout. */
+  paid?: boolean;
 }
 
 export type PartnerWork = 'take_in' | 'shelving' | 'release' | 'handover' | 'holding' | 'sort' | 'receiving' | 'pass_on' | 'bag_load' | 'road';
 
 export interface MyPartnerOwed {
   lines: PartnerOwedRow[];
-  totals?: Array<{ partnerName: string; currency: string; amount: number }>;
+  totals?: Array<{ partnerName: string; currency: string; amount: number; paid?: number }>;
 }
 
 export const PARTNER_STEP: Record<PartnerOwedRow['step'], MessageKey> = {
@@ -61,6 +63,14 @@ export const workWords = (l: Pick<PartnerOwedRow, 'work' | 'step'>): MessageKey 
 
 const when = (at: string) => new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+/** What a partner owes the hand in all — and, once it has paid some, what it paid and what it still owes (4c). */
+export function totalWords(total: NonNullable<MyPartnerOwed['totals']>[number], t: Translate): string {
+  if (!total.paid) return t('partner.owed.total', { partner: total.partnerName, amount: cash(total.amount, total.currency) });
+  const open = Math.round((total.amount - total.paid) * 100) / 100;
+  if (open <= 0.005) return t('partner.owed.allPaid', { partner: total.partnerName, paid: cash(total.paid, total.currency) });
+  return t('partner.owed.totalPaid', { partner: total.partnerName, paid: cash(total.paid, total.currency), open: cash(open, total.currency) });
+}
+
 /** The card, from what the server said — pure, for the test. The latest twenty steps; the total per partner first. */
 export function PartnerOwedList({ owed, t }: { owed: MyPartnerOwed | null; t: Translate }) {
   if (!owed || owed.lines.length === 0) return null;
@@ -68,10 +78,11 @@ export function PartnerOwedList({ owed, t }: { owed: MyPartnerOwed | null; t: Tr
     <Card title={t('partner.owed.title')}>
       {(owed.totals ?? []).map((total) => (
         <p class="t-body" key={`${total.partnerName}|${total.currency}`}>
-          <b>{t('partner.owed.total', { partner: total.partnerName, amount: cash(total.amount, total.currency) })}</b>
+          <b>{totalWords(total, t)}</b>
         </p>
       ))}
       <p class="hint">{t('partner.owed.note')}</p>
+      <p class="hint">{t('partner.owed.daily')}</p>
       <div class="rows" role="list">
         {owed.lines.slice(0, 20).map((l) => (
           <div class="row" role="listitem" key={l.lineId}>
@@ -79,6 +90,7 @@ export function PartnerOwedList({ owed, t }: { owed: MyPartnerOwed | null; t: Tr
               <span class="row__title">
                 {t(workWords(l))} · {l.reference}
                 {l.takenBack ? ` · ${t('partner.owed.takenBack')}` : null}
+                {l.paid ? ` · ${t('partner.owed.paid')}` : null}
               </span>
               <span class="row__meta">{when(l.at)}</span>
             </span>

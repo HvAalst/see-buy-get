@@ -738,11 +738,11 @@ function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNu
 
   return (
     <>
-      <p class="t-body">{t('account.payout.body')}</p>
+      <p class="t-body">{api.payout?.way === 'partner' ? t('account.payout.bodyPartner', { partner: api.payout.paidBy ?? '' }) : t('account.payout.body')}</p>
       {api.payout?.masked ? <p class="t-body">{t('account.payout.change')}</p> : null}
       <div class="field">
         <label class="field__label" for="acct-payout-phone">
-          {t('account.payout.numberLabel')}
+          {t(api.payout?.way === 'partner' ? 'account.payout.numberLabelPartner' : 'account.payout.numberLabel')}
         </label>
         <PhoneField
           id="acct-payout-phone"

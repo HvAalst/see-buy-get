@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import { PartnerPeopleBody, type PartnerMemberRow } from '../tower/screens/PartnerPeopleFold';
-import type { PartnerOwed } from './api';
+import type { PartnerOwed, PartnerPayouts } from './api';
 import { openOnArrival } from './logic';
 import { OwedBody } from './screens/HomeScreen';
 import { HandsBody } from './screens/HandsScreen';
@@ -47,8 +47,8 @@ describe('what we owe', () => {
     expect(html).toContain('Bole Duka · PUD-1');
     expect(html.match(/>taken back</g)).toHaveLength(1);
     expect(html).toContain('>Live<');
-    // What is paid in and out comes with the money itself.
-    expect(html).toContain('What is paid in and paid out shows here once payments run through our own accounts.');
+    // 4c — each hand is paid once a day.
+    expect(html).toContain('Each hand is paid once a day from your account, to the payout number it set.');
   });
 
   it('not live, or a read that failed: said, the figures kept', () => {
@@ -63,6 +63,26 @@ describe('what we owe', () => {
     const before = renderToString(<OwedBody owed={null} failed={false} live="off" t={tt} />);
     expect(before).toContain('aria-busy="true"');
     expect(before).not.toContain('Nothing owed yet');
+  });
+});
+
+describe('its payouts (4c)', () => {
+  const payouts = (over: Partial<PartnerPayouts> = {}): PartnerPayouts => ({ currency: 'ETB', waiting: 2, waitingAmount: 340, shortAmount: 300, paidAmount: 40, rows: [], ...over });
+
+  it('what waits for the account to hold enough, first and as a warning; what waits in all; paid so far and still to pay; a paid step tagged', () => {
+    const paidLine = owed({ lines: owed().lines.map((l) => (l.lineId === 'po_1' ? { ...l, paid: true } : l)) });
+    const html = renderToString(<OwedBody owed={paidLine} payouts={payouts()} failed={false} live="live" t={tt} />);
+    expect(html).toMatch(/class="cerr">[^<]*300[^<]* of payouts wait for your account to hold enough/);
+    expect(html).toMatch(/2 payouts wait, [^<]*340[^<]* in all\./);
+    expect(html).toMatch(/Paid out so far: [^<]*40[^<]*\. Still to pay: [^<]*300/);
+    expect(html.match(/>paid</g)).toHaveLength(1);
+    expect(html.indexOf('of payouts wait')).toBeLessThan(html.indexOf('payouts wait, '));
+  });
+
+  it('nothing waiting, nothing paid yet: nothing said of payouts', () => {
+    const html = renderToString(<OwedBody owed={owed()} payouts={payouts({ waiting: 0, waitingAmount: 0, shortAmount: 0, paidAmount: 0 })} failed={false} live="live" t={tt} />);
+    expect(html).not.toContain('payouts wait');
+    expect(html).not.toContain('Paid out so far');
   });
 });
 

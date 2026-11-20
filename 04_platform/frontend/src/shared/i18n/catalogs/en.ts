@@ -1274,6 +1274,12 @@ export const en = {
   'account.payout.oldTexted': 'Your old number was texted that it was replaced.',
   'account.payout.oldKept': 'Test mode: the text to your old number was kept, not sent.',
   'account.payout.oldNotSent': 'Your old number could not be texted.',
+  'account.payout.bodyPartner': '{partner} pays you to this number, by phone, for your work for it. A code is texted to it, to show it is yours.',
+  'account.payout.numberLabelPartner': 'Phone number, with its country code',
+  'partner.owed.totalPaid': '{partner} has paid you {paid}, and owes you {open} more',
+  'partner.owed.allPaid': '{partner} has paid you all it owes: {paid}',
+  'partner.owed.paid': 'paid',
+  'partner.owed.daily': 'It pays once a day, to the payout number you set in Settings. With no number set, your payout waits for one.',
   // 2026-11-19 — a carrier's own Mollie account, in Settings (the payments plan, part 2): a shipper pays it at the handover.
   'account.mollie.title': 'Mollie',
   'account.mollie.subNone': 'Not connected',

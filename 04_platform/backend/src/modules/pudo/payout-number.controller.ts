@@ -43,7 +43,7 @@ export class PayoutNumberController {
     return this.numbers.view(actor);
   }
 
-  @Roles('driver', 'fleet_manager', 'mdp')
+  @Roles('driver', 'fleet_manager', 'mdp', 'agent')
   @UseGuards(RateLimitGuard)
   @RateLimit(20, 15 * 60)
   @Post('code')
@@ -51,7 +51,7 @@ export class PayoutNumberController {
     return this.numbers.requestCode(actor, dto.phone, Date.now(), dto.via);
   }
 
-  @Roles('driver', 'fleet_manager', 'mdp')
+  @Roles('driver', 'fleet_manager', 'mdp', 'agent')
   @UseGuards(RateLimitGuard)
   @RateLimit(30, 15 * 60)
   @Post()

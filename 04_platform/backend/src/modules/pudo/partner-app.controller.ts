@@ -9,6 +9,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { PartnerLedgerService, type PartnerPayeeKind } from './partner-ledger.service';
+import { PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
 import { InvitePartnerMemberDto, PartnerMeView, PartnerMemberService, PartnerMemberView, PartnerMembershipList, PartnerMembershipView, PartnerOwedForPartner, PartnerSession } from './partner-member.service';
 
 /**
@@ -25,6 +26,7 @@ export class PartnerAppController {
     private readonly mdps: MdpService,
     private readonly drivers: DriverService,
     private readonly fleets: FleetManagerService,
+    private readonly payouts: PartnerPayoutService,
   ) {}
 
   /* ------------------------------------------------------------------ our staff -- */
@@ -83,12 +85,20 @@ export class PartnerAppController {
     return this.members.me(actor);
   }
 
+  /** 4c — the partner's own payouts to its hands: what waits, and why (the account short above all), and what was paid. */
+  @Roles('partner')
+  @Get('partner/me/payouts')
+  myPayouts(@Actor() actor: IntrospectionResult): PartnerPayoutsView {
+    const { entity } = this.members.requireMember(actor);
+    return this.payouts.viewOf(entity.entityId);
+  }
+
   /** What the partner owes its hands: in all, per hand, every step — the record our staff read on its page. */
   @Roles('partner')
   @Get('partner/me/owed')
   owed(@Actor() actor: IntrospectionResult): PartnerOwedForPartner {
     const { entity } = this.members.requireMember(actor);
-    const view = this.ledger.ledgerOf(entity.entityId);
+    const view = this.ledger.ledgerOf(entity.entityId, { paidLineIds: this.payouts.paidLineIds() });
     // Each hand by the name the partner knows it by — it contracts them — and never a phone number.
     const names: Record<string, string> = {};
     for (const h of [...view.byPayee, ...view.lines]) {
