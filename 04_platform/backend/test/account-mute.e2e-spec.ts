@@ -96,7 +96,7 @@ describe('an account at rest — over the wire', () => {
     const walkUp = await http()
       .post('/v1/sbg/parcels/accept')
       .set(shop.shopToken)
-      .send({ agentDid: shop.did, parcelId: `REST-${digits()}`, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000611', receiverMobile: '+254700000612', paymentMode: 'prepaid', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) });
+      .send({ agentDid: shop.did, parcelId: `REST-${digits()}`, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000611', receiverMobile: '+254700000612', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) });
     expect(walkUp.status).toBe(403);
     expect(walkUp.body).toMatchObject({ params: { reason: 'shop_resting' } });
     expect(walkUp.body.detail).toMatch(/its owner muted the account/);

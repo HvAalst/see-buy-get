@@ -252,6 +252,8 @@ export class AcceptParcelDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   /** How long this take-in took at the counter, by the app's own clock, in seconds — for the pilot's numbers. */
   @IsOptional() @IsNumber() @Min(0) @Max(86_400) takeInSeconds?: number;
+  /** 2026-11-20 — the payment by phone asked for this parcel at this counter, paid (4b): where the counter takes no cash. */
+  @IsOptional() @IsString() @Matches(/^hp_[A-Za-z0-9_-]{6,40}$/) paymentId?: string;
   @IsString() parcelId!: string;
   /** The redesigned counter measures the parcel: dims + weight → the tier is DERIVED (like the vendor/Send
    *  mint). `size` remains for the legacy declared-tier path; at least one of {dimensionsCm+weightKg, size}

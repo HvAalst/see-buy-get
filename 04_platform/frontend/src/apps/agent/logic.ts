@@ -15,7 +15,7 @@ import { dangerousGoodsValue, isDangerousNature } from '../../shared/dangerousGo
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
-import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, AbroadRoute, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, TakeInTerms } from './types';
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, AbroadRoute, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, PhonePay, TakeInTerms } from './types';
 
 /* ---------------------------------------------------------- take-in terms -- */
 
@@ -76,6 +76,19 @@ export function termsBlock(terms: TakeInTerms | null, loadState: 'idle' | 'loadi
   // Nothing of ours covers it: the customer is told before the goods change hands, as for the carrier's promise.
   if (termsNeedTelling(terms) && !told) return t('agent.accept.termsTickFirst');
   return null;
+}
+
+/**
+ * 2026-11-20 — PAID BY PHONE FIRST (a partner's country, 4b): what still stands between the counter and the take-in — nothing once
+ * the payment for this very parcel is paid; otherwise what to do. Null where the counter takes no payment by phone.
+ */
+export function phonePayBlock(terms: TakeInTerms | null, pay: PhonePay | null, parcelId: string, online: boolean, t: Translate): string | null {
+  if (!terms?.payByPhone) return null;
+  const mine = pay && pay.parcelId === parcelId.trim().toUpperCase() ? pay : null;
+  if (mine?.state === 'paid') return null;
+  if (!online) return t('agent.accept.pay.needsSignal');
+  if (mine?.state === 'asked') return t('agent.accept.pay.waiting', { ends: mine.phoneEnds });
+  return t('agent.accept.pay.first');
 }
 
 /* ------------------------------------------------------------------- gate -- */

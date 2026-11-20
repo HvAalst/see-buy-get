@@ -1565,6 +1565,8 @@ export class Parcel {
   lockedPerKm?: number; // the cheapest carrier rate it was QUOTED at, in its own money: the rebate's rate where the carrier's is not known
   buyerCharge?: number; // what the checkout charged the buyer (REPORTED only — vendor's income)
   paidStatus?: 'unpaid' | 'ParcelPaid'; // prepaid gate — label issues only when ParcelPaid
+  /** 2026-11-20 — a walk-up paid by phone at the counter, into the partner's account through the payment hub (4b): which payment, how much, test money or not. */
+  paidByPhone?: { paymentId: string; amount: number; currency: string; test: boolean; partnerEntityId: string };
   disputeReason?: string;
   disputePhotoRef?: string;
   // S23 — the buyer's own delivered-state proof + app-filed dispute, kept ALONGSIDE the agent's

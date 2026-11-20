@@ -478,6 +478,8 @@ export function createOperatorApi(sbg: SbgClient) {
     /** A try of it: a payment prompt to a phone, on test money. */
     tryPartnerPayment: (entityId: string, phone: string, amount: number) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/try', { params: { path: { entityId } }, body: { phone, amount } })),
+    /** 4b — our fee on the partner's payments, a percentage (P4-c). */
+    setPartnerFee: (entityId: string, pct: number) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/fee', { params: { path: { entityId } }, body: { pct } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),

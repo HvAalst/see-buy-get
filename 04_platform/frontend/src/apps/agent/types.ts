@@ -368,6 +368,21 @@ export interface TakeInTerms {
   cashAccepted: boolean;
   /** P4 — false where the promise is ours but this country cannot be paid out in: owed, not paid. */
   paidOut: boolean;
+  /** 2026-11-20 — where the sender pays by phone first, before the label (a partner's country, 4b): to whom, how much. */
+  payByPhone?: { to: string; price: number; currency: string };
+}
+
+/** 2026-11-20 — a walk-up's payment by phone, as the counter last heard of it (4b). */
+export interface PhonePay {
+  parcelId: string;
+  paymentId: string;
+  state: 'asked' | 'paid' | 'failed';
+  why?: 'declined' | 'expired' | 'unreachable' | 'insufficient';
+  phoneEnds: string;
+  amount: number;
+  currency: string;
+  test: boolean;
+  askedAt: string;
 }
 
 export interface HandoverView {

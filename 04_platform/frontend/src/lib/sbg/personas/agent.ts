@@ -177,6 +177,8 @@ export function createAgentApi(sbg: SbgClient) {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
       /** How long it took at the counter, by this app's clock — for the pilot's numbers. */
       takeInSeconds?: number;
+      /** 2026-11-20 — the payment by phone asked for this parcel here, paid (a partner's country, 4b). */
+      paymentId?: string;
       /** 2026-11-18 — to a shop in another country, on a route that is on: its declaration (step 2b). */
       abroad?: { contents: string; itemCount: number; declaredValue: number; currency: string; invoicePhotoRef: string; contentsPhotoRef: string; seal: string; senderName: string; receiverName: string };
     }) =>
@@ -327,6 +329,10 @@ export function createAgentApi(sbg: SbgClient) {
     /** P3 — whose promise a walk-up taken in here is under, who answers for it, and the cover. Asked when
      *  the take-in screen opens, so it is said before the goods are accepted rather than after a refusal. */
     takeInTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/take-in-terms', { params: { path: { did } } })),
+
+    /** 2026-11-20 — a walk-up paid by phone (a partner's country, 4b): the prompt asked of the payer's phone, and where it stands. */
+    askPhonePayment: (agentDid: string, parcelId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/phone-payment', { body: { agentDid, parcelId, phone } })),
+    phonePayment: (paymentId: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/phone-payment/{paymentId}', { params: { path: { paymentId } } })),
 
     /** Round 27 — a parcel this shop took in, its label for the counter's thermal printer (ZPL). */
     labelZpl: (did: string, parcelId: string) =>

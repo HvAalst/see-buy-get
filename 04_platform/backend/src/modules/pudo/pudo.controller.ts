@@ -72,6 +72,7 @@ import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry, countryOfPhone } from '../../foundation/countries/catalogue';
 import { ApiHeader, ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
+import { HubPaymentView, PhonePaymentDto } from '../../foundation/payment-hub/hub.types';
 import { Public } from '../../foundation/auth/public.decorator';
 import { AgreementService } from '../../foundation/documents/agreement.service';
 import { DocumentsService } from '../../foundation/documents/documents.service';
@@ -4035,6 +4036,28 @@ export class SbgController {
     // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
     this.pilot?.noteTakeIn((taken as { parcelId?: string }).parcelId ?? dto.parcelId, agentDid, dto.takeInSeconds);
     return taken;
+  }
+
+  /**
+   * 2026-11-20 — A WALK-UP PAID BY PHONE (the payments plan, 4b; P3-c "payment by phone only" in a partner's country): the counter
+   * asks for the payment — a prompt on the payer's phone, into the partner's account, for the partner's price — and takes the
+   * parcel in once it is paid. A shop asks at its own counter; staff ask nothing in its name.
+   */
+  @Roles('agent', 'operator')
+  @Post('parcels/phone-payment')
+  @AtTheCounter()
+  askPhonePayment(@Body() dto: PhonePaymentDto, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A payment is asked at the shop’s own counter, signed in as the shop. Staff ask nothing in its name');
+    return this.parcels.askPhonePayment(actingDid(actor, dto.agentDid), dto.parcelId, dto.phone);
+  }
+
+  /** Where the counter's payment stands: asked of its provider now. The counter that asked it alone reads it. */
+  @Roles('agent', 'operator')
+  @Get('parcels/phone-payment/:paymentId')
+  @AtTheCounter()
+  phonePayment(@Param('paymentId') paymentId: string, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A payment is read at the shop’s own counter, signed in as the shop');
+    return this.parcels.phonePaymentState(actingDid(actor), paymentId);
   }
 
   /**

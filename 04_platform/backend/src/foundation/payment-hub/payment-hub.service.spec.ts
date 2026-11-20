@@ -34,7 +34,7 @@ describe('the payment hub', () => {
   it('a partner’s account is the stand-in’s for now: test money, in the partner’s own money, holding nothing yet', async () => {
     const { hub } = aHub();
     expect(hub.ready()).toEqual(['stand-in']);
-    expect(await hub.accountView(PARTNER.entityId, T0)).toEqual({ provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 0 });
+    expect(await hub.accountView(PARTNER.entityId, T0)).toEqual({ provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 0, feeOwed: 0 });
     expect(hub.paymentsOf(PARTNER.entityId)).toEqual([]);
   });
 
@@ -167,9 +167,68 @@ describe('the payment hub', () => {
     expect(await si.status({ ...acct, accountId: 'acct-2' }, { providerRef: paid.providerRef, ourRef: 'i1' }, later)).toEqual({ state: 'failed', why: 'unknown' });
   });
 
+  it('our fee (P4-c): set by name, counted on each payment as it is paid at the percentage then — never on a try, never on one paid before', async () => {
+    const { hub } = aHub();
+    const before = await hub.collect(PARTNER.entityId, { reference: 'PUD-F0', amount: 1000, payerPhone: '+251911000123', description: 'x' }, T0);
+    await hub.settle(before.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    expect(() => hub.setFee(PARTNER.entityId, 51, 'Staff Ann')).toThrow(/from 0 to 50/);
+    expect(() => hub.setFee(PARTNER.entityId, 3, ' ')).toThrow(/Say who sets the fee/);
+    expect(hub.setFee(PARTNER.entityId, 2.5, 'Staff Ann', T0)).toMatchObject({ feePct: 2.5, feeSetBy: 'Staff Ann', feeSetAt: new Date(T0).toISOString() });
+    const a = await hub.collect(PARTNER.entityId, { reference: 'PUD-F1', amount: 1000, payerPhone: '+251911000123', description: 'x' }, T0);
+    expect((await hub.settle(a.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS)).fee).toEqual({ pct: 2.5, amount: 25 });
+    hub.setFee(PARTNER.entityId, 4, 'Staff Ben', T0 + 1);
+    const b = await hub.collect(PARTNER.entityId, { reference: 'PUD-F2', amount: 500, payerPhone: '+251911000123', description: 'x' }, T0);
+    expect((await hub.settle(b.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS)).fee).toEqual({ pct: 4, amount: 20 });
+    // A declined prompt and a try by our staff are no turnover; the one paid before the fee was set keeps none.
+    const no = await hub.collect(PARTNER.entityId, { reference: 'PUD-F3', amount: 800, payerPhone: '+251911000000', description: 'x' }, T0);
+    expect((await hub.settle(no.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS)).fee).toBeUndefined();
+    const tried = await hub.tryPayment(PARTNER.entityId, { phone: '+251911000123', amount: 900 }, 'Staff Ann', T0);
+    await hub.settle(tried.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    expect(hub.get(before.paymentId)?.fee).toBeUndefined();
+    expect(hub.feeOwed(PARTNER.entityId)).toBe(45);
+    expect(await hub.accountView(PARTNER.entityId, T0 + STAND_IN_ANSWERS_AFTER_MS)).toMatchObject({ feePct: 4, feeSetBy: 'Staff Ben', feeOwed: 45 });
+    expect(hub.paymentsOf(PARTNER.entityId).find((p) => p.reference === 'PUD-F1')?.fee).toBe(25);
+  });
+
+  it('one payment, one parcel: taken for the parcel it was asked for, once', async () => {
+    const { hub } = aHub();
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-U1', amount: 100, payerPhone: '+251911000123', description: 'x' }, T0);
+    expect(hub.use(p.paymentId, 'PUD-U1').usedFor).toBe('PUD-U1');
+    expect(hub.use(p.paymentId, 'PUD-U1').usedFor).toBe('PUD-U1');
+    expect(() => hub.use(p.paymentId, 'PUD-U2')).toThrow('That payment was for PUD-U1 already');
+    expect(() => hub.use('hp_nothing', 'PUD-U1')).toThrow(/No payment/);
+  });
+
+  it('a refund (P4-d): only of a paid payment, kept before the provider is asked, given back once — and our fee on it taken back', async () => {
+    const { hub, told } = aHub();
+    hub.setFee(PARTNER.entityId, 3, 'Staff Ann', T0);
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-R1', amount: 1000, payerPhone: '+251911000123', description: 'x' }, T0);
+    await expect(hub.refund(p.paymentId, 'voided', T0)).rejects.toThrow('Only a payment that was paid is given back');
+    await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    expect(hub.feeOwed(PARTNER.entityId)).toBe(30);
+    const back = await hub.refund(p.paymentId, 'voided', T0 + 5000);
+    expect(back).toMatchObject({ kind: 'refund', refundOf: p.paymentId, state: 'paid', amount: 1000, phoneEnds: '123', reference: 'PUD-R1' });
+    expect((await hub.refund(p.paymentId, 'voided again', T0 + 6000)).paymentId).toBe(back.paymentId);
+    expect(hub.feeOwed(PARTNER.entityId)).toBe(0);
+    expect((await hub.accountView(PARTNER.entityId, T0 + 6000)).balance).toBe(0);
+    expect(told.filter(([, x]) => x.kind === 'refund').map(([, x]) => x.state)).toEqual(['asked', 'paid']);
+  });
+
+  it('the stand-in’s answer, once given, stays: paid stays paid whatever the clock says next', async () => {
+    const { hub } = aHub();
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-S1', amount: 70, payerPhone: '+251911000123', description: 'x' }, T0);
+    await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    // Asked again with an earlier clock, as a second server or a test might: still paid, still held.
+    expect((await hub.accountView(PARTNER.entityId, T0)).balance).toBe(70);
+  });
+
   it('its staff doors are for staff who keep the money, and the server says at boot what the hub reaches', () => {
     expect(STAFF_AREAS['GET sbg/entities/:entityId/payment-account']).toBe('money');
     expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/try']).toBe('money');
+    expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/fee']).toBe('money');
+    // A walk-up's payment is the shop's own, at its counter: staff ask nothing in its name.
+    expect(STAFF_AREAS['POST sbg/parcels/phone-payment']).toBe('none');
+    expect(STAFF_AREAS['GET sbg/parcels/phone-payment/:paymentId']).toBe('none');
     const app = readFileSync(join(__dirname, '../../app.module.ts'), 'utf8');
     expect(app).toMatch(/PaymentHubModule,/);
   });

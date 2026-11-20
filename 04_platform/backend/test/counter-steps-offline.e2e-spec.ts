@@ -46,6 +46,9 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
       .expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
     declared(app, 'shop', did);
+    // A float, so a walk-up is taken in for cash: our counters take nothing else (the payments plan, 4b).
+    const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(staff).send({ amount: 50 }).expect(201);
+    await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(staff).send({ providerRef: `MPX${tag}${seq}`, amount: 50 }).expect(201);
     return did;
   };
   const asShop = async (did: string) => ({ authorization: `Bearer ${(await http().post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token}` });
@@ -56,7 +59,7 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
   };
   /** A walk-up taken in at the north shop, for the south — done at `at` and sent now. */
   const takeIn = async (parcelId: string, at?: number) =>
-    (await http().post('/v1/sbg/parcels/accept').set(staff).send({ agentDid: origin, parcelId, size: 'S', destZone: south, destPudoDid: dest, senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), paymentMode: 'prepaid', ...(at ? { observedAt: iso(at) } : {}) }).expect(201)).body;
+    (await http().post('/v1/sbg/parcels/accept').set(staff).send({ agentDid: origin, parcelId, size: 'S', destZone: south, destPudoDid: dest, senderMobile: '+254700000001', receiverMobile: '+254700000002', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), ...(at ? { observedAt: iso(at) } : {}) }).expect(201)).body;
   const near = (a: string | undefined, b: number) => expect(Math.abs(Date.parse(a!) - b)).toBeLessThan(5_000);
   const lastScan = (id: string) => parcels.get(id).scans[parcels.get(id).scans.length - 1];
   const leg = (id: string, kind: string) => (parcels.get(id).custody ?? []).find((l) => l.holderKind === kind)!;

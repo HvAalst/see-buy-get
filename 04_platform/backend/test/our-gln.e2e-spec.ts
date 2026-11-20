@@ -109,7 +109,7 @@ describe('our own GS1 prefix, over the wire', () => {
     // A parcel taken in for the collection point: its label carries the point's GLN, on the page and for the thermal printer.
     await http().post('/v1/sbg/corridors').set(operator).send({ name: `GlnFrom → GlnTo ${tag}`, originZone: `GlnFrom${tag}`, destZone: `GlnTo${tag}` }).expect(201);
     const parcelId = `GLN-${tag}`;
-    await http().post('/v1/sbg/parcels/accept').set(from.token).send({ agentDid: from.did, parcelId, size: 'S', destZone: `GlnTo${tag}`, destPudoDid: to.did, senderMobile: '+254700000401', receiverMobile: '+254700000402', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), from.did), paymentMode: 'prepaid' }).expect(201);
+    await http().post('/v1/sbg/parcels/accept').set(from.token).send({ agentDid: from.did, parcelId, size: 'S', destZone: `GlnTo${tag}`, destPudoDid: to.did, senderMobile: '+254700000401', receiverMobile: '+254700000402', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), from.did) }).expect(201);
     expect((await http().get(`/v1/sbg/parcels/${parcelId}/label`).set(operator).expect(200)).body.svg).toContain(`To GLN ${glnTo}`);
     expect((await http().get(`/v1/sbg/agents/${from.did}/parcels/${parcelId}/label.zpl`).set(from.token).expect(200)).text).toContain(`^FDTo GLN ${glnTo}^FS`);
 

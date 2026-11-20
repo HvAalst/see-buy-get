@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../store/persistent-map';
-import type { CollectRequest, HubProvider, OpenedAccount, PayoutRequest, ProviderAnswer } from './hub.types';
+import type { CollectRequest, HubProvider, OpenedAccount, PayoutRequest, ProviderAnswer, RefundRequest } from './hub.types';
 
 /** How long the stand-in takes to answer a payment prompt: long enough for a counter's screen to show it waiting. */
 export const STAND_IN_ANSWERS_AFTER_MS = 4_000;
@@ -22,6 +22,8 @@ interface StandInRequest {
   at: number;
   /** A refund: the payment it gives back. */
   paidRef?: string;
+  /** A prompt's answer, once given: a provider never changes it after (paid stays paid, whatever the clock says next). */
+  settled?: { state: 'paid' | 'failed'; why?: string };
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -59,7 +61,7 @@ export class StandInProvider implements HubProvider {
     return { state: 'paid', providerRef: r.ref };
   }
 
-  async refund(account: OpenedAccount, req: PayoutRequest & { paidRef: string }, now: number = Date.now()): Promise<ProviderAnswer> {
+  async refund(account: OpenedAccount, req: RefundRequest, now: number = Date.now()): Promise<ProviderAnswer> {
     const paid = this.requests.get(req.paidRef);
     if (!paid || paid.accountId !== account.accountId || paid.kind !== 'in' || this.answer(paid, now).state !== 'paid') return { state: 'failed', why: 'unknown' };
     const back = [...this.requests.values()].filter((x) => x.kind === 'refund' && x.paidRef === req.paidRef).reduce((s, x) => s + x.amount, 0);
@@ -77,10 +79,14 @@ export class StandInProvider implements HubProvider {
 
   private answer(r: StandInRequest, now: number): ProviderAnswer {
     if (r.kind !== 'in') return { state: 'paid', providerRef: r.ref };
+    if (r.settled) return { ...r.settled, providerRef: r.ref };
     const waited = now - r.at;
-    if (r.ends === STAND_IN_NEVER_ANSWERS) return waited >= STAND_IN_LAPSES_AFTER_MS ? { state: 'failed', providerRef: r.ref, why: 'expired' } : { state: 'asked', providerRef: r.ref };
-    if (waited < STAND_IN_ANSWERS_AFTER_MS) return { state: 'asked', providerRef: r.ref };
-    return r.ends === STAND_IN_DECLINES ? { state: 'failed', providerRef: r.ref, why: 'declined' } : { state: 'paid', providerRef: r.ref };
+    let settled: StandInRequest['settled'];
+    if (r.ends === STAND_IN_NEVER_ANSWERS) settled = waited >= STAND_IN_LAPSES_AFTER_MS ? { state: 'failed', why: 'expired' } : undefined;
+    else if (waited >= STAND_IN_ANSWERS_AFTER_MS) settled = r.ends === STAND_IN_DECLINES ? { state: 'failed', why: 'declined' } : { state: 'paid' };
+    if (!settled) return { state: 'asked', providerRef: r.ref };
+    this.requests.set(r.ref, { ...r, settled });
+    return { ...settled, providerRef: r.ref };
   }
 
   /** What the account holds: every prompt paid, less every payout and refund. */

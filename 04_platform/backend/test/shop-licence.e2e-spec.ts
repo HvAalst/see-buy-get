@@ -114,13 +114,15 @@ describe('a shop’s trading licence — over the wire', () => {
     const shop = await aShop('Kona Shop');
     await approve(shop.did, { licenceExpiresAt: '2099-12-31' }).expect(201);
     await http().post(`/v1/sbg/agents/${shop.did}/deposit`).set(staff).expect(201);
-    await http().post(`/v1/sbg/agents/${shop.did}/top-up`).set(staff).send({ amount: 50 });
+    // A float, completed, so a walk-up is taken in for cash: our counters take nothing else (the payments plan, 4b).
+    const asked = await http().post(`/v1/sbg/agents/${shop.did}/top-up`).set(staff).send({ amount: 50 }).expect(201);
+    await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(staff).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     declared(app, 'shop', shop.did);
     const walkUp = async () =>
       http()
         .post('/v1/sbg/parcels/accept')
         .set(shop.token)
-        .send({ agentDid: shop.did, parcelId: `LIC-${digits()}`, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000601', receiverMobile: '+254700000602', paymentMode: 'prepaid', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) });
+        .send({ agentDid: shop.did, parcelId: `LIC-${digits()}`, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000601', receiverMobile: '+254700000602', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) });
 
     // Time passes: it ran to a day more than fourteen days gone. (A date in the past cannot be typed, so it is written here.)
     const record = app.get(AgentService).get(shop.did);

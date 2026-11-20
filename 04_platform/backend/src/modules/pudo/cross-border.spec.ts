@@ -52,6 +52,8 @@ import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayeeStandingRegistrar } from './payee-standing';
 import { PartnerLedgerService } from './partner-ledger.service';
+import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
+import { STAND_IN_ANSWERS_AFTER_MS } from '../../foundation/payment-hub/stand-in.provider';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 /**
@@ -78,6 +80,7 @@ describe('crossing a border', () => {
   let managers: FleetManagerService;
   let drivers: DriverService;
   let partners: PartnerLedgerService;
+  let hub: PaymentHubService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -93,7 +96,7 @@ describe('crossing a border', () => {
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, PresenceService, BooksService, FxService, PartnerLedgerService,
+        EntityService, PresenceService, BooksService, FxService, PartnerLedgerService, PaymentHubService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -117,6 +120,7 @@ describe('crossing a border', () => {
     managers = moduleRef.get(FleetManagerService);
     drivers = moduleRef.get(DriverService);
     partners = moduleRef.get(PartnerLedgerService);
+    hub = moduleRef.get(PaymentHubService);
     books.reset(); // each test starts on clean books — the money is derived from them
   });
 
@@ -133,6 +137,15 @@ describe('crossing a border', () => {
   }
 
   const NAIROBI = { lat: -1.286, lng: 36.817 };
+
+  /** A Kenyan shop approved and topped up: a walk-up at our counter is taken in for cash (4b refuses anything else). */
+  function fundedShop(shopName: string) {
+    const ke = shop(shopName, 'Nairobi', NAIROBI);
+    agents.submitKyc(ke.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['front.jpg'] });
+    agents.decideKyc(ke.did, true, undefined, undefined, '2099-12-31');
+    gate.topUp(ke.did, 50);
+    return agents.get(ke.did);
+  }
   const ADDIS = { lat: 9.03, lng: 38.74 };
   const MOYALE_KE = { lat: 3.52, lng: 39.05 }; // the Kenyan side of the border post
   const HAWASSA = { lat: 7.06, lng: 38.48 };
@@ -166,13 +179,13 @@ describe('crossing a border', () => {
       parcels.accept({ parcelId, agentDid, destZone: 'DarEsSalaam2', size: 'M', senderMobile: '+255700111', receiverMobile: '+255700222', dropoffPhotoRef: photoBy(agentDid), ...(mode ? { paymentMode: mode } : {}) } as never);
 
     it('records the promise as OURS and posts, where a sister carries it', () => {
-      const ke = shop('Mama Sarah', 'Nairobi', NAIROBI);
+      const ke = fundedShop('Mama Sarah');
       const keEntity = entities.requireForJurisdiction('KE').entityId;
       const before = books.balance(keEntity, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, ke.did);
-      const parcel = parcels.accept({ parcelId: 'PUD-KE-1', agentDid: ke.did, destZone: 'Kisumu', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(ke.did) } as never);
+      const parcel = parcels.accept({ parcelId: 'PUD-KE-1', agentDid: ke.did, destZone: 'Kisumu', size: 'M', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(ke.did) } as never);
       expect(parcel.takeInPromise).toBe('ours');
       expect(parcel.collectingEntityId).toBe(keEntity);
-      // The shop is owed for the work, on the sister that contracts it.
+      // Taken in for cash: the shop's float is charged the parcel, on the sister that contracts it.
       expect(books.balance(keEntity, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, ke.did)).not.toBe(before);
     });
 
@@ -190,13 +203,16 @@ describe('crossing a border', () => {
       expect(parcel.status).toBe('At_PUDO');
     });
 
-    it('2026-11-20 — under a Partnered country’s partner, the partner owes the shop its take-in at its own figure, off our books; a void takes it back (the payments plan, 3a)', () => {
+    it('2026-11-20 — under a Partnered country’s partner, the partner owes the shop its take-in at its own figure, off our books; a void takes it back (the payments plan, 3a)', async () => {
       const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Courier Ltd' }, 'Amina');
-      entities.setAmounts(partner.entityId, { labourFee: 1500 }, 'Amina');
+      entities.setAmounts(partner.entityId, { labourFee: 1500, wholesale: 9000 }, 'Amina');
       entities.activate(partner.entityId, 'Brian');
       presence.set({ jurisdiction: 'UG', level: 'partnered' });
       const ug = shop('Kampala Duka', 'Kampala', { lat: 0.35, lng: 32.58 }, 'UG');
-      const parcel = parcels.accept({ parcelId: 'PUD-UG-1', agentDid: ug.did, destZone: 'Kampala2', size: 'M', paymentMode: 'prepaid', senderMobile: '+256700111', receiverMobile: '+256700222', dropoffPhotoRef: photoBy(ug.did) } as never);
+      // Paid by phone first (4b): the prompt, paid, then the take-in.
+      const asked = await parcels.askPhonePayment(ug.did, 'PUD-UG-1', '+256700111000');
+      await hub.settle(asked.paymentId, Date.now() + STAND_IN_ANSWERS_AFTER_MS);
+      const parcel = parcels.accept({ parcelId: 'PUD-UG-1', agentDid: ug.did, destZone: 'Kampala2', size: 'M', paymentMode: 'prepaid', paymentId: asked.paymentId, senderMobile: '+256700111', receiverMobile: '+256700222', dropoffPhotoRef: photoBy(ug.did) } as never);
 
       expect(parcel.takeInPromise).toBe('theirs');
       expect(parcel.intakeLabour).toBe(1500);
@@ -206,6 +222,9 @@ describe('crossing a border', () => {
       expect(books.journal({ ref: 'PUD-UG-1' })).toEqual([]);
 
       parcels.void('PUD-UG-1', ug.did, photoBy(ug.did));
+      // …and the sender's payment given back to the phone it came from, from the partner's account (P4-d).
+      await new Promise((r) => setImmediate(r));
+      expect(hub.paymentsOf(partner.entityId).find((x) => x.kind === 'refund')).toMatchObject({ refundOf: asked.paymentId, state: 'paid', amount: 9000, currency: 'UGX', phoneEnds: '000' });
       const after = partners.ledgerOf(partner.entityId);
       expect(after.owed).toBe(0);
       expect(after.byPayee).toEqual([]);
@@ -220,6 +239,123 @@ describe('crossing a border', () => {
       expect(parcel.takeInPromise).toBe('theirs');
       expect(parcel.intakeLabour).toBeUndefined();
       expect(partners.owedTo([tz.did])).toEqual({ lines: [] });
+    });
+
+    /*
+     * 2026-11-20 — THE PAYMENTS PLAN, 4b: a walk-up in a partner's country is paid by phone, into the partner's account, before
+     * its label (P3-c, P4-a); our own counters take cash; where nobody holds money yet, as before (P4-g, asked).
+     */
+    describe('paid by phone, before the label (4b)', () => {
+      async function partnerCounter(tag: string, list: Record<string, number> = { labourFee: 1500, wholesale: 9000 }) {
+        const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: `Kampala Courier ${tag}` }, 'Amina');
+        entities.setAmounts(partner.entityId, list, 'Amina');
+        entities.activate(partner.entityId, 'Brian');
+        presence.set({ jurisdiction: 'UG', level: 'partnered' });
+        const ug = shop(`Kampala Duka ${tag}`, 'Kampala', { lat: 0.35, lng: 32.58 }, 'UG');
+        const walkUp = (parcelId: string, extra: Record<string, unknown> = {}) => ({ parcelId, agentDid: ug.did, destZone: 'Kampala2', size: 'M', paymentMode: 'prepaid', senderMobile: '+256700111', receiverMobile: '+256700222', dropoffPhotoRef: photoBy(ug.did), ...extra }) as never;
+        return { partner, ug, walkUp };
+      }
+      const paid = async (agentDid: string, parcelId: string, phone = '+256700111000') => {
+        const asked = await parcels.askPhonePayment(agentDid, parcelId, phone);
+        return hub.settle(asked.paymentId, Date.now() + STAND_IN_ANSWERS_AFTER_MS);
+      };
+
+      it('the counter is told: the sender pays by phone, to the partner, its own price for a parcel — and nothing until the partner has set one', async () => {
+        const { ug, partner } = await partnerCounter('T');
+        expect(parcels.takeInTerms(ug.did)).toMatchObject({ promise: 'theirs', cashAccepted: false, currency: 'UGX', payByPhone: { to: partner.name, price: 9000, currency: 'UGX' } });
+        // A partner that has set no price of its own: no figure in nobody's money, and nothing taken in.
+        const bare = await partnerCounter('B', { labourFee: 1500 });
+        expect(parcels.takeInTerms(bare.ug.did).payByPhone).toBeUndefined();
+        expect(() => parcels.accept(bare.walkUp('PUD-UG-B1'))).toThrow(/has not set what a parcel costs yet/);
+        await expect(parcels.askPhonePayment(bare.ug.did, 'PUD-UG-B1', '+256700111000')).rejects.toThrow(/does not pay by phone/);
+        // Our own counter takes cash, and is not told of a phone.
+        const ke = shop('Mama Sarah Cash', 'Nairobi', NAIROBI);
+        expect(parcels.takeInTerms(ke.did).payByPhone).toBeUndefined();
+        await expect(parcels.askPhonePayment(ke.did, 'PUD-KE-P1', '+254700111000')).rejects.toThrow(/does not pay by phone/);
+      });
+
+      it('refused before anything is kept: no payment, one asked elsewhere or for another parcel, one still waiting, one declined, one for less than the price', async () => {
+        const { ug, walkUp, partner } = await partnerCounter('R');
+        const other = shop('Kampala Duka R2', 'Kampala', { lat: 0.36, lng: 32.59 }, 'UG');
+        expect(() => parcels.accept(walkUp('PUD-UG-R1'))).toThrow('The sender pays by phone first: ask for the payment, then take the parcel in');
+        const elsewhere = await paid(other.did, 'PUD-UG-R1');
+        expect(() => parcels.accept(walkUp('PUD-UG-R1', { paymentId: elsewhere.paymentId }))).toThrow('No payment for PUD-UG-R1 was asked at this counter: ask for it again');
+        const forAnother = await paid(ug.did, 'PUD-UG-R9');
+        expect(() => parcels.accept(walkUp('PUD-UG-R1', { paymentId: forAnother.paymentId }))).toThrow(/No payment for PUD-UG-R1 was asked at this counter/);
+        // A number paid for at one counter is paid, for this partner, at every counter: not asked twice.
+        await expect(parcels.askPhonePayment(ug.did, 'PUD-UG-R1', '+256700111000')).rejects.toThrow('PUD-UG-R1 is paid already');
+        const waiting = await parcels.askPhonePayment(ug.did, 'PUD-UG-R4', '+256700111000');
+        expect(() => parcels.accept(walkUp('PUD-UG-R4', { paymentId: waiting.paymentId }))).toThrow('The payment is still waiting on the phone ending 000');
+        const declined = await parcels.askPhonePayment(ug.did, 'PUD-UG-R2', '+256700110000');
+        await hub.settle(declined.paymentId, Date.now() + STAND_IN_ANSWERS_AFTER_MS);
+        expect(() => parcels.accept(walkUp('PUD-UG-R2', { paymentId: declined.paymentId }))).toThrow('The payment did not go through: ask for it again');
+        // Its price went up after the sender paid: asked again, at the new price.
+        const cheap = await paid(ug.did, 'PUD-UG-R3');
+        entities.setAmounts(partner.entityId, { wholesale: 9500 }, 'Amina');
+        expect(() => parcels.accept(walkUp('PUD-UG-R3', { paymentId: cheap.paymentId }))).toThrow('The payment was 9000, and a parcel costs 9500 now: ask for the payment again');
+        // None of it kept: no parcel, nothing owed.
+        for (const id of ['PUD-UG-R1', 'PUD-UG-R2', 'PUD-UG-R3', 'PUD-UG-R4']) expect(() => parcels.get(id)).toThrow();
+        expect(partners.owedTo([ug.did])).toEqual({ lines: [] });
+      });
+
+      it('paid: taken in with its label, the payment kept with it — one payment, one parcel; asked again for a parcel taken in, refused', async () => {
+        const { ug, walkUp, partner } = await partnerCounter('P');
+        const pay = await paid(ug.did, 'PUD-UG-P1');
+        const parcel = parcels.accept(walkUp('PUD-UG-P1', { paymentId: pay.paymentId }));
+        expect(parcel).toMatchObject({ paidStatus: 'ParcelPaid', paidByPhone: { paymentId: pay.paymentId, amount: 9000, currency: 'UGX', test: true, partnerEntityId: partner.entityId } });
+        expect(parcel.label?.svg).toContain('PUD-UG-P1');
+        expect(parcels.labelZplFor('PUD-UG-P1')).toContain('PUD-UG-P1');
+        expect(hub.get(pay.paymentId)?.usedFor).toBe('PUD-UG-P1');
+        // Not for a second parcel, and no prompt for a parcel already taken in.
+        expect(() => parcels.accept(walkUp('PUD-UG-P2', { paymentId: pay.paymentId }))).toThrow(/No payment for PUD-UG-P2 was asked at this counter/);
+        await expect(parcels.askPhonePayment(ug.did, 'PUD-UG-P1', '+256700111000')).rejects.toThrow('Parcel PUD-UG-P1 already exists');
+        // The counter reads its own payment; another counter does not.
+        expect((await parcels.phonePaymentState(ug.did, pay.paymentId)).usedFor).toBe('PUD-UG-P1');
+        const other = shop('Kampala Duka P2', 'Kampala', { lat: 0.36, lng: 32.59 }, 'UG');
+        await expect(parcels.phonePaymentState(other.did, pay.paymentId)).rejects.toThrow('No payment asked at this counter has that number');
+        // None of it on any book of ours.
+        expect(books.journal({ ref: 'PUD-UG-P1' })).toEqual([]);
+      });
+
+      it('our fee: a percentage of every parcel’s payment, counted as it is paid, owed by the partner — and given back with a refund', async () => {
+        const { ug, walkUp, partner } = await partnerCounter('F');
+        hub.setFee(partner.entityId, 3, 'Staff Ann');
+        const first = await paid(ug.did, 'PUD-UG-F1');
+        expect(first.fee).toEqual({ pct: 3, amount: 270 });
+        parcels.accept(walkUp('PUD-UG-F1', { paymentId: first.paymentId }));
+        const second = await paid(ug.did, 'PUD-UG-F2');
+        parcels.accept(walkUp('PUD-UG-F2', { paymentId: second.paymentId }));
+        expect(hub.feeOwed(partner.entityId)).toBe(540);
+        expect(await hub.accountView(partner.entityId)).toMatchObject({ feePct: 3, feeSetBy: 'Staff Ann', feeOwed: 540, balance: 18000 });
+        // A try by our staff is no turnover.
+        const tried = await hub.tryPayment(partner.entityId, { phone: '+256700111000', amount: 1000 }, 'Staff Ann');
+        await hub.settle(tried.paymentId, Date.now() + STAND_IN_ANSWERS_AFTER_MS);
+        expect(hub.feeOwed(partner.entityId)).toBe(540);
+        // Voided: the payment given back, and our fee on it with it.
+        parcels.void('PUD-UG-F2', ug.did, photoBy(ug.did));
+        await new Promise((r) => setImmediate(r));
+        expect(hub.feeOwed(partner.entityId)).toBe(270);
+      });
+
+      it('where a partner contracts, nothing is taken in unpaid — not even on a server without the payment hub', async () => {
+        const { walkUp } = await partnerCounter('N');
+        const held = parcels as unknown as { hub?: unknown };
+        const real = held.hub;
+        held.hub = undefined;
+        try {
+          expect(() => parcels.accept(walkUp('PUD-UG-N1'))).toThrow(/Payment by phone is not set up on this server: nothing is taken in under Kampala Courier N/);
+          expect(() => parcels.get('PUD-UG-N1')).toThrow();
+        } finally {
+          held.hub = real;
+        }
+      });
+
+      it('our own counter takes cash: a walk-up sent as anything else is refused before anything is kept', () => {
+        const ke = fundedShop('Mama Sarah Prepaid');
+        expect(() => parcels.accept({ parcelId: 'PUD-KE-PP1', agentDid: ke.did, destZone: 'Nairobi2', size: 'M', paymentMode: 'prepaid', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(ke.did) } as never)).toThrow('At Mama Sarah Prepaid the sender pays in cash: take it in as a cash parcel');
+        expect(() => parcels.get('PUD-KE-PP1')).toThrow();
+        expect(gate.entries({ did: ke.did, type: 'LABOR_PAYOUT' })).toEqual([]);
+      });
     });
 
     it('does not take the whole shop list down with it', () => {
@@ -480,7 +616,7 @@ describe('crossing a border', () => {
       parcels.accept({ parcelId, agentDid, destZone: 'Kisumu', size: 'M', paymentMode: mode, senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(agentDid) } as never);
 
     it('OURS names the sister and the cover it gives — and the parcel is stamped with exactly that', () => {
-      const ke = shop('Mama Sarah P3', 'Nairobi', NAIROBI);
+      const ke = fundedShop('Mama Sarah P3');
       const keEntity = entities.requireForJurisdiction('KE');
       entities.setInsurance(keEntity.entityId, { freeLimit: 5000 });
 
@@ -488,7 +624,7 @@ describe('crossing a border', () => {
       expect(terms).toMatchObject({ promise: 'ours', answeredBy: keEntity.name, coverLimit: 5000, coverBasis: 'free-limit', cashAccepted: true });
 
       // What the counter said is what a claim will be judged against — never a second computation.
-      const parcel = takeIn(ke.did, 'PUD-P3-1', 'credit');
+      const parcel = takeIn(ke.did, 'PUD-P3-1', 'cash');
       expect(parcel.coverLimit).toBe(5000);
     });
 

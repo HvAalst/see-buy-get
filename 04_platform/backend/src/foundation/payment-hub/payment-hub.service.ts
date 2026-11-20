@@ -8,7 +8,7 @@ import { hashPhone } from '../identity/phone';
 import { currencyForJurisdiction } from '../money/currency';
 import { PersistentMap } from '../store/persistent-map';
 import { StandInProvider } from './stand-in.provider';
-import { HUB_PROVIDERS, HUB_WHY, type HubPayment, type HubPaymentView, type HubProvider, type HubProviderId, type HubWhy, type OpenedAccount, type PaymentAccountView, type ProviderAnswer } from './hub.types';
+import { HUB_PROVIDERS, HUB_WHY, type HubAccountRecord, type HubPayment, type HubPaymentView, type HubProvider, type HubProviderId, type HubWhy, type OpenedAccount, type PaymentAccountView, type ProviderAnswer } from './hub.types';
 
 /** Further providers, each an adapter (a test's own, or a real one once it is built for a chosen partner). */
 export const PAYMENT_HUB_PROVIDERS = 'PAYMENT_HUB_PROVIDERS';
@@ -34,6 +34,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   private readonly logger = new Logger('PaymentHub');
   private readonly providers = new Map<HubProviderId, HubProvider>();
   private readonly payments = new PersistentMap<string, HubPayment>('payment-hub-payments');
+  /** Each company's settings in the hub: our fee on its payments (P4-c). */
+  private readonly accounts = new PersistentMap<string, HubAccountRecord>('payment-hub-accounts');
   /** The prompts still waiting: what the sweep asks about. Built from the kept payments when it first runs. */
   private waiting?: Set<string>;
   private timer?: ReturnType<typeof setInterval>;
@@ -72,7 +74,16 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   async accountView(ownerEntityId: string, now: number = Date.now()): Promise<PaymentAccountView> {
     const a = this.account(ownerEntityId);
     const held = await this.provider(a.provider).balance(a, now).catch(() => undefined);
-    return { provider: a.provider, test: !a.live, currency: a.currency, ready: this.ready(), ...(held ? { balance: held.amount } : {}) };
+    const rec = this.accounts.get(ownerEntityId);
+    return {
+      provider: a.provider,
+      test: !a.live,
+      currency: a.currency,
+      ready: this.ready(),
+      ...(held ? { balance: held.amount } : {}),
+      ...(rec?.feePct != null ? { feePct: rec.feePct, ...(rec.feeSetBy ? { feeSetBy: rec.feeSetBy } : {}), ...(rec.feeSetAt ? { feeSetAt: rec.feeSetAt } : {}) } : {}),
+      feeOwed: this.feeOwed(ownerEntityId),
+    };
   }
 
   /**
@@ -81,7 +92,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    * already paid is refused; one whose prompt is still waiting gives that same prompt for the same phone and amount — a second
    * press at a counter asks nobody twice — and is refused for another, so one thing is never paid twice from two phones.
    */
-  async collect(ownerEntityId: string, req: { reference: string; amount: number; payerPhone: string; description: string; askedBy?: string }, now: number = Date.now()): Promise<HubPayment> {
+  async collect(ownerEntityId: string, req: { reference: string; amount: number; payerPhone: string; description: string; askedBy?: string; siteId?: string }, now: number = Date.now()): Promise<HubPayment> {
     const amount = round2(req.amount);
     if (!(amount > 0)) throw new GlosError('VALIDATION_FAILED', 'A payment is for more than nothing');
     const digits = (req.payerPhone ?? '').replace(/\D/g, '');
@@ -108,6 +119,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       test: !a.live,
       askedAt: new Date(now).toISOString(),
       ...(req.askedBy ? { askedBy: req.askedBy } : {}),
+      ...(req.siteId ? { siteId: req.siteId } : {}),
     };
     this.payments.set(payment.paymentId, payment);
     this.waitingSet().add(payment.paymentId);
@@ -153,6 +165,78 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     }
   }
 
+  /**
+   * OUR FEE ON A PARTNER'S PAYMENTS (P4-c; the owner: "needs to be set as a percentage on the total turnover so it can be
+   * ingested per transaction"): set by our staff, by name. It counts on every payment paid from then on — each payment keeps
+   * the percentage it was counted at — and never on one already paid.
+   */
+  setFee(ownerEntityId: string, pct: number, by: string, now: number = Date.now()): HubAccountRecord {
+    this.entities.get(ownerEntityId);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 50) throw new GlosError('VALIDATION_FAILED', 'Our fee is a percentage from 0 to 50');
+    if (!by?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who sets the fee: it is kept by name');
+    const rec: HubAccountRecord = { ...(this.accounts.get(ownerEntityId) ?? { ownerEntityId }), feePct: round2(pct), feeSetBy: by.trim(), feeSetAt: new Date(now).toISOString() };
+    this.accounts.set(ownerEntityId, rec);
+    return rec;
+  }
+
+  /** Our fee counted on a company's payments, less any given back: what the partner owes us, a loan until we can invoice it. */
+  feeOwed(ownerEntityId: string): number {
+    const back = this.refunded();
+    let sum = 0;
+    for (const p of this.payments.values()) if (p.ownerEntityId === ownerEntityId && p.kind === 'in' && p.state === 'paid' && p.fee && !back.has(p.paymentId)) sum += p.fee.amount;
+    return round2(sum);
+  }
+
+  /**
+   * ONE PAYMENT, ONE PARCEL: a paid prompt taken as the payment for the parcel it was asked for, once. Asked by the take-in
+   * before anything is written, and kept with the parcel as it is kept.
+   */
+  use(paymentId: string, parcelId: string): HubPayment {
+    const p = this.payments.get(paymentId);
+    if (!p) throw new GlosError('NOT_FOUND', `No payment ${paymentId}`);
+    if (p.usedFor && p.usedFor !== parcelId) throw new GlosError('INVALID_STATE', `That payment was for ${p.usedFor} already`);
+    const next = { ...p, usedFor: parcelId };
+    this.payments.set(paymentId, next);
+    return next;
+  }
+
+  /**
+   * A PAYMENT GIVEN BACK (P4-d: a parcel voided after it was paid is refunded to the sender's phone, at once). The refund is
+   * kept before the provider is asked, as a prompt is, and asked again until it answers; once given back, never twice.
+   */
+  async refund(paymentId: string, description: string, now: number = Date.now()): Promise<HubPayment> {
+    const paid = this.payments.get(paymentId);
+    if (!paid || paid.kind !== 'in' || paid.state !== 'paid') throw new GlosError('INVALID_STATE', 'Only a payment that was paid is given back');
+    const earlier = [...this.payments.values()].find((x) => x.kind === 'refund' && x.refundOf === paymentId && x.state !== 'failed');
+    if (earlier) return earlier;
+    const a = this.account(paid.ownerEntityId);
+    const back: HubPayment = {
+      paymentId: `hp_${randomBytes(9).toString('base64url')}`,
+      kind: 'refund',
+      ownerEntityId: paid.ownerEntityId,
+      provider: paid.provider,
+      reference: paid.reference,
+      amount: paid.amount,
+      currency: paid.currency,
+      phoneEnds: paid.phoneEnds,
+      phoneHash: paid.phoneHash,
+      state: 'asked',
+      test: paid.test,
+      askedAt: new Date(now).toISOString(),
+      refundOf: paymentId,
+    };
+    this.payments.set(back.paymentId, back);
+    this.waitingSet().add(back.paymentId);
+    this.told(back);
+    let answer: ProviderAnswer | undefined;
+    try {
+      answer = await this.provider(paid.provider).refund(a, { ourRef: back.paymentId, amount: paid.amount, currency: paid.currency, description, paidRef: paid.providerRef ?? '' }, now);
+    } catch (err) {
+      this.logger.warn(`a refund went unanswered by ${paid.provider}: ${(err as Error).message}`);
+    }
+    return answer ? this.apply(back.paymentId, answer, now) : back;
+  }
+
   /** A company's payments, newest first. */
   paymentsOf(ownerEntityId: string, limit = 50): HubPaymentView[] {
     return [...this.payments.values()]
@@ -175,6 +259,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       state: answer.state,
       ...(answer.state === 'failed' ? { why: answer.why ?? 'failed' } : {}),
       ...(answer.state !== 'asked' ? { settledAt: new Date(now).toISOString() } : {}),
+      ...(answer.state === 'paid' ? this.feeOn(p) : {}),
     };
     this.payments.set(paymentId, next);
     if (next.state !== 'asked') {
@@ -182,6 +267,20 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       this.told(next);
     }
     return next;
+  }
+
+  /** Our fee on a payment as it is paid: a parcel's payment into an account whose fee is set — never a try by our staff. */
+  private feeOn(p: HubPayment): Partial<HubPayment> {
+    const pct = this.accounts.get(p.ownerEntityId)?.feePct;
+    if (p.kind !== 'in' || p.askedBy || !pct) return {};
+    return { fee: { pct, amount: round2((p.amount * pct) / 100) } };
+  }
+
+  /** The payments given back, by the payment each gives back. */
+  private refunded(): Set<string> {
+    const out = new Set<string>();
+    for (const p of this.payments.values()) if (p.kind === 'refund' && p.state === 'paid' && p.refundOf) out.add(p.refundOf);
+    return out;
   }
 
   /** Every payment asked, paid or failed is said on the bus: the console's live view hears it, and whatever waits on it. */
@@ -222,5 +321,8 @@ export function viewOf(p: HubPayment): HubPaymentView {
     askedAt: p.askedAt,
     ...(p.settledAt ? { settledAt: p.settledAt } : {}),
     ...(p.askedBy ? { askedBy: p.askedBy } : {}),
+    ...(p.usedFor ? { usedFor: p.usedFor } : {}),
+    ...(p.fee ? { fee: p.fee.amount } : {}),
+    ...(p.refundOf ? { refundOf: p.refundOf } : {}),
   };
 }

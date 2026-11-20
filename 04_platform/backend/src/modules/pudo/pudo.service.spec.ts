@@ -7514,7 +7514,7 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'FD-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FD-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(bag.code, 'FD-P');
     dispatch.release(bag.code);
     const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
@@ -7555,7 +7555,7 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'CT-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CT-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(bag.code, 'CT-P');
 
     // The shop hands it over directly. No offer, no claim — the common case.
@@ -8321,7 +8321,7 @@ describe('PUDO Light', () => {
     const full = totes.register(origin.did);
     totes.assign(full.code, mdp.mdpId, mdp.name);
     for (let i = 0; i < 10; i += 1) {
-      parcels.accept({ agentDid: origin.did, parcelId: `D-${i}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+      parcels.accept({ agentDid: origin.did, parcelId: `D-${i}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
       mdps.fillTote(full.code, `D-${i}`);
     }
     expect(dispatch.publishReady()).toContain(full.code);
@@ -8330,7 +8330,7 @@ describe('PUDO Light', () => {
     // (b) a partial bag waits — published only once it has aged past 24 h
     const partial = totes.register(origin.did);
     totes.assign(partial.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'D-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'D-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(partial.code, 'D-P');
     expect(dispatch.publishReady()).not.toContain(partial.code);
     expect(dispatch.publishReady(Date.now() + 25 * 3_600_000)).toContain(partial.code);
@@ -8345,8 +8345,8 @@ describe('PUDO Light', () => {
 
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'DS-1', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
-    parcels.accept({ agentDid: origin.did, parcelId: 'DS-2', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DS-1', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DS-2', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(bag.code, 'DS-1');
     mdps.fillTote(bag.code, 'DS-2');
     dispatch.release(bag.code);
@@ -8371,7 +8371,7 @@ describe('PUDO Light', () => {
     fleet.couple(d.did, moto.vehicleId);
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'L-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'L-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(bag.code, 'L-1');
     dispatch.release(bag.code);
 
@@ -8390,7 +8390,7 @@ describe('PUDO Light', () => {
     fleet.couple(b.did, vehicles.register({ plate: 'MB-1', vehicleClass: 'motorcycle', ownerName: 'Ben' }).vehicleId);
     const bag = totes.register(origin.did);
     totes.assign(bag.code, mdp.mdpId, mdp.name);
-    parcels.accept({ agentDid: origin.did, parcelId: 'R-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'R-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     mdps.fillTote(bag.code, 'R-1');
     dispatch.release(bag.code);
 
@@ -8680,7 +8680,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('S21 Origin', 'NorthTown', 50);
     const sender = '+254700811';
     const receiver = '+254700822';
-    parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: photoBy(origin.did) });
 
     // The receiver sees it as 'received'; the sender as 'sent' — one parcel, two authenticated views.
     const recv = parcels.partyTo(hashPhone(receiver));
@@ -8712,7 +8712,7 @@ describe('PUDO Light', () => {
     const hub = mdps.register({ name: 'East Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.9 } }, { approvedBy: 'staff' });
 
     // Outbound parcel that nominates its destination PUDO → has destAgentDid → MDP-sortable (P1 #2).
-    parcels.accept({ agentDid: origin.did, parcelId: 'TM-1', size: 'M', destZone: 'EastTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'TM-1', size: 'M', destZone: 'EastTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
     expect(parcels.get('TM-1').destAgentDid).toBe(dest.did);
 
     const bag = totes.register(origin.did);

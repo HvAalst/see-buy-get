@@ -1030,7 +1030,7 @@ describe('GLOS backend (e2e)', () => {
     const bag = await request(http).post(`/v1/sbg/agents/${origin}/totes`).set(auth).expect(201);
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/assign`).set(auth).send({ destinationNodeId: hub.body.mdpId, destinationLabel: 'Hub' }).expect(201);
     for (const id of [`P1-${u}`, `P2-${u}`]) {
-      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin), paymentMode: 'prepaid' }).expect(201);
+      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
       await request(http).post(`/v1/sbg/totes/${bag.body.code}/fill`).set(auth).send({ parcelId: id }).expect(201);
     }
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/release`).set(auth).expect(201);

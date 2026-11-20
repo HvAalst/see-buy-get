@@ -18199,6 +18199,65 @@
         }
       }
     },
+    "/v1/sbg/parcels/phone-payment": {
+      "post": {
+        "operationId": "Sbg.askPhonePayment",
+        "summary": "",
+        "description": "2026-11-20 — A WALK-UP PAID BY PHONE (the payments plan, 4b; P3-c \"payment by phone only\" in a partner's country): the counter\nasks for the payment — a prompt on the payer's phone, into the partner's account, for the partner's price — and takes the\nparcel in once it is paid. A shop asks at its own counter; staff ask nothing in its name.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhonePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/phone-payment/{paymentId}": {
+      "get": {
+        "operationId": "Sbg.phonePayment",
+        "summary": "",
+        "description": "Where the counter's payment stands: asked of its provider now. The counter that asked it alone reads it.",
+        "parameters": [
+          {
+            "name": "paymentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/abroad": {
       "get": {
         "operationId": "Sbg.abroadRoutes",
@@ -38548,6 +38607,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HubPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/payment-account/fee": {
+      "post": {
+        "operationId": "PartnerLedger.setFee",
+        "summary": "",
+        "description": "4b — OUR FEE ON THE PARTNER'S PAYMENTS (P4-c): a percentage of every payment into its account, set by our staff who keep the\nmoney, by name. Counted on each payment as it is paid, and owed by the partner — a loan until a company of ours can\ninvoice it (L62).",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountView"
                 }
               }
             }
@@ -68334,6 +68432,11 @@
             "minimum": 0,
             "maximum": 86400
           },
+          "paymentId": {
+            "type": "string",
+            "description": "2026-11-20 — the payment by phone asked for this parcel at this counter, paid (4b): where the counter takes no cash.",
+            "pattern": "/^hp_[A-Za-z0-9_-]{6,40}$/"
+          },
           "parcelId": {
             "type": "string"
           },
@@ -69511,6 +69614,31 @@
           "paidStatus": {
             "type": "object"
           },
+          "paidByPhone": {
+            "type": "object",
+            "properties": {
+              "paymentId": {
+                "required": true,
+                "type": "string"
+              },
+              "amount": {
+                "required": true,
+                "type": "number"
+              },
+              "currency": {
+                "required": true,
+                "type": "string"
+              },
+              "test": {
+                "required": true,
+                "type": "boolean"
+              },
+              "partnerEntityId": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "disputeReason": {
             "type": "string"
           },
@@ -69737,6 +69865,7 @@
           "floorPaidAhead",
           "goesInBag",
           "papersSeen",
+          "paidByPhone",
           "acceptedAt",
           "returnOf",
           "returnLoad",
@@ -69744,6 +69873,112 @@
           "payAtCollection",
           "doorHold",
           "scans"
+        ]
+      },
+      "PhonePaymentDto": {
+        "type": "object",
+        "properties": {
+          "agentDid": {
+            "type": "string",
+            "description": "The shop asking; taken from the sign-in for a shop."
+          },
+          "parcelId": {
+            "type": "string",
+            "pattern": "/^[A-Za-z0-9-]{3,40}$/",
+            "description": "The number on the parcel’s sticker."
+          },
+          "phone": {
+            "type": "string",
+            "pattern": "/^\\+\\d{9,15}$/",
+            "description": "The phone the prompt goes to, with its country code."
+          }
+        },
+        "required": [
+          "parcelId",
+          "phone"
+        ]
+      },
+      "HubPaymentView": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out",
+              "refund"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "phoneEnds": {
+            "type": "string",
+            "description": "The last three digits of the phone."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "asked",
+              "paid",
+              "failed"
+            ]
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "declined",
+              "expired",
+              "unreachable",
+              "insufficient"
+            ],
+            "description": "Why it did not go. Absent where the provider gave a reason of its own."
+          },
+          "test": {
+            "type": "boolean"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "settledAt": {
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "A try of the account: the member of staff who asked it."
+          },
+          "usedFor": {
+            "type": "string",
+            "description": "The parcel it paid for, once taken in."
+          },
+          "fee": {
+            "type": "number",
+            "description": "Our fee on it: the partner’s percentage, counted when it was paid."
+          },
+          "refundOf": {
+            "type": "string",
+            "description": "A refund: the payment it gives back."
+          }
+        },
+        "required": [
+          "paymentId",
+          "kind",
+          "reference",
+          "amount",
+          "currency",
+          "phoneEnds",
+          "state",
+          "test",
+          "askedAt"
         ]
       },
       "CounterAbroadRoute": {
@@ -91719,84 +91954,29 @@
           "balance": {
             "type": "number",
             "description": "What the account holds, where the provider says. Absent when it did not answer."
+          },
+          "feePct": {
+            "type": "number",
+            "description": "Our fee, a percentage of every payment into the account (P4-c). Absent until set."
+          },
+          "feeSetBy": {
+            "type": "string",
+            "description": "Who set the fee, by name, and when."
+          },
+          "feeSetAt": {
+            "type": "string"
+          },
+          "feeOwed": {
+            "type": "number",
+            "description": "Our fee counted so far on payments kept, less any given back: owed by the partner, as a loan until a company of ours can invoice it."
           }
         },
         "required": [
           "provider",
           "test",
           "currency",
-          "ready"
-        ]
-      },
-      "HubPaymentView": {
-        "type": "object",
-        "properties": {
-          "paymentId": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "in",
-              "out",
-              "refund"
-            ]
-          },
-          "reference": {
-            "type": "string"
-          },
-          "amount": {
-            "type": "number"
-          },
-          "currency": {
-            "type": "string"
-          },
-          "phoneEnds": {
-            "type": "string",
-            "description": "The last three digits of the phone."
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "asked",
-              "paid",
-              "failed"
-            ]
-          },
-          "why": {
-            "type": "string",
-            "enum": [
-              "declined",
-              "expired",
-              "unreachable",
-              "insufficient"
-            ],
-            "description": "Why it did not go. Absent where the provider gave a reason of its own."
-          },
-          "test": {
-            "type": "boolean"
-          },
-          "askedAt": {
-            "type": "string"
-          },
-          "settledAt": {
-            "type": "string"
-          },
-          "askedBy": {
-            "type": "string",
-            "description": "A try of the account: the member of staff who asked it."
-          }
-        },
-        "required": [
-          "paymentId",
-          "kind",
-          "reference",
-          "amount",
-          "currency",
-          "phoneEnds",
-          "state",
-          "test",
-          "askedAt"
+          "ready",
+          "feeOwed"
         ]
       },
       "PaymentAccountRead": {
@@ -91837,6 +92017,21 @@
         "required": [
           "phone",
           "amount"
+        ]
+      },
+      "PartnerFeeDto": {
+        "type": "object",
+        "properties": {
+          "pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 50,
+            "description": "The percentage of every payment into the partner’s account, from 0 to 50.",
+            "example": 3
+          }
+        },
+        "required": [
+          "pct"
         ]
       },
       "PartnerOwedSum": {

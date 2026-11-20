@@ -5,12 +5,13 @@ import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Need
 import { useConnectivity } from '../../../shared/connectivity';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, NATURES, abroadRouteFor, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, weighedFor } from '../logic';
+import { BODY_HINTS, NATURES, abroadRouteFor, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, phonePayBlock, termsBlock, termsNeedTelling, weighedFor } from '../logic';
 import { FreightBooking } from './FreightBooking';
 import type { AbroadRoute, NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState, TakenInPlace } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 import { TakenInLabel } from './TakenInLabel';
+import { PhonePayCard } from './PhonePayCard';
 
 export interface AcceptScreenProps {
   state: AgentState;
@@ -55,7 +56,12 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   // 2026-11-18 — to a shop in another country a route is on to (step 2b): declared here, and only with a signal.
   const abroad = abroadRouteFor(state.acceptPoints, f.destPudoDid, state.agent?.country, state.abroadRoutes);
   const { online } = useConnectivity();
-  const blockReason = acceptMissing(f, t, Boolean(abroad)) ?? termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t) ?? (abroad && !online ? t('agent.accept.abroad.needsSignal') : null);
+  const blockReason =
+    acceptMissing(f, t, Boolean(abroad)) ??
+    termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t) ??
+    (abroad && !online ? t('agent.accept.abroad.needsSignal') : null) ??
+    // 2026-11-20 — paid by phone first, where the counter takes no cash (a partner's country, 4b).
+    phonePayBlock(state.takeInTermsState === 'ready' ? state.takeInTerms : null, state.phonePay, f.parcelId, online, t);
   const terms = state.takeInTermsState === 'ready' ? state.takeInTerms : null;
   const termsAloud = terms ? `${takeInTermsNotice(terms, t).title}. ${takeInTermsNotice(terms, t).detail} ` : '';
   // A walk-up too big for the bus is booked as freight once it is measured and has a shop to go to.
@@ -307,6 +313,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Card>
 
       {abroad ? <AbroadCard route={abroad} state={state} actions={actions} /> : null}
+
+      {terms?.payByPhone ? (
+        <PhonePayCard pay={state.phonePay} terms={terms as TakeInTerms & { payByPhone: NonNullable<TakeInTerms['payByPhone']> }} parcelId={f.parcelId} senderPhone={f.senderMobile} online={online} busy={state.busy === 'phonePay'} onAsk={(phone) => void actions.askPhonePayment(phone)} />
+      ) : null}
 
       {/* P3 — said out loud before acceptance: whose promise, who answers, and the cover. Directly above the
           button, so it is the last thing read before the goods change hands. */}

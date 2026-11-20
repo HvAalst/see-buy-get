@@ -26,10 +26,13 @@ export interface HubPaymentRow {
   askedAt: string;
   settledAt?: string;
   askedBy?: string;
+  usedFor?: string;
+  fee?: number;
+  refundOf?: string;
 }
 
 export interface PaymentAccountRead {
-  account: { provider: HubProviderId; test: boolean; currency: string; ready: HubProviderId[]; balance?: number };
+  account: { provider: HubProviderId; test: boolean; currency: string; ready: HubProviderId[]; balance?: number; feePct?: number; feeSetBy?: string; feeSetAt?: string; feeOwed: number };
   payments: HubPaymentRow[];
 }
 
@@ -59,9 +62,12 @@ export function paymentState(p: HubPaymentRow, t: Translate): string {
 }
 
 /** The fold's inside, from what the server said — pure, for the test. */
-export function PaymentAccountBody({ read, t, busy, onTry }: { read: PaymentAccountRead; t: Translate; busy?: boolean; onTry?: (phone: string, amount: number) => void }) {
+export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: PaymentAccountRead; t: Translate; busy?: boolean; onTry?: (phone: string, amount: number) => void; onFee?: (pct: number) => void }) {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
+  const [pct, setPct] = useState('');
+  const pctFigure = Number(pct);
+  const pctReady = pct.trim() !== '' && Number.isFinite(pctFigure) && pctFigure >= 0 && pctFigure <= 50;
   const a = read.account;
   const figure = Number(amount);
   const ready = /^\+\d{9,15}$/.test(phone.replace(/[\s-]/g, '')) && Number.isFinite(figure) && figure >= 1;
@@ -80,6 +86,19 @@ export function PaymentAccountBody({ read, t, busy, onTry }: { read: PaymentAcco
         </div>
       </div>
       {a.test ? <p class="chint">{t('tower.partner.pay.ownLater')}</p> : null}
+      <p class="cfield__label">{t('tower.partner.pay.feeTitle')}</p>
+      <p class="chint">{t('tower.partner.pay.feeLede')}</p>
+      <p class="chint">
+        {a.feePct != null ? t('tower.partner.pay.feeNow', { pct: a.feePct, by: a.feeSetBy ?? '', at: a.feeSetAt ? when(a.feeSetAt) : '' }) : t('tower.partner.pay.feeNone')} {t('tower.partner.pay.feeOwed', { amount: cash(a.feeOwed, a.currency) })}
+      </p>
+      {onFee ? (
+        <div class="crow">
+          <input class="cinput cinput--sm" type="number" inputMode="decimal" min={0} max={50} step="0.01" aria-label={t('tower.partner.pay.feePct')} placeholder={t('tower.partner.pay.feePct')} value={pct} onInput={(e) => setPct((e.target as HTMLInputElement).value)} />
+          <button type="button" class="cbtn cbtn--sm" disabled={!pctReady || busy} onClick={() => onFee(Math.round(pctFigure * 100) / 100)}>
+            {t('tower.partner.pay.feeSave')}
+          </button>
+        </div>
+      ) : null}
       {onTry && a.test ? (
         <>
           <p class="cfield__label">{t('tower.partner.pay.tryTitle')}</p>
@@ -108,6 +127,8 @@ export function PaymentAccountBody({ read, t, busy, onTry }: { read: PaymentAcco
                 </span>
                 <span class="crow__sub">
                   {cash(p.amount, p.currency)} · {t('tower.partner.pay.phoneEnds', { ends: p.phoneEnds })} · {when(p.askedAt)}
+                  {p.usedFor ? ` · ${t('tower.partner.pay.forParcel', { parcel: p.usedFor })}` : ''}
+                  {p.fee != null ? ` · ${t('tower.partner.pay.feeOn', { amount: cash(p.fee, p.currency) })}` : ''}
                 </span>
               </span>
             </div>
@@ -120,7 +141,7 @@ export function PaymentAccountBody({ read, t, busy, onTry }: { read: PaymentAcco
 
 type Load = (entityId: string) => Promise<Result<unknown>>;
 
-export function PartnerPaymentFold({ entityId, load, tryIt }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>> }) {
+export function PartnerPaymentFold({ entityId, load, tryIt, setFee }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>>; setFee: (entityId: string, pct: number) => Promise<Result<unknown>> }) {
   const t = useT();
   const [read, setRead] = useState<PaymentAccountRead | null>(null);
   const [busy, setBusy] = useState(false);
@@ -149,12 +170,20 @@ export function PartnerPaymentFold({ entityId, load, tryIt }: { entityId: string
     if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
     await refresh();
   };
+  const fee = async (pct: number) => {
+    setBusy(true);
+    setFailed(null);
+    const r = await setFee(entityId, pct);
+    setBusy(false);
+    if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
+    await refresh();
+  };
   if (!read) return null;
   const hint = read.account.test ? t('tower.partner.pay.hintTest', { provider: t(PROVIDER[read.account.provider]) }) : t(PROVIDER[read.account.provider]);
   return (
     <ConsoleFold title={t('tower.partner.pay.title')} hint={hint}>
       {failed ? <p class="cerr">{failed}</p> : null}
-      <PaymentAccountBody read={read} t={t} busy={busy} onTry={(phone, amount) => void tryPayment(phone, amount)} />
+      <PaymentAccountBody read={read} t={t} busy={busy} onTry={(phone, amount) => void tryPayment(phone, amount)} onFee={(pct) => void fee(pct)} />
     </ConsoleFold>
   );
 }

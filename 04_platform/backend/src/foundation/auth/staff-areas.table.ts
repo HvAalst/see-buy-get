@@ -502,6 +502,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // staff who keep the money.
   'GET sbg/entities/:entityId/payment-account': 'money',
   'POST sbg/entities/:entityId/payment-account/try': 'money',
+  // 2026-11-20 — our fee on a partner's payments (4b, P4-c): set by staff who keep the money. A walk-up's payment by phone is the
+  // shop's own, at its counter: staff ask nothing in its name.
+  'POST sbg/entities/:entityId/payment-account/fee': 'money',
+  'POST sbg/parcels/phone-payment': 'none',
+  'GET sbg/parcels/phone-payment/:paymentId': 'none',
   // 2026-11-20 — a partner's own people (3c): read by any staff role, as its record is; added and taken out by admin. The
   // Partner app's own doors are a person's, or the partner's, never staff's.
   'GET sbg/entities/:entityId/partner-members': 'any',

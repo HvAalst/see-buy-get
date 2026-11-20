@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsString, Matches, Max, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 /**
  * 2026-11-20 — THE PAYMENT HUB (the payments plan, step 4; the owner: "the system might have to ingest a variety of payment
@@ -47,6 +47,15 @@ export interface PayoutRequest {
   description: string;
 }
 
+export interface RefundRequest {
+  ourRef: string;
+  amount: number;
+  currency: string;
+  description: string;
+  /** The provider's own handle for the payment given back. */
+  paidRef: string;
+}
+
 /** A provider behind the hub. Every answer about money comes from it — never from a screen, never assumed. */
 export interface HubProvider {
   readonly id: HubProviderId;
@@ -56,8 +65,8 @@ export interface HubProvider {
   status(account: OpenedAccount, ref: { providerRef?: string; ourRef: string }, now?: number): Promise<ProviderAnswer>;
   /** Send money from the account to a phone. */
   payout(account: OpenedAccount, req: PayoutRequest, now?: number): Promise<ProviderAnswer>;
-  /** Give a payment back to the phone it came from. */
-  refund(account: OpenedAccount, req: PayoutRequest & { paidRef: string }, now?: number): Promise<ProviderAnswer>;
+  /** Give a payment back to the phone it came from — named by the provider's own handle for it, never by a number. */
+  refund(account: OpenedAccount, req: RefundRequest, now?: number): Promise<ProviderAnswer>;
   /** What the account holds, where the provider says. */
   balance(account: OpenedAccount, now?: number): Promise<{ amount: number; currency: string } | undefined>;
 }
@@ -85,6 +94,22 @@ export interface HubPayment {
   settledAt?: string;
   /** A try asked by our staff: who, by name. */
   askedBy?: string;
+  /** The counter that asked it: a shop's id. Only that counter reads it, and only for its own take-in. */
+  siteId?: string;
+  /** The parcel it paid for, once taken in: one payment, one parcel. */
+  usedFor?: string;
+  /** Our fee on it (P4-c): the partner's percentage of the payment, counted when it is paid. Owed by the partner. */
+  fee?: { pct: number; amount: number };
+  /** A refund: the payment it gives back. */
+  refundOf?: string;
+}
+
+/** A company's settings in the hub: our fee on its payments (P4-c), set by our staff by name. */
+export interface HubAccountRecord {
+  ownerEntityId: string;
+  feePct?: number;
+  feeSetBy?: string;
+  feeSetAt?: string;
 }
 
 /** Why a payment did not go, in a word each screen says in its own language. */
@@ -104,6 +129,9 @@ export class HubPaymentView {
   @ApiProperty() askedAt: string;
   @ApiPropertyOptional() settledAt?: string;
   @ApiPropertyOptional({ description: 'A try of the account: the member of staff who asked it.' }) askedBy?: string;
+  @ApiPropertyOptional({ description: 'The parcel it paid for, once taken in.' }) usedFor?: string;
+  @ApiPropertyOptional({ description: 'Our fee on it: the partner’s percentage, counted when it was paid.' }) fee?: number;
+  @ApiPropertyOptional({ description: 'A refund: the payment it gives back.' }) refundOf?: string;
 }
 
 export class PaymentAccountView {
@@ -112,6 +140,10 @@ export class PaymentAccountView {
   @ApiProperty() currency: string;
   @ApiProperty({ enum: HUB_PROVIDERS, isArray: true, description: 'The providers whose adapter is ready.' }) ready: HubProviderId[];
   @ApiPropertyOptional({ description: 'What the account holds, where the provider says. Absent when it did not answer.' }) balance?: number;
+  @ApiPropertyOptional({ description: 'Our fee, a percentage of every payment into the account (P4-c). Absent until set.' }) feePct?: number;
+  @ApiPropertyOptional({ description: 'Who set the fee, by name, and when.' }) feeSetBy?: string;
+  @ApiPropertyOptional() feeSetAt?: string;
+  @ApiProperty({ description: 'Our fee counted so far on payments kept, less any given back: owed by the partner, as a loan until a company of ours can invoice it.' }) feeOwed: number;
 }
 
 /** A partner's payment account, as our staff read it: the account, and its payments, newest first. */
@@ -132,4 +164,31 @@ export class TryPaymentDto {
   @Min(1)
   @Max(100_000)
   amount: number;
+}
+
+/** Our fee on a partner's payments (P4-c): a percentage of each, set by our staff. */
+export class PartnerFeeDto {
+  @ApiProperty({ description: 'The percentage of every payment into the partner’s account, from 0 to 50.', example: 3 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(50)
+  pct: number;
+}
+
+/** A payment prompt asked by a counter for a walk-up it is taking in (4b): the parcel's number and the payer's phone. */
+export class PhonePaymentDto {
+  @ApiPropertyOptional({ description: 'The shop asking; taken from the sign-in for a shop.' })
+  @IsOptional()
+  @IsString()
+  agentDid?: string;
+
+  @ApiProperty({ description: 'The number on the parcel’s sticker.' })
+  @IsString()
+  @Matches(/^[A-Za-z0-9-]{3,40}$/)
+  parcelId: string;
+
+  @ApiProperty({ description: 'The phone the prompt goes to, with its country code.' })
+  @IsString()
+  @Matches(/^\+\d{9,15}$/, { message: 'Give the whole phone number with its country code, starting with +' })
+  phone: string;
 }

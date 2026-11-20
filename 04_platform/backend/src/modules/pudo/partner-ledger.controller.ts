@@ -6,7 +6,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
-import { HubPaymentView, PaymentAccountRead, TryPaymentDto } from '../../foundation/payment-hub/hub.types';
+import { HubPaymentView, PartnerFeeDto, PaymentAccountRead, PaymentAccountView, TryPaymentDto } from '../../foundation/payment-hub/hub.types';
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
@@ -79,6 +79,19 @@ export class PartnerLedgerController {
   tryPayment(@Param('entityId') entityId: string, @Body() dto: TryPaymentDto, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
     this.requirePartner(entityId);
     return this.hub.tryPayment(entityId, dto, auditActor(actor));
+  }
+
+  /**
+   * 4b — OUR FEE ON THE PARTNER'S PAYMENTS (P4-c): a percentage of every payment into its account, set by our staff who keep the
+   * money, by name. Counted on each payment as it is paid, and owed by the partner — a loan until a company of ours can
+   * invoice it (L62).
+   */
+  @Roles('operator')
+  @Post('entities/:entityId/payment-account/fee')
+  async setFee(@Param('entityId') entityId: string, @Body() dto: PartnerFeeDto, @Actor() actor: IntrospectionResult): Promise<PaymentAccountView> {
+    this.requirePartner(entityId);
+    this.hub.setFee(entityId, dto.pct, auditActor(actor));
+    return this.hub.accountView(entityId);
   }
 
   private requirePartner(entityId: string): void {

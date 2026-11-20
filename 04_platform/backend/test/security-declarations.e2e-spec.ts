@@ -59,6 +59,9 @@ describe('the yearly security declaration — over the wire', () => {
     };
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await photograph('kyc_id'), tradingLicenceRef: await photograph('kyc_licence'), shopPhotoRefs: [await photograph('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
+    // A float, so a walk-up is taken in for cash: our counters take nothing else (the payments plan, 4b).
+    const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(staff).send({ amount: 50 }).expect(201);
+    await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(staff).send({ providerRef: `MPX${u}`, amount: 50 }).expect(201);
     return { did, token };
   }
 
@@ -70,7 +73,7 @@ describe('the yearly security declaration — over the wire', () => {
     expect(first.lines.length).toBeGreaterThanOrEqual(4);
 
     // Nothing new taken in — said with where it is signed.
-    const walkUp = (id: string) => ({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000501', receiverMobile: '+254700000502', paymentMode: 'prepaid' });
+    const walkUp = (id: string) => ({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000501', receiverMobile: '+254700000502' });
     const refused = await http().post('/v1/sbg/parcels/accept').set(shop.token).send({ ...walkUp(`DECL-${digits()}`), dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(409);
     expect(refused.body).toMatchObject({ code: 'DECLARATION_REQUIRED' });
     expect(refused.body.detail).toBe('Mama Neema has not signed its security declaration: nothing new is taken on until it has. It is signed in the Shop app, on the home screen.');

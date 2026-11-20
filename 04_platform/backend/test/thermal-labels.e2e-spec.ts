@@ -81,7 +81,7 @@ describe('every label for a thermal printer, over the wire', () => {
 
     // THE COUNTER: a walk-up taken in at Nairobi for the Kisumu shop.
     const walkUp = `ZPL-${tag}`;
-    const taken = (await http().post('/v1/sbg/parcels/accept').set(nairobi.token).send({ agentDid: nairobi.did, parcelId: walkUp, size: 'S', destZone: `ZplKisumu${tag}`, destPudoDid: kisumu.did, senderMobile: '+254700000301', receiverMobile: '+254700000302', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), nairobi.did), paymentMode: 'prepaid' }).expect(201)).body;
+    const taken = (await http().post('/v1/sbg/parcels/accept').set(nairobi.token).send({ agentDid: nairobi.did, parcelId: walkUp, size: 'S', destZone: `ZplKisumu${tag}`, destPudoDid: kisumu.did, senderMobile: '+254700000301', receiverMobile: '+254700000302', dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), nairobi.did) }).expect(201)).body;
     const counter = await http().get(`/v1/sbg/agents/${nairobi.did}/parcels/${walkUp}/label.zpl`).set(nairobi.token).expect(200);
     expect(counter.headers['content-type']).toMatch(/^text\/plain/);
     const zpl = counter.text;

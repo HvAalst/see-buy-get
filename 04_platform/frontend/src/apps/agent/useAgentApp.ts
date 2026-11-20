@@ -59,6 +59,7 @@ import type {
   GeocodeView,
   HandoverView,
   IntakePreview,
+  PhonePay,
   TakeInTerms,
   LedgerSummary,
   NetworkPoint,
@@ -296,6 +297,8 @@ export interface AgentState {
   acceptDerived: ClassifyView | null;
   /** 2026-11-08 — a walk-up's price as the sender pays it, said before it is taken in: from the country's price card, or a parcel collected here. */
   acceptPrice: { gross: number; currency: string; local?: boolean } | null;
+  /** 2026-11-20 — the walk-up's payment by phone, where the counter takes no cash (a partner's country, 4b). */
+  phonePay: PhonePay | null;
   /** 2026-11-08 — the price list this counter keeps, to price a walk-up with no signal (step 3b): the last the server gave. */
   counterPrices: CounterPriceRow | null;
   /** The geocoded point for the Address mode's nearest-first sort (+ a plain note on the match/quality). */
@@ -428,6 +431,7 @@ const INITIAL: AgentState = {
   abroadRoutes: [],
   acceptDerived: null,
   acceptPrice: null,
+  phonePay: null,
   counterPrices: null,
   acceptNear: null,
   acceptGeoBusy: false,
@@ -1844,6 +1848,8 @@ export function useAgentApp() {
         // 2026-11-08 — the price the sender was told: refused, and said anew, if it has moved since.
         ...(stateRef.current.acceptPrice ? { expectedTotal: stateRef.current.acceptPrice.gross } : {}),
         ...(abroad ? { abroad: abroadBody(f.abroad) } : {}),
+        // 2026-11-20 — paid by phone first (a partner's country, 4b): the payment for this very parcel.
+        ...(terms?.payByPhone && stateRef.current.phonePay?.state === 'paid' ? { paymentId: stateRef.current.phonePay.paymentId } : {}),
       });
       if (r.error) {
         const now = (r.error as { params?: { now?: unknown } }).params?.now;
@@ -1866,7 +1872,7 @@ export function useAgentApp() {
       const here = p && p.destAgentDid && p.originAgentDid === p.destAgentDid ? { binSlot: p.binSlot, cashDue: p.shipmentCost, currency: p.currency } : undefined;
       // A walk-up priced from the country's card: the cash to take, said again on the label sheet.
       const cash = p && !here && p.shipmentCost != null ? { amount: p.shipmentCost, currency: p.currency } : undefined;
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(cash ? { cash } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}), ...(p.border?.papers?.svg ? { papersSvg: p.border.papers.svg } : {}) } : null }));
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptPrice: null, phonePay: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp, ...(here ? { here } : {}), ...(cash ? { cash } : {}), ...(placeOf(p) ? { place: placeOf(p) } : {}), ...(p.border?.papers?.svg ? { papersSvg: p.border.papers.svg } : {}) } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
@@ -2662,6 +2668,40 @@ export function useAgentApp() {
     });
   }, [client, run, fail, setRelease]);
 
+  /**
+   * 2026-11-20 — ASK THE SENDER TO PAY BY PHONE (a partner's country, 4b): a prompt on the payer's phone, into the partner's
+   * account, for the parcel on the sticker. The take-in waits for it to be paid; the screen reads it again until it is.
+   */
+  const askPhonePayment = useCallback(
+    async (phone: string) => {
+      if (!client || !did) return;
+      const parcelId = stateRef.current.accept.parcelId.trim().toUpperCase();
+      if (!parcelId || !phone.trim()) return;
+      await run('phonePay', async () => {
+        const r = await client.api.askPhonePayment(did, parcelId, phone.trim());
+        if (r.error) return fail(r.error);
+        const p = narrow<Omit<PhonePay, 'parcelId'>>(r.data);
+        if (p) setState((s) => ({ ...s, phonePay: { ...p, parcelId } }));
+      });
+    },
+    [client, did, run, fail],
+  );
+
+  // While the prompt waits on the phone, read it again every few seconds — never past the time a prompt can wait.
+  useEffect(() => {
+    const pay = state.phonePay;
+    if (!client || !pay || pay.state !== 'asked' || Date.now() - Date.parse(pay.askedAt) > 3 * 60_000) return;
+    const timer = setTimeout(() => {
+      void client.api.phonePayment(pay.paymentId).then((r) => {
+        const next = r.error ? null : narrow<Omit<PhonePay, 'parcelId'>>(r.data);
+        if (!next) return;
+        setState((s) => (s.phonePay?.paymentId === pay.paymentId ? { ...s, phonePay: { ...next, parcelId: pay.parcelId } } : s));
+        if (next.state === 'paid') buzz();
+      });
+    }, 3_000);
+    return () => clearTimeout(timer);
+  }, [client, state.phonePay]);
+
   /** Round 27 — the label of a parcel this shop took in, as a file for its thermal label printer (ZPL). */
   const thermalLabel = useCallback(async (parcelId: string) => {
     if (!client || !did) return;
@@ -2999,6 +3039,7 @@ export function useAgentApp() {
       sendLicenceRenewal,
       saveShopfront,
       submitAccept,
+      askPhonePayment,
       /** CV1 — the conversations API for this shop (null until signed in). */
       chatApi: client?.conversations ?? null,
       setTermsTold,

@@ -3,6 +3,8 @@ import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/co
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PartnerLedgerService } from './partner-ledger.service';
+import { PaymentHubService, viewOf as hubViewOf } from '../../foundation/payment-hub/payment-hub.service';
+import type { HubPaymentView } from '../../foundation/payment-hub/hub.types';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { FxService } from '../../foundation/money/fx.service';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -742,6 +744,8 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
 }
 
 interface AcceptInput {
+  /** 2026-11-20 — the payment by phone asked for this parcel at this counter (4b). */
+  paymentId?: string;
   /** 2026-11-08 — a walk-up to another shop priced from its country's price card (the controller works it out), and the price the counter showed. */
   walkInQuote?: ShipmentQuote;
   expectedTotal?: number;
@@ -823,6 +827,11 @@ export interface TakeInTerms {
    * before the goods are accepted rather than on the day the shopkeeper expected money.
    */
   paidOut: boolean;
+  /**
+   * 2026-11-20 — where the sender pays by phone, before the label (the payments plan, 4b; P3-c "payment by phone only"): to whom,
+   * and how much — the partner's own price for a parcel. Absent where the counter takes cash, or where nobody can be paid yet.
+   */
+  payByPhone?: { to: string; price: number; currency: string };
 }
 
 /**
@@ -885,6 +894,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly ourGlns?: OurGlnBook,
     // 2026-11-20 — where a partner contracts and pays (Partnered), its own list prices a shop's steps (the payments plan, 3a).
     @Optional() private readonly partners?: PartnerLedgerService,
+    // 2026-11-20 — the payment hub: a walk-up in a partner's country is paid by phone into the partner's account (4b).
+    @Optional() private readonly hub?: PaymentHubService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1489,7 +1500,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const promise = this.presence.takeInPromise(country, payerJurisdiction);
     const level = this.presence.resolve(country).level;
     if (promise !== 'ours') {
-      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: NETWORK_CURRENCY, cashAccepted: false, paidOut: false };
+      const phone = promise === 'theirs' ? this.phonePriceAt(country) : undefined;
+      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: phone?.currency ?? NETWORK_CURRENCY, cashAccepted: false, paidOut: false, ...(phone ? { payByPhone: phone } : {}) };
     }
     // This country's sister where one exists; otherwise the payer's, the leg here being a service it bought.
     const entityId = this.agents.entityIdOrNone(agent) ?? (payerJurisdiction ? this.entities.forJurisdiction(payerJurisdiction)?.entityId : undefined);
@@ -1698,6 +1710,10 @@ export class ParcelService implements OnApplicationBootstrap {
      * rather than booking a fee into a company that does not exist in that country.
      */
     if (promise === 'theirs' && mode === 'cash') this.presence.require(country, 'cashOnDelivery');
+    // 2026-11-20 — NOT IN CASH, THEN BY PHONE, FIRST (the payments plan, 4b; P4-a "the payment comes before the label"): under a
+    // partner's promise, a paid payment into the partner's account for this very parcel, asked at this counter; under ours, the
+    // counter takes cash, and a walk-up sent as anything else is refused. Asked before anything is written.
+    const byPhone = mode !== 'cash' ? this.phonePaidFor(input, promise, country, agent.shopName) : undefined;
 
     // 'No money, no scan' gate applies to cash parcels (they consume a platform credit).
     if (mode === 'cash' && !this.gate.canTransact(input.agentDid).ok) {
@@ -1802,9 +1818,11 @@ export class ParcelService implements OnApplicationBootstrap {
     if (sameShop) parcel.binSlot = this.shelf.assign(input.agentDid, parcel.parcelId, parcel.size);
     // 2026-11-05 — any other walk-up is told where it goes, as a booking is: the open bag for its next stop, or a shelf slot.
     else this.placeTakenIn(parcel, input.agentDid);
+    if (byPhone) Object.assign(parcel, { paidStatus: 'ParcelPaid', paidByPhone: byPhone });
     parcel.label = this.label(parcel);
     if (parcel.border) parcel.border.papers = { svg: this.borderPapers(parcel) };
     this.parcels.set(parcel.parcelId, parcel);
+    if (byPhone) this.hub?.use(byPhone.paymentId, parcel.parcelId);
     // The account each number is certainly for today, so the parcel stays theirs when the number does not.
     this.keep(parcel.parcelId, { sender: this.accountAt(parcel.senderPhoneHash), receiver: this.accountAt(parcel.receiverPhoneHash) });
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
@@ -2112,6 +2130,71 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * 2026-11-20 — WHERE THE SENDER PAYS BY PHONE (4b): a country where a partner contracts and pays (Partnered, its partner
+   * switched on), through the payment hub, at the partner's own price for a parcel. Nowhere else yet: where nobody holds money
+   * (Matched) the carrier collects its own, as before (P4-g, asked); our own counters take cash.
+   */
+  private phonePriceAt(country: string): { to: string; price: number; currency: string } | undefined {
+    const partner = this.hub ? this.partners?.partnerAt(country) : undefined;
+    if (!partner) return undefined;
+    // The partner's OWN figure for a parcel — never the figure every company starts from, which is in nobody's money.
+    const price = partner.amounts?.wholesale;
+    if (typeof price !== 'number' || !(price > 0)) return undefined;
+    return { to: partner.name, price, currency: this.entities.amountsFor(partner.entityId).currency ?? partner.currency ?? NETWORK_CURRENCY };
+  }
+
+  /**
+   * A WALK-UP NOT PAID IN CASH (4b): paid by phone, at this counter, for this parcel — or refused, before anything is written.
+   * Under a partner's promise: the payment asked here for this parcel, into the partner's account, paid, for its price, and
+   * not taken for another parcel. Under ours: the counter takes the payment in cash. Where nobody holds money yet: as before.
+   */
+  private phonePaidFor(input: AcceptInput, promise: 'ours' | 'theirs' | 'none', country: string, shopName: string): NonNullable<Parcel['paidByPhone']> | undefined {
+    if (promise === 'ours') {
+      if (this.presence.can(country, 'cashOnDelivery')) throw new GlosError('SHIPMENT_NOT_PAID', `At ${shopName} the sender pays in cash: take it in as a cash parcel`);
+      throw new GlosError('SHIPMENT_NOT_PAID', `${shopName} can take no payment yet, in cash or by phone: nothing is taken in until it can`);
+    }
+    const partner = promise === 'theirs' ? this.partners?.partnerAt(country) : undefined;
+    if (!partner) return undefined;
+    // Where a partner contracts and pays, nothing is taken in unpaid — not even on a server without the payment hub.
+    if (!this.hub) throw new GlosError('INVALID_STATE', `Payment by phone is not set up on this server: nothing is taken in under ${partner.name} until it is`);
+    const due = this.phonePriceAt(country);
+    if (!due) throw new GlosError('INVALID_STATE', `${partner.name} has not set what a parcel costs yet: nothing is taken in until it has`);
+    if (!input.paymentId) throw new GlosError('SHIPMENT_NOT_PAID', 'The sender pays by phone first: ask for the payment, then take the parcel in');
+    const p = this.hub.get(input.paymentId);
+    if (!p || p.kind !== 'in' || p.ownerEntityId !== partner.entityId || p.reference !== input.parcelId || p.siteId !== input.agentDid) {
+      throw new GlosError('SHIPMENT_NOT_PAID', `No payment for ${input.parcelId} was asked at this counter: ask for it again`);
+    }
+    if (p.state === 'asked') throw new GlosError('SHIPMENT_NOT_PAID', `The payment is still waiting on the phone ending ${p.phoneEnds}`);
+    if (p.state !== 'paid') throw new GlosError('SHIPMENT_NOT_PAID', 'The payment did not go through: ask for it again');
+    if (p.usedFor && p.usedFor !== input.parcelId) throw new GlosError('SHIPMENT_NOT_PAID', `That payment was for ${p.usedFor}`);
+    if (p.amount + 0.005 < due.price) throw new GlosError('PRICE_CHANGED', `The payment was ${p.amount}, and a parcel costs ${due.price} now: ask for the payment again`, { expected: p.amount, now: due.price });
+    return { paymentId: p.paymentId, amount: p.amount, currency: p.currency, test: p.test, partnerEntityId: partner.entityId };
+  }
+
+  /**
+   * 4b — THE PAYMENT BY PHONE, ASKED BY THE COUNTER taking a walk-up in: a prompt on the payer's phone, into the partner's account,
+   * for the partner's price. Refused for a parcel number already taken in, and where the counter does not take payment by phone.
+   */
+  async askPhonePayment(agentDid: string, parcelId: string, phone: string, now: number = Date.now()): Promise<HubPaymentView> {
+    const id = parcelId.trim().toUpperCase();
+    if (this.parcels.has(id)) throw new GlosError('PARCEL_EXISTS', `Parcel ${id} already exists`);
+    const agent = this.agents.get(agentDid);
+    const country = this.agents.countryOf(agent);
+    const due = this.presence.takeInPromise(country) === 'theirs' ? this.phonePriceAt(country) : undefined;
+    const partner = due ? this.partners?.partnerAt(country) : undefined;
+    if (!due || !partner || !this.hub) throw new GlosError('FORBIDDEN', `At ${agent.shopName} the sender does not pay by phone`);
+    const p = await this.hub.collect(partner.entityId, { reference: id, amount: due.price, payerPhone: phone, description: `Parcel ${id}, taken in at ${agent.shopName}`, siteId: agentDid }, now);
+    return hubViewOf(p);
+  }
+
+  /** 4b — where the counter's payment stands now, asked of its provider; the counter that asked it alone reads it. */
+  async phonePaymentState(agentDid: string, paymentId: string, now: number = Date.now()): Promise<HubPaymentView> {
+    const p = this.hub?.get(paymentId);
+    if (!p || p.siteId !== agentDid) throw new GlosError('NOT_FOUND', 'No payment asked at this counter has that number');
+    return hubViewOf(await this.hub!.settle(paymentId, now));
+  }
+
+  /**
    * 2026-11-20 — what a cash walk-up is charged, worked out as accept() charges it: its route's price where it has one
    * (collected where it is handed in, abroad, or priced from the country's card), else one parcel at the shop company's list
    * price, tax and all (P4-a). Asked before the parcel is kept; the charge itself follows from the parcel as kept.
@@ -2267,6 +2350,8 @@ export class ParcelService implements OnApplicationBootstrap {
       if (parcel.shelvingLabour) this.gate.clawbackLabour(agentDid, parcel.shelvingLabour, parcel.parcelId, parcel.sellerEntityId, 'shelving');
     }
     this.refundStore(parcel, 'voided at the counter: given back in full');
+    // 2026-11-20 — paid by phone (4b): given back to the phone it came from, at once (P4-d), from the partner's account.
+    if (parcel.paidByPhone) void this.hub?.refund(parcel.paidByPhone.paymentId, `${parcel.parcelId} voided at the counter`).catch(() => undefined);
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }

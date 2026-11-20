@@ -13,7 +13,7 @@ import { PaymentAccountBody, paymentState, type HubPaymentRow, type PaymentAccou
  */
 const tt = t as never;
 const row = (over: Partial<HubPaymentRow> = {}): HubPaymentRow => ({ paymentId: 'hp_1', kind: 'in', reference: 'try_abc', amount: 250, currency: 'ETB', phoneEnds: '123', state: 'asked', test: true, askedAt: '2026-11-20T09:00:00Z', askedBy: 'Amina Otieno', ...over });
-const read = (over: Partial<PaymentAccountRead['account']> = {}, payments: HubPaymentRow[] = [row()]): PaymentAccountRead => ({ account: { provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 0, ...over }, payments });
+const read = (over: Partial<PaymentAccountRead['account']> = {}, payments: HubPaymentRow[] = [row()]): PaymentAccountRead => ({ account: { provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 0, feeOwed: 0, ...over }, payments });
 
 describe('where a payment stands, in words', () => {
   it('waiting, paid, or not paid — and why, where it is one the screens know', () => {
@@ -62,12 +62,34 @@ describe('the fold, for our staff', () => {
     expect(html).not.toContain('two of our staff switch it live');
   });
 
+  it('our fee (4b): what it is, who set it and when, what the partner owes so far — and a form to set it; each payment says its parcel and our fee on it', () => {
+    const none = renderToString(<PaymentAccountBody read={read({}, [])} t={tt} onFee={() => undefined} />);
+    expect(none).toContain('Our fee');
+    expect(none).toContain('No fee set yet.');
+    expect(none).toContain('a loan until a company of ours can invoice it');
+    expect(none).toContain('Set the fee');
+    const set = renderToString(
+      <PaymentAccountBody
+        read={read({ feePct: 3, feeSetBy: 'Amina Otieno', feeSetAt: '2026-11-20T10:00:00Z', feeOwed: 540 }, [row({ askedBy: undefined, reference: 'PUD-1', state: 'paid', usedFor: 'PUD-1', fee: 270 })])}
+        t={tt}
+      />,
+    );
+    expect(set).toContain('3% of every payment, set by Amina Otieno on 2026-11-20 10:00.');
+    expect(set).toMatch(/Owed so far: [^<]*540/);
+    expect(set).toContain('for PUD-1');
+    expect(set).toMatch(/our fee [^<]*270/);
+    // No form without the hand that sets it.
+    expect(set).not.toContain('Set the fee');
+  });
+
   it('sits on a partner’s own company record, its words in every language', () => {
     const screen = readFileSync(join('src', 'apps/tower/screens/CompanyRecordScreen.tsx'), 'utf8');
     expect(screen).toMatch(/kind === 'partner' && client && entityId \? <PartnerPaymentFold /);
     const api = readFileSync(join('src', 'lib/sbg/personas/operator.ts'), 'utf8');
     expect(api).toMatch(/partnerPaymentAccount: \(entityId: string\) => sbg\.request\(\(c\) => c\.GET\('\/v1\/sbg\/entities\/\{entityId\}\/payment-account'/);
     expect(api).toMatch(/tryPartnerPayment: \(entityId: string, phone: string, amount: number\) =>\s*sbg\.request\(\(c\) => c\.POST\('\/v1\/sbg\/entities\/\{entityId\}\/payment-account\/try'/);
+    expect(api).toMatch(/setPartnerFee: \(entityId: string, pct: number\) => sbg\.request\(\(c\) => c\.POST\('\/v1\/sbg\/entities\/\{entityId\}\/payment-account\/fee'/);
+    expect(screen).toContain('setFee={(id, pct) => client.api.setPartnerFee(id, pct)}');
     for (const locale of ['sw', 'nl', 'am']) {
       const words = readFileSync(join('src', `shared/i18n/words/${locale}/tower.ts`), 'utf8');
       expect(words).toContain('"tower.partner.pay.tryHint"');

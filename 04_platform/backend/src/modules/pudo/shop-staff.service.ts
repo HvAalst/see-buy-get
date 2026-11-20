@@ -16,6 +16,8 @@ const LOG_LIMIT = 300;
 /** The words for each counter act the log keeps, by the route handler that does it — or, where the body says which, by what it says. */
 export const COUNTER_ACTS: Readonly<Record<string, string | ((body: Record<string, unknown>) => string)>> = {
   accept: 'took a parcel in',
+  // 2026-11-20 — a walk-up paid by phone in a partner's country (4b): the prompt asked of the sender's phone.
+  askPhonePayment: 'asked a sender to pay by phone',
   intake: 'took a parcel in',
   arrive: 'received a parcel off the bus',
   shelve: 'shelved a parcel',
