@@ -151,6 +151,6 @@ describe('the live view, over the wire', () => {
     pwaniOffice.close();
     const deadline = Date.now() + 3000;
     while (Date.now() < deadline && app.get(LiveService).count().fleets > before.fleets - 2) await new Promise((r) => setTimeout(r, 20));
-    expect(app.get(LiveService).count()).toEqual({ console: before.console - 1, fleets: before.fleets - 2 });
+    expect(app.get(LiveService).count()).toEqual({ console: before.console - 1, fleets: before.fleets - 2, partners: before.partners });
   });
 });
