@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SeeBuyGet Partner</title>
+    <meta name="description" content="For a partner company's own people: what it owes its shops, hubs and drivers, live — each person with their own sign-in." />
+
+    <!-- Light only, like every other app in this family: one palette, one system. -->
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <!-- A signed-in workplace: the front page is what search engines should read. -->
+    <meta name="robots" content="noindex, follow" />
+
+    <!-- Installed / standalone chrome: it installs, keeping the app and never its figures (see the partner entry in vite.config.ts). -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Partner" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+    <!-- The web app manifest link is injected here by vite-plugin-pwa at build time. -->
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

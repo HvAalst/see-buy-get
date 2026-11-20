@@ -126,7 +126,7 @@ http://127.0.0.1:9180 {
 		root * /srv/site
 		import static_caching
 
-		@bare path_regexp ^/(driver|agent|send|fleet|mdp|vendor|business)$
+		@bare path_regexp ^/(driver|agent|send|fleet|mdp|vendor|business|partner)$
 		redir @bare {path}/ 308
 
 		# 2026-11-02 — A SHARE THAT REACHED THE SERVER. An app's share target is a POST its own service worker answers on the
@@ -150,7 +150,7 @@ http://127.0.0.1:9180 {
 		}
 
 		# Each app answers any path under its own base with its own shell.
-		@app path_regexp app ^/(driver|agent|send|fleet|mdp|vendor|business)/
+		@app path_regexp app ^/(driver|agent|send|fleet|mdp|vendor|business|partner)/
 		handle @app {
 			try_files {path} {path}/index.html /{re.app.1}/index.html
 			file_server

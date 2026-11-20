@@ -896,7 +896,7 @@ export function pickedVehicle(f: JoinForm, cls: string): Partial<JoinForm> {
  * to read a landing page every morning. Only the PRESENCE of a key is read — never its value, never a secret.
  */
 export interface DeviceApp {
-  id: 'driver' | 'shop' | 'hub' | 'fleet' | 'store' | 'send' | 'business';
+  id: 'driver' | 'shop' | 'hub' | 'fleet' | 'store' | 'send' | 'business' | 'partner';
   href: string;
   icon: IconName;
 }
@@ -910,6 +910,8 @@ export const DEVICE_APPS: Array<DeviceApp & { key: string }> = [
   { id: 'send', key: 'glos-send-did', href: '/send/', icon: 'box' },
   // B1 — somebody who works for a shipper, importer, expeditor, clearing agent or yard.
   { id: 'business', key: 'glos-business-did', href: '/business/', icon: 'badge' },
+  // 2026-11-20 — somebody who works for a partner company: what it owes its hands (the payments plan, 3c).
+  { id: 'partner', key: 'glos-partner-did', href: '/partner/', icon: 'wallet' },
 ];
 
 export function appsOnThisDevice(store: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): DeviceApp[] {

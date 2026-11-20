@@ -1,0 +1,144 @@
+/* ==========================================================================
+   The Partner app (2026-11-20, the payments plan, 3c) — the console's design system (console.css, tower.css), as the
+   Business app wears it, and only what a partner's office adds to it.
+   ========================================================================== */
+
+/* The chooser carries more than a sign-in card: wider, and the sections spaced. */
+.pa-choose {
+  max-width: 560px;
+}
+.pa-choose > section {
+  margin-bottom: 20px;
+}
+.pa-choose .cons__panelt {
+  display: block;
+  margin-bottom: 8px;
+}
+.pa-choose__acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* The phone apps' email step sits inside a console card here: its label dressed like every other label on this surface. */
+.pa-signin .field__label {
+  font-size: var(--c-fs-sm);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--navy);
+}
+.pa-signin__same {
+  margin-top: 12px;
+}
+
+/* The step bar pinned at the top of the card, in the card's white, so a step scrolls cleanly under it. */
+.pa-door .twr-signin__card .steps--pinned {
+  top: var(--sa-t);
+  margin: 0 -24px 14px;
+  padding: 0 24px;
+  background: var(--card);
+}
+
+/* On a phone the card IS the screen — edge to edge, the house's 16px gutter, clear of a notch and the home bar. */
+@media (max-width: 560px) {
+  .pa-door {
+    padding: 0;
+    align-items: stretch;
+  }
+  .pa-door .twr-signin__card {
+    max-width: none;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: calc(16px + var(--sa-t)) calc(16px + var(--sa-r)) calc(24px + var(--sa-b)) calc(16px + var(--sa-l));
+  }
+  .pa-door .twr-signin__card .steps--pinned {
+    margin: 0 calc(-16px - var(--sa-r)) 14px calc(-16px - var(--sa-l));
+    padding: 0 calc(16px + var(--sa-r)) 0 calc(16px + var(--sa-l));
+  }
+  /* The sign-in's one call, across the screen. */
+  .pa-signin form > button[type='submit'] {
+    width: 100%;
+  }
+}
+
+/* On a phone, or anything with a thumb for a pointer, the door's controls take a thumb's size, and a box being typed in is
+   16px, under which an iPhone zooms the page when the box takes the focus. */
+@media (max-width: 560px), (pointer: coarse) {
+  .pa-door {
+    --c-ctl-h: 48px;
+    --c-fs: 15px;
+    --c-fs-sm: 13px;
+  }
+  .pa-door .twr-signin__card {
+    font-size: 15px;
+  }
+  .pa-door .cinput {
+    font-size: 16px;
+  }
+}
+
+/* The mast: the partner's name, cut short rather than pushing the menu off a phone. */
+.pa-mast__name {
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pa-mast__end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.pa-mast__end .topbar__lead {
+  margin-left: 0;
+}
+
+/* What is owed in all: the one figure the screen is for, first and large. */
+.pa-total {
+  margin: 0 0 12px;
+  font-size: var(--c-fs-xl, 22px);
+  font-weight: 700;
+  color: var(--navy);
+}
+.pa-live {
+  margin: 0 0 12px;
+}
+
+/* THE CALL TO INSTALL on the home (shared/ui/InstallBar.tsx), as the Business app has it: pinned under the console's mast,
+   edge to edge across the main area at every width — over its padding: 24px at a desk, 16px below 1100px, 12px on a phone. */
+.pa .installbar {
+  top: var(--c-mast-h);
+  width: calc(100% + 48px);
+  margin: -22px -24px 18px;
+  padding: 10px 24px;
+}
+@media (max-width: 1100px) {
+  .pa .installbar {
+    width: calc(100% + 32px);
+    margin: -18px -16px 16px;
+    padding: 10px 16px;
+  }
+}
+@media (max-width: 640px) {
+  .pa .installbar {
+    width: calc(100% + 24px);
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 10px 12px;
+  }
+}
+/* A pinned bar sticks to the nearest box that scrolls: while the bar is there, the main area clips sideways instead. */
+.pa .cons__main:has(> .installbar) {
+  overflow-x: clip;
+}
+
+/* On a phone, room under the last row for the tab bar. */
+@media (max-width: 860px) {
+  .pa .cons__main {
+    padding-bottom: calc(88px + var(--sa-b));
+  }
+}

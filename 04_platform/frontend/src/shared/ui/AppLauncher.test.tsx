@@ -22,7 +22,7 @@ describe('the sheet of apps', () => {
   });
 
   it('shows every app a person can install, with the very icon it installs with — and not the staff console', () => {
-    expect(LAUNCHER_APPS.map((a) => a.id)).toEqual(['home', 'agent', 'mdp', 'vendor', 'driver', 'fleet', 'business', 'genesis']);
+    expect(LAUNCHER_APPS.map((a) => a.id)).toEqual(['home', 'agent', 'mdp', 'vendor', 'driver', 'fleet', 'business', 'partner', 'genesis']);
     for (const a of LAUNCHER_APPS) {
       const icons = readdirSync(join(SRC, 'apps', a.id, 'public/icons'), { withFileTypes: true }).map((e) => e.name);
       expect(icons, a.id).toContain('icon-192.png');
@@ -47,8 +47,8 @@ describe('the sheet of apps', () => {
   it('draws them as a grid of icons and names, this app marked', () => {
     const html = renderToString(<AppsSheet open onClose={() => undefined} here="mdp" />);
     expect(html).toContain('All SeeBuyGet apps');
-    expect(html.match(/class="apps-grid__icon"/g)).toHaveLength(8);
-    for (const name of ['SeeBuyGet', 'Shop', 'Hub', 'Store', 'Driver', 'Fleet', 'Business', 'Send']) expect(html).toContain(`>${name}</span>`);
+    expect(html.match(/class="apps-grid__icon"/g)).toHaveLength(9);
+    for (const name of ['SeeBuyGet', 'Shop', 'Hub', 'Store', 'Driver', 'Fleet', 'Business', 'Partner', 'Send']) expect(html).toContain(`>${name}</span>`);
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('This app');
     expect(html).toContain('href="/agent/"');

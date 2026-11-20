@@ -169,6 +169,8 @@ describe('the bar before signing in', () => {
         'apps/home/screens/RolesScreen.tsx',
         'apps/home/screens/SignInScreen.tsx',
         'apps/mdp/screens/SignInScreen.tsx',
+        // 2026-11-20 — the Partner app's card, built like the Business app's.
+        'apps/partner/screens/SignInScreen.tsx',
         'apps/vendor/screens/SignInScreen.tsx',
         'shared/account/ConfirmDevice.tsx',
       ].sort(),
@@ -181,7 +183,7 @@ describe('the bar before signing in', () => {
 
   it('is what every sign-in screen ends in, in place of the old foot — the desks’ cards (Business, the console) apart', () => {
     // The Business card draws its foot at a desk and the bar on a phone (2026-11-02, signup-wizard.test.tsx holds it to that).
-    const DESKS = ['apps/business/screens/SignInScreen.tsx', 'apps/tower/screens/SignInScreen.tsx'];
+    const DESKS = ['apps/business/screens/SignInScreen.tsx', 'apps/partner/screens/SignInScreen.tsx', 'apps/tower/screens/SignInScreen.tsx'];
     const doors = [...FILES].filter((f) => /^apps\/[^/]+\/screens\/(SignInScreen|AuthScreen|JoinScreen|StaffSignIn|RolesScreen)\.tsx$/.test(f));
     expect(doors).toContain('apps/driver/screens/SignInScreen.tsx');
     expect(doors.length).toBeGreaterThanOrEqual(12);

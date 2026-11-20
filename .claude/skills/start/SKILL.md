@@ -11,7 +11,7 @@ Start SeeBuyGet with `04_platform/scripts/app.sh`, run from the repository root.
 
 - **dev** (the default; use it when the arguments name no mode): Node on this machine with hot reload. The backend
   on :3000 plus the apps named in the arguments; with none named, `driver`. Apps: `home driver agent genesis`
-  (the Send app, at /send/) `fleet mdp vendor business tower` (the operator console). "console" means `tower`,
+  (the Send app, at /send/) `fleet mdp vendor business partner tower` (the operator console). "console" means `tower`,
   "send" means `genesis`, "all" means every one of them.
 - **docker**: the stack in `04_platform/docker-compose.yml`. Use it when the arguments say docker, compose,
   container, production-like or cloud. `04_platform/.env` decides local or cloud.

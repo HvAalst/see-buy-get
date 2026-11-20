@@ -38507,6 +38507,238 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/partner-members": {
+      "get": {
+        "operationId": "PartnerApp.membersOf",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerMemberView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "PartnerApp.invite",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitePartnerMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMemberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/partner-members/{memberId}": {
+      "delete": {
+        "operationId": "PartnerApp.remove",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMemberView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/mine": {
+      "get": {
+        "operationId": "PartnerApp.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMembershipList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/invitations/{memberId}/accept": {
+      "post": {
+        "operationId": "PartnerApp.accept",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMembershipView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/invitations/{memberId}/decline": {
+      "post": {
+        "operationId": "PartnerApp.decline",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/{entityId}/session": {
+      "post": {
+        "operationId": "PartnerApp.session",
+        "summary": "",
+        "description": "Open one partner: a session that reads for it, for a person who is in it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/me": {
+      "get": {
+        "operationId": "PartnerApp.me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/me/owed": {
+      "get": {
+        "operationId": "PartnerApp.owed",
+        "summary": "",
+        "description": "What the partner owes its hands: in all, per hand, every step — the record our staff read on its page.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerOwedForPartner"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/shop/staff": {
       "get": {
         "operationId": "ShopStaff.list",
@@ -91424,6 +91656,225 @@
           "lines"
         ]
       },
+      "PartnerMemberView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phoneEnds": {
+            "type": "string",
+            "description": "The last three digits of their number."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "joined",
+              "declined",
+              "removed"
+            ]
+          },
+          "invitedBy": {
+            "type": "string"
+          },
+          "invitedAt": {
+            "type": "string"
+          },
+          "joinedAt": {
+            "type": "string"
+          },
+          "removedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberId",
+          "name",
+          "phoneEnds",
+          "state",
+          "invitedBy",
+          "invitedAt"
+        ]
+      },
+      "InvitePartnerMemberDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "The number they sign in with."
+          },
+          "name": {
+            "type": "string",
+            "description": "Who this is: what they read is recorded under this name."
+          }
+        },
+        "required": [
+          "phone",
+          "name"
+        ]
+      },
+      "PartnerMembershipView": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The partner company."
+          },
+          "country": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "joined"
+            ]
+          },
+          "invitedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberId",
+          "entityId",
+          "name",
+          "country",
+          "state",
+          "invitedBy"
+        ]
+      },
+      "PartnerMembershipList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerMembershipView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "PartnerToken": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in"
+        ]
+      },
+      "PartnerMeView": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The partner company."
+          },
+          "country": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "memberName": {
+            "type": "string",
+            "description": "The person signed in, as our staff named them."
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "country",
+          "currency",
+          "memberName"
+        ]
+      },
+      "PartnerSession": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/PartnerToken"
+          },
+          "partner": {
+            "$ref": "#/components/schemas/PartnerMeView"
+          }
+        },
+        "required": [
+          "token",
+          "partner"
+        ]
+      },
+      "PartnerOwedForPartner": {
+        "type": "object",
+        "properties": {
+          "partnerEntityId": {
+            "type": "string"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "owed": {
+            "type": "number"
+          },
+          "byPayee": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerOwedTotal"
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerOwedRow"
+            }
+          },
+          "names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Each hand’s name: a shop’s, a hub’s, a courier’s shop-floor label, a fleet’s. Never a phone number."
+          }
+        },
+        "required": [
+          "partnerEntityId",
+          "partnerName",
+          "currency",
+          "owed",
+          "byPayee",
+          "lines",
+          "names"
+        ]
+      },
       "ShopStaffView": {
         "type": "object",
         "properties": {
@@ -97608,7 +98059,8 @@
               "mdp",
               "vendor",
               "fleet",
-              "business"
+              "business",
+              "partner"
             ]
           },
           "email": {
@@ -97735,7 +98187,8 @@
               "mdp",
               "vendor",
               "fleet",
-              "business"
+              "business",
+              "partner"
             ]
           },
           "locale": {

@@ -16,6 +16,7 @@ import { enMdp } from './en.mdp';
 import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
 import { enBusiness } from './en.business';
+import { enPartner } from './en.partner';
 import { enSend } from './en.send';
 import { enHelp } from './en.help';
 import { enHelpApp } from './en.help-app';
@@ -40,6 +41,7 @@ export const enApps = {
   ...enVendor,
   ...enHome,
   ...enBusiness,
+  ...enPartner,
   ...enSend,
   ...enHelp,
   ...enHelpApp,

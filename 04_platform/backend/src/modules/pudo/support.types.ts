@@ -16,7 +16,7 @@ export type SupportCategory = (typeof SUPPORT_CATEGORIES)[number];
 export const URGENT_CATEGORIES: readonly SupportCategory[] = ['safety'];
 
 /** Where a message was written from: the app the person was in (its Help), or the front door. */
-export const SUPPORT_FROM = ['home', 'send', 'agent', 'driver', 'mdp', 'vendor', 'fleet', 'business'] as const;
+export const SUPPORT_FROM = ['home', 'send', 'agent', 'driver', 'mdp', 'vendor', 'fleet', 'business', 'partner'] as const;
 
 export type SupportStatus = 'open' | 'answered' | 'closed';
 

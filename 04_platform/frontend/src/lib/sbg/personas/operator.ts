@@ -467,6 +467,12 @@ export function createOperatorApi(sbg: SbgClient) {
     partnerCheckLooked: (entityId: string, flagId: string, note?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-checks/{flagId}/looked', { params: { path: { entityId, flagId } }, body: { ...(note?.trim() ? { note: note.trim() } : {}) } })),
     partnerReview: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-checks/review', { params: { path: { entityId } } })),
+    /** 2026-11-20 — a partner's own people in the Partner app: who is in it, added by number and name, taken out by name (3c). */
+    partnerMembers: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-members', { params: { path: { entityId } } })),
+    invitePartnerMember: (entityId: string, phone: string, name: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-members', { params: { path: { entityId } }, body: { phone, name } })),
+    removePartnerMember: (entityId: string, memberId: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/partner-members/{memberId}', { params: { path: { entityId, memberId } } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),

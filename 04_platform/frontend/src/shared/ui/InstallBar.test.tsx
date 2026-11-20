@@ -65,7 +65,7 @@ describe('the call to install, in every app that installs', () => {
     const vite = readFileSync('vite.config.ts', 'utf8');
     // Proof the list was read: the apps the build makes, less the ones that do not install and the front page.
     const apps = readdirSync(join('src', 'apps'), { withFileTypes: true })
-      .filter((e) => e.isDirectory() && !['home', 'tower', 'business'].includes(e.name))
+      .filter((e) => e.isDirectory() && !['home', 'tower', 'business', 'partner'].includes(e.name))
       .map((e) => e.name);
     expect(apps.sort()).toEqual(['agent', 'driver', 'fleet', 'genesis', 'mdp', 'vendor']);
     // The console does not install; the Business app does since 2026-11-02, and has its bar on its home (below).
@@ -95,5 +95,18 @@ describe('the call to install, in every app that installs', () => {
     expect(shell).toMatch(/\{ key: 'install', icon: 'bell', label: t\('install\.menu'\), onGo: \(\) => setGuide\(true\) \}/);
     expect(shell).toMatch(/<InstallGuideSheet open=\{guide\} onClose=\{\(\) => setGuide\(false\)\} app="business" \/>/);
     expect(renderToString(<InstallSheet open onClose={() => undefined} app="business" install={state()} />)).toContain('Get the most out of the Business app');
+  });
+
+  it('stands first on the Partner app’s home too, pinned under the mast, with its guide in the menu (2026-11-20)', () => {
+    const home = readFileSync(join('src', 'apps', 'partner', 'screens', 'HomeScreen.tsx'), 'utf8');
+    expect(home).toMatch(/return \(\s*<>\s*\{install \? <InstallBar app="partner" \/> : null\}\s*<header class="cons__head">/);
+    expect(home).toMatch(/<OwedBody owed=\{state\.owed\} failed=\{state\.owedFailed\} live=\{state\.live\} t=\{t\} install \/>/);
+    const css = readFileSync(join('src', 'apps', 'partner', 'partner.css'), 'utf8');
+    expect(css).toMatch(/\.pa \.installbar \{\s*top: var\(--c-mast-h\);/);
+    expect(css).toMatch(/\.pa \.cons__main:has\(> \.installbar\) \{\s*overflow-x: clip;/);
+    const shell = readFileSync(join('src', 'apps', 'partner', 'app.tsx'), 'utf8');
+    expect(shell).toMatch(/\{ key: 'install', icon: 'bell', label: t\('install\.menu'\), onGo: \(\) => setGuide\(true\) \}/);
+    expect(shell).toMatch(/<InstallGuideSheet open=\{guide\} onClose=\{\(\) => setGuide\(false\)\} app="partner" \/>/);
+    expect(renderToString(<InstallSheet open onClose={() => undefined} app="partner" install={state()} />)).toContain('Get the most out of the Partner app');
   });
 });

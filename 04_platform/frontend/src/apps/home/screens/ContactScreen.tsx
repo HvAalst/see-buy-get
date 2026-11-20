@@ -25,7 +25,7 @@ export const TOPICS: ReadonlyArray<{ category: SupportCategory; label: MessageKe
 ];
 
 /** The apps a message may say it came from (?from=driver, from that app's Help). */
-const FROM = ['home', 'send', 'agent', 'driver', 'mdp', 'vendor', 'fleet', 'business'];
+const FROM = ['home', 'send', 'agent', 'driver', 'mdp', 'vendor', 'fleet', 'business', 'partner'];
 const MAX = 2000;
 
 /**

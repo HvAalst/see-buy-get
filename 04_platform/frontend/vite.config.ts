@@ -277,6 +277,29 @@ const APPS = {
     ],
   },
   /**
+   * 2026-11-20 — the Partner app (the payments plan, 3c; the owner: "console for staff and partner app with live view"; a
+   * separate Partner app): a partner company's own people, added by SeeBuyGet's staff, each signed in with their own phone
+   * and PIN, read live what their company owes its shops, hubs and drivers. Built like the Business app — for an office desk,
+   * and whole on a phone — and like it, it installs keeping the APP and never its figures (keepNoReads in its main.tsx).
+   */
+  partner: {
+    base: '/partner/',
+    name: 'SeeBuyGet Partner',
+    short: 'Partner',
+    description: 'For a partner company’s own people: what it owes its shops, hubs and drivers on the SeeBuyGet network, live — in all, per hand and every step — each person with their own sign-in.',
+    devPort: 5183,
+    previewPort: 5193,
+    // Its sections (logic.ts Section; app.tsx SECTIONS).
+    shortcuts: [
+      { go: 'home', name: 'What we owe', short: 'Owed', description: 'What the company owes in all, and every step' },
+      { go: 'hands', name: 'Per hand', short: 'Per hand', description: 'What each shop, hub and driver is owed' },
+    ],
+    screenshots: [
+      { file: 'home.png', label: 'What we owe: in all, and every step as it is done' },
+      { file: 'hands.png', label: 'Per hand: what each shop, hub and driver is owed' },
+    ],
+  },
+  /**
    * The operator console — the first app in this family built for a LARGE SCREEN and a mouse, for the
    * people who operate the network rather than use it. Not installable (see `installable` above), and
    * it is deliberately not on the front door's role chooser: nobody joins as an operator.

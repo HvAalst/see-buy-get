@@ -18,6 +18,7 @@ export const enHelp = {
   'help.app.send': 'Send app',
   'help.app.home': 'The front page',
   'help.app.business': 'Business app',
+  'help.app.partner': 'Partner app',
   // The help centre (/help/ on the front door).
   'help.ui.title': 'Help',
   'help.ui.home': 'SeeBuyGet front page',
@@ -33,6 +34,7 @@ export const enHelp = {
   'help.ui.role.store': 'An online store',
   'help.ui.role.fleet': 'A fleet office',
   'help.ui.role.business': 'A business',
+  'help.ui.role.partner': 'A partner company',
   'help.ui.results': '{n, plural, =0 {Nothing matches} one {# article matches} other {# articles match}}',
   'help.ui.noResults': 'Try another word, or a shorter one — or write to us below.',
   'help.ui.mostAsked': 'Most asked',

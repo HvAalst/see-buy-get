@@ -21,7 +21,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN="$ROOT/.run"
 API_PORT=3000
-APPS="home driver agent genesis fleet mdp vendor business tower"
+APPS="home driver agent genesis fleet mdp vendor business partner tower"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -31,7 +31,7 @@ label() { printf '%-9s ' "$1"; }
 app_port() {
   case "$1" in
     home) echo 5180 ;; driver) echo 5173 ;; agent) echo 5175 ;; genesis) echo 5176 ;; fleet) echo 5177 ;;
-    mdp) echo 5178 ;; vendor) echo 5179 ;; tower) echo 5181 ;; business) echo 5182 ;;
+    mdp) echo 5178 ;; vendor) echo 5179 ;; tower) echo 5181 ;; business) echo 5182 ;; partner) echo 5183 ;;
     *) die "unknown app '$1' — have: $APPS" ;;
   esac
 }
@@ -154,7 +154,7 @@ dev_stop() {
     label "$(basename "$f" .pid)"; say "stopped"; stopped=1
   done
   # Anything still holding our ports that is ours (started by hand, or its pid file lost) — never Docker's.
-  for port in $API_PORT 5173 5175 5176 5177 5178 5179 5180 5181 5182; do
+  for port in $API_PORT 5173 5175 5176 5177 5178 5179 5180 5181 5182 5183; do
     pid=$(listening "$port")
     if [ -n "$pid" ] && ours "$pid"; then
       kill_tree "$pid"; label ":$port"; say "stopped (pid $pid)"; stopped=1

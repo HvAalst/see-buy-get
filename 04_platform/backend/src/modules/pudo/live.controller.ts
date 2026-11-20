@@ -10,7 +10,9 @@ import { LIVE_BEAT_MS, LiveListener, LiveService } from './live.service';
 export function listenerOf(actor: IntrospectionResult | undefined): LiveListener {
   if (actor?.role === 'operator' || actor?.role === 'entity_admin') return { kind: 'console' };
   if (actor?.role === 'fleet_manager' && actor.tenant) return { kind: 'fleet', fleetDid: actor.tenant };
-  throw new GlosError('FORBIDDEN', 'The live view is for the console and fleet offices');
+  // 2026-11-20 — a partner's own people, their own partner's screens (the payments plan, 3c).
+  if (actor?.role === 'partner' && actor.tenant) return { kind: 'partner', partnerEntityId: actor.tenant };
+  throw new GlosError('FORBIDDEN', 'The live view is for the console, fleet offices and partners');
 }
 
 /**
@@ -24,7 +26,7 @@ export function listenerOf(actor: IntrospectionResult | undefined): LiveListener
 export class LiveController {
   constructor(private readonly live: LiveService) {}
 
-  @Roles('fleet_manager', 'entity_admin', 'operator')
+  @Roles('fleet_manager', 'entity_admin', 'operator', 'partner')
   @Sse('live')
   stream(@Actor() actor: IntrospectionResult): Observable<MessageEvent> {
     const who = listenerOf(actor);

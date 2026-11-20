@@ -26,7 +26,7 @@ type Manifest = {
 };
 
 /** The apps that install: every app's folder but the console's (vite.config.ts: installable false). The Business app since 2026-11-02. */
-const INSTALLABLE = ['agent', 'business', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'vendor'];
+const INSTALLABLE = ['agent', 'business', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'partner', 'vendor'];
 /** The apps with conversations, which the phone's share list offers. */
 const CHATS = ['agent', 'driver', 'fleet', 'genesis', 'vendor'];
 /** Where each app's Screen type is written — the Business app's are its sections. */
@@ -38,6 +38,8 @@ const SCREENS: Record<string, string> = {
   genesis: 'genesis/useSendApp.ts',
   home: 'home/useHomeApp.ts',
   mdp: 'mdp/useMdpApp.ts',
+  // 2026-11-20 — the Partner app's are its sections, as the Business app's are.
+  partner: 'partner/logic.ts',
   vendor: 'vendor/useVendorApp.ts',
 };
 
@@ -97,7 +99,7 @@ describe.each(INSTALLABLE)('the %s app', (app) => {
   it('offers its most common jobs from its icon, each a screen of its own', () => {
     const screens = screensOf(app);
     // Proof the Screen type was read: a screen every reader of the app knows is among them.
-    const known: Record<string, string> = { agent: 'accept', business: 'exports', driver: 'board', fleet: 'runs', genesis: 'track', home: 'market', mdp: 'sort', vendor: 'mint' };
+    const known: Record<string, string> = { agent: 'accept', business: 'exports', driver: 'board', fleet: 'runs', genesis: 'track', home: 'market', mdp: 'sort', partner: 'hands', vendor: 'mint' };
     expect(screens).toContain(known[app]);
 
     const shortcuts = manifests[app].shortcuts ?? [];

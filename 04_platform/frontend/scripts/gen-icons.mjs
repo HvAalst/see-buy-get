@@ -293,6 +293,8 @@ const GLYPHS = {
     capsule(0.5, 0.51, 0.79, 0.51, 0.055),
     capsule(0.5, 0.63, 0.7, 0.63, 0.055),
   ),
+  // 2026-11-20 — The Partner: two rings linked — a company that carries for the network, and the network it carries for.
+  partner: union(ring(0.33, 0.5, 0.16, 0.27), ring(0.67, 0.5, 0.16, 0.27)),
   // The console (a tab only, never installed): a desk with a screen.
   tower: union(
     roundRect(0.3, 0.12, 0.7, 0.3, 0.06),

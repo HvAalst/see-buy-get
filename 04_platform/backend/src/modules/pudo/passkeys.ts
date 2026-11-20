@@ -62,7 +62,7 @@ const hashOf = (secret: string): string => createHash('sha256').update(secret).d
  * signature is accepted from are our own sites (the same list the browser rule reads, foundation/http/cors.ts), and on
  * a laptop each app's dev and preview port on localhost (frontend/vite.config.ts, APPS: devPort / previewPort).
  */
-export const DEV_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 5181, 5182, 5185, 5186, 5187, 5188, 5189, 5190, 5191, 5192];
+export const DEV_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 5181, 5182, 5183, 5185, 5186, 5187, 5188, 5189, 5190, 5191, 5192, 5193];
 export function relyingParty(env: Record<string, string | undefined> = process.env): { rpID: string; rpName: string; origins: string[] } {
   let rpID = 'localhost';
   try {

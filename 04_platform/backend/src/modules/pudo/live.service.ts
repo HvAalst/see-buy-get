@@ -6,11 +6,11 @@ import { GlosEvent } from '../../foundation/events/glos-events';
  * What changed, named the way a screen would ask about it again. A name only: whoever hears it reads what changed
  * through its own doors, which decide what it may see — the live connection itself carries no record of anybody's.
  */
-export const LIVE_TOPICS = ['changed', 'bell', 'orders', 'loads', 'plan', 'vehicles', 'runs', 'cases', 'map'] as const;
+export const LIVE_TOPICS = ['changed', 'bell', 'orders', 'loads', 'plan', 'vehicles', 'runs', 'cases', 'map', 'owed'] as const;
 export type LiveTopic = (typeof LIVE_TOPICS)[number];
 
 /** Who is listening: the network's console (staff, and the administrators of our companies), or one fleet's office. */
-export type LiveListener = { kind: 'console' } | { kind: 'fleet'; fleetDid: string };
+export type LiveListener = { kind: 'console' } | { kind: 'fleet'; fleetDid: string } | { kind: 'partner'; partnerEntityId: string };
 
 /** The least time between two messages to one connection: what changes in between is said together, once. */
 export const LIVE_GAP_MS = 2_000;
@@ -57,6 +57,8 @@ export class LiveService implements OnModuleInit, OnModuleDestroy {
     // neither, and comes every few seconds from every driver on a shift: that one goes only to its own fleet (map).
     this.stopListening = this.events?.subscribeAll((e) => {
       if (e.type !== GlosEvent.Pudo.DriverMoved) this.toConsole('changed');
+      // 2026-11-20 — a step the partner owes, or one taken back: told to that partner's own screens, and nobody else's (3c).
+      if (e.type === GlosEvent.Pudo.PartnerOwed) this.toPartner((e.payload as { partnerEntityId?: string } | undefined)?.partnerEntityId, 'owed');
     });
   }
 
@@ -96,15 +98,23 @@ export class LiveService implements OnModuleInit, OnModuleDestroy {
     this.toFleet(ownerDid, topic, now);
   }
 
+  /** 2026-11-20 — something one partner's own people read may have changed: told to that partner's screens only (3c). */
+  toPartner(partnerEntityId: string | undefined, topic: LiveTopic, now: number = Date.now()): void {
+    if (!partnerEntityId) return;
+    for (const c of this.connections.values()) if (c.who.kind === 'partner' && c.who.partnerEntityId === partnerEntityId) this.queue(c, topic, now);
+  }
+
   /** How many screens are listening — for the server's own picture of itself, never who. */
-  count(): { console: number; fleets: number } {
+  count(): { console: number; fleets: number; partners: number } {
     let consoleN = 0;
     let fleets = 0;
+    let partners = 0;
     for (const c of this.connections.values()) {
       if (c.who.kind === 'console') consoleN += 1;
-      else fleets += 1;
+      else if (c.who.kind === 'fleet') fleets += 1;
+      else partners += 1;
     }
-    return { console: consoleN, fleets };
+    return { console: consoleN, fleets, partners };
   }
 
   private queue(c: Connection, topic: LiveTopic, now: number): void {

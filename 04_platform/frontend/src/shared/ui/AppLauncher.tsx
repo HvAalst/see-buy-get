@@ -7,7 +7,7 @@ import type { AppRole, MyApp, MyAppsApi } from '../account/myApps';
 import type { Result, SbgError } from '../../lib/sbg';
 import { withCarry } from '../account/carry';
 
-export type LauncherApp = 'home' | 'agent' | 'mdp' | 'vendor' | 'driver' | 'fleet' | 'business' | 'genesis';
+export type LauncherApp = 'home' | 'agent' | 'mdp' | 'vendor' | 'driver' | 'fleet' | 'business' | 'partner' | 'genesis';
 
 /**
  * EVERY APP OF THE NETWORK, AS ITS ICON ON A PHONE'S HOME SCREEN (the owner, 2026-11-04: "can't we make it more like google's
@@ -22,6 +22,8 @@ export const LAUNCHER_APPS: ReadonlyArray<{ id: LauncherApp; path: string; name:
   { id: 'driver', path: 'driver/', name: 'launcher.app.driver' },
   { id: 'fleet', path: 'fleet/', name: 'launcher.app.fleet' },
   { id: 'business', path: 'business/', name: 'launcher.app.business' },
+  // 2026-11-20 — a partner company's own people (the payments plan, 3c).
+  { id: 'partner', path: 'partner/', name: 'launcher.app.partner' },
   { id: 'genesis', path: 'send/', name: 'launcher.app.genesis' },
 ];
 

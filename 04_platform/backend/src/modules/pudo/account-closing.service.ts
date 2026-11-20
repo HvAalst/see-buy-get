@@ -15,6 +15,7 @@ import { IdDisputeService } from './id-dispute.service';
 import { AccountMoveService } from './account-move.service';
 import { PayoutNumberService } from './payout-number.service';
 import { BusinessService } from './business.service';
+import { PartnerMemberService } from './partner-member.service';
 
 /** Four years without a sign-in, and the owner is told the account can be closed (the user, 2026-10-22). */
 export const INACTIVE_MONTHS = 48;
@@ -90,6 +91,7 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     private readonly payoutNumbers: PayoutNumberService,
     private readonly businesses: BusinessService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly partnerMembers?: PartnerMemberService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -228,6 +230,8 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     }
     this.parcels.forgetPerson(phoneHash, personDid, address);
     this.businesses.forgetPerson(personDid, phoneHash, now);
+    // 2026-11-20 — and every place it held in a partner's app (the payments plan, 3c).
+    this.partnerMembers?.forgetPerson(personDid, phoneHash, now);
     this.accounts.forgetForPhone(phoneHash);
     const closed = this.persons.close(personDid, now);
     this.logger.log(`an account was closed by its owner (${personDid})`);

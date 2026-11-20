@@ -229,8 +229,9 @@ describe('shared while signed out', () => {
 });
 
 describe('exactly the five apps with chats receive shares', () => {
-  // The phone apps' layer. The Business app installs too (2026-11-02), with no app layer and no chats: not one of these.
-  const APPS: Array<Exclude<InstallApp, 'business'>> = ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'];
+  // The phone apps' layer. The Business app installs too (2026-11-02), with no app layer and no chats: not one of these —
+  // nor the Partner app (2026-11-20), built like it.
+  const APPS: Array<Exclude<InstallApp, 'business' | 'partner'>> = ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'];
 
   it('the layer mounts the share sheet in the five, and not in the hub', () => {
     const mounted = APPS.filter((app) => captureWhile(() => renderToString(<AppLayer app={app} chats={null} />)).made.some((v) => v.type === SharedInLayer));

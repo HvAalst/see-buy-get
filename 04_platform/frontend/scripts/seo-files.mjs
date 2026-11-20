@@ -23,7 +23,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
 const SITE = (process.env.SBG_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
 /** The installable apps: behind a sign-in, nothing for a crawler. */
-const APPS = ['driver', 'agent', 'send', 'fleet', 'mdp', 'vendor'];
+const APPS = ['driver', 'agent', 'send', 'fleet', 'mdp', 'vendor', 'business', 'partner'];
 /** Kept from crawlers: the apps behind a sign-in. The Send app is public — prices, booking, tracking — so it is read. */
 const PRIVATE = APPS.filter((a) => a !== 'send');
 

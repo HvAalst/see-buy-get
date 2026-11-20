@@ -44,7 +44,7 @@ describe('the word files', () => {
   });
 
   it('every app names the catalogues it speaks, so its words are fetched in the chosen language', () => {
-    for (const app of ['agent', 'business', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'tower', 'vendor']) {
+    for (const app of ['agent', 'business', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'partner', 'tower', 'vendor']) {
       expect({ app, wired: /\nwordsOf\('/.test(readFileSync(`src/apps/${app}/english.ts`, 'utf8')) }).toEqual({ app, wired: true });
     }
     // The choice is in every app's Settings.

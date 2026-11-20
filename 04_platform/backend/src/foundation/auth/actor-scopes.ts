@@ -53,6 +53,9 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   // addressed to a business was recorded and could be read by nobody. The inbox only: the notifications routes refuse
   // a business sign-in a device to push to, and ask the member guard who is still in it.
   business: ['business:read:own', 'business:manage:own', 'notification:manage:self'],
+  // 2026-11-20 — a partner's own people (the payments plan, 3c): they read what their company owes its hands, live. Nothing
+  // else: who is in it is our staff's to say, and whether they are still in it is asked on every request.
+  partner: ['partner:read:own'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

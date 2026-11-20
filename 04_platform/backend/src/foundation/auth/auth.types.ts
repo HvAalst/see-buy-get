@@ -22,6 +22,9 @@ export type ActorRole =
    *  is the business's own, `tenant` its entityId, `personDid` the member. Not an `entity_admin`: that role sets what
    *  a company of ours charges, and a customer's login must never reach a price. */
   | 'business'
+  /** 2026-11-20 — A person acting for a PARTNER company (the payments plan, 3c): one of its own people, invited by our staff,
+   *  reading what the partner owes its hands. `did` is the partner's own, `tenant` its entityId, `personDid` the member. */
+  | 'partner'
   | 'operator'
   | 'anon';
 

@@ -260,6 +260,7 @@ export const enHome = {
   'home.landing.back.store': 'Store app',
   'home.landing.back.send': 'Your parcels',
   'home.landing.back.business': 'Business app',
+  'home.landing.back.partner': 'Partner app',
   'home.landing.proofTitle': 'The network today',
   'home.landing.proofLede': 'Counted live from the network, not estimated.',
   'home.landing.stat.shops': 'shops taking parcels',
@@ -368,6 +369,8 @@ export const enHome = {
   'home.signin.cred.fleet': 'Phone number and PIN',
   'home.signin.business': 'A business: shippers, importers and expeditors',
   'home.signin.businessSub': 'Your team, each with their own phone and PIN — also clearing agents and container yards',
+  'home.signin.partner': 'A partner company: a local courier carrying for the network',
+  'home.signin.partnerSub': 'Its own people, each with their own phone and PIN, see what it owes, live',
   'home.signin.justSending': 'Just sending or tracking',
   // True of a price and a tracking key; booking a send from the phone needs an account (since PG3), and that is where it is signed in to.
   'home.signin.noAccount': 'No account to price or track — sign in to book',

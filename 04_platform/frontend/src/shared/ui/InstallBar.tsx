@@ -17,7 +17,7 @@ import { AllowPicture, AndroidAppInfoPicture, AndroidBatteryPicture, AndroidHold
  * them on 2026-11-02 (the owner: "can the business app also get the sticky 'install this app, how'") — its bar is on its
  * home screen, under the console's mast (business.css).
  */
-export type InstallApp = 'agent' | 'mdp' | 'driver' | 'fleet' | 'vendor' | 'send' | 'business';
+export type InstallApp = 'agent' | 'mdp' | 'driver' | 'fleet' | 'vendor' | 'send' | 'business' | 'partner';
 const nameOf = (t: (k: MessageKey) => string, app: InstallApp) => t(`install.app.${app}` as MessageKey);
 
 export function InstallBar({ app: key }: { app: InstallApp }) {

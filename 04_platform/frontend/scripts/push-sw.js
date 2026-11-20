@@ -117,7 +117,7 @@ self.addEventListener('notificationclick', (event) => {
  * address also starts with: under it, a window of the Driver or the Shop app is not the front page's, and must not be
  * taken over by a notice meant for the front page.
  */
-var OTHER_APPS = ['/driver/', '/agent/', '/send/', '/fleet/', '/mdp/', '/vendor/', '/business/', '/tower/'];
+var OTHER_APPS = ['/driver/', '/agent/', '/send/', '/fleet/', '/mdp/', '/vendor/', '/business/', '/partner/', '/tower/'];
 function ofThisApp(url, scope) {
   if (!url || !url.startsWith(scope)) return false;
   var scopePath = new URL(scope).pathname;

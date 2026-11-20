@@ -51,6 +51,19 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             <Icon name="chevronRight" size={22} />
           </span>
         </a>
+        {/* 2026-11-20 — a partner company's own people have their own app too (the payments plan, 3c). */}
+        <a class="row" href="/partner/">
+          <span class="row__ic">
+            <Icon name="wallet" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('home.signin.partner')}</span>
+            <span class="row__s">{t('home.signin.partnerSub')}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </a>
         <a class="row" href="/send/">
           <span class="row__ic">
             <Icon name="send" size={24} />

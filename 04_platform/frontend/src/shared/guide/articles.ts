@@ -11,7 +11,7 @@ import { t as translate, type MessageKey, type Translate } from '../i18n';
  * partners read too, are in staff-articles.ts, which only the operator console imports.
  */
 
-export type GuideApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'home' | 'console' | 'business';
+export type GuideApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' | 'home' | 'console' | 'business' | 'partner';
 /** The apps a reader outside SeeBuyGet's staff is in. */
 export type PublicApp = Exclude<GuideApp, 'console'>;
 
@@ -66,6 +66,7 @@ export const GUIDE_APPS: Record<PublicApp, MessageKey> = {
   send: 'help.app.send',
   home: 'help.app.home',
   business: 'help.app.business',
+  partner: 'help.app.partner',
 };
 
 export const ARTICLE_SPECS: ArticleSpec[] = [
@@ -87,7 +88,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'driver-sign-in', apps: ['driver'], group: 'start', site: true, steps: 4, notes: ['careful', 'careful', 'why', 'why', 'rare', 'rare', 'note'] },
   { id: 'driver-fleet', apps: ['driver'], group: 'start', steps: 3, notes: ['note', 'why', 'note', 'note', 'note', 'note'] },
   { id: 'change-pin', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 3, notes: ['careful', 'note', 'careful', 'note', 'rare', 'careful', 'note', 'note'] },
-  { id: 'close-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business'], group: 'account', steps: 3, notes: ['careful', 'note', 'note', 'why'] },
+  { id: 'close-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business', 'partner'], group: 'account', steps: 3, notes: ['careful', 'note', 'note', 'why'] },
   { id: 'mute-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business'], group: 'account', steps: 3, notes: ['note', 'note', 'why'] },
   { id: 'who-you-contract-with', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'business'], group: 'account', steps: 4, notes: ['note', 'why', 'rare'] },
   { id: 'account-recovery', apps: ['fleet', 'driver', 'send'], group: 'account', site: true, steps: 5, notes: ['note', 'why', 'note', 'note', 'careful', 'rare', 'rare', 'rare', 'careful', 'rare', 'rare', 'rare', 'rare', 'rare', 'note', 'why', 'note', 'rare', 'why', 'note', 'careful', 'rare', 'note'] },
@@ -179,13 +180,13 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // 2026-11-01/02 — the apps feel native (the owner: "If needed, update the help pages too"). All inside the apps: none is
   // about getting in or getting started on the public site, which keeps its own list (help.test).
   // The call to install, pinned until the app is installed, and its guide to notifications; the shortcuts on its icon.
-  { id: 'install-app', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'start', steps: 6, notes: ['note', 'careful', 'note', 'note', 'why', 'note'] },
+  { id: 'install-app', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business', 'partner'], group: 'start', steps: 6, notes: ['note', 'careful', 'note', 'note', 'why', 'note'] },
   // Back, a sheet swiped down, pulling down to refresh, and a business load's record in sections.
-  { id: 'get-around', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'start', steps: 5, notes: ['note', 'note', 'rare', 'note'] },
+  { id: 'get-around', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business', 'partner'], group: 'start', steps: 5, notes: ['note', 'note', 'rare', 'note'] },
   // Share SeeBuyGet from every app's menu: one link of the person's own, counted to them.
-  { id: 'share-seebuyget', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'account', steps: 4, notes: ['note', 'note', 'note', 'note'] },
+  { id: 'share-seebuyget', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business', 'partner'], group: 'account', steps: 4, notes: ['note', 'note', 'note', 'note'] },
   // Unlock with fingerprint or face, under Settings: on and off, this phone only, back to the PIN or password.
-  { id: 'fingerprint-unlock', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'account', steps: 4, notes: ['note', 'note', 'careful', 'careful', 'careful', 'rare'] },
+  { id: 'fingerprint-unlock', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business', 'partner'], group: 'account', steps: 4, notes: ['note', 'note', 'careful', 'careful', 'careful', 'rare'] },
   // Words, a link or a photo shared into the app from another, sent into a chat (the five apps with chats).
   { id: 'share-into-chat', apps: ['agent', 'driver', 'fleet', 'vendor', 'send'], group: 'daily', steps: 5, notes: ['note', 'note', 'note', 'rare', 'rare'] },
   // A photo in a chat about a load or a parcel: filed first, then shown (the owner: "Damage claims should be fingerprinted").

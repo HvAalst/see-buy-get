@@ -60,7 +60,7 @@ describe('the live view: who is told what', () => {
     live.toFleet(undefined, 'orders');
     live.toOwner(undefined);
     expect([desk.got.length, kilima.got.length, pwani.got.length]).toEqual([1, 1, 1]);
-    expect(live.count()).toEqual({ console: 1, fleets: 2 });
+    expect(live.count()).toEqual({ console: 1, fleets: 2, partners: 0 });
   });
 
   it('says at once what changes after a quiet while, and gathers what changes in between into one message', () => {
@@ -109,7 +109,7 @@ describe('the live view: who is told what', () => {
       const still = heard(live, CONSOLE);
       live.toConsole('changed');
       expect(still.got).toEqual([['changed']]);
-      expect(live.count()).toEqual({ console: 2, fleets: 0 });
+      expect(live.count()).toEqual({ console: 2, fleets: 0, partners: 0 });
     } finally {
       jest.useRealTimers();
     }
@@ -141,7 +141,7 @@ describe('the live view: who is told what', () => {
       { active: true, role: 'agent' },
       undefined,
     ] as Array<IntrospectionResult | undefined>) {
-      expect(() => listenerOf(actor)).toThrow(/console and fleet offices/);
+      expect(() => listenerOf(actor)).toThrow(/console, fleet offices and partners/);
     }
   });
 });

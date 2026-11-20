@@ -25,7 +25,7 @@ to click.
 - `/start`: the driver app, ready in a minute or two.
 - `/start driver tower`: name the apps you want. You can name any of these: **home** (the front page), **driver**,
   **agent** (a pick-up shop), **send** (sending a parcel), **fleet**, **mdp** (the sorting hub), **vendor**
-  (a merchant), **business**, **tower** (the operator console). Or say **all**.
+  (a merchant), **business**, **partner** (a partner company's own people), **tower** (the operator console). Or say **all**.
 - `/start seed`: also fills the app with sample people, shops and parcels, and gives you a sheet of logins to try.
 - `/start docker`: runs it the way the live website runs. It's slower to start, but closer to the real thing.
 
