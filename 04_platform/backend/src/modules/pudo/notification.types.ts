@@ -234,6 +234,11 @@ export const NOTIFICATION_KINDS = [
    * was paid — or not paid yet; to the driver and the fleet's office, three days after delivery with nothing said, whether it was.
    */
   'freight_paid_direct',
+  /**
+   * 2026-11-20 — a month's invoice for our fee on payments by Mollie (the payments plan, part 2c): to the carrier it is made out
+   * to — the courier, or the fleet. Already paid: Mollie took the fee from the payments. In Settings, under Mollie.
+   */
+  'fee_invoice',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

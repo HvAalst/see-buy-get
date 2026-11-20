@@ -1,9 +1,47 @@
-import { useState } from 'preact/hooks';
-import type { SbgError } from '../../lib/sbg';
-import { useT } from '../i18n';
-import { Button, ErrorNote, Note } from '../ui';
-import { mollieBackSays, type MollieBack } from './mollie';
+import { useEffect, useState } from 'preact/hooks';
+import type { Result, SbgError } from '../../lib/sbg';
+import { useT, type Translate } from '../i18n';
+import { cash } from '../money';
+import { Button, DocumentButton, ErrorNote, Note } from '../ui';
+import { invoiceMonthWords, mollieBackSays, type MollieBack, type MollieInvoiceRow } from './mollie';
 import type { AccountApi } from './useAccount';
+
+/**
+ * 2026-11-20 — THE INVOICES FOR OUR FEE, ONE A MONTH (the payments plan, part 2c): each one paid already — Mollie took the fee
+ * from the payments — and opened as its printable page. A test invoice says it is one. Pure, for the test.
+ */
+export function MollieInvoiceList({ items, t, open }: { items: MollieInvoiceRow[] | null; t: Translate; open: (invoiceId: string) => Promise<Result<string>> }) {
+  if (items === null) return null;
+  return (
+    <div style="margin-top:16px">
+      <p class="t-body">
+        <b>{t('account.mollie.invoicesTitle')}</b>
+      </p>
+      {items.length === 0 ? (
+        <p class="hint">{t('account.mollie.invoicesNone')}</p>
+      ) : (
+        items.map((i) => (
+          <div key={i.invoiceId}>
+            <DocumentButton
+              label={`${t('account.mollie.invoiceLine', { month: invoiceMonthWords(i.month), amount: cash(i.gross, i.currency) })}${i.test ? ` · ${t('account.mollie.invoiceTest')}` : ''}`}
+              title={t('account.mollie.invoiceTitle', { number: i.number })}
+              fetch={() => open(i.invoiceId)}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function MollieInvoices({ api }: { api: AccountApi }) {
+  const t = useT();
+  const [items, setItems] = useState<MollieInvoiceRow[] | null>(null);
+  useEffect(() => {
+    void api.mollieInvoices().then((r) => setItems(r.error || !r.data ? null : r.data.items));
+  }, [api.mollieInvoices]);
+  return <MollieInvoiceList items={items} t={t} open={api.mollieInvoice} />;
+}
 
 /**
  * 2026-11-19 — CONNECT YOUR OWN MOLLIE ACCOUNT (the payments plan, part 2). What it does, said before the button: a shipper who
@@ -68,6 +106,8 @@ export function MollieForm({ api, back }: { api: AccountApi; back: MollieBack | 
               </Button>
             </>
           )}
+          {/* Kept after a disconnect too: an invoice is the carrier's to keep. */}
+          <MollieInvoices api={api} />
         </>
       )}
       {error ? <ErrorNote error={error} /> : null}

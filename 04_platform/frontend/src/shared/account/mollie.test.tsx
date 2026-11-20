@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../i18n';
-import { MollieForm } from './MollieSettings';
-import { mollieBackOf, mollieBackSays, mollieSub, showsMollie, withoutMollieBack, type MollieView } from './mollie';
+import { MollieForm, MollieInvoiceList } from './MollieSettings';
+import { invoiceMonthWords, mollieBackOf, mollieBackSays, mollieSub, showsMollie, withoutMollieBack, type MollieView } from './mollie';
 import type { AccountApi } from './useAccount';
 
 /*
@@ -89,6 +89,34 @@ describe('the Mollie form', () => {
   });
 });
 
+describe('the invoices for our fee (part 2c)', () => {
+  const open = async () => ({ data: '<html></html>', error: null }) as never;
+  const list = (items: Parameters<typeof MollieInvoiceList>[0]['items']) => renderToString(<MollieInvoiceList items={items} t={tt} open={open} />);
+  const row = { invoiceId: 'fi_1', number: 'NL-2026-00001', test: false, month: '2026-10', issuedAt: '2026-11-01T00:30:00Z', currency: 'EUR', gross: 1, payments: 2 };
+
+  it('one a month, each said paid, opened as its page; a test one says it is a test', () => {
+    const html = list([row, { ...row, invoiceId: 'fi_2', number: 'TEST-NL-2026-00001', test: true }]);
+    expect(html).toContain('Invoices for our fee');
+    expect(html).toContain(`${invoiceMonthWords('2026-10')} · `);
+    expect(html).toContain(' · paid');
+    expect(html).toContain(' · Test');
+    expect(invoiceMonthWords('2026-10')).toMatch(/2026/);
+  });
+
+  it('none yet: says when one comes; not read yet: nothing at all', () => {
+    expect(list([])).toContain('No invoice yet. One comes each month after a month with payments by Mollie.');
+    expect(list(null)).toBe('');
+  });
+
+  it('read from the carrier’s own invoices, and kept after a disconnect', () => {
+    const hook = readFileSync(join('src', 'shared', 'account', 'useAccount.ts'), 'utf8');
+    expect(hook).toMatch(/raw\.GET\('\/v1\/sbg\/mollie\/invoices' as never/);
+    expect(hook).toMatch(/raw\.GET\('\/v1\/sbg\/mollie\/invoices\/\{id\}\/invoice\.html' as never, \{ params: \{ path: \{ id: invoiceId \} \}, parseAs: 'text' \}/);
+    const form = readFileSync(join('src', 'shared', 'account', 'MollieSettings.tsx'), 'utf8');
+    expect(form).toMatch(/\)\}\s*\{\/\* Kept after a disconnect too: an invoice is the carrier's to keep\. \*\/\}\s*<MollieInvoices api=\{api\} \/>/);
+  });
+});
+
 describe('wired', () => {
   const read = (...p: string[]) => readFileSync(join('src', ...p), 'utf8');
 
@@ -114,7 +142,8 @@ describe('wired', () => {
   it('every word in Kiswahili, Dutch and Amharic too', () => {
     const en = read('shared', 'i18n', 'catalogs', 'en.ts');
     const keys = [...en.matchAll(/'(account\.mollie\.[a-zA-Z]+)'/g)].map((m) => m[1]);
-    expect(keys.length).toBe(25);
+    // 25 for connecting (part 2a), and five for the monthly fee invoices (part 2c, 2026-11-20).
+    expect(keys.length).toBe(30);
     for (const locale of ['sw', 'nl', 'am']) {
       const words = read('shared', 'i18n', 'words', locale, 'base.ts');
       expect(keys.filter((k) => !words.includes(`"${k}":`))).toEqual([]);

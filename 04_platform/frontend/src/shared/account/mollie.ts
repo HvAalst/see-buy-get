@@ -27,6 +27,24 @@ export interface MollieView {
 
 export type MollieBack = { outcome: 'connected' } | { outcome: 'failed'; why: 'expired' | 'denied' | 'no_profile' | 'failed' };
 
+/** 2026-11-20 — a month's invoice for our fee (part 2c): already paid, Mollie took it from the payments. */
+export interface MollieInvoiceRow {
+  invoiceId: string;
+  number: string;
+  test: boolean;
+  month: string;
+  issuedAt: string;
+  currency: string;
+  gross: number;
+  payments: number;
+}
+
+/** The month invoiced, in the reader's own words: "October 2026". */
+export function invoiceMonthWords(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, (m || 1) - 1, 1)).toLocaleString([], { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
 type T = (key: string, vars?: Record<string, string | number>) => string;
 
 /** Settings shows Mollie to a carrier it is for — and to a fleet driver in the Netherlands, to say its office connects it. */

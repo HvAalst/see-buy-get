@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
@@ -12,6 +12,7 @@ import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guar
 import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
 import { MollieConnectionView, MollieConnectStarted, type MolliePayee } from '../../foundation/mollie/mollie.types';
 import { DirectPayService } from './direct-pay.service';
+import { FeeInvoiceList, FeeInvoiceService } from './fee-invoice.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
@@ -38,7 +39,29 @@ export class MollieController {
     private readonly drivers: DriverService,
     private readonly managers: FleetManagerService,
     private readonly direct: DirectPayService,
+    private readonly feeInvoices: FeeInvoiceService,
   ) {}
+
+  /** 2026-11-20 — the invoices for our fee on this carrier's payments by Mollie, one a month (part 2c): newest first. */
+  @Roles('driver', 'fleet_manager')
+  @Get('invoices')
+  invoices(@Actor() actor: IntrospectionResult): FeeInvoiceList {
+    return this.feeInvoices.listFor(this.paidAs(actor));
+  }
+
+  /** One of them, as its printable page — only to the carrier it is made out to. */
+  @Roles('driver', 'fleet_manager')
+  @Get('invoices/:id/invoice.html')
+  @Header('content-type', 'text/html; charset=utf-8')
+  invoiceHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
+    return this.feeInvoices.html(id, this.paidAs(actor));
+  }
+
+  private paidAs(actor: IntrospectionResult | undefined): string {
+    const payee = this.payeeOf(actor);
+    if ('notPayee' in payee) throw new GlosError('FORBIDDEN', payee.notPayee);
+    return payee.payeeId;
+  }
 
   /**
    * 2026-11-19 — MOLLIE'S NOTICE OF A PAYMENT (part 2b): only its id, unsigned — so the payment is asked for from Mollie and

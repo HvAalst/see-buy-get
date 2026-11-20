@@ -172,7 +172,7 @@ describe('whose account it is', () => {
   const svc = new MollieConnectService(crypt, APP, aMollie({}).fetchImpl);
   const drivers = { get: (did: string) => (did === 'did:glos:courier-utrecht' ? { did, jurisdiction: 'NL' } : { did, jurisdiction: 'NL', managerDid: 'did:glos:fleet-1' }) } as unknown as DriverService;
   const managers = { get: (did: string) => ({ did, jurisdiction: 'NL' }) } as unknown as FleetManagerService;
-  const doors = new MollieController(svc, drivers, managers, {} as never);
+  const doors = new MollieController(svc, drivers, managers, {} as never, {} as never);
 
   it('a courier’s own; a fleet driver’s is its fleet’s, connected by the office; staff connect nobody’s', () => {
     expect(doors.mine({ role: 'driver', did: 'did:glos:courier-utrecht' } as never).available).toBe(true);

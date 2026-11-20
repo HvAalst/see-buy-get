@@ -136,6 +136,11 @@ export class DirectPayService {
     await this.refresh(p, now);
   }
 
+  /** Every payment Mollie confirmed paid that carried our fee — what the monthly fee invoices are made from (part 2c). */
+  paidWithFee(): DirectPayment[] {
+    return [...this.payments.values()].filter((p) => p.status === 'paid' && p.paidAt && p.fee && p.fee > 0);
+  }
+
   /** The page the payer comes back to after Mollie's checkout: how the payment went, in Dutch and English, nothing else. */
   paidPage(ref: string): string {
     const p = [...this.payments.values()].find((x) => x.ref === ref);

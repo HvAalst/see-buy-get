@@ -1298,6 +1298,12 @@ export const en = {
   'account.mollie.backDenied': 'You did not give access in Mollie, so nothing was connected.',
   'account.mollie.backNoProfile': 'Your Mollie account has no profile to take payments with yet. Add one in Mollie, then connect again.',
   'account.mollie.backFailed': 'Mollie could not be connected: try again.',
+  // 2026-11-20 — the invoices for our fee, one a month, already paid (the payments plan, part 2c).
+  'account.mollie.invoicesTitle': 'Invoices for our fee',
+  'account.mollie.invoicesNone': 'No invoice yet. One comes each month after a month with payments by Mollie.',
+  'account.mollie.invoiceLine': '{month} · {amount} · paid',
+  'account.mollie.invoiceTest': 'Test',
+  'account.mollie.invoiceTitle': 'Invoice {number}',
   // The phones and browsers a PIN works on (Settings). No device has a name: the server keeps none to show.
   'account.devices.title': 'Phones and browsers',
   'account.devices.sub': 'Where your PIN works',

@@ -10,7 +10,7 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import type { ContractView } from './contract';
 import { idDisputeApi, type DisputeAgainstMe, type IdDisputeApi } from './idDispute';
 import type { PayoutNumberSaved, PayoutNumberView } from './payoutNumber';
-import type { MollieConnectedView, MollieView } from './mollie';
+import type { MollieConnectedView, MollieInvoiceRow, MollieView } from './mollie';
 
 /**
  * THE ACCOUNT, THE SAME IN EVERY APP.
@@ -163,6 +163,10 @@ export interface AccountApi {
   connectMollie: () => Promise<Result<{ url?: string; connected?: MollieConnectedView }>>;
   /** The leave given back to Mollie, and the connection forgotten. */
   disconnectMollie: () => Promise<Result<MollieView>>;
+  /** 2026-11-20 — the invoices for our fee on this carrier's payments by Mollie, one a month (part 2c), newest first. */
+  mollieInvoices: () => Promise<Result<{ items: MollieInvoiceRow[] }>>;
+  /** One of them, as its printable page. */
+  mollieInvoice: (invoiceId: string) => Promise<Result<string>>;
 }
 
 const NO_CLIENT = { data: null, error: null } as unknown as Result<never>;
@@ -207,6 +211,8 @@ const IDLE: AccountApi = {
   mollie: null,
   connectMollie: async () => NO_CLIENT,
   disconnectMollie: async () => NO_CLIENT,
+  mollieInvoices: async () => NO_CLIENT,
+  mollieInvoice: async () => NO_CLIENT,
 };
 
 export function useAccount(client: SbgClient | null, enabled = true, opts: { mollie?: boolean } = {}): AccountApi {
@@ -485,6 +491,18 @@ export function useAccount(client: SbgClient | null, enabled = true, opts: { mol
     return r;
   }, [client]);
 
+  const mollieInvoices = useCallback(async () => {
+    if (!client) return NO_CLIENT as Result<{ items: MollieInvoiceRow[] }>;
+    return (await client.request((raw) => raw.GET('/v1/sbg/mollie/invoices' as never, {} as never) as never)) as Result<{ items: MollieInvoiceRow[] }>;
+  }, [client]);
+  const mollieInvoice = useCallback(
+    async (invoiceId: string) => {
+      if (!client) return NO_CLIENT as Result<string>;
+      return (await client.request((raw) => raw.GET('/v1/sbg/mollie/invoices/{id}/invoice.html' as never, { params: { path: { id: invoiceId } }, parseAs: 'text' } as never) as never)) as Result<string>;
+    },
+    [client],
+  );
+
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber, mollie, connectMollie, disconnectMollie };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber, mollie, connectMollie, disconnectMollie, mollieInvoices, mollieInvoice };
 }

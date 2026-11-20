@@ -57,6 +57,10 @@ describe('a carrier connects its own Mollie account, over the wire', () => {
     expect((await http().get('/v1/sbg/mollie').set(bearer(courier.token)).expect(200)).body.connected).toMatchObject({ via: 'test_key', testmode: true });
     const gone = (await http().delete('/v1/sbg/mollie').set(bearer(courier.token)).expect(200)).body;
     expect(gone).toEqual({ available: true, via: 'test_key' });
+    // 2026-11-20 — part 2c: its invoices for our fee, none yet; one not its own is not there.
+    expect((await http().get('/v1/sbg/mollie/invoices').set(bearer(courier.token)).expect(200)).body).toEqual({ items: [] });
+    await http().get('/v1/sbg/mollie/invoices/fi_not_yours/invoice.html').set(bearer(courier.token)).expect(404);
+    await http().get('/v1/sbg/mollie/invoices').expect(401);
   });
 
   it('is not offered elsewhere; a fleet driver is told its office connects it; staff connect nobody’s; nobody signed out', async () => {

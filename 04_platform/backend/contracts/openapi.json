@@ -38133,6 +38133,55 @@
         }
       }
     },
+    "/v1/sbg/mollie/invoices": {
+      "get": {
+        "operationId": "Mollie.invoices",
+        "summary": "",
+        "description": "2026-11-20 — the invoices for our fee on this carrier's payments by Mollie, one a month (part 2c): newest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeInvoiceList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mollie/invoices/{id}/invoice.html": {
+      "get": {
+        "operationId": "Mollie.invoiceHtml",
+        "summary": "",
+        "description": "One of them, as its printable page — only to the carrier it is made out to.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mollie/webhook": {
       "post": {
         "operationId": "Mollie.webhook",
@@ -90559,6 +90608,59 @@
         "required": [
           "way",
           "country"
+        ]
+      },
+      "FeeInvoiceRow": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "test": {
+            "type": "boolean"
+          },
+          "month": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "gross": {
+            "type": "number"
+          },
+          "payments": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "invoiceId",
+          "number",
+          "test",
+          "month",
+          "issuedAt",
+          "currency",
+          "gross",
+          "payments"
+        ]
+      },
+      "FeeInvoiceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeInvoiceRow"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "MollieWebhookDto": {

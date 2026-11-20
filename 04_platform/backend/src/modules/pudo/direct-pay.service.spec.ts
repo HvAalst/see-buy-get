@@ -227,6 +227,25 @@ describe('a load’s price, paid at the handover by Mollie', () => {
     await expect(w.svc.ask('frt_1', courier, T0)).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
   });
 
+  // 2026-11-20 — part 2c: the monthly fee invoices are made from these, and from nothing else.
+  it('what the monthly invoices are made from: payments Mollie confirmed paid that carried our fee — nothing else', async () => {
+    const w = aWorld();
+    await w.join(COURIER);
+    w.load('frt_1');
+    await w.svc.ask('frt_1', courier, T0);
+    expect(w.svc.paidWithFee()).toEqual([]);
+    paymentStatus = { status: 'paid', paidAt: '2026-11-20T10:03:00Z' };
+    await w.svc.onWebhook('tr_1', T0);
+    expect(w.svc.paidWithFee().map((p) => [p.paymentId, p.fee, p.paidAt])).toEqual([['tr_1', 0.5, '2026-11-20T10:03:00Z']]);
+    const free = aWorld({ fee: 0 });
+    await free.join(COURIER);
+    free.load('frt_1');
+    await free.svc.ask('frt_1', courier, T0);
+    paymentStatus = { status: 'paid', paidAt: '2026-11-20T10:03:00Z' };
+    await free.svc.onWebhook('tr_1', T0);
+    expect(free.svc.paidWithFee()).toEqual([]);
+  });
+
   it('the page the payer comes back to says how it went, by our own reference, and nothing else', async () => {
     const w = aWorld();
     await w.join(COURIER);
