@@ -858,6 +858,26 @@ describe('PUDO Light', () => {
     expect(books.balances(entities.requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
   });
 
+  /* 2026-11-20 — the payments plan, P4-a: "the payment comes before the label". */
+  it('a cash walk-up whose own price is more than the float and its credit cover is refused before anything is kept — no parcel, no label, nothing charged', () => {
+    const a = onboardAgent('Dear Shop', 'NorthTown', 1);
+    agents.setPrice(a.did, 100);
+    const quote = routing.quoteShipment(a.did, a.did, 'S', undefined, { kg: 1, consumer: true });
+    expect(quote.locked.gross).toBeGreaterThan(TRADE_CREDIT_LIMIT);
+    // One parcel at the list price would pass: the gate alone let this one through, and it was kept before its charge failed.
+    expect(gate.canTransact(a.did).ok).toBe(true);
+    const take = () => parcels.accept({ agentDid: a.did, parcelId: 'QR-DEAR', size: 'S', weightKg: 1, destZone: 'NorthTown', destPudoDid: a.did, sameShopQuote: quote, senderMobile: '+254700000901', receiverMobile: '+254700000902', dropoffPhotoRef: photoBy(a.did) });
+    expect(take).toThrow(/Trade credit is used up/);
+    expect(() => parcels.get('QR-DEAR')).toThrow();
+    expect(agents.balance(a.did)).toBe(1);
+    expect(gate.entries({ did: a.did, type: 'FEE' })).toEqual([]);
+    // Topped up to cover it, the very same parcel is taken in — nothing of the first try is in its way — and charged its price.
+    gate.topUp(a.did, quote.locked.gross);
+    expect(take().parcelId).toBe('QR-DEAR');
+    expect(gate.entries({ did: a.did, type: 'FEE' })).toEqual([expect.objectContaining({ sign: '-', amount: quote.locked.gross, reference: 'QR-DEAR' })]);
+    expect(books.balances(entities.requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
+  });
+
   it('voids a parcel within the window and refunds the agent', () => {
     const a = onboardAgent('Void Shop', 'NorthTown', 10);
     const before = agents.balance(a.did)!;
@@ -5095,6 +5115,31 @@ describe('PUDO Light', () => {
       // An unparseable stamp prints nothing rather than the word "Invalid" on a customer's parcel.
       expect(labelDate(undefined)).toBe('');
       expect(labelDate('not-a-date')).toBe('');
+    });
+
+    /* 2026-11-20 — the payments plan, P4-a: "anywhere a parcel is minted in the system, the payment comes before the label". */
+    it('no label before the payment, at staff’s door or a counter’s: a store’s order not paid yet, a Send booking not yet paid at the counter', () => {
+      const origin = onboardAgent('Unpaid Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Unpaid Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'Unpaid N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: 'Unpaid Store', callbackUrl: 'https://unpaid.example/hook', secret: 'whsec' });
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      const { parcel, label } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-UNPAID', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote });
+      expect([parcel.paidStatus, label]).toEqual(['unpaid', null]);
+      expect(() => parcels.labelFor(parcel.parcelId)).toThrow(`${parcel.parcelId} is not paid yet: its label prints once it is paid`);
+      expect(() => parcels.labelZplFor(parcel.parcelId)).toThrow(/is not paid yet/);
+      // Paid from its balance: both doors print it.
+      vendors.topUp(vendor.vendorId, 500);
+      expect(parcels.settleUnpaid(parcel.parcelId).paid).toBe(true);
+      expect(parcels.labelFor(parcel.parcelId).svg).toContain(parcel.parcelId);
+      expect(parcels.labelZplFor(parcel.parcelId)).toContain(parcel.parcelId);
+
+      // A booking in the Send app: none at the counter's door until it is paid there, in cash, as it is taken in.
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:unpaid', senderPhoneHash: 'h-unpaid', receiverMobile: '+254700600077', originAgentDid: origin.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(origin.did, dest.did) }).parcel;
+      expect(() => parcels.labelZplFor(sent.parcelId)).toThrow(/is not paid yet/);
+      expect(() => parcels.labelFor(sent.parcelId)).toThrow(/is not paid yet/);
+      parcels.intakeConsumerSend(sent.parcelId, origin.did, photoBy(origin.did));
+      expect(parcels.labelZplFor(sent.parcelId)).toContain(sent.parcelId);
     });
 
     it('burns the collection code after repeated wrong tries, and a burned code opens nothing', () => {
@@ -14268,6 +14313,9 @@ describe('PUDO Light', () => {
         expect(refused?.code).toBe('NEW_LABEL');
         expect(refused?.message).toBe(`${id} was withdrawn: it goes back as ${backId}. Print its new label, put it over the old one, then scan ${backId}.`);
         expect(parcels.hubLabel(hub.mdpId, backId).svg).toContain(backId);
+        // Paid at collection, by design (until P4-f): its label prints for the hub's thermal printer while it is still unpaid.
+        expect(parcels.get(backId)).toMatchObject({ paidStatus: 'unpaid', payAtCollection: expect.objectContaining({ amount: expect.any(Number) }) });
+        expect(parcels.labelZplFor(backId)).toContain(backId);
         const again = mdps.sortParcel(hub.mdpId, backId);
         expect([origin.did, origin.zone]).toContain(again.nextDestination.type === 'pudo' ? again.nextDestination.id : again.nextDestination.zone);
       });

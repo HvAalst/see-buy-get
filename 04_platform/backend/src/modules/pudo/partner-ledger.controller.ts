@@ -6,6 +6,8 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { HubPaymentView, PaymentAccountRead, TryPaymentDto } from '../../foundation/payment-hub/hub.types';
+import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { MyPartnerOwed, PartnerLedgerService, PartnerLedgerView } from './partner-ledger.service';
@@ -24,6 +26,7 @@ export class PartnerLedgerController {
     private readonly drivers: DriverService,
     private readonly mdps: MdpService,
     private readonly checks: PartnerChecksService,
+    private readonly hub: PaymentHubService,
   ) {}
 
   /** A partner's record, for our staff: every line it owes, and what it owes each hand in all. */
@@ -57,6 +60,25 @@ export class PartnerLedgerController {
   reviewNow(@Param('entityId') entityId: string): Promise<PartnerReviewRow> {
     this.requirePartner(entityId);
     return this.checks.review(entityId, Date.now(), { asked: true });
+  }
+
+  /**
+   * 4a — THE PARTNER'S PAYMENT ACCOUNT, for our staff (the payments plan, step 4): which provider its money goes through —
+   * the stand-in, test money, until its own provider is added and switched live — what the account holds, and its payments.
+   */
+  @Roles('operator')
+  @Get('entities/:entityId/payment-account')
+  async paymentAccount(@Param('entityId') entityId: string): Promise<PaymentAccountRead> {
+    this.requirePartner(entityId);
+    return { account: await this.hub.accountView(entityId), payments: this.hub.paymentsOf(entityId) };
+  }
+
+  /** A try of the account: a payment prompt to a phone, on test money, by name — the whole loop seen working before any parcel. */
+  @Roles('operator')
+  @Post('entities/:entityId/payment-account/try')
+  tryPayment(@Param('entityId') entityId: string, @Body() dto: TryPaymentDto, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
+    this.requirePartner(entityId);
+    return this.hub.tryPayment(entityId, dto, auditActor(actor));
   }
 
   private requirePartner(entityId: string): void {

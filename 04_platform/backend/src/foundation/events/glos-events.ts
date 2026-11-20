@@ -157,6 +157,7 @@ export const GlosEvent = {
     FreightNotPaidDirect: 'pudo.freight_not_paid_direct', // delivered, and its carrier says the shipper has not paid yet (2026-10-27); the shipper is told
     FreightPaidDirectAsked: 'pudo.freight_paid_direct_asked', // delivered three days ago and nothing said: its carrier is asked whether it was paid
     FreightPaidDirect: 'pudo.freight_paid_direct', // a load settled between the parties: its carrier says the shipper paid it (2026-10-27); the shipper is told
+    HubPayment: 'pudo.hub_payment', // 2026-11-20 — a payment through the payment hub asked of a phone, paid or failed (the payments plan, step 4)
     PartnerOwed: 'pudo.partner_owed', // 2026-11-20 — in a Partnered country, a step of a parcel carried under the partner's promise: what the partner owes the hand that did it (the payments plan, 3a)
     FreightHandedBack: 'pudo.freight_handed_back', // FP8 — a driver gave a claimed load back before pickup; the sender (and the office that put it on them) is told // FP7 — the sender's instructions changed on a load a driver holds; the driver is told // FP5 — the fleet office put a load on one of its drivers; the driver is told
     NoteFrozen: 'pudo.note_frozen', // a copy of a consignment note was frozen — the trigger for delivering the bundle to a party's own storage

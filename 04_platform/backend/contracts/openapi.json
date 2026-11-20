@@ -38487,6 +38487,74 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/payment-account": {
+      "get": {
+        "operationId": "PartnerLedger.paymentAccount",
+        "summary": "",
+        "description": "4a — THE PARTNER'S PAYMENT ACCOUNT, for our staff (the payments plan, step 4): which provider its money goes through —\nthe stand-in, test money, until its own provider is added and switched live — what the account holds, and its payments.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/payment-account/try": {
+      "post": {
+        "operationId": "PartnerLedger.tryPayment",
+        "summary": "",
+        "description": "A try of the account: a payment prompt to a phone, on test money, by name — the whole loop seen working before any parcel.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubPaymentView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/partner-owed/mine": {
       "get": {
         "operationId": "PartnerLedger.mine",
@@ -91615,6 +91683,161 @@
             "description": "What staff found, in a few words."
           }
         }
+      },
+      "PaymentAccountView": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "stand-in",
+              "telebirr",
+              "mpesa-et",
+              "chapa"
+            ]
+          },
+          "test": {
+            "type": "boolean",
+            "description": "Test money only: the stand-in, until the partner’s own provider is set and switched live."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "array",
+            "description": "The providers whose adapter is ready.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "stand-in",
+                "telebirr",
+                "mpesa-et",
+                "chapa"
+              ]
+            }
+          },
+          "balance": {
+            "type": "number",
+            "description": "What the account holds, where the provider says. Absent when it did not answer."
+          }
+        },
+        "required": [
+          "provider",
+          "test",
+          "currency",
+          "ready"
+        ]
+      },
+      "HubPaymentView": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out",
+              "refund"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "phoneEnds": {
+            "type": "string",
+            "description": "The last three digits of the phone."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "asked",
+              "paid",
+              "failed"
+            ]
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "declined",
+              "expired",
+              "unreachable",
+              "insufficient"
+            ],
+            "description": "Why it did not go. Absent where the provider gave a reason of its own."
+          },
+          "test": {
+            "type": "boolean"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "settledAt": {
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "A try of the account: the member of staff who asked it."
+          }
+        },
+        "required": [
+          "paymentId",
+          "kind",
+          "reference",
+          "amount",
+          "currency",
+          "phoneEnds",
+          "state",
+          "test",
+          "askedAt"
+        ]
+      },
+      "PaymentAccountRead": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/PaymentAccountView"
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubPaymentView"
+            }
+          }
+        },
+        "required": [
+          "account",
+          "payments"
+        ]
+      },
+      "TryPaymentDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "pattern": "/^\\+\\d{9,15}$/",
+            "description": "The phone the prompt goes to, with its country code (+251…).",
+            "example": "+251911000123"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000,
+            "description": "How much, in the account’s money.",
+            "example": 250
+          }
+        },
+        "required": [
+          "phone",
+          "amount"
+        ]
       },
       "PartnerOwedSum": {
         "type": "object",

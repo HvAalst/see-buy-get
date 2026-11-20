@@ -1703,6 +1703,10 @@ export class ParcelService implements OnApplicationBootstrap {
     if (mode === 'cash' && !this.gate.canTransact(input.agentDid).ok) {
       throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds. Top up to accept parcels.');
     }
+    // 2026-11-20 — …and the parcel's REAL price, not one parcel at the list price: covered by the float and its credit, asked
+    // before anything is written (the payments plan, P4-a). It used to be asked only as the charge was tried, after the parcel
+    // was kept — so a parcel whose route cost more than the float covered stayed kept, label and all, and unpaid.
+    if (promise === 'ours' && mode === 'cash') this.gate.requireCharge(input.agentDid, this.walkUpDue(input, sameShop, abroad));
 
     // The redesigned counter MEASURES the parcel (dims + weight) → derive the tier + cargo class exactly
     // like the vendor/Send mint (createInbound), so a size can't be under-declared. Dims present → derive
@@ -2105,6 +2109,17 @@ export class ParcelService implements OnApplicationBootstrap {
   /** 2026-11-05 — handed in and collected at the one shop: no road, no hub, no driver. */
   isSameShop(parcel: Pick<Parcel, 'originAgentDid' | 'destAgentDid'>): boolean {
     return Boolean(parcel.destAgentDid) && parcel.originAgentDid === parcel.destAgentDid;
+  }
+
+  /**
+   * 2026-11-20 — what a cash walk-up is charged, worked out as accept() charges it: its route's price where it has one
+   * (collected where it is handed in, abroad, or priced from the country's card), else one parcel at the shop company's list
+   * price, tax and all (P4-a). Asked before the parcel is kept; the charge itself follows from the parcel as kept.
+   */
+  private walkUpDue(input: AcceptInput, sameShop: boolean, abroad: { quote: ShipmentQuote } | undefined): number {
+    const quoted = sameShop ? input.sameShopQuote : abroad ? abroad.quote : input.walkInQuote;
+    if (quoted) return quoted.locked.gross;
+    return taxOn(this.amountsAt(input.agentDid).wholesale, this.wholesaleTax(input.agentDid).ratePct).gross;
   }
 
   /** The price a parcel keeps, from the quote it was sold at: the locked leg, its tax, its cover, what it was made of. */
@@ -3884,10 +3899,21 @@ export class ParcelService implements OnApplicationBootstrap {
     if (sscc) parcel.sscc = sscc;
   }
 
-  /** DT — the printable label for a parcel (reprint surface). Returns the persisted one, or generates it on
-   *  demand (e.g. an inbound parcel not yet paid still has no label → generated so an operator can inspect it). */
+  /**
+   * 2026-11-20 — NO LABEL BEFORE THE PAYMENT (the payments plan, P4-a; the owner: "anywhere a parcel is minted in the system,
+   * the payment comes before the label is created"). A store's order not paid yet, or a Send booking not yet paid at the
+   * counter, prints no label at any door — a shop's, a hub's, staff's. Paid at collection is the one way round it, by design:
+   * goods turned round at a hub to go back to their sender, until they are paid first too (P4-f).
+   */
+  private requirePaidLabel(parcel: Parcel): void {
+    if (parcel.paidStatus === 'unpaid' && !parcel.payAtCollection) throw new GlosError('SHIPMENT_NOT_PAID', `${parcel.parcelId} is not paid yet: its label prints once it is paid`);
+  }
+
+  /** DT — the printable label for a parcel (reprint surface): the persisted one, or — for a paid parcel that has none — made
+   *  now. Never for a parcel whose payment has not come (requirePaidLabel). */
   labelFor(parcelId: string): PhygitalLabel {
     const parcel = this.require(parcelId);
+    this.requirePaidLabel(parcel);
     if (parcel.label) return parcel.label;
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
     return this.label(parcel, destShop);
@@ -3899,6 +3925,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   labelZplFor(parcelId: string): string {
     const parcel = this.require(parcelId);
+    this.requirePaidLabel(parcel);
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
     const gln = parcel.destAgentDid ? this.ourGlns?.of('shop', parcel.destAgentDid) : undefined;
     return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop, this.codes?.codesFor(parcel.parcelId)?.companyPrefix.length, gln);

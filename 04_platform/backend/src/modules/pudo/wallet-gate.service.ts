@@ -333,9 +333,12 @@ export class WalletGateService {
     return entry;
   }
 
-  /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
-   *  the shop keeps the retail spread off-platform — we never see that money and never should. */
-  chargeShipping(did: string, amount: number, parcelId: string, tax = 0, provision = 0): PudoLedgerEntry {
+  /**
+   * 2026-11-20 — MAY THIS SHOP BE CHARGED THIS MUCH NOW: its float and its credit cover the whole charge (the payments plan,
+   * P4-a). Asked by a take-in before anything is written, with the parcel's real price — so a parcel is never kept, label and
+   * all, and then found unpaid — and asked again by chargeShipping as it charges.
+   */
+  requireCharge(did: string, amount: number): void {
     // Null where we hold no money in that country; the paths below are money paths, so it is refused
     // upstream by entityIdOf before this is ever reached.
     const balance = this.agents.balance(did) ?? 0;
@@ -344,6 +347,13 @@ export class WalletGateService {
     if (balance - amount < -creditLimitOf(this.agents.amountsOf(did)) - 1e-9) {
       throw new GlosError('WALLET_INSUFFICIENT', `Trade credit is used up (${TRADE_CREDIT_PARCELS} parcels) — top up to keep scanning`);
     }
+  }
+
+  /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
+   *  the shop keeps the retail spread off-platform — we never see that money and never should. */
+  chargeShipping(did: string, amount: number, parcelId: string, tax = 0, provision = 0): PudoLedgerEntry {
+    this.requireCharge(did, amount);
+    const balance = this.agents.balance(did) ?? 0;
     // Tax first, off the top — held for an authority, never ours, never revenue.
     const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
     const net = Math.round((amount - collected) * 100) / 100;

@@ -473,6 +473,11 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-members', { params: { path: { entityId } }, body: { phone, name } })),
     removePartnerMember: (entityId: string, memberId: string) =>
       sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/partner-members/{memberId}', { params: { path: { entityId, memberId } } })),
+    /** 2026-11-20 — a partner's payment account in the payment hub: its provider, what it holds, its payments (step 4a). */
+    partnerPaymentAccount: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/payment-account', { params: { path: { entityId } } })),
+    /** A try of it: a payment prompt to a phone, on test money. */
+    tryPartnerPayment: (entityId: string, phone: string, amount: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/try', { params: { path: { entityId } }, body: { phone, amount } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),
