@@ -375,7 +375,7 @@ export class IdentityController {
     if (dto.expectedTotal != null && Math.abs(dto.expectedTotal - quote.locked.gross) > 0.001) {
       throw new GlosError('PRICE_CHANGED', `The price is now ${quote.locked.gross.toFixed(2)} — please review it before sending`, { newTotal: quote.locked.gross });
     }
-    const { parcel, label } = this.parcels.createConsumerSend({
+    const { parcel, code } = this.parcels.createConsumerSend({
       senderPersonDid: person.personDid,
       senderPhoneHash: person.phoneHash,
       receiverMobile: dto.receiverMobile,
@@ -398,7 +398,8 @@ export class IdentityController {
     }
     return {
       parcel: this.parcels.consumerParcel(parcel.parcelId, person),
-      label,
+      // 2026-11-20 — a code to show at the shop, not a label: the shop prints the label once it is paid there (P4-e).
+      code,
       // `total` is the GROSS — the cash this sender hands over at the counter. `tax` names the part of it
       // that is not ours, because a person is entitled to see the tax they paid and, in most places, a
       // receipt is required to say so. The platform's own three layers stay out of it: a buyer sees a price — in its

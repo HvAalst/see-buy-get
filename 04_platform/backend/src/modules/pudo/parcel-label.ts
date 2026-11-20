@@ -2,6 +2,9 @@ import { ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 import { zplBox, zplGs1_128, zplLabel, zplQr, zplText } from '../../foundation/label/zpl';
 import type { Parcel } from './pudo.types';
 
+/** 2026-11-20 — on a parcel the carrier pays every hand for (P4-g): short enough for both labels, in the labels' language. */
+export const CARRIER_PAYS_LINE = 'Carrier pays all who handle it';
+
 /**
  * Round 27 — A PARCEL'S LABEL FOR A THERMAL PRINTER (ZPL, 100 × 150 mm at 203 dpi): what the counter's label says —
  * the parcel's QR, where it goes, the day it was taken in, the papers in the pouch across a border, the public tracking
@@ -10,7 +13,7 @@ import type { Parcel } from './pudo.types';
  * Round 29 — a store's parcel with its SSCC (the store's GS1 prefix) carries GS1's part at the foot, as a business's
  * package label does: the code as a person reads it, and as the printer's own GS1-128.
  */
-export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'customs' | 'trackingKey' | 'direction' | 'sscc'>, created: string, destShop?: string, prefixLength = 7, destGln?: string): string {
+export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'customs' | 'trackingKey' | 'direction' | 'sscc' | 'carrierPays'>, created: string, destShop?: string, prefixLength = 7, destGln?: string): string {
   const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const qrPayload = `sbg:parcel:${parcel.parcelId}`;
   const f: string[] = [];
@@ -25,6 +28,8 @@ export function parcelLabelZpl(parcel: Pick<Parcel, 'parcelId' | 'destZone' | 'c
   f.push(zplText(46, 42, 3, `Created ${created}`));
   // A parcel crossing a border carries its papers: said where the counter and the border post look first (round 13).
   if (parcel.customs) f.push(zplText(46, 49, 3, 'Customs papers in the pouch'));
+  // 2026-11-20 — the carrier pays every hand, where nobody holds money (P4-g); never on a parcel with papers, which is ours.
+  else if (parcel.carrierPays) f.push(zplText(46, 49, 2.6, CARRIER_PAYS_LINE));
   // 2026-11-09 — the collection point's GS1 location number, given by SeeBuyGet.
   if (destGln) f.push(zplText(46, 55.5, 3, `To GLN ${destGln}`));
   f.push(zplBox(0, 59.75, 100, 0.5));

@@ -503,6 +503,8 @@ export const enAgent = {
   'agent.accept.receiverPhone': 'Receiver phone',
   'agent.accept.phonesNote': 'The receiver gets the tracking message and the pickup code.',
   'agent.accept.confirm': 'Confirm and accept',
+  'agent.accept.termsCarrierPays': 'SeeBuyGet does not share out the pay for it: the carrier pays the hubs, the drivers and the shop at the far end itself.',
+  'agent.accept.donePrintLabel': 'Paid: print the label of {parcel} now and stick it on.',
   'agent.accept.pay.title': 'Paid by phone',
   'agent.accept.pay.amount': 'The sender pays',
   'agent.accept.pay.to': 'to {to}, by a prompt on their phone. No cash here.',

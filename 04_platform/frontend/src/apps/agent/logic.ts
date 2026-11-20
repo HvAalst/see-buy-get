@@ -37,7 +37,8 @@ export function takeInTermsNotice(terms: TakeInTerms, t: Translate): TermsNotice
     return { tone: 'danger', icon: 'warning', title: t('agent.accept.termsNoneTitle'), detail: t('agent.accept.termsNoneDetail', { country }) };
   }
   if (terms.promise === 'theirs') {
-    return { tone: 'warn', icon: 'warning', title: t('agent.accept.termsTheirsTitle'), detail: t('agent.accept.termsTheirsDetail', { country }) };
+    // 2026-11-20 — and where nobody holds money, that the carrier pays the hubs, the drivers and the shop at the far end itself (P4-g).
+    return { tone: 'warn', icon: 'warning', title: t('agent.accept.termsTheirsTitle'), detail: t('agent.accept.termsTheirsDetail', { country }) + (terms.carrierPays ? ` ${t('agent.accept.termsCarrierPays')}` : '') };
   }
   const sister = terms.answeredBy ?? t('agent.accept.termsOursUs');
   // P4 — said in the same breath: the work is owed, but it cannot be paid out in this country yet.

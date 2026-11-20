@@ -370,6 +370,8 @@ export interface TakeInTerms {
   paidOut: boolean;
   /** 2026-11-20 — where the sender pays by phone first, before the label (a partner's country, 4b): to whom, how much. */
   payByPhone?: { to: string; price: number; currency: string };
+  /** 2026-11-20 — where nobody holds money (P4-g): the carrier pays every hand itself, and SeeBuyGet shares out no pay. */
+  carrierPays?: boolean;
 }
 
 /** 2026-11-20 — a walk-up's payment by phone, as the counter last heard of it (4b). */

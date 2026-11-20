@@ -435,6 +435,8 @@ export const words: Record<string, string> = {
   "agent.accept.receiverPhone": "Simu ya mpokeaji",
   "agent.accept.phonesNote": "Mpokeaji anapata ujumbe wa ufuatiliaji na msimbo wa kuchukulia.",
   "agent.accept.confirm": "Thibitisha na upokee",
+  "agent.accept.termsCarrierPays": "SeeBuyGet haigawi malipo yake: msafirishaji mwenyewe ndiye anayelipa vitovu, madereva na duka la upande wa pili.",
+  "agent.accept.donePrintLabel": "Imelipwa: chapisha lebo ya {parcel} sasa na uibandike.",
   "agent.accept.pay.title": "Imelipwa kwa simu",
   "agent.accept.pay.amount": "Mtumaji analipa",
   "agent.accept.pay.to": "kwa {to}, kwa ombi kwenye simu yake. Hakuna pesa taslimu hapa.",

@@ -258,6 +258,10 @@ describe('dims (PG3)', () => {
     expect(items[1]).toContain('4.40');
     expect(items[1]).toContain('KES'); // the cash to hand over, in its money
     expect(items).toHaveLength(3);
+    // 2026-11-20 — a code to show, never a label to print at home: the shop prints it once paid (P4-e).
+    expect(items[0]).toBe('Take the parcel to Mama Njeri and show this code');
+    expect(items[1]).toMatch(/The shop then prints the label and sticks it on\.$/);
+    expect(items.join(' ')).not.toMatch(/show this label/);
   });
 });
 

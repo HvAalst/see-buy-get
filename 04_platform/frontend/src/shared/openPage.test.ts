@@ -103,7 +103,6 @@ describe('every paper prints from the slide-up', () => {
     'shared/TaxInvoicesCard.tsx',
     'apps/fleet/screens/DriversScreen.tsx',
     'apps/agent/screens/TakenInLabel.tsx',
-    'apps/genesis/screens/SendScreen.tsx',
   ];
 
   it('opens a tab nowhere in the apps or the shared code but the sheet’s “Open to print” — the desk console aside', () => {
@@ -136,6 +135,8 @@ describe('every paper prints from the slide-up', () => {
       const text = src(f);
       expect({ f, sheet: /\busePaper\(\)/.test(text), shown: /\b(paper\.show|showPaper)\(/.test(text) }).toEqual({ f, sheet: true, shown: true });
     }
+    // 2026-11-20 — the Send app's booking prints nothing any more: a code to show at the shop, its label printed there once paid (P4-e).
+    expect(src('apps/genesis/screens/SendScreen.tsx')).not.toMatch(/usePaper\(|paper\.show\(|window\.open\(/);
     // Drawn where the sheet lives: the app for a hook's paper, the screen for its own.
     expect(src('apps/vendor/app.tsx')).toMatch(/<PaperSheet state=\{paper\} \/>/);
     expect(src('apps/mdp/app.tsx')).toMatch(/<PaperSheet state=\{paper\} \/>/);

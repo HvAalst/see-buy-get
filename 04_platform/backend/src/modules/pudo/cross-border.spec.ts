@@ -232,6 +232,30 @@ describe('crossing a border', () => {
       expect(books.journal({ ref: 'PUD-UG-1' })).toEqual([]);
     });
 
+    /* 2026-11-20 — P4-g, the owner: "as recommended but we mention for parcels that no one of sbg facilitates the distribution of
+     * the pay among the beneficiaries (hubs, last leg drivers, pudo)". */
+    it('where nobody holds money (Matched): the counter is told, and the label says, that the carrier pays everyone who handles it', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka CP', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      expect(parcels.takeInTerms(tz.did)).toMatchObject({ promise: 'theirs', carrierPays: true });
+      const parcel = parcels.accept({ parcelId: 'PUD-TZ-CP', agentDid: tz.did, destZone: 'DarEsSalaam2', size: 'M', paymentMode: 'prepaid', senderMobile: '+255700111', receiverMobile: '+255700222', dropoffPhotoRef: photoBy(tz.did) } as never);
+      expect(parcel.carrierPays).toBe(true);
+      expect(parcel.label?.svg).toContain('Carrier pays all who handle it');
+      expect(parcels.labelZplFor('PUD-TZ-CP')).toContain('Carrier pays all who handle it');
+      // Where a partner pays its hands, and at our own counters, not said.
+      const ke = fundedShop('Mama Sarah CP');
+      expect(parcels.takeInTerms(ke.did).carrierPays).toBeUndefined();
+      const ours = parcels.accept({ parcelId: 'PUD-KE-CP', agentDid: ke.did, destZone: 'Kisumu', size: 'M', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(ke.did) } as never);
+      expect(ours.carrierPays).toBeUndefined();
+      expect(ours.label?.svg).not.toContain('Carrier pays');
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Courier CP' }, 'Amina');
+      entities.setAmounts(partner.entityId, { wholesale: 9000 }, 'Amina');
+      entities.activate(partner.entityId, 'Brian');
+      presence.set({ jurisdiction: 'UG', level: 'partnered' });
+      const ug = shop('Kampala Duka CP', 'Kampala', { lat: 0.35, lng: 32.58 }, 'UG');
+      expect(parcels.takeInTerms(ug.did).carrierPays).toBeUndefined();
+    });
+
     it('takes nothing as owed under the carrier’s promise where no partner contracts — a country only Matched', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
       const tz = shop('Dar Duka 5', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');

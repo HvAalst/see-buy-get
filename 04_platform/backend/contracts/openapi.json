@@ -69692,6 +69692,9 @@
           "paidStatus": {
             "type": "object"
           },
+          "carrierPays": {
+            "type": "boolean"
+          },
           "paidByPhone": {
             "type": "object",
             "properties": {

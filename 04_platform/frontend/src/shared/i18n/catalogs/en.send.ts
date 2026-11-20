@@ -217,8 +217,8 @@ export const enSend = {
 
   // logic.ts sentence builders (each takes `t` and returns the finished string).
   'send.logic.dimsBlocker': 'Measure the parcel: length, width, height and weight',
-  'send.logic.mintTake': 'Take the parcel to {shop} and show this label',
-  'send.logic.mintPay': 'Pay {price} there — cash is fine',
+  'send.logic.mintTake': 'Take the parcel to {shop} and show this code',
+  'send.logic.mintPay': 'Pay {price} there — cash is fine. The shop then prints the label and sticks it on.',
   'send.logic.mintReceiverSees': 'The receiver sees it in the SeeBuyGet app on their number — now, or as soon as they sign up',
   'send.logic.handling': '{price} handling',
   'send.logic.rated': 'rated {avg}',
@@ -454,7 +454,7 @@ export const enSend = {
   'send.book.to': 'To',
   'send.book.sameShop': 'Dropped off and collected at the same shop: no bus, so it is ready to collect as soon as it is handed in.',
   'send.book.size': 'Size',
-  'send.book.makeLabel': 'Make my label',
+  'send.book.makeLabel': 'Book it',
   'send.book.enterNumber': 'Enter the receiver’s number first.',
   'send.book.backToPrice': 'Go back to the price',
   'send.book.thePrice': 'the price',
@@ -462,8 +462,9 @@ export const enSend = {
   'send.book.aloud': 'Type the receiver\'s phone number, then make the label. You pay {price} in cash when you drop the parcel at {shop}.',
 
   // Send wizard — the done step: the minted label.
-  'send.done.title': 'Your label is ready',
-  'send.done.lede': 'The parcel already exists on the network — show this at the shop and it is on its way.',
+  'send.done.title': 'Your parcel is booked',
+  'send.done.lede': 'Show this code at the shop. You pay there, and the shop prints the label and sticks it on.',
+  'send.done.codeHint': 'This is not a label: there is nothing to print at home. The shop scans this code.',
   'send.done.nextTitle': 'What happens next',
   'send.done.journeyTitle': 'Planned journey',
   'send.done.routedHub': 'Routed through a sorting hub. ',
@@ -472,10 +473,9 @@ export const enSend = {
   'send.done.recordsTitle': 'Keep for your records',
   'send.done.parcel': 'Parcel',
   'send.done.trackingKey': 'Tracking key',
-  'send.done.openLabel': 'Open and print the label',
   'send.done.seeInParcels': 'See it in My parcels',
   'send.done.another': 'Send another parcel',
-  'send.done.aloud': 'Your label is ready. Take the parcel to {shop}, show the label, and pay {price} in cash. The receiver sees it in the SeeBuyGet app on their number.',
+  'send.done.aloud': 'Your parcel is booked. Take it to {shop}, show this code and pay {price} there. The shop prints the label. The receiver sees it in the SeeBuyGet app on their number.',
 
   // Track screen.
   'send.track.title': 'Where is my parcel?',

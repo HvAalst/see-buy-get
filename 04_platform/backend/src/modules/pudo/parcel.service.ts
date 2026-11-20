@@ -639,6 +639,7 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
   );
 }
 import { qrSvgGroup } from '../../foundation/label/qr';
+import { CARRIER_PAYS_LINE } from './parcel-label';
 import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 
 /**
@@ -832,6 +833,11 @@ export interface TakeInTerms {
    * and how much — the partner's own price for a parcel. Absent where the counter takes cash, or where nobody can be paid yet.
    */
   payByPhone?: { to: string; price: number; currency: string };
+  /**
+   * 2026-11-20 — where nobody holds money (Matched; P4-g, the owner: "we mention for parcels that no one of sbg facilitates the
+   * distribution of the pay among the beneficiaries"): the carrier pays the hubs, the drivers and the shop at the far end itself.
+   */
+  carrierPays?: boolean;
 }
 
 /**
@@ -1501,7 +1507,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const level = this.presence.resolve(country).level;
     if (promise !== 'ours') {
       const phone = promise === 'theirs' ? this.phonePriceAt(country) : undefined;
-      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: phone?.currency ?? NETWORK_CURRENCY, cashAccepted: false, paidOut: false, ...(phone ? { payByPhone: phone } : {}) };
+      const carrierPays = promise === 'theirs' && !this.partners?.partnerAt(country);
+      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: phone?.currency ?? NETWORK_CURRENCY, cashAccepted: false, paidOut: false, ...(phone ? { payByPhone: phone } : {}), ...(carrierPays ? { carrierPays: true } : {}) };
     }
     // This country's sister where one exists; otherwise the payer's, the leg here being a service it bought.
     const entityId = this.agents.entityIdOrNone(agent) ?? (payerJurisdiction ? this.entities.forJurisdiction(payerJurisdiction)?.entityId : undefined);
@@ -1779,6 +1786,8 @@ export class ParcelService implements OnApplicationBootstrap {
       // Kept on the parcel rather than derived later: a country can move while goods sit on a shelf,
       // and the promise made at the counter is the promise that was made.
       takeInPromise: promise,
+      // 2026-11-20 — the carrier pays every hand itself, where nobody holds money (P4-g): said on its label.
+      ...(promise === 'theirs' && !this.partners?.partnerAt(country) ? { carrierPays: true } : {}),
       senderMobile: input.senderMobile,
       receiverMobile: input.receiverMobile,
       senderPhoneHash: hashPhone(input.senderMobile) || undefined,
@@ -2679,7 +2688,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * collects it at the drop-off scan, so the label issues immediately (it is the sender's drop-off
    * credential, not a payment receipt).
    */
-  createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel } {
+  createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote }): { parcel: Parcel; code: PhygitalLabel } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
     // 2026-11-05 — drop-off and collection at the one shop is a same-shop parcel (it was refused): priced as one stop by
@@ -2756,13 +2765,14 @@ export class ParcelService implements OnApplicationBootstrap {
       custody: [{ holderId: input.senderPersonDid, holderKind: 'sender', from: now, note: 'packed by the sender' }],
       scans: [{ at: now, status: 'CREATED', by: input.senderPersonDid, note: `peer send · drop off at ${origin.shopName}`, anchorTxId }],
     };
-    parcel.label = this.label(parcel, dest.shopName); // outbound branch: tracking key, no handover secret
+    // 2026-11-20 — NO LABEL BEFORE IT IS PAID (P4-e, "as recommended"): a booking gets a code to show at the shop; the label
+    // is made there, once the sender has paid at the counter (intakeConsumerSend).
     this.parcels.set(parcelId, parcel);
     // Made BY the sender's account, not addressed to a number: theirs whatever number they are on, or go back to.
     this.keep(parcelId, { sender: input.senderPersonDid, receiver: this.accountAt(parcel.receiverPhoneHash) });
     this.holds?.hold({ parcelId, agentDid: origin.did, bookedBy: { personDid: input.senderPersonDid } });
     void this.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
-    return { parcel, label: parcel.label };
+    return { parcel, code: this.bookingCode(parcel) };
   }
 
   /** What the e-commerce checkout charges the buyer (reported only — full price, or up to the cap). */
@@ -2891,6 +2901,8 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.acceptedAt = step.at;
     parcel.dropoffPhotoRef = dropoffPhotoRef;
     parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint
+    // 2026-11-20 — paid: its label is made now, for the counter to print and stick on (P4-e).
+    parcel.label = this.label(parcel, parcel.destAgentDid ? this.agents.find(parcel.destAgentDid)?.shopName : undefined);
     this.handTo(parcel, 'shop', agentDid, 'dropped off at the counter', step);
     this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected', step);
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
@@ -3909,6 +3921,8 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="120" y="110" font-family="Arial" font-size="9" fill="#6E7684">Created ${labelDate(parcel.acceptedAt)}</text>`,
       // A parcel crossing a border carries its papers: said where the counter and the border post both look first (round 13).
       ...(parcel.customs ? [`<text x="120" y="122" font-family="Arial" font-size="9" font-weight="bold" fill="#B42318">Customs papers in the pouch</text>`] : []),
+      // 2026-11-20 — where nobody holds money (P4-g): said to every hand that handles it, that the carrier pays them, not SeeBuyGet.
+      ...(parcel.carrierPays ? [`<text x="120" y="122" font-family="Arial" font-size="9" font-weight="bold" fill="#4A5261">${CARRIER_PAYS_LINE}</text>`] : []),
       // 2026-11-18 — a parcel abroad at a counter (step 2b): its seal, and the airports it leaves from and arrives at.
       ...(parcel.border
         ? [
@@ -3921,6 +3935,24 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
       ...(gln ? [`<text x="308" y="171" font-family="monospace" font-size="8" fill="#4A5261" text-anchor="end">To GLN ${gln}</text>`] : []),
       ...(parcel.sscc ? this.ssccSvg(parcel.parcelId, parcel.sscc) : []),
+      `</svg>`,
+    ].join('');
+    return { parcelId: parcel.parcelId, qrPayload, svg };
+  }
+
+  /**
+   * 2026-11-20 — A BOOKING'S CODE (P4-e): what the sender shows at the shop — the parcel's QR, which the counter scans, and its
+   * number. Not a label: nothing to stick on a box before it is paid. The words around it are the Send app's, in its language.
+   */
+  private bookingCode(parcel: Parcel): PhygitalLabel {
+    const qrPayload = `sbg:parcel:${parcel.parcelId}`;
+    const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="280" viewBox="0 0 240 280">`,
+      `<rect width="240" height="280" fill="#fff"/>`,
+      qrSvgGroup(qrPayload, 20, 16, 200),
+      `<text x="120" y="244" font-family="Arial" font-size="13" font-weight="bold" fill="#0B1F5C" text-anchor="middle">SeeBuyGet</text>`,
+      `<text x="120" y="266" font-family="monospace" font-size="14" fill="#0B1F5C" text-anchor="middle">${esc(parcel.parcelId)}</text>`,
       `</svg>`,
     ].join('');
     return { parcelId: parcel.parcelId, qrPayload, svg };
@@ -4670,7 +4702,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.originZone = to.zone;
     if (!parcel.vendorId) parcel.collectingEntityId = this.agents.entityIdOf(to); // the counter that takes the cash collects
     const dest = parcel.destAgentDid ? this.agents.find(parcel.destAgentDid) : undefined;
-    if (dest && (!parcel.vendorId || parcel.paidStatus === 'ParcelPaid')) parcel.label = this.label(parcel, dest.shopName);
+    if (dest && parcel.paidStatus === 'ParcelPaid') parcel.label = this.label(parcel, dest.shopName);
     parcel.dropOffMoves = [...(parcel.dropOffMoves ?? []), { at: new Date(now).toISOString(), from, to: toAgentDid, by, was, now: cost, currency: parcel.currency }];
     const sender = this.senderOf(parcel).owner;
     this.holds?.move(parcelId, toAgentDid, parcel.vendorId ? { vendorId: parcel.vendorId } : { personDid: sender ?? by }, now);

@@ -435,6 +435,8 @@ export const words: Record<string, string> = {
   "agent.accept.receiverPhone": "Telefoon ontvanger",
   "agent.accept.phonesNote": "De ontvanger krijgt het volgbericht en de afhaalcode.",
   "agent.accept.confirm": "Bevestigen en aannemen",
+  "agent.accept.termsCarrierPays": "SeeBuyGet verdeelt de betaling ervoor niet: de vervoerder betaalt zelf de hubs, de chauffeurs en de winkel aan de andere kant.",
+  "agent.accept.donePrintLabel": "Betaald: print nu het label van {parcel} en plak het erop.",
   "agent.accept.pay.title": "Betaald per telefoon",
   "agent.accept.pay.amount": "De afzender betaalt",
   "agent.accept.pay.to": "aan {to}, via een verzoek op zijn telefoon. Hier geen contant geld.",

@@ -54,6 +54,10 @@ describe('P3 — what the counter says before it takes goods in', () => {
     expect(n.title).toMatch(/carrier answers/);
     expect(n.detail).toMatch(/TZ/);
     expect(n.detail).toMatch(/cover is zero/);
+    // 2026-11-20 — and where nobody holds money (P4-g): the carrier pays every hand itself; SeeBuyGet shares out no pay.
+    expect(n.detail).not.toMatch(/share out the pay/);
+    const nobody = takeInTermsNotice(terms({ promise: 'theirs', jurisdiction: 'TZ', answeredBy: undefined, coverLimit: 0, coverBasis: 'none', carrierPays: true }), t);
+    expect(nobody.detail).toMatch(/SeeBuyGet does not share out the pay for it: the carrier pays the hubs, the drivers and the shop at the far end itself\./);
   });
 
   it('blocks until the terms are known — a failed load is not consent', () => {

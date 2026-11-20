@@ -8,7 +8,6 @@ import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPr
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
-import { labelGot, PaperSheet, usePaper } from '../../../shared/ui/PaperSheet';
 
 export interface SendScreenProps {
   state: SendState;
@@ -604,14 +603,9 @@ function DoneStep({ state, actions }: SendScreenProps) {
   const m = state.minted;
   // The shop the parcel was actually minted at — snapshotted at mint, immune to any later back-navigation.
   const fromName = state.mintedFromName ?? t('send.dropShop');
-  // 2026-11-02 — the label in the slide-up, on its page as it will print, never in the browser (the owner: "the print
-  // function in slide up").
-  const paper = usePaper();
   if (!m) return null;
-  const svg = m.label?.svg ?? null;
-
-  // Drawn when the parcel was made: in hand, so nothing is fetched.
-  const openLabel = () => paper.show(t('common.doc.label'), async () => labelGot(svg, `${t('common.doc.label')} — ${m.parcel.parcelId}`, t('common.doc.labelGone')));
+  // 2026-11-20 — a code to show at the shop, not a label (P4-e): the shop prints the label once the sender has paid there.
+  const svg = m.code?.svg ?? null;
 
   return (
     <div class="scr">
@@ -620,6 +614,7 @@ function DoneStep({ state, actions }: SendScreenProps) {
 
       {/* Trusted markup: the SVG comes from OUR backend's mint response, nothing user-authored. */}
       {svg ? <div class="labelbox" dangerouslySetInnerHTML={{ __html: svg }} /> : null}
+      <p class="hint">{t('send.done.codeHint')}</p>
 
       <Card title={t('send.done.nextTitle')}>
         <Checklist items={mintChecklist(fromName, m.price.total, m.price.currency, t)} />
@@ -656,14 +651,8 @@ function DoneStep({ state, actions }: SendScreenProps) {
       </Card>
 
       <div class="scr__cta">
-        <Button onClick={openLabel} disabled={!svg}>
-          {t('send.done.openLabel')}
-        </Button>
+        <Button onClick={() => actions.go('parcels')}>{t('send.done.seeInParcels')}</Button>
       </div>
-
-      <Button variant="outline" onClick={() => actions.go('parcels')}>
-        {t('send.done.seeInParcels')}
-      </Button>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={actions.startAgain}>
@@ -671,7 +660,6 @@ function DoneStep({ state, actions }: SendScreenProps) {
         </Button>
         <ReadAloud text={() => t('send.done.aloud', { shop: fromName, price: money(m.price.total, m.price.currency) })} label={t('send.readAloud')} />
       </div>
-      <PaperSheet state={paper} />
     </div>
   );
 }

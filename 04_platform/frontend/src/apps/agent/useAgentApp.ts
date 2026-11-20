@@ -349,7 +349,8 @@ export interface AgentState {
   /** 2026-11-13 — the weight typed at a counter whose scale counts, for a person's send (site tools, T2). */
   intakeWeighed: string;
   /** The last completed intake — drives the "taken in, cash collected" sheet. */
-  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string; place?: TakenInPlace } | null;
+  /** 2026-11-20 — `label`: a person's booking gets its label only once paid here (P4-e): printed from this sheet. */
+  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; currency?: string; destShopName?: string; place?: TakenInPlace; label?: TakenIn } | null;
   /** P3 — whose promise a walk-up taken in here is under. Re-asked every time the take-in screen opens,
    *  because a country can move down the ladder while the shop stands open. */
   takeInTerms: TakeInTerms | null;
@@ -2318,7 +2319,18 @@ export function useAgentApp() {
         preMint: null,
         preMintState: 'idle',
         preMintError: null,
-        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, currency: pm.currency, destShopName: pm.destShopName, ...(placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) ? { place: placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) } : {}) },
+        intakeDone: {
+          parcelId: pm.parcelId,
+          kind: pm.kind,
+          cashDue: pm.cashDue,
+          currency: pm.currency,
+          destShopName: pm.destShopName,
+          ...(placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) ? { place: placeOf(narrow<{ originSlot?: string; goesInBag?: { code: string; label: string } }>(r.data)) } : {}),
+          // 2026-11-20 — a person's booking is labelled only now, paid (P4-e): its label, to print and stick on.
+          ...(pm.kind === 'peer_send' && narrow<{ label?: { svg?: string } }>(r.data)?.label?.svg
+            ? { label: { parcelId: pm.parcelId, svg: narrow<{ label: { svg: string } }>(r.data).label.svg, trackingKey: narrow<{ trackingKey?: string }>(r.data).trackingKey } }
+            : {}),
+        },
       }));
       pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.parcelTakenIn'), detail: pm.kind === 'peer_send' ? t('agent.toast.takenInCash', { amount: money(pm.cashDue, pm.currency) }) : t('agent.toast.takenInPrepaid') });
       await refresh();

@@ -363,6 +363,13 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             {state.intakeDone.destShopName ? <p class="hint">{t('agent.accept.doneTravels', { shop: state.intakeDone.destShopName })}</p> : null}
             {/* 2026-11-05 — where it goes now: the open bag for its next stop, or a shelf slot until it is bagged. */}
             <PlaceNote place={state.intakeDone.place} />
+            {/* 2026-11-20 — a person's booking, paid now: its label, made only now, to print and stick on (P4-e). */}
+            {state.intakeDone.label ? (
+              <>
+                <p class="t-body">{t('agent.accept.donePrintLabel', { parcel: state.intakeDone.parcelId })}</p>
+                <TakenInLabel label={state.intakeDone.label} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
+              </>
+            ) : null}
             <Button onClick={actions.dismissIntakeDone}>{t('agent.accept.doneAnother')}</Button>
           </>
         ) : null}

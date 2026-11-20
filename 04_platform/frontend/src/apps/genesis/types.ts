@@ -225,7 +225,8 @@ export interface MintPrice {
 /** POST /identity/parcels — the sender's authenticated twin + their drop-off credential + the locked price. */
 export interface MintResult {
   parcel: ConsumerParcelView;
-  label: { parcelId: string; qrPayload: string; svg: string };
+  /** 2026-11-20 — the code to show at the shop, not a label: the shop prints the label once it is paid there (P4-e). */
+  code: { parcelId: string; qrPayload: string; svg: string };
   price: MintPrice;
   journey?: { hops: string[]; mdpRouted: boolean; pickupReadyAt: string };
 }

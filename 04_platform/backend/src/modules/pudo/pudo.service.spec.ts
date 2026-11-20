@@ -1948,7 +1948,7 @@ describe('PUDO Light', () => {
     expect(parcels.partyTo(buyer.phoneHash).received).toEqual([]);
   });
 
-  it('PG1: a signed-in sender mints in-app — DID, locked price, journey twin and label at creation', async () => {
+  it('PG1: a signed-in sender mints in-app — DID, locked price, journey twin, and a code to show at the shop (its label once paid, P4-e)', async () => {
     const flush = () => new Promise((r) => setImmediate(r));
     twin.onModuleInit();
     graduation.onModuleInit();
@@ -1960,8 +1960,10 @@ describe('PUDO Light', () => {
     expect(res.parcel.relation).toBe('sent');
     expect(res.parcel.did).toMatch(/^did:glos:/);
     expect(res.parcel.status).toBe('Created');
-    // The drop-off credential: a printable label carrying the PUBLIC tracking key, no handover secret.
-    expect(res.label.svg).toContain(res.parcel.trackingKey);
+    // The drop-off credential: a code to show at the shop — its QR and number — never a label before it is paid (P4-e, 2026-11-20).
+    expect(res.code).toMatchObject({ parcelId: res.parcel.parcelId, qrPayload: `sbg:parcel:${res.parcel.parcelId}` });
+    expect(res.code.svg).toContain(res.parcel.parcelId);
+    expect(res.label).toBeUndefined();
     // The price is ALWAYS the locked (cheapest) leg — flexible's rebate rail is vendor-only, so a person
     // is never quoted the ceiling. Tied to the live quote, not just non-zero.
     expect(res.price.routeMode).toBe('locked');
@@ -2002,10 +2004,13 @@ describe('PUDO Light', () => {
     const a: any = parcels.get(mine.parcel.parcelId);
     const b: any = vendorRes.parcel;
     // Identity artefacts exist on both (but differ per shipment).
-    for (const k of ['did', 'trackingKey', 'label']) {
+    for (const k of ['did', 'trackingKey']) {
       expect(a[k]).toBeDefined();
       expect(b[k]).toBeDefined();
     }
+    // The label, only once paid (P4-a, P4-e): the store's order is paid from its balance, the person's at the counter.
+    expect(b.label).toBeDefined();
+    expect(a.label).toBeUndefined();
     // The SAME box on the SAME lane must derive and price IDENTICALLY — the epic's thesis, pinned.
     for (const k of ['size', 'cargoClass', 'routeMode', 'routeKm', 'nodeFees', 'transportCost', 'platformFee', 'shipmentCost', 'ceilingCost']) {
       expect(a[k]).toEqual(b[k]);
@@ -2395,6 +2400,8 @@ describe('PUDO Light', () => {
       expect(view.balance).toBeUndefined();
       moves.move(sent.parcelId, b.did, view.now, 'did:person:mv4');
       expect(parcels.get(sent.parcelId)).toMatchObject({ originAgentDid: b.did, shipmentCost: view.now });
+      // Moved before it is paid: still no label (P4-e) — it is made at the counter, once paid.
+      expect(parcels.get(sent.parcelId).label).toBeUndefined();
       expect(shelfSvc.held(b.did)).toBe(1);
       expect(dropHolds.of(sent.parcelId)?.bookedBy).toEqual({ personDid: 'did:person:mv4' });
       const funds = gate.canTransact(b.did).balance;
@@ -5134,11 +5141,19 @@ describe('PUDO Light', () => {
       expect(parcels.labelFor(parcel.parcelId).svg).toContain(parcel.parcelId);
       expect(parcels.labelZplFor(parcel.parcelId)).toContain(parcel.parcelId);
 
-      // A booking in the Send app: none at the counter's door until it is paid there, in cash, as it is taken in.
-      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:unpaid', senderPhoneHash: 'h-unpaid', receiverMobile: '+254700600077', originAgentDid: origin.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(origin.did, dest.did) }).parcel;
+      // A booking in the Send app: a code, never a label (P4-e) — none at any door until it is paid there, in cash, as it is taken in.
+      const booked = parcels.createConsumerSend({ senderPersonDid: 'did:person:unpaid', senderPhoneHash: 'h-unpaid', receiverMobile: '+254700600077', originAgentDid: origin.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(origin.did, dest.did) });
+      const sent = booked.parcel;
+      expect(booked.code).toMatchObject({ parcelId: sent.parcelId, qrPayload: `sbg:parcel:${sent.parcelId}` });
+      expect(booked.code.svg).toContain(sent.parcelId);
+      expect(booked.code.svg).not.toContain('Track this parcel');
+      expect(sent.label).toBeUndefined();
       expect(() => parcels.labelZplFor(sent.parcelId)).toThrow(/is not paid yet/);
       expect(() => parcels.labelFor(sent.parcelId)).toThrow(/is not paid yet/);
-      parcels.intakeConsumerSend(sent.parcelId, origin.did, photoBy(origin.did));
+      const taken = parcels.intakeConsumerSend(sent.parcelId, origin.did, photoBy(origin.did));
+      // Paid: its label is made now, for the counter to print — with where it goes.
+      expect(taken.label?.svg).toContain('Track this parcel');
+      expect(taken.label?.svg).toContain('Unpaid Dest');
       expect(parcels.labelZplFor(sent.parcelId)).toContain(sent.parcelId);
     });
 

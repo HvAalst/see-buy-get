@@ -435,6 +435,8 @@ export const words: Record<string, string> = {
   "agent.accept.receiverPhone": "የተቀባዩ ስልክ",
   "agent.accept.phonesNote": "ተቀባዩ የክትትል መልእክቱንና የመውሰጃ ኮዱን ያገኛል።",
   "agent.accept.confirm": "ያረጋግጡና ይቀበሉ",
+  "agent.accept.termsCarrierPays": "SeeBuyGet ክፍያውን አያከፋፍልም፤ አጓጓዡ ራሱ ማዕከላቱን፣ ሹፌሮቹን እና በሌላኛው ጫፍ ያለውን ሱቅ ይከፍላል።",
+  "agent.accept.donePrintLabel": "ተከፍሏል፤ የ{parcel} መለያ አሁን ያትሙ እና ይለጥፉት።",
   "agent.accept.pay.title": "በስልክ የተከፈለ",
   "agent.accept.pay.amount": "ላኪው የሚከፍለው",
   "agent.accept.pay.to": "ለ{to}፣ በስልካቸው ላይ በሚመጣ ጥያቄ። እዚህ ጥሬ ገንዘብ የለም።",
