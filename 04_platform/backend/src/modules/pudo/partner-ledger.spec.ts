@@ -112,6 +112,16 @@ describe('what the partner owes, step by step', () => {
     expect(w.ledger.owedTo(['did:glos:shop-addis']).totals).toEqual([{ partnerName: 'Addis Courier PLC', currency: 'ETB', amount: 0 }]);
   });
 
+  it('a void takes back the very work undone: the take-in, never the shelving of the same amount (3b)', () => {
+    const w = aWorld();
+    w.gate.payLabour('did:glos:shop-addis', 40, 'PUD-5', 'parcel', undefined, 'take_in');
+    w.gate.payLabour('did:glos:shop-addis', 40, 'PUD-5', 'parcel', undefined, 'shelving');
+    w.gate.clawbackLabour('did:glos:shop-addis', 40, 'PUD-5', undefined, 'shelving');
+    const lines = w.ledger.ledgerOf(PARTNER.entityId).lines;
+    expect(lines.filter((l) => l.takenBack).map((l) => l.work)).toEqual(['shelving']);
+    expect(lines.map((l) => l.work).sort()).toEqual(['shelving', 'shelving', 'take_in']);
+  });
+
   it('never a road a company of ours was paid for, nor staff’s own settlement, nor a shop a company of ours stands behind', () => {
     const w = aWorld();
     expect(w.gate.driverPayout('did:glos:courier-addis', 300, { ours: true })).toBeNull();

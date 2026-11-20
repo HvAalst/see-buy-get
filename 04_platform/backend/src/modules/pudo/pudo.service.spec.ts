@@ -3046,7 +3046,7 @@ describe('PUDO Light', () => {
         expect(t.destinationNodeId).toBe(second.mdpId);
         expect(t.redirects?.[0]).toMatchObject({ fromId: first.mdpId, toId: second.mdpId, reason: 'hub_down' });
       }
-      expect(paid).toHaveBeenCalledWith('did:glos:hd-driver');
+      expect(paid).toHaveBeenCalledWith('did:glos:hd-driver', onBoard.code);
       expect(paid).toHaveBeenCalledTimes(1);
       expect(parcels.get(`HD-B-${seq}`).plan!.offPlan).toEqual([expect.objectContaining({ kind: 'system', reason: 'hub_down', planned: first.mdpId, took: second.mdpId })]);
       // Nothing new is sent to it: the zone's hub is the second, the first serves nothing while it is down.
@@ -13694,7 +13694,7 @@ describe('PUDO Light', () => {
         const takeBack = jest.spyOn(gate, 'clawbackLabour');
         if (how === 'cancel') parcels.cancel(id, 'ops', 'test');
         else parcels.void(id, origin.did, photoBy(origin.did));
-        expect(takeBack).toHaveBeenCalledWith(origin.did, parcels.get(id).intakeLabour, id, seller);
+        expect(takeBack).toHaveBeenCalledWith(origin.did, parcels.get(id).intakeLabour, id, seller, 'take_in');
         takeBack.mockRestore();
         expect(parcels.get(id).status).toBe('Voided');
         expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(store + parcels.get(id).shipmentCost!, 2);

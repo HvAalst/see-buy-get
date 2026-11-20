@@ -217,7 +217,7 @@ export class ReturnService {
     // quietly funding a store's return, which is not what anybody agreed to.
     if (held.owed.amount > 0) {
       this.vendors.billShipment(vendorId, parcel.parcelId, holding);
-      this.gate.payLabour(offer.fromAgentDid, held.owed.amount, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+      this.gate.payLabour(offer.fromAgentDid, held.owed.amount, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'holding');
       parcel.holdingSettled = (parcel.holdingSettled ?? 0) + held.owed.amount;
     }
 

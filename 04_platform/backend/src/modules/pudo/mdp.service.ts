@@ -1402,7 +1402,7 @@ export class MdpService {
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     }
-    if (fleet) this.gate.payBagLoad(fleet.driverDid); // for scanning it aboard, at the driver's own company's figure
+    if (fleet) this.gate.payBagLoad(fleet.driverDid, tote.code); // for scanning it aboard, at the driver's own company's figure
     void this.events.publish(GlosEvent.Pudo.BagLoaded, { toteId: tote.toteId, code: tote.code, driverBadgeId, destinationNodeId: tote.destinationNodeId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
     // 2026-11-02 — a bag collected off a hub's floor frees its place: bags held for room there go on.
     if (offHubFloor) this.letWaitingGo();
@@ -1536,7 +1536,7 @@ export class MdpService {
     if (!driverDid || !tote.haul || !(tote.haul.road > 0)) return;
     // The road is paid once: a stretch already paid to a driver it was taken over from on the way is not paid again.
     const left = roadLeftToPay(tote.haul);
-    if (left > 0) this.gate.driverPayout(driverDid, left);
+    if (left > 0) this.gate.driverPayout(driverDid, left, { work: 'road', reference: tote.code });
   }
 
   /**
@@ -1805,7 +1805,7 @@ export class MdpService {
         if (km > 0) this.totes.extendHaul(tote.code, km);
         return { paid: km > 0, as, ...(km > 0 ? { km } : {}) };
       }
-      return { paid: Boolean(this.gate.payBagLoad(tote.carriedBy!)), as: 'bag' };
+      return { paid: Boolean(this.gate.payBagLoad(tote.carriedBy!, tote.code)), as: 'bag' };
     } catch {
       return { paid: false };
     }

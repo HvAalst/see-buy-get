@@ -272,7 +272,7 @@ export class BusinessDoorService implements OnModuleInit {
     const { load, driverDid } = this.dispatch.handDeliversParcel(d.freightId, shopDid, badgeId, byName, now);
     if (holding) {
       this.vendors.billShipment(d.vendorId, parcelId, holding.billed, 0, 0, 0, { kind: 'holding', note: `kept at ${d.shopName} past its free days` });
-      this.gate.payLabour(shopDid, holding.amount, parcelId, 'parcel', p.sellerEntityId);
+      this.gate.payLabour(shopDid, holding.amount, parcelId, 'parcel', p.sellerEntityId, 'holding');
     }
     // Handed, before the parcel's own step tells anyone: what hears that step reads it as handed, never as collected.
     this.doors.set(parcelId, { ...d, state: 'handed', handedAt: new Date(now).toISOString(), ...(holding ? { holdingPaid: holding } : {}) });

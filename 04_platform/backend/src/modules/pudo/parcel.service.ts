@@ -1124,7 +1124,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (pay > list) parcel.floorPaidAhead = { did: agentDid, amount: Math.round((pay - list) * 100) / 100 };
     else delete parcel.floorPaidAhead;
     parcel.shelvingLabour = pay;
-    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'shelving');
     this.noteShopPaid(agentDid, parcel, pay);
   }
 
@@ -1149,7 +1149,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** The release pay, paid and kept (notePaid). */
   private payRelease(agentDid: string, parcel: Parcel): void {
     const pay = this.releasePayOf(agentDid, parcel);
-    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'release');
     this.noteShopPaid(agentDid, parcel, pay);
   }
 
@@ -1824,7 +1824,7 @@ export class ParcelService implements OnApplicationBootstrap {
       if (due > 0) this.gate.chargeShipping(input.agentDid, due, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
       const pay = this.takeInPayOf(input.agentDid, parcel);
       parcel.intakeLabour = pay;
-      this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+      this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'take_in');
     } else if (promise === 'ours') {
       if (mode === 'cash') {
         const rule = this.wholesaleTax(input.agentDid);
@@ -1842,7 +1842,7 @@ export class ParcelService implements OnApplicationBootstrap {
       } else {
         const pay = this.takeInPayOf(input.agentDid, parcel);
         parcel.intakeLabour = pay;
-        this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+        this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'take_in');
       }
     } else if (promise === 'theirs') {
       /*
@@ -1851,7 +1851,7 @@ export class ParcelService implements OnApplicationBootstrap {
        * Kept on the parcel only when it was owed, so a void takes back exactly that; nothing anywhere else.
        */
       const pay = this.takeInPayOf(input.agentDid, parcel);
-      if (this.gate.owedByPartner(input.agentDid, pay, parcel.parcelId, 'parcel')) parcel.intakeLabour = pay;
+      if (this.gate.owedByPartner(input.agentDid, pay, parcel.parcelId, 'parcel', 'take_in')) parcel.intakeLabour = pay;
     }
 
 
@@ -2002,7 +2002,7 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     // Pay the agent the handover fee once for the batch.
-    if (handed.length) this.gate.payLabour(input.agentDid, this.amountsAt(input.agentDid).handoverFee, manifestId, 'manifest');
+    if (handed.length) this.gate.payLabour(input.agentDid, this.amountsAt(input.agentDid).handoverFee, manifestId, 'manifest', undefined, 'handover');
 
     // REP2 — surface the DID of the fleet driver who took the batch, so the shop can rate them for this leg
     // (a legacy corridor-whitelist driver has no registry DID and isn't rateable → undefined).
@@ -2249,7 +2249,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (shelvedHere) {
       // Off its shelf, and its shelving taken back with the take-in: an undone parcel earned neither.
       this.shelf.release(agentDid, parcel.parcelId);
-      if (parcel.shelvingLabour) this.gate.clawbackLabour(agentDid, parcel.shelvingLabour, parcel.parcelId, parcel.sellerEntityId);
+      if (parcel.shelvingLabour) this.gate.clawbackLabour(agentDid, parcel.shelvingLabour, parcel.parcelId, parcel.sellerEntityId, 'shelving');
     }
     this.refundStore(parcel, 'voided at the counter: given back in full');
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
@@ -2268,7 +2268,7 @@ export class ParcelService implements OnApplicationBootstrap {
       // Taken in "prepaid" — a store's parcel, or a walk-up nobody paid for at the counter: what the shop was paid for taking
       // it in is taken back, as for a sender's own parcel (the user, 2026-10-26: "Refund and take back"). The store's own
       // money comes back by refundStore.
-      if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId, parcel.sellerEntityId);
+      if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId, parcel.sellerEntityId, 'take_in');
       return;
     }
     // A same-shop walk-up (2026-11-05) was charged as a Send parcel is — its route's price, then its take-in paid — and is
@@ -2280,7 +2280,7 @@ export class ParcelService implements OnApplicationBootstrap {
       this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
       // What was PAID at intake, not what the list says today. A parcel from before that was kept reads the figure
       // every company started from, which is what it was paid.
-      this.gate.clawbackLabour(agentDid, parcel.intakeLabour ?? LABOUR_FEE, parcel.parcelId, parcel.sellerEntityId);
+      this.gate.clawbackLabour(agentDid, parcel.intakeLabour ?? LABOUR_FEE, parcel.parcelId, parcel.sellerEntityId, 'take_in');
     } else {
       // At the rate stamped on the parcel at intake, never today's — a sister that changed its rate inside
       // the void window must not make a refund differ from the charge it reverses. A parcel from before
@@ -2799,7 +2799,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax, parcel.shipmentProvision); // remit the collected cash, tax and all (a 0-priced route charges nothing)
     const pay = this.takeInPayOf(agentDid, parcel);
     parcel.intakeLabour = pay;
-    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId, 'take_in');
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     if (here) this.shelveHere(parcel, agentDid, step, `dropped off to be collected here · shelf ${parcel.binSlot}`);
     return parcel;
@@ -2836,7 +2836,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake', step);
     const pay = this.takeInPayOf(agentDid, parcel);
     parcel.intakeLabour = pay;
-    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId, 'take_in');
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
     if (here) this.shelveHere(parcel, agentDid, step, `handed in to be collected here · shelf ${parcel.binSlot}`);
     return parcel;

@@ -494,6 +494,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // and a hand's own, read by the hand.
   'GET sbg/entities/:entityId/partner-owed': 'money',
   'GET sbg/partner-owed/mine': 'none',
+  // 2026-11-20 — the checks on a partner's figures (the payments plan, 3b): read and closed by staff who keep the money.
+  'GET sbg/entities/:entityId/partner-checks': 'money',
+  'POST sbg/entities/:entityId/partner-checks/:flagId/looked': 'money',
+  'POST sbg/entities/:entityId/partner-checks/review': 'money',
   'GET sbg/pilot': 'admin',
   'GET sbg/presence': 'any',
   'GET sbg/presence/:jurisdiction': 'any',

@@ -462,6 +462,11 @@ export function createOperatorApi(sbg: SbgClient) {
     companyRecord: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } } })),
     /** 2026-11-20 — a partner company's record: what it owes each hand, step by step (the payments plan, 3a). */
     partnerOwed: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-owed', { params: { path: { entityId } } })),
+    /** 2026-11-20 — the checks on a partner's figures: what to look at, what was looked at, the last AI review (3b). */
+    partnerChecks: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-checks', { params: { path: { entityId } } })),
+    partnerCheckLooked: (entityId: string, flagId: string, note?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-checks/{flagId}/looked', { params: { path: { entityId, flagId } }, body: { ...(note?.trim() ? { note: note.trim() } : {}) } })),
+    partnerReview: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-checks/review', { params: { path: { entityId } } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),

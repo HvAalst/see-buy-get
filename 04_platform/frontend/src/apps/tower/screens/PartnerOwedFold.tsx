@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { narrow, type Result } from '../../../lib/sbg';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { cash } from '../../../shared/money';
-import { PARTNER_STEP, type PartnerOwedRow } from '../../../shared/partnerOwed';
+import { workWords, type PartnerOwedRow } from '../../../shared/partnerOwed';
 import { ConsoleFold } from '../ConsoleFold';
 
 /**
@@ -50,7 +50,7 @@ export function PartnerOwedBody({ view, t }: { view: PartnerLedgerView; t: Trans
           <div class="crow" key={l.lineId}>
             <span class="crow__body">
               <span class="crow__top">
-                <span class="crow__name">{t(PARTNER_STEP[l.step])}</span>
+                <span class="crow__name">{t(workWords(l))}</span>
                 <span class="ctag ctag--quiet">{t(KIND[l.payeeKind])}</span>
                 {l.takenBack ? <span class="ctag ctag--quiet">{t('partner.owed.takenBack')}</span> : null}
               </span>

@@ -284,7 +284,7 @@ export class UnclaimedService {
   settleToShop(parcel: Parcel, now: number = Date.now()): number {
     const owed = this.parcels.holdingOwed(parcel, now).amount;
     if (owed <= 0 || !parcel.destAgentDid) return 0;
-    this.gate.payLabour(parcel.destAgentDid, owed, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(parcel.destAgentDid, owed, parcel.parcelId, 'parcel', parcel.sellerEntityId, 'holding');
     parcel.holdingSettled = (parcel.holdingSettled ?? 0) + owed;
     return owed;
   }

@@ -21,7 +21,13 @@ export interface PartnerOwedRow {
   at: string;
   /** A step undone (a parcel voided or called off at the shop): what was owed for it, taken back — its amount below zero. */
   takenBack?: boolean;
+  /** Which work, exactly: a take-in, a shelving, a release… (3b). Absent on a line from before it was said. */
+  work?: PartnerWork;
+  /** What the partner’s own list said for that work when it was owed. */
+  listed?: number;
 }
+
+export type PartnerWork = 'take_in' | 'shelving' | 'release' | 'handover' | 'holding' | 'sort' | 'receiving' | 'pass_on' | 'bag_load' | 'road';
 
 export interface MyPartnerOwed {
   lines: PartnerOwedRow[];
@@ -35,6 +41,23 @@ export const PARTNER_STEP: Record<PartnerOwedRow['step'], MessageKey> = {
   pass_on: 'partner.owed.step.pass_on',
   haul: 'partner.owed.step.haul',
 };
+
+/** 2026-11-20 — which work, said as the hand did it: “Taken in”, “Handed out”, “A bag loaded” (3b). */
+export const PARTNER_WORK: Record<PartnerWork, MessageKey> = {
+  take_in: 'partner.owed.work.take_in',
+  shelving: 'partner.owed.work.shelving',
+  release: 'partner.owed.work.release',
+  handover: 'partner.owed.work.handover',
+  holding: 'partner.owed.work.holding',
+  sort: 'partner.owed.work.sort',
+  receiving: 'partner.owed.work.receiving',
+  pass_on: 'partner.owed.work.pass_on',
+  bag_load: 'partner.owed.work.bag_load',
+  road: 'partner.owed.work.road',
+};
+
+/** The words for a line's work: the very work where it is said, the kind of step where it is not. */
+export const workWords = (l: Pick<PartnerOwedRow, 'work' | 'step'>): MessageKey => (l.work ? PARTNER_WORK[l.work] : PARTNER_STEP[l.step]);
 
 const when = (at: string) => new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -54,7 +77,7 @@ export function PartnerOwedList({ owed, t }: { owed: MyPartnerOwed | null; t: Tr
           <div class="row" role="listitem" key={l.lineId}>
             <span class="row__body">
               <span class="row__title">
-                {t(PARTNER_STEP[l.step])} · {l.reference}
+                {t(workWords(l))} · {l.reference}
                 {l.takenBack ? ` · ${t('partner.owed.takenBack')}` : null}
               </span>
               <span class="row__meta">{when(l.at)}</span>

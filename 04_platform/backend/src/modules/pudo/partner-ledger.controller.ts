@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
-import { actingTenant } from '../../foundation/auth/acting';
+import { actingTenant, auditActor } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -9,6 +9,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { MyPartnerOwed, PartnerLedgerService, PartnerLedgerView } from './partner-ledger.service';
+import { PartnerChecksService, PartnerChecksView, PartnerFlagLookedDto, PartnerFlagRow, PartnerReviewRow } from './partner-checks.service';
 
 /**
  * 2026-11-20 — WHAT A PARTNER OWES, READ (the payments plan, 3a; the owner: "console for staff"; the hands see it, "named"). Our
@@ -22,6 +23,7 @@ export class PartnerLedgerController {
     private readonly entities: EntityService,
     private readonly drivers: DriverService,
     private readonly mdps: MdpService,
+    private readonly checks: PartnerChecksService,
   ) {}
 
   /** A partner's record, for our staff: every line it owes, and what it owes each hand in all. */
@@ -29,9 +31,37 @@ export class PartnerLedgerController {
   @ApiQuery({ name: 'payeeId', required: false, description: 'Only what it owes this one hand.' })
   @Get('entities/:entityId/partner-owed')
   ofPartner(@Param('entityId') entityId: string, @Query('payeeId') payeeId?: string): PartnerLedgerView {
+    this.requirePartner(entityId);
+    return this.ledger.ledgerOf(entityId, { ...(payeeId ? { payeeId } : {}) });
+  }
+
+  /** 3b — the checks on a partner's figures, for our staff: what is still to look at, what was looked at, the last AI review. */
+  @Roles('operator')
+  @Get('entities/:entityId/partner-checks')
+  checksOf(@Param('entityId') entityId: string): PartnerChecksView {
+    this.requirePartner(entityId);
+    return this.checks.checksOf(entityId);
+  }
+
+  /** Looked at, by name, with what was found. */
+  @Roles('operator')
+  @Post('entities/:entityId/partner-checks/:flagId/looked')
+  looked(@Param('entityId') entityId: string, @Param('flagId') flagId: string, @Body() dto: PartnerFlagLookedDto, @Actor() actor: IntrospectionResult): PartnerFlagRow {
+    this.requirePartner(entityId);
+    return this.checks.markLooked(entityId, flagId, auditActor(actor), dto.note);
+  }
+
+  /** The AI review now, rather than at the day's turn: once an hour at most, as each one is paid for. */
+  @Roles('operator')
+  @Post('entities/:entityId/partner-checks/review')
+  reviewNow(@Param('entityId') entityId: string): Promise<PartnerReviewRow> {
+    this.requirePartner(entityId);
+    return this.checks.review(entityId, Date.now(), { asked: true });
+  }
+
+  private requirePartner(entityId: string): void {
     const entity = this.entities.get(entityId);
     if (entity.kind !== 'partner') throw new GlosError('NOT_FOUND', `${entity.name} is not a partner company`);
-    return this.ledger.ledgerOf(entityId, { ...(payeeId ? { payeeId } : {}) });
   }
 
   /** A hand's own: what any partner owes it — a courier its own, a fleet's office its fleet's, a hub and a shop theirs. */
