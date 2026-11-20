@@ -1,5 +1,7 @@
-import { Controller, Delete, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { actingTenant } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -9,9 +11,19 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
 import { MollieConnectionView, MollieConnectStarted, type MolliePayee } from '../../foundation/mollie/mollie.types';
+import { DirectPayService } from './direct-pay.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
+
+/** Mollie's notice: a payment's id, form-encoded, and nothing else. */
+export class MollieWebhookDto {
+  @ApiPropertyOptional({ description: 'Mollie’s own id for the payment (tr_…): the only thing its notice carries.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  id?: string;
+}
 
 /**
  * 2026-11-19 — A CARRIER CONNECTS ITS OWN MOLLIE ACCOUNT, from its own Settings (the payments plan, part 2). Whose account it
@@ -25,7 +37,32 @@ export class MollieController {
     private readonly mollie: MollieConnectService,
     private readonly drivers: DriverService,
     private readonly managers: FleetManagerService,
+    private readonly direct: DirectPayService,
   ) {}
+
+  /**
+   * 2026-11-19 — MOLLIE'S NOTICE OF A PAYMENT (part 2b): only its id, unsigned — so the payment is asked for from Mollie and
+   * that answer counts. An id not ours is answered 200 and ignored; a Mollie that does not answer our question is answered
+   * 503, so Mollie tries again (ten times over a day).
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(600, 15 * 60)
+  @HttpCode(200)
+  @Post('webhook')
+  async webhook(@Body() dto: MollieWebhookDto): Promise<{ ok: true }> {
+    if (dto?.id) await this.direct.onWebhook(dto.id);
+    return { ok: true };
+  }
+
+  /** Where the payer comes back to after Mollie's checkout: how it went, by our own random reference. */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
+  @Get('paid/:ref')
+  paid(@Param('ref') ref: string, @Res() res: Response): void {
+    res.status(200).type('html').send(this.direct.paidPage(ref));
+  }
 
   @Roles('driver', 'fleet_manager')
   @Get()

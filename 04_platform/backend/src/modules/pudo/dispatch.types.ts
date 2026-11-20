@@ -563,8 +563,13 @@ export class PaidDirect {
   /** The price agreed here: what the carrier says it was paid. */
   amount: number;
   @ApiPropertyOptional() currency?: string;
-  /** Who said so: the driver it was on, or the office of the fleet that carried it. */
-  @ApiProperty({ enum: ['driver', 'office'] }) by: 'driver' | 'office';
+  /**
+   * Who said so: the driver it was on, or the office of the fleet that carried it — or Mollie, which confirmed the payment
+   * itself (2026-11-19, the payments plan, part 2): not anybody's word.
+   */
+  @ApiProperty({ enum: ['driver', 'office', 'mollie'] }) by: 'driver' | 'office' | 'mollie';
+  /** Mollie's own id for the payment (tr_…), where Mollie confirmed it. */
+  @ApiPropertyOptional() reference?: string;
 }
 
 /** Delivered, and the carrier says the shipper has NOT paid the price agreed yet: when, and who said so (2026-10-27). */

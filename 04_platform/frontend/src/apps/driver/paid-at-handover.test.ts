@@ -32,7 +32,8 @@ describe('the question at the handover', () => {
 
 describe('wired into the delivery step', () => {
   it('asks only on a load the shipper pays directly, not paid yet, at the price agreed', () => {
-    expect(screen).toMatch(/\{claim\.paidByShipper && !claim\.paidDirect && claim\.lockedPrice != null \? \([\s\S]{0,400}checked=\{paidSeen\}[\s\S]{0,300}driver\.loads\.paidSeen'[\s\S]{0,200}driver\.loads\.paidSeenHint/);
+    // 2026-11-19 — the Mollie card (part 2b) stands above the tick; the tick stays until Mollie itself confirms the payment.
+    expect(screen).toMatch(/\{claim\.paidByShipper && !claim\.paidDirect && claim\.lockedPrice != null \? \([\s\S]{0,700}\{!molliePaid \? \([\s\S]{0,200}checked=\{paidSeen\}[\s\S]{0,300}driver\.loads\.paidSeen'[\s\S]{0,200}driver\.loads\.paidSeenHint/);
   });
 
   it('sends the answer with the delivery itself', () => {

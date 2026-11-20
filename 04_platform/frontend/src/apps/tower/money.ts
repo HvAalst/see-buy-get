@@ -216,7 +216,7 @@ export type AmountsForm = Record<AmountKey, string>;
  * handed to a driver, loaded, sorted, shelved, handed over — and last what waiting costs. The server's own order is
  * the order the figures were written in the code, which is nobody's way of thinking about a parcel.
  */
-export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'mdpPassOnFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay', 'freightPerKm', 'freightBaseFee'];
+export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'mdpPassOnFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay', 'freightPerKm', 'freightBaseFee', 'directPayFee'];
 
 /**
  * WHAT THE ROAD STARTS FROM — the last two on the list, under a heading of their own because they are not a parcel's
@@ -225,6 +225,13 @@ export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee
  * every load picked up here at them, in this company's money.
  */
 export const ROAD_AMOUNTS: AmountKey[] = ['freightPerKm', 'freightBaseFee'];
+
+/**
+ * 2026-11-19 — PAID STRAIGHT TO THE CARRIER, BY MOLLIE (the payments plan, part 2b): our fee for server costs on each such
+ * payment, taken by Mollie, BTW included — under a heading of its own, as it is neither a parcel's nor the road's. Nothing
+ * until it is set; only where Mollie is how such payments are watched.
+ */
+export const DIRECT_PAY_AMOUNTS: AmountKey[] = ['directPayFee'];
 
 const amountRow = (pricing: Pick<EntityPricing, 'amounts'>, key: AmountKey): CompanyAmount | undefined => pricing.amounts.find((r) => r.key === key);
 
@@ -305,6 +312,7 @@ export const AMOUNT_LABEL: Record<AmountKey, MessageKey> = {
   holdingFeePerDay: 'tower.amounts.k.holdingFeePerDay',
   freightPerKm: 'tower.amounts.k.freightPerKm',
   freightBaseFee: 'tower.amounts.k.freightBaseFee',
+  directPayFee: 'tower.amounts.k.directPayFee',
 };
 
 export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
@@ -319,6 +327,7 @@ export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
   holdingFeePerDay: 'tower.amounts.h.holdingFeePerDay',
   freightPerKm: 'tower.amounts.h.freightPerKm',
   freightBaseFee: 'tower.amounts.h.freightBaseFee',
+  directPayFee: 'tower.amounts.h.directPayFee',
 };
 
 export function coverFormOf(row: LanePricing): CoverForm {

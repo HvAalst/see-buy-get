@@ -423,6 +423,11 @@ export function createDriverApi(sbg: SbgClient) {
       // Round 22 — dated when the goods were handed over, not when a signal was found.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
+    /** 2026-11-19 — a load the shipper pays directly: whether it can be paid by Mollie now, and the latest payment (part 2b). */
+    freightMollie: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/mollie', { params: { path: { id: freightId } } })),
+    /** …and ask for the price agreed: a payment on the carrier's own Mollie account, its page as a QR code. */
+    askFreightMollie: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/mollie', { params: { path: { id: freightId } } })),
+
     /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
     failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable' | 'no_code'; note?: string; position?: HandoverFix }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/delivery-failed', { params: { path: { id: freightId } }, body: { driverDid, ...body } })),

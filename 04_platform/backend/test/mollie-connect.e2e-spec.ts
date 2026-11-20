@@ -79,4 +79,15 @@ describe('a carrier connects its own Mollie account, over the wire', () => {
     const back = await http().get('/v1/sbg/mollie/oauth/callback?state=not-ours&code=abc').expect(302);
     expect(back.headers.location).toBe('https://seebuyget.test/driver/?mollie=failed&why=expired');
   });
+
+  // 2026-11-19 — part 2b: Mollie's notice comes form-encoded and unsigned; one not about a payment of ours is answered and
+  // ignored. The page a payer comes back to answers anybody, and says nothing of a reference that is not ours.
+  it('Mollie’s notice is read as Mollie sends it, and one not ours is answered and ignored; the payer’s page knows nothing of a made-up reference', async () => {
+    const notice = await http().post('/v1/sbg/mollie/webhook').type('form').send('id=tr_not_ours').expect(200);
+    expect(notice.body).toEqual({ ok: true });
+    const page = await http().get('/v1/sbg/mollie/paid/made-up-reference').expect(200);
+    expect(page.headers['content-type']).toMatch(/text\/html/);
+    expect(page.text).toContain('Deze link is onbekend.');
+    await http().get('/v1/sbg/dispatch/freight/frt_x/mollie').expect(401);
+  });
 });

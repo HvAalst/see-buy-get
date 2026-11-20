@@ -4278,18 +4278,19 @@ export class DispatchService {
    * carries it — says it was paid, and when. Their word, on the record for both sides: the shipper sees it on its load and is
    * told. No money moves through us and nothing on our books changes. Said once: a second tick answers with the first.
    */
-  confirmPaidDirect(freightId: string, by: 'driver' | 'office', now: number = Date.now()): Freight {
+  confirmPaidDirect(freightId: string, by: 'driver' | 'office' | 'mollie', now: number = Date.now(), reference?: string): Freight {
     const f = this.requireFreight(freightId);
     if (f.settlement !== 'between_parties') throw new GlosError('INVALID_STATE', 'SeeBuyGet pays the carrier for this load — there is no payment between you and the shipper to confirm');
     if (f.paidDirect) return f;
     if (!(f.status === 'claimed' || f.status === 'in_transit' || f.status === 'delivered') || f.lockedPrice == null) {
       throw new GlosError('INVALID_STATE', `This load is ${f.status}: a payment is confirmed on a load a driver has taken, at the price agreed`);
     }
-    f.paidDirect = { at: new Date(now).toISOString(), amount: f.lockedPrice, currency: lockedCurrencyOf(f), by };
+    // 2026-11-19 — by Mollie: its own id for the payment rides along, so either side can find it in Mollie.
+    f.paidDirect = { at: new Date(now).toISOString(), amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, ...(reference ? { reference } : {}) };
     this.freights.set(f.freightId, f);
     this.unpaid = undefined;
     void this.events
-      .publish(GlosEvent.Pudo.FreightPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel, ...(f.claimedBy ? { driverDid: f.claimedBy } : {}), ...(reference ? { reference } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }

@@ -1346,6 +1346,19 @@ describe('a driver changing fleet', () => {
         expect(done.paidDirect).toBeUndefined();
       });
 
+      // 2026-11-19 — CONFIRMED BY MOLLIE (part 2b): not anybody's word; Mollie's id for the payment kept, and both told.
+      it('confirmed by Mollie: said so on the load with Mollie’s id, and the shipper and the driver are both told', async () => {
+        const { f, d } = aBusinessLoadOnTheRoad('Kilima Mollie');
+        const poster = String(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.postedByDid);
+        const paidAt = Date.parse('2026-11-20T10:03:00Z');
+        const done = dispatch.confirmPaidDirect(f.freightId, 'mollie', paidAt, 'tr_WDqYK6vllg');
+        fleet.uncouple(d.driver.did);
+        expect(done.paidDirect).toEqual({ at: '2026-11-20T10:03:00.000Z', amount: done.lockedPrice, currency: expect.any(String), by: 'mollie', reference: 'tr_WDqYK6vllg' });
+        await settle();
+        expect(notifications.inboxFor(poster).map((n) => n.title)).toContain(`Load ${f.code}: paid, confirmed by Mollie`);
+        expect(notifications.inboxFor(d.driver.did).map((n) => n.title).some((title) => title.startsWith(`Load ${f.code}: paid `) && title.endsWith('confirmed by Mollie'))).toBe(true);
+      });
+
       it('the delivery door passes it on, and the request may carry it', () => {
         const src = (p: string) => readFileSync(join(__dirname, p), 'utf8');
         expect(src('pudo.controller.ts')).toMatch(/freightDeliver\([\s\S]{0,1200}\.\.\.\(dto\.paidSeen \? \{ paidSeen: true \} : \{\}\)/);

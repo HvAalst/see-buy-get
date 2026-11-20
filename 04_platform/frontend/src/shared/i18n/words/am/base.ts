@@ -93,6 +93,8 @@ export const words: Record<string, string> = {
   "common.paidDirect.shipperPays": "እዚህ የተስማማችሁበትን ዋጋ ለአሽከርካሪው በቀጥታ ይከፍላሉ። SeeBuyGet ለዚህ ጭነት ምንም ገንዘብ አያስተላልፍም።",
   "common.paidDirect.shipperDriver": "አሽከርካሪው {when} {amount} እንደከፈሉ ገልጿል።",
   "common.paidDirect.shipperOffice": "የአጓጓዡ የተሽከርካሪ ድርጅት {when} {amount} እንደከፈሉ ገልጿል።",
+  "common.paidDirect.saidByMollie": "{amount} ተከፍሏል፤ Mollie {when} አረጋግጧል",
+  "common.paidDirect.shipperMollie": "Mollie {when} {amount} እንደከፈሉ አረጋግጧል።",
   "common.paidDirect.toast": "ተገልጿል: ጭነት ላኪው ከፍሏል",
   "common.paidDirect.notYetPaid": "ገና አልተከፈለም",
   "common.paidDirect.back": "ይመለሱ",

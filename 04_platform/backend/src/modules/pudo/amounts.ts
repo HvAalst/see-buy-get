@@ -50,6 +50,9 @@ export const DEFAULT_AMOUNTS: Amounts = {
   holdingFeePerDay: HOLDING_FEE_PER_DAY,
   freightPerKm: DEFAULT_PRICE_PER_KM,
   freightBaseFee: VEHICLE_SPEC.truck.defaultBaseFee,
+  // 2026-11-19 — our fee on a payment straight to the carrier by Mollie, for server costs (the owner: "a small fee for server
+  // costs"; L60, answered): taken by Mollie from the payment, BTW included. Nothing until a company sets it.
+  directPayFee: 0,
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -89,6 +92,7 @@ export function amountsLine(amounts: Partial<Record<AmountKey, number | undefine
     holdingFeePerDay: 'holding per day',
     freightPerKm: 'freight per km',
     freightBaseFee: 'truck loading fee',
+    directPayFee: 'our fee on a payment by Mollie',
   };
   const said = keys.map((k) => `${words[k]} ${amounts[k] ?? '—'}`).join(', ');
   return currency ? `${said} (${currency})` : said;

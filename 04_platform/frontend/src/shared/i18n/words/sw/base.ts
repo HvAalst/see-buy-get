@@ -93,6 +93,8 @@ export const words: Record<string, string> = {
   "common.paidDirect.shipperPays": "Unamlipa dereva moja kwa moja, bei iliyokubaliwa hapa. SeeBuyGet haibebi pesa yoyote kwa mzigo huu.",
   "common.paidDirect.shipperDriver": "Dereva anasema ulilipa {amount}, tarehe {when}.",
   "common.paidDirect.shipperOffice": "Kampuni ya magari ya msafirishaji inasema ulilipa {amount}, tarehe {when}.",
+  "common.paidDirect.saidByMollie": "{amount} zimelipwa, imethibitishwa na Mollie tarehe {when}",
+  "common.paidDirect.shipperMollie": "Mollie imethibitisha kwamba ulilipa {amount}, tarehe {when}.",
   "common.paidDirect.toast": "Imesemwa: mtumaji wa mzigo amelipa",
   "common.paidDirect.notYetPaid": "Bado haijalipwa",
   "common.paidDirect.back": "Rudi",

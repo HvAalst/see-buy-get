@@ -2561,6 +2561,9 @@ export function useDriverApp() {
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       freightInvoice: (freightId: string) => client!.api.freightInvoice(freightId),
       freightManifest: (freightId: string) => client!.api.freightManifest(freightId),
+      /** 2026-11-19 — paid at the handover by Mollie (the payments plan, part 2b): look, and ask for the price agreed. */
+      freightMollie: (freightId: string) => client!.api.freightMollie(freightId),
+      askFreightMollie: (freightId: string) => client!.api.askFreightMollie(freightId),
       matchRate,
       setLoadSpace,
       setHelpers,

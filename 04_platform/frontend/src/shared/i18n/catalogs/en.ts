@@ -146,6 +146,9 @@ export const en = {
   'common.paidDirect.shipperPays': 'You pay the driver directly, the price agreed here. SeeBuyGet carries no money for this load.',
   'common.paidDirect.shipperDriver': 'The driver says you paid {amount}, on {when}.',
   'common.paidDirect.shipperOffice': 'The carrier’s fleet says you paid {amount}, on {when}.',
+  // 2026-11-19 — confirmed by Mollie itself, not anybody's word (the payments plan, part 2b).
+  'common.paidDirect.saidByMollie': 'Paid {amount}, confirmed by Mollie on {when}',
+  'common.paidDirect.shipperMollie': 'Mollie confirmed you paid {amount}, on {when}.',
   'common.paidDirect.toast': 'Said: the shipper paid',
   'common.paidDirect.notYetPaid': 'Not paid yet',
   'common.paidDirect.back': 'Back',

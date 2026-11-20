@@ -34,7 +34,7 @@ import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancel
 interface FreightNotPaidAnswered { freightId: string; code: string; reference: string; amount: number; currency: string; driverDid?: string; officeDid?: string; destLabel?: string }
 /** Delivered three days ago, nothing said: its carrier is asked whether it was paid. */
 interface FreightPaidDirectAsked { freightId: string; code: string; amount: number; currency: string; driverDid: string; officeDid?: string; destLabel?: string }
-interface FreightPaidDirectEvent { freightId: string; code: string; amount: number; currency: string; by: 'driver' | 'office'; driverName?: string; posterDid?: string; destLabel?: string }
+interface FreightPaidDirectEvent { freightId: string; code: string; amount: number; currency: string; by: 'driver' | 'office' | 'mollie'; driverName?: string; posterDid?: string; destLabel?: string; driverDid?: string; reference?: string }
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
 interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
 interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
@@ -1048,6 +1048,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /** To the poster: the carrier says it was paid the price agreed for this load. Their word, on the load for both sides. */
   private async onFreightPaidDirect(p: FreightPaidDirectEvent): Promise<void> {
+    // 2026-11-19 — CONFIRMED BY MOLLIE (the payments plan, part 2): not anybody's word — Mollie says the payment went through.
+    // The shipper is told, and the driver too, who may have walked away from the screen with the QR code on it.
+    if (p.by === 'mollie') return this.onFreightPaidByMollie(p);
     if (!p.posterDid) return;
     const who = p.by === 'office' ? `${p.driverName ? `${p.driverName}’s` : 'The driver’s'} fleet` : (p.driverName ?? 'The driver');
     try {
@@ -1062,6 +1065,20 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } catch (err) {
       this.logger.warn(`freight-paid-direct notify failed for ${p.freightId}: ${(err as Error).message}`);
     }
+  }
+
+  private async onFreightPaidByMollie(p: FreightPaidDirectEvent): Promise<void> {
+    const amount = `${p.currency} ${p.amount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const to = p.destLabel ? ` to ${p.destLabel}` : '';
+    const tell = async (did: string, title: string, body: string) => {
+      try {
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: loadLink(p.freightId), tag: `freight:${p.freightId}:paid-direct`, data: { freightId: p.freightId } });
+      } catch (err) {
+        this.logger.warn(`freight-paid-by-mollie notify failed for ${p.freightId}: ${(err as Error).message}`);
+      }
+    };
+    if (p.posterDid) await tell(p.posterDid, `Load ${p.code}: paid, confirmed by Mollie`, `Mollie confirmed your payment of ${amount} for ${p.code}${to}, the price agreed. The money went into the carrier’s own Mollie account: SeeBuyGet carries no money for this load.`);
+    if (p.driverDid) await tell(p.driverDid, `Load ${p.code}: paid ${amount}, confirmed by Mollie`, `The shipper paid ${amount} for ${p.code}${to} by Mollie. The money is in the Mollie account it went to, and the load says it is paid.`);
   }
 
   /** To the poster: the carrier says the price agreed has not been paid. The poster pays them directly; we carry no money. */

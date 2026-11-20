@@ -38133,6 +38133,51 @@
         }
       }
     },
+    "/v1/sbg/mollie/webhook": {
+      "post": {
+        "operationId": "Mollie.webhook",
+        "summary": "",
+        "description": "2026-11-19 — MOLLIE'S NOTICE OF A PAYMENT (part 2b): only its id, unsigned — so the payment is asked for from Mollie and\nthat answer counts. An id not ours is answered 200 and ignored; a Mollie that does not answer our question is answered\n503, so Mollie tries again (ten times over a day).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MollieWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mollie/paid/{ref}": {
+      "get": {
+        "operationId": "Mollie.paid",
+        "summary": "",
+        "description": "Where the payer comes back to after Mollie's checkout: how it went, by our own random reference.",
+        "parameters": [
+          {
+            "name": "ref",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/mollie": {
       "get": {
         "operationId": "Mollie.mine",
@@ -38194,6 +38239,58 @@
         "responses": {
           "200": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/mollie": {
+      "get": {
+        "operationId": "DirectPay.look",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectPayView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "DirectPay.ask",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectPayView"
+                }
+              }
+            }
           }
         }
       }
@@ -63221,7 +63318,8 @@
               "mdpPassOnFee",
               "holdingFeePerDay",
               "freightPerKm",
-              "freightBaseFee"
+              "freightBaseFee",
+              "directPayFee"
             ]
           },
           "amount": {
@@ -72864,11 +72962,16 @@
           },
           "by": {
             "type": "string",
-            "description": "Who said so: the driver it was on, or the office of the fleet that carried it.",
+            "description": "Who said so: the driver it was on, or the office of the fleet that carried it — or Mollie, which confirmed the payment\nitself (2026-11-19, the payments plan, part 2): not anybody's word.",
             "enum": [
               "driver",
-              "office"
+              "office",
+              "mollie"
             ]
+          },
+          "reference": {
+            "type": "string",
+            "description": "Mollie's own id for the payment (tr_…), where Mollie confirmed it."
           },
           "at": {
             "type": "string"
@@ -90458,6 +90561,15 @@
           "country"
         ]
       },
+      "MollieWebhookDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Mollie’s own id for the payment (tr_…): the only thing its notice carries."
+          }
+        }
+      },
       "MollieConnectedView": {
         "type": "object",
         "properties": {
@@ -90545,6 +90657,104 @@
             "$ref": "#/components/schemas/MollieConnectedView"
           }
         }
+      },
+      "DirectPayPaymentView": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "pending",
+              "authorized",
+              "paid",
+              "canceled",
+              "expired",
+              "failed"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "number"
+          },
+          "testmode": {
+            "type": "boolean",
+            "description": "Test money only: our test key, or the Connect app before the owner says live."
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "description": "Mollie's own payment page — what the QR code opens. Only while it can still be paid."
+          },
+          "qrSvg": {
+            "type": "string",
+            "description": "The QR code of that page, drawn here: shown on the driver's phone for the payer to scan."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paymentId",
+          "status",
+          "amount",
+          "currency",
+          "testmode"
+        ]
+      },
+      "DirectPayView": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "not_direct",
+              "paid",
+              "no_price",
+              "not_mollie",
+              "not_eur",
+              "not_connected",
+              "office_connects"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "number",
+            "description": "Our fee Mollie would take from it, said before the payment is asked for."
+          },
+          "testmode": {
+            "type": "boolean"
+          },
+          "payment": {
+            "description": "The latest payment asked for on this load.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectPayPaymentView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "available"
+        ]
       },
       "ShopStaffView": {
         "type": "object",

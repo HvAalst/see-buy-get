@@ -11,6 +11,7 @@ import {
   AMOUNT_HINT,
   AMOUNT_LABEL,
   AMOUNT_ORDER,
+  DIRECT_PAY_AMOUNTS,
   ROAD_AMOUNTS,
   amountsFormError,
   amountsFormOf,
@@ -247,10 +248,12 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
 
       <div class="twr-knobs">
         <p class="chint">{t('tower.amounts.hint', { currency: currency || t('tower.amounts.itsMoney') })}</p>
-        {[AMOUNT_ORDER.filter((key) => !ROAD_AMOUNTS.includes(key)), ROAD_AMOUNTS].map((keys, i) => (
+        {[AMOUNT_ORDER.filter((key) => !ROAD_AMOUNTS.includes(key) && !DIRECT_PAY_AMOUNTS.includes(key)), ROAD_AMOUNTS, DIRECT_PAY_AMOUNTS].map((keys, i) => (
           <Fragment key={i}>
             {/* The road's two figures are not a parcel's: they sit under a heading of their own (2026-10-25). */}
             {i === 1 ? <p class="chint"><b>{t('tower.amounts.roadTitle')}</b> {t('tower.amounts.roadHint')}</p> : null}
+            {/* 2026-11-19 — nor is our fee on a payment straight to the carrier by Mollie (the payments plan, part 2b). */}
+            {i === 2 ? <p class="chint"><b>{t('tower.amounts.directPayTitle')}</b> {t('tower.amounts.directPayHint')}</p> : null}
             <div class="twr-knobs__row">
               {keys.map((key) => {
                 const row = pricing.amounts.find((r) => r.key === key);

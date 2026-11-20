@@ -217,7 +217,7 @@ describe('the lanes', () => {
  * decision, and saving one figure must not turn the seven beside it into decisions nobody took.
  */
 describe('a company’s list of amounts', () => {
-  const STARTS: Record<string, number> = { wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, mdpPassOnFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 };
+  const STARTS: Record<string, number> = { wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, mdpPassOnFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10, directPayFee: 0 };
   const list = (own: Record<string, number> = {}): { amounts: CompanyAmount[] } => ({
     amounts: Object.keys(STARTS).map((key) => ({ key: key as CompanyAmount['key'], amount: own[key] ?? STARTS[key], own: key in own, startsAt: STARTS[key] })),
   });
@@ -228,14 +228,14 @@ describe('a company’s list of amounts', () => {
     expect(Object.keys(AMOUNT_LABEL).sort()).toEqual(Object.keys(STARTS).sort());
     expect(Object.keys(AMOUNT_HINT).sort()).toEqual(Object.keys(STARTS).sort());
     // Read in the order a parcel travels: what comes in first, what waiting costs last — and then, under a heading of
-    // their own, what the road starts from (2026-10-25).
+    // their own, what the road starts from (2026-10-25), and our fee on a payment straight to the carrier (2026-11-19).
     expect(AMOUNT_ORDER[0]).toBe('wholesale');
-    expect(AMOUNT_ORDER.slice(-3)).toEqual(['holdingFeePerDay', ...ROAD_AMOUNTS]);
+    expect(AMOUNT_ORDER.slice(-4)).toEqual(['holdingFeePerDay', ...ROAD_AMOUNTS, 'directPayFee']);
     expect(ROAD_AMOUNTS).toEqual(['freightPerKm', 'freightBaseFee']);
   });
 
   it('opens with this company’s OWN figures, and an empty box wherever it has set none', () => {
-    expect(amountsFormOf(list())).toEqual({ wholesale: '', labourFee: '', handoverFee: '', toteLoadFee: '', mdpSortFee: '', mdpPassOnFee: '', shelvingFee: '', releaseFee: '', holdingFeePerDay: '', freightPerKm: '', freightBaseFee: '' });
+    expect(amountsFormOf(list())).toEqual({ wholesale: '', labourFee: '', handoverFee: '', toteLoadFee: '', mdpSortFee: '', mdpPassOnFee: '', shelvingFee: '', releaseFee: '', holdingFeePerDay: '', freightPerKm: '', freightBaseFee: '', directPayFee: '' });
     expect(amountsFormOf(list({ wholesale: 160, handoverFee: 0 }))).toMatchObject({ wholesale: '160', handoverFee: '0', labourFee: '' });
   });
 

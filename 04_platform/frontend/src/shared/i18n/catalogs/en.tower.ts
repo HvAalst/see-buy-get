@@ -955,6 +955,11 @@ export const enTower = {
   'tower.amounts.h.freightPerKm': 'For every class of vehicle, empty run included.',
   'tower.amounts.k.freightBaseFee': 'A truck’s loading fee',
   'tower.amounts.h.freightBaseFee': 'Paid once per load. A smaller vehicle starts from its share of it: a van half, a car a fifth, a motorcycle eight parts in a hundred.',
+  // 2026-11-19 — our fee on a payment straight to the carrier by Mollie, for server costs (the payments plan, part 2b).
+  'tower.amounts.k.directPayFee': 'Our fee on a payment by Mollie',
+  'tower.amounts.h.directPayFee': 'Taken by Mollie from each payment a shipper makes straight to a carrier, for server costs, tax included. Empty: nothing is taken.',
+  'tower.amounts.directPayTitle': 'Paid straight to the carrier, by Mollie.',
+  'tower.amounts.directPayHint': 'Only where Mollie is how such payments are watched: the Netherlands. Each carrier gets one invoice a month for it.',
   'tower.amounts.math': 'A parcel taken in at the counter brings in {price}. Sorting it at a hub still at its starting fee, shelving and handing it over pay out at least {out} of that — more where a shop’s own fee is more.',
   'tower.amounts.mathOver': 'A parcel taken in at the counter brings in {price}, and sorting it at a hub still at its starting fee, shelving and handing it over pay out {out}: more than it brings in. Check which box each figure is in.',
   'tower.amounts.negative': '{field} cannot be less than nothing.',

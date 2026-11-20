@@ -10,7 +10,9 @@ export interface PaidDirectView {
   at: string;
   amount: number;
   currency?: string;
-  by: 'driver' | 'office';
+  /** 2026-11-19 — or `mollie`: Mollie confirmed the payment itself (the payments plan, part 2b), with its id in `reference`. */
+  by: 'driver' | 'office' | 'mollie';
+  reference?: string;
 }
 
 /** Delivered, and the carrier says the shipper has NOT paid yet: when, and who said so (2026-10-27). */
@@ -44,6 +46,7 @@ export function paidWhen(at: string): string {
 /** The carrier's side: paid, how much, and who said so when. */
 export function paidDirectLine(p: PaidDirectView, t: Translate, currency?: string): string {
   const vars = { amount: cash(p.amount, p.currency ?? currency), when: paidWhen(p.at) };
+  if (p.by === 'mollie') return t('common.paidDirect.saidByMollie', vars);
   return p.by === 'office' ? t('common.paidDirect.saidByOffice', vars) : t('common.paidDirect.saidByDriver', vars);
 }
 
@@ -54,6 +57,7 @@ export function paidDirectLine(p: PaidDirectView, t: Translate, currency?: strin
 export function shipperPaidLine(row: { paysDriverDirect?: boolean; paidDirect?: PaidDirectView; notPaidDirect?: NotPaidView; agreedPrice?: number; currency?: string }, t: Translate): string | null {
   if (row.paidDirect) {
     const vars = { amount: cash(row.paidDirect.amount, row.paidDirect.currency ?? row.currency), when: paidWhen(row.paidDirect.at) };
+    if (row.paidDirect.by === 'mollie') return t('common.paidDirect.shipperMollie', vars);
     return row.paidDirect.by === 'office' ? t('common.paidDirect.shipperOffice', vars) : t('common.paidDirect.shipperDriver', vars);
   }
   // Delivered, and the carrier says it has not been paid (2026-10-27): said plainly, with the price agreed.

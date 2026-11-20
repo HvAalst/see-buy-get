@@ -490,6 +490,19 @@ export const enDriver = {
   // 2026-11-19 — at the handover, on a load the shipper pays directly: paid, said as the goods change hands (the payments plan).
   'driver.loads.paidSeen': 'The shipper paid me {amount}',
   'driver.loads.paidSeenHint': 'Paid by phone? Look on your own phone, not on the shipper’s screen: a payment message can be faked. Not paid yet? You decide whether to hand it over, and you can say later whether it was paid.',
+  // 2026-11-19 — paid at the handover by Mollie, from a QR code, into the carrier's own account (the payments plan, part 2b).
+  'driver.mollie.ask': 'Ask for payment by Mollie: {amount}',
+  'driver.mollie.fee': 'Mollie takes SeeBuyGet’s fee for server costs from it: {fee}.',
+  'driver.mollie.show': 'Show this to the shipper: they scan it with their phone and pay {amount} by iDEAL or card.',
+  'driver.mollie.waiting': 'Waiting for the payment…',
+  'driver.mollie.paid': 'Paid {amount}, confirmed by Mollie',
+  'driver.mollie.again': 'The last QR code expired or was not paid: make a new one.',
+  'driver.mollie.copy': 'Send the payment link',
+  'driver.mollie.copied': 'Link copied',
+  'driver.mollie.test': 'Test payment: no real money moves.',
+  'driver.mollie.connect': 'Connect Mollie in Settings, and the shipper can pay you here from a QR code.',
+  'driver.mollie.office': 'Once the company you drive for connects Mollie, the shipper can pay here from a QR code.',
+  'driver.mollie.qrLabel': 'QR code to pay {amount} by Mollie',
   'driver.loads.addReceiver': 'Type the name of the person who received the goods.',
   'driver.loads.addPodPhoto': 'Add a photo of the goods as delivered.',
   // D9 — what the receiver found at the handover: on the note beside their name; the delivery still stands.

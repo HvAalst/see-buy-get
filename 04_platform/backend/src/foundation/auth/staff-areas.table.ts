@@ -484,6 +484,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/mollie': 'none',
   'POST sbg/mollie/connect': 'none',
   'DELETE sbg/mollie': 'none',
+  // 2026-11-19 — a load's price, paid at the handover by Mollie (part 2b): the driver it is on, or its fleet's office.
+  'GET sbg/dispatch/freight/:id/mollie': 'none',
+  'POST sbg/dispatch/freight/:id/mollie': 'none',
   'GET sbg/pilot': 'admin',
   'GET sbg/presence': 'any',
   'GET sbg/presence/:jurisdiction': 'any',

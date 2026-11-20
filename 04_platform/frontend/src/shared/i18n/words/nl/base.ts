@@ -93,6 +93,8 @@ export const words: Record<string, string> = {
   "common.paidDirect.shipperPays": "Je betaalt de chauffeur rechtstreeks, de prijs die hier is afgesproken. SeeBuyGet verwerkt geen geld voor deze lading.",
   "common.paidDirect.shipperDriver": "De chauffeur zegt dat je {amount} hebt betaald, op {when}.",
   "common.paidDirect.shipperOffice": "De vervoerder van de chauffeur zegt dat je {amount} hebt betaald, op {when}.",
+  "common.paidDirect.saidByMollie": "{amount} betaald, bevestigd door Mollie op {when}",
+  "common.paidDirect.shipperMollie": "Mollie bevestigde dat je {amount} hebt betaald, op {when}.",
   "common.paidDirect.toast": "Gezegd: de verlader heeft betaald",
   "common.paidDirect.notYetPaid": "Nog niet betaald",
   "common.paidDirect.back": "Terug",

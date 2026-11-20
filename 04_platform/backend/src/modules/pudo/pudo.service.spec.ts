@@ -13488,7 +13488,8 @@ describe('PUDO Light', () => {
 
     it('starts every company from today’s figures — and nothing changes until somebody sets one', () => {
       // …and what the road starts from (2026-10-25): a vehicle's rate per kilometre and a truck's loading fee.
-      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.3, mdpPassOnFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
+      // …and our fee on a payment straight to the carrier by Mollie (2026-11-19): nothing until a company sets it.
+      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.3, mdpPassOnFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10, directPayFee: 0 });
       expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
       // Nobody's company: the starting figures, in no money in particular.
       expect(entities.amountsFor(undefined)).toEqual({ ...DEFAULT_AMOUNTS, currency: undefined });

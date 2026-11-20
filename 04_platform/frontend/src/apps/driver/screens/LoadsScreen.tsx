@@ -31,6 +31,7 @@ import type { PassageKind } from '../../../shared/passages';
 import type { SealsAtDelivery } from '../../../shared/seals';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
+import { MolliePay } from './MolliePay';
 
 export interface LoadsScreenProps {
   state: DriverState;
@@ -500,10 +501,13 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const [deliveryCode, setDeliveryCode] = useState('');
   const [nameChecked, setNameChecked] = useState(false); // 2026-11-15 — the code was emailed: their name checked (R2)
   const [paidSeen, setPaidSeen] = useState(false); // 2026-11-19 — paid, said as the goods change hands (the payments plan, part 1)
+  const [molliePaid, setMolliePaid] = useState(false); // 2026-11-19 — …or paid here by Mollie (part 2b): no word of the driver's asked
+
   useEffect(() => {
     setDeliveryCode('');
     setNameChecked(false);
     setPaidSeen(false);
+    setMolliePaid(false);
     setCounted('');
     setReceipt('');
     setSealReads({});
@@ -669,13 +673,20 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               {/* 2026-11-19 — a load the shipper pays directly: paid, said as the goods change hands (the payments plan, part 1). It
                   never holds the delivery back: when to hand over unpaid is the driver's call, and "not paid" can still be said later. */}
               {claim.paidByShipper && !claim.paidDirect && claim.lockedPrice != null ? (
-                <div class="field" style="margin-top:14px">
-                  <label class="checkline">
-                    <input type="checkbox" checked={paidSeen} disabled={busy} onChange={(e) => setPaidSeen(e.currentTarget.checked)} />
-                    <span>{t('driver.loads.paidSeen', { amount: cash(claim.lockedPrice, state.session.currency) })}</span>
-                  </label>
-                  <p class="hint">{t('driver.loads.paidSeenHint')}</p>
-                </div>
+                <>
+                  {/* 2026-11-19 — or paid here by Mollie, from a QR code, where the carrier connected its own account (part 2b):
+                      once Mollie says it is paid, the driver's own word is not asked for. */}
+                  <MolliePay freightId={claim.ref} actions={actions} onPaid={() => setMolliePaid(true)} />
+                  {!molliePaid ? (
+                    <div class="field" style="margin-top:14px">
+                      <label class="checkline">
+                        <input type="checkbox" checked={paidSeen} disabled={busy} onChange={(e) => setPaidSeen(e.currentTarget.checked)} />
+                        <span>{t('driver.loads.paidSeen', { amount: cash(claim.lockedPrice, state.session.currency) })}</span>
+                      </label>
+                      <p class="hint">{t('driver.loads.paidSeenHint')}</p>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
