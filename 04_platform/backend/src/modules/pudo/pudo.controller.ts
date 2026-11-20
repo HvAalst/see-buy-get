@@ -4004,7 +4004,8 @@ export class SbgController {
   @Roles('operator')
   @Post('drivers/payout')
   driverPayout(@Body() dto: DriverPayoutDto) {
-    return this.gate.driverPayout(dto.driverId, dto.amount);
+    // Staff's own settlement, of our money: never put on a partner's record by hand (3a).
+    return this.gate.driverPayout(dto.driverId, dto.amount, { ours: true });
   }
 
   // --- agent app: 3 screens ---

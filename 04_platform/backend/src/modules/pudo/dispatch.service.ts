@@ -4032,7 +4032,8 @@ export class DispatchService {
       // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
       // weeks later takes the money back from this party, not from a fleet the driver has joined since.
       const payee = this.drivers.payeeOrNone(f.claimedBy);
-      if (this.gate.driverPayout(f.claimedBy, f.lockedPrice) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
+      // Billed by a company of ours: never owed by a partner where none of ours pays this driver (3a).
+      if (this.gate.driverPayout(f.claimedBy, f.lockedPrice, { ours: true }) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
       f.driverPaid = true;
     }
   }

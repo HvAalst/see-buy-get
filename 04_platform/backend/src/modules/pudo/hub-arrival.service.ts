@@ -294,7 +294,7 @@ export class HubArrivalService {
       // The hub's own fee for what it counted: a custody event, paid as its sort is.
       if (this.gate) {
         const amount = Math.round(a.fee.perUnit * input.units * 100) / 100;
-        this.gate.receivingLabour(hub.mdpId, amount, a.arrivalId, this.mdps.entityIdOrNone(hub), this.vendors.entityIdOrNone(this.vendors.get(a.vendorId)));
+        this.gate.receivingLabour(hub.mdpId, amount, a.arrivalId, this.mdps.entityIdOrNone(hub), this.vendors.entityIdOrNone(this.vendors.get(a.vendorId)), this.mdps.countryOf(hub));
         a.fee.paid = { units: input.units, amount, at };
       }
     }

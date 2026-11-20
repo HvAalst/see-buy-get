@@ -1,3 +1,4 @@
+import { PARTNER_OWED_PATH, PartnerOwedCard } from '../../../shared/partnerOwed';
 import { mdpConfig } from '../api';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../../../shared/ui';
@@ -128,6 +129,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       <OpensSoonNote country={hub?.country} detail={t('opening.hub')} ask={state.staff ? undefined : { kind: 'hub', config: mdpConfig() }} />
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
+      {/* 2026-11-20 — where a partner company contracts and pays: what it owes this hub, named (the payments plan, 3a). */}
+      {state.staff || !sbg ? null : <PartnerOwedCard fetchOwed={() => sbg.request((raw) => raw.GET(PARTNER_OWED_PATH as never, {} as never) as never)} />}
 
       {hub && !open ? <HubPapers state={state} actions={actions} /> : null}
       {/* 2026-11-02 — its space, said before it is approved too: the owner can say it while its papers are with staff. */}

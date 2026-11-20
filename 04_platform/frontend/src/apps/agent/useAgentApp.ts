@@ -2942,6 +2942,8 @@ export function useAgentApp() {
       /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
       notifications: client?.notifications ?? null,
       refresh,
+      /** 2026-11-20 — what a partner company owes this shop, named (the payments plan, 3a). */
+      partnerOwed: () => (client ? client.api.partnerOwed() : Promise.resolve({ data: null, error: null })),
       signIn,
       confirmDevice,
       devicePaired,

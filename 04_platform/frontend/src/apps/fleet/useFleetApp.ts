@@ -1500,6 +1500,8 @@ export function useFleetApp() {
     // is the same one every other app talks to and this app holds no opinion about it.
     sbg: client?.client.sbg ?? null,
     actions: {
+      /** 2026-11-20 — what a partner company owes this fleet for its drivers' road, named (the payments plan, 3a). */
+      partnerOwed: () => (client ? client.api.partnerOwed() : Promise.resolve({ data: null, error: null })),
       loadTrips,
       saveTrips,
       skipTrip: (tripId: string, day: string, skip: boolean) => (client ? tripAct(() => client.api.skipTrip(tripId, day, skip) as never) : Promise.resolve()),

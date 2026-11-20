@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { PartnerLedgerService, type PartnerOwedLine } from './partner-ledger.service';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -158,7 +159,28 @@ export class WalletGateService {
     // To resolve WHO a driver's money is owed to. Read here rather than passed in, because an optional
     // parameter is a thing every call site forgot — which is exactly how this posting went missing.
     private readonly drivers: DriverService,
+    // 2026-11-20 — where a partner contracts and pays (Partnered), what it owes for a step no company of ours pays (3a).
+    @Optional() private readonly partners?: PartnerLedgerService,
   ) {}
+
+  /** A step the partner owes, as the hand's own row reads it: in the partner's money, and named. */
+  private owedRow(type: LedgerType, line: PartnerOwedLine, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
+    // A line taken back (below zero) is the hand's row going the other way.
+    return this.record(type, line.amount < 0 ? '-' : '+', Math.abs(line.amount), did, reference, refType, undefined, { currency: line.currency, owedBy: { entityId: line.partnerEntityId, name: line.partnerName } });
+  }
+
+  /**
+   * 2026-11-20 — A SHOP'S STEP UNDER THE CARRIER'S PROMISE, where that carrier is a Partnered country's partner: owed by the
+   * partner, at its own rates, on the shop's own row with its name — never on our books, and nothing anywhere else (the
+   * payments plan, 3a). Asked by payLabour for a shop no company of ours stands behind, and by the walk-up take-in itself.
+   */
+  owedByPartner(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry | null {
+    const agent = this.agents.get(did);
+    // A shop a company of ours stands behind is paid by it, and taken back from it (clawbackLabour): never the partner's.
+    if (this.agents.entityIdOrNone(agent)) return null;
+    const line = this.partners?.owe({ country: this.agents.countryOf(agent), payeeId: did, payeeKind: 'shop', amount, reference, refType, step: 'labour' });
+    return line ? this.owedRow('LABOR_PAYOUT', line, did, reference, refType) : null;
+  }
 
   /**
    * Post a movement to the sister that contracts this shop, and keep the typed ledger row that the
@@ -363,8 +385,11 @@ export class WalletGateService {
        *
        * With no seller named, nothing of ours owes it: goods taken in under the carrier's promise are the
        * carrier's to pay for, and inventing a payable here would promise the shopkeeper money nobody owes.
+       *
+       * 2026-11-20 — …and where that carrier is the partner of a Partnered country, the partner owes it, at its own rates:
+       * kept on the partner's record and on the shop's own, named — never on our books (the payments plan, 3a).
        */
-      if (!sellerEntityId || !(amount > 0)) return null;
+      if (!sellerEntityId) return this.owedByPartner(did, amount, reference, refType);
       const entryId = this.books.post({
         entityId: sellerEntityId,
         kind: 'purchased-service',
@@ -498,8 +523,12 @@ export class WalletGateService {
     if (!(amount > 0)) return null;
     const agent = this.agents.get(did);
     if (!this.agents.entityIdOrNone(agent)) {
-      // Nothing was owed where nobody of ours sold it (the carrier's promise): nothing to take back.
-      if (!sellerEntityId) return null;
+      // Nothing of ours was owed where nobody of ours sold it (the carrier's promise): nothing of ours to take back.
+      // 2026-11-20 — …save what a Partnered country's partner owed the shop for it: taken back from its record (3a).
+      if (!sellerEntityId) {
+        const line = this.partners?.takeBack({ payeeId: did, amount, reference: parcelId, step: 'labour' });
+        return line ? this.owedRow('LABOR_PAYOUT', line, did, parcelId, 'parcel') : null;
+      }
       const entryId = this.books.post({
         entityId: sellerEntityId,
         kind: 'purchased-service-reversal',
@@ -586,11 +615,17 @@ export class WalletGateService {
     return this.driverPayout(driverDid, this.drivers.payTermsOf(driverDid).bagLoadPay);
   }
 
-  driverPayout(driverId: string, amount: number): PudoLedgerEntry | null {
+  driverPayout(driverId: string, amount: number, opts: { ours?: boolean } = {}): PudoLedgerEntry | null {
     const { entityId, payeeDid } = this.drivers.payeeOrNone(driverId);
     // A fleet standing where no sister does is not paid by us: the job settles between the two parties, off the
     // platform, and nothing is accrued. Returning null rather than refusing, because this runs at DELIVERY — a
     // custody event must not fail because a money question has no answer (the P2 lesson, again).
+    // 2026-11-20 — where a partner contracts and pays (Partnered), it owes the road: on its record, named (3a). Never a load
+    // a company of ours was paid for, nor staff's own settlement (`ours`): the partner never held that money, so it cannot owe it.
+    if (!entityId && amount > 0 && !opts.ours) {
+      const line = this.partners?.owe({ country: this.drivers.countryOfWork(driverId), payeeId: payeeDid, payeeKind: payeeDid === driverId ? 'driver' : 'fleet', amount, reference: driverId, refType: 'driver', step: 'haul' });
+      return line ? this.owedRow('DRIVER_PAYOUT', line, undefined, driverId, 'driver') : null;
+    }
     if (!entityId || !(amount > 0)) return null;
     const entryId = this.books.post({
       entityId,
@@ -633,21 +668,26 @@ export class WalletGateService {
 
   /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. A hub in
    *  another country recharges its sister's outlay to the seller exactly as a shop does. */
-  sortLabour(mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
-    return this.hubLabour('sort-labour', mdpId, amount, reference, entityId, sellerEntityId);
+  sortLabour(mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string, hubCountry?: string): PudoLedgerEntry {
+    return this.hubLabour('sort-labour', mdpId, amount, reference, entityId, sellerEntityId, hubCountry);
   }
 
   /** A hub's receiving work (D12): its own fee for the units it counted at its door, accrued as its sort labour is. */
-  receivingLabour(mdpId: string, amount: number, arrivalId: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
-    return this.hubLabour('receiving-labour', mdpId, amount, arrivalId, entityId, sellerEntityId);
+  receivingLabour(mdpId: string, amount: number, arrivalId: string, entityId?: string, sellerEntityId?: string, hubCountry?: string): PudoLedgerEntry {
+    return this.hubLabour('receiving-labour', mdpId, amount, arrivalId, entityId, sellerEntityId, hubCountry);
   }
 
   /** 2026-11-12 — a hub's pay for a whole bag it received on its seal and passed on unopened (D5): its own fee, a bag. */
-  passOnLabour(mdpId: string, amount: number, code: string, entityId?: string): PudoLedgerEntry {
-    return this.hubLabour('pass-on-labour', mdpId, amount, code, entityId);
+  passOnLabour(mdpId: string, amount: number, code: string, entityId?: string, hubCountry?: string): PudoLedgerEntry {
+    return this.hubLabour('pass-on-labour', mdpId, amount, code, entityId, undefined, hubCountry);
   }
 
-  private hubLabour(kind: 'sort-labour' | 'receiving-labour' | 'pass-on-labour', mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
+  private hubLabour(kind: 'sort-labour' | 'receiving-labour' | 'pass-on-labour', mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string, hubCountry?: string): PudoLedgerEntry {
+    // 2026-11-20 — no company of ours, no seller: where a partner contracts and pays (Partnered), it owes the hub (3a).
+    if (!entityId && !sellerEntityId) {
+      const line = this.partners?.owe({ country: hubCountry, payeeId: mdpId, payeeKind: 'hub', amount, reference: reference || mdpId, refType: 'mdp', step: kind === 'sort-labour' ? 'sort' : kind === 'receiving-labour' ? 'receiving' : 'pass_on' });
+      if (line) return this.owedRow('LABOR_PAYOUT', line, undefined, reference || mdpId, 'mdp');
+    }
     const entryId = entityId
       ? this.books.post({
           entityId,
@@ -752,9 +792,9 @@ export class WalletGateService {
    * another company — on the screen and in every export. A line with no entry behind it (a reconciliation record,
    * kept outside the books) is what it always was.
    */
-  private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType'], entryId?: string): PudoLedgerEntry {
-    const currency = (entryId ? this.books.entry(entryId)?.currency : undefined) ?? NETWORK_CURRENCY;
-    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency, did, reference, refType, entryId, at: new Date().toISOString() };
+  private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType'], entryId?: string, extra?: { currency?: string; owedBy?: PudoLedgerEntry['owedBy'] }): PudoLedgerEntry {
+    const currency = extra?.currency ?? (entryId ? this.books.entry(entryId)?.currency : undefined) ?? NETWORK_CURRENCY;
+    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency, did, reference, refType, entryId, ...(extra?.owedBy ? { owedBy: extra.owedBy } : {}), at: new Date().toISOString() };
     this.ledger.set(entry.id, entry);
     return entry;
   }

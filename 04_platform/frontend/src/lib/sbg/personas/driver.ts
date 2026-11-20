@@ -108,6 +108,8 @@ export function createDriverApi(sbg: SbgClient) {
     /** Round 38 — where an independent rider stands under their company's custody cap; `capped` false when none applies. */
     custodyCap: () => sbg.request((c) => c.GET('/v1/sbg/custody-cap', {})),
     /** FP2 — the consignment note of a load this driver carries. */
+    /** 2026-11-20 — what a partner company owes this sign-in, named (the payments plan, 3a). */
+    partnerOwed: () => sbg.request((c) => c.GET('/v1/sbg/partner-owed/mine')),
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** Round 38 — the load's commercial invoice, to show at the border: the driver carrying it across one, from pickup on. */
     freightInvoice: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/commercial-invoice.html', { params: { path: { id: freightId } }, parseAs: 'text' })),

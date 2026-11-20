@@ -7,6 +7,7 @@ import { hashPhone } from '../../foundation/identity/phone';
 import { TOWING_KINDS, type TowingKind } from './trailer-rules';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
+import { PartnerLedgerService } from './partner-ledger.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { RegistrationPrints, type IdentityFields, type PrintField } from '../../foundation/identity/registration-prints';
@@ -107,6 +108,8 @@ export class DriverService {
     // Optional so the specs that build this by hand keep working; app.boot.spec catches it missing from
     // the module. Without it a courier cannot send a photograph, and is told so rather than silently not.
     @Optional() private readonly media?: MediaService,
+    // 2026-11-20 — where a partner contracts and pays (Partnered), its own list prices a driver's steps (the payments plan, 3a).
+    @Optional() private readonly partners?: PartnerLedgerService,
   ) {}
 
   /**
@@ -156,7 +159,8 @@ export class DriverService {
    * or their own country's for a courier). One answer for the offer that promises it and the scan that pays it.
    */
   payTermsOf(did: string): { bagLoadPay: number; currency: string } {
-    const list = this.entities.amountsFor(this.payeeOrNone(did).entityId);
+    // 2026-11-20 — no company of ours settles them: the partner's own list, where a partner contracts and pays (3a).
+    const list = this.entities.amountsFor(this.payeeOrNone(did).entityId ?? this.partners?.ratesEntityAt(this.countryOfWork(did)));
     return { bagLoadPay: list.toteLoadFee, currency: list.currency ?? currencyForJurisdiction(this.countryOfWork(did)) };
   }
 

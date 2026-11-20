@@ -24,6 +24,8 @@ export function createFleetApi(sbg: SbgClient) {
     pauseTrip: (tripId: string, paused: boolean) => sbg.request((c) => c.POST('/v1/sbg/fleet/trips/{tripId}/pause', { params: { path: { tripId } }, body: { paused } })),
     geocodePlace: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
     /** FP2 — the consignment note of a load one of the fleet's drivers carried. */
+    /** 2026-11-20 — what a partner company owes this sign-in, named (the payments plan, 3a). */
+    partnerOwed: () => sbg.request((c) => c.GET('/v1/sbg/partner-owed/mine')),
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** A haul the shipper pays the fleet for directly: the office says it was paid, the price agreed (2026-10-27). */
     paidDirect: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/paid-direct', { params: { path: { id: freightId } } })),

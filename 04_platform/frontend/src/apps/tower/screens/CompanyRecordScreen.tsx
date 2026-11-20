@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
 import { ConsoleFold } from '../ConsoleFold';
+import { PartnerOwedFold } from './PartnerOwedFold';
 import { useT } from '../../../shared/i18n';
 import { paperForUpload } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
@@ -163,6 +164,8 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
         <>
           <Readiness view={view} />
           <RunningOut view={view} hint={runningOutHint(hands, reader)} />
+          {/* 2026-11-20 — a partner company: what it owes each hand, step by step (the payments plan, 3a). */}
+          {view.entity.kind === 'partner' && client && entityId ? <PartnerOwedFold entityId={entityId} load={(id) => client.api.partnerOwed(id)} /> : null}
           {/* Each section disabled for whoever does not keep it — every field inside reads, and tower.css takes the
               buttons away. Inside each fold, not around them all: a disabled fieldset disables every button in it,
               and the fold's own headline is the button that opens it. */}

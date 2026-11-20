@@ -1,3 +1,4 @@
+import { PartnerOwedCard } from '../../../shared/partnerOwed';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, DocumentButton, ErrorNote, Explainer, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { maySayNotPaid, maySayPaid, paidWhen, shipperAnswerLine } from '../../../shared/paidDirect';
@@ -82,6 +83,8 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       <h1 class="scr__title">{t('fleet.earn.title')}</h1>
       <Explainer who={state.manager?.did} id="fleet.earnings.how" text={t('fleet.earn.lede')} />
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.queryEarnings({ offset: q.offset })} /> : null}
+      {/* 2026-11-20 — where a partner company contracts and pays: what it owes this fleet, named (the payments plan, 3a). */}
+      <PartnerOwedCard fetchOwed={actions.partnerOwed} />
 
       <GlanceNumber
         label={t('fleet.earn.earned')}

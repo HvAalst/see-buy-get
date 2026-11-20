@@ -460,6 +460,8 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /** CA3 — one company's record, readiness, papers, lapses and changes. */
     companyRecord: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } } })),
+    /** 2026-11-20 — a partner company's record: what it owes each hand, step by step (the payments plan, 3a). */
+    partnerOwed: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-owed', { params: { path: { entityId } } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),

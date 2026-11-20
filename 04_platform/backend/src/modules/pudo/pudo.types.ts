@@ -1707,6 +1707,11 @@ export class PudoLedgerEntry {
   /** The journal entry this row projects. The BOOKS are the money; this row is how a shopkeeper reads
    *  it. Absent on rows written before the books existed, and on records that move no money of ours. */
   entryId?: string;
+  /**
+   * 2026-11-20 — owed by the partner of a Partnered country, not by a company of ours (the payments plan, 3a): its name, so the
+   * hand knows who pays it. In the partner's money; on none of our books.
+   */
+  owedBy?: { entityId: string; name: string };
   did?: string; // agent (or driver) the entry applies to
   reference: string; // parcel id / manifest id / driver id / admin id / bank txn / mdp id / vendor id
   refType: 'parcel' | 'manifest' | 'driver' | 'admin' | 'bank' | 'mdp' | 'vendor';

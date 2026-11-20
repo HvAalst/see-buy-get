@@ -178,7 +178,7 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
       // Two counted against one booked: the second charged at the fee it was booked at; the hub paid 100 for each.
       const door = svc.receive('mdp_1', a.arrivalId, { units: 2 }, 'Floor', NOW);
       expect(billed[1]?.slice(2, 5)).toEqual([120, 0, 16]);
-      expect(paid[0]).toEqual(['mdp_1', 200, a.arrivalId, 'ke', 'ke']);
+      expect(paid[0]).toEqual(['mdp_1', 200, a.arrivalId, 'ke', 'ke', 'KE']);
       expect(door.fee).toEqual({ perUnit: 100, currency: 'KES', paid: 200, paidUnits: 2 });
     });
 

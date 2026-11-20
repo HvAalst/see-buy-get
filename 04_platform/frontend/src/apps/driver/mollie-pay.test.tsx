@@ -77,7 +77,8 @@ describe('the console sets our fee', () => {
     expect(t(AMOUNT_LABEL.directPayFee)).toBe('Our fee on a payment by Mollie');
     expect(t(AMOUNT_HINT.directPayFee)).toContain('Empty: nothing is taken.');
     const rates = readFileSync(join('src', 'apps', 'tower', 'screens', 'RatesScreen.tsx'), 'utf8');
-    expect(rates).toMatch(/!ROAD_AMOUNTS\.includes\(key\) && !DIRECT_PAY_AMOUNTS\.includes\(key\)\), ROAD_AMOUNTS, DIRECT_PAY_AMOUNTS\]/);
+    expect(rates).toMatch(/const PARCEL_AMOUNTS = AMOUNT_ORDER\.filter\(\(key\) => !ROAD_AMOUNTS\.includes\(key\) && !DIRECT_PAY_AMOUNTS\.includes\(key\)\);/);
+    expect(rates).toMatch(/\[PARCEL_AMOUNTS, ROAD_AMOUNTS, DIRECT_PAY_AMOUNTS\]/);
     expect(rates).toMatch(/\{i === 2 \? <p class="chint"><b>\{t\('tower\.amounts\.directPayTitle'\)\}<\/b> \{t\('tower\.amounts\.directPayHint'\)\}<\/p> : null\}/);
   });
 });

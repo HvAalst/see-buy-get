@@ -46,6 +46,9 @@ import {
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { custodyCapsBody } from '../custodyCaps';
 
+/** A parcel's figures: everything on the list but the road's two and our fee on a payment by Mollie. */
+const PARCEL_AMOUNTS = AMOUNT_ORDER.filter((key) => !ROAD_AMOUNTS.includes(key) && !DIRECT_PAY_AMOUNTS.includes(key));
+
 /**
  * What each sister charges — the three rate layers, the tax it collects, and the cover it carries.
  *
@@ -91,6 +94,8 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
 
       {!pricing ? (
         <p class="cons__empty">{t('tower.rates.loading')}</p>
+      ) : pricing.kind === 'partner' ? (
+        <PartnerList pricing={pricing} state={state} actions={actions} />
       ) : (
         <>
           {/* A company that cannot transact gets the explanation and NOTHING ELSE. The resolution still
@@ -216,7 +221,35 @@ function LaneRow({ row, pricing, state, actions }: { row: LanePricing; pricing: 
  * AN EMPTY BOX IS NOT ZERO. It stands at what every company starts from, and the box shows that figure greyed, so
  * "not set" is a number somebody can read. Zero is a decision — a step this company pays nothing for — and is typed.
  */
-function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+/**
+ * 2026-11-20 — A PARTNER'S OWN LIST (the payments plan, 3a; the owner: "the partner's own list"). Where its country is set to
+ * Local partner, the partner pays the shops, hubs and drivers who work under its promise at these figures, in its own money,
+ * and SeeBuyGet keeps the record of what it owes them. What a parcel costs and what each step pays — nothing else: no rate,
+ * tax, road figure or fee of ours applies to a company that is never a party to a transaction of ours.
+ */
+export function PartnerList({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  return (
+    <>
+      <p class="cons__caveat">
+        <Icon name="info" size={18} />
+        <span>
+          <b>{t('tower.rates.partnerLead', { name: pricing.name })}</b> {t('tower.rates.partnerBody')}
+        </span>
+      </p>
+      {state.done ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {state.done}
+        </p>
+      ) : null}
+      <Amounts pricing={pricing} state={state} actions={actions} partner />
+      <RecentChanges pricing={pricing} />
+    </>
+  );
+}
+
+function Amounts({ pricing, state, actions, partner }: { pricing: EntityPricing; state: TowerState; actions: TowerActions; partner?: boolean }) {
   const t = useT();
   const [form, setForm] = useState<AmountsForm>(() => amountsFormOf(pricing));
   const [tried, setTried] = useState(false);
@@ -248,7 +281,8 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
 
       <div class="twr-knobs">
         <p class="chint">{t('tower.amounts.hint', { currency: currency || t('tower.amounts.itsMoney') })}</p>
-        {[AMOUNT_ORDER.filter((key) => !ROAD_AMOUNTS.includes(key) && !DIRECT_PAY_AMOUNTS.includes(key)), ROAD_AMOUNTS, DIRECT_PAY_AMOUNTS].map((keys, i) => (
+        {/* A partner's list is a parcel's figures only: the road's and our fee by Mollie are not its to set (2026-11-20). */}
+        {(partner ? [PARCEL_AMOUNTS] : [PARCEL_AMOUNTS, ROAD_AMOUNTS, DIRECT_PAY_AMOUNTS]).map((keys, i) => (
           <Fragment key={i}>
             {/* The road's two figures are not a parcel's: they sit under a heading of their own (2026-10-25). */}
             {i === 1 ? <p class="chint"><b>{t('tower.amounts.roadTitle')}</b> {t('tower.amounts.roadHint')}</p> : null}

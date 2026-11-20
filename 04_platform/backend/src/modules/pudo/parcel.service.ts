@@ -2,6 +2,7 @@ import { assertSiteTakes, scaleCounts } from './site-tools';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
+import { PartnerLedgerService } from './partner-ledger.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { FxService } from '../../foundation/money/fx.service';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -882,6 +883,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly holds?: DropOffHoldService,
     // 2026-11-09 — the GLN SeeBuyGet gave the collection point a parcel goes to: printed on its label.
     @Optional() private readonly ourGlns?: OurGlnBook,
+    // 2026-11-20 — where a partner contracts and pays (Partnered), its own list prices a shop's steps (the payments plan, 3a).
+    @Optional() private readonly partners?: PartnerLedgerService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1067,12 +1070,16 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private amountsAt(agentDid: string, sellerEntityId?: string): Amounts & { currency?: string } {
     let own: string | undefined;
+    let country: string | undefined;
     try {
-      own = this.agents.entityIdOrNone(this.agents.get(agentDid));
+      const agent = this.agents.get(agentDid);
+      own = this.agents.entityIdOrNone(agent);
+      country = this.agents.countryOf(agent);
     } catch {
       own = undefined;
     }
-    return this.entities.amountsFor(own ?? sellerEntityId);
+    // 2026-11-20 — no company of ours here and no seller: the partner's own list, where a partner contracts and pays (3a).
+    return this.entities.amountsFor(own ?? sellerEntityId ?? this.partners?.ratesEntityAt(country));
   }
 
   /**
@@ -1837,6 +1844,14 @@ export class ParcelService implements OnApplicationBootstrap {
         parcel.intakeLabour = pay;
         this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
       }
+    } else if (promise === 'theirs') {
+      /*
+       * 2026-11-20 — …and where that carrier is the partner of a Partnered country, the partner owes the shop its take-in,
+       * at its own rates: on the partner's record and the shop's own, named — never on our books (the payments plan, 3a).
+       * Kept on the parcel only when it was owed, so a void takes back exactly that; nothing anywhere else.
+       */
+      const pay = this.takeInPayOf(input.agentDid, parcel);
+      if (this.gate.owedByPartner(input.agentDid, pay, parcel.parcelId, 'parcel')) parcel.intakeLabour = pay;
     }
 
 

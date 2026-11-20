@@ -159,7 +159,7 @@ describe('a company, recorded properly', () => {
       expect(readiness.readinessOf(partner.entityId).warnings).toEqual([]);
     });
 
-    it('a draft company of ours prepares its whole price list before it is switched on; money still waits; a partner has none (2026-11-12)', () => {
+    it('a draft company of ours prepares its whole price list before it is switched on; money still waits; a partner keeps only its own amounts (2026-11-12; 2026-11-20)', () => {
       const zm = entities.createCompany({ kind: 'sister', jurisdiction: 'ZM', name: 'SeeBuyGet Zambia' }, 'Amina');
       expect(zm.status).toBe('draft');
       entities.setAmounts(zm.entityId, { mdpSortFee: 12, mdpPassOnFee: 10, wholesale: 40 }, 'Amina');
@@ -173,11 +173,18 @@ describe('a company, recorded properly', () => {
       expect(entities.pricingFor(zm.entityId, [], { editable: true }).editable).toBe(true);
       // Money still waits for the switch-on.
       expect(() => entities.requireTransacting(zm.entityId)).toThrow(/still a draft/);
-      // A partner, or the holding company, has no price list of ours.
+      // 2026-11-20 — a partner keeps its own list of what each step pays (the payments plan, 3a; the owner: "the partner's own
+      // list"), draft or switched on, in its own money — its amounts only: never a rate, a tax or a setting of ours. The
+      // holding company has no price list at all.
       const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Partner' }, 'Amina');
-      expect(() => entities.setAmounts(partner.entityId, { wholesale: 40 }, 'Amina')).toThrow(/still a draft|partner company/);
+      expect(entities.setAmounts(partner.entityId, { labourFee: 1500 }, 'Amina').amounts).toEqual({ labourFee: 1500 });
+      expect(entities.amountsFor(partner.entityId)).toMatchObject({ labourFee: 1500, currency: 'UGX' });
+      expect(entities.pricingFor(partner.entityId, [], { editable: true }).editable).toBe(true);
+      expect(() => entities.setTax(partner.entityId, { ratePct: 0 }, 'Amina')).toThrow(/still a draft|partner company/);
+      expect(() => entities.setPricingMode(partner.entityId, 'factors', 'Amina')).toThrow(/still a draft|partner company/);
+      expect(() => entities.setRunPay(partner.entityId, 'km', 'Amina')).toThrow(/still a draft|partner company/);
       expect(() => entities.setAmounts('sbg', { wholesale: 40 }, 'Amina')).toThrow(/holding company/);
-      expect(entities.pricingFor(partner.entityId, [], { editable: true }).editable).toBe(false);
+      expect(entities.pricingFor('sbg', [], { editable: true }).editable).toBe(false);
     });
 
     it('does not accept a bank account in the wrong money for a company of ours', () => {

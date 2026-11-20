@@ -2557,6 +2557,8 @@ export function useDriverApp() {
       loadTakeOvers,
       sendTakeOver,
       tellWhenRested,
+      /** 2026-11-20 — what a partner company owes this courier for the road, named (the payments plan, 3a). */
+      partnerOwed: () => (client ? client.api.partnerOwed() : Promise.resolve({ data: null, error: null })),
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       freightInvoice: (freightId: string) => client!.api.freightInvoice(freightId),

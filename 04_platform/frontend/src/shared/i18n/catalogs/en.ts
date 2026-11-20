@@ -1304,6 +1304,16 @@ export const en = {
   'account.mollie.invoiceLine': '{month} · {amount} · paid',
   'account.mollie.invoiceTest': 'Test',
   'account.mollie.invoiceTitle': 'Invoice {number}',
+  // 2026-11-20 — where a partner company contracts and pays: what it owes the hand, named (the payments plan, 3a).
+  'partner.owed.title': 'What the partner owes you',
+  'partner.owed.total': '{partner} owes you {amount} in all',
+  'partner.owed.note': 'In this country a partner company contracts and pays for the network: it pays you for these steps, at its own rates.',
+  'partner.owed.step.labour': 'Work on a parcel',
+  'partner.owed.step.sort': 'Sorted at the hub',
+  'partner.owed.step.receiving': 'Received at the hub',
+  'partner.owed.step.pass_on': 'A bag passed on',
+  'partner.owed.step.haul': 'On the road',
+  'partner.owed.takenBack': 'taken back',
   // The phones and browsers a PIN works on (Settings). No device has a name: the server keeps none to show.
   'account.devices.title': 'Phones and browsers',
   'account.devices.sub': 'Where your PIN works',

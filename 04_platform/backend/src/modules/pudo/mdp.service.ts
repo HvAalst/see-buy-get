@@ -7,6 +7,7 @@ import { RiskRegisterService } from './risk-register.service';
 import { CorridorService } from './corridor.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { PartnerLedgerService } from './partner-ledger.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -108,6 +109,8 @@ export class MdpService {
     @Optional() private readonly notifications?: NotificationService,
     // 2026-11-11 — the road, to measure an extra leg by (a hub down, its country paying runs by km). Optional for the specs.
     @Optional() @Inject(ROUTER) private readonly router?: Router,
+    // 2026-11-20 — where a partner contracts and pays (Partnered), its own list is a hub's starting fee (the payments plan, 3a).
+    @Optional() private readonly partners?: PartnerLedgerService,
   ) {}
 
   /**
@@ -282,7 +285,8 @@ export class MdpService {
       address: input.address?.trim() || undefined,
       // Its own fee — what senders are charged and what it is paid for each parcel it sorts. A hub that names none starts
       // at its company's list (the user, 2026-10-26: "Its own fee"), and sets its own from its home screen.
-      pricePerParcel: input.pricePerParcel ?? this.entities.amountsFor(entity?.entityId).mdpSortFee,
+      // 2026-11-20 — where no company of ours stands but a partner contracts and pays (Partnered): the partner's list (3a).
+      pricePerParcel: input.pricePerParcel ?? this.entities.amountsFor(entity?.entityId ?? this.partners?.ratesEntityAt(country)).mdpSortFee,
       createdAt: now,
       vetting: vouched === 'joining' ? { state: 'draft' } : { state: 'approved', approvedAt: now, approvedBy: vouched.approvedBy },
       ...(saysSpace ? { bagPlaces: input.bagPlaces, sortPerDay: input.sortPerDay, spaceSaidAt: now } : {}),
@@ -433,7 +437,8 @@ export class MdpService {
    */
   feeCeilingOf(mdp: Mdp): { sort: number; passOn: number; multiple: number; listSort: number; listPassOn: number } {
     const entityId = this.entityIdOrNone(mdp);
-    const list = this.entities.amountsFor(entityId);
+    // 2026-11-20 — no company of ours here: the partner's own list, where a partner contracts and pays (3a).
+    const list = this.entities.amountsFor(entityId ?? this.partners?.ratesEntityAt(this.countryOf(mdp)));
     const multiple = this.entities.hubFeeCeilingFor(entityId);
     const round2 = (n: number) => Math.round(n * 100) / 100;
     return { sort: round2(list.mdpSortFee * multiple), passOn: round2(list.mdpPassOnFee * multiple), multiple, listSort: list.mdpSortFee, listPassOn: list.mdpPassOnFee };
@@ -1460,7 +1465,7 @@ export class MdpService {
     }
     const tote = this.totes.passOn(before.code, mdp.mdpId, next?.mdpId ?? finalId, next?.name ?? before.throughToName ?? finalId, now);
     const fee = this.passOnFeeOf(mdp);
-    if (fee > 0) this.gate.passOnLabour(mdp.mdpId, fee, tote.code, this.entityIdOrNone(mdp));
+    if (fee > 0) this.gate.passOnLabour(mdp.mdpId, fee, tote.code, this.entityIdOrNone(mdp), this.countryOf(mdp));
     void this.events.publish(GlosEvent.Pudo.BagPassedOn, { mdpId: mdp.mdpId, code: tote.code, next: tote.destinationNodeId, final: finalId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
     return { mdpId: mdp.mdpId, emptied: [], passedOn: { code: tote.code, next: next?.name ?? finalId, final: final?.name ?? before.throughToName ?? finalId } };
   }
@@ -1586,7 +1591,7 @@ export class MdpService {
       const hub = this.require(mdpId);
       const sortPay = this.sortPayOf(hub, parcel);
       const put = this.parcels.acrossToCounter(parcelId, hub, counterDid, now);
-      if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, this.entityIdOrNone(hub), parcel.sellerEntityId);
+      if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, this.entityIdOrNone(hub), parcel.sellerEntityId, this.countryOf(hub));
       this.parcels.notePaid(this.parcels.get(parcelId), { type: 'mdp', id: mdpId, label: hub.name }, sortPay, this.currencyOf(hub), now);
       void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: '' }, { source: 'pudo' }).catch(() => undefined);
       this.noteSorted(hub, now);
@@ -1615,7 +1620,7 @@ export class MdpService {
     const hub = this.require(mdpId);
     const hubEntity = this.entityIdOrNone(hub);
     const sortPay = this.sortPayOf(hub, parcel);
-    if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId);
+    if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId, this.countryOf(hub));
     // 2026-11-06 — kept on its plan as paid, priced through this hub or not (what another way cost: the lanes).
     this.parcels.notePaid(parcel, { type: 'mdp', id: mdpId, label: hub.name }, sortPay, this.currencyOf(hub), now);
 

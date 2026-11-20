@@ -51,6 +51,7 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayeeStandingRegistrar } from './payee-standing';
+import { PartnerLedgerService } from './partner-ledger.service';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 /**
@@ -76,6 +77,7 @@ describe('crossing a border', () => {
   let books: BooksService;
   let managers: FleetManagerService;
   let drivers: DriverService;
+  let partners: PartnerLedgerService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -91,7 +93,7 @@ describe('crossing a border', () => {
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, PresenceService, BooksService, FxService,
+        EntityService, PresenceService, BooksService, FxService, PartnerLedgerService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -114,6 +116,7 @@ describe('crossing a border', () => {
     books = moduleRef.get(BooksService);
     managers = moduleRef.get(FleetManagerService);
     drivers = moduleRef.get(DriverService);
+    partners = moduleRef.get(PartnerLedgerService);
     books.reset(); // each test starts on clean books — the money is derived from them
   });
 
@@ -185,6 +188,38 @@ describe('crossing a border', () => {
       // …and the custody chain is there, which is the whole reason to be in the country at all.
       expect(parcel.custody?.[0]?.holderId).toBe(tz.did);
       expect(parcel.status).toBe('At_PUDO');
+    });
+
+    it('2026-11-20 — under a Partnered country’s partner, the partner owes the shop its take-in at its own figure, off our books; a void takes it back (the payments plan, 3a)', () => {
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'UG', name: 'Kampala Courier Ltd' }, 'Amina');
+      entities.setAmounts(partner.entityId, { labourFee: 1500 }, 'Amina');
+      entities.activate(partner.entityId, 'Brian');
+      presence.set({ jurisdiction: 'UG', level: 'partnered' });
+      const ug = shop('Kampala Duka', 'Kampala', { lat: 0.35, lng: 32.58 }, 'UG');
+      const parcel = parcels.accept({ parcelId: 'PUD-UG-1', agentDid: ug.did, destZone: 'Kampala2', size: 'M', paymentMode: 'prepaid', senderMobile: '+256700111', receiverMobile: '+256700222', dropoffPhotoRef: photoBy(ug.did) } as never);
+
+      expect(parcel.takeInPromise).toBe('theirs');
+      expect(parcel.intakeLabour).toBe(1500);
+      expect(partners.ledgerOf(partner.entityId)).toMatchObject({ partnerName: 'Kampala Courier Ltd', currency: 'UGX', owed: 1500, byPayee: [{ payeeId: ug.did, payeeKind: 'shop', amount: 1500, steps: 1 }] });
+      expect(partners.owedTo([ug.did]).totals).toEqual([{ partnerName: 'Kampala Courier Ltd', currency: 'UGX', amount: 1500 }]);
+      // None of it on any book of ours: the partner pays, we keep the record.
+      expect(books.journal({ ref: 'PUD-UG-1' })).toEqual([]);
+
+      parcels.void('PUD-UG-1', ug.did, photoBy(ug.did));
+      const after = partners.ledgerOf(partner.entityId);
+      expect(after.owed).toBe(0);
+      expect(after.byPayee).toEqual([]);
+      expect(after.lines.map((l) => [l.amount, l.takenBack ?? false]).sort()).toEqual([[-1500, true], [1500, false]]);
+      expect(books.journal({ ref: 'PUD-UG-1' })).toEqual([]);
+    });
+
+    it('takes nothing as owed under the carrier’s promise where no partner contracts — a country only Matched', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka 5', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const parcel = parcels.accept({ parcelId: 'PUD-TZ-5', agentDid: tz.did, destZone: 'DarEsSalaam2', size: 'M', paymentMode: 'prepaid', senderMobile: '+255700111', receiverMobile: '+255700222', dropoffPhotoRef: photoBy(tz.did) } as never);
+      expect(parcel.takeInPromise).toBe('theirs');
+      expect(parcel.intakeLabour).toBeUndefined();
+      expect(partners.owedTo([tz.did])).toEqual({ lines: [] });
     });
 
     it('does not take the whole shop list down with it', () => {

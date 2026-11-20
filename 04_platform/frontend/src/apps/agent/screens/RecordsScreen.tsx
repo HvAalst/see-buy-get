@@ -1,3 +1,4 @@
+import { PartnerOwedCard } from '../../../shared/partnerOwed';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, GlanceNumber, Icon, Pager, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
@@ -264,6 +265,8 @@ function Earnings({ state, actions }: RecordsScreenProps) {
           another screen must not leave a stale figure here. The summary drives only the in/out/net sub-line. */}
       {/* 2026-11-04 — where SeeBuyGet holds no money for this shop, no figure: "0,00" read as a wallet that is not there. */}
       {state.agent && state.agent.balance === null ? <GlanceNumber label={t('agent.home.noFloat')} value="—" sub={t('agent.home.noFloatSub')} /> : null}
+      {/* 2026-11-20 — where a partner company contracts and pays: what it owes this shop, named (the payments plan, 3a). */}
+      <PartnerOwedCard fetchOwed={actions.partnerOwed} />
       {state.agent && state.agent.balance === null ? null : <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance, state.agent?.currency)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: netLabel(sum.net, sum.currency) }) : t('agent.records.summaryHint')} />}
 
       <Card title={t('agent.records.earnings')} aside={<span class="row__count">{state.ledgerTotal}</span>}>

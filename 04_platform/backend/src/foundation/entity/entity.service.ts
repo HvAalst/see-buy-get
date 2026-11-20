@@ -157,6 +157,17 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
+  /**
+   * 2026-11-20 — …AND A PARTNER KEEPS ITS OWN LIST OF WHAT EACH STEP PAYS (the payments plan, 3a; the owner: "the partner's
+   * own list"). In a Partnered country it pays the shops, hubs and drivers who work under its promise, at its own figures,
+   * and we keep the record of what it owes. Its amounts only, draft or switched on: never a rate, a tax or a fee of ours —
+   * it is still never a party to a transaction of ours.
+   */
+  private requireListKeeper(entityId: string): Entity {
+    const entity = this.get(entityId);
+    return entity.kind === 'partner' ? entity : this.requireOursToPrepare(entityId);
+  }
+
   requireTransacting(entityId: string): Entity {
     const entity = this.get(entityId);
     if (!canTransact(entity)) {
@@ -385,7 +396,7 @@ export class EntityService implements OnApplicationBootstrap {
    * float a shop must hold to take one in and the measure of its credit line: at zero both stop guarding anything.
    */
   setAmounts(entityId: string, patch: Partial<Record<string, number | null>>, by?: string): Entity {
-    const entity = this.requireOursToPrepare(entityId);
+    const entity = this.requireListKeeper(entityId);
     const before = resolveAmounts(entity.amounts);
     const own: Partial<Record<AmountKey, number>> = { ...(entity.amounts ?? {}) };
 
@@ -1117,7 +1128,8 @@ export class EntityService implements OnApplicationBootstrap {
       // A screen that renders controls it cannot use is a screen that lies about what you may do. The
       // caller's reach is decided by the guard; this only reports it, so the UI never has to guess.
       // 2026-11-12 — a draft company of ours prepares its list before switch-on: editable too.
-      editable: (opts?.editable ?? false) && entity.kind === 'sister',
+      // 2026-11-20 — and a partner its own list of what each step pays (its amounts only; the screen shows it nothing else).
+      editable: (opts?.editable ?? false) && (entity.kind === 'sister' || entity.kind === 'partner'),
       bounds: {
         minRatePct: MIN_PLATFORM_FEE_PCT,
         maxRatePct: MAX_PLATFORM_FEE_PCT,

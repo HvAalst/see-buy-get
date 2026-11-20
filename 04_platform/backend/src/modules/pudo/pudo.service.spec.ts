@@ -2936,7 +2936,7 @@ describe('PUDO Light', () => {
         const atWajir = mdps.dropBag(wajir.mdpId, code, receivedAtHub(wajir.mdpId));
         expect(atWajir).toMatchObject({ emptied: [], passedOn: { code, next: 'WB El Wak', final: 'WB Mandera' } });
         expect(totes.requireByCode(code)).toMatchObject({ status: 'available', locationId: wajir.mdpId, destinationNodeId: elwak.mdpId, parcels: ['WB-1'] });
-        expect(paid).toHaveBeenCalledWith(wajir.mdpId, 0.3, code, expect.anything());
+        expect(paid).toHaveBeenCalledWith(wajir.mdpId, 0.3, code, expect.anything(), 'KE');
         expect(parcels.get('WB-1')).toMatchObject({ passedWhole: 1, status: 'On_Bus' });
         // Its driver's card on the next leg says it is a whole bag for Mandera.
         expect((dispatch as any).wrapTote(code)?.throughTo).toBe('WB Mandera');
@@ -2948,7 +2948,7 @@ describe('PUDO Light', () => {
         expect(mdps.passOnFeeOf(mdps.require(elwak.mdpId))).toBe(1.25);
         mdps.loadBag(code, 'BUS-WB3');
         expect(mdps.dropBag(elwak.mdpId, code, receivedAtHub(elwak.mdpId)).passedOn).toMatchObject({ next: 'WB Mandera' });
-        expect(paid).toHaveBeenLastCalledWith(elwak.mdpId, 1.25, code, expect.anything());
+        expect(paid).toHaveBeenLastCalledWith(elwak.mdpId, 1.25, code, expect.anything(), 'KE');
         expect(totes.requireByCode(code).destinationNodeId).toBe(mandera.mdpId);
         mdps.loadBag(code, 'BUS-WB4');
         const atMandera = mdps.dropBag(mandera.mdpId, code, receivedAtHub(mandera.mdpId));

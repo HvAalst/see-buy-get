@@ -490,6 +490,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-20 — the invoices for our fee on a carrier's payments by Mollie (part 2c): the carrier's own.
   'GET sbg/mollie/invoices': 'none',
   'GET sbg/mollie/invoices/:id/invoice.html': 'none',
+  // 2026-11-20 — what a partner owes, step by step (the payments plan, 3a): its whole record, for staff who keep the money;
+  // and a hand's own, read by the hand.
+  'GET sbg/entities/:entityId/partner-owed': 'money',
+  'GET sbg/partner-owed/mine': 'none',
   'GET sbg/pilot': 'admin',
   'GET sbg/presence': 'any',
   'GET sbg/presence/:jurisdiction': 'any',

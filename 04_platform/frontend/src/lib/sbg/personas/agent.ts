@@ -235,6 +235,8 @@ export function createAgentApi(sbg: SbgClient) {
 
     /** FB2b — the prices offered on one of my loads, newest first. */
     /** FP2 — the load's consignment note (CMR), as a printable page. */
+    /** 2026-11-20 — what a partner company owes this sign-in, named (the payments plan, 3a). */
+    partnerOwed: () => sbg.request((c) => c.GET('/v1/sbg/partner-owed/mine')),
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
     /** 2026-11-15 — the receiver lost the code: it arrived. */
