@@ -425,6 +425,18 @@ export class IdentityController {
     return this.bookings.look(id);
   }
 
+  /**
+   * 2026-11-21 — CALL OFF THIS BOOKING, BEFORE IT IS HANDED IN (the payments plan, 5c): its sender only. The place held at the shop
+   * is given back; paid online, the money goes back to the account that paid.
+   */
+  @Roles('consumer')
+  @Post('parcels/:id/cancel')
+  cancelBooking(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    this.parcels.cancelByItsSender(id, person);
+    return { parcel: this.parcels.consumerParcel(id, person) };
+  }
+
   /** Pay it now: a Mollie payment by iDEAL for its price; the sender is sent to their bank and comes back to this booking. */
   @Roles('consumer')
   @Post('parcels/:id/pay')

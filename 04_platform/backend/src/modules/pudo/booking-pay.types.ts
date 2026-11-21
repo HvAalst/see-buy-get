@@ -24,8 +24,29 @@ export class BookingPayment {
   expiresAt?: string;
   checkedAt?: string;
   paidAt?: string;
-  /** Paid, but the booking could no longer take it (handed in for cash meanwhile, or ended): it is owed back. */
+  /** Paid, but the booking could no longer take it (handed in for cash meanwhile, or ended): it is owed back, and given back. */
   unapplied?: string;
+  /** Booked as our income when the parcel was handed in (5b): what a refund afterwards takes back from the books. */
+  takenIn?: BookingTakenIn;
+  /** 2026-11-21 — given back to the account that paid (5c): asked of Mollie, or waiting to be asked again. */
+  refund?: BookingRefund;
+}
+
+export class BookingTakenIn {
+  at: string;
+  tax: number;
+  provision: number;
+}
+
+/** asked: Mollie took the refund and sends the money back · waiting: Mollie could not be reached or refused; asked again hourly. */
+export class BookingRefund {
+  state: 'asked' | 'waiting';
+  why: string;
+  at: string;
+  refundId?: string;
+  /** Why Mollie did not take it, while it waits. */
+  error?: string;
+  tries: number;
 }
 
 /** What the Send app shows for one booking: whether it can be paid online now, and the latest payment. */
@@ -39,4 +60,6 @@ export class BookingPayView {
   status?: BookingPayStatus;
   checkoutUrl?: string;
   paidAt?: string;
+  /** 2026-11-21 — given back (5c): asked of Mollie, or waiting to be asked again. */
+  refund?: 'asked' | 'waiting';
 }

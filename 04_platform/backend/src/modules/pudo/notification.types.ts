@@ -319,6 +319,8 @@ export const NOTIFICATION_KINDS = [
   'welcome',
   /** 2026-11-21 — a booking paid online when booked (5a): its label is ready, to print at home or show at the shop. */
   'booking_paid',
+  /** 2026-11-21 — a booking paid online called off (5c): its money going back to the account that paid. */
+  'booking_refunded',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

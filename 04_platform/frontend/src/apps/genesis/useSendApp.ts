@@ -1004,6 +1004,25 @@ export function useSendApp() {
     [client],
   );
 
+  /** 2026-11-21 — call off a booking before it is handed in (5c): null when done, or the server's words. */
+  const cancelBooking = useCallback(
+    async (id: string): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.cancelBooking(id);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return null;
+        }
+        return r.error.detail || r.error.title;
+      }
+      void openParcel(id);
+      void loadParcels();
+      return null;
+    },
+    [client, openParcel, loadParcels],
+  );
+
   /** Pay it now: where to go to pay by iDEAL, or why not. */
   const payBooking = useCallback(
     async (id: string): Promise<{ checkoutUrl?: string; error?: string }> => {
@@ -1466,6 +1485,7 @@ export function useSendApp() {
     nominateCollector,
     bookingPay,
     payBooking,
+    cancelBooking,
     movePreview,
     moveParcel,
       closeParcel,

@@ -776,4 +776,11 @@ export const enSend = {
   'send.pay.step3': 'Tape all four edges of the label.',
   'send.pay.step4': 'Do not fold the label over an edge of the box.',
   'send.pay.step5': 'Keep the QR code clear: no tape across it and no marks on it.',
+  'send.cancel.open': 'Cancel this booking',
+  'send.cancel.title': 'Cancel this booking?',
+  'send.cancel.means': 'What cancelling does',
+  'send.cancel.meansUnpaid': 'The booking ends and the place held at the shop is given back. Nothing was paid, so nothing comes back. To send it after all, book it again.',
+  'send.cancel.meansPaid': 'The booking ends and the place held at the shop is given back. What you paid online goes back in full to the account that paid; it can take a few working days to show.',
+  'send.cancel.yes': 'Yes, cancel it',
+  'send.cancel.keep': 'Keep the booking',
 };

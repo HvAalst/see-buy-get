@@ -30139,6 +30139,28 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/cancel": {
+      "post": {
+        "operationId": "Identity.cancelBooking",
+        "summary": "",
+        "description": "2026-11-21 — CALL OFF THIS BOOKING, BEFORE IT IS HANDED IN (the payments plan, 5c): its sender only. The place held at the shop\nis given back; paid online, the money goes back to the account that paid.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}": {
       "get": {
         "operationId": "Identity.parcel",
@@ -83368,6 +83390,10 @@
           },
           "paidAt": {
             "type": "string"
+          },
+          "refund": {
+            "type": "object",
+            "description": "2026-11-21 — given back (5c): asked of Mollie, or waiting to be asked again."
           }
         },
         "required": [

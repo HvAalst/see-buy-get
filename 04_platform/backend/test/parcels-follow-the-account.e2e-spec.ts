@@ -7,6 +7,8 @@ import { declared } from './declared';
 import { AccountRecoveryService } from '../src/modules/pudo/account-recovery.service';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
+import { PersonService } from '../src/modules/pudo/person.service';
+import { RoutingService } from '../src/modules/pudo/routing.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { NUMBER_UNDO_MS } from '../src/modules/pudo/person.service';
 import { AGREED } from './agreed';
@@ -294,5 +296,23 @@ describe('a parcel is kept by the account, over the wire', () => {
     // invitation says which number, in its one line.
     await orderFor(`+2547${digits()}6`);
     expect((await myParcels(early)).received.map((p) => p.parcelId)).toEqual([first]);
+  });
+
+  /* 2026-11-21 — the payments plan, 5c: a booking called off by its sender before it is handed in, over the wire. */
+  it('a booking is called off by its sender over the wire — by nobody else, once only, and not once handed in', async () => {
+    const origin = await aShop('North CX', 'NorthTown');
+    const token = await signUp(`+2547${digits()}4`);
+    const stranger = await signUp(`+2547${digits()}5`);
+    const person = app.get(PersonService).requireByDid(await idOf(token));
+    const book = () => app.get(ParcelService).createConsumerSend({ senderPersonDid: person.personDid, senderPhoneHash: person.phoneHash, receiverMobile: `+2547${digits()}6`, originAgentDid: origin, destAgentDid: origin, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: app.get(RoutingService).quoteShipment(origin, origin) }).parcel;
+    const booked = book();
+    await http().post(`/v1/sbg/identity/parcels/${booked.parcelId}/cancel`).set(bearer(stranger)).expect(404);
+    const done = (await http().post(`/v1/sbg/identity/parcels/${booked.parcelId}/cancel`).set(bearer(token)).expect(201)).body;
+    expect(done.parcel).toMatchObject({ parcelId: booked.parcelId, status: 'Voided' });
+    expect((await http().post(`/v1/sbg/identity/parcels/${booked.parcelId}/cancel`).set(bearer(token)).expect(400)).body.detail).toBe('It is cancelled already');
+    // Handed in: the shop that took it in calls it off.
+    const taken = book();
+    Object.assign(app.get(ParcelService).get(taken.parcelId), { status: 'At_PUDO' });
+    expect((await http().post(`/v1/sbg/identity/parcels/${taken.parcelId}/cancel`).set(bearer(token)).expect(400)).body.detail).toMatch(/handed in already \(At_PUDO\): the shop that took it in can call it off/);
   });
 });

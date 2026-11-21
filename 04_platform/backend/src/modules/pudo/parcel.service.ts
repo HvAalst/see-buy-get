@@ -2363,6 +2363,8 @@ export class ParcelService implements OnApplicationBootstrap {
       if (parcel.shelvingLabour) this.gate.clawbackLabour(agentDid, parcel.shelvingLabour, parcel.parcelId, parcel.sellerEntityId, 'shelving');
     }
     this.refundStore(parcel, 'voided at the counter: given back in full');
+    // 2026-11-21 — paid online when booked (5c): given back in full to the account that paid.
+    if (parcel.paidOnline) this.onlineCalledOff?.(parcel, 'voided at the counter');
     // 2026-11-20 — paid by phone (4b): given back to the phone it came from, at once (P4-d), from the partner's account.
     if (parcel.paidByPhone) void this.hub?.refund(parcel.paidByPhone.paymentId, `${parcel.parcelId} voided at the counter`).catch(() => undefined);
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
@@ -2461,6 +2463,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-05 — called off before it was handed in: the place held for it at its shop is given back.
     if (parcel.status === 'Created') this.holds?.end(parcelId);
     if (parcel.status === 'Created' || parcel.status === 'At_PUDO') this.refundStore(parcel, parcel.status === 'Created' ? 'called off before it was handed in: given back in full' : 'called off at the counter: given back in full');
+    // 2026-11-21 — paid online when booked (the payments plan, 5c): given back in full to the account that paid, from our own
+    // Mollie account — before it leaves the shop, as a store's money is.
+    if ((parcel.status === 'Created' || parcel.status === 'At_PUDO') && parcel.paidOnline) this.onlineCalledOff?.(parcel, parcel.status === 'Created' ? 'called off before it was handed in' : 'called off at the counter');
+    // 2026-11-21 — paid by phone at the counter (4b) and called off there: given back to the phone it came from, as a void does.
+    // It used to be given back only on a void.
+    if (parcel.status === 'At_PUDO' && parcel.paidByPhone) void this.hub?.refund(parcel.paidByPhone.paymentId, `${parcel.parcelId} called off at the counter`).catch(() => undefined);
     parcel.status = 'Voided';
     this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');
@@ -2883,7 +2891,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.admitBooked(parcel, agentDid);
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
     // 2026-11-21 — PAID ONLINE WHEN BOOKED (the payments plan, 5b): no cash, nothing charged to the shop. Weighed heavier than was
-    // paid for, it is refused and the sender books again (until P5-c is answered); weighed lighter or the same, the price paid stands.
+    // paid for, it is refused and the sender books again (P5-c, the owner: "the sender books again, not on the credit line"); weighed lighter or the same, the price paid stands.
     const online = parcel.paidOnline;
     if (online && weighed && weighed.quote.locked.gross > online.amount + 1e-9) {
       throw new GlosError('INVALID_STATE', `Weighed at ${weighed.kg} kg it costs more than the ${online.amount.toFixed(2)} ${online.currency} paid online for ${parcel.weightKg} kg: the sender books again for the right weight`);
@@ -2937,6 +2945,26 @@ export class ParcelService implements OnApplicationBootstrap {
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: online ? 'prepaid' : 'cash' }, { source: 'pudo' }).catch(() => undefined);
     if (here) this.shelveHere(parcel, agentDid, step, `dropped off to be collected here · shelf ${parcel.binSlot}`);
     return parcel;
+  }
+
+  /**
+   * 2026-11-21 — A BOOKING CALLED OFF BY ITS SENDER, BEFORE IT IS HANDED IN (the payments plan, 5c). The drop-off reminder always
+   * said "you can also cancel it"; now the Send app can. The place held at the shop is given back; paid online, the money goes
+   * back to the account that paid (BookingPayService). Once a shop has it, its counter calls it off, as before.
+   */
+  cancelByItsSender(parcelId: string, reader: Reader | string): Parcel {
+    const parcel = this.require(parcelId);
+    if (!isFor(this.senderOf(parcel), readerOf(reader))) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Only a booking made in the Send app is called off here');
+    if (parcel.status === 'Voided') throw new GlosError('INVALID_STATE', 'It is cancelled already');
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `It was handed in already (${parcel.status}): the shop that took it in can call it off`);
+    return this.cancel(parcelId, 'sender', 'called off by its sender');
+  }
+
+  /** 2026-11-21 — what gives a booking paid online back to the account that paid when it is called off (BookingPayService). */
+  private onlineCalledOff?: (parcel: Parcel, why: string) => void;
+  onCalledOffPaidOnline(fn: (parcel: Parcel, why: string) => void): void {
+    this.onlineCalledOff = fn;
   }
 
   /** 2026-11-21 — what books a booking paid online as income once it is handed in (BookingPayService registers it). */
@@ -4729,8 +4757,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   moveDropOff(parcelId: string, toAgentDid: string, quote: ShipmentQuote, by: string, now: number = Date.now()): { parcel: Parcel; was: number; now: number } {
     const parcel = this.require(parcelId);
-    // 2026-11-21 — paid online when booked: the price paid stands at the new shop, nothing more to pay and nothing back (P5-d, as
-    // recommended until it is answered).
+    // 2026-11-21 — paid online when booked: the price paid stands at the new shop, nothing more to pay and nothing back (P5-d, the owner:
+    // "as recommended").
     const cost = parcel.paidOnline ? (parcel.shipmentCost ?? 0) : this.moveCostOf(parcel, quote);
     const refused = this.moveRefusal(parcel, toAgentDid, cost, now);
     if (refused) throw new GlosError(refused.code, refused.message);

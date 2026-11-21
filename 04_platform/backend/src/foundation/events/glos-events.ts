@@ -73,6 +73,8 @@ export const GlosEvent = {
     PlateClaimAsked: 'pudo.plate_claim_asked',
     // 2026-11-21 — a Send-app booking paid online when booked (the payments plan, 5a): its sender told the label is ready.
     BookingPaidOnline: 'pudo.booking_paid_online',
+    // 2026-11-21 — its money given back to the account that paid (5c), or waiting to be: told to its sender.
+    BookingRefunded: 'pudo.booking_refunded',
     PlateClaimClosed: 'pudo.plate_claim_closed',
     PlateClaimLapsed: 'pudo.plate_claim_lapsed',
     // Round 39 — a light courier's ID photo seen by staff, or sent back with the reason: told to the rider.

@@ -698,4 +698,11 @@ export const words: Record<string, string> = {
   "send.pay.step3": "የመለያውን አራቱንም ጠርዞች በፕላስተር ይለጥፉ።",
   "send.pay.step4": "መለያውን በሳጥኑ ጠርዝ ላይ አያጥፉት።",
   "send.pay.step5": "የQR ኮዱን ንጹህ ያድርጉ፦ በላዩ ላይ ፕላስተር ወይም ምልክት አይኑር።",
+  "send.cancel.open": "ይህን ቦታ ማስያዝ ይሰርዙ",
+  "send.cancel.title": "ይህን ቦታ ማስያዝ ይሰርዙ?",
+  "send.cancel.means": "መሰረዝ የሚያደርገው",
+  "send.cancel.meansUnpaid": "ቦታ ማስያዙ ያበቃል፣ በሱቁ የተያዘው ቦታም ይለቀቃል። ምንም አልተከፈለም፣ ስለዚህ የሚመለስ የለም። አሁንም ለመላክ ከፈለጉ እንደገና ቦታ ያስይዙ።",
+  "send.cancel.meansPaid": "ቦታ ማስያዙ ያበቃል፣ በሱቁ የተያዘው ቦታም ይለቀቃል። በመስመር ላይ የከፈሉት ሙሉ በሙሉ ወደ ከፈለው ሂሳብ ይመለሳል፤ ለመታየት ጥቂት የሥራ ቀናት ሊወስድ ይችላል።",
+  "send.cancel.yes": "አዎ፣ ይሰርዙት",
+  "send.cancel.keep": "ቦታ ማስያዙን ያቆዩ",
 };

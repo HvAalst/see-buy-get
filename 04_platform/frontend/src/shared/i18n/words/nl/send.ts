@@ -698,4 +698,11 @@ export const words: Record<string, string> = {
   "send.pay.step3": "Plak alle vier de randen van het label af met tape.",
   "send.pay.step4": "Vouw het label niet over een rand van de doos.",
   "send.pay.step5": "Houd de QR-code vrij: geen tape eroverheen en geen krassen erop.",
+  "send.cancel.open": "Deze boeking annuleren",
+  "send.cancel.title": "Deze boeking annuleren?",
+  "send.cancel.means": "Wat annuleren doet",
+  "send.cancel.meansUnpaid": "De boeking vervalt en de plek in de winkel komt vrij. Er is niets betaald, dus er komt niets terug. Wil je het toch versturen, boek het dan opnieuw.",
+  "send.cancel.meansPaid": "De boeking vervalt en de plek in de winkel komt vrij. Wat je online betaalde, gaat in zijn geheel terug naar de rekening waarmee je betaalde; het kan een paar werkdagen duren voor je het ziet.",
+  "send.cancel.yes": "Ja, annuleren",
+  "send.cancel.keep": "Boeking houden",
 };

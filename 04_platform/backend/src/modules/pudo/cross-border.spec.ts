@@ -361,6 +361,19 @@ describe('crossing a border', () => {
         expect(hub.feeOwed(partner.entityId)).toBe(270);
       });
 
+      /* 2026-11-21 — the payments plan, 5c: a cancel used to keep the money; only a void gave it back. */
+      it('called off at the counter, not only voided: the payment given back to the phone it came from, our fee with it', async () => {
+        const { ug, walkUp, partner } = await partnerCounter('C');
+        hub.setFee(partner.entityId, 3, 'Staff Ann');
+        const pay = await paid(ug.did, 'PUD-UG-C1');
+        parcels.accept(walkUp('PUD-UG-C1', { paymentId: pay.paymentId }));
+        expect(hub.feeOwed(partner.entityId)).toBe(270);
+        parcels.cancel('PUD-UG-C1', 'ops', 'the sender changed their mind');
+        await new Promise((r) => setImmediate(r));
+        expect(parcels.get('PUD-UG-C1').status).toBe('Voided');
+        expect(hub.feeOwed(partner.entityId)).toBe(0);
+      });
+
       it('where a partner contracts, nothing is taken in unpaid — not even on a server without the payment hub', async () => {
         const { walkUp } = await partnerCounter('N');
         const held = parcels as unknown as { hub?: unknown };

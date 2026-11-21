@@ -564,6 +564,20 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
     // 2026-11-21 — "I bought it" (PlateClaimService): the owner asked, the asker told how it ended; staff's decision told to both.
     this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimAsked, (e) => this.onPlateClaim('asked', e.payload.claim));
+    // 2026-11-21 — a booking paid online called off (5c): its sender told the money goes back, or waits to.
+    this.events.subscribe<{ parcelId: string; personDid: string; amount: number; currency: string; state?: 'asked' | 'waiting' }>(GlosEvent.Pudo.BookingRefunded, (e) => {
+      const p = e.payload;
+      void this.tell(p.personDid, {
+        kind: 'booking_refunded',
+        title: p.state === 'waiting' ? `Your money for ${p.parcelId} goes back soon` : `Your money for ${p.parcelId} is on its way back`,
+        body: p.state === 'waiting'
+          ? `${p.currency} ${p.amount.toFixed(2)} goes back to the account that paid as soon as the payment service answers. Nothing for you to do.`
+          : `${p.currency} ${p.amount.toFixed(2)} goes back to the account that paid. It can take a few working days to show.`,
+        link: `/?parcel=${p.parcelId}`,
+        tag: `booking-refund:${p.parcelId}:${p.state ?? 'asked'}`,
+        data: { parcelId: p.parcelId },
+      });
+    });
     // 2026-11-21 — a booking paid online when booked (5a): its sender told the label is ready, where it opens.
     this.events.subscribe<{ parcelId: string; personDid: string; amount: number; currency: string }>(GlosEvent.Pudo.BookingPaidOnline, (e) => {
       const p = e.payload;

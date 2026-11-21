@@ -5,6 +5,7 @@ import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import './english';
 import { PaidLabelCard, PayOnlineBody, stickSteps } from './screens/PayOnline';
+import { CancelBooking } from './screens/CancelBooking';
 import { printParcelLabel } from '../../shared/print-label';
 import type { BookingPayView } from './types';
 
@@ -61,6 +62,25 @@ describe('paying a booking online', () => {
   });
 });
 
+describe('calling off a booking before it is handed in (5c)', () => {
+  const card = (paidOnline: boolean, open: boolean) => renderToString(<CancelBooking paidOnline={paidOnline} cancel={async () => null} open={open} />);
+  it('quiet until asked for; then what it means first — the money back where it was paid online — and the way to keep it', () => {
+    expect(card(false, false)).toContain(t('send.cancel.open'));
+    expect(card(false, false)).not.toContain(t('send.cancel.yes'));
+    const unpaid = card(false, true);
+    expect(unpaid).toContain(t('send.cancel.meansUnpaid'));
+    expect(unpaid).toContain(t('send.cancel.yes'));
+    expect(unpaid).toContain(t('send.cancel.keep'));
+    expect(card(true, true)).toContain(t('send.cancel.meansPaid'));
+  });
+
+  it('on the booking, only while it is not handed in, and never for a store’s order', () => {
+    const mine = readFileSync(join('src', 'apps/genesis/screens/MyParcelsScreen.tsx'), 'utf8');
+    expect(mine).toContain("parcel.relation === 'sent' && parcel.status === 'Created' && parcel.direction === 'outbound' && !parcel.vendorOrder ? (");
+    expect(mine).toContain('<CancelBooking paidOnline={Boolean(parcel.paidOnline)} cancel={() => actions.cancelBooking(parcel.parcelId)} />');
+  });
+});
+
 describe('where it is reached', () => {
   const src = (p: string) => readFileSync(join('src', p), 'utf8');
   it('the Send app: after booking, and on the booking until it is handed in', () => {
@@ -80,7 +100,7 @@ describe('where it is reached', () => {
     for (const locale of ['nl', 'sw', 'am'] as const) {
       const send = (await import(`../../shared/i18n/words/${locale}/send.ts`)).words as Record<string, string>;
       const agent = (await import(`../../shared/i18n/words/${locale}/agent.ts`)).words as Record<string, string>;
-      for (const k of ['send.pay.title', 'send.pay.cta', 'send.pay.step1', 'send.pay.step5', 'send.pay.paidBody']) expect(send[k], `${locale} ${k}`).toBeTruthy();
+      for (const k of ['send.pay.title', 'send.pay.cta', 'send.pay.step1', 'send.pay.step5', 'send.pay.paidBody', 'send.cancel.open', 'send.cancel.meansPaid', 'send.cancel.yes']) expect(send[k], `${locale} ${k}`).toBeTruthy();
       for (const k of ['agent.accept.paidOnlineTitle', 'agent.accept.paidOnlineDetail']) expect(agent[k], `${locale} ${k}`).toBeTruthy();
     }
   });

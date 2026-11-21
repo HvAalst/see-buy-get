@@ -698,4 +698,11 @@ export const words: Record<string, string> = {
   "send.pay.step3": "Bandika kingo zote nne za lebo kwa utepe.",
   "send.pay.step4": "Usikunje lebo juu ya ukingo wa boksi.",
   "send.pay.step5": "Acha msimbo wa QR wazi: bila utepe juu yake na bila alama.",
+  "send.cancel.open": "Ghairi nafasi hii",
+  "send.cancel.title": "Ughairi nafasi hii?",
+  "send.cancel.means": "Kughairi kunafanya nini",
+  "send.cancel.meansUnpaid": "Nafasi inaisha na nafasi iliyoshikiliwa dukani inaachiliwa. Hakuna kilicholipwa, kwa hiyo hakuna kinachorudi. Ukitaka kutuma hata hivyo, weka nafasi tena.",
+  "send.cancel.meansPaid": "Nafasi inaisha na nafasi iliyoshikiliwa dukani inaachiliwa. Ulicholipa mtandaoni kinarudi chote kwenye akaunti iliyolipa; inaweza kuchukua siku chache za kazi kuonekana.",
+  "send.cancel.yes": "Ndiyo, ighairi",
+  "send.cancel.keep": "Baki na nafasi",
 };

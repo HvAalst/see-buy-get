@@ -16,6 +16,7 @@ import { MollieController } from './mollie.controller';
  */
 type Call = { url: string; method: string; headers: Record<string, string>; body?: string };
 let paymentStatus: { status: string; paidAt?: string; value?: string; currency?: string } = { status: 'open' };
+let refundsDown = false;
 const CHECKOUT = 'https://www.mollie.com/checkout/select-method/tr_b1';
 function aMollie() {
   const calls: Call[] = [];
@@ -24,6 +25,7 @@ function aMollie() {
     calls.push(c);
     const path = new URL(url).pathname;
     if (c.method === 'POST' && path === '/v2/payments') return json(201, { id: 'tr_b1', status: 'open', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), amount: { currency: 'EUR', value: '7.95' }, _links: { checkout: { href: CHECKOUT } } });
+    if (c.method === 'POST' && path === '/v2/payments/tr_b1/refunds') return refundsDown ? json(503, { status: 503, title: 'Service Unavailable', detail: 'Down for maintenance' }) : json(201, { resource: 'refund', id: 're_1', status: 'queued', amount: { currency: 'EUR', value: '7.95' } });
     if (c.method === 'GET' && path === '/v2/payments/tr_b1') return json(200, { id: 'tr_b1', status: paymentStatus.status, ...(paymentStatus.paidAt ? { paidAt: paymentStatus.paidAt } : {}), amount: { currency: paymentStatus.currency ?? 'EUR', value: paymentStatus.value ?? '7.95' } });
     return json(404, { status: 404, title: 'Not Found' });
   };
@@ -33,8 +35,9 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const crypt = { encrypt: (s: string) => s, decrypt: (s: string) => s } as unknown as FieldEncryption;
 const OURS: MollieConfig = { testmode: true, publicBase: 'https://seebuyget.test', host: 'https://mollie.stand-in', ownKey: 'test_ours' };
 
-function aWorld(opts: { cfg?: MollieConfig; country?: string; currency?: string; parcel?: Partial<Parcel> } = {}) {
+function aWorld(opts: { cfg?: MollieConfig; country?: string; currency?: string; parcel?: Partial<Parcel>; refuseMark?: boolean } = {}) {
   paymentStatus = { status: 'open' };
+  refundsDown = false;
   const mollie = aMollie();
   const connect = new MollieConnectService(crypt, opts.cfg ?? OURS, mollie.fetchImpl);
   const parcel = {
@@ -53,12 +56,17 @@ function aWorld(opts: { cfg?: MollieConfig; country?: string; currency?: string;
   } as unknown as Parcel;
   const marked: unknown[] = [];
   let takenIn: ((p: Parcel) => void) | undefined;
+  let calledOff: ((p: Parcel, why: string) => void) | undefined;
   const parcels = {
     get: () => parcel,
     markPaidOnline: (id: string, paid: Parcel['paidOnline']) => {
+      if (opts.refuseMark) throw new Error('Parcel is At_PUDO: a booking is paid online before it is handed in');
       marked.push([id, paid]);
       Object.assign(parcel, { paidOnline: paid, paidStatus: 'ParcelPaid' });
       return parcel;
+    },
+    onCalledOffPaidOnline: (fn: (p: Parcel, why: string) => void) => {
+      calledOff = fn;
     },
     onTakenInPaidOnline: (fn: (p: Parcel) => void) => {
       takenIn = fn;
@@ -69,7 +77,7 @@ function aWorld(opts: { cfg?: MollieConfig; country?: string; currency?: string;
   const books = { post: (e: (typeof posted)[number]) => (posted.push(e), e) } as unknown as BooksService;
   const pay = new BookingPayService(connect, parcels, agents, books);
   pay.onModuleInit();
-  return { pay, parcel, marked, posted, calls: mollie.calls, takenIn: () => takenIn!(parcel) };
+  return { pay, parcel, marked, posted, calls: mollie.calls, takenIn: () => takenIn!(parcel), calledOff: (why: string) => calledOff!(parcel, why) };
 }
 
 describe('a booking paid online when booked (the payments plan, 5a/5b)', () => {
@@ -143,6 +151,72 @@ describe('a booking paid online when booked (the payments plan, 5a/5b)', () => {
     await controller.webhook({ id: 'tr_b' });
     await controller.webhook({ id: 'tr_l' });
     expect(seen).toEqual(['booking:tr_b', 'booking:tr_l', 'direct:tr_l']);
+  });
+
+  /* 5c — called off or voided before it left the shop: given back in full to the account that paid. */
+  const settle = async () => {
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+  const paidWorld = async (opts: Parameters<typeof aWorld>[0] = {}) => {
+    const w = aWorld(opts);
+    await w.pay.ask('PUD-NL1', 'did:glos:person-anouk');
+    paymentStatus = { status: 'paid' };
+    await w.pay.onWebhook('tr_b1');
+    return w;
+  };
+  const refundCalls = (w: ReturnType<typeof aWorld>) => w.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/refunds'));
+
+  it('called off before it was handed in: given back through Mollie, once; the money held as the sender’s leaves our account', async () => {
+    const w = await paidWorld();
+    w.calledOff('called off before it was handed in');
+    await settle();
+    const asked = refundCalls(w);
+    expect(asked).toHaveLength(1);
+    expect(JSON.parse(asked[0].body!)).toMatchObject({ amount: { currency: 'EUR', value: '7.95' }, description: 'SeeBuyGet PUD-NL1: called off before it was handed in' });
+    expect(asked[0].headers['idempotency-key'] ?? asked[0].headers['Idempotency-Key']).toBe('refund-tr_b1');
+    expect(w.posted.map((e) => e.kind)).toEqual(['send-prepayment', 'send-refund']);
+    expect(w.posted[1].lines).toEqual([{ code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: 'did:glos:person-anouk', amount: 7.95 }, { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -7.95 }]);
+    expect(w.pay.view('PUD-NL1').refund).toBe('asked');
+    // Asked again: nothing more.
+    await w.pay.refundFor('PUD-NL1', 'again');
+    expect(refundCalls(w)).toHaveLength(1);
+  });
+
+  it('voided after it was handed in: what was our income taken back first, then the money given back', async () => {
+    const w = await paidWorld();
+    w.takenIn();
+    w.calledOff('voided at the counter');
+    await settle();
+    expect(w.posted.map((e) => e.kind)).toEqual(['send-prepayment', 'shipping', 'shipping-reversal', 'send-refund']);
+    expect(w.posted[2].lines).toEqual([
+      { code: ACCOUNT_CODES.REVENUE, amount: 6.47 },
+      { code: ACCOUNT_CODES.PAYABLE_TAX, amount: 1.38 },
+      { code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: 0.1 },
+      { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: 'did:glos:person-anouk', amount: -7.95 },
+    ]);
+  });
+
+  it('Mollie not answering: it waits, nothing booked, and is asked again until Mollie takes it', async () => {
+    const w = await paidWorld();
+    refundsDown = true;
+    w.calledOff('called off before it was handed in');
+    await settle();
+    expect(w.pay.view('PUD-NL1').refund).toBe('waiting');
+    expect(w.posted.map((e) => e.kind)).toEqual(['send-prepayment']);
+    expect(await w.pay.refundsAgain()).toBe(0);
+    refundsDown = false;
+    expect(await w.pay.refundsAgain()).toBe(1);
+    expect(w.pay.view('PUD-NL1').refund).toBe('asked');
+    expect(w.posted.map((e) => e.kind)).toEqual(['send-prepayment', 'send-refund']);
+    expect(await w.pay.refundsAgain()).toBe(0);
+  });
+
+  it('paid after it was already paid at the shop: held, owed back, and given back at once', async () => {
+    const w = await paidWorld({ refuseMark: true });
+    await settle();
+    expect(w.marked).toEqual([]);
+    expect(refundCalls(w)).toHaveLength(1);
+    expect(w.posted.map((e) => e.kind)).toEqual(['send-prepayment', 'send-refund']);
   });
 
   it('our own key: test_ or live_, a live one never in a sandbox; the test key stands in where none is set', () => {

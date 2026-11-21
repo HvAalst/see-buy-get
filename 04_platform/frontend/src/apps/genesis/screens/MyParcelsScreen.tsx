@@ -2,6 +2,7 @@ import { WeightFoundCard } from '../../../shared/WeightFoundCard';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { MoveDropOff } from './MoveDropOff';
 import { PaidLabelCard, PayOnlineCard } from './PayOnline';
+import { CancelBooking } from './CancelBooking';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow, type SbgClient } from '../../../lib/sbg';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
@@ -265,6 +266,10 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
         ) : (
           <PayOnlineCard parcelId={parcel.parcelId} look={actions.bookingPay} pay={actions.payBooking} onPaid={() => void actions.openParcel(parcel.parcelId)} />
         )
+      ) : null}
+      {/* 2026-11-21 — called off before it is handed in (5c): paid online, the money goes back to the account that paid. */}
+      {parcel.relation === 'sent' && parcel.status === 'Created' && parcel.direction === 'outbound' && !parcel.vendorOrder ? (
+        <CancelBooking paidOnline={Boolean(parcel.paidOnline)} cancel={() => actions.cancelBooking(parcel.parcelId)} />
       ) : null}
 
       {/* 2026-11-06 — booked and not dropped off yet: dropped off at another shop instead, re-priced, the sender's own choice. */}

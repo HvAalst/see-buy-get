@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -18,6 +18,8 @@ import { BOOKING_PAY_FINAL, type BookingPayStatus, type BookingPayView, type Boo
 const LOOK_EVERY_MS = 5_000;
 const STATUSES: readonly BookingPayStatus[] = ['open', 'pending', 'authorized', 'paid', 'canceled', 'expired', 'failed'];
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** A refund Mollie could not take is asked again this often. */
+const REFUND_AGAIN_MS = 3_600_000;
 
 /**
  * 2026-11-21 — A SEND-APP BOOKING PAID ONLINE WHEN BOOKED (the payments plan, 5a and 5b; P5-a "netherlands first", P5-b "it stays
@@ -33,10 +35,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * with its tax (takenIn). Mollie's own charge is our cost, booked when Mollie reports it.
  */
 @Injectable()
-export class BookingPayService implements OnModuleInit {
+export class BookingPayService implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('BookingPay');
   private readonly payments = new PersistentMap<string, BookingPayment>('booking-payments');
   private readonly latest = new PersistentMap<string, string>('booking-payments-by-parcel');
+  private timer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly mollie: MollieConnectService,
@@ -48,6 +51,103 @@ export class BookingPayService implements OnModuleInit {
 
   onModuleInit(): void {
     this.parcels.onTakenInPaidOnline((p) => this.takenIn(p));
+    // 2026-11-21 — called off or voided before it left the shop (5c): given back to the account that paid.
+    this.parcels.onCalledOffPaidOnline((p, why) => void this.refundFor(p.parcelId, why).catch((err) => this.logger.warn(`refund for ${p.parcelId}: ${(err as Error).message}`)));
+  }
+
+  onApplicationBootstrap(): void {
+    this.timer = setInterval(() => void this.refundsAgain().catch((err) => this.logger.warn(`refunds again: ${(err as Error).message}`)), REFUND_AGAIN_MS);
+    this.timer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * 2026-11-21 — GIVEN BACK IN FULL TO THE ACCOUNT THAT PAID (the payments plan, 5c): a booking called off or voided before it
+   * left the shop, or a payment that arrived for a booking already paid in cash. Asked of Mollie on our own account; the books
+   * follow once Mollie takes it (what was income is taken back first, then the money leaves). Mollie unreachable or refusing,
+   * it waits and is asked again every hour. Once only.
+   */
+  async refundFor(parcelId: string, why: string, now: number = Date.now()): Promise<BookingPayment | undefined> {
+    const p = this.latestFor(parcelId);
+    if (!p || p.status !== 'paid' || p.refund?.state === 'asked') return p;
+    return this.askRefund(p, p.refund?.why ?? why, now);
+  }
+
+  /** Every hour: each refund Mollie could not take, asked again. */
+  async refundsAgain(now: number = Date.now()): Promise<number> {
+    let asked = 0;
+    for (const p of [...this.payments.values()]) {
+      if (p.refund?.state !== 'waiting') continue;
+      const done = await this.askRefund(p, p.refund.why, now).catch(() => undefined);
+      if (done?.refund?.state === 'asked') asked += 1;
+    }
+    return asked;
+  }
+
+  private async askRefund(p: BookingPayment, why: string, now: number): Promise<BookingPayment> {
+    const token = this.mollie.ownToken();
+    const at = new Date(now).toISOString();
+    const tries = (p.refund?.tries ?? 0) + 1;
+    const wait = (error: string): BookingPayment => {
+      const next: BookingPayment = { ...p, refund: { state: 'waiting', why, at, error, tries } };
+      this.payments.set(p.paymentId, next);
+      if (tries === 1) this.tellRefund(next);
+      return next;
+    };
+    if (!token) return wait('Our Mollie account is not set up on this server');
+    let made: Record<string, unknown>;
+    try {
+      made = await this.mollie.api().createRefund(token.bearer, p.paymentId, { amount: { currency: p.currency, value: p.amount.toFixed(2) }, description: `SeeBuyGet ${p.parcelId}: ${why}`.slice(0, 255) }, `refund-${p.paymentId}`);
+    } catch (err) {
+      return wait(asOurs(err).message);
+    }
+    const next: BookingPayment = { ...p, refund: { state: 'asked', why, at, ...(typeof made.id === 'string' ? { refundId: made.id } : {}), tries } };
+    this.payments.set(p.paymentId, next);
+    this.bookRefund(next);
+    this.tellRefund(next);
+    return next;
+  }
+
+  /** The books, once Mollie takes the refund: what was our income taken back first (5b), then the money leaving our account. */
+  private bookRefund(p: BookingPayment): void {
+    const gross = round2(p.amount);
+    try {
+      if (p.takenIn) {
+        const tax = round2(p.takenIn.tax);
+        const provision = round2(p.takenIn.provision);
+        this.books.post({
+          entityId: p.entityId,
+          kind: 'shipping-reversal',
+          ref: p.parcelId,
+          currency: p.currency,
+          lines: [
+            { code: ACCOUNT_CODES.REVENUE, amount: round2(gross - tax - provision) },
+            ...(tax > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: tax }] : []),
+            ...(provision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: provision }] : []),
+            { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: p.personDid, amount: -gross },
+          ],
+        });
+      }
+      this.books.post({
+        entityId: p.entityId,
+        kind: 'send-refund',
+        ref: p.refund?.refundId ?? p.paymentId,
+        currency: p.currency,
+        lines: [
+          { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: p.personDid, amount: gross },
+          { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -gross },
+        ],
+      });
+    } catch (err) {
+      this.logger.warn(`Mollie refund for ${p.parcelId} was asked, but could not be booked: ${(err as Error).message}`);
+    }
+  }
+
+  private tellRefund(p: BookingPayment): void {
+    void this.events?.publish(GlosEvent.Pudo.BookingRefunded, { parcelId: p.parcelId, personDid: p.personDid, amount: p.amount, currency: p.currency, state: p.refund?.state }, { source: 'pudo' }).catch(() => undefined);
   }
 
   /** What the Send app shows for this booking: whether it can be paid online now, and the latest payment. */
@@ -57,7 +157,7 @@ export class BookingPayService implements OnModuleInit {
     const offer = this.offerOf(parcel);
     return {
       ...offer,
-      ...(p ? { status: p.status, ...(p.checkoutUrl && !BOOKING_PAY_FINAL.includes(p.status) ? { checkoutUrl: p.checkoutUrl } : {}), ...(p.paidAt ? { paidAt: p.paidAt } : {}) } : {}),
+      ...(p ? { status: p.status, ...(p.checkoutUrl && !BOOKING_PAY_FINAL.includes(p.status) ? { checkoutUrl: p.checkoutUrl } : {}), ...(p.paidAt ? { paidAt: p.paidAt } : {}), ...(p.refund ? { refund: p.refund.state } : {}) } : {}),
     };
   }
 
@@ -201,13 +301,15 @@ export class BookingPayService implements OnModuleInit {
       // Handed in for cash, or ended, before Mollie said: the money is the sender's, owed back (5c).
       this.payments.set(p.paymentId, { ...p, unapplied: (err as Error).message });
       this.logger.warn(`Mollie payment ${p.paymentId} is paid, but ${p.parcelId} could not take it: ${(err as Error).message}`);
+      // 2026-11-21 — owed back, and given back at once (5c).
+      void this.refundFor(p.parcelId, 'paid after it was paid at the shop').catch(() => undefined);
     }
   }
 
   /** Handed in at the shop (5b): what was held as the sender's becomes our income, with its tax and the claims provision. */
   private takenIn(parcel: Parcel): void {
     const p = this.paidFor(parcel.parcelId);
-    if (!p || p.unapplied) return;
+    if (!p || p.unapplied || p.takenIn) return;
     const gross = round2(p.amount);
     const tax = round2(Math.min(Math.max(parcel.shipmentTax ?? 0, 0), gross));
     const provision = round2(Math.min(Math.max(parcel.shipmentProvision ?? 0, 0), gross - tax));
@@ -223,6 +325,7 @@ export class BookingPayService implements OnModuleInit {
         ...(provision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: -provision }] : []),
       ],
     });
+    this.payments.set(p.paymentId, { ...p, takenIn: { at: new Date().toISOString(), tax, provision } });
   }
 
   private latestFor(parcelId: string): BookingPayment | undefined {

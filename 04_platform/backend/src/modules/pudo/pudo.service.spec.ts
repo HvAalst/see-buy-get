@@ -3944,6 +3944,35 @@ describe('PUDO Light', () => {
       expect(parcels.get(heavy.parcelId).status).toBe('Created');
     });
 
+    /* 2026-11-21 — the payments plan, 5c: a booking called off by its sender before it is handed in; paid online, given back. */
+    it('a booking called off by its sender before it is handed in: ended, its place given back; paid online, the money asked back — never once handed in, never by anybody else', () => {
+      const shop = onboardAgent('CX Shop', 'NorthTown', 50);
+      const dest = onboardAgent('CX Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'CX N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const book = (id: string) => parcels.createConsumerSend({ senderPersonDid: `did:person:${id}`, senderPhoneHash: `h-${id}`, receiverMobile: '+254700600091', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+      const asked: Array<[string, string]> = [];
+      parcels.onCalledOffPaidOnline((p, why) => asked.push([p.parcelId, why]));
+      const me = (id: string) => ({ phoneHash: `h-${id}`, personDid: `did:person:${id}` });
+      // Unpaid: ended, nothing to give back.
+      const unpaid = book('cx1');
+      expect(() => parcels.cancelByItsSender(unpaid.parcelId, me('cx2'))).toThrow(/No such parcel/);
+      expect(parcels.cancelByItsSender(unpaid.parcelId, me('cx1')).status).toBe('Voided');
+      expect(asked).toEqual([]);
+      // Paid online: ended, and its money asked back from the account that paid.
+      const paid = book('cx3');
+      parcels.markPaidOnline(paid.parcelId, { paymentId: 'tr_cx3', amount: paid.shipmentCost!, currency: 'KES', at: new Date().toISOString(), test: true, method: 'ideal' });
+      parcels.cancelByItsSender(paid.parcelId, me('cx3'));
+      expect(asked).toEqual([[paid.parcelId, 'called off before it was handed in']]);
+      expect(parcels.get(paid.parcelId).status).toBe('Voided');
+      // Handed in: its counter calls it off — and paid online, the money asked back from there too.
+      const taken = book('cx4');
+      parcels.markPaidOnline(taken.parcelId, { paymentId: 'tr_cx4', amount: taken.shipmentCost!, currency: 'KES', at: new Date().toISOString(), test: true, method: 'ideal' });
+      parcels.intakeConsumerSend(taken.parcelId, shop.did, photoBy(shop.did));
+      expect(() => parcels.cancelByItsSender(taken.parcelId, me('cx4'))).toThrow(/It was handed in already \(At_PUDO\): the shop that took it in can call it off/);
+      parcels.void(taken.parcelId, shop.did, photoBy(shop.did));
+      expect(asked[1]).toEqual([taken.parcelId, 'voided at the counter']);
+    });
+
     /* 2026-11-13 — the owner: "shop and hub tools", T2 — a weight taken on a scale that counts sets the price. */
     it('a person’s send weighed at a counter whose scale counts is priced at that weight, the booking kept beside it; on a guide scale the booking stands', () => {
       const until = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);
