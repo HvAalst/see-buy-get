@@ -3883,6 +3883,27 @@ describe('PUDO Light', () => {
       expect(shelved.destAgentDid).toBe(shop.did);
     });
 
+    /* 2026-11-21 — the owner: "yes" — a booking's cash runs on the shop's credit line, as a walk-up's does. */
+    it('a booking’s cash runs on the shop’s credit line, as a walk-up’s does — beyond float and credit, refused before anything is written', () => {
+      const shop = onboardAgent('CR Shop', 'NorthTown', 1);
+      const dest = onboardAgent('CR Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'CR N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const book = (id: string) => parcels.createConsumerSend({ senderPersonDid: `did:person:${id}`, senderPhoneHash: `h-${id}`, receiverMobile: '+254700600088', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+      const first = book('cr1');
+      // Dearer than the float alone, within float and credit: the float used to refuse it.
+      expect(first.shipmentCost!).toBeGreaterThan(agents.balance(shop.did)!);
+      expect(first.shipmentCost!).toBeLessThan(agents.balance(shop.did)! + TRADE_CREDIT_LIMIT);
+      parcels.intakeConsumerSend(first.parcelId, shop.did, photoBy(shop.did));
+      expect(parcels.get(first.parcelId)).toMatchObject({ status: 'At_PUDO', paidStatus: 'ParcelPaid' });
+      // Dearer than float and credit together: refused, and nothing kept.
+      agents.setPrice(shop.did, 1000);
+      const dear = book('cr2');
+      expect(dear.shipmentCost!).toBeGreaterThan(agents.balance(shop.did)! + TRADE_CREDIT_LIMIT);
+      expect(() => parcels.intakeConsumerSend(dear.parcelId, shop.did, photoBy(shop.did))).toThrow(/Trade credit is used up/);
+      expect(parcels.get(dear.parcelId)).toMatchObject({ status: 'Created', paidStatus: 'unpaid' });
+      expect(parcels.get(dear.parcelId).label).toBeUndefined();
+    });
+
     /* 2026-11-13 — the owner: "shop and hub tools", T2 — a weight taken on a scale that counts sets the price. */
     it('a person’s send weighed at a counter whose scale counts is priced at that weight, the booking kept beside it; on a guide scale the booking stands', () => {
       const until = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);

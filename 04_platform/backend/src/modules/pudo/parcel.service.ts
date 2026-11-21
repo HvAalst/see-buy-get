@@ -2880,7 +2880,10 @@ export class ParcelService implements OnApplicationBootstrap {
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
     const due = weighed ? weighed.quote.locked.gross : (parcel.shipmentCost ?? 0);
     const gate = this.gate.canTransact(agentDid);
-    if (!gate.moneyOk || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    if (!gate.moneyOk) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    // 2026-11-21 — the cash a booking is taken in for runs on the shop's credit line, as a walk-up's does (the owner: "yes"):
+    // the float and its credit cover the booking's price, asked before anything is written. It used to be the float alone.
+    this.gate.requireCharge(agentDid, due);
     // A same-shop parcel takes its shelf slot before anything is written (2026-11-05).
     const here = this.isSameShop(parcel);
     // 2026-11-13 — WEIGHED AT THE COUNTER on a scale that counts (T2): its weight sets the price, the booking kept beside it.
