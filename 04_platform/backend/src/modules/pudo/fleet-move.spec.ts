@@ -35,6 +35,7 @@ import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { FleetMoveService } from './fleet-move.service';
+import { takeOffVehicle } from './vehicle-take-off';
 import { FleetOfferService, MAX_OFFERS_PER_DAY, OFFER_DAYS } from './fleet-offer.service';
 import { ownerDrivers } from './handle-directory.service';
 import { ConsignmentNoteService } from './consignment-note.service';
@@ -983,7 +984,7 @@ describe('a driver changing fleet', () => {
         expect(() => vehicles.correctPlate(first.vehicleId, '   ', { name: 'Rider', role: 'driver' })).toThrow(/A number plate is required/);
         // Another courier's plate: refused, and nothing changes on either.
         const other = courier(['bike'], 'KMZZ 900Z');
-        expect(() => vehicles.correctPlate(first.vehicleId, 'kmzz 900z', { name: 'Rider', role: 'driver' })).toThrow(/^KMZZ 900Z is on another vehicle in the network already\. If that plate is yours, ask the help centre$/);
+        expect(() => vehicles.correctPlate(first.vehicleId, 'kmzz 900z', { name: 'Rider', role: 'driver' })).toThrow(/^KMZZ 900Z is on another vehicle in the network already\. If you bought it, ask its owner whether they sold it$/);
         expect([vehicles.get(first.vehicleId).plate, vehicles.get(other.first.vehicleId).plate]).toEqual(['KMDX 123A', 'KMZZ 900Z']);
       });
 
@@ -1048,6 +1049,58 @@ describe('a driver changing fleet', () => {
         expect(departures.plateCorrected(d.truck.vehicleId, fixed.plate)).toBe(1);
         expect(departures.require(run.departureId).plate).toBe('KCX 900T');
         expect(fixed.plateHistory).toEqual([expect.objectContaining({ plate: was, role: 'fleet' })]);
+      });
+
+      it('a plate is kept as typed — an S stays an S; spaces between its parts come to one', () => {
+        const { did } = courier(['bike'], 'KSS 1A');
+        expect(vehicles.list().filter((v) => v.ownerDriverDid === did).map((v) => v.plate)).toEqual(['KSS 1A']);
+        expect(moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'pedal', plate: ' kss   777s ' }).plate).toBe('KSS 777S');
+        // Two spaces typed where the record has one are the same plate.
+        expect(() => moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'pedal', plate: 'KSS  777S' })).toThrow(/^KSS 777S is on another vehicle in the network already/);
+        // Kept that way by every door, riding for yourself as much as adding one.
+        expect(vehicles.get(courier(['bike'], ' kmsp   2a ').first.vehicleId).plate).toBe('KMSP 2A');
+      });
+
+      /**
+       * 2026-11-21 — THE OWNER: "add the check". Every door that registers a vehicle asks the plate first, before anything is
+       * written: riding for yourself, at once or as an ask; staff approving an ask whose plate went onto another vehicle since.
+       */
+      it('every door asks the plate first: riding for yourself, at once or as an ask; staff approving an ask taken since', () => {
+        const { first } = courier(['bike'], 'KMDO 1A');
+        const r = aRider(aFleet('Kilima Logistics').did);
+        moves.leave(r.driver.did);
+        expect(() => moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: 'kmdo 1a' })).toThrow(/^KMDO 1A is on another vehicle in the network already\. If you bought it, ask its owner whether they sold it$/);
+        // Nothing changed: still between fleets, no vehicle of theirs.
+        expect(drivers.get(r.driver.did).removedFrom).toBeDefined();
+        expect(ownedBy(r.driver.did)).toEqual([]);
+        expect(vehicles.get(first.vehicleId).status).toBe('ACTIVE');
+
+        const { did } = aTruckerOutOf('Pwani Haulage');
+        expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KMDO 1A', ...papersOf(did) })).toThrow(/on another vehicle in the network already/);
+        expect(drivers.get(did).courierAsk).toBeUndefined();
+        moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCPT 9T', ...papersOf(did) });
+        // While it waited, the plate went onto another vehicle: the approval is refused and nothing about them changes.
+        vehicles.register({ plate: 'KCPT 9T', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'X', managerDid: aFleet('Lake Haulage').did } as never);
+        expect(() => moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno', criminalRecordClear: true })).toThrow(/^KCPT 9T is on another vehicle in the network already/);
+        expect(drivers.get(did).courierAsk).toMatchObject({ plate: 'KCPT 9T' });
+        expect(ownedBy(did)).toEqual([]);
+      });
+
+      it('taken off, sold or scrapped: never with a run waiting for it — put the run on another vehicle first', () => {
+        const kilima = aFleet('Kilima Logistics');
+        const d = aDriver(kilima.did);
+        const line = corridors.publish(corridors.proposeLine({ managerDid: kilima.did, company: 'Kilima Logistics', name: 'Nairobi – Mombasa TO', originZone: 'Nairobi TO', destZone: 'Mombasa TO', vehicleType: 'truck' }).corridorId, 'did:glos:staff');
+        const run = departures.declare({ managerDid: kilima.did, corridorId: line.corridorId, vehicleId: d.truck.vehicleId, leavesAt: new Date(Date.now() + DAY).toISOString(), capacityKg: 6000, capacityM3: 40, basis: 'per_trip', amount: 450 });
+        const take = () => takeOffVehicle({ vehicles, fleet, departures }, d.truck.vehicleId);
+        expect(take).toThrow(new RegExp(`^${d.truck.plate} is on the Nairobi – Mombasa TO run leaving ${run.leavesAt.slice(0, 10)}, not left yet: put the run on another vehicle first$`));
+        departures.swapVehicle(run.departureId, kilima.did, aTruck(kilima.did).vehicleId);
+        fleet.couple(d.driver.did, d.truck.vehicleId);
+        expect(take).toThrow(/^A shift is running on .*: end it first$/);
+        fleet.uncouple(d.driver.did);
+        expect(take().status).toBe('RETIRED');
+        expect(take).toThrow(/is off the list already/);
+        // Its plate is free for whoever carries it now.
+        expect(vehicles.plateTaken(d.truck.plate)).toBe(false);
       });
     });
   });

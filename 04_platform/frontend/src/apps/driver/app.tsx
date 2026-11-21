@@ -165,7 +165,7 @@ export function App() {
         labels={false}
       />
 
-      <FleetSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} />
+      <FleetSheet open={fleetOpen} onClose={() => setFleetOpen(false)} state={state} actions={actions} sbg={sbg} />
       {coverOpen ? <CoverSheet state={state} actions={actions} sbg={sbg} onClose={() => setCoverOpen(false)} withStatus /> : null}
       <Toasts state={state} actions={actions} />
       {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}

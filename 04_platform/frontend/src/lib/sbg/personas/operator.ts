@@ -54,6 +54,10 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/lost' as never, { params: { path: { id: parcelId } }, body } as never) as never),
     /** The trail: a load's or a bag's anchored steps, each checked now against the chain. */
     trail: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/trail/{ref}', { params: { path: { ref } } })),
+    /** 2026-11-21 — plates nobody answered about (a vehicle said to be sold), and staff's decision on one, with a reason. */
+    lapsedPlateClaims: () => sbg.request((c) => c.GET('/v1/sbg/plate-claims/lapsed', {})),
+    decidePlateClaim: (vehicleId: string, body: { claimId: string; release: boolean; reason: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/plate-claim-decision', { params: { path: { id: vehicleId } }, body })),
     /** 2026-11-06 — a Bags_Waiting case's bags; the drivers an offer of one would reach; and the offer to the one chosen. */
     caseBags: (caseId: string) => sbg.request((c) => c.GET('/v1/sbg/flag-cases/{caseId}/bags', { params: { path: { caseId } } })),
     bagDrivers: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}/drivers', { params: { path: { code } } })),

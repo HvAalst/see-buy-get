@@ -1377,4 +1377,9 @@ export const words: Record<string, string> = {
   "fleet.vehicles.plateSave": "ታርጋውን ያስቀምጡ",
   "fleet.vehicles.plateSaved": "ታርጋው አሁን {plate} ነው",
   "fleet.vehicles.plateSavedDetail": "ተለጣፊውን እንደገና ያትሙ፦ በዳሽቦርዱ ላይ ያለው የድሮውን ታርጋ ያሳያል።",
+  "fleet.vehicles.soldBtn": "ተሽጧል ወይም ከአገልግሎት ውጭ ሆኗል",
+  "fleet.vehicles.soldTitle": "{plate}ን ከተሽከርካሪዎችዎ ያስወግዱ?",
+  "fleet.vehicles.soldBody": "ተሽጧል፣ ከአገልግሎት ውጭ ሆኗል ወይም በስህተት ተጨምሯል። ከእንግዲህ ሥራ አይቀርብለትም፣ በእሱም ፈረቃ አይጀመርም፤ ያደረገው በመዝገቡ ላይ ይቆያል፣ ታርጋውም አሁን ለሚጠቀምበት ነጻ ይሆናል። ፈረቃ እየሄደበት ወይም ጉዞ እየጠበቀው እያለ አይሆንም።",
+  "fleet.vehicles.soldYes": "አዎ፣ ያስወግዱት",
+  "fleet.vehicles.soldDone": "{plate} ከተሽከርካሪዎችዎ ተወግዷል",
 };

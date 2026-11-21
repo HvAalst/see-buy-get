@@ -59,6 +59,8 @@ export const NOTIFICATION_KINDS = [
   'terms_updated',
   /** Round 39 — where they work was rated for a threat in the risk register: what a high rating asks of them from now. */
   'risk_rated',
+  /** 2026-11-21 — a plate claimed: its owner asked whether they sold the vehicle; the asker told how it ended. */
+  'plate_claim',
   /**
    * A DRIVER'S HOURS, said by the clock: an hour before the shift limit, at the limit, and — to somebody who asked —
    * when their rest is over. The fleet's office hears the limit being passed too. Until this, everything about the

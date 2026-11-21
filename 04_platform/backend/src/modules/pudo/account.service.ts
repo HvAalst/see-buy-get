@@ -1219,6 +1219,8 @@ export class AccountService implements OnApplicationBootstrap {
       // 2026-11-03 — what their own vehicle runs on, asked before anything is written (VehicleService.askEnergy).
       const own = profile.vehicle as { vehicleClass?: Parameters<VehicleService['askEnergy']>[0]; energy?: unknown } | undefined;
       if (own?.vehicleClass) this.vehicles.askEnergy(own.vehicleClass, own.energy);
+      // 2026-11-21 — a plate no other vehicle in use carries, asked before anybody is registered.
+      if (profile.vehicle) this.vehicles.requirePlateFree(String((profile.vehicle as { plate?: unknown }).plate ?? ''), { signingUp: true });
       const driver = this.drivers.register({ ...(profile.driver as object), managerDid: undefined } as never);
       /*
        * A SELF-EMPLOYED COURIER ARRIVES WITH THEIR OWN VEHICLE, OR THEY ARRIVE UNABLE TO WORK.

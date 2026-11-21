@@ -10,6 +10,9 @@ import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { Equipment } from './cargo.types';
 import { TOWING_CLASSES, UNBRAKED_MAX_KG } from './trailer-rules';
 
+/** 2026-11-21 — a plate as it is kept: trimmed, one space between its parts, in capitals. */
+export const plateOf = (plate: string | undefined): string => (plate ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+
 /** Loading equipment in words, for a refusal a person reads. */
 const EQUIPMENT_WORDS: Partial<Record<Equipment, string>> = {
   HTR: 'a sack barrow',
@@ -148,7 +151,7 @@ export class VehicleService {
       vehicleId: `veh_${randomBytes(7).toString('hex')}`,
       managerDid: input.managerDid,
       qr: `VEH-${randomBytes(4).toString('hex').toUpperCase()}`, // dashboard sticker
-      plate: input.plate.trim().toUpperCase(),
+      plate: plateOf(input.plate),
       vehicleClass: input.vehicleClass,
       truckSubtype: input.truckSubtype,
       // What it runs on, as its owner said. Absent only where it was not asked: never a class's guess.
@@ -268,8 +271,33 @@ export class VehicleService {
    * vehicle no longer counts.
    */
   plateTaken(plate: string, exceptVehicleId?: string): boolean {
-    const wanted = plate.trim().toUpperCase();
-    return [...this.vehicles.values()].some((v) => v.vehicleId !== exceptVehicleId && v.status !== 'RETIRED' && v.plate === wanted);
+    return Boolean(this.holderOf(plate, exceptVehicleId));
+  }
+
+  /** 2026-11-21 — the vehicle in use that carries this plate (spaces and case as a plate is kept), or none. */
+  holderOf(plate: string, exceptVehicleId?: string): Vehicle | undefined {
+    const wanted = plateOf(plate);
+    return [...this.vehicles.values()].find((v) => v.vehicleId !== exceptVehicleId && v.status !== 'RETIRED' && v.plate === wanted);
+  }
+
+  /**
+   * 2026-11-21 — EVERY DOOR THAT REGISTERS A VEHICLE ASKS THIS FIRST (the owner: "add the check and consider that a vehicle may be
+   * sold"). A plate on another vehicle in use is refused, with the way on for somebody who bought it: its owner is asked whether
+   * they sold it (PlateClaimService). `signingUp`: no account yet to ask from, so the way on is to add it in the app.
+   */
+  requirePlateFree(plate: string, opts: { exceptVehicleId?: string; signingUp?: boolean } = {}): string {
+    const wanted = plateOf(plate);
+    if (!wanted) throw new GlosError('FIELD_REQUIRED', 'A number plate is required', { field: 'plate' });
+    if (this.holderOf(wanted, opts.exceptVehicleId)) {
+      throw new GlosError(
+        'DUPLICATE',
+        opts.signingUp
+          ? `${wanted} is on another vehicle in the network already. If you bought it, sign up without it and add it in the app, where its owner is asked whether they sold it`
+          : `${wanted} is on another vehicle in the network already. If you bought it, ask its owner whether they sold it`,
+        { field: 'plate', plate: wanted },
+      );
+    }
+    return wanted;
   }
 
   /**
@@ -283,9 +311,7 @@ export class VehicleService {
     const wanted = (plate ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
     if (!wanted) throw new GlosError('FIELD_REQUIRED', 'A number plate is required', { field: 'plate' });
     if (wanted === v.plate) throw new GlosError('INVALID_INPUT', `${wanted} is its plate already`, { field: 'plate' });
-    if (this.plateTaken(wanted, v.vehicleId)) {
-      throw new GlosError('DUPLICATE', `${wanted} is on another vehicle in the network already. If that plate is yours, ask the help centre`, { field: 'plate' });
-    }
+    this.requirePlateFree(wanted, { exceptVehicleId: v.vehicleId });
     v.plateHistory = [...(v.plateHistory ?? []), { plate: v.plate, until: new Date(now).toISOString(), by: by.name, role: by.role }];
     v.plate = wanted;
     this.vehicles.set(v.vehicleId, v);

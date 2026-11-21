@@ -124,4 +124,21 @@ describe('a driver signs up with their PIN, over the wire', () => {
     for (let i = 0; i < MAX_DRIVER_REFUSALS_PER_DAY; i++) expect((await probe()).body.code).toBe('DUPLICATE');
     expect((await probe()).body.code).toBe('RATE_LIMITED');
   });
+
+  /**
+   * 2026-11-21 — THE OWNER: "add the check". A plate another vehicle in use carries is refused before anybody is made, with the way
+   * on for whoever bought it: sign up without it, and add it in the app, where its owner is asked whether they sold it.
+   */
+  it('a plate another vehicle carries is refused before anybody is made — with the way on for whoever bought it', async () => {
+    const first = await aPerson();
+    const u = digits();
+    await http().post('/v1/sbg/drivers/signups').set(first.auth).send({ phone: first.phone, profile: profile(first.phone, u) }).expect(201);
+    const second = await aPerson();
+    const v = digits();
+    const refused = await http().post('/v1/sbg/drivers/signups').set(second.auth).send({ phone: second.phone, profile: { ...profile(second.phone, v), vehicle: { plate: `bk  ${u}`, vehicleClass: 'bike', energy: 'pedal' } } });
+    expect([refused.status, refused.body.code, refused.body.params?.field]).toEqual([409, 'DUPLICATE', 'plate']);
+    expect(refused.body.detail).toBe(`BK ${u} is on another vehicle in the network already. If you bought it, sign up without it and add it in the app, where its owner is asked whether they sold it`);
+    // Nobody was made: the same person, the same details, their own plate — signed up.
+    await http().post('/v1/sbg/drivers/signups').set(second.auth).send({ phone: second.phone, profile: profile(second.phone, v) }).expect(201);
+  });
 });

@@ -69,6 +69,10 @@ export const GlosEvent = {
     HubPapersDecided: 'pudo.hub_papers_decided',
     // A driver in no fleet asked to ride for themselves on something heavy, and staff decided: told to the driver.
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
+    // 2026-11-21 — "I bought it": the owner of the vehicle carrying a plate is asked; the asker told when it closes; staff when it lapses.
+    PlateClaimAsked: 'pudo.plate_claim_asked',
+    PlateClaimClosed: 'pudo.plate_claim_closed',
+    PlateClaimLapsed: 'pudo.plate_claim_lapsed',
     // Round 39 — a light courier's ID photo seen by staff, or sent back with the reason: told to the rider.
     DriverIdPhotoDecided: 'pudo.driver_id_photo_decided',
     // Round 40 — staff recorded a shop's trading licence to a new date, or sent back the one it sent with the reason: told to the shop.

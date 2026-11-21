@@ -8,6 +8,7 @@ import { initials } from '../ConsoleMenu';
 import { DocumentStrip } from './DocumentStrip';
 import { TransitPanel } from './TransitPanel';
 import { OperatorPapersPanel } from './OperatorPapers';
+import { PlateClaimsPanel } from './PlateClaimsPanel';
 import { DeclarationsPanel } from './DeclarationsPanel';
 import { ShopLicencesPanel } from './ShopLicences';
 import { useCountryAtlas } from './CountrySelect';
@@ -161,6 +162,9 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
           <VehicleSheet row={openVehicle} state={state} actions={actions} />
         </ConsoleDetail>
       ) : null}
+
+      {/* 2026-11-21 — plates nobody answered about: a vehicle said to be sold, decided here with a reason both are told. */}
+      <PlateClaimsPanel state={state} actions={actions} />
 
       {/* The fleet OPERATORS' own papers — shown whatever any sister enforces. */}
       <OperatorPapersPanel state={state} actions={actions} />

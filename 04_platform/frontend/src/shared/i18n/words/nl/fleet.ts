@@ -1377,4 +1377,9 @@ export const words: Record<string, string> = {
   "fleet.vehicles.plateSave": "Kenteken opslaan",
   "fleet.vehicles.plateSaved": "Het kenteken is nu {plate}",
   "fleet.vehicles.plateSavedDetail": "Print de sticker opnieuw: op de sticker op het dashboard staat het oude kenteken.",
+  "fleet.vehicles.soldBtn": "Verkocht of gesloopt",
+  "fleet.vehicles.soldTitle": "{plate} van je voertuigen halen?",
+  "fleet.vehicles.soldBody": "Verkocht, gesloopt of per vergissing toegevoegd. Er wordt geen werk meer voor aangeboden en er begint geen dienst meer op; wat het deed blijft bewaard, en het kenteken is vrij voor wie het nu voert. Niet zolang er een dienst op loopt of een rit op wacht.",
+  "fleet.vehicles.soldYes": "Ja, haal het eraf",
+  "fleet.vehicles.soldDone": "{plate} staat niet meer bij je voertuigen",
 };

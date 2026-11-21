@@ -83,6 +83,8 @@ export function createFleetApi(sbg: SbgClient) {
     setVehicleEquipment: (vehicleId: string, equipment: string[]) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/equipment', { params: { path: { id: vehicleId } }, body: { equipment: equipment as never } })),
 
+    /** 2026-11-21 — sold, scrapped, or added by mistake: off the fleet's vehicles (never mid-shift or with a run waiting). */
+    retireVehicle: (vehicleId: string) => sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/retire', { params: { path: { id: vehicleId } } })),
     /** 2026-11-21 — a vehicle's plate, corrected by its fleet's office (the plate it had is kept on it). */
     correctPlate: (vehicleId: string, plate: string) => sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/plate', { params: { path: { id: vehicleId } }, body: { plate } })),
 

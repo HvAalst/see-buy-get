@@ -1,3 +1,4 @@
+import { PlateClaimsCard, PlateTakenAsk } from '../../../shared/plates/PlateClaims';
 import { useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, Icon, Note, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
@@ -123,6 +124,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   const [towFor, setTowFor] = useState<VehicleRow | null>(null);
   // 2026-11-21 — its plate corrected (the owner: "can't edit the car details when I made a mistake in the number plate").
   const [plateFor, setPlateFor] = useState<VehicleRow | null>(null);
+  // 2026-11-21 — sold or scrapped: taken off, said first (the owner: "consider that a vehicle may be sold").
+  const [soldFor, setSoldFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -132,6 +135,9 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* 2026-11-21 — a plate on another vehicle already: whoever bought it asks its owner; and what is asked of this fleet. */}
+      <PlateTakenAsk error={state.error} sbg={sbg} />
+      <PlateClaimsCard sbg={sbg} onChanged={() => void actions.refresh()} />
       <BrokenDownCard sbg={sbg} fleetDid={state.manager?.did} reload={upkeepChanged} onOpen={(id) => setCareFor((state.vehicles.find((v) => v.vehicleId === id) as VehicleRow | undefined) ?? null)} />
 
       <Card title={t('fleet.vehicles.registerTitle')}>
@@ -449,6 +455,9 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                     <Button variant="link" full={false} onClick={() => setPlateFor(v)}>
                       {t('fleet.vehicles.plateBtn')}
                     </Button>
+                    <Button variant="link" full={false} onClick={() => setSoldFor(v)}>
+                      {t('fleet.vehicles.soldBtn')}
+                    </Button>
                     <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
                       {t('fleet.vehicles.rateBtn')}
                     </Button>
@@ -511,6 +520,25 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <EnergySheet vehicle={energyFor} onClose={() => setEnergyFor(null)} state={state} actions={actions} />
       {plateFor ? <PlateSheet vehicle={plateFor} onClose={() => setPlateFor(null)} state={state} actions={actions} /> : null}
+      {soldFor ? (
+        <Sheet open onClose={() => setSoldFor(null)} title={t('fleet.vehicles.soldTitle', { plate: soldFor.plate })}>
+          <p class="t-body">{t('fleet.vehicles.soldBody')}</p>
+          <Button
+            chevron={false}
+            busy={state.busy === `retire:${soldFor.vehicleId}`}
+            onClick={() => {
+              const v = soldFor;
+              setSoldFor(null);
+              void actions.retireVehicle(v);
+            }}
+          >
+            {t('fleet.vehicles.soldYes')}
+          </Button>
+          <Button variant="link" onClick={() => setSoldFor(null)}>
+            {t('common.cancel')}
+          </Button>
+        </Sheet>
+      ) : null}
       {equipmentFor ? <EquipmentSheet vehicle={equipmentFor} onClose={() => setEquipmentFor(null)} state={state} actions={actions} /> : null}
       {towFor ? <TowSheet vehicle={towFor} onClose={() => setTowFor(null)} sbg={sbg} onSaved={() => void actions.refresh()} /> : null}
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />

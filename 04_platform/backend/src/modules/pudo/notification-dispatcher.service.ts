@@ -1,3 +1,4 @@
+import type { PlateClaim } from './plate-claim.types';
 import type { OrderHandedOn } from './fleet-overflow.types';
 import { BusinessDoorService } from './business-door.service';
 import type { DriverRostered } from './fleet-roster.service';
@@ -561,6 +562,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     });
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
+    // 2026-11-21 — "I bought it" (PlateClaimService): the owner asked, the asker told how it ended; staff's decision told to both.
+    this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimAsked, (e) => this.onPlateClaim('asked', e.payload.claim));
+    this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimClosed, (e) => this.onPlateClaim('closed', e.payload.claim));
+    this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimLapsed, (e) => this.onPlateClaim('lapsed', e.payload.claim));
     // Round 39 — the risk register: a hub, or the fleet running a corridor, is told when where it works is rated anew.
     this.events.subscribe<{ subject: 'corridor' | 'hub'; id: string; threat: string; level: string; from?: string; tell?: { did: string; name: string } }>(GlosEvent.Pudo.RiskRated, (e) => {
       const p = e.payload;
@@ -2378,6 +2383,60 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * A DRIVER IN NO FLEET ASKED TO RIDE FOR THEMSELVES on something heavy, and staff decided: told either way, on the
    * event. Yes says who they ride for now; no says why, in staff's words, and that they may ask again.
    */
+  /**
+   * 2026-11-21 — A PLATE CLAIMED. The owner hears they are asked, with one tap to answer where it opens (the Driver app's home, a
+   * fleet's Vehicles); the asker hears how it ended — and, where staff decided, both hear why. Nobody is told who owns a plate.
+   */
+  private async onPlateClaim(step: 'asked' | 'closed' | 'lapsed', c: PlateClaim): Promise<void> {
+    const where = (p: { kind: 'driver' | 'fleet' }) => (p.kind === 'fleet' ? '/?go=vehicles' : '/?go=home');
+    const data = { claimId: c.claimId, plate: c.plate, state: c.state };
+    if (step === 'asked' && c.holder) {
+      await this.tell(c.holder.did, {
+        kind: 'plate_claim',
+        title: `Did you sell ${c.plate}?`,
+        body: `${c.claimant.name} says they bought it. If you sold it, take it off your vehicles with one tap; if it is still yours, say so. Not answered in 14 days, SeeBuyGet staff look at it.`,
+        link: where(c.holder),
+        tag: `plate-claim:${c.claimId}`,
+        data,
+      });
+      return;
+    }
+    if (step === 'lapsed') {
+      await this.tell(c.claimant.did, {
+        kind: 'plate_claim',
+        title: `No answer about ${c.plate} yet`,
+        body: c.holder ? 'Its owner has not answered in 14 days. SeeBuyGet staff look at it now; you hear here when they decide.' : 'Nobody can be asked about it. SeeBuyGet staff look at it now; you hear here when they decide.',
+        link: where(c.claimant),
+        tag: `plate-claim:${c.claimId}:lapsed`,
+        data,
+      });
+      return;
+    }
+    const free = c.state === 'sold' || c.state === 'released' || c.state === 'freed';
+    await this.tell(c.claimant.did, {
+      kind: 'plate_claim',
+      title: free ? `${c.plate} is free: add it` : c.state === 'kept' ? `${c.plate} is still its owner’s` : `${c.plate} stays where it is`,
+      body: free
+        ? `${c.state === 'released' ? `SeeBuyGet staff took it off the vehicles of the owner who did not answer: ${c.reason ?? ''}`.trim() : 'It is off its owner’s vehicles.'} Add it now: it is on nobody’s list.`
+        : c.state === 'kept'
+          ? 'Its owner says they did not sell it. If it is yours, ask the help centre, with the registration papers in your name.'
+          : `SeeBuyGet staff looked at it: ${c.reason ?? ''}`.trim(),
+      link: where(c.claimant),
+      tag: `plate-claim:${c.claimId}:closed`,
+      data,
+    });
+    if (c.state === 'released' && c.holder) {
+      await this.tell(c.holder.did, {
+        kind: 'plate_claim',
+        title: `${c.plate} was taken off your vehicles`,
+        body: `Somebody said they bought it, and you did not answer in 14 days. SeeBuyGet staff looked at it: ${c.reason ?? ''} If it is still yours, ask the help centre.`,
+        link: where(c.holder),
+        tag: `plate-claim:${c.claimId}:released`,
+        data,
+      });
+    }
+  }
+
   private async onRideAloneDecided(payload: { did: string; approved: boolean; reason?: string; companyName?: string }): Promise<void> {
     try {
       await this.notifications.notify(payload.did, {

@@ -5,7 +5,8 @@ import { energyFits } from '../../../shared/vehicleEnergy';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Note, PhotoField, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
-import type { SbgError } from '../../../lib/sbg';
+import type { SbgClient, SbgError } from '../../../lib/sbg';
+import { PlateTakenAsk } from '../../../shared/plates/PlateClaims';
 import type { Uploaded } from '../../../shared/upload';
 import { removalWords, removedLine, rosterDayName, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
 import type { RideAloneTerms } from '../types';
@@ -50,7 +51,7 @@ const DAY: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
  * vehicle of their own. On anything heavier it is an ASK, with a photograph of their ID and of their licence, that
  * network staff read before they ride; while it waits the sheet says so, and a refusal is shown in staff's words.
  */
-export function FleetSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: DriverState; actions: DriverActions }) {
+export function FleetSheet({ open, onClose, state, actions, sbg = null }: { open: boolean; onClose: () => void; state: DriverState; actions: DriverActions; sbg?: SbgClient | null }) {
   const t = useT();
   const [error, setError] = useState<SbgError | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -74,6 +75,8 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
       <p class="t-body">{driver?.fleetName ? t('driver.fleet.now', { company: driver.fleetName }) : removed ? t('driver.fleet.nowNone') : t('driver.fleet.nowOwn')}</p>
       {removed ? <Note tone="warn" icon="truck" title={removedLine(removed, formatDate(removed.at, DAY), t)} detail={removalWords(removed, t, Boolean(state.rideAlone?.offered))} /> : null}
       {error ? <RefusalNote error={error} /> : null}
+      {/* 2026-11-21 — riding for themselves on a vehicle they bought, whose seller never took it off. */}
+      <PlateTakenAsk error={error} sbg={sbg} />
 
       {/* THEIR DAYS: what the office has said about who drives each coming day. Planning, never a gate — said so. */}
       {driver?.managerDid && driver.fleetName ? (

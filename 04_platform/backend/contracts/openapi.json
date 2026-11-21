@@ -41849,6 +41849,155 @@
         }
       }
     },
+    "/v1/sbg/plate-claims": {
+      "post": {
+        "operationId": "PlateClaim.ask",
+        "summary": "",
+        "description": "\"I bought it\": the owner of the vehicle that carries this plate is asked whether they sold it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlateClaimAskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateClaimView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "PlateClaim.mine",
+        "summary": "",
+        "description": "What is asked of this driver or fleet about its vehicles, and what it asked.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateClaimsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/plate-claims/{id}/answer": {
+      "post": {
+        "operationId": "PlateClaim.answer",
+        "summary": "",
+        "description": "The owner's answer: sold — it comes off their vehicles now — or still theirs.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlateClaimAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateClaimView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/plate-claims/lapsed": {
+      "get": {
+        "operationId": "PlateClaim.lapsed",
+        "summary": "",
+        "description": "For staff: the claims nobody answered in fourteen days, or with nobody to ask.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LapsedPlateClaimView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vehicles/{id}/plate-claim-decision": {
+      "post": {
+        "operationId": "PlateClaim.decide",
+        "summary": "",
+        "description": "Staff decide one, at the vehicle's address: take it off its owner's list, or leave it — with a reason both are told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlateClaimDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateClaimView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/partners": {
       "get": {
         "operationId": "FleetOverflow.list",
@@ -96084,6 +96233,175 @@
             ]
           }
         }
+      },
+      "PlateClaimAskDto": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "plate"
+        ]
+      },
+      "PlateClaimView": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "string"
+          },
+          "state": {
+            "type": "object"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Staff's words, where staff decided."
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "To the owner only: who says they bought it, by name — the seller knows whom they sold to."
+          }
+        },
+        "required": [
+          "claimId",
+          "plate",
+          "vehicleClass",
+          "state",
+          "askedAt"
+        ]
+      },
+      "PlateClaimsView": {
+        "type": "object",
+        "properties": {
+          "forMe": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlateClaimView"
+            }
+          },
+          "asked": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlateClaimView"
+            }
+          }
+        },
+        "required": [
+          "forMe",
+          "asked"
+        ]
+      },
+      "PlateClaimAnswerDto": {
+        "type": "object",
+        "properties": {
+          "sold": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sold"
+        ]
+      },
+      "PlateClaimParty": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "object"
+          },
+          "did": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "did",
+          "name"
+        ]
+      },
+      "LapsedPlateClaimView": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string"
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "vehicleClass": {
+            "type": "string"
+          },
+          "claimant": {
+            "$ref": "#/components/schemas/PlateClaimParty"
+          },
+          "holder": {
+            "$ref": "#/components/schemas/PlateClaimParty"
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "lapsedAt": {
+            "type": "string"
+          },
+          "lastShiftAt": {
+            "type": "string",
+            "description": "When a shift last ran on the vehicle: one since it was asked about says somebody still drives it."
+          }
+        },
+        "required": [
+          "claimId",
+          "vehicleId",
+          "plate",
+          "vehicleClass",
+          "claimant",
+          "askedAt",
+          "lapsedAt"
+        ]
+      },
+      "PlateClaimDecisionDto": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "release": {
+            "type": "boolean",
+            "description": "True: take the vehicle off its owner's list. False: leave it."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "by": {
+            "type": "string",
+            "description": "The member of staff, by name, where the sign-in is shared.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "claimId",
+          "release"
+        ]
       },
       "PartnershipEnd": {
         "type": "object",

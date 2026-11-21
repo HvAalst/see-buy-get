@@ -623,6 +623,12 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PATCH sbg/vehicles/:id/equipment': 'support',
   // 2026-11-21 — a plate is corrected by the vehicle's owner, its fleet or its driver: staff write nothing in its name.
   'PATCH sbg/vehicles/:id/plate': 'none',
+  // 2026-11-21 — "I bought it": asked and answered by a driver or a fleet's office; staff decide only what nobody answered.
+  'POST sbg/plate-claims': 'none',
+  'GET sbg/plate-claims': 'none',
+  'POST sbg/plate-claims/:id/answer': 'none',
+  'GET sbg/plate-claims/lapsed': 'vetting',
+  'POST sbg/vehicles/:id/plate-claim-decision': 'vetting',
   'GET sbg/trailers': 'none',
   'POST sbg/trailers': 'none',
   'DELETE sbg/trailers/:id': 'none',

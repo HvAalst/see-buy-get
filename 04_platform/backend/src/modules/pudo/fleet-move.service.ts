@@ -13,6 +13,7 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import { VehicleService } from './vehicle.service';
 import { betweenFleets } from './driver.service';
+import { takeOffVehicle } from './vehicle-take-off';
 import { TRUCK_SUBTYPE_CATALOG, type TruckSubtype, type VehicleClass, type VehicleEnergy } from './fleet.config';
 import type { CourierAsk, FleetDriver, FleetRemovalReason, Vehicle } from './fleet.types';
 
@@ -259,6 +260,8 @@ export class FleetMoveService {
     }
     // 2026-11-03 — what it runs on, asked whether they ride at once or ask first.
     this.vehicles.askEnergy(input.vehicleClass, input.energy, now);
+    // 2026-11-21 — and a plate no other vehicle in use carries, at once or as an ask.
+    this.vehicles.requirePlateFree(input.plate ?? '');
     // ANYTHING HEAVIER THAN A MOTORCYCLE ON THEIR LICENCE: an ask, read by staff before they ride — refused before
     // anything is written, and nothing about them changes while it waits.
     if (driver.registry === 'heavy') {
@@ -312,6 +315,8 @@ export class FleetMoveService {
     if (!this.drivers.courierCountries().some((c) => c.jurisdiction === ask.country)) {
       throw new GlosError('FORBIDDEN', `The network does not operate in ${ask.country} any more, so a courier cannot be registered there`);
     }
+    // 2026-11-21 — the plate may have gone onto another vehicle since it was asked: refused before anything changes.
+    this.vehicles.requirePlateFree(ask.plate);
     const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), ...(ask.energy ? { energy: ask.energy } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: ask.country } as never);
     this.drivers.recordCourierCheck(driverDid, { at: ask.askedAt, ...(input.by ? { by: input.by } : {}) }, now);
     this.drivers.rideAlone(driverDid, ask.country);
@@ -339,9 +344,7 @@ export class FleetMoveService {
       throw new GlosError('FIELD_REQUIRED', 'Say what body your truck has: flatbed, tipper, refrigerated…', { field: 'truckSubtype' });
     }
     this.vehicles.askEnergy(input.vehicleClass, input.energy, now);
-    const plate = (input.plate ?? '').trim().replace(/s+/g, ' ').toUpperCase();
-    if (!plate) throw new GlosError('FIELD_REQUIRED', 'A number plate is required', { field: 'plate' });
-    if (this.vehicles.plateTaken(plate)) throw new GlosError('DUPLICATE', `${plate} is on another vehicle in the network already. If that plate is yours, ask the help centre`, { field: 'plate' });
+    const plate = this.vehicles.requirePlateFree(input.plate);
     // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it — in the country they ride in.
     const vehicle = this.vehicles.register({ plate, vehicleClass: input.vehicleClass, ...(input.vehicleClass === 'truck' ? { truckSubtype: input.truckSubtype } : {}), ...(input.energy ? { energy: input.energy } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: driver.jurisdiction } as never);
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
@@ -357,8 +360,7 @@ export class FleetMoveService {
     const v = this.vehicles.get(vehicleId); // 404 if unknown
     if (v.managerDid || v.ownerDriverDid !== driverDid) throw new GlosError('FORBIDDEN', 'Only the driver who owns this vehicle takes it off their list');
     if (v.status === 'RETIRED') throw new GlosError('INVALID_STATE', `${v.plate} is off your list already`);
-    if (this.fleet.activeForVehicle(vehicleId)) throw new GlosError('INVALID_STATE', `A shift is running on ${v.plate}: end it first`);
-    return this.vehicles.retire(vehicleId);
+    return takeOffVehicle({ vehicles: this.vehicles, fleet: this.fleet, departures: this.departures }, vehicleId);
   }
 
   private tellRideAlone(driver: FleetDriver, approved: boolean, reason?: string): void {

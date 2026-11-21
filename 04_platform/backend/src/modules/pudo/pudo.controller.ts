@@ -108,6 +108,7 @@ import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
 import { VehicleService } from './vehicle.service';
+import { takeOffVehicle } from './vehicle-take-off';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
@@ -6831,6 +6832,8 @@ export class SbgController {
     const managerDid = actor?.role === 'operator' ? dto.managerDid : actingTenant(actor);
     if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'A vehicle is registered by its fleet’s office');
     this.vehicles.askEnergy(dto.vehicleClass, dto.energy);
+    // 2026-11-21 — a plate no other vehicle in use carries (a bought one: its owner is asked first, PlateClaimService).
+    this.vehicles.requirePlateFree(dto.plate);
     return this.vehicles.register({ ...dto, managerDid } as never);
   }
 
@@ -6890,7 +6893,8 @@ export class SbgController {
   @Post('vehicles/:id/retire')
   retireVehicle(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVehicleOwner(id, actor);
-    return this.vehicles.retire(id);
+    // 2026-11-21 — sold or scrapped: never while a shift runs on it or a run waits for it (vehicle-take-off.ts).
+    return takeOffVehicle({ vehicles: this.vehicles, fleet: this.fleet, departures: this.departures }, id);
   }
 
   /** The vehicle's owning fleet, or an operator. A vehicle with no fleet (an independent courier's) is operator-only. */

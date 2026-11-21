@@ -333,6 +333,17 @@ export class FleetService {
    * Seeding the history is the honest way to say it. It is their vehicle; the list is what they may start
    * on; and the first real coupling moves it to the head the same way any other would.
    */
+  /** 2026-11-21 — when a shift last ran on this vehicle: now, while one runs; absent where none ever did. */
+  lastShiftOn(vehicleId: string, now: number = Date.now()): string | undefined {
+    let last: string | undefined;
+    for (const a of this.assignments.values()) {
+      if (a.vehicleId !== vehicleId) continue;
+      const at = a.status === 'ended' && a.endedAt ? a.endedAt : new Date(now).toISOString();
+      if (!last || at > last) last = at;
+    }
+    return last;
+  }
+
   claimOwnVehicle(driverDid: string, vehicleId: string): void {
     this.rememberVehicle(driverDid, vehicleId);
   }

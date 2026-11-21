@@ -111,6 +111,8 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/fleet/managers/setting-up': list({ at: 'items', row: { field: 'jurisdiction' } }),
   'GET sbg/fleet/drivers': list({ row: { of: 'driver', id: ['did', 'driverDid'] } }),
   'GET sbg/fleet/drivers/kyc-queue': list({ row: { of: 'driver', id: ['did', 'driverDid'] } }),
+  // 2026-11-21 — plates nobody answered about, each in the country of the vehicle that carries it.
+  'GET sbg/plate-claims/lapsed': list({ row: { of: 'vehicle', id: 'vehicleId' } }),
   'GET sbg/fleet/drivers/id-photos': list({ at: 'items', row: { of: 'driver', id: 'did' } }),
   'GET sbg/fleet/papers/couriers/:did/contact': record('driver', 'did'),
   'GET sbg/businesses': list({ at: 'items', row: { field: 'country' } }),

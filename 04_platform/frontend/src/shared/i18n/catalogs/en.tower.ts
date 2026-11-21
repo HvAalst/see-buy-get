@@ -4131,6 +4131,21 @@ export const enTowerPrices = {
   'tower.prices.st.in_force': 'In force',
   'tower.prices.st.past': 'Replaced',
   'tower.prices.st.withdrawn': 'Withdrawn',
+  'tower.plates.title': 'Plates nobody answered about ({n})',
+  'tower.plates.lede': 'Somebody said they bought a vehicle, and its owner did not answer in 14 days, or nobody could be asked. Take it off the owner’s vehicles or leave it, with a reason both are told. A shift since it was asked about says somebody still drives it.',
+  'tower.plates.none': 'None waiting.',
+  'tower.plates.who': '{asker} says they bought it · owner: {owner} · asked {day}',
+  'tower.plates.nobody': 'nobody on record',
+  'tower.plates.lastOut': 'Last went out {day}',
+  'tower.plates.neverOut': 'Never went out on a shift',
+  'tower.plates.inUse': 'Went out since',
+  'tower.plates.notOut': 'Not out since',
+  'tower.plates.decide': 'Decide',
+  'tower.plates.why': 'Why: both are told',
+  'tower.plates.release': 'Take it off the owner’s vehicles',
+  'tower.plates.leave': 'Leave it',
+  'tower.plates.released': '{plate} is off its owner’s vehicles; both are told',
+  'tower.plates.left': '{plate} stays where it is; the one who asked is told',
 };
 
 /** Every one of the console's own words — registered by the console when it starts (apps/tower/english.ts), and by the tests. */

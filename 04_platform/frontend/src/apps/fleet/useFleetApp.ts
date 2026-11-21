@@ -910,6 +910,20 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** 2026-11-21 — sold or scrapped: off the fleet's vehicles (the owner: "consider that a vehicle may be sold"). */
+  const retireVehicle = useCallback(
+    async (vehicle: { vehicleId: string; plate: string }) => {
+      if (!client) return;
+      await run(`retire:${vehicle.vehicleId}`, async () => {
+        const r = await client.api.retireVehicle(vehicle.vehicleId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('fleet.vehicles.soldDone', { plate: vehicle.plate }) });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   /** 2026-11-21 — a vehicle's plate corrected by its office (the owner: "a mistake in the number plate"); the plate it had is kept on it. */
   const correctPlate = useCallback(
     async (vehicle: { vehicleId: string; plate: string }, plate: string) => {
@@ -1550,6 +1564,7 @@ export function useFleetApp() {
       setVehiclePrice,
       setVehicleEnergy,
       correctPlate,
+      retireVehicle,
       setVehicleEquipment,
       setVehiclePapers,
       sendOwnPaper,

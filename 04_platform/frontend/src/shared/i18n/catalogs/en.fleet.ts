@@ -1509,4 +1509,9 @@ export const enFleet = {
   'fleet.vehicles.plateSave': 'Save the plate',
   'fleet.vehicles.plateSaved': 'The plate is {plate} now',
   'fleet.vehicles.plateSavedDetail': 'Print its sticker again: the one on the dashboard shows the old plate.',
+  'fleet.vehicles.soldBtn': 'Sold or scrapped',
+  'fleet.vehicles.soldTitle': 'Take {plate} off your vehicles?',
+  'fleet.vehicles.soldBody': 'Sold, scrapped, or added by mistake. No work is offered for it any more and no shift starts on it; what it did stays on its record, and its plate is free for whoever carries it now. Not while a shift runs on it or a run waits for it.',
+  'fleet.vehicles.soldYes': 'Yes, take it off',
+  'fleet.vehicles.soldDone': '{plate} is off your vehicles',
 };

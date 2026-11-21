@@ -1377,4 +1377,9 @@ export const words: Record<string, string> = {
   "fleet.vehicles.plateSave": "Hifadhi nambari ya usajili",
   "fleet.vehicles.plateSaved": "Nambari ya usajili sasa ni {plate}",
   "fleet.vehicles.plateSavedDetail": "Chapisha stika yake tena: iliyo kwenye dashibodi inaonyesha nambari ya zamani.",
+  "fleet.vehicles.soldBtn": "Limeuzwa au limeachwa",
+  "fleet.vehicles.soldTitle": "Uondoe {plate} kwenye magari yako?",
+  "fleet.vehicles.soldBody": "Limeuzwa, limeachwa kabisa, au liliongezwa kwa makosa. Halitapewa kazi tena na hakuna zamu itakayoanza nalo; lililofanya linabaki kwenye rekodi yake, na nambari yake iko huru kwa anayelibeba sasa. Si wakati zamu inaendelea nalo au safari inalisubiri.",
+  "fleet.vehicles.soldYes": "Ndiyo, liondoe",
+  "fleet.vehicles.soldDone": "{plate} limeondolewa kwenye magari yako",
 };

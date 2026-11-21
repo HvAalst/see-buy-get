@@ -889,6 +889,11 @@ export class DepartureService {
       .sort((a, b) => a.leavesAt.localeCompare(b.leavesAt));
   }
 
+  /** 2026-11-21 — the runs this vehicle has not left on yet (open or closed to bookings), soonest first. */
+  openRunsOf(vehicleId: string): Departure[] {
+    return [...this.departures.values()].filter((d) => d.vehicleId === vehicleId && (d.status === 'open' || d.status === 'closed')).sort((a, b) => a.leavesAt.localeCompare(b.leavesAt));
+  }
+
   /**
    * 2026-11-21 — A PLATE CORRECTED ON ITS VEHICLE: the runs it has not left on yet say the plate it really carries, so a
    * shipper waiting for the truck looks for the right one. A run that has left keeps the plate it left with.

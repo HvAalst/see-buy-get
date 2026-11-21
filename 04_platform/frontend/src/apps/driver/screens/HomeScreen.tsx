@@ -37,6 +37,7 @@ import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { LoadSpaceSheet } from './LoadSpaceSheet';
 import { OwnVehicleLinks } from './OwnVehicleLinks';
+import { PlateClaimsCard } from '../../../shared/plates/PlateClaims';
 import { equipmentWords } from '../../../shared/equipment';
 import { trailerApi, trailerLine } from '../../../shared/trailers';
 import { TrailersCard } from '../../../shared/trailers/TrailersCard';
@@ -276,6 +277,9 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         </Card>
       ) : null}
 
+      {/* 2026-11-21 — "Did you sell …?" to the owner, one tap each way; and where the plates they asked about stand. */}
+      <PlateClaimsCard sbg={sbg} onChanged={() => void actions.refresh()} />
+
       {state.vehicles.length ? (
         <Card title={t('driver.home.whichVehicle')}>
           <div class="rows" role="list">
@@ -357,8 +361,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       )}
 
       {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own sbg={sbg ?? null} helpers={state.session.helpers} /> : null}
-      {OwnSheets && ownFor ? <OwnSheets.OwnVehicleSheet vehicle={ownFor} onClose={() => setOwnFor(null)} actions={actions} /> : null}
-      {OwnSheets && adding ? <OwnSheets.AddOwnVehicleSheet classes={licensed} onClose={() => setAdding(false)} actions={actions} /> : null}
+      {OwnSheets && ownFor ? <OwnSheets.OwnVehicleSheet vehicle={ownFor} onClose={() => setOwnFor(null)} actions={actions} sbg={sbg ?? null} /> : null}
+      {OwnSheets && adding ? <OwnSheets.AddOwnVehicleSheet classes={licensed} onClose={() => setAdding(false)} actions={actions} sbg={sbg ?? null} /> : null}
       {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (

@@ -3,7 +3,8 @@ import { Button, Card, ErrorNote, Note, Sheet } from '../../../shared/ui';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { energyFits } from '../../../shared/vehicleEnergy';
 import { useT } from '../../../shared/i18n';
-import type { SbgError } from '../../../lib/sbg';
+import type { SbgClient, SbgError } from '../../../lib/sbg';
+import { PlateTakenAsk } from '../../../shared/plates/PlateClaims';
 import { ownVehicleMissing, type OwnVehicleForm } from '../logic';
 import { vehicleWord } from '../vehicle-words';
 import type { DriverActions } from '../useDriverApp';
@@ -14,7 +15,7 @@ import type { DriverActions } from '../useDriverApp';
  * the way to take it off their vehicles: sold, scrapped, or added by mistake. What that means is said before the button that
  * does it. A refusal (a plate on another vehicle, a shift running on it) is shown in the server's words.
  */
-export function OwnVehicleSheet({ vehicle, onClose, actions }: { vehicle: { vehicleId: string; plate: string; vehicleClass: string }; onClose: () => void; actions: DriverActions }) {
+export function OwnVehicleSheet({ vehicle, onClose, actions, sbg = null }: { vehicle: { vehicleId: string; plate: string; vehicleClass: string }; onClose: () => void; actions: DriverActions; sbg?: SbgClient | null }) {
   const t = useT();
   const [plate, setPlate] = useState(vehicle.plate);
   const [removing, setRemoving] = useState(false);
@@ -31,6 +32,7 @@ export function OwnVehicleSheet({ vehicle, onClose, actions }: { vehicle: { vehi
   return (
     <Sheet open onClose={onClose} title={t('driver.own.title', { plate: vehicle.plate })}>
       {error ? <ErrorNote error={error} /> : null}
+      <PlateTakenAsk error={error} sbg={sbg} />
       <div class="field">
         <label class="field__label" for="own-plate">
           {t('driver.alone.plate')}
@@ -74,7 +76,7 @@ export function OwnVehicleSheet({ vehicle, onClose, actions }: { vehicle: { vehi
  * the first, without the country they ride in already: a kind their licence covers (chosen already when there is one), its
  * plate, what it runs on, and a truck's body. On their list at once.
  */
-export function AddOwnVehicleSheet({ classes, onClose, actions }: { classes: string[]; onClose: () => void; actions: DriverActions }) {
+export function AddOwnVehicleSheet({ classes, onClose, actions, sbg = null }: { classes: string[]; onClose: () => void; actions: DriverActions; sbg?: SbgClient | null }) {
   const t = useT();
   const [form, setForm] = useState<OwnVehicleForm>({ vehicleClass: classes.length === 1 ? classes[0] : '', plate: '' });
   const [bodies, setBodies] = useState<Array<{ id: string; label: string }>>([]);
@@ -108,6 +110,7 @@ export function AddOwnVehicleSheet({ classes, onClose, actions }: { classes: str
     <Sheet open onClose={onClose} title={t('driver.own.addTitle')}>
       <p class="t-body">{t('driver.own.addLede')}</p>
       {error ? <ErrorNote error={error} /> : null}
+      <PlateTakenAsk error={error} sbg={sbg} />
       <div class="stack">
         <div class="field">
           <label class="field__label" for="own-class">

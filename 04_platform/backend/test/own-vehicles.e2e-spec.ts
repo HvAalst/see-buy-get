@@ -74,7 +74,7 @@ describe('a vehicle’s plate corrected, and a courier’s own vehicles, by thei
     expect((await listOf(rider.did, rider.token)).filter((v) => v.own).map((v) => v.plate).sort()).toEqual([fixedPlate, secondPlate].sort());
     // Never two on one plate.
     const twice = await http().post(add).set(rider.token).send({ vehicleClass: 'bike', energy: 'pedal', plate: fixedPlate });
-    expect([twice.status, twice.body.detail]).toEqual([409, `${fixedPlate} is on another vehicle in the network already. If that plate is yours, ask the help centre`]);
+    expect([twice.status, twice.body.detail]).toEqual([409, `${fixedPlate} is on another vehicle in the network already. If you bought it, ask its owner whether they sold it`]);
     expect((await http().patch(`/v1/sbg/vehicles/${second.vehicleId}/plate`).set(rider.token).send({ plate: fixedPlate })).status).toBe(409);
     // A class their licence does not cover.
     expect((await http().post(add).set(rider.token).send({ vehicleClass: 'van', energy: 'diesel', plate: `KMVA ${digits()}` }).expect(400)).body.detail).toMatch(/not licence-cleared for a van/);
