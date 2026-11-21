@@ -30,11 +30,13 @@ import {
   shiftSummary,
   usedPercent,
   litresOf,
+  addsOwnVehicles,
 } from '../logic';
 import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { LoadSpaceSheet } from './LoadSpaceSheet';
+import { OwnVehicleLinks } from './OwnVehicleLinks';
 import { equipmentWords } from '../../../shared/equipment';
 import { trailerApi, trailerLine } from '../../../shared/trailers';
 import { TrailersCard } from '../../../shared/trailers/TrailersCard';
@@ -171,6 +173,21 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
   // 2026-11-13 — one of their own, opened to say what it takes and carries.
   const [loadFor, setLoadFor] = useState<RecentVehicleView | null>(null);
+  // 2026-11-21 — one of their own, corrected or taken off; and another added (the owner: "can't edit the car details when I made
+  // a mistake in the number plate, also I can't add a second car of mine"). The sheets come when first opened, as the upkeep's do.
+  const [ownFor, setOwnFor] = useState<RecentVehicleView | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [OwnSheets, setOwnSheets] = useState<typeof import('./OwnVehicleSheet') | null>(null);
+  const openOwn = (then: () => void) =>
+    void import('./OwnVehicleSheet').then(
+      (m) => {
+        setOwnSheets(m);
+        then();
+      },
+      () => undefined, // no signal and not yet saved on the phone: the button simply waits for one
+    );
+  const addsOwn = addsOwnVehicles(state.driver) && Boolean(state.driver?.licence?.classes?.length);
+  const licensed = state.driver?.licence?.classes ?? [];
   // A courier's own vehicle has the upkeep a fleet's office keeps for its own: off the road and back, readings,
   // services, the daily check's defects and a breakdown's ending (2026-10-25 — the server had it all, no screen did).
   const [careFor, setCareFor] = useState<RecentVehicleView | null>(null);
@@ -331,10 +348,17 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
               {t('driver.load.openFor', { plate: v.plate })}
             </Button>
           ))}
+          {/* 2026-11-21 — its plate corrected, or taken off their vehicles; and another of their own added. */}
+          <OwnVehicleLinks vehicles={state.vehicles} adds={addsOwn} onOpen={(v) => openOwn(() => setOwnFor(v))} onAdd={() => openOwn(() => setAdding(true))} />
         </Card>
-      ) : null}
+      ) : (
+        /* A courier with no vehicle on their list (the last one taken off): the way to add the one they ride. */
+        <OwnVehicleLinks vehicles={state.vehicles} adds={addsOwn} onOpen={(v) => openOwn(() => setOwnFor(v))} onAdd={() => openOwn(() => setAdding(true))} />
+      )}
 
       {loadFor ? <LoadSpaceSheet open actions={actions} onClose={() => setLoadFor(null)} vehicle={loadFor} word={vehicleWord(loadFor.vehicleClass, t)} own sbg={sbg ?? null} helpers={state.session.helpers} /> : null}
+      {OwnSheets && ownFor ? <OwnSheets.OwnVehicleSheet vehicle={ownFor} onClose={() => setOwnFor(null)} actions={actions} /> : null}
+      {OwnSheets && adding ? <OwnSheets.AddOwnVehicleSheet classes={licensed} onClose={() => setAdding(false)} actions={actions} /> : null}
       {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (

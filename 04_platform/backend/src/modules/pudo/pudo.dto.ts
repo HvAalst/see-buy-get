@@ -2218,6 +2218,35 @@ export class RideAloneDto {
   @IsOptional() @IsString() @MaxLength(80) licenceCopyRef?: string;
 }
 
+/** 2026-11-21 — another vehicle of a courier's own: of a class their licence covers; a truck with its body. */
+export class OwnVehicleDto {
+  @IsString() @MaxLength(32) vehicleClass!: string;
+  @IsString() @MaxLength(32) plate!: string;
+  @IsOptional() @IsString() @MaxLength(32) truckSubtype?: string;
+  /** What it runs on (fleet.config VEHICLE_ENERGIES); asked. */
+  @IsOptional() @IsIn(VEHICLE_ENERGIES) energy?: VehicleEnergy;
+}
+
+/** 2026-11-21 — a vehicle's plate, corrected by its owner. */
+export class VehiclePlateDto {
+  @IsString() @MaxLength(32) plate!: string;
+}
+
+/** A plate a vehicle carried before it was corrected: until when, and who corrected it. */
+export class PlateWasView {
+  @ApiProperty() plate!: string;
+  @ApiProperty() until!: string;
+  @ApiProperty() by!: string;
+  @ApiProperty({ enum: ['fleet', 'driver'] }) role!: 'fleet' | 'driver';
+}
+
+/** A vehicle's plate as corrected, and the plates it carried before, oldest first. */
+export class PlateCorrectedView {
+  @ApiProperty() vehicleId!: string;
+  @ApiProperty() plate!: string;
+  @ApiProperty({ type: () => PlateWasView, isArray: true }) plateHistory!: PlateWasView[];
+}
+
 /** A fleet takes a driver off — always with a reason the driver is shown. */
 export class RemoveDriverDto {
   @IsIn(['left', 'ended', 'other']) reason!: 'left' | 'ended' | 'other';

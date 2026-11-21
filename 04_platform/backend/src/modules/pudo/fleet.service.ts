@@ -294,7 +294,11 @@ export class FleetService {
    */
   recentVehicles(driverDid: string): RecentVehicle[] {
     const known = this.vehicles.list();
-    return (this.vehicleHistory.get(driverDid) ?? [])
+    const history = this.vehicleHistory.get(driverDid) ?? [];
+    // 2026-11-21 — and every vehicle of their own, however many others they drove since: the history keeps five, and a
+    // courier with a second car of their own must never find their first gone from the list it is started from.
+    const own = known.filter((v) => !v.managerDid && v.ownerDriverDid === driverDid && !history.includes(v.vehicleId)).map((v) => v.vehicleId);
+    return [...history, ...own]
       .map((id) => known.find((v) => v.vehicleId === id))
       .filter((v): v is NonNullable<typeof v> => !!v && v.status !== 'RETIRED')
       .map((v) => ({

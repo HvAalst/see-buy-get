@@ -1371,4 +1371,10 @@ export const words: Record<string, string> = {
   "fleet.passport.save": "Paspoort vastleggen",
   "fleet.toast.passportSaved": "Paspoort vastgelegd",
   "fleet.toast.passportSavedDetail": "Het staat op het grensmanifest van de ladingen die deze chauffeur bij Moyale over de grens brengt.",
+  "fleet.vehicles.plateBtn": "Kenteken corrigeren",
+  "fleet.vehicles.plateTitle": "Kenteken van {plate} corrigeren",
+  "fleet.vehicles.plateBody": "Schrijf het zoals het op het voertuig staat. Het kenteken dat het had, blijft bewaard, en de ritten waarvoor het nog niet vertrokken is, tonen het nieuwe.",
+  "fleet.vehicles.plateSave": "Kenteken opslaan",
+  "fleet.vehicles.plateSaved": "Het kenteken is nu {plate}",
+  "fleet.vehicles.plateSavedDetail": "Print de sticker opnieuw: op de sticker op het dashboard staat het oude kenteken.",
 };

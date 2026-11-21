@@ -1555,6 +1555,57 @@ export function useDriverApp() {
     [client, pushToast, refresh],
   );
 
+  /** 2026-11-21 — the plate of a vehicle of their own, corrected (the owner: "a mistake in the number plate"). */
+  const correctPlate = useCallback(
+    async (vehicleId: string, plate: string): Promise<SbgError | null> => {
+      if (!client) return null;
+      const r = await client.api.correctPlate(vehicleId, plate);
+      if (r.error) return r.error;
+      buzz();
+      const now = narrow<{ plate: string }>(r.data)?.plate ?? plate;
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.own.plateSaved', { plate: now }), detail: t('driver.own.plateSavedDetail') });
+      await refresh();
+      return null;
+    },
+    [client, pushToast, refresh],
+  );
+
+  /** 2026-11-21 — another vehicle of a courier's own (the owner: "I can't add a second car of mine"): on their list at once. */
+  const addOwnVehicle = useCallback(
+    async (body: { vehicleClass: string; plate: string; truckSubtype?: string; energy?: string }): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      const r = await client.api.addOwnVehicle(did, body);
+      if (r.error) return r.error;
+      buzz();
+      const added = narrow<{ vehicle: { plate: string } }>(r.data)?.vehicle.plate ?? body.plate;
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.own.added', { plate: added }), detail: t('driver.own.addedDetail') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
+
+  /** 2026-11-21 — a vehicle of their own taken off their list: sold, scrapped, or added by mistake. */
+  const retireOwnVehicle = useCallback(
+    async (vehicleId: string, plate: string): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      const r = await client.api.retireOwnVehicle(did, vehicleId);
+      if (r.error) return r.error;
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.own.removed', { plate }) });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
+
+  /** The bodies a truck is registered with — empty where they cannot be read: the server still asks for one. */
+  const truckBodies = useCallback(async (): Promise<Array<{ id: string; label: string }>> => {
+    if (!client) return [];
+    const r = await client.api.truckSubtypes();
+    return r.error ? [] : (narrow<Array<{ id: string; label: string }>>(r.data) ?? []).map((b) => ({ id: b.id, label: b.label }));
+  }, [client]);
+
   /** 2026-11-13 — who works with this driver on a job (unusual loads, U1): loads that need more hands are offered by it. */
   const setHelpers = useCallback(
     async (helpers: number): Promise<SbgError | null> => {
@@ -2568,6 +2619,10 @@ export function useDriverApp() {
       askFreightMollie: (freightId: string) => client!.api.askFreightMollie(freightId),
       matchRate,
       setLoadSpace,
+      correctPlate,
+      addOwnVehicle,
+      retireOwnVehicle,
+      truckBodies,
       setHelpers,
       takeCounter,
       loadTrips,

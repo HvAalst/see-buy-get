@@ -1371,4 +1371,10 @@ export const words: Record<string, string> = {
   "fleet.passport.save": "ፓስፖርቱን ይመዝግቡ",
   "fleet.toast.passportSaved": "ፓስፖርቱ ተመዝግቧል",
   "fleet.toast.passportSavedDetail": "ይህ አሽከርካሪ በMoyale በኩል በሚያሻግራቸው ጭነቶች የድንበር ማኒፌስት ላይ ይታተማል።",
+  "fleet.vehicles.plateBtn": "ታርጋውን ያርሙ",
+  "fleet.vehicles.plateTitle": "የ{plate}ን ታርጋ ያርሙ",
+  "fleet.vehicles.plateBody": "በተሽከርካሪው ላይ እንዳለ ይጻፉት። የነበረው ታርጋ በመዝገቡ ላይ ይቀመጣል፣ ገና ያልተነሳባቸው ጉዞዎችም አዲሱን ያሳያሉ።",
+  "fleet.vehicles.plateSave": "ታርጋውን ያስቀምጡ",
+  "fleet.vehicles.plateSaved": "ታርጋው አሁን {plate} ነው",
+  "fleet.vehicles.plateSavedDetail": "ተለጣፊውን እንደገና ያትሙ፦ በዳሽቦርዱ ላይ ያለው የድሮውን ታርጋ ያሳያል።",
 };

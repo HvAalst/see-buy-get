@@ -1371,4 +1371,10 @@ export const words: Record<string, string> = {
   "fleet.passport.save": "Rekodi pasipoti",
   "fleet.toast.passportSaved": "Pasipoti imerekodiwa",
   "fleet.toast.passportSavedDetail": "Huchapishwa kwenye manifesti ya mpakani ya mizigo ambayo dereva huyu huvusha Moyale.",
+  "fleet.vehicles.plateBtn": "Rekebisha nambari ya usajili",
+  "fleet.vehicles.plateTitle": "Rekebisha nambari ya usajili ya {plate}",
+  "fleet.vehicles.plateBody": "Iandike kama ilivyo kwenye gari. Nambari iliyokuwa nayo inahifadhiwa kwenye rekodi yake, na safari ambazo bado haijaondoka zinaonyesha mpya.",
+  "fleet.vehicles.plateSave": "Hifadhi nambari ya usajili",
+  "fleet.vehicles.plateSaved": "Nambari ya usajili sasa ni {plate}",
+  "fleet.vehicles.plateSavedDetail": "Chapisha stika yake tena: iliyo kwenye dashibodi inaonyesha nambari ya zamani.",
 };

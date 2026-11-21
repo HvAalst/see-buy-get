@@ -956,6 +956,100 @@ describe('a driver changing fleet', () => {
       expect(vehicles.get(vehicle!.vehicleId)).toMatchObject({ ownerDriverDid: r.driver.did });
       expect(vehicles.get(vehicle!.vehicleId).managerDid).toBeUndefined();
     });
+
+    /**
+     * 2026-11-21 — THE OWNER: "can't edit the car details when I made a mistake in the number plate, also I can't add a second
+     * car of mine." A courier corrects the plate of a vehicle of their own, adds another of a class their licence covers, and
+     * takes one off their list — never two vehicles on one plate, never mid-shift.
+     */
+    describe('a courier’s own vehicles', () => {
+      const courier = (classes: string[] = ['bike'], plate = 'KMDX 12A') => {
+        const r = aRider(aFleet('Kilima Logistics').did, classes);
+        moves.leave(r.driver.did);
+        const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate });
+        return { did: r.driver.did, first: vehicle! };
+      };
+
+      it('a plate typed wrong is corrected by its owner: the old one kept with who and when, never one another vehicle carries', () => {
+        const { did, first } = courier();
+        const fixed = vehicles.correctPlate(first.vehicleId, '  kmdx   123a ', { name: 'Rider', role: 'driver' });
+        expect(fixed.plate).toBe('KMDX 123A');
+        expect(fixed.plateHistory).toEqual([{ plate: 'KMDX 12A', until: expect.any(String), by: 'Rider', role: 'driver' }]);
+        expect(fleet.recentVehicles(did).map((v) => v.plate)).toEqual(['KMDX 123A']);
+        // The sticker's code is the same: a typed plate now finds it by the new plate only.
+        expect(vehicles.byQr('KMDX 123A')?.vehicleId).toBe(first.vehicleId);
+        expect(vehicles.byQr('KMDX 12A')).toBeUndefined();
+        expect(() => vehicles.correctPlate(first.vehicleId, 'KMDX 123A', { name: 'Rider', role: 'driver' })).toThrow(/is its plate already/);
+        expect(() => vehicles.correctPlate(first.vehicleId, '   ', { name: 'Rider', role: 'driver' })).toThrow(/A number plate is required/);
+        // Another courier's plate: refused, and nothing changes on either.
+        const other = courier(['bike'], 'KMZZ 900Z');
+        expect(() => vehicles.correctPlate(first.vehicleId, 'kmzz 900z', { name: 'Rider', role: 'driver' })).toThrow(/^KMZZ 900Z is on another vehicle in the network already\. If that plate is yours, ask the help centre$/);
+        expect([vehicles.get(first.vehicleId).plate, vehicles.get(other.first.vehicleId).plate]).toEqual(['KMDX 123A', 'KMZZ 900Z']);
+      });
+
+      it('a second vehicle of their own, at once, of a class their licence covers — on their list beside the first', () => {
+        const { did, first } = courier();
+        const second = moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'electric', plate: ' kmeb 456b ' });
+        expect(second).toMatchObject({ plate: 'KMEB 456B', vehicleClass: 'bike', energy: 'electric', ownerType: 'driver_owned', ownerDriverDid: did, status: 'ACTIVE' });
+        expect(second.managerDid).toBeUndefined();
+        expect(fleet.recentVehicles(did).map((v) => v.vehicleId).sort()).toEqual([first.vehicleId, second.vehicleId].sort());
+        expect(fleet.recentVehicles(did).every((v) => v.own === true)).toBe(true);
+        expect(() => fleet.couple(did, second.vehicleId)).not.toThrow();
+        fleet.uncouple(did);
+        // What a signing-up courier is asked, no looser.
+        expect(() => moves.addOwnVehicle(did, { vehicleClass: 'motorcycle', energy: 'petrol', plate: 'KMCA 1M' })).toThrow(/^You are not licence-cleared for a motorcycle\. Choose a vehicle you are cleared for$/);
+        expect(() => moves.addOwnVehicle(did, { vehicleClass: 'bike', plate: 'KMEN 2' })).toThrow(/whether the bicycle is pedalled or electric/);
+        expect(() => moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'pedal', plate: ' ' })).toThrow(/A number plate is required/);
+        expect(() => moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'pedal', plate: 'kmeb 456b' })).toThrow(/^KMEB 456B is on another vehicle in the network already/);
+        expect(vehicles.list().filter((v) => v.ownerDriverDid === did)).toHaveLength(2);
+      });
+
+      it('every vehicle of their own stays on their list, however many: the history keeps five', () => {
+        const { did, first } = courier(['bike']);
+        const more = [1, 2, 3, 4, 5].map((n) => moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'pedal', plate: `KMOWN ${n}` }));
+        expect(fleet.recentVehicles(did).map((v) => v.vehicleId).sort()).toEqual([first, ...more].map((v) => v.vehicleId).sort());
+      });
+
+      it('a fleet’s driver adds none — the office registers its vehicles; somebody between fleets rides for themselves first', () => {
+        const kilima = aFleet('Kilima Logistics');
+        const r = aRider(kilima.did);
+        expect(() => moves.addOwnVehicle(r.driver.did, { vehicleClass: 'bike', energy: 'pedal', plate: 'KMFL 1' })).toThrow(/^You drive for Kilima Logistics: its office registers its vehicles$/);
+        moves.leave(r.driver.did);
+        expect(() => moves.addOwnVehicle(r.driver.did, { vehicleClass: 'bike', energy: 'pedal', plate: 'KMFL 1' })).toThrow(/You do not ride for yourself yet/);
+        expect(vehicles.list().filter((v) => v.plate === 'KMFL 1')).toEqual([]);
+      });
+
+      it('one taken off their list: theirs alone, not mid-shift; its plate free again for the vehicle that really carries it', () => {
+        const { did, first } = courier();
+        const second = moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'electric', plate: 'KMEC 789C' });
+        const someone = courier(['bike'], 'KMYY 1Y');
+        expect(() => moves.retireOwnVehicle(someone.did, second.vehicleId)).toThrow(/^Only the driver who owns this vehicle takes it off their list$/);
+        fleet.couple(did, second.vehicleId);
+        expect(() => moves.retireOwnVehicle(did, second.vehicleId)).toThrow(/^A shift is running on KMEC 789C: end it first$/);
+        fleet.uncouple(did);
+        expect(moves.retireOwnVehicle(did, second.vehicleId).status).toBe('RETIRED');
+        expect(fleet.recentVehicles(did).map((v) => v.vehicleId)).toEqual([first.vehicleId]);
+        expect(() => moves.retireOwnVehicle(did, second.vehicleId)).toThrow(/off your list already/);
+        expect(() => vehicles.correctPlate(second.vehicleId, 'KMEC 790C', { name: 'Rider', role: 'driver' })).toThrow(/retired/);
+        // Its plate is free: the vehicle that really carries it can be added.
+        expect(moves.addOwnVehicle(did, { vehicleClass: 'bike', energy: 'electric', plate: 'KMEC 789C' }).status).toBe('ACTIVE');
+        // A fleet's vehicle is never a courier's to take off.
+        const truck = aTruck(aFleet('Pwani Haulage').did);
+        expect(() => moves.retireOwnVehicle(did, truck.vehicleId)).toThrow(/Only the driver who owns this vehicle/);
+      });
+
+      it('a fleet corrects its truck’s plate: the runs it has not left on yet say the new one', () => {
+        const kilima = aFleet('Kilima Logistics');
+        const d = aDriver(kilima.did);
+        const line = corridors.publish(corridors.proposeLine({ managerDid: kilima.did, company: 'Kilima Logistics', name: 'Nairobi – Mombasa PL', originZone: 'Nairobi PL', destZone: 'Mombasa PL', vehicleType: 'truck' }).corridorId, 'did:glos:staff');
+        const run = departures.declare({ managerDid: kilima.did, corridorId: line.corridorId, vehicleId: d.truck.vehicleId, leavesAt: new Date(Date.now() + DAY).toISOString(), capacityKg: 6000, capacityM3: 40, basis: 'per_trip', amount: 450 });
+        const was = d.truck.plate;
+        const fixed = vehicles.correctPlate(d.truck.vehicleId, 'KCX 900T', { name: 'Kilima office', role: 'fleet' });
+        expect(departures.plateCorrected(d.truck.vehicleId, fixed.plate)).toBe(1);
+        expect(departures.require(run.departureId).plate).toBe('KCX 900T');
+        expect(fixed.plateHistory).toEqual([expect.objectContaining({ plate: was, role: 'fleet' })]);
+      });
+    });
   });
 
   describe('a driver leaves their fleet, by themselves', () => {

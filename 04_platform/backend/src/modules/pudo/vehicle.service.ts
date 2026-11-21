@@ -262,6 +262,36 @@ export class VehicleService {
     return v;
   }
 
+  /**
+   * 2026-11-21 — IS THIS PLATE ON ANOTHER VEHICLE IN USE. A plate names one vehicle: typed in place of a sticker it starts a
+   * shift on the vehicle that carries it (byQr), so two vehicles on one plate would start somebody on the wrong one. A retired
+   * vehicle no longer counts.
+   */
+  plateTaken(plate: string, exceptVehicleId?: string): boolean {
+    const wanted = plate.trim().toUpperCase();
+    return [...this.vehicles.values()].some((v) => v.vehicleId !== exceptVehicleId && v.status !== 'RETIRED' && v.plate === wanted);
+  }
+
+  /**
+   * 2026-11-21 — A PLATE CORRECTED (the owner: "can't edit the car details when I made a mistake in the number plate"), by its
+   * fleet's office or the driver who owns it. The plate it had is kept, with when and who; what was written under it keeps it.
+   * Its sticker's code does not change: the plate printed above it does, so the sticker is printed again.
+   */
+  correctPlate(vehicleId: string, plate: string, by: { name: string; role: 'fleet' | 'driver' }, now: number = Date.now()): Vehicle {
+    const v = this.require(vehicleId);
+    if (v.status === 'RETIRED') throw new GlosError('INVALID_STATE', 'This vehicle is retired: its plate stays as it was');
+    const wanted = (plate ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+    if (!wanted) throw new GlosError('FIELD_REQUIRED', 'A number plate is required', { field: 'plate' });
+    if (wanted === v.plate) throw new GlosError('INVALID_INPUT', `${wanted} is its plate already`, { field: 'plate' });
+    if (this.plateTaken(wanted, v.vehicleId)) {
+      throw new GlosError('DUPLICATE', `${wanted} is on another vehicle in the network already. If that plate is yours, ask the help centre`, { field: 'plate' });
+    }
+    v.plateHistory = [...(v.plateHistory ?? []), { plate: v.plate, until: new Date(now).toISOString(), by: by.name, role: by.role }];
+    v.plate = wanted;
+    this.vehicles.set(v.vehicleId, v);
+    return v;
+  }
+
   ground(vehicleId: string): Vehicle {
     const v = this.require(vehicleId);
     v.status = 'GROUNDED';
@@ -304,6 +334,7 @@ export class VehicleService {
   retire(vehicleId: string): Vehicle {
     const v = this.require(vehicleId);
     v.status = 'RETIRED';
+    this.vehicles.set(v.vehicleId, v);
     this.media.anchorVehicleRetired(vehicleId); // S26: start the grace clock on this vehicle's asset photos
     return v;
   }

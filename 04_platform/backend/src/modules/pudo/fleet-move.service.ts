@@ -321,6 +321,46 @@ export class FleetMoveService {
     return rides;
   }
 
+  /**
+   * 2026-11-21 — ANOTHER VEHICLE OF THEIR OWN (the owner: "I can't add a second car of mine"). A courier — in no fleet, riding
+   * for themselves — registers it from their own app, as they registered their first: of a class their licence covers, with
+   * what it runs on, and a truck with its body. At once: the network checked the person, and the vehicle is theirs. A fleet's
+   * driver drives the fleet's vehicles, which its office registers; somebody between fleets rides for themselves first.
+   */
+  addOwnVehicle(driverDid: string, input: { vehicleClass: VehicleClass; plate: string; truckSubtype?: TruckSubtype; energy?: VehicleEnergy }, now: number = Date.now()): Vehicle {
+    const driver = this.drivers.get(driverDid);
+    if (driver.managerDid) throw new GlosError('FORBIDDEN', `You drive for ${this.managers.get(driver.managerDid).companyName}: its office registers its vehicles`);
+    if (betweenFleets(driver)) throw new GlosError('INVALID_STATE', 'You do not ride for yourself yet: choose to, under “Your fleet”, with the vehicle you ride');
+    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'Your driver account is suspended, so no vehicle can be added from here');
+    if (!driver.licence.classes.includes(input.vehicleClass)) {
+      throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${String(input.vehicleClass).replace(/_/g, ' ')}. Choose a vehicle you are cleared for`, { field: 'vehicleClass' });
+    }
+    if (input.vehicleClass === 'truck' && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype as TruckSubtype]) {
+      throw new GlosError('FIELD_REQUIRED', 'Say what body your truck has: flatbed, tipper, refrigerated…', { field: 'truckSubtype' });
+    }
+    this.vehicles.askEnergy(input.vehicleClass, input.energy, now);
+    const plate = (input.plate ?? '').trim().replace(/s+/g, ' ').toUpperCase();
+    if (!plate) throw new GlosError('FIELD_REQUIRED', 'A number plate is required', { field: 'plate' });
+    if (this.vehicles.plateTaken(plate)) throw new GlosError('DUPLICATE', `${plate} is on another vehicle in the network already. If that plate is yours, ask the help centre`, { field: 'plate' });
+    // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it — in the country they ride in.
+    const vehicle = this.vehicles.register({ plate, vehicleClass: input.vehicleClass, ...(input.vehicleClass === 'truck' ? { truckSubtype: input.truckSubtype } : {}), ...(input.energy ? { energy: input.energy } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: driver.jurisdiction } as never);
+    this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
+    return vehicle;
+  }
+
+  /**
+   * 2026-11-21 — A VEHICLE OF THEIR OWN TAKEN OFF THEIR LIST: sold, scrapped, or added by mistake. Only the courier who owns it,
+   * and not while anybody is on a shift with it. It is retired, as a fleet retires one: its history stays, it is offered no
+   * more, and its plate is free for the vehicle that really carries it.
+   */
+  retireOwnVehicle(driverDid: string, vehicleId: string): Vehicle {
+    const v = this.vehicles.get(vehicleId); // 404 if unknown
+    if (v.managerDid || v.ownerDriverDid !== driverDid) throw new GlosError('FORBIDDEN', 'Only the driver who owns this vehicle takes it off their list');
+    if (v.status === 'RETIRED') throw new GlosError('INVALID_STATE', `${v.plate} is off your list already`);
+    if (this.fleet.activeForVehicle(vehicleId)) throw new GlosError('INVALID_STATE', `A shift is running on ${v.plate}: end it first`);
+    return this.vehicles.retire(vehicleId);
+  }
+
   private tellRideAlone(driver: FleetDriver, approved: boolean, reason?: string): void {
     const companyName = approved && driver.entityId ? this.drivers.courierCountries().find((c) => c.jurisdiction === driver.jurisdiction)?.companyName : undefined;
     void this.events

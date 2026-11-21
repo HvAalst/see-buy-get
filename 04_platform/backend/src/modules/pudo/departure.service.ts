@@ -890,6 +890,21 @@ export class DepartureService {
   }
 
   /**
+   * 2026-11-21 — A PLATE CORRECTED ON ITS VEHICLE: the runs it has not left on yet say the plate it really carries, so a
+   * shipper waiting for the truck looks for the right one. A run that has left keeps the plate it left with.
+   */
+  plateCorrected(vehicleId: string, plate: string): number {
+    let n = 0;
+    for (const d of this.departures.values()) {
+      if (d.vehicleId !== vehicleId || (d.status !== 'open' && d.status !== 'closed')) continue;
+      d.plate = plate;
+      this.departures.set(d.departureId, d);
+      n += 1;
+    }
+    return n;
+  }
+
+  /**
    * A BREAKDOWN'S QUESTION: the bookings aboard a vehicle's runs that have left, and the shipper of each where the load
    * was sold to one. The fleet's own bookings name nobody to tell: the office is the one telling.
    */

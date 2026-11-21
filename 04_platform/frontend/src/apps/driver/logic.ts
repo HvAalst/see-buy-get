@@ -245,6 +245,20 @@ export function rideAloneMissing(
   return null;
 }
 
+/** 2026-11-21 — another vehicle of a courier's own (the owner: "I can't add a second car of mine"): what riding for themselves asks, without a country. */
+export type OwnVehicleForm = Pick<RideAloneForm, 'vehicleClass' | 'plate' | 'truckSubtype' | 'energy'>;
+
+/** Why another vehicle of their own cannot be added yet, as the key of the sentence — or null. The same order as the first. */
+export function ownVehicleMissing(form: OwnVehicleForm, classes: string[]): Exclude<ReturnType<typeof rideAloneMissing>, 'driver.alone.needCountry' | 'driver.alone.needPapers'> {
+  const why = rideAloneMissing({ ...form, country: '-' }, { classes, countries: [{ jurisdiction: '-' }] });
+  return why === 'driver.alone.needCountry' || why === 'driver.alone.needPapers' ? null : why;
+}
+
+/** 2026-11-21 — a courier: in no fleet, and not between fleets. Only they add vehicles of their own; a fleet's office registers its. */
+export function addsOwnVehicles(driver: { managerDid?: string; removedFrom?: unknown } | null | undefined): boolean {
+  return Boolean(driver) && !driver!.managerDid && !driver!.removedFrom;
+}
+
 /** The company they would ride for in the country chosen — or null where the network has none there, or no country is chosen. */
 export function rideAloneCompany(countries: Array<{ jurisdiction: string; companyName?: string }>, country: string): string | null {
   return countries.find((c) => c.jurisdiction === country)?.companyName ?? null;

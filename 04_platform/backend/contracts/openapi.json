@@ -20520,6 +20520,45 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/plate": {
+      "patch": {
+        "operationId": "Sbg.correctVehiclePlate",
+        "summary": "",
+        "description": "2026-11-21 — A PLATE CORRECTED (the owner: \"can't edit the car details when I made a mistake in the number plate\"): by the\nfleet that owns the vehicle, or the driver who owns it — not a fleet's driver, and not staff: the owner keeps its own\nrecord. The plate it had is kept on it, with who corrected it; the runs it has not left on yet say the new one.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehiclePlateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateCorrectedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vehicles/{id}/pricing": {
       "patch": {
         "operationId": "Sbg.setVehiclePrice",
@@ -23593,6 +23632,68 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/drivers/{did}/own-vehicles": {
+      "post": {
+        "operationId": "Sbg.addOwnVehicle",
+        "summary": "",
+        "description": "2026-11-21 — ANOTHER VEHICLE OF THEIR OWN (the owner: \"I can't add a second car of mine\"): a courier's, from their own\nsign-in and nobody else's — of a class their licence covers, at once (FleetMoveService.addOwnVehicle).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnVehicleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/drivers/{did}/own-vehicles/{vehicleId}/retire": {
+      "post": {
+        "operationId": "Sbg.retireOwnVehicle",
+        "summary": "",
+        "description": "2026-11-21 — a vehicle of their own taken off their list (sold, scrapped, added by mistake): theirs alone, never mid-shift.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -55901,6 +56002,29 @@
           "unbrakedKg"
         ]
       },
+      "PlateWas": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "role": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "plate",
+          "until",
+          "by",
+          "role"
+        ]
+      },
       "VehicleDocuments": {
         "type": "object",
         "properties": {
@@ -56095,6 +56219,13 @@
                 "required": true,
                 "type": "string"
               }
+            }
+          },
+          "plateHistory": {
+            "description": "2026-11-21 — THE PLATES IT WAS KNOWN BY BEFORE (the owner: \"can't edit the car details when I made a mistake in the number\nplate\"): each one it carried, until when, and who corrected it — its fleet or the driver who owns it. Oldest first. Absent:\nnever corrected. Records written under an old plate keep the plate they were written with.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlateWas"
             }
           },
           "toteCapacity": {
@@ -71717,6 +71848,67 @@
           "equipment"
         ]
       },
+      "VehiclePlateDto": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "plate"
+        ]
+      },
+      "PlateWasView": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "fleet",
+              "driver"
+            ]
+          }
+        },
+        "required": [
+          "plate",
+          "until",
+          "by",
+          "role"
+        ]
+      },
+      "PlateCorrectedView": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "plateHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlateWasView"
+            }
+          }
+        },
+        "required": [
+          "vehicleId",
+          "plate",
+          "plateHistory"
+        ]
+      },
       "ParcelInvoiceImporterDto": {
         "type": "object",
         "properties": {
@@ -76690,6 +76882,39 @@
         },
         "required": [
           "country",
+          "vehicleClass",
+          "plate"
+        ]
+      },
+      "OwnVehicleDto": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "plate": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "truckSubtype": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "energy": {
+            "type": "string",
+            "description": "What it runs on (fleet.config VEHICLE_ENERGIES); asked.",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
+          }
+        },
+        "required": [
           "vehicleClass",
           "plate"
         ]

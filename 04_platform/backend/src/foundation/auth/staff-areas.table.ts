@@ -621,6 +621,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PATCH sbg/mdps/:id/pricing': 'none',
   'PATCH sbg/vehicles/:id/load-space': 'support',
   'PATCH sbg/vehicles/:id/equipment': 'support',
+  // 2026-11-21 — a plate is corrected by the vehicle's owner, its fleet or its driver: staff write nothing in its name.
+  'PATCH sbg/vehicles/:id/plate': 'none',
   'GET sbg/trailers': 'none',
   'POST sbg/trailers': 'none',
   'DELETE sbg/trailers/:id': 'none',
@@ -881,6 +883,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/drivers/:did/leave-fleet': 'none',
   'POST sbg/drivers/:did/rate': 'support',
   'POST sbg/drivers/:did/ride-alone': 'none',
+  // 2026-11-21 — a courier's own vehicles, added and taken off by the courier alone.
+  'POST sbg/drivers/:did/own-vehicles': 'none',
+  'POST sbg/drivers/:did/own-vehicles/:vehicleId/retire': 'none',
   'POST sbg/drivers/onboard': 'vetting',
   'POST sbg/drivers/payout': 'money',
   'POST sbg/drivers/signups': 'none',

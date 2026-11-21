@@ -133,6 +133,16 @@ export function createDriverApi(sbg: SbgClient) {
     /** 2026-11-12 — what the vehicle takes, as its driver says: the most it carries (kg) and its load space (m³; null: not known). */
     setLoadSpace: (vehicleId: string, body: { capacityKg?: number; volumeM3?: number | null; loadLengthM?: number | null }) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/load-space', { params: { path: { id: vehicleId } }, body })),
+    /** 2026-11-21 — the plate of a vehicle of their own, corrected (the owner: "a mistake in the number plate"). */
+    correctPlate: (vehicleId: string, plate: string) => sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/plate', { params: { path: { id: vehicleId } }, body: { plate } })),
+    /** 2026-11-21 — another vehicle of a courier's own (the owner: "I can't add a second car of mine"). */
+    addOwnVehicle: (did: string, body: { vehicleClass: string; plate: string; truckSubtype?: string; energy?: string }) =>
+      // Cast: the generated body narrows `energy` to a closed union the form feeds as a checked string; the server checks it again.
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/own-vehicles', { params: { path: { did } }, body: body as never })),
+    /** 2026-11-21 — a vehicle of their own taken off their list: sold, scrapped, or added by mistake. */
+    retireOwnVehicle: (did: string, vehicleId: string) => sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/own-vehicles/{vehicleId}/retire', { params: { path: { did, vehicleId } } })),
+    /** The bodies a truck is registered with (public: a catalogue, not somebody's data). */
+    truckSubtypes: () => sbg.request((c) => c.GET('/v1/sbg/vehicles/truck-subtypes', {})),
     /** 2026-11-13 — take the poster's price back: the load is the driver's at it (unusual loads, U4). */
     takeCounter: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/take-counter', { params: { path: { id: proposalId } } })),
     /** 2026-11-13 — who works with the driver on a job: none, one or two helpers (unusual loads, U1). */

@@ -244,6 +244,14 @@ export class VehicleDocuments {
   customsLicenceExpiresAt?: string;
 }
 
+/** 2026-11-21 — a plate a vehicle carried before it was corrected: until when, and who corrected it (its fleet or its driver). */
+export class PlateWas {
+  plate: string;
+  until: string;
+  by: string;
+  role: 'fleet' | 'driver';
+}
+
 export class Vehicle {
   vehicleId: string;
   managerDid?: string; // the fleet manager that owns this vehicle (undefined = unmanaged/legacy)
@@ -294,6 +302,12 @@ export class Vehicle {
   towing?: HitchedTrailer;
   /** 2026-11-13 — who last said what loading equipment it carries, and when (PATCH vehicles/:id/equipment). */
   equipmentSetBy?: { name: string; role: 'fleet' | 'driver' | 'staff'; at: string };
+  /**
+   * 2026-11-21 — THE PLATES IT WAS KNOWN BY BEFORE (the owner: "can't edit the car details when I made a mistake in the number
+   * plate"): each one it carried, until when, and who corrected it — its fleet or the driver who owns it. Oldest first. Absent:
+   * never corrected. Records written under an old plate keep the plate they were written with.
+   */
+  plateHistory?: PlateWas[];
   /**
    * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
    * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this

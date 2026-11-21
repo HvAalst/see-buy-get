@@ -910,6 +910,20 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** 2026-11-21 — a vehicle's plate corrected by its office (the owner: "a mistake in the number plate"); the plate it had is kept on it. */
+  const correctPlate = useCallback(
+    async (vehicle: { vehicleId: string; plate: string }, plate: string) => {
+      if (!client) return;
+      await run(`plate:${vehicle.vehicleId}`, async () => {
+        const r = await client.api.correctPlate(vehicle.vehicleId, plate);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('fleet.vehicles.plateSaved', { plate: r.data?.plate ?? plate }), detail: t('fleet.vehicles.plateSavedDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   /** 2026-11-13 — the loading equipment a vehicle carries, said by its office: the whole list (the owner: "build loading equipment"). */
   const setVehicleEquipment = useCallback(
     async (vehicle: { vehicleId: string; plate: string }, equipment: string[]) => {
@@ -1535,6 +1549,7 @@ export function useFleetApp() {
       setKyc,
       setVehiclePrice,
       setVehicleEnergy,
+      correctPlate,
       setVehicleEquipment,
       setVehiclePapers,
       sendOwnPaper,

@@ -1503,4 +1503,10 @@ export const enFleet = {
   'fleet.still.sayWrong': 'Say it',
   'fleet.still.answeredBy': '{outcome}: said by {by}, {when}.',
   'fleet.still.noAnswerStill': 'The driver did not answer. Try again, or send someone.',
+  'fleet.vehicles.plateBtn': 'Correct the plate',
+  'fleet.vehicles.plateTitle': 'Correct the plate of {plate}',
+  'fleet.vehicles.plateBody': 'Write it as it is on the vehicle. The plate it had is kept on its record, and the runs it has not left on yet show the new one.',
+  'fleet.vehicles.plateSave': 'Save the plate',
+  'fleet.vehicles.plateSaved': 'The plate is {plate} now',
+  'fleet.vehicles.plateSavedDetail': 'Print its sticker again: the one on the dashboard shows the old plate.',
 };

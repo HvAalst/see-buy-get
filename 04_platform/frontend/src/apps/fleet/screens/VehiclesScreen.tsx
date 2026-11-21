@@ -121,6 +121,8 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   const [equipmentFor, setEquipmentFor] = useState<VehicleRow | null>(null);
   // 2026-11-13 — what a car or van may tow, and its rate while towing (trailer plan D3, D5).
   const [towFor, setTowFor] = useState<VehicleRow | null>(null);
+  // 2026-11-21 — its plate corrected (the owner: "can't edit the car details when I made a mistake in the number plate").
+  const [plateFor, setPlateFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -444,6 +446,9 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                     <Button variant="link" full={false} onClick={() => setPapersFor(v)}>
                       {t('fleet.vehicles.papersBtn')}
                     </Button>
+                    <Button variant="link" full={false} onClick={() => setPlateFor(v)}>
+                      {t('fleet.vehicles.plateBtn')}
+                    </Button>
                     <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
                       {t('fleet.vehicles.rateBtn')}
                     </Button>
@@ -505,6 +510,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
       <EnergySheet vehicle={energyFor} onClose={() => setEnergyFor(null)} state={state} actions={actions} />
+      {plateFor ? <PlateSheet vehicle={plateFor} onClose={() => setPlateFor(null)} state={state} actions={actions} /> : null}
       {equipmentFor ? <EquipmentSheet vehicle={equipmentFor} onClose={() => setEquipmentFor(null)} state={state} actions={actions} /> : null}
       {towFor ? <TowSheet vehicle={towFor} onClose={() => setTowFor(null)} sbg={sbg} onSaved={() => void actions.refresh()} /> : null}
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
@@ -706,6 +712,42 @@ function EnergySheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
         {t('vehicle.energy.save')}
       </Button>
       <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
+  );
+}
+
+/**
+ * 2026-11-21 — A PLATE CORRECTED (the owner: "can't edit the car details when I made a mistake in the number plate"): as it is on
+ * the vehicle. The plate it had is kept on its record; its runs not left yet show the new one; its sticker is printed again.
+ */
+function PlateSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [plate, setPlate] = useState(vehicle.plate);
+  const changed = plate.trim() !== '' && plate.trim().replace(/\s+/g, ' ').toUpperCase() !== vehicle.plate;
+  return (
+    <Sheet open onClose={onClose} title={t('fleet.vehicles.plateTitle', { plate: vehicle.plate })}>
+      <p class="t-body">{t('fleet.vehicles.plateBody')}</p>
+      <div class="field">
+        <label class="field__label" for="v-plate-fix">
+          {t('fleet.vehicles.plate')}
+        </label>
+        <input id="v-plate-fix" class="input input--mono" value={plate} maxLength={32} onInput={(e) => setPlate(e.currentTarget.value)} autocapitalize="characters" spellcheck={false} />
+      </div>
+      <Button
+        chevron={false}
+        disabled={!changed}
+        busy={state.busy === `plate:${vehicle.vehicleId}`}
+        onClick={() => {
+          const v = vehicle;
+          onClose();
+          void actions.correctPlate(v, plate.trim());
+        }}
+      >
+        {t('fleet.vehicles.plateSave')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
         {t('common.cancel')}
       </Button>
     </Sheet>
