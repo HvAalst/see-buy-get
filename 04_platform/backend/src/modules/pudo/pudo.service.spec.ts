@@ -14312,11 +14312,15 @@ describe('PUDO Light', () => {
         expect(holding).toBeGreaterThan(0);
         // The counter reads what to take before it hands anything over.
         expect(monitor.parcelTimeline(back.parcelId)).toMatchObject({ payAtCollection: { amount: due, currency: 'KES' }, holdingOwed: holding, holdingCurrency: 'KES', returnOf: id });
-        // A float that cannot cover it: refused before the code is looked at, so the person loses no try.
+        // A float AND its credit that cannot cover it: refused before the code is looked at, so the person loses no try.
         gate.reverseTopUp(origin.did, floatOf(origin.did), 'drain-PWC');
+        const limit = gate.canTransact(origin.did).credit.limit;
+        gate.chargeShipping(origin.did, limit, 'drain-credit-PWC');
         expect(() => parcels.pickup(back.parcelId, origin.did, back.otp!)).toThrow(/^Top up first: .* is due on this parcel, taken in cash from the person collecting it$/);
         expect(parcels.get(back.parcelId)).toMatchObject({ status: 'Unclaimed', otpAttempts: 0 });
-        gate.topUp(origin.did, due + 10);
+        // 2026-11-21 — the owner: "yes collection on the credit line too": a float short of it, with credit to cover it, is enough.
+        gate.topUp(origin.did, limit);
+        expect(floatOf(origin.did)).toBeLessThan(due);
         // A wrong code: counted, and nothing charged.
         const before = floatOf(origin.did);
         expect(() => parcels.pickup(back.parcelId, origin.did, back.otp === '0000' ? '1111' : '0000')).toThrow(/Incorrect OTP/);

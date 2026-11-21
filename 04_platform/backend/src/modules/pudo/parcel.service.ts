@@ -2285,12 +2285,13 @@ export class ParcelService implements OnApplicationBootstrap {
     // Round 31 — a hand-over photo, when there is one, is the shop's own: refused before a code is counted.
     if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
     // A PERSON'S GOODS TURNED ROUND AT A HUB (2026-10-27): the way back is paid here, in cash, as they are collected — charged
-    // to the shop's float as a take-in is. The float must cover it: asked before the code is looked at, so a short float never
-    // costs the person one of their tries.
+    // to the shop's float as a take-in is. The float and its credit must cover it (2026-11-21, the owner: "yes collection on the
+    // credit line too", as a walk-up's and a booking's cash): asked before the code is looked at, so a short float never costs the
+    // person one of their tries.
     const due = parcel.payAtCollection && !parcel.payAtCollection.paidAt ? parcel.payAtCollection : undefined;
     if (due) {
       const float = this.gate.canTransact(agentDid);
-      if (!float.moneyOk || float.balance + 1e-9 < due.amount) {
+      if (!float.moneyOk || float.balance - due.amount < -float.credit.limit - 1e-9) {
         throw new GlosError('WALLET_INSUFFICIENT', `Top up first: ${due.amount.toFixed(2)} ${due.currency} is due on this parcel, taken in cash from the person collecting it`);
       }
     }

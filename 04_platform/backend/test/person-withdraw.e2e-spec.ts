@@ -123,12 +123,16 @@ describe('a person’s parcel withdrawn at a hub, over the wire', () => {
     // On the shelf of the shop it came back to: the counter reads what to take, before it hands anything over.
     Object.assign(app.get(ParcelService).get(backId), { status: 'Ready_For_Pickup', atMdpId: undefined, readyAt: new Date().toISOString() });
     expect((await http().get(`/v1/sbg/parcels/${backId}`).set(shop.owner).expect(200)).body).toMatchObject({ payAtCollection: { amount: told.amount } });
-    // A float that cannot cover it: refused before the code is tried.
+    // A float AND its credit that cannot cover it: refused before the code is tried.
     const gate = app.get(WalletGateService);
     gate.reverseTopUp(shop.did, gate.canTransact(shop.did).balance, 'drain');
+    const limit = gate.canTransact(shop.did).credit.limit;
+    gate.chargeShipping(shop.did, limit, 'drain-credit');
     const short = await http().post(`/v1/sbg/parcels/${backId}/pickup`).set(shop.owner).send({ otp: code });
     expect([short.status, short.body.detail]).toEqual([402, expect.stringMatching(/^Top up first: .* is due on this parcel, taken in cash from the person collecting it$/)]);
-    gate.topUp(shop.did, 20);
+    // 2026-11-21 — collection cash runs on the credit line too: a float short of it, with credit to cover it, is enough.
+    gate.topUp(shop.did, limit);
+    expect(gate.canTransact(shop.did).balance).toBeLessThan(told.amount);
     const before = gate.canTransact(shop.did).balance;
     await http().post(`/v1/sbg/parcels/${backId}/pickup`).set(shop.owner).send({ otp: code }).expect(201);
     expect(gate.entries({ did: shop.did, type: 'FEE' }).filter((e) => e.reference === backId)).toEqual([expect.objectContaining({ sign: '-', amount: told.amount })]);
