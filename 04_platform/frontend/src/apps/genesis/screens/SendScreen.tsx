@@ -1,3 +1,4 @@
+import { PayOnlineCard } from './PayOnline';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField, WeightInput } from '../../../shared/ui';
@@ -615,6 +616,9 @@ function DoneStep({ state, actions }: SendScreenProps) {
       {/* Trusted markup: the SVG comes from OUR backend's mint response, nothing user-authored. */}
       {svg ? <div class="labelbox" dangerouslySetInnerHTML={{ __html: svg }} /> : null}
       <p class="hint">{t('send.done.codeHint')}</p>
+
+      {/* 2026-11-21 — pay now by iDEAL and print the label at home, where it is offered (the payments plan, 5a); the code stays. */}
+      <PayOnlineCard parcelId={m.parcel.parcelId} look={actions.bookingPay} pay={actions.payBooking} onPaid={() => void actions.openParcel(m.parcel.parcelId)} />
 
       <Card title={t('send.done.nextTitle')}>
         <Checklist items={mintChecklist(fromName, m.price.total, m.price.currency, t)} />

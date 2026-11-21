@@ -27,7 +27,7 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder, inCustoms, abroadAsideAt } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelWeightFound, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PaidOnline, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable, JourneyPlan, CustomsDeclaration, ParcelBorder, inCustoms, abroadAsideAt } from './pudo.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { BORDER_HOLD_DAYS } from './pudo.config';
 import { VendorService } from './vendor.service';
@@ -1413,6 +1413,9 @@ export class ParcelService implements OnApplicationBootstrap {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
       relation,
+      // 2026-11-21 — paid online when booked (5a): to its sender, and the label to print at home, until it is handed in.
+      ...(relation === 'sent' && p.paidOnline ? { paidOnline: { at: p.paidOnline.at, amount: p.paidOnline.amount, currency: p.paidOnline.currency, test: p.paidOnline.test } } : {}),
+      ...(relation === 'sent' && p.paidOnline && p.label?.svg && p.status === 'Created' ? { label: p.label.svg } : {}),
       ...(relation === 'sent' && p.weightFound ? { weightFound: p.weightFound } : {}),
       ...(shopChoice ? { shopChoice } : {}),
       direction: p.direction,
@@ -2879,16 +2882,29 @@ export class ParcelService implements OnApplicationBootstrap {
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
-    const due = weighed ? weighed.quote.locked.gross : (parcel.shipmentCost ?? 0);
-    const gate = this.gate.canTransact(agentDid);
-    if (!gate.moneyOk) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
-    // 2026-11-21 — the cash a booking is taken in for runs on the shop's credit line, as a walk-up's does (the owner: "yes"):
-    // the float and its credit cover the booking's price, asked before anything is written. It used to be the float alone.
-    this.gate.requireCharge(agentDid, due);
+    // 2026-11-21 — PAID ONLINE WHEN BOOKED (the payments plan, 5b): no cash, nothing charged to the shop. Weighed heavier than was
+    // paid for, it is refused and the sender books again (until P5-c is answered); weighed lighter or the same, the price paid stands.
+    const online = parcel.paidOnline;
+    if (online && weighed && weighed.quote.locked.gross > online.amount + 1e-9) {
+      throw new GlosError('INVALID_STATE', `Weighed at ${weighed.kg} kg it costs more than the ${online.amount.toFixed(2)} ${online.currency} paid online for ${parcel.weightKg} kg: the sender books again for the right weight`);
+    }
+    const due = online ? 0 : weighed ? weighed.quote.locked.gross : (parcel.shipmentCost ?? 0);
+    if (!online) {
+      const gate = this.gate.canTransact(agentDid);
+      if (!gate.moneyOk) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+      // 2026-11-21 — the cash a booking is taken in for runs on the shop's credit line, as a walk-up's does (the owner: "yes"):
+      // the float and its credit cover the booking's price, asked before anything is written. It used to be the float alone.
+      this.gate.requireCharge(agentDid, due);
+    }
     // A same-shop parcel takes its shelf slot before anything is written (2026-11-05).
     const here = this.isSameShop(parcel);
     // 2026-11-13 — WEIGHED AT THE COUNTER on a scale that counts (T2): its weight sets the price, the booking kept beside it.
-    if (weighed) {
+    // Paid online, the weight is kept and the price paid stands (it was refused above when heavier).
+    if (weighed && online) {
+      parcel.weighed = { kg: weighed.kg, at: new Date().toISOString(), by: agentDid, siteName: shop.shopName, bookedKg: parcel.weightKg, ...(parcel.shipmentCost != null ? { bookedCost: parcel.shipmentCost } : {}) };
+      Object.assign(parcel, { weightKg: weighed.kg, size: weighedSize!, cargoClass: weighedClass! });
+      parcel.weightSource = 'weighed';
+    } else if (weighed) {
       const bookedKg = parcel.weightKg;
       const bookedCost = parcel.shipmentCost;
       Object.assign(parcel, peerSendPriceOf(weighed.quote), { weightKg: weighed.kg, size: weighedSize!, cargoClass: weighedClass! });
@@ -2904,20 +2920,46 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = step.at;
     parcel.dropoffPhotoRef = dropoffPhotoRef;
-    parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint
-    // 2026-11-20 — paid: its label is made now, for the counter to print and stick on (P4-e).
-    parcel.label = this.label(parcel, parcel.destAgentDid ? this.agents.find(parcel.destAgentDid)?.shopName : undefined);
+    parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint — or online, when booked
+    // 2026-11-20 — paid: its label is made now, for the counter to print and stick on (P4-e). Paid online, it was made then (5a).
+    if (!online || !parcel.label) parcel.label = this.label(parcel, parcel.destAgentDid ? this.agents.find(parcel.destAgentDid)?.shopName : undefined);
     this.handTo(parcel, 'shop', agentDid, 'dropped off at the counter', step);
-    this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected', step);
+    this.scan(parcel, 'At_PUDO', agentDid, online ? 'peer-send drop-off · paid online when booked' : 'peer-send drop-off · cash collected', step);
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
     if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax, parcel.shipmentProvision); // remit the collected cash, tax and all (a 0-priced route charges nothing)
+    // 2026-11-21 — paid online: what was held as the sender's becomes our income now, with its tax (5b).
+    if (online) this.onlineTakenIn?.(parcel);
     const pay = this.takeInPayOf(agentDid, parcel);
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId, 'take_in');
-    void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
+    void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: online ? 'prepaid' : 'cash' }, { source: 'pudo' }).catch(() => undefined);
     if (here) this.shelveHere(parcel, agentDid, step, `dropped off to be collected here · shelf ${parcel.binSlot}`);
+    return parcel;
+  }
+
+  /** 2026-11-21 — what books a booking paid online as income once it is handed in (BookingPayService registers it). */
+  private onlineTakenIn?: (parcel: Parcel) => void;
+  onTakenInPaidOnline(fn: (parcel: Parcel) => void): void {
+    this.onlineTakenIn = fn;
+  }
+
+  /**
+   * 2026-11-21 — A SEND-APP BOOKING PAID ONLINE (the payments plan, 5a): Mollie confirmed what was asked, in the money asked for
+   * (BookingPayService checks before this is called). Its label is made now, to print at home or show at the shop; nothing is
+   * owed at the counter. Once only: a booking already paid, handed in, or ended is left as it is.
+   */
+  markPaidOnline(parcelId: string, paid: PaidOnline): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a booking made in the Send app');
+    if (parcel.paidOnline) return parcel;
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}: a booking is paid online before it is handed in`);
+    parcel.paidOnline = { ...paid };
+    parcel.paidStatus = 'ParcelPaid';
+    parcel.paymentMode = 'prepaid';
+    parcel.label = this.label(parcel, parcel.destAgentDid ? this.agents.find(parcel.destAgentDid)?.shopName : undefined);
+    this.parcels.set(parcel.parcelId, parcel);
     return parcel;
   }
 
@@ -4687,7 +4729,9 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   moveDropOff(parcelId: string, toAgentDid: string, quote: ShipmentQuote, by: string, now: number = Date.now()): { parcel: Parcel; was: number; now: number } {
     const parcel = this.require(parcelId);
-    const cost = this.moveCostOf(parcel, quote);
+    // 2026-11-21 — paid online when booked: the price paid stands at the new shop, nothing more to pay and nothing back (P5-d, as
+    // recommended until it is answered).
+    const cost = parcel.paidOnline ? (parcel.shipmentCost ?? 0) : this.moveCostOf(parcel, quote);
     const refused = this.moveRefusal(parcel, toAgentDid, cost, now);
     if (refused) throw new GlosError(refused.code, refused.message);
     const from = parcel.originAgentDid!;
@@ -4696,7 +4740,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const paidStore = Boolean(parcel.vendorId && parcel.paidStatus === 'ParcelPaid');
     // The first price back, the new one charged: checked above, so the bill below is covered.
     if (paidStore) this.vendors.rebate(parcel.vendorId!, parcelId, was, 'drop-off moved: the first price given back', parcel.shipmentTax ?? 0, (parcel.shipmentProvision ?? 0) + (parcel.shipmentPremium ?? 0), parcel.fx?.buffer ?? 0);
-    this.repriceFor(parcel, quote, cost);
+    if (!parcel.paidOnline) this.repriceFor(parcel, quote, cost);
     if (paidStore) {
       const bill = this.vendors.billShipment(parcel.vendorId!, parcelId, cost, quote.fx?.buffer, parcel.shipmentTax ?? 0, Math.round(((parcel.shipmentProvision ?? 0) + (parcel.shipmentPremium ?? 0)) * 100) / 100, { note: 'drop-off moved' });
       if (!bill.paid) throw new GlosError('WALLET_INSUFFICIENT', 'The balance no longer covers the new price: top up first');
@@ -4704,7 +4748,8 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.originAgentDid = toAgentDid;
     parcel.committedNodeDid = toAgentDid;
     parcel.originZone = to.zone;
-    if (!parcel.vendorId) parcel.collectingEntityId = this.agents.entityIdOf(to); // the counter that takes the cash collects
+    // The counter that takes the cash collects; paid online, the company whose account it was paid into keeps it.
+    if (!parcel.vendorId && !parcel.paidOnline) parcel.collectingEntityId = this.agents.entityIdOf(to);
     const dest = parcel.destAgentDid ? this.agents.find(parcel.destAgentDid) : undefined;
     if (dest && parcel.paidStatus === 'ParcelPaid') parcel.label = this.label(parcel, dest.shopName);
     parcel.dropOffMoves = [...(parcel.dropOffMoves ?? []), { at: new Date(now).toISOString(), from, to: toAgentDid, by, was, now: cost, currency: parcel.currency }];

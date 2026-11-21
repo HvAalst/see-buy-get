@@ -22,6 +22,12 @@ export function directPayWayOf(country?: string): DirectPayWay | undefined {
 }
 
 export interface MollieConfig {
+  /**
+   * 2026-11-21 — OUR OWN COMPANY'S MOLLIE ACCOUNT, by its API key (the payments plan, 5a: a sender pays us when booking).
+   * `live_…` or `test_…`, set by the owner in the server's settings (GLOS_MOLLIE_API_KEY); a live key is never taken in a sandbox.
+   * Absent, the test key stands in, for test money only.
+   */
+  ownKey?: string;
   /** The Connect app (app_…): a carrier connects its own Mollie account through it. Set by the owner, in the server's settings. */
   clientId?: string;
   clientSecret?: string;

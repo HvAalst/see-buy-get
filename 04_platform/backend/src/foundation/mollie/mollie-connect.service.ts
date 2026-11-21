@@ -35,12 +35,16 @@ export function mollieConfigFromEnv(env: NodeJS.ProcessEnv, logger?: Logger): Mo
   const text = (v?: string) => (v && v.trim() ? v.trim() : undefined);
   const testKey = text(env.GLOS_MOLLIE_TEST_KEY);
   if (testKey && !testKey.startsWith('test_')) logger?.error('GLOS_MOLLIE_TEST_KEY is not a test key (test_…): it is not used');
+  const ownKey = text(env.GLOS_MOLLIE_API_KEY);
+  const ownOk = Boolean(ownKey && (ownKey.startsWith('test_') || (ownKey.startsWith('live_') && !isSandbox())));
+  if (ownKey && !ownOk) logger?.error(ownKey.startsWith('live_') ? 'GLOS_MOLLIE_API_KEY is a live key: it is not used in a sandbox' : 'GLOS_MOLLIE_API_KEY is not a Mollie API key (live_… or test_…): it is not used');
   const host = text(env.GLOS_MOLLIE_HOST);
   if (host && !isSandbox()) logger?.error('GLOS_MOLLIE_HOST is a stand-in for Mollie: it is not used outside a sandbox');
   return {
     clientId: text(env.GLOS_MOLLIE_CLIENT_ID),
     clientSecret: text(env.GLOS_MOLLIE_CLIENT_SECRET),
     ...(testKey?.startsWith('test_') ? { testKey } : {}),
+    ...(ownOk ? { ownKey } : {}),
     testmode: (env.GLOS_MOLLIE_LIVE ?? '').trim().toLowerCase() !== 'true',
     publicBase: text(env.SBG_PUBLIC_URL)?.replace(/\/+$/, ''),
     ...(host && isSandbox() ? { host: host.replace(/\/+$/, '') } : {}),
@@ -77,6 +81,16 @@ export class MollieConnectService {
     if (this.cfg.clientId && this.cfg.clientSecret && this.cfg.publicBase) return 'oauth';
     if (this.cfg.testKey) return 'test_key';
     return undefined;
+  }
+
+  /**
+   * 2026-11-21 — OUR OWN COMPANY'S ACCOUNT (the payments plan, 5a): its API key, or the test key standing in for test money;
+   * null where neither is set. A payment made with a key is test or live by the key itself.
+   */
+  ownToken(): { bearer: string; testmode: boolean } | null {
+    if (this.cfg.ownKey) return { bearer: this.cfg.ownKey, testmode: this.cfg.ownKey.startsWith('test_') };
+    if (this.cfg.testKey) return { bearer: this.cfg.testKey, testmode: true };
+    return null;
   }
 
   /** The client, for whoever makes and reads payments on a connection. */

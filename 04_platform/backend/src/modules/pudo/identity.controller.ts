@@ -1,3 +1,5 @@
+import { BookingPayService } from './booking-pay.service';
+import { BookingPayView } from './booking-pay.types';
 import { Body, Controller, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { PersonDoorService } from './person-door.service';
@@ -70,6 +72,8 @@ export class IdentityController {
     @Optional() private readonly moves?: DropOffMoveService,
     // 2026-11-06 — its pickup shop closed: the receiver chooses one of the shops the driver with it picked.
     @Optional() private readonly shopChoices?: ShopChoiceService,
+    // 2026-11-21 — a booking paid online when booked, by iDEAL through Mollie into our own account (the payments plan, 5a).
+    @Optional() private readonly bookings?: BookingPayService,
   ) {}
 
   /**
@@ -407,6 +411,27 @@ export class IdentityController {
       price: { routeMode: parcel.routeMode, currency: parcelCurrency(parcel), total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost, tax: parcel.shipmentTax, taxLabel: parcel.taxLabel },
       journey,
     };
+  }
+
+  /**
+   * 2026-11-21 — PAY THIS BOOKING ONLINE NOW (the payments plan, 5a; P5-a "netherlands first", P5-b "it stays optional"): whether
+   * it can be (where Mollie runs, in euros), and the latest payment — asked of Mollie again while one is open. Its sender only.
+   */
+  @Roles('consumer')
+  @Get('parcels/:id/pay')
+  bookingPay(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<BookingPayView> {
+    const person = this.persons.requireByDid(actor.did!);
+    if (!this.parcels.sentBy(id, person) || !this.bookings) throw new GlosError('NOT_FOUND', 'No such parcel');
+    return this.bookings.look(id);
+  }
+
+  /** Pay it now: a Mollie payment by iDEAL for its price; the sender is sent to their bank and comes back to this booking. */
+  @Roles('consumer')
+  @Post('parcels/:id/pay')
+  payBooking(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<BookingPayView> {
+    const person = this.persons.requireByDid(actor.did!);
+    if (!this.parcels.sentBy(id, person) || !this.bookings) throw new GlosError('NOT_FOUND', 'No such parcel');
+    return this.bookings.ask(id, person.personDid);
   }
 
   /** One parcel the caller is a party to — the authenticated twin + status timeline (404 to a non-party). */

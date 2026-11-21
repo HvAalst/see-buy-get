@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BookingPayService } from './booking-pay.service';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query, Res, UseGuards, Optional } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
@@ -40,6 +41,8 @@ export class MollieController {
     private readonly managers: FleetManagerService,
     private readonly direct: DirectPayService,
     private readonly feeInvoices: FeeInvoiceService,
+    // 2026-11-21 — a Send-app booking paid online (5a): the same notice names its payment.
+    @Optional() private readonly bookings?: BookingPayService,
   ) {}
 
   /** 2026-11-20 — the invoices for our fee on this carrier's payments by Mollie, one a month (part 2c): newest first. */
@@ -74,7 +77,8 @@ export class MollieController {
   @HttpCode(200)
   @Post('webhook')
   async webhook(@Body() dto: MollieWebhookDto): Promise<{ ok: true }> {
-    if (dto?.id) await this.direct.onWebhook(dto.id);
+    // A load paid direct, or a booking paid online (5a): each looks after its own and leaves the other's.
+    if (dto?.id && !(await this.bookings?.onWebhook(dto.id).catch(() => false))) await this.direct.onWebhook(dto.id);
     return { ok: true };
   }
 

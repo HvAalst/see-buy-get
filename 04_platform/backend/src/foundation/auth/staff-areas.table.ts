@@ -435,6 +435,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/identity/me': 'none',
   'GET sbg/identity/parcels': 'none',
   'GET sbg/identity/parcels/:id': 'none',
+  // 2026-11-21 — a booking paid online by its sender (5a): theirs alone.
+  'GET sbg/identity/parcels/:id/pay': 'none',
+  'POST sbg/identity/parcels/:id/pay': 'none',
   'GET sbg/identity/parcels/:id/door': 'none',
   'GET sbg/imports': 'support',
   'GET sbg/imports/:importId': 'support',

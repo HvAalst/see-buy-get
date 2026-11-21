@@ -1385,4 +1385,6 @@ export const enAgent = {
   'agent.freightSteps.seePlanned': 'Once booked it waits until {when}, then goes to drivers.',
   'agent.freightSteps.seeEarly': 'A driver can reserve it before the day.',
   'agent.freightSteps.seeNotEarly': 'No driver sees it before the day.',
+  'agent.accept.paidOnlineTitle': 'Paid online when booked',
+  'agent.accept.paidOnlineDetail': 'Nothing to take: the sender paid when booking, and the label is on the parcel or on their phone. Photograph it and take it in.',
 };

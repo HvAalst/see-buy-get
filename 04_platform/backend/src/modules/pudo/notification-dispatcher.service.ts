@@ -564,6 +564,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
     // 2026-11-21 — "I bought it" (PlateClaimService): the owner asked, the asker told how it ended; staff's decision told to both.
     this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimAsked, (e) => this.onPlateClaim('asked', e.payload.claim));
+    // 2026-11-21 — a booking paid online when booked (5a): its sender told the label is ready, where it opens.
+    this.events.subscribe<{ parcelId: string; personDid: string; amount: number; currency: string }>(GlosEvent.Pudo.BookingPaidOnline, (e) => {
+      const p = e.payload;
+      void this.tell(p.personDid, {
+        kind: 'booking_paid',
+        title: `Paid: the label for ${p.parcelId} is ready`,
+        body: 'Print it at home and stick it on the parcel, or show it on your phone at the shop. Nothing more to pay there.',
+        link: `/?parcel=${p.parcelId}`,
+        tag: `booking-paid:${p.parcelId}`,
+        data: { parcelId: p.parcelId },
+      });
+    });
     this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimClosed, (e) => this.onPlateClaim('closed', e.payload.claim));
     this.events.subscribe<{ claim: PlateClaim }>(GlosEvent.Pudo.PlateClaimLapsed, (e) => this.onPlateClaim('lapsed', e.payload.claim));
     // Round 39 — the risk register: a hub, or the fleet running a corridor, is told when where it works is rated anew.

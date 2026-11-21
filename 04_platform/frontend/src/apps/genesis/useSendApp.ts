@@ -45,7 +45,7 @@ import {
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
 import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
-import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, MoveView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
+import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, MoveView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult, BookingPayView } from './types';
 import { refusalSentence } from '../../shared/ui/ErrorNote';
 
 // 2026-11-13 — 'load': posting something too big for a shop as a load (unusual loads, U5).
@@ -990,6 +990,38 @@ export function useSendApp() {
    * 2026-11-06 — DROPPED OFF AT ANOTHER SHOP: what it would cost from there (asked, nothing done), and moving it at the price
    * the sender was shown. The move answers the server's refusal in its own words, or nothing; done, the parcel is read again.
    */
+  /** 2026-11-21 — a booking paid online (the payments plan, 5a): whether it can be, and the latest payment. */
+  const bookingPay = useCallback(
+    async (id: string): Promise<BookingPayView | null> => {
+      if (!client) return null;
+      const r = await client.api.bookingPay(id);
+      if (r.error) {
+        if (isSignInRequired(r.error)) signOutRef.current(r.error);
+        return null;
+      }
+      return narrow<BookingPayView>(r.data);
+    },
+    [client],
+  );
+
+  /** Pay it now: where to go to pay by iDEAL, or why not. */
+  const payBooking = useCallback(
+    async (id: string): Promise<{ checkoutUrl?: string; error?: string }> => {
+      if (!client) return {};
+      const r = await client.api.payBooking(id);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return {};
+        }
+        return { error: r.error.detail || r.error.title };
+      }
+      const v = narrow<BookingPayView>(r.data);
+      return v?.checkoutUrl ? { checkoutUrl: v.checkoutUrl } : { error: t('send.pay.failed') };
+    },
+    [client],
+  );
+
   const movePreview = useCallback(
     async (id: string, to: string): Promise<MoveView | null> => {
       if (!client) return null;
@@ -1432,6 +1464,8 @@ export function useSendApp() {
     choosePickupShop,
     answerWeight,
     nominateCollector,
+    bookingPay,
+    payBooking,
     movePreview,
     moveParcel,
       closeParcel,

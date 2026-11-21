@@ -1,6 +1,7 @@
 import { WeightFoundCard } from '../../../shared/WeightFoundCard';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { MoveDropOff } from './MoveDropOff';
+import { PaidLabelCard, PayOnlineCard } from './PayOnline';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow, type SbgClient } from '../../../lib/sbg';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
@@ -256,6 +257,15 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       </section>
 
       {parcel.runningLate ? <Note tone="warn" icon="clock" title={t('send.late.title')} detail={lateLine(parcel.runningLate, t)} /> : null}
+
+      {/* 2026-11-21 — booked and not handed in: paid online, its label to print at home; or the way to pay now (the payments plan, 5a). */}
+      {parcel.relation === 'sent' && parcel.status === 'Created' ? (
+        parcel.paidOnline && parcel.label ? (
+          <PaidLabelCard parcelId={parcel.parcelId} svg={parcel.label} />
+        ) : (
+          <PayOnlineCard parcelId={parcel.parcelId} look={actions.bookingPay} pay={actions.payBooking} onPaid={() => void actions.openParcel(parcel.parcelId)} />
+        )
+      ) : null}
 
       {/* 2026-11-06 — booked and not dropped off yet: dropped off at another shop instead, re-priced, the sender's own choice. */}
       <MoveDropOff

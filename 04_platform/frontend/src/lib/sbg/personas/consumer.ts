@@ -58,6 +58,10 @@ export function createConsumerApi(sbg: SbgClient) {
     /** One parcel the person is a party to — the authenticated twin + status timeline (404 to a non-party). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}', { params: { path: { id } } })),
 
+    /** 2026-11-21 — a booking paid online when booked (the payments plan, 5a): whether it can be, the latest payment; and pay it now. */
+    bookingPay: (id: string) => sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}/pay', { params: { path: { id } } })),
+    payBooking: (id: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/pay', { params: { path: { id } } })),
+
     /** Attach the receiver's own delivered-state photo (proof of what they received). */
     pod: (id: string, photoRef: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/pod', { params: { path: { id } }, body: { photoRef } })),
 

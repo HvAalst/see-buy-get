@@ -3904,6 +3904,46 @@ describe('PUDO Light', () => {
       expect(parcels.get(dear.parcelId).label).toBeUndefined();
     });
 
+    /* 2026-11-21 — the payments plan, 5a/5b: a booking paid online when booked is labelled then, and taken in without cash. */
+    it('a booking paid online: labelled when paid, taken in without cash or a charge to the shop — its fee to the float; heavier than paid, refused', () => {
+      const shop = onboardAgent('PO Shop', 'NorthTown', 1);
+      const dest = onboardAgent('PO Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'PO N-S', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:po1', senderPhoneHash: 'h-po1', receiverMobile: '+254700600089', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+      expect(sent.label).toBeUndefined();
+      const takenIn: string[] = [];
+      parcels.onTakenInPaidOnline((p) => takenIn.push(p.parcelId));
+      const paid = parcels.markPaidOnline(sent.parcelId, { paymentId: 'tr_po1', amount: sent.shipmentCost!, currency: 'KES', at: new Date().toISOString(), test: true, method: 'ideal' });
+      expect(paid).toMatchObject({ paidStatus: 'ParcelPaid', paymentMode: 'prepaid', paidOnline: { paymentId: 'tr_po1' } });
+      expect(paid.label?.svg).toContain('<svg');
+      // Its sender sees it paid, and the label to print, until it is handed in.
+      expect(parcels.consumerParcel(sent.parcelId, { phoneHash: 'h-po1', personDid: 'did:person:po1' })).toMatchObject({ paidOnline: { amount: sent.shipmentCost }, label: expect.stringContaining('<svg') });
+      // Paid twice: nothing changes.
+      expect(parcels.markPaidOnline(sent.parcelId, { paymentId: 'tr_po2', amount: 1, currency: 'KES', at: new Date().toISOString(), test: true, method: 'ideal' }).paidOnline?.paymentId).toBe('tr_po1');
+      // The counter reads it: nothing to take, paid online.
+      expect(controller.intakePreview(sent.parcelId, { role: 'agent', did: shop.did } as never)).toMatchObject({ cashDue: 0, paidOnline: true });
+      // An empty float and no credit left would refuse cash; paid online, nothing is charged to the shop.
+      gate.reverseTopUp(shop.did, agents.balance(shop.did)!, 'drain-PO');
+      gate.chargeShipping(shop.did, gate.canTransact(shop.did).credit.limit, 'drain-credit-PO');
+      const before = agents.balance(shop.did)!;
+      const taken = parcels.intakeConsumerSend(sent.parcelId, shop.did, photoBy(shop.did));
+      expect(taken).toMatchObject({ status: 'At_PUDO', paidStatus: 'ParcelPaid' });
+      expect(taken.label?.svg).toBe(paid.label?.svg);
+      expect(gate.entries({ did: shop.did, type: 'FEE' }).filter((e) => e.reference === sent.parcelId)).toEqual([]);
+      // Its take-in fee goes into the float.
+      expect(agents.balance(shop.did)!).toBeGreaterThan(before);
+      expect(takenIn).toEqual([sent.parcelId]);
+      expect(parcels.consumerParcel(sent.parcelId, { phoneHash: 'h-po1', personDid: 'did:person:po1' }).label).toBeUndefined();
+      // Heavier at a scale that counts than what was paid for: refused, the sender books again.
+      const heavy = parcels.createConsumerSend({ senderPersonDid: 'did:person:po2', senderPhoneHash: 'h-po2', receiverMobile: '+254700600090', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+      parcels.markPaidOnline(heavy.parcelId, { paymentId: 'tr_po3', amount: heavy.shipmentCost!, currency: 'KES', at: new Date().toISOString(), test: true, method: 'ideal' });
+      const q15 = routing.quoteShipment(shop.did, dest.did, 'M', 1, { kg: 15 });
+      const dearer = { ...q15, locked: { ...q15.locked, gross: heavy.shipmentCost! + 5 } };
+      expect(dearer.locked.gross).toBeGreaterThan(heavy.shipmentCost!);
+      expect(() => parcels.intakeConsumerSend(heavy.parcelId, shop.did, photoBy(shop.did), undefined, { kg: 15, quote: dearer })).toThrow(/costs more than the .* paid online for 1 kg: the sender books again for the right weight$/);
+      expect(parcels.get(heavy.parcelId).status).toBe('Created');
+    });
+
     /* 2026-11-13 — the owner: "shop and hub tools", T2 — a weight taken on a scale that counts sets the price. */
     it('a person’s send weighed at a counter whose scale counts is priced at that weight, the booking kept beside it; on a guide scale the booking stands', () => {
       const until = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);

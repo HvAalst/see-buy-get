@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "agent.freight.arrived": "ደርሷል",
   "agent.freight.arrivedSaid": "እንደደረሰ ተገልጿል፦ ሹፌሩ ያለ ኮዱ ማድረስ ይችላል።",
   "agent.freight.arrivedToast": "እንደደረሰ ተገልጿል",
+  "agent.accept.paidOnlineTitle": "ሲያዝ በመስመር ላይ ተከፍሏል",
+  "agent.accept.paidOnlineDetail": "የሚቀበሉት ገንዘብ የለም፦ ላኪው ሲያዝ ከፍሏል፣ መለያውም በእቃው ላይ ወይም በስልካቸው ላይ ነው። ፎቶ አንሱና ይቀበሉት።",
 };

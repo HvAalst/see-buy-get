@@ -103,6 +103,11 @@ export class MollieClient {
     return this.call('POST', '/v2/payments', { bearer, json: body, idempotencyKey });
   }
 
+  /** 2026-11-21 — money back on a payment (the payments plan, 5c): the whole or a part, once per key. */
+  createRefund(bearer: string, paymentId: string, body: Record<string, unknown>, idempotencyKey: string): Promise<Record<string, unknown>> {
+    return this.call('POST', `/v2/payments/${encodeURIComponent(paymentId)}/refunds`, { bearer, json: body, idempotencyKey });
+  }
+
   /** A test payment is only found when asked for as one. */
   getPayment(bearer: string, paymentId: string, testmode: boolean): Promise<Record<string, unknown>> {
     return this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}${testmode ? '?testmode=true' : ''}`, { bearer });

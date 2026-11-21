@@ -1114,6 +1114,16 @@ export function abroadAsideAt(p: Pick<Parcel, 'border' | 'atMdpId' | 'status'>):
   return inCustoms(p) ? 'customs' : undefined;
 }
 
+/** 2026-11-21 — a booking paid online (the payments plan, 5a): which payment, how much, when, and whether it was test money. */
+export class PaidOnline {
+  paymentId: string;
+  amount: number;
+  currency: string;
+  at: string;
+  test: boolean;
+  method: string;
+}
+
 export class PhygitalLabel {
   parcelId: string;
   qrPayload: string; // what the printed QR encodes
@@ -1158,6 +1168,9 @@ export interface AbroadParcelView {
 }
 
 export interface ConsumerParcelView {
+  /** 2026-11-21 — to its sender: paid online when booked (5a), and its label, to print at home or show at the shop. */
+  paidOnline?: { at: string; amount: number; currency: string; test: boolean };
+  label?: string;
   parcelId: string;
   /** 2026-11-15 — who has it now, by name: a shop, a hub, or on the road a company and its kind of vehicle (plan R1). */
   nowWith?: NowWithView;
@@ -1569,6 +1582,8 @@ export class Parcel {
   carrierPays?: boolean;
   /** 2026-11-20 — a walk-up paid by phone at the counter, into the partner's account through the payment hub (4b): which payment, how much, test money or not. */
   paidByPhone?: { paymentId: string; amount: number; currency: string; test: boolean; partnerEntityId: string };
+  /** 2026-11-21 — a Send-app booking paid online when booked (the payments plan, 5a): by iDEAL through Mollie into our own company's account. Held as the sender's until it is handed in (5b). */
+  paidOnline?: PaidOnline;
   disputeReason?: string;
   disputePhotoRef?: string;
   // S23 — the buyer's own delivered-state proof + app-filed dispute, kept ALONGSIDE the agent's

@@ -136,7 +136,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
 
       {pm && booked && pm.intakeReady ? (
         <>
-          {pm.kind === 'peer_send' ? (
+          {pm.kind === 'peer_send' && pm.paidOnline ? (
+            /* 2026-11-21 — paid online when booked (the payments plan, 5b): nothing to take, the label is on it already. */
+            <Note tone="ok" icon="check" title={t('agent.accept.paidOnlineTitle')} detail={t('agent.accept.paidOnlineDetail')} />
+          ) : pm.kind === 'peer_send' ? (
             <GlanceNumber
               label={t('agent.accept.collectCash')}
               value={money(pm.cashDue, pm.currency)}
@@ -188,7 +191,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
               disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none' || (pm.papers ? papersSeen !== pm.parcelId : false) || weighedFor(pm, state.intakeWeighed) === null}
               busy={state.busy === 'intake'}
             >
-              {pm.kind === 'peer_send' ? t('agent.accept.collectAndTakeIn', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.takeIn')}
+              {pm.kind === 'peer_send' && !pm.paidOnline ? t('agent.accept.collectAndTakeIn', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.takeIn')}
             </Button>
             {pm.kind === 'peer_send' && !state.intakePhotoRef ? <p class="hint" style="margin-top:8px">{t('agent.accept.photoFirst')}</p> : null}
             {pm.papers && papersSeen !== pm.parcelId ? <p class="hint" style="margin-top:8px">{t('agent.accept.papersFirst')}</p> : null}
@@ -198,7 +201,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <ReadAloud
               text={() =>
                 (pm.terms ? `${takeInTermsNotice(pm.terms, t).title}. ${takeInTermsNotice(pm.terms, t).detail} ` : '') +
-                (pm.kind === 'peer_send' ? t('agent.accept.aloudBooked', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.aloudPrepaid'))
+                (pm.kind === 'peer_send' && !pm.paidOnline ? t('agent.accept.aloudBooked', { amount: money(pm.cashDue, pm.currency) }) : t('agent.accept.aloudPrepaid'))
               }
               label={t('agent.readAloud')}
             />
@@ -356,7 +359,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         {state.intakeDone ? (
           <>
             <p class="t-body">
-              {state.intakeDone.kind === 'peer_send'
+              {state.intakeDone.kind === 'peer_send' && state.intakeDone.cashDue > 0
                 ? t('agent.accept.doneCash', { amount: money(state.intakeDone.cashDue, state.intakeDone.currency) })
                 : t('agent.accept.donePrepaid')}
             </p>

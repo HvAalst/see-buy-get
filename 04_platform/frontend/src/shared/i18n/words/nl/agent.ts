@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "agent.freight.arrived": "Het is aangekomen",
   "agent.freight.arrivedSaid": "Gemeld als aangekomen: de chauffeur mag afleveren zonder de code.",
   "agent.freight.arrivedToast": "Gemeld als aangekomen",
+  "agent.accept.paidOnlineTitle": "Online betaald bij het boeken",
+  "agent.accept.paidOnlineDetail": "Niets af te rekenen: de afzender betaalde bij het boeken, en het label zit op het pakket of staat op de telefoon. Maak een foto en neem het aan.",
 };

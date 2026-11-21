@@ -337,8 +337,10 @@ export interface IntakePreview {
   fragile: boolean;
   destZone: string;
   destShopName?: string;
-  /** The locked price the shop collects in cash — 0 for a prepaid store order. */
+  /** The locked price the shop collects in cash — 0 for a prepaid store order, or a booking paid online. */
   cashDue: number;
+  /** 2026-11-21 — a Send-app booking paid online when booked (the payments plan, 5b): nothing to take at the counter. */
+  paidOnline?: boolean;
   /** 2026-11-13 — this counter's scale counts (site tools, T2): a weight typed here sets the price. */
   weighs?: boolean;
   /** Weighed here: the weight the cash due is at, and what was booked. */

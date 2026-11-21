@@ -317,6 +317,8 @@ export const NOTIFICATION_KINDS = [
    * (welcome.ts).
    */
   'welcome',
+  /** 2026-11-21 — a booking paid online when booked (5a): its label is ready, to print at home or show at the shop. */
+  'booking_paid',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

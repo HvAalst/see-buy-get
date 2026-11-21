@@ -71,6 +71,8 @@ export const GlosEvent = {
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
     // 2026-11-21 — "I bought it": the owner of the vehicle carrying a plate is asked; the asker told when it closes; staff when it lapses.
     PlateClaimAsked: 'pudo.plate_claim_asked',
+    // 2026-11-21 — a Send-app booking paid online when booked (the payments plan, 5a): its sender told the label is ready.
+    BookingPaidOnline: 'pudo.booking_paid_online',
     PlateClaimClosed: 'pudo.plate_claim_closed',
     PlateClaimLapsed: 'pudo.plate_claim_lapsed',
     // Round 39 — a light courier's ID photo seen by staff, or sent back with the reason: told to the rider.

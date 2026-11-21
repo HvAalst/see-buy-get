@@ -1241,4 +1241,6 @@ export const words: Record<string, string> = {
   "agent.freight.arrived": "Umefika",
   "agent.freight.arrivedSaid": "Imesemwa umefika: dereva anaweza kufikisha bila msimbo.",
   "agent.freight.arrivedToast": "Imesemwa umefika",
+  "agent.accept.paidOnlineTitle": "Kimelipwa mtandaoni wakati wa kuweka nafasi",
+  "agent.accept.paidOnlineDetail": "Hakuna cha kupokea: mtumaji alilipa alipoweka nafasi, na lebo iko kwenye kifurushi au kwenye simu yake. Kipige picha na ukipokee.",
 };

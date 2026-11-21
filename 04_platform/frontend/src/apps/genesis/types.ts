@@ -291,7 +291,22 @@ export interface MoveView {
   why?: string;
 }
 
+/** 2026-11-21 — a booking paid online when booked (the payments plan, 5a): whether it can be, and the latest payment. */
+export interface BookingPayView {
+  offered: boolean;
+  why?: 'not_booking' | 'paid' | 'handed_in' | 'not_here' | 'not_eur' | 'no_account';
+  amount?: number;
+  currency?: string;
+  testmode?: boolean;
+  status?: 'open' | 'pending' | 'authorized' | 'paid' | 'canceled' | 'expired' | 'failed';
+  checkoutUrl?: string;
+  paidAt?: string;
+}
+
 export interface ConsumerParcelView {
+  /** 2026-11-21 — to its sender: paid online when booked (5a), and its label to print at home, until it is handed in. */
+  paidOnline?: { at: string; amount: number; currency: string; test: boolean };
+  label?: string;
   /** 2026-11-13 — to the sender: a weight a hub found, unlike what they said, and their side (site tools, T2). */
   weightFound?: import('../../shared/WeightFoundCard').WeightFound;
   parcelId: string;

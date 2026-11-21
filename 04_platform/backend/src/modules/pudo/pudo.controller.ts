@@ -5763,7 +5763,9 @@ export class SbgController {
       fragile: parcel.fragile ?? false,
       destZone: parcel.destZone,
       destShopName: parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined,
-      cashDue: kind === 'peer_send' ? (weighedAt?.quote.locked.gross ?? parcel.shipmentCost ?? 0) : 0,
+      // 2026-11-21 — paid online when booked (the payments plan, 5b): nothing to take at the counter.
+      cashDue: kind === 'peer_send' && !parcel.paidOnline ? (weighedAt?.quote.locked.gross ?? parcel.shipmentCost ?? 0) : 0,
+      ...(parcel.paidOnline ? { paidOnline: true } : {}),
       // 2026-11-13 — this counter's scale counts (T2): a weight typed here sets the price; and what was booked, where it did.
       weighs,
       ...(weighedAt ? { weighedKg: weighedAt.kg, bookedKg: parcel.weightKg, bookedCashDue: parcel.shipmentCost ?? 0 } : {}),

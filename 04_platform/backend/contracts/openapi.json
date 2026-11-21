@@ -30083,6 +30083,62 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/pay": {
+      "get": {
+        "operationId": "Identity.bookingPay",
+        "summary": "",
+        "description": "2026-11-21 — PAY THIS BOOKING ONLINE NOW (the payments plan, 5a; P5-a \"netherlands first\", P5-b \"it stays optional\"): whether\nit can be (where Mollie runs, in euros), and the latest payment — asked of Mollie again while one is open. Its sender only.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingPayView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Identity.payBooking",
+        "summary": "",
+        "description": "Pay it now: a Mollie payment by iDEAL for its price; the sender is sent to their bank and comes back to this booking.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingPayView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}": {
       "get": {
         "operationId": "Identity.parcel",
@@ -69137,6 +69193,37 @@
           "buffer"
         ]
       },
+      "PaidOnline": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "test": {
+            "type": "boolean"
+          },
+          "method": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paymentId",
+          "amount",
+          "currency",
+          "at",
+          "test",
+          "method"
+        ]
+      },
       "DisputeCase": {
         "type": "object",
         "properties": {
@@ -70019,6 +70106,14 @@
                 "type": "string"
               }
             }
+          },
+          "paidOnline": {
+            "description": "2026-11-21 — a Send-app booking paid online when booked (the payments plan, 5a): by iDEAL through Mollie into our own company's account. Held as the sender's until it is handed in (5b).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaidOnline"
+              }
+            ]
           },
           "disputeReason": {
             "type": "string"
@@ -83244,6 +83339,39 @@
           "destPudoDid",
           "dimensionsCm",
           "weightKg"
+        ]
+      },
+      "BookingPayView": {
+        "type": "object",
+        "properties": {
+          "offered": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "object"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "testmode": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "object",
+            "description": "The latest payment asked for: where it stands, and where to pay while it is open."
+          },
+          "checkoutUrl": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "offered"
         ]
       },
       "DoorPreview": {
