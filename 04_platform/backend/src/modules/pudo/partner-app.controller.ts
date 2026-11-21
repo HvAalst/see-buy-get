@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Optional, Param, Post } from '@nestjs/common';
 import { auditActor } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -9,7 +9,39 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { PartnerLedgerService, type PartnerPayeeKind } from './partner-ledger.service';
-import { PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
+import { PartnerPayoutRow, PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
+
+/** 4e — one sender's payment into the partner's account: for which parcel, how much, where it stands — never the phone. */
+export class PartnerMoneyIn {
+  @ApiProperty() reference: string;
+  @ApiProperty() amount: number;
+  @ApiProperty() currency: string;
+  @ApiProperty({ enum: ['asked', 'paid', 'failed'] }) state: 'asked' | 'paid' | 'failed';
+  @ApiProperty() at: string;
+  @ApiPropertyOptional({ description: 'Given back to the sender: the parcel was voided.' }) givenBack?: boolean;
+}
+
+/**
+ * 4e — THE PARTNER'S MONEY, as its own people read it (the plan: "Paid in", "Paid out" and "Waiting", live): what senders paid
+ * into its account, what went back, what it paid its hands and what waits, what its account holds, and our fee it owes.
+ */
+export class PartnerMoneyView {
+  @ApiProperty() currency: string;
+  @ApiPropertyOptional({ description: 'What the account holds, where its provider says.' }) balance?: number;
+  @ApiProperty() test: boolean;
+  @ApiProperty() paidIn: number;
+  @ApiProperty() givenBack: number;
+  @ApiProperty() paidOut: number;
+  @ApiProperty() waiting: number;
+  @ApiProperty() waitingAmount: number;
+  @ApiProperty() shortAmount: number;
+  @ApiProperty({ description: 'Our fee on its payments, owed by it: a loan until a company of ours can invoice it.' }) feeOwed: number;
+  @ApiProperty({ type: [PartnerMoneyIn] }) ins: PartnerMoneyIn[];
+  @ApiProperty({ type: [PartnerPayoutRow] }) payouts: PartnerPayoutRow[];
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: 'Each hand paid, by the name the partner knows it by.' }) names: Record<string, string>;
+}
 import { InvitePartnerMemberDto, PartnerMeView, PartnerMemberService, PartnerMemberView, PartnerMembershipList, PartnerMembershipView, PartnerOwedForPartner, PartnerSession } from './partner-member.service';
 
 /**
@@ -27,6 +59,7 @@ export class PartnerAppController {
     private readonly drivers: DriverService,
     private readonly fleets: FleetManagerService,
     private readonly payouts: PartnerPayoutService,
+    @Optional() private readonly hub?: PaymentHubService,
   ) {}
 
   /* ------------------------------------------------------------------ our staff -- */
@@ -91,6 +124,43 @@ export class PartnerAppController {
   myPayouts(@Actor() actor: IntrospectionResult): PartnerPayoutsView {
     const { entity } = this.members.requireMember(actor);
     return this.payouts.viewOf(entity.entityId);
+  }
+
+  /** 4e — the partner's money: paid in, given back, paid out, waiting — live, with each hand by its name. */
+  @Roles('partner')
+  @Get('partner/me/money')
+  async myMoney(@Actor() actor: IntrospectionResult): Promise<PartnerMoneyView> {
+    const { entity } = this.members.requireMember(actor);
+    const id = entity.entityId;
+    const account = this.hub ? await this.hub.accountView(id) : undefined;
+    const totals = this.hub?.totalsOf(id) ?? { paidIn: 0, givenBack: 0, paidOut: 0 };
+    const out = this.payouts.viewOf(id);
+    const kept = this.hub?.kept(id) ?? [];
+    const back = new Set(kept.filter((p) => p.kind === 'refund' && p.state === 'paid' && p.refundOf).map((p) => p.refundOf as string));
+    const ins = kept
+      .filter((p) => p.kind === 'in' && !p.askedBy)
+      .reverse()
+      .slice(0, 100)
+      .map((p) => ({ reference: p.reference, amount: p.amount, currency: p.currency, state: p.state, at: p.settledAt ?? p.askedAt, ...(back.has(p.paymentId) ? { givenBack: true } : {}) }));
+    const names: Record<string, string> = {};
+    for (const r of out.rows) {
+      if (names[r.payeeId]) continue;
+      const name = this.nameOf(r.payeeKind, r.payeeId);
+      if (name) names[r.payeeId] = name;
+    }
+    return {
+      currency: account?.currency ?? out.currency,
+      ...(account?.balance != null ? { balance: account.balance } : {}),
+      test: account?.test ?? true,
+      ...totals,
+      waiting: out.waiting,
+      waitingAmount: out.waitingAmount,
+      shortAmount: out.shortAmount,
+      feeOwed: account?.feeOwed ?? 0,
+      ins,
+      payouts: out.rows.slice(0, 100),
+      names,
+    };
   }
 
   /** What the partner owes its hands: in all, per hand, every step — the record our staff read on its page. */

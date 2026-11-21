@@ -146,9 +146,17 @@ export class PaymentAccountView {
   @ApiProperty({ description: 'Our fee counted so far on payments kept, less any given back: owed by the partner, as a loan until a company of ours can invoice it.' }) feeOwed: number;
 }
 
+/** 4e — what came in, went back and went out of the account, paid. */
+export class PaymentTotalsView {
+  @ApiProperty({ description: 'Senders’ payments, paid: never a try by our staff.' }) paidIn: number;
+  @ApiProperty() givenBack: number;
+  @ApiProperty() paidOut: number;
+}
+
 /** A partner's payment account, as our staff read it: the account, and its payments, newest first. */
 export class PaymentAccountRead {
   @ApiProperty({ type: PaymentAccountView }) account: PaymentAccountView;
+  @ApiProperty({ type: PaymentTotalsView }) totals: PaymentTotalsView;
   @ApiProperty({ type: [HubPaymentView] }) payments: HubPaymentView[];
 }
 

@@ -90,6 +90,8 @@ export function PayoutsBody({ payouts, t, busy, onPayNow }: { payouts: PartnerPa
 
 export interface PaymentAccountRead {
   account: { provider: HubProviderId; test: boolean; currency: string; ready: HubProviderId[]; balance?: number; feePct?: number; feeSetBy?: string; feeSetAt?: string; feeOwed: number };
+  /** 2026-11-21 — what came in, went back and went out, paid (4e). */
+  totals?: { paidIn: number; givenBack: number; paidOut: number };
   payments: HubPaymentRow[];
 }
 
@@ -142,6 +144,7 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: Paym
           </span>
         </div>
       </div>
+      {read.totals ? <p class="chint">{t('tower.partner.pay.totals', { paidIn: cash(read.totals.paidIn, a.currency), givenBack: cash(read.totals.givenBack, a.currency), paidOut: cash(read.totals.paidOut, a.currency) })}</p> : null}
       {a.test ? <p class="chint">{t('tower.partner.pay.ownLater')}</p> : null}
       <p class="cfield__label">{t('tower.partner.pay.feeTitle')}</p>
       <p class="chint">{t('tower.partner.pay.feeLede')}</p>

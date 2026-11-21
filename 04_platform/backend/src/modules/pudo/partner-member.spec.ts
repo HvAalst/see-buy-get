@@ -139,6 +139,29 @@ describe('a partner’s own people', () => {
     expect(Object.keys(doors.owed(asPartner(selam.personDid)).names)).toEqual(['did:glos:shop-k', 'mdp_k']);
     expect(ledger.ledgerOf).toHaveBeenCalledWith(partnerId, { paidLineIds: expect.any(Set) });
   });
+
+  it('4e — its money: paid in (never a try), given back, paid out, what waits, our fee it owes — each hand by its name, never a phone', async () => {
+    const selam = aPerson();
+    const { memberId } = members.invite(partnerId, { phone: selam.phone, name: 'Selam Tesfaye' }, 'Amina Otieno');
+    members.accept(selam.personDid, memberId);
+    const at = '2026-11-20T10:00:00.000Z';
+    const hub = {
+      accountView: async () => ({ provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 935, feeOwed: 7.5 }),
+      totalsOf: () => ({ paidIn: 250, givenBack: 250, paidOut: 65 }),
+      kept: () => [
+        { paymentId: 'hp_1', kind: 'in', reference: 'PUD-1', amount: 250, currency: 'ETB', state: 'paid', askedAt: at, settledAt: at, phoneEnds: '123', phoneHash: 'secret-hash' },
+        { paymentId: 'hp_2', kind: 'in', reference: 'try_x', amount: 5, currency: 'ETB', state: 'paid', askedAt: at, askedBy: 'Staff Ann', phoneEnds: '777', phoneHash: 'h2' },
+        { paymentId: 'hp_3', kind: 'refund', reference: 'PUD-1', amount: 250, currency: 'ETB', state: 'paid', askedAt: at, refundOf: 'hp_1', phoneEnds: '123', phoneHash: 'secret-hash' },
+      ],
+    };
+    const payouts = { paidLineIds: () => new Set<string>(), viewOf: () => ({ currency: 'ETB', waiting: 1, waitingAmount: 300, shortAmount: 300, paidAmount: 65, rows: [{ payoutId: 'pp_1', payeeId: 'did:glos:shop-k', payeeKind: 'shop', amount: 65, currency: 'ETB', steps: 2, state: 'paid', day: '2026-11-20' }] }) };
+    const agents = { get: () => ({ shopName: 'Duka la Kampala' }) };
+    const doors = new PartnerAppController(members, {} as never, agents as never, {} as never, {} as never, {} as never, payouts as never, hub as never);
+    const money = await doors.myMoney(asPartner(selam.personDid));
+    expect(money).toMatchObject({ currency: 'ETB', balance: 935, test: true, paidIn: 250, givenBack: 250, paidOut: 65, waiting: 1, waitingAmount: 300, shortAmount: 300, feeOwed: 7.5, names: { 'did:glos:shop-k': 'Duka la Kampala' } });
+    expect(money.ins).toEqual([{ reference: 'PUD-1', amount: 250, currency: 'ETB', state: 'paid', at, givenBack: true }]);
+    expect(JSON.stringify(money)).not.toMatch(/123|secret-hash|Staff Ann/);
+  });
 });
 
 describe('the partner’s live view', () => {
@@ -164,6 +187,8 @@ describe('the partner’s live view', () => {
     // …and, 4c, that a payout was made, paid or is waiting.
     expect(live).toMatch(/if \(e\.type === GlosEvent\.Pudo\.PartnerOwed \|\| e\.type === GlosEvent\.Pudo\.PartnerPayout\) this\.toPartner\(\(e\.payload as \{ partnerEntityId\?: string \} \| undefined\)\?\.partnerEntityId, 'owed'\);/);
     expect(GlosEvent.Pudo.PartnerOwed).toBe('pudo.partner_owed');
+    // 4e — and money asked of a phone, paid or failed, in the partner's account.
+    expect(live).toContain("if (e.type === GlosEvent.Pudo.HubPayment) this.toPartner((e.payload as { ownerEntityId?: string } | undefined)?.ownerEntityId, 'owed');");
     expect(read('live.controller.ts')).toMatch(/@Roles\('fleet_manager', 'entity_admin', 'operator', 'partner'\)\s*@Sse\('live'\)/);
   });
 });
@@ -180,8 +205,10 @@ describe('wired', () => {
     expect(doors.match(/@Roles\('operator'\)\s*@(Get|Post|Delete)\('entities\/:entityId\/partner-members/g)).toHaveLength(3);
     expect(doors.match(/@Roles\('consumer'\)\s*@(Get|Post)\('partner\//g)).toHaveLength(4);
     // 4c — and its own payouts.
-    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(3);
+    // 4e — and its money.
+    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(4);
     expect(STAFF_AREAS['GET sbg/partner/me/payouts']).toBe('none');
+    expect(STAFF_AREAS['GET sbg/partner/me/money']).toBe('none');
     expect(read('account-closing.service.ts')).toMatch(/this\.partnerMembers\?\.forgetPerson\(personDid, phoneHash, now\);/);
     expect(read('pudo.module.ts')).toMatch(/PartnerChecksService, PartnerMemberService,/);
     expect(read('pudo.module.ts')).toMatch(/PartnerLedgerController, PartnerAppController,/);

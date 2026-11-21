@@ -38963,6 +38963,26 @@
         }
       }
     },
+    "/v1/sbg/partner/me/money": {
+      "get": {
+        "operationId": "PartnerApp.myMoney",
+        "summary": "",
+        "description": "4e — the partner's money: paid in, given back, paid out, waiting — live, with each hand by its name.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerMoneyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/partner/me/owed": {
       "get": {
         "operationId": "PartnerApp.owed",
@@ -91847,6 +91867,14 @@
           },
           "missing": {
             "type": "boolean"
+          },
+          "owed": {
+            "type": "number",
+            "description": "What the steps owed the hand come to (4e)."
+          },
+          "changedOn": {
+            "type": "string",
+            "description": "The day the hand’s payout number was changed (4e)."
           }
         }
       },
@@ -91882,6 +91910,9 @@
               "own_parcels",
               "off_list",
               "volume",
+              "money_no_parcel",
+              "payout_new_number",
+              "paid_beyond_owed",
               "ai"
             ]
           },
@@ -92074,11 +92105,34 @@
           "feeOwed"
         ]
       },
+      "PaymentTotalsView": {
+        "type": "object",
+        "properties": {
+          "paidIn": {
+            "type": "number",
+            "description": "Senders’ payments, paid: never a try by our staff."
+          },
+          "givenBack": {
+            "type": "number"
+          },
+          "paidOut": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "paidIn",
+          "givenBack",
+          "paidOut"
+        ]
+      },
       "PaymentAccountRead": {
         "type": "object",
         "properties": {
           "account": {
             "$ref": "#/components/schemas/PaymentAccountView"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PaymentTotalsView"
           },
           "payments": {
             "type": "array",
@@ -92089,6 +92143,7 @@
         },
         "required": [
           "account",
+          "totals",
           "payments"
         ]
       },
@@ -92449,6 +92504,112 @@
         "required": [
           "token",
           "partner"
+        ]
+      },
+      "PartnerMoneyIn": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "asked",
+              "paid",
+              "failed"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "givenBack": {
+            "type": "boolean",
+            "description": "Given back to the sender: the parcel was voided."
+          }
+        },
+        "required": [
+          "reference",
+          "amount",
+          "currency",
+          "state",
+          "at"
+        ]
+      },
+      "PartnerMoneyView": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "number",
+            "description": "What the account holds, where its provider says."
+          },
+          "test": {
+            "type": "boolean"
+          },
+          "paidIn": {
+            "type": "number"
+          },
+          "givenBack": {
+            "type": "number"
+          },
+          "paidOut": {
+            "type": "number"
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "waitingAmount": {
+            "type": "number"
+          },
+          "shortAmount": {
+            "type": "number"
+          },
+          "feeOwed": {
+            "type": "number",
+            "description": "Our fee on its payments, owed by it: a loan until a company of ours can invoice it."
+          },
+          "ins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerMoneyIn"
+            }
+          },
+          "payouts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerPayoutRow"
+            }
+          },
+          "names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Each hand paid, by the name the partner knows it by."
+          }
+        },
+        "required": [
+          "currency",
+          "test",
+          "paidIn",
+          "givenBack",
+          "paidOut",
+          "waiting",
+          "waitingAmount",
+          "shortAmount",
+          "feeOwed",
+          "ins",
+          "payouts",
+          "names"
         ]
       },
       "PartnerOwedForPartner": {

@@ -201,6 +201,11 @@ export class PayoutNumberService implements OnModuleInit {
     return { numberId: record.numberId, masked: maskMsisdn(record.msisdn) };
   }
 
+  /** 4e — when this payee's payout number was CHANGED (a first number is not a change): what the money checks read. */
+  changesOf(payeeId: string): string[] {
+    return (this.numbers.get(payeeId)?.history ?? []).filter((e) => e.act === 'changed').map((e) => e.at);
+  }
+
   /** The whole number — for the rail, at the moment it sends, and only for the number the payout was raised to. */
   fullNumber(payeeId: string, numberId: string): string | undefined {
     const record = this.numbers.get(payeeId);

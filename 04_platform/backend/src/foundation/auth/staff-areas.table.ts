@@ -510,6 +510,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/entities/:entityId/partner-payouts': 'money',
   'POST sbg/entities/:entityId/partner-payouts/run': 'money',
   'GET sbg/partner/me/payouts': 'none',
+  'GET sbg/partner/me/money': 'none',
   'POST sbg/parcels/phone-payment': 'none',
   'GET sbg/parcels/phone-payment/:paymentId': 'none',
   // 2026-11-20 — a partner's own people (3c): read by any staff role, as its record is; added and taken out by admin. The

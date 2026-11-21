@@ -252,6 +252,23 @@ describe('the payment hub', () => {
     expect(await hub.refundsAgain(T0 + 10_000 + 3 * REFUND_AGAIN_AFTER_MS)).toEqual([]);
   });
 
+  it('4e — what came in, went back and went out, paid: senders’ payments only, never a try; the companies it keeps payments for', async () => {
+    const { hub } = aHub();
+    const p = await hub.collect(PARTNER.entityId, { reference: 'PUD-T1', amount: 300, payerPhone: '+251911000123', description: 'x' }, T0);
+    await hub.settle(p.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    const q = await hub.collect(PARTNER.entityId, { reference: 'PUD-T2', amount: 100, payerPhone: '+251911000124', description: 'x' }, T0);
+    await hub.settle(q.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    const tried = await hub.tryPayment(PARTNER.entityId, { phone: '+251911000125', amount: 50 }, 'Staff Ann', T0);
+    await hub.settle(tried.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    await hub.refund(q.paymentId, 'voided', T0 + 10_000);
+    await hub.payout(PARTNER.entityId, { reference: 'pp_1', amount: 40, payeePhone: '+251911000222', description: 'x' }, T0 + 10_000);
+    const never = await hub.collect(PARTNER.entityId, { reference: 'PUD-T3', amount: 70, payerPhone: '+251911000000', description: 'x' }, T0);
+    await hub.settle(never.paymentId, T0 + STAND_IN_ANSWERS_AFTER_MS);
+    expect(hub.totalsOf(PARTNER.entityId)).toEqual({ paidIn: 400, givenBack: 100, paidOut: 40 });
+    expect(hub.owners()).toEqual([PARTNER.entityId]);
+    expect(hub.kept(PARTNER.entityId).map((x) => x.kind)).toEqual(['in', 'in', 'in', 'in', 'refund', 'out']);
+  });
+
   it('its staff doors are for staff who keep the money, and the server says at boot what the hub reaches', () => {
     expect(STAFF_AREAS['GET sbg/entities/:entityId/payment-account']).toBe('money');
     expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/try']).toBe('money');

@@ -17,6 +17,14 @@ const tt = t as never;
 const flag = (over: Partial<PartnerFlagRow> = {}): PartnerFlagRow => ({ flagId: 'pf_1', rule: 'twice', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', lineIds: ['po_1', 'po_2'], facts: { work: 'take_in', reference: 'PUD-1', times: 2 }, severity: 'urgent', foundAt: '2026-11-20T11:00:00Z', ...over });
 
 describe('why a finding was raised', () => {
+  it('4e — the money checks in words, with their figures', () => {
+    expect(flagWhy(flag({ rule: 'money_no_parcel', payeeId: 'did:glos:shop-bole', facts: { reference: 'PUD-9', amount: 250, currency: 'ETB', day: '2026-11-21' } }), tt)).toMatch(/250\.00 was paid in for PUD-9 on 2026-11-21, and no parcel was taken in for it\.$/);
+    expect(flagWhy(flag({ rule: 'payout_new_number', facts: { amount: 40, currency: 'ETB', day: '2026-11-21', changedOn: '2026-11-19' } }), tt)).toMatch(/^Paid .*40\.00 on 2026-11-21 to a payout number changed on 2026-11-19\.$/);
+    expect(flagWhy(flag({ rule: 'paid_beyond_owed', facts: { amount: 65, owed: 40, currency: 'ETB' } }), tt)).toMatch(/^Paid .*65\.00 in all, where the steps owed come to .*40\.00\.$/);
+    const html = renderToString(<PartnerChecksBody view={{ open: [flag({ rule: 'paid_beyond_owed', facts: { amount: 65, owed: 40, currency: 'ETB' } })], looked: [], aiReady: false }} t={tt} />);
+    expect(html).toContain('Paid more than owed');
+  });
+
   it('each rule in words, with its figures', () => {
     expect(flagWhy(flag(), tt)).toBe('Taken in for PUD-1, owed 2 times.');
     expect(flagWhy(flag({ rule: 'never_held', facts: { reference: 'PUD-1' } }), tt)).toBe('Paid for PUD-1, which this hand never held.');

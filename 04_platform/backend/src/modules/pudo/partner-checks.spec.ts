@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STAFF_AREAS } from '../../foundation/auth/staff-areas.table';
 import { PartnerLedgerService, type PartnerOwedLine } from './partner-ledger.service';
-import { PartnerChecksService, findFlags, readReview, reviewInput, reviewRequest, REVIEW_MODEL, type CheckWorld } from './partner-checks.service';
+import { PartnerChecksService, findFlags, findMoneyFlags, readReview, reviewInput, reviewRequest, MONEY_NO_PARCEL_AFTER_MS, NEW_NUMBER_DAYS, REVIEW_MODEL, type CheckWorld, type MoneyWorld } from './partner-checks.service';
 
 /*
  * 2026-11-20 — CHECKS ON THE PARTNER'S FIGURES (the payments plan, 3b; the owner: "We also need AI anti fraud scrutiny on the
@@ -101,6 +101,43 @@ describe('the fixed rules', () => {
   });
 });
 
+/*
+ * 2026-11-21 — THE MONEY CHECKS (the payments plan, 4e: "a payout to a number changed recently, money in with no parcel behind
+ * it, payouts beyond the steps done"). Held to here: each found with its figures, and nothing found where the money is right.
+ */
+describe('the money checks', () => {
+  const pay = (over: Partial<MoneyWorld['payments'][number]> = {}): MoneyWorld['payments'][number] => ({ paymentId: 'hp_1', kind: 'in', reference: 'PUD-1', amount: 250, currency: 'ETB', state: 'paid', askedAt: new Date(T0).toISOString(), settledAt: new Date(T0 + 5000).toISOString(), siteId: 'did:glos:shop-bole', ...over });
+  const out = (over: Partial<MoneyWorld['payouts'][number]> = {}): MoneyWorld['payouts'][number] => ({ payoutId: 'pp_1', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', amount: 40, currency: 'ETB', state: 'paid', paidAt: new Date(T0).toISOString(), ...over });
+  const money = (w: Partial<MoneyWorld>, now = T0 + 2 * MONEY_NO_PARCEL_AFTER_MS) => findMoneyFlags({ payments: [], payouts: [], owed: new Map(), changesOf: () => [], ...w }, now);
+
+  it('money paid in for a parcel no parcel was taken in for, an hour on — the counter that asked it named; not a try, not a refunded one, not one taken in', () => {
+    expect(money({ payments: [pay()] })).toEqual([{ key: 'money_no_parcel|hp_1', rule: 'money_no_parcel', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', lineIds: ['hp_1'], facts: { reference: 'PUD-1', amount: 250, currency: 'ETB', day: '2026-11-20' }, severity: 'look' }]);
+    // Not yet an hour: the counter may still be taking it in.
+    expect(money({ payments: [pay()] }, T0 + 60_000)).toEqual([]);
+    expect(money({ payments: [pay({ usedFor: 'PUD-1' })] })).toEqual([]);
+    expect(money({ payments: [pay({ askedBy: 'Staff Ann' })] })).toEqual([]);
+    expect(money({ payments: [pay({ state: 'failed' })] })).toEqual([]);
+    expect(money({ payments: [pay(), pay({ paymentId: 'hp_2', kind: 'refund', refundOf: 'hp_1' })] })).toEqual([]);
+  });
+
+  it('a payout paid within a week after the hand’s payout number was changed — urgent, with both days; not before the change, not after the week', () => {
+    const changed = new Date(T0 - 2 * 86_400_000).toISOString();
+    const owed = new Map([['did:glos:shop-bole', 40]]);
+    expect(money({ payouts: [out()], owed, changesOf: () => [changed] })).toEqual([{ key: 'payout_new_number|pp_1', rule: 'payout_new_number', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', lineIds: ['pp_1'], facts: { amount: 40, currency: 'ETB', day: '2026-11-20', changedOn: '2026-11-18' }, severity: 'urgent' }]);
+    expect(money({ payouts: [out()], owed, changesOf: () => [new Date(T0 - (NEW_NUMBER_DAYS + 1) * 86_400_000).toISOString()] })).toEqual([]);
+    expect(money({ payouts: [out()], owed, changesOf: () => [new Date(T0 + 86_400_000).toISOString()] })).toEqual([]);
+    // A first number set is no change, and a payout still waiting moved no money.
+    expect(money({ payouts: [out()], owed })).toEqual([]);
+    expect(money({ payouts: [out({ state: 'waiting', paidAt: undefined })], owed, changesOf: () => [changed] })).toEqual([]);
+  });
+
+  it('a hand paid more in all than its steps come to — urgent, with both figures; paid what it is owed, nothing', () => {
+    const two = [out(), out({ payoutId: 'pp_2', amount: 25 })];
+    expect(money({ payouts: two, owed: new Map([['did:glos:shop-bole', 40]]) })).toEqual([{ key: 'paid_beyond_owed|did:glos:shop-bole', rule: 'paid_beyond_owed', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', lineIds: ['pp_1', 'pp_2'], facts: { amount: 65, owed: 40, currency: 'ETB' }, severity: 'urgent' }]);
+    expect(money({ payouts: two, owed: new Map([['did:glos:shop-bole', 65]]) })).toEqual([]);
+  });
+});
+
 describe('what the AI review is shown, and how its answer is read', () => {
   const lines = [line({}), line({ payeeId: 'mdp_addis', payeeKind: 'hub', step: 'sort', work: 'sort', refType: 'mdp', reference: 'PUD-1', amount: 25, listed: 25 }), line({ payeeId: 'did:glos:courier-abebe', payeeKind: 'driver', step: 'haul', work: 'road', reference: 'BAG-7', refType: 'bag', amount: 300, listed: undefined })];
 
@@ -151,6 +188,20 @@ describe('kept for staff', () => {
     const owe = (reference: string, at: number) => ledger.owe({ country: 'ET', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', amount: 40, reference, refType: 'parcel', step: 'labour', work: 'take_in' }, at);
     return { checks, ledger, owe };
   }
+
+  it('4e — the money checks run with the rest, every hour — for a partner with money in its account and no step owed yet too', async () => {
+    const presence = { resolve: () => ({ level: 'partnered' }) };
+    const partner = { entityId: P, name: 'Addis Courier PLC', kind: 'partner', jurisdiction: 'ET', currency: 'ETB' };
+    const entities = { partnerFor: () => partner, amountsFor: () => ({ currency: 'ETB' }), get: () => partner };
+    const ledger = new PartnerLedgerService(presence as never, entities as never);
+    const paid = { paymentId: 'hp_9', kind: 'in', reference: 'PUD-9', amount: 250, currency: 'ETB', state: 'paid', askedAt: new Date(T0).toISOString(), settledAt: new Date(T0).toISOString(), siteId: 'did:glos:shop-bole' };
+    const hub = { kept: () => [paid], owners: () => [P] };
+    const payouts = { payoutsOf: () => [] };
+    const numbers = { changesOf: () => [] };
+    const checks = new PartnerChecksService(ledger, entities as never, {} as never, {} as never, {} as never, undefined, hub as never, payouts as never, numbers as never);
+    await checks.due(T0 + 2 * MONEY_NO_PARCEL_AFTER_MS);
+    expect(checks.checksOf(P).open).toEqual([expect.objectContaining({ rule: 'money_no_parcel', payeeId: 'did:glos:shop-bole', facts: { reference: 'PUD-9', amount: 250, currency: 'ETB', day: '2026-11-20' } })]);
+  });
 
   it('each finding once; looked at by name, with what was found; reopened only when something new is in it', () => {
     const { checks, ledger, owe } = aService();

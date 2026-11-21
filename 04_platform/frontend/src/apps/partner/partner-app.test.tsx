@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import { PartnerPeopleBody, type PartnerMemberRow } from '../tower/screens/PartnerPeopleFold';
-import type { PartnerOwed, PartnerPayouts } from './api';
+import type { PartnerMoney, PartnerOwed, PartnerPayouts } from './api';
+import { MoneyBody } from './screens/MoneyScreen';
 import { openOnArrival } from './logic';
 import { OwedBody } from './screens/HomeScreen';
 import { HandsBody } from './screens/HandsScreen';
@@ -143,8 +144,77 @@ describe('a partner’s people, for our staff', () => {
   });
 });
 
+describe('its money (4e)', () => {
+  const money = (over: Partial<PartnerMoney> = {}): PartnerMoney => ({
+    currency: 'ETB',
+    balance: 935,
+    test: true,
+    paidIn: 1250,
+    givenBack: 250,
+    paidOut: 65,
+    waiting: 1,
+    waitingAmount: 300,
+    shortAmount: 300,
+    feeOwed: 30,
+    ins: [
+      { reference: 'PUD-2', amount: 1000, currency: 'ETB', state: 'paid', at: '2026-11-21T09:00:00Z' },
+      { reference: 'PUD-1', amount: 250, currency: 'ETB', state: 'paid', at: '2026-11-21T08:00:00Z', givenBack: true },
+      { reference: 'PUD-3', amount: 250, currency: 'ETB', state: 'asked', at: '2026-11-21T09:30:00Z' },
+    ],
+    payouts: [
+      { payoutId: 'pp_1', payeeId: 'did:glos:shop-bole', payeeKind: 'shop', amount: 65, currency: 'ETB', steps: 2, state: 'paid', day: '2026-11-21' },
+      { payoutId: 'pp_2', payeeId: 'did:glos:courier', payeeKind: 'driver', amount: 300, currency: 'ETB', steps: 1, state: 'waiting', why: 'balance', day: '2026-11-21' },
+    ],
+    names: { 'did:glos:shop-bole': 'Bole Duka', 'did:glos:courier': 'Driver A.' },
+    ...over,
+  });
+
+  it('paid in, given back, paid out and waiting — what the account holds, test money said, a short account warned, our fee it owes', () => {
+    const html = renderToString(<MoneyBody money={money()} failed={false} live="live" t={tt} />);
+    expect(html).toMatch(/Your account holds [^<]*935/);
+    expect(html).toContain('>Test money<');
+    expect(html).toMatch(/Paid in<\/span>[\s\S]*?1,250/);
+    expect(html).toMatch(/[^<]*250[^<]* given back/);
+    expect(html).toMatch(/Paid out<\/span>[\s\S]*?65/);
+    expect(html).toMatch(/1 payout waits, [^<]*300[^<]* in all\./);
+    expect(html).toMatch(/class="cerr">[^<]*300[^<]* of payouts wait for your account to hold enough/);
+    expect(html).toMatch(/Our fee you owe so far: [^<]*30[^<]*\. It is a loan until a company of ours can invoice it\./);
+    expect(html).toContain('>Live<');
+  });
+
+  it('each sender’s payment by its parcel — paid, waiting on the phone, given back — never a phone; each payout by the hand’s name, and why it waits', () => {
+    const html = renderToString(<MoneyBody money={money()} failed={false} live="live" t={tt} />);
+    expect(html).toContain('PUD-2');
+    expect(html).toContain('Waiting on the phone');
+    expect(html.match(/>given back</g)).toHaveLength(1);
+    expect(html).toContain('Bole Duka');
+    expect(html).toContain('Driver A.');
+    expect(html).toContain('Waits: your account does not hold enough');
+    expect(html).toContain('2 steps');
+    expect(html).not.toMatch(/did:glos:/);
+  });
+
+  it('nothing yet, said as that; before the first read, nothing claimed', () => {
+    const none = renderToString(<MoneyBody money={money({ ins: [], payouts: [], paidIn: 0, givenBack: 0, paidOut: 0, waiting: 0, waitingAmount: 0, shortAmount: 0, balance: undefined, test: false })} failed={false} live="off" t={tt} />);
+    expect(none).toContain('No payments yet.');
+    expect(none).toContain('No payouts yet.');
+    expect(none).not.toContain('Your account holds');
+    expect(none).not.toContain('class="cerr"');
+    expect(renderToString(<MoneyBody money={null} failed={false} live="off" t={tt} />)).toContain('aria-busy="true"');
+  });
+});
+
 describe('wired', () => {
   const read = (...p: string[]) => readFileSync(join('src', ...p), 'utf8');
+
+  it('4e — a Money section, read with what it owes, from its own door', () => {
+    const app = read('apps', 'partner', 'app.tsx');
+    expect(app).toContain("const ORDER: Section[] = ['home', 'hands', 'money'];");
+    expect(app).toContain("state.section === 'money' ? <MoneyScreen state={state} />");
+    expect(read('apps', 'partner', 'api.ts')).toMatch(/money: \(\) => call\(\(c\) => c\.GET\('\/v1\/sbg\/partner\/me\/money'/);
+    expect(read('apps', 'partner', 'usePartnerApp.ts')).toContain('partner.current.money()');
+    for (const locale of ['sw', 'nl', 'am']) expect(read('shared', 'i18n', 'words', locale, 'partner.ts')).toContain('"partner.app.money.fee"');
+  });
 
   it('to its own doors: a person’s list and invitations, a session for one partner, and what it owes', () => {
     const api = read('apps', 'partner', 'api.ts');

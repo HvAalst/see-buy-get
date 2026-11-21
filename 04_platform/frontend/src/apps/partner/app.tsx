@@ -19,6 +19,7 @@ import { readPhone } from './api';
 import type { Section } from './logic';
 import { ChooseScreen } from './screens/ChooseScreen';
 import { HandsScreen } from './screens/HandsScreen';
+import { MoneyScreen } from './screens/MoneyScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { usePartnerApp } from './usePartnerApp';
@@ -28,13 +29,15 @@ import '../tower/tower.css';
 import './partner.css';
 
 /** Every section, for Back and for a shortcut's `?go=` (shared/nav.ts). */
-const SECTIONS = screensOf<Section>({ home: true, hands: true });
+const SECTIONS = screensOf<Section>({ home: true, hands: true, money: true });
 
 const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'partner.app.nav.owed', icon: 'wallet' },
   hands: { label: 'partner.app.nav.hands', icon: 'person' },
+  // 2026-11-21 — paid in, paid out, waiting (the payments plan, 4e).
+  money: { label: 'partner.app.nav.money', icon: 'repeat' },
 };
-const ORDER: Section[] = ['home', 'hands'];
+const ORDER: Section[] = ['home', 'hands', 'money'];
 
 /**
  * 2026-11-20 — THE PARTNER APP (the payments plan, 3c; the owner: "console for staff and partner app with live view"; a
@@ -119,7 +122,7 @@ export function App() {
         <main class="cons__main">
           {/* Right after a sign-in that took a code: the fingerprint, offered once. */}
           <PasskeyOffer api={account.passkey} look="console" />
-          {state.section === 'hands' ? <HandsScreen state={state} /> : <HomeScreen state={state} />}
+          {state.section === 'hands' ? <HandsScreen state={state} /> : state.section === 'money' ? <MoneyScreen state={state} /> : <HomeScreen state={state} />}
         </main>
       </div>
 

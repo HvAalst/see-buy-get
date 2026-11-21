@@ -59,6 +59,8 @@ export class LiveService implements OnModuleInit, OnModuleDestroy {
       if (e.type !== GlosEvent.Pudo.DriverMoved) this.toConsole('changed');
       // 2026-11-20 — a step the partner owes, or one taken back: told to that partner's own screens, and nobody else's (3c).
       if (e.type === GlosEvent.Pudo.PartnerOwed || e.type === GlosEvent.Pudo.PartnerPayout) this.toPartner((e.payload as { partnerEntityId?: string } | undefined)?.partnerEntityId, 'owed');
+      // 4e — and money asked of a phone, paid or failed, in a partner's account: its own screens read it again.
+      if (e.type === GlosEvent.Pudo.HubPayment) this.toPartner((e.payload as { ownerEntityId?: string } | undefined)?.ownerEntityId, 'owed');
     });
   }
 

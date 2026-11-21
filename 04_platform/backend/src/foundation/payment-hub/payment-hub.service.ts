@@ -313,6 +313,33 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       .map(viewOf);
   }
 
+  /** 4e — a company's payments as they are kept, oldest first: what the money checks read. */
+  kept(ownerEntityId: string): HubPayment[] {
+    return [...this.payments.values()].filter((p) => p.ownerEntityId === ownerEntityId).sort((a, b) => a.askedAt.localeCompare(b.askedAt));
+  }
+
+  /** The companies the hub keeps payments for. */
+  owners(): string[] {
+    return [...new Set([...this.payments.values()].map((p) => p.ownerEntityId))];
+  }
+
+  /**
+   * 4e — WHAT CAME IN, WENT BACK AND WENT OUT of a company's account, as the provider answered: senders' payments (never a try by
+   * our staff), refunds, payouts. Paid only — a prompt still waiting, or one that failed, moved no money.
+   */
+  totalsOf(ownerEntityId: string): { paidIn: number; givenBack: number; paidOut: number } {
+    let paidIn = 0;
+    let givenBack = 0;
+    let paidOut = 0;
+    for (const p of this.payments.values()) {
+      if (p.ownerEntityId !== ownerEntityId || p.state !== 'paid') continue;
+      if (p.kind === 'in' && !p.askedBy) paidIn += p.amount;
+      else if (p.kind === 'refund') givenBack += p.amount;
+      else if (p.kind === 'out') paidOut += p.amount;
+    }
+    return { paidIn: round2(paidIn), givenBack: round2(givenBack), paidOut: round2(paidOut) };
+  }
+
   get(paymentId: string): HubPayment | undefined {
     return this.payments.get(paymentId);
   }

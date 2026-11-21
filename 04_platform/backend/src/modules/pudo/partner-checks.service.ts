@@ -10,6 +10,9 @@ import { ClaudeGateway, type ClaudeReply, type ClaudeRequest } from './claude.ga
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import { LISTED_AT, PARTNER_WORKS, PartnerLedgerService, type PartnerOwedLine, type PartnerPayeeKind, type PartnerWork } from './partner-ledger.service';
+import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
+import { PartnerPayoutService } from './partner-payout.service';
+import { PayoutNumberService } from './payout-number.service';
 
 /**
  * 2026-11-20 — CHECKS ON THE PARTNER'S FIGURES (the payments plan, 3b; the owner: "We also need AI anti fraud scrutiny on the
@@ -18,7 +21,7 @@ import { LISTED_AT, PARTNER_WORKS, PartnerLedgerService, type PartnerOwedLine, t
  * then once a day by an AI review of the week's figures, which sees tokens in place of names, phone numbers and ids. Each
  * finding says why, in figures, and waits for our staff to look; nothing here stops a step, holds a payout or moves money.
  */
-export const PARTNER_CHECK_RULES = ['twice', 'never_held', 'own_parcels', 'off_list', 'volume', 'ai'] as const;
+export const PARTNER_CHECK_RULES = ['twice', 'never_held', 'own_parcels', 'off_list', 'volume', 'money_no_parcel', 'payout_new_number', 'paid_beyond_owed', 'ai'] as const;
 export type PartnerCheckRule = (typeof PARTNER_CHECK_RULES)[number];
 export type PartnerReviewWhy = 'refused' | 'cut_short' | 'unreadable' | 'unreachable';
 
@@ -36,6 +39,10 @@ export const VOLUME_TIMES = 3;
 export const VOLUME_HISTORY_DAYS = 5;
 /** A hand with no steps in the fortnight before: this many in one day is looked at. */
 export const VOLUME_NEW_HAND = 30;
+/** 4e — money in for a parcel with no parcel taken in for it, this long after it was paid, is looked at. */
+export const MONEY_NO_PARCEL_AFTER_MS = 60 * 60_000;
+/** 4e — a payout paid within this many days after the hand's payout number was changed is looked at. */
+export const NEW_NUMBER_DAYS = 7;
 /** The model the daily review runs on — the one the plan adviser runs on. */
 export const REVIEW_MODEL = 'claude-opus-5-5';
 export const REVIEW_DAYS = 7;
@@ -60,6 +67,10 @@ export interface PartnerFlagFacts {
   parcels?: string[];
   /** Paid for a parcel that is not on record at all. */
   missing?: boolean;
+  /** 4e — what the steps owed a hand come to, beside what it was paid. */
+  owed?: number;
+  /** 4e — the day the hand's payout number was changed. */
+  changedOn?: string;
 }
 
 export interface PartnerFlag {
@@ -213,6 +224,49 @@ export function findFlags(lines: PartnerOwedLine[], world: CheckWorld, now: numb
   return [...found.values()];
 }
 
+/** 4e — what the money checks read: the account's payments, the partner's payouts, what each hand is owed, when numbers changed. */
+export interface MoneyWorld {
+  payments: Array<{ paymentId: string; kind: 'in' | 'out' | 'refund'; reference: string; amount: number; currency: string; state: 'asked' | 'paid' | 'failed'; askedAt: string; settledAt?: string; usedFor?: string; askedBy?: string; refundOf?: string; siteId?: string }>;
+  payouts: Array<{ payoutId: string; payeeId: string; payeeKind: PartnerPayeeKind; amount: number; currency: string; state: 'waiting' | 'paid'; paidAt?: string }>;
+  /** What the steps owed each hand come to, take-backs netted. */
+  owed: Map<string, number>;
+  /** When a hand's payout number was changed. */
+  changesOf(payeeId: string): string[];
+}
+
+/**
+ * 4e — THE MONEY CHECKS (the plan: "a payout to a number changed recently, money in with no parcel behind it, payouts beyond
+ * the steps done") — pure, as the fixed rules are: money paid in for a parcel no parcel was taken in for, an hour on; a payout
+ * paid within a week after the hand's number was changed; and a hand paid more in all than its steps come to.
+ */
+export function findMoneyFlags(w: MoneyWorld, now: number): Finding[] {
+  const out: Finding[] = [];
+  const round2 = (n: number): number => Math.round(n * 100) / 100;
+  const givenBack = new Set(w.payments.filter((p) => p.kind === 'refund' && p.state !== 'failed' && p.refundOf).map((p) => p.refundOf as string));
+  for (const p of w.payments) {
+    if (p.kind !== 'in' || p.state !== 'paid' || p.askedBy || p.usedFor || givenBack.has(p.paymentId)) continue;
+    const at = p.settledAt ?? p.askedAt;
+    if (now - Date.parse(at) < MONEY_NO_PARCEL_AFTER_MS) continue;
+    out.push({ key: `money_no_parcel|${p.paymentId}`, rule: 'money_no_parcel', payeeId: p.siteId ?? '', payeeKind: 'shop', lineIds: [p.paymentId], facts: { reference: p.reference, amount: p.amount, currency: p.currency, day: dayOf(at) }, severity: 'look' });
+  }
+  const paid = new Map<string, { amount: number; kind: PartnerPayeeKind; currency: string; ids: string[] }>();
+  for (const o of w.payouts) {
+    if (o.state !== 'paid' || !o.paidAt) continue;
+    const t = paid.get(o.payeeId) ?? { amount: 0, kind: o.payeeKind, currency: o.currency, ids: [] };
+    t.amount += o.amount;
+    t.ids.push(o.payoutId);
+    paid.set(o.payeeId, t);
+    const paidAt = Date.parse(o.paidAt);
+    const changed = w.changesOf(o.payeeId).filter((c) => paidAt - Date.parse(c) >= 0 && paidAt - Date.parse(c) <= NEW_NUMBER_DAYS * DAY_MS).sort().pop();
+    if (changed) out.push({ key: `payout_new_number|${o.payoutId}`, rule: 'payout_new_number', payeeId: o.payeeId, payeeKind: o.payeeKind, lineIds: [o.payoutId], facts: { amount: o.amount, currency: o.currency, day: dayOf(o.paidAt), changedOn: dayOf(changed) }, severity: 'urgent' });
+  }
+  for (const [payeeId, t] of paid) {
+    const owed = round2(w.owed.get(payeeId) ?? 0);
+    if (round2(t.amount) > owed + 0.005) out.push({ key: `paid_beyond_owed|${payeeId}`, rule: 'paid_beyond_owed', payeeId, payeeKind: t.kind, lineIds: t.ids, facts: { amount: round2(t.amount), owed, currency: t.currency }, severity: 'urgent' });
+  }
+  return out;
+}
+
 /**
  * WHAT THE AI REVIEW IS SHOWN — tokens, never a name, a phone number or an id: hands as H1, H2…, parcels and bags as R1, R2…;
  * with each step's day, hour, work, amount and the list figure it was owed against, and what the fixed rules raised already.
@@ -328,6 +382,8 @@ export class PartnerFlagFactsView {
   @ApiPropertyOptional() usual?: number;
   @ApiPropertyOptional({ type: [String] }) parcels?: string[];
   @ApiPropertyOptional() missing?: boolean;
+  @ApiPropertyOptional({ description: 'What the steps owed the hand come to (4e).' }) owed?: number;
+  @ApiPropertyOptional({ description: 'The day the hand’s payout number was changed (4e).' }) changedOn?: string;
 }
 
 export class PartnerFlagLookedView {
@@ -409,6 +465,10 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
     private readonly agents: AgentService,
     private readonly mdps: MdpService,
     @Optional() private readonly claude?: ClaudeGateway,
+    // 4e — the money: the account's payments, the partner's payouts, the hands' payout numbers.
+    @Optional() private readonly hub?: PaymentHubService,
+    @Optional() private readonly payouts?: PartnerPayoutService,
+    @Optional() private readonly numbers?: PayoutNumberService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -426,7 +486,8 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
     if (this.running) return;
     this.running = true;
     try {
-      for (const partnerEntityId of this.ledger.partnersWithLines()) {
+      // 4e — a partner with money in its account and no step owed yet is checked too.
+      for (const partnerEntityId of new Set([...this.ledger.partnersWithLines(), ...(this.hub?.owners() ?? [])])) {
         this.check(partnerEntityId, now);
         if (!this.reviews.has(`${partnerEntityId}|${dayOf(now)}`) && this.ledger.linesOf(partnerEntityId, now - REVIEW_DAYS * DAY_MS).length) await this.review(partnerEntityId, now);
       }
@@ -438,7 +499,15 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
   /** The fixed rules over the partner's last month. Returns what was found new, or found again with something new in it. */
   check(partnerEntityId: string, now: number = Date.now()): PartnerFlag[] {
     const lines = this.ledger.linesOf(partnerEntityId, now - 30 * DAY_MS);
-    return findFlags(lines, this.world(), now).flatMap((f) => this.keep(partnerEntityId, f, now) ?? []);
+    return [...findFlags(lines, this.world(), now), ...this.moneyFindings(partnerEntityId, now)].flatMap((f) => this.keep(partnerEntityId, f, now) ?? []);
+  }
+
+  /** 4e — the money checks over the partner's account, payouts and every step it ever owed. */
+  private moneyFindings(partnerEntityId: string, now: number): Finding[] {
+    if (!this.hub && !this.payouts) return [];
+    const owed = new Map<string, number>();
+    for (const l of this.ledger.linesOf(partnerEntityId)) owed.set(l.payeeId, (owed.get(l.payeeId) ?? 0) + l.amount);
+    return findMoneyFlags({ payments: this.hub?.kept(partnerEntityId) ?? [], payouts: this.payouts?.payoutsOf(partnerEntityId) ?? [], owed, changesOf: (id) => this.numbers?.changesOf(id) ?? [] }, now);
   }
 
   /**

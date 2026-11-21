@@ -223,6 +223,11 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
     };
   }
 
+  /** 4e — a partner's payouts as they are kept: what the money checks read. */
+  payoutsOf(partnerEntityId: string): PartnerPayout[] {
+    return [...this.payouts.values()].filter((p) => p.partnerEntityId === partnerEntityId);
+  }
+
   /** The owed lines a payout has paid — what a hand sees as paid. */
   paidLineIds(): Set<string> {
     const out = new Set<string>();

@@ -10,7 +10,7 @@ import { ConsoleFold } from '../ConsoleFold';
  * scrutiny on the figures"). On a partner company's own page: each finding of the fixed rules and of the daily AI review, why —
  * in figures — and a "Looked at" with what was found. Nothing here stops a step or holds a payout: it tells staff where to look.
  */
-export type PartnerCheckRule = 'twice' | 'never_held' | 'own_parcels' | 'off_list' | 'volume' | 'ai';
+export type PartnerCheckRule = 'twice' | 'never_held' | 'own_parcels' | 'off_list' | 'volume' | 'money_no_parcel' | 'payout_new_number' | 'paid_beyond_owed' | 'ai';
 
 export interface PartnerFlagRow {
   flagId: string;
@@ -18,7 +18,7 @@ export interface PartnerFlagRow {
   payeeId: string;
   payeeKind: PartnerOwedRow['payeeKind'];
   lineIds: string[];
-  facts: { work?: PartnerWork; reference?: string; times?: number; amount?: number; listed?: number; currency?: string; day?: string; count?: number; usual?: number; parcels?: string[]; missing?: boolean };
+  facts: { work?: PartnerWork; reference?: string; times?: number; amount?: number; listed?: number; currency?: string; day?: string; count?: number; usual?: number; parcels?: string[]; missing?: boolean; owed?: number; changedOn?: string };
   reason?: string;
   severity: 'look' | 'urgent';
   foundAt: string;
@@ -47,6 +47,9 @@ const RULE: Record<PartnerCheckRule, MessageKey> = {
   own_parcels: 'tower.partner.checks.rule.own_parcels',
   off_list: 'tower.partner.checks.rule.off_list',
   volume: 'tower.partner.checks.rule.volume',
+  money_no_parcel: 'tower.partner.checks.rule.money_no_parcel',
+  payout_new_number: 'tower.partner.checks.rule.payout_new_number',
+  paid_beyond_owed: 'tower.partner.checks.rule.paid_beyond_owed',
   ai: 'tower.partner.checks.rule.ai',
 };
 const KIND: Record<PartnerOwedRow['payeeKind'], MessageKey> = { shop: 'tower.partner.kind.shop', hub: 'tower.partner.kind.hub', driver: 'tower.partner.kind.driver', fleet: 'tower.partner.kind.fleet' };
@@ -73,6 +76,13 @@ export function flagWhy(f: PartnerFlagRow, t: Translate): string {
       return t('tower.partner.checks.say.offList', { amount: cash(x.amount, x.currency), work, reference: x.reference ?? '', listed: cash(x.listed, x.currency) });
     case 'volume':
       return x.usual != null ? t('tower.partner.checks.say.volume', { count: x.count ?? 0, day: x.day ?? '', usual: x.usual }) : t('tower.partner.checks.say.volumeNew', { count: x.count ?? 0, day: x.day ?? '' });
+    // 2026-11-21 — the money checks (4e).
+    case 'money_no_parcel':
+      return t('tower.partner.checks.say.moneyNoParcel', { amount: cash(x.amount, x.currency), reference: x.reference ?? '', day: x.day ?? '' });
+    case 'payout_new_number':
+      return t('tower.partner.checks.say.payoutNewNumber', { amount: cash(x.amount, x.currency), day: x.day ?? '', changedOn: x.changedOn ?? '' });
+    case 'paid_beyond_owed':
+      return t('tower.partner.checks.say.paidBeyondOwed', { amount: cash(x.amount, x.currency), owed: cash(x.owed, x.currency) });
     default:
       return f.reason ?? '';
   }

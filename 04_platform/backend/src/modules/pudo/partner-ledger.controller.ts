@@ -72,7 +72,7 @@ export class PartnerLedgerController {
   @Get('entities/:entityId/payment-account')
   async paymentAccount(@Param('entityId') entityId: string): Promise<PaymentAccountRead> {
     this.requirePartner(entityId);
-    return { account: await this.hub.accountView(entityId), payments: this.hub.paymentsOf(entityId) };
+    return { account: await this.hub.accountView(entityId), totals: this.hub.totalsOf(entityId), payments: this.hub.paymentsOf(entityId) };
   }
 
   /** A try of the account: a payment prompt to a phone, on test money, by name — the whole loop seen working before any parcel. */

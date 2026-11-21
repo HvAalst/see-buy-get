@@ -123,11 +123,29 @@ export interface PartnerPayouts {
   rows: Array<{ payoutId: string; payeeId: string; payeeKind: PartnerOwedRow['payeeKind']; amount: number; currency: string; steps: number; state: 'waiting' | 'paid'; why?: 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable'; day: string; paidAt?: string }>;
 }
 
+/** 2026-11-21 — the partner's money (4e): paid in, given back, paid out, waiting, what the account holds, our fee it owes. */
+export interface PartnerMoney {
+  currency: string;
+  balance?: number;
+  test: boolean;
+  paidIn: number;
+  givenBack: number;
+  paidOut: number;
+  waiting: number;
+  waitingAmount: number;
+  shortAmount: number;
+  feeOwed: number;
+  ins: Array<{ reference: string; amount: number; currency: string; state: 'asked' | 'paid' | 'failed'; at: string; givenBack?: boolean }>;
+  payouts: PartnerPayouts['rows'];
+  names: Record<string, string>;
+}
+
 export interface PartnerClient {
   client: SeededAppClient;
   me(): Promise<Result<PartnerMe>>;
   owed(): Promise<Result<PartnerOwed>>;
   payouts(): Promise<Result<PartnerPayouts>>;
+  money(): Promise<Result<PartnerMoney>>;
 }
 
 export function createPartnerClient(): PartnerClient {
@@ -138,6 +156,7 @@ export function createPartnerClient(): PartnerClient {
     me: () => call((c) => c.GET('/v1/sbg/partner/me', {}) as never),
     owed: () => call((c) => c.GET('/v1/sbg/partner/me/owed', {}) as never),
     payouts: () => call((c) => c.GET('/v1/sbg/partner/me/payouts', {}) as never),
+    money: () => call((c) => c.GET('/v1/sbg/partner/me/money', {}) as never),
   };
 }
 

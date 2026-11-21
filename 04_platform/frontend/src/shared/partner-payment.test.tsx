@@ -26,6 +26,12 @@ describe('where a payment stands, in words', () => {
 });
 
 describe('the fold, for our staff', () => {
+  it('4e — what came in, went back and went out of the account, paid', () => {
+    const html = renderToString(<PaymentAccountBody read={{ ...read({}, []), totals: { paidIn: 1250, givenBack: 250, paidOut: 65 } }} t={tt} />);
+    expect(html).toMatch(/Paid in [^<]*1,250[^<]* · given back [^<]*250[^<]* · paid out [^<]*65/);
+    expect(renderToString(<PaymentAccountBody read={read({}, [])} t={tt} />)).not.toContain('Paid in ');
+  });
+
   it('the stand-in, test money, what it holds — and that the partner’s own provider comes later, switched live by two', () => {
     // No payments: only the account itself can say it is test money.
     const html = renderToString(<PaymentAccountBody read={read({ balance: 1250 }, [])} t={tt} onTry={() => undefined} />);
