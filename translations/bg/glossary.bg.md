@@ -66,4 +66,11 @@
 | goods | стоки | |
 | mute, unmute | заглушаване, връщане на звука | |
 | Kenya, Ethiopia, the Netherlands, Bulgaria | Кения, Етиопия, Нидерландия, България | |
+| rider (on a bicycle or motorbike) | куриер | not шофьор |
+| release code, pickup code | код за получаване | |
+| wallet | портфейл | the shop's float stays салдо |
+| freight marketplace, drivers' board | борса | товарна борса in full |
+| customs clearance, clearing agent | митническо освобождаване, агент по митническо освобождаване | |
+| pickup point | пункт за получаване | |
+| bus (vehicle) | автобус | a van is бус |
 
