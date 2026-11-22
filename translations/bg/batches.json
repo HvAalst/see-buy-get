@@ -67,5 +67,93 @@
   ],
   "chars": 37423,
   "phrases": 434
+ },
+ {
+  "batch": 6,
+  "parts": [
+   "help-app.01",
+   "help-app.02",
+   "help-app.03",
+   "help-app.04"
+  ],
+  "chars": 120607,
+  "phrases": 518
+ },
+ {
+  "batch": 7,
+  "parts": [
+   "help-app.05",
+   "help-app.06",
+   "mdp.01",
+   "mdp.02",
+   "vendor.01"
+  ],
+  "chars": 104474,
+  "phrases": 1304
+ },
+ {
+  "batch": 8,
+  "parts": [
+   "vendor.02",
+   "partner.01",
+   "directory.01",
+   "upkeep.01",
+   "business.01",
+   "business.02"
+  ],
+  "chars": 102555,
+  "phrases": 1609
+ },
+ {
+  "batch": 9,
+  "parts": [
+   "business.03",
+   "business.04",
+   "business.05",
+   "fleet.01"
+  ],
+  "chars": 100964,
+  "phrases": 1450
+ },
+ {
+  "batch": 10,
+  "parts": [
+   "fleet.02",
+   "fleet.03",
+   "tower-business.01",
+   "tower-business.02"
+  ],
+  "chars": 114881,
+  "phrases": 1870
+ },
+ {
+  "batch": 11,
+  "parts": [
+   "tower.01",
+   "tower.02",
+   "tower.03",
+   "tower.04"
+  ],
+  "chars": 120169,
+  "phrases": 1781
+ },
+ {
+  "batch": 12,
+  "parts": [
+   "tower.05",
+   "tower.06",
+   "tower.07",
+   "tower.08"
+  ],
+  "chars": 120389,
+  "phrases": 1739
+ },
+ {
+  "batch": 13,
+  "parts": [
+   "tower.09"
+  ],
+  "chars": 19802,
+  "phrases": 343
  }
 ]
