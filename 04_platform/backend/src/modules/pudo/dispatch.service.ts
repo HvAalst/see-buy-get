@@ -5412,7 +5412,13 @@ export class DispatchService {
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
   private borderRefusals(vehicle: Vehicle, driverDid: string, load: Claimable): BorderRefusal[] {
     if (!this.borders || load.kind !== 'freight') return [];
-    return this.borders.refusalsFor(load, this.drivers.homeCountryOf(driverDid, vehicle.managerDid));
+    // 2026-11-22 — under the EU count (BG-4) the rule reads this vehicle's own loads: taken over in it, or claimed by its driver
+    // and not yet taken over. Read only when the rule asks, never for the whole board's every offer.
+    const vehicleLoads = () =>
+      [...this.freights.values()]
+        .filter((f) => f.freightId !== load.ref && (f.carriage?.vehicleId === vehicle.vehicleId || (f.status === 'claimed' && f.claimedBy === driverDid)))
+        .map((f) => ({ pickupCountry: f.pickupCountry, destCountry: f.destCountry, status: f.status, startedAt: f.claimedAt ?? f.pickedUpAt, deliveredAt: f.deliveredAt }));
+    return this.borders.refusalsFor(load, this.drivers.homeCountryOf(driverDid, vehicle.managerDid), vehicleLoads);
   }
 
   /**

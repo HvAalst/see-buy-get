@@ -10,7 +10,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * A rule is held per DIRECTION (a Kenyan truck entering Tanzania is not a Tanzanian truck entering Kenya), and
  * the absence of a rule is not permission — the same rule as the crowd-sourced road constraints.
  */
-export const CABOTAGE_RULES = ['allowed', 'forbidden'] as const;
+// 2026-11-22 — 'eu': the EU's count (the owner's BG-4, Regulation (EC) No 1072/2009 art. 8 as amended by Regulation (EU) 2020/1055):
+// after a load into the country is unloaded, up to three loads inside it within seven days, then four days without — per vehicle.
+// Only between two EU countries.
+export const CABOTAGE_RULES = ['allowed', 'forbidden', 'eu'] as const;
 export type CabotageRule = (typeof CABOTAGE_RULES)[number];
 
 export class BorderCrossingPoint {

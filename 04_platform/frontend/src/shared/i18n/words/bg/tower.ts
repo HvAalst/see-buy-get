@@ -699,6 +699,8 @@ export const words: Record<string, string> = {
   "tower.borders.col.cabotage": "Товари вътре",
   "tower.borders.cabotage.allowed": "позволено",
   "tower.borders.cabotage.forbidden": "не е позволено",
+  "tower.borders.cabotage.eu": "броят се по правилото на ЕС",
+  "tower.borders.cabotage.euHint": "След разтоварване на товар, влязъл в страната, до 3 товара в нея в рамките на 7 дни, след това 4 дни без. Само между две държави от ЕС.",
   "tower.borders.by": "от {who}",
   "tower.borders.edit": "Промени",
   "tower.borders.formTitle": "Запиши правило",

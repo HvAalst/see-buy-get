@@ -767,6 +767,8 @@ export const enTower = {
   'tower.borders.col.cabotage': 'Loads inside',
   'tower.borders.cabotage.allowed': 'allowed',
   'tower.borders.cabotage.forbidden': 'not allowed',
+  'tower.borders.cabotage.eu': 'counted the EU way',
+  'tower.borders.cabotage.euHint': 'After a load into the country is unloaded, up to 3 loads inside it within 7 days, then 4 days without. Only between two EU countries.',
   'tower.borders.by': 'by {who}',
   'tower.borders.edit': 'Change',
   'tower.borders.formTitle': 'Record a rule',

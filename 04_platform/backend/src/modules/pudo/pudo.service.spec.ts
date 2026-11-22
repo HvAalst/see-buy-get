@@ -9995,6 +9995,30 @@ describe('PUDO Light', () => {
     expect(() => dispatch.claim(offer.offerId, noon)).toThrow(/may not carry a load inside Tanzania/);
   });
 
+  it('2026-11-22 — the EU count reads the truck’s own loads: nothing inside Bulgaria until its load into Bulgaria is delivered (BG-4)', () => {
+    presence.set({ jurisdiction: 'NL', level: 'matched' });
+    presence.set({ jurisdiction: 'BG', level: 'matched' });
+    const d = drivers.register({ displayName: 'NLT', fullName: 'Jan', nationalId: 'ID-NLT', mobile: '+31612345678', licenceClasses: ['truck'], licenceNumber: 'L-NLT', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, jurisdiction: 'NL' });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'NL-EU-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    expect(drivers.homeCountryOf(d.did)).toBe('NL');
+    const here = { lat: 42.7, lng: 23.32 };
+    const offered = (freightId: string) => dispatch.suggest(d.did, { from: here, to: here }).find((o) => o.ref === freightId);
+    borders.set({ from: 'NL', to: 'BG', cabotage: 'eu' }, 'Amina');
+
+    const sofia = dispatch.registerFreight({ description: 'Bricks', pickupLocation: here, pickupLabel: 'Sofia yard', destLabel: 'Plovdiv site', destLocation: here, weightKg: 300, packaging: 'palletised', pickupCountry: 'BG', destCountry: 'BG' });
+    expect(offered(sofia.freightId)).toBeUndefined();
+
+    // Its load into Bulgaria, carried and delivered by this truck.
+    const into = dispatch.registerFreight({ description: 'Tiles', pickupLocation: here, pickupLabel: 'Venlo yard', destLabel: 'Sofia depot', destLocation: here, weightKg: 300, packaging: 'palletised', pickupCountry: 'NL', destCountry: 'BG' });
+    dispatch.claim(offered(into.freightId)!.offerId);
+    pickupOk(into, d.did);
+    deliverOk(into, d.did);
+    expect(offered(sofia.freightId)).toBeDefined();
+  });
+
   describe('credentials anybody can change — and a fleet code that is nobody else’s business', () => {
     it('changes a hub password only with the current one, and signs out every session holding the old one', async () => {
       const email = 'rotate-hub@sbg.test';

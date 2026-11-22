@@ -699,6 +699,8 @@ export const words: Record<string, string> = {
   "tower.borders.col.cabotage": "በውስጥ ጭነቶች",
   "tower.borders.cabotage.allowed": "ተፈቅዷል",
   "tower.borders.cabotage.forbidden": "አይፈቀድም",
+  "tower.borders.cabotage.eu": "በአውሮፓ ኅብረት ደንብ ይቆጠራል",
+  "tower.borders.cabotage.euHint": "ወደ አገሩ የገባ ጭነት ከተራገፈ በኋላ፣ በ7 ቀናት ውስጥ በአገሩ ውስጥ እስከ 3 ጭነቶች፣ ከዚያ 4 ቀናት ያለ ጭነት። በሁለት የአውሮፓ ኅብረት አገሮች መካከል ብቻ።",
   "tower.borders.by": "በ{who}",
   "tower.borders.edit": "ይቀይሩ",
   "tower.borders.formTitle": "ደንብ ይመዝግቡ",

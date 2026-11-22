@@ -352,7 +352,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Between two EU countries the network asks for no customs declaration and no commercial invoice, plans no wait at a border, and holds nothing for customs. A driver is not asked to say they reached a border post. Outside the EU a crossing is papered as before.",
-      "Loads inside a country after a load into it: the EU allows three within seven days, then the vehicle leaves. The network does not count them yet, so until it does, record loads inside as not allowed.",
+      "Loads inside a country after a load into it: between two EU countries, choose “counted the EU way” on the rule. The network then lets a vehicle carry up to three loads inside the country within seven days of unloading a load into it, then none for four days after its last one. The last of the three must also be delivered within the seven days, which the driver plans.",
       "Dangerous goods follow the road rules for dangerous goods between EU countries, as they do inside one.",
       "Places inside an EU country that are outside its tax area, such as the Canary Islands or Åland, look like the rest of their country to the network. Open no route to them.",
       "A price card of its own for a pair of countries is not built yet."

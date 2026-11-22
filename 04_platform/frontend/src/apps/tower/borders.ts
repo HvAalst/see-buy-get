@@ -24,7 +24,7 @@ export interface BorderRuleRow {
   maxWeightKg?: number;
   maxLengthM?: number;
   maxHeightM?: number;
-  cabotage: 'allowed' | 'forbidden';
+  cabotage: 'allowed' | 'forbidden' | 'eu';
   note?: string;
   setBy: string;
   setAt: string;
@@ -38,7 +38,7 @@ export interface BorderForm {
   permits: string;
   regionalInsurance: string;
   maxWeightKg: string;
-  cabotage: 'allowed' | 'forbidden';
+  cabotage: 'allowed' | 'forbidden' | 'eu';
   note: string;
 }
 

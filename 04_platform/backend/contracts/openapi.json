@@ -59549,7 +59549,8 @@
             "description": "May a vehicle from `from` carry a load that starts and ends inside `to`?",
             "enum": [
               "allowed",
-              "forbidden"
+              "forbidden",
+              "eu"
             ]
           },
           "note": {

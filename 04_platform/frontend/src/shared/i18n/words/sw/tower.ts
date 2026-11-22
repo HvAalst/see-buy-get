@@ -699,6 +699,8 @@ export const words: Record<string, string> = {
   "tower.borders.col.cabotage": "Mizigo ndani ya nchi",
   "tower.borders.cabotage.allowed": "inaruhusiwa",
   "tower.borders.cabotage.forbidden": "hairuhusiwi",
+  "tower.borders.cabotage.eu": "huhesabiwa kwa kanuni ya EU",
+  "tower.borders.cabotage.euHint": "Baada ya mzigo kuingia nchini kushushwa, hadi mizigo 3 ndani yake ndani ya siku 7, kisha siku 4 bila. Kati ya nchi mbili za EU tu.",
   "tower.borders.by": "na {who}",
   "tower.borders.edit": "Badilisha",
   "tower.borders.formTitle": "Rekodi sheria",

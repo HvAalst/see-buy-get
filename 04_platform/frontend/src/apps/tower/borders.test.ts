@@ -29,6 +29,12 @@ describe('a border rule, typed by hand', () => {
     expect(crossingLine({ name: 'Namanga', hours: '24 hours' })).toBe('Namanga · 24 hours');
   });
 
+  it('2026-11-22 — sends and reads back the EU count between two EU countries (BG-4)', () => {
+    const body = toBorderBody({ ...EMPTY_BORDER_FORM, from: 'NL', to: 'BG', cabotage: 'eu' });
+    expect(body).toMatchObject({ from: 'NL', to: 'BG', cabotage: 'eu', crossings: [] });
+    expect(formFromRule({ ...(body as Record<string, unknown>), setBy: 'Amina', setAt: '2026-11-22T08:00:00Z' } as never).cabotage).toBe('eu');
+  });
+
   it('round 14 — lists each post’s measured wait with its crossing’s other posts, the busiest first', () => {
     const row = (from: string, to: string, post: string, crossings: number): BorderWaitRow => ({ from, to, post, hours: 6, crossings, measured: crossings >= 5, longestHours: 9, lastClearedAt: '2026-10-19T08:00:00Z' });
     const ordered = waitsInOrder([row('KE', 'UG', 'Busia', 3), row('KE', 'TZ', 'Namanga', 2), row('KE', 'UG', 'Malaba', 23)]);

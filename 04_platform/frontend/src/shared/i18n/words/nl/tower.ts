@@ -699,6 +699,8 @@ export const words: Record<string, string> = {
   "tower.borders.col.cabotage": "Ladingen binnen",
   "tower.borders.cabotage.allowed": "toegestaan",
   "tower.borders.cabotage.forbidden": "niet toegestaan",
+  "tower.borders.cabotage.eu": "geteld volgens de EU-regel",
+  "tower.borders.cabotage.euHint": "Nadat een lading het land in is gelost, tot 3 ladingen binnen het land binnen 7 dagen, daarna 4 dagen niet. Alleen tussen twee EU-landen.",
   "tower.borders.by": "door {who}",
   "tower.borders.edit": "Wijzigen",
   "tower.borders.formTitle": "Een regel vastleggen",

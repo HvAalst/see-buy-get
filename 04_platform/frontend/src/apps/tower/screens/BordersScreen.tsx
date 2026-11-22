@@ -116,7 +116,7 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
                   <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.borders.col.carry')}</span>{[...rule.permits, ...rule.regionalInsurance].join(', ') || t('tower.borders.nothing')}</td>
                   <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.borders.col.limits')}</span>{rule.maxWeightKg ? t('tower.borders.maxKg', { kg: rule.maxWeightKg.toLocaleString() }) : t('tower.borders.nothing')}</td>
                   <td><span class="ctbl__lbl">{t('tower.borders.col.cabotage')}</span>
-                    <span class={`ctag ${rule.cabotage === 'allowed' ? 'ctag--ok' : 'ctag--quiet'}`}>{t(rule.cabotage === 'allowed' ? 'tower.borders.cabotage.allowed' : 'tower.borders.cabotage.forbidden')}</span>
+                    <span class={`ctag ${rule.cabotage === 'forbidden' ? 'ctag--quiet' : 'ctag--ok'}`}>{t(rule.cabotage === 'allowed' ? 'tower.borders.cabotage.allowed' : rule.cabotage === 'eu' ? 'tower.borders.cabotage.eu' : 'tower.borders.cabotage.forbidden')}</span>
                   </td>
                   <td>
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setForm(formFromRule(rule))}>
@@ -198,12 +198,15 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
           <ConsolePick
             label={t('tower.borders.f.cabotage')}
             value={form.cabotage}
-            onChange={(v) => setForm({ ...form, cabotage: v as 'allowed' | 'forbidden' })}
+            onChange={(v) => setForm({ ...form, cabotage: v as 'allowed' | 'forbidden' | 'eu' })}
             options={[
               { value: 'forbidden', label: t('tower.borders.cabotage.forbidden') },
               { value: 'allowed', label: t('tower.borders.cabotage.allowed') },
+              // 2026-11-22 — the EU count (BG-4): for two EU countries; the server refuses it for any other pair, in words.
+              { value: 'eu', label: t('tower.borders.cabotage.eu') },
             ]}
           />
+          {form.cabotage === 'eu' ? <p class="chint">{t('tower.borders.cabotage.euHint')}</p> : null}
           <label class="cfield">
             <span class="cfield__label">{t('tower.borders.f.crossings')}</span>
             <textarea class="cinput" rows={3} value={form.crossings} onInput={(e) => setForm({ ...form, crossings: e.currentTarget.value })} />
