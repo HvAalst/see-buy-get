@@ -269,6 +269,8 @@ export const ID_DOCUMENTS: Record<string, string[]> = {
   ZM: ['nrc', 'passport', 'driving_licence'],
   DE: ['personalausweis', 'passport', 'residence_permit'],
   NL: ['id_card', 'passport', 'driving_licence', 'residence_permit'],
+  // 2026-11-22 — Bulgaria (the Netherlands–Bulgaria plan, part 5): the identity card (лична карта), as for any EU citizen.
+  BG: ['id_card', 'passport', 'driving_licence', 'residence_permit'],
   GB: ['passport', 'driving_licence', 'biometric_residence_permit'],
   US: ['passport', 'driving_licence', 'state_id'],
 };
@@ -327,6 +329,15 @@ export const OBLIGATIONS: Record<string, LocalObligation[]> = {
     { key: 'postal_registration', name: 'Registration as a postal carrier (postvervoerbedrijf)', authority: 'Autoriteit Consument & Markt (ACM)' },
     // GDPR art. 37: a data protection officer, reported on the AP's form — likely required for a network that follows its drivers' positions (L48).
     { key: 'data_protection_registration', name: 'Data protection officer appointed and reported', authority: 'Autoriteit Persoonsgegevens' },
+  ],
+  // 2026-11-22 — Bulgaria (the Netherlands–Bulgaria plan, part 5; legal.html L63, L68). Postal Services Act (consolidated, January
+  // 2026): express mail services are non-universal postal services (art. 38 item 3), performed after a written notification to the
+  // Communications Regulation Commission, which enters the operator in its public register (art. 59); a service within the scope
+  // of the universal postal service needs an individual licence instead (art. 39 item 2). Which one our parcels need is L63.
+  // GDPR art. 37: a data protection officer, its contact details reported to the Commission for Personal Data Protection (L68).
+  BG: [
+    { key: 'postal_registration', name: 'Entry in the register of postal operators, by notification (express services) or individual licence', authority: 'Communications Regulation Commission' },
+    { key: 'data_protection_registration', name: 'Data protection officer appointed and reported', authority: 'Commission for Personal Data Protection' },
   ],
   DE: [
     { key: 'e_invoicing', name: 'E-Rechnung — receiving and issuing structured invoices (XRechnung / ZUGFeRD)' },

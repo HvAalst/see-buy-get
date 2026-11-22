@@ -3,6 +3,7 @@ import { ET_PROPOSAL } from './et';
 import { KE_PROPOSAL } from './ke';
 import { NL_PROPOSAL } from './nl';
 import { UG_PROPOSAL } from './ug';
+import { BG_PROPOSAL } from './bg';
 
 export type { ZoneProposal } from './types';
 
@@ -19,6 +20,8 @@ const PROPOSALS: Record<string, ZoneProposal> = {
   ET: ET_PROPOSAL,
   // 2026-11-10 — Uganda, where a business is registered (the owner: "check for a zone map of Uganda").
   UG: UG_PROPOSAL,
+  // 2026-11-22 — Bulgaria, the far end of the Netherlands–Bulgaria route (the plan, part 10; the owner: "continue part 10 and 5").
+  BG: BG_PROPOSAL,
 };
 
 export function proposalFor(country: string | undefined): ZoneProposal | undefined {

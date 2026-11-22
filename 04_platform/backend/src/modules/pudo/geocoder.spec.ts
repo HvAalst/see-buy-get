@@ -65,6 +65,7 @@ describe('geo gazetteer (G1)', () => {
         ET: { lat: [3, 15], lng: [33, 48] }, // Moyale to Mekelle, Gambela to Dire Dawa
         UG: { lat: [-1.5, 4.3], lng: [29.5, 35] }, // Kabale to Kitgum, Kasese to Moroto
         NL: { lat: [50.7, 53.6], lng: [3.3, 7.3] }, // Maastricht to Groningen
+        BG: { lat: [41.2, 44.3], lng: [22.3, 28.7] }, // Kulata to Silistra, Kyustendil to Varna (2026-11-22)
       };
       for (const e of GAZETTEER) {
         const box = BOX[e.country];

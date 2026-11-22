@@ -294,6 +294,27 @@ describe('the first map proposed for a country — Kenya’s, for Kenya’s comp
     expect(zones.zoneAt('KE', { lat: 0.3136, lng: 32.5811 })).toBeUndefined();
   });
 
+  it('Bulgaria has its own (2026-11-22): its 264 municipalities, a zone for each province seat and each province’s rest; hard to reach where the regulator lists many villages', () => {
+    entities.createCompany({ kind: 'sister', jurisdiction: 'BG', name: 'SeeBuyGet Bulgaria' }, 'Owner');
+    const bg = zones.setup('sbg-bg').proposal!;
+    expect(bg).toMatchObject({ level: 'municipalities', areas: 264, zones: 61 });
+    expect(bg.attribution).toMatch(/geoBoundaries/);
+    expect(bg.source).toMatch(/Communications Regulation Commission/);
+    const s = zones.startFromProposal('sbg-bg', 'Ivan P.');
+    expect(s.draft!.zones.reduce((n, z) => n + z.areas, 0)).toBe(264);
+    expect(s.draft!.zones.every((z) => ['urban', 'rural', 'remote'].includes(z.group) && z.evidence?.length)).toBe(true);
+    // Each zone proposed hard to reach cites the regulator's list, with its date, and says its counts as floors.
+    expect(s.draft!.zones.filter((z) => z.group === 'remote').every((z) => z.evidence!.some((e) => /decision No 606 of 23 June 2011\): .*at least \d+/.test(e)))).toBe(true);
+    zones.publish('sbg-bg', undefined, 'Ivan P.');
+    entities.activate('sbg-bg', 'Owner');
+    expect(zones.zoneAt('BG', { lat: 42.6977, lng: 23.3219 })).toMatchObject({ name: 'Sofia', group: 'urban' });
+    expect(zones.zoneAt('BG', { lat: 42.1354, lng: 24.7453 })).toMatchObject({ name: 'Plovdiv', group: 'urban' });
+    expect(zones.zoneAt('BG', { lat: 42.8667, lng: 25.4833 })).toMatchObject({ name: 'Gabrovo province, hard to reach', group: 'remote' }); // Tryavna
+    expect(zones.zoneAt('BG', { lat: 42.9, lng: 23.92 })).toMatchObject({ name: 'Sofia province', group: 'rural' }); // Pravets
+    // Bulgaria's alone: a Dutch pin in Sofia finds nothing in it.
+    expect(zones.zoneAt('NL', { lat: 42.6977, lng: 23.3219 })).toBeUndefined();
+  });
+
   it('Ethiopia has its own (2026-11-10; the 2023 boundaries since 11-11): its 1,148 woredas, Addis Ababa one zone, a zone for each town and each administrative zone’s rest; remote only with a source', () => {
     const et = zones.setup('sbg-et').proposal!;
     expect(et).toMatchObject({ level: 'woredas', areas: 1148, zones: 114, licence: 'CC BY-IGO' });

@@ -17,6 +17,16 @@ describe('what each country requires of anybody operating there', () => {
     expect(nl[1]).toMatchObject({ name: 'Data protection officer appointed and reported', authority: 'Autoriteit Persoonsgegevens' });
   });
 
+  // 2026-11-22 — Bulgaria (the Netherlands–Bulgaria plan, part 5): its own two, in place of the default.
+  it('asks Bulgaria what Bulgaria asks: entry in the CRC’s register of postal operators and a reported data protection officer', () => {
+    expect(keys('BG')).toEqual(['postal_registration', 'data_protection_registration']);
+    const bg = catalogueEntry('BG')!;
+    expect(bg.obligations[0]).toMatchObject({ authority: 'Communications Regulation Commission', name: expect.stringMatching(/notification .* or individual licence/) });
+    expect(bg.obligations[1]).toMatchObject({ authority: 'Commission for Personal Data Protection' });
+    expect(bg.idDocuments).toEqual(['id_card', 'passport', 'driving_licence', 'residence_permit']);
+    expect(bg.currency).toBe('EUR');
+  });
+
   it('keeps a nation’s rules national: no courier licence asked where none was researched', () => {
     expect(keys('DE')).not.toContain('courier_licence');
     expect(keys('NL')).not.toContain('courier_licence');

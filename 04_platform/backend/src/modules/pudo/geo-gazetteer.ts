@@ -181,9 +181,55 @@ const NETHERLANDS: PlaceEntry[] = [
   { name: "Waalwijk", location: { lat: 51.6826, lng: 5.0703 } },
 ];
 
+const BULGARIA: PlaceEntry[] = [
+  // --- Bulgaria (2026-11-22; the Netherlands–Bulgaria plan, part 10): its province seats, larger towns and the border crossings
+  // loads run through, each checked to lie in its own municipality (geoBoundaries). Named as written in Latin letters, and in
+  // Cyrillic as a Bulgarian types it.
+  { name: "Sofia", location: { lat: 42.6977, lng: 23.3219 }, aliases: ["софия", "sofiya", "sofia city"], broad: true },
+  { name: "Plovdiv", location: { lat: 42.1354, lng: 24.7453 }, aliases: ["пловдив"], broad: true },
+  { name: "Varna", location: { lat: 43.2141, lng: 27.9147 }, aliases: ["варна"], broad: true },
+  { name: "Burgas", location: { lat: 42.5048, lng: 27.4626 }, aliases: ["бургас", "bourgas"], broad: true },
+  { name: "Ruse", location: { lat: 43.8356, lng: 25.9657 }, aliases: ["русе", "rousse"] },
+  { name: "Stara Zagora", location: { lat: 42.4258, lng: 25.6345 }, aliases: ["стара загора"] },
+  { name: "Pleven", location: { lat: 43.417, lng: 24.6067 }, aliases: ["плевен"] },
+  { name: "Sliven", location: { lat: 42.6817, lng: 26.3229 }, aliases: ["сливен"] },
+  { name: "Dobrich", location: { lat: 43.5726, lng: 27.8273 }, aliases: ["добрич"] },
+  { name: "Shumen", location: { lat: 43.2712, lng: 26.9361 }, aliases: ["шумен"] },
+  { name: "Pernik", location: { lat: 42.6052, lng: 23.0378 }, aliases: ["перник"] },
+  { name: "Haskovo", location: { lat: 41.9344, lng: 25.5554 }, aliases: ["хасково"] },
+  { name: "Yambol", location: { lat: 42.4842, lng: 26.5035 }, aliases: ["ямбол"] },
+  { name: "Pazardzhik", location: { lat: 42.1928, lng: 24.3336 }, aliases: ["пазарджик"] },
+  { name: "Blagoevgrad", location: { lat: 42.0209, lng: 23.0943 }, aliases: ["благоевград"] },
+  { name: "Veliko Tarnovo", location: { lat: 43.0757, lng: 25.6172 }, aliases: ["велико търново", "veliko turnovo"] },
+  { name: "Vratsa", location: { lat: 43.2102, lng: 23.5529 }, aliases: ["враца"] },
+  { name: "Gabrovo", location: { lat: 42.8742, lng: 25.3187 }, aliases: ["габрово"] },
+  { name: "Vidin", location: { lat: 43.9962, lng: 22.8679 }, aliases: ["видин"] },
+  { name: "Kyustendil", location: { lat: 42.2839, lng: 22.6911 }, aliases: ["кюстендил"] },
+  { name: "Kardzhali", location: { lat: 41.65, lng: 25.3667 }, aliases: ["кърджали", "kurdzhali"] },
+  { name: "Montana", location: { lat: 43.4125, lng: 23.225 }, aliases: ["монтана"] },
+  { name: "Targovishte", location: { lat: 43.2512, lng: 26.5726 }, aliases: ["търговище"] },
+  { name: "Lovech", location: { lat: 43.137, lng: 24.7142 }, aliases: ["ловеч"] },
+  { name: "Silistra", location: { lat: 44.1171, lng: 27.2606 }, aliases: ["силистра"] },
+  { name: "Razgrad", location: { lat: 43.5333, lng: 26.5167 }, aliases: ["разград"] },
+  { name: "Smolyan", location: { lat: 41.5774, lng: 24.7011 }, aliases: ["смолян"] },
+  { name: "Asenovgrad", location: { lat: 42.0167, lng: 24.8667 }, aliases: ["асеновград"] },
+  { name: "Kazanlak", location: { lat: 42.6194, lng: 25.3929 }, aliases: ["казанлък"] },
+  { name: "Dupnitsa", location: { lat: 42.2667, lng: 23.1167 }, aliases: ["дупница"] },
+  { name: "Botevgrad", location: { lat: 42.9064, lng: 23.7867 }, aliases: ["ботевград"] },
+  { name: "Samokov", location: { lat: 42.3375, lng: 23.5528 }, aliases: ["самоков"] },
+  { name: "Karlovo", location: { lat: 42.6333, lng: 24.8 }, aliases: ["карлово"] },
+  { name: "Svishtov", location: { lat: 43.6, lng: 25.35 }, aliases: ["свищов"] },
+  { name: "Sandanski", location: { lat: 41.5667, lng: 23.2833 }, aliases: ["сандански"] },
+  { name: "Petrich", location: { lat: 41.3983, lng: 23.2069 }, aliases: ["петрич"] },
+  { name: "Svilengrad", location: { lat: 41.7667, lng: 26.2 }, aliases: ["свиленград"] },
+  { name: "Kulata", location: { lat: 41.3889, lng: 23.3667 }, aliases: ["кулата", "kulata border"] },
+  { name: "Kapitan Andreevo", location: { lat: 41.72, lng: 26.29 }, aliases: ["капитан андреево"] },
+  { name: "Sofia Airport", location: { lat: 42.6967, lng: 23.4114 }, aliases: ["летище софия", "sof airport"] },
+];
+
 const inCountry = (country: string, list: PlaceEntry[]): GazetteerEntry[] => list.map((e) => ({ ...e, country }));
 
-export const GAZETTEER: GazetteerEntry[] = [...inCountry('KE', KENYA), ...inCountry('ET', ETHIOPIA), ...inCountry('UG', UGANDA), ...inCountry('NL', NETHERLANDS)];
+export const GAZETTEER: GazetteerEntry[] = [...inCountry('KE', KENYA), ...inCountry('ET', ETHIOPIA), ...inCountry('UG', UGANDA), ...inCountry('NL', NETHERLANDS), ...inCountry('BG', BULGARIA)];
 
 /** The places of the countries given (ISO 3166 alpha-2), or every place where none is. */
 function placesIn(countries?: readonly (string | undefined)[]): GazetteerEntry[] {
@@ -191,11 +237,12 @@ function placesIn(countries?: readonly (string | undefined)[]): GazetteerEntry[]
   return codes.length ? GAZETTEER.filter((e) => codes.includes(e.country)) : GAZETTEER;
 }
 
-/** Normalise a query for matching: lowercase, strip punctuation to spaces, collapse whitespace. */
+/** Normalise a query for matching: lowercase, strip punctuation to spaces, collapse whitespace. 2026-11-22 — letters of any
+ *  script are kept (Cyrillic, Ethiopic): a Bulgarian types "Пловдив", and it was read as nothing. */
 export function normalizePlace(q: string): string {
   return q
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
