@@ -349,6 +349,8 @@ export interface NewLoad {
   destLocation: { lat: number; lng: number };
   pickupCountry?: string;
   destCountry?: string;
+  /** 2026-11-22 — to another EU country: it holds no alcohol, tobacco, medicines or weapons (BG-2). */
+  noGoodsWithOwnRules?: boolean;
   weightKg: number;
   packaging?: string;
   /** CMR box 2 — who receives the goods. */

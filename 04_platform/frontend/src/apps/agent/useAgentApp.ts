@@ -27,6 +27,7 @@ import type { TamperUnit, UnitHold } from '../../shared/tamper';
 import type { BagClosedWith } from '../../shared/bagSeal';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence, refusalSentence } from '../../shared/ui';
+import { goodsWordAsked } from '../../shared/ui/GoodsWord';
 import type { RefusalBody } from '../../shared/RefusalCard';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
@@ -1959,7 +1960,11 @@ export function useAgentApp() {
         // CL1 — sent only when the clerk was told. No term means the sender claims, as before.
         incoterm: incotermValue(f.incoterm),
         namedPlace: f.namedPlace.trim() || undefined,
+        // 2026-11-22 — to a shop in another EU country: the sender's word on what it holds, once the server asked it (BG-2).
+        ...(f.goodsWord ? { noGoodsWithOwnRules: f.noGoodsWithOwnRules } : {}),
       });
+      const asked = goodsWordAsked(r.error);
+      if (asked) return setState((s) => ({ ...s, accept: { ...s.accept, goodsWord: asked } }));
       if (r.error) return fail(r.error);
       buzz();
       const fr = narrow<AgentState['bookedFreight']>(r.data);

@@ -380,6 +380,7 @@ export const words: Record<string, string> = {
   "business.loads.need.description": "Zeg wat het is.",
   "business.loads.need.fromSiteId": "Kies waar het wordt opgehaald.",
   "business.loads.need.toSiteId": "Kies waar het heen gaat.",
+  "business.loads.need.noGoodsWithOwnRules": "Zeg dat er geen alcohol, tabak, medicijnen of wapens in zitten.",
   "business.loads.need.weightKg": "Geef het gewicht in kilogram.",
   "business.loads.placeGone": "Een van die plaatsen kon niet meer worden gevonden. Kies hem opnieuw.",
   "business.loads.posted": "{code} staat op het bord.",

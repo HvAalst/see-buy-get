@@ -409,6 +409,7 @@ export const enBusiness = {
   'business.loads.need.description': 'Say what it is.',
   'business.loads.need.fromSiteId': 'Choose where it is collected.',
   'business.loads.need.toSiteId': 'Choose where it goes.',
+  'business.loads.need.noGoodsWithOwnRules': 'Say that it holds no alcohol, tobacco, medicines or weapons.',
   'business.loads.need.weightKg': 'Give the weight in kilograms.',
   'business.loads.placeGone': 'One of those places could not be found any more. Choose it again.',
   'business.loads.posted': '{code} is on the board.',

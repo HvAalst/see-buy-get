@@ -8,6 +8,7 @@ import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, ty
 import type { SendActions, SendState } from '../useSendApp';
 import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
+import { GoodsWord, goodsWordAsked, type UnionPassage } from '../../../shared/ui/GoodsWord';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 import { CodeMailBounced } from '../../../shared/CodeMailBounced';
@@ -24,6 +25,9 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [posted, setPosted] = useState(false);
+  // 2026-11-22 — to another EU country (BG-2): the server says where the pins fall, and asks the person's word on what it holds.
+  const [word, setWord] = useState<UnionPassage | null>(null);
+  const [said, setSaid] = useState(false);
   const blocker = personLoadBlocker(form);
   const set = (patch: Partial<PersonLoadForm>) => setForm((f) => ({ ...f, ...patch }));
   const note = (n: PlaceNote) => (n.kind === 'notFound' ? t('send.load.geoNotFound') : n.kind === 'found' ? t('send.load.geoFound', { where: n.where }) : n.kind === 'pinned' ? t('send.load.pinned') : '');
@@ -31,8 +35,10 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
     if (!api || blocker) return;
     setBusy(true);
     setProblem(null);
-    const r = await api.post(personLoadBody(form));
+    const r = await api.post({ ...personLoadBody(form), ...(word ? { noGoodsWithOwnRules: said } : {}) });
     setBusy(false);
+    const asked = goodsWordAsked(r.error as SbgError);
+    if (asked) return setWord(asked);
     if (r.error) return setProblem(refusalSentence(r.error as SbgError));
     setPosted(true);
   };
@@ -133,13 +139,14 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
         </div>
       </Card>
       <p class="card__note">{t('send.load.howPay')}</p>
+      {word ? <GoodsWord passage={word} said={said} onChange={setSaid} /> : null}
       {problem ? (
         <p class="hint" role="alert">
           {problem}
         </p>
       ) : null}
       <div class="scr__cta">
-        <Button busy={busy} disabled={blocker !== null || !api} onClick={() => void post()}>
+        <Button busy={busy} disabled={blocker !== null || !api || (word !== null && !said)} onClick={() => void post()}>
           {t('send.load.post')}
         </Button>
         {blocker ? <p class="hint">{t(blocker)}</p> : null}

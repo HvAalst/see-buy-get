@@ -70821,6 +70821,9 @@
             "type": "string",
             "pattern": "SCHEDULED_PICKUP_RE"
           },
+          "noGoodsWithOwnRules": {
+            "type": "boolean"
+          },
           "allowEarlyClaim": {
             "type": "boolean"
           },
@@ -73680,6 +73683,32 @@
           "driverDid"
         ]
       },
+      "FreightWithinUnion": {
+        "type": "object",
+        "properties": {
+          "union": {
+            "type": "string",
+            "enum": [
+              "EU"
+            ]
+          },
+          "fromCountry": {
+            "type": "string"
+          },
+          "toCountry": {
+            "type": "string"
+          },
+          "saidNoneAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "union",
+          "fromCountry",
+          "toCountry",
+          "saidNoneAt"
+        ]
+      },
       "FreightReload": {
         "type": "object",
         "properties": {
@@ -75137,6 +75166,9 @@
           },
           "destCountry": {
             "type": "string"
+          },
+          "withinUnion": {
+            "$ref": "#/components/schemas/FreightWithinUnion"
           },
           "carriage": {
             "type": "object",
@@ -79092,6 +79124,10 @@
           },
           "destCountry": {
             "type": "string"
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-22 — to another EU country, where no customs list what is inside (BG-2): true says it holds no alcohol, tobacco,\n medicines or weapons. Required there, and refused without; not asked anywhere else."
           },
           "pickupLocation": {
             "$ref": "#/components/schemas/GeoDto"

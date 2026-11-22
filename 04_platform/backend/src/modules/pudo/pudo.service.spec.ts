@@ -12834,6 +12834,28 @@ describe('PUDO Light', () => {
     expect(() => controller.bookFreight({ ...base, natureCode: 'HAZ-DUST' } as never, { role: 'pudo', did: origin.did } as never)).not.toThrow();
   });
 
+  it('2026-11-22 — a load booked at the counter to a shop in another EU country: the sender’s word first, kept on the load (BG-2)', () => {
+    presence.set({ jurisdiction: 'NL', level: 'matched' });
+    presence.set({ jurisdiction: 'BG', level: 'matched' });
+    const shopIn = (shopName: string, zone: string, country: string, location: { lat: number; lng: number }) => {
+      agentSeq += 1;
+      const a = agents.register({ shopName, zone, country, location, landmark: 'by the road', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-${agentSeq}`, mobile: `+3161234${agentSeq}`, deviceImei: `IMEI-${agentSeq}`, requirements: eligibleReqs() });
+      agents.submitKyc(a.did, kycDocs);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
+      return agents.get(a.did);
+    };
+    const origin = shopIn('Grachten Winkel', 'Amsterdam', 'NL', { lat: 52.37, lng: 4.9 });
+    const dest = shopIn('Магазин Витоша', 'Sofia', 'BG', { lat: 42.7, lng: 23.32 });
+    const base = { dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 400 };
+    const before = dispatch.listFreight().length;
+    expect(() => controller.bookFreight(base as never, { role: 'pudo', did: origin.did } as never)).toThrow(/from NL to BG: say that it holds no alcohol, tobacco, medicines or weapons/);
+    expect(() => controller.bookFreight({ ...base, noGoodsWithOwnRules: true, natureCode: 'HUM' } as never, { role: 'pudo', did: origin.did } as never)).toThrow(/medicines do not go to another country with us/);
+    expect(dispatch.listFreight()).toHaveLength(before);
+    const res: any = controller.bookFreight({ ...base, noGoodsWithOwnRules: true } as never, { role: 'pudo', did: origin.did } as never);
+    const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
+    expect(f.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
+  });
+
   it('FB2d: ruling nothing out stores no preference at all', () => {
     // "The customer did not mind" and "the customer ruled out an empty list of bodies" must not become the
     // same record, or the market series would count a refusal nobody made.

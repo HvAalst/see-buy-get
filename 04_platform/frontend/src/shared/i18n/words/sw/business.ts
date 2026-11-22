@@ -380,6 +380,7 @@ export const words: Record<string, string> = {
   "business.loads.need.description": "Sema ni nini.",
   "business.loads.need.fromSiteId": "Chagua unapochukuliwa.",
   "business.loads.need.toSiteId": "Chagua unakokwenda.",
+  "business.loads.need.noGoodsWithOwnRules": "Sema kwamba haina pombe, tumbaku, dawa wala silaha.",
   "business.loads.need.weightKg": "Toa uzito kwa kilo.",
   "business.loads.placeGone": "Moja ya maeneo hayo halikuweza kupatikana tena. Lichague tena.",
   "business.loads.posted": "{code} uko kwenye ubao.",

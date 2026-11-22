@@ -4150,6 +4150,9 @@ export class SbgController {
     // Dangerous goods come with their UN number from the counter too (the gaps check, 2026-10-29).
     const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
     if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
+    // 2026-11-22 — to a shop in another EU country: the sender's word on what it holds, said at the counter (BG-2).
+    const passage = unionPassageBetween(this.agents.countryOf(origin), this.agents.countryOf(dest));
+    requireNoGoodsWithOwnRules(passage, dto.noGoodsWithOwnRules, 'noGoodsWithOwnRules', dto.natureCode);
     const freight = this.dispatch.registerFreight({
       description: `Counter freight (${cargoClass}) booked at ${origin.shopName}`,
       pickupLocation: origin.location,
@@ -4171,6 +4174,7 @@ export class SbgController {
       // CA6 — the country at each end, so the rules of crossing a border can be asked of this load.
       pickupCountry: this.agents.countryOf(origin),
       destCountry: this.agents.countryOf(dest),
+      ...(passage ? { withinUnion: { ...passage, saidNoneAt: new Date().toISOString() } } : {}),
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       commitMode: dto.commitMode,
       // 2026-11-13 — what it takes to move it (unusual loads): any extra work makes it negotiated.

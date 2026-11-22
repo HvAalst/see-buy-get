@@ -5,6 +5,7 @@ import { BackStep } from '../../../shared/ui/BackStep';
 import { PhoneField, StepList } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { countryNameIn } from '../../../shared/documents/documents';
+import { euPassage } from '../../../shared/eu';
 import { quoteFigure } from '../../../shared/quote';
 import { publicRequest } from '../../../lib/sbg';
 import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
@@ -167,9 +168,12 @@ export function PostLoad({
   const step: PostAt = at === 'done' ? 'done' : stepIn(at, steps);
   // Across a border the consignment note asks more of the form (the CMR check, 2026-10-28).
   const crossing = Boolean(form.destCountry && form.destCountry !== business.country);
+  // 2026-11-22 — to another EU country: no customs, and the business's word on what it holds instead (BG-2).
+  const passage = euPassage(business.country, form.destCountry);
+  const countryName = (code: string) => countries.find((c) => c.code === code)?.name ?? countryNameIn(code, 'en');
   const dangerous = isDangerousNature(form.natureCode);
   const cold = isColdNature(form.natureCode);
-  const ctx = { crossing, contract: Boolean(contract), today: todayIn(start?.now) };
+  const ctx = { crossing, withinUnion: Boolean(passage), contract: Boolean(contract), today: todayIn(start?.now) };
   const gaps = step === 'done' ? [] : stepGaps(step, form, ctx);
   const back = postBack(step, steps);
   const siteApi = client ? (client.api as never) : null;
@@ -390,8 +394,18 @@ export function PostLoad({
           </label>
           <div class="cfield">
             <CountrySelect value={form.destCountry} onChange={(destCountry) => set({ destCountry })} label={t('business.loads.f.destCountry')} options={countries} />
-            {crossing ? <span class="chint">{t('business.loads.f.crossing')}</span> : null}
+            {crossing && !passage ? <span class="chint">{t('business.loads.f.crossing')}</span> : null}
+            {passage ? <span class="chint">{t('common.union.body', { from: countryName(passage.fromCountry), to: countryName(passage.toCountry) })}</span> : null}
           </div>
+          {passage ? (
+            <>
+              <label class="cfield--check">
+                <input type="checkbox" checked={form.noGoodsWithOwnRules} onChange={(e) => set({ noGoodsWithOwnRules: e.currentTarget.checked })} />
+                <span>{t('common.union.none')}</span>
+              </label>
+              {gap('noGoodsWithOwnRules')}
+            </>
+          ) : null}
           {/* Box 2 of the consignment note: who receives the goods. A receiving point is its own consignee. */}
           {receiving ? null : (
             <>

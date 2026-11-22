@@ -527,6 +527,9 @@ export const en = {
   // 2026-11-02 — the bar pinned to the bottom of every screen before signing in (SignedOutBar): a short word under each
   // picture, as the tab bar has; the longer name stays the button's title. Back and Help are common.back and guide.link.
   'common.bar.label': 'Help and more',
+  'common.union.title': 'To another EU country',
+  'common.union.body': 'From {from} to {to} there are no customs: no invoice and no declaration.',
+  'common.union.none': 'It holds no alcohol, tobacco, medicines or weapons. These do not go to another country with us.',
   'common.bar.readAloud': 'Read aloud',
   'common.bar.allApps': 'All apps',
   // Under every box an address is typed into to find shops (OsmCredit): OpenStreetMap's service, credited as it asks.

@@ -601,6 +601,15 @@ export class FreightAirTerminal {
   @ApiPropertyOptional() complainDays?: number;
 }
 
+/** 2026-11-22 — a load to another EU country, with no customs (BG-2): which two, and when its poster said it holds no alcohol,
+ *  tobacco, medicines or weapons. */
+export class FreightWithinUnion {
+  @ApiProperty({ enum: ['EU'] }) union: 'EU';
+  @ApiProperty() fromCountry: string;
+  @ApiProperty() toCountry: string;
+  @ApiProperty() saidNoneAt: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -703,6 +712,7 @@ export class Freight {
   /** CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked. */
   @ApiPropertyOptional() pickupCountry?: string;
   @ApiPropertyOptional() destCountry?: string;
+  @ApiPropertyOptional({ type: FreightWithinUnion }) withinUnion?: FreightWithinUnion;
   /**
    * FP2 — WHO took the goods over and IN WHAT, fixed at pickup for the consignment note. Read live it would follow
    * the driver's later shifts; a note must name the vehicle that carried this load.

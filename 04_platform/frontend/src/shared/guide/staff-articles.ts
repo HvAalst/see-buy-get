@@ -347,7 +347,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "Papers: check the fleet’s papers for the line: its EU community licence for carrying goods between member states, its insurance, and its drivers’ papers.",
       "Corridors: publish the fleet’s line between the two zones.",
       "Borders: record a rule each way, with Vehicles from and Entering, the permits the fleet carries, and whether it may carry loads inside the country it enters. Between two EU countries, leave the crossings empty: there is no border post.",
-      "What may not go: between two EU countries nobody makes a list of contents, so the store says what a parcel does not hold. In the Store app it ticks that the parcel holds no alcohol, tobacco, medicines or weapons, and its system sends the same; without it, the parcel is refused. A parcel or load marked as medicines is refused whatever is said.",
+      "What may not go: between two EU countries nobody makes a list of contents, so the sender says what the goods do not hold: a tick that they hold no alcohol, tobacco, medicines or weapons. A store ticks it in the Store app, and its system sends the same; a business ticks it on a load in the Business app; a person in the Send app, and a shop at its counter, tick it when a load is to another EU country. Without it, nothing is sent. Goods marked as medicines are refused whatever is said.",
       "Prices: check the price a shop quotes for the two places."
     ],
     notes: [

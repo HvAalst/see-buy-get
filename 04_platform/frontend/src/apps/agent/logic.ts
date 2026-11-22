@@ -388,6 +388,10 @@ export interface AcceptForm {
   dims: DimsForm;
   fragile: boolean;
   natureCode: CargoNature;
+  /** 2026-11-22 — a load to a shop in another EU country (BG-2): the two countries, once the server asked the sender's word on
+   *  what it holds; and that word. */
+  goodsWord: { fromCountry: string; toCountry: string } | null;
+  noGoodsWithOwnRules: boolean;
   /** How the counter is picking the destination: on a map, or by typing an area. */
   destMode: 'map' | 'address';
   destPudoDid: string;
@@ -568,6 +572,8 @@ export const EMPTY_ACCEPT: AcceptForm = {
   dims: { l: '', w: '', h: '', kg: '' },
   fragile: false,
   natureCode: 'GEN',
+  goodsWord: null,
+  noGoodsWithOwnRules: false,
   destMode: 'map',
   destPudoDid: '',
   destZone: '',

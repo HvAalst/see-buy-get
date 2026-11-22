@@ -380,6 +380,7 @@ export const words: Record<string, string> = {
   "business.loads.need.description": "Кажете какво е.",
   "business.loads.need.fromSiteId": "Изберете откъде се взема.",
   "business.loads.need.toSiteId": "Изберете къде отива.",
+  "business.loads.need.noGoodsWithOwnRules": "Потвърдете, че не съдържа алкохол, тютюн, лекарства или оръжие.",
   "business.loads.need.weightKg": "Посочете теглото в килограми.",
   "business.loads.placeGone": "Едно от тези места не можа да бъде намерено повече. Изберете го отново.",
   "business.loads.posted": "{code} е на борсата.",

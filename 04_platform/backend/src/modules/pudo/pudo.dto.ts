@@ -3111,6 +3111,9 @@ export class RegisterFreightDto {
   /** CA6 — the country at each end, where the poster knows it; the rules of crossing are only asked of a known country. */
   @IsOptional() @IsString() pickupCountry?: string;
   @IsOptional() @IsString() destCountry?: string;
+  /** 2026-11-22 — to another EU country, where no customs list what is inside (BG-2): true says it holds no alcohol, tobacco,
+   *  medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
   @ValidateNested() @Type(() => GeoDto) pickupLocation!: GeoDto;
   @IsString() pickupLabel!: string;
   @IsString() destLabel!: string;
@@ -3248,6 +3251,10 @@ export class BookFreightDto {
    */
   @IsOptional() @IsObject() @ApiPropertyOptional({ type: LoadWork }) work?: LoadWork;
   @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string; // absent = ship now; present = planned
+  /** 2026-11-22 — to another EU country, where no customs list what is inside (BG-2): true says it holds no alcohol, tobacco,
+   *  medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
+
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
   /** FB2c — can the load be split into two smaller ones? The counter is the one place someone is standing in
    *  front of the thing, so it is the one place this can honestly be answered — and it is the fact that flips

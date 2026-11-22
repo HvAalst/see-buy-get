@@ -380,6 +380,7 @@ export const words: Record<string, string> = {
   "business.loads.need.description": "ምን እንደሆነ ይግለጹ።",
   "business.loads.need.fromSiteId": "የሚወሰድበትን ቦታ ይምረጡ።",
   "business.loads.need.toSiteId": "የሚሄድበትን ቦታ ይምረጡ።",
+  "business.loads.need.noGoodsWithOwnRules": "አልኮል፣ ትምባሆ፣ መድኃኒት ወይም የጦር መሣሪያ እንዳልያዘ ይግለጹ።",
   "business.loads.need.weightKg": "ክብደቱን በኪሎግራም ያስገቡ።",
   "business.loads.placeGone": "ከእነዚያ ቦታዎች አንዱ ከእንግዲህ ሊገኝ አልቻለም። እንደገና ይምረጡት።",
   "business.loads.posted": "{code} በሰሌዳው ላይ ነው።",

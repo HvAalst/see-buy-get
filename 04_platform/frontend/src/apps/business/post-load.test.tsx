@@ -21,6 +21,7 @@ import {
   postBack,
   postFields,
   postGaps,
+  gapStep,
   postNext,
   postSteps,
   sendLoad,
@@ -467,10 +468,26 @@ const CASES: Array<{ name: string; answers: Partial<PostForm>; business?: Busine
 
 describe('the same request as the one page, for the same answers', () => {
   it('starts from the same answers the page started from — and the temperature and the work, which it never asked, empty', () => {
-    const added = { tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '' };
+    // 2026-11-22 — and the word on what goes to another EU country, which it never asked (BG-2).
+    const added = { tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false };
     expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, ...added });
     expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), ...Object.keys(added)]);
     expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', ...added });
+  });
+
+  // 2026-11-22 — to another EU country (BG-2): no customs, so the business's word on what it holds, asked where the country is.
+  it('asks the word on what it holds only for a load to another EU country, and sends it only there', () => {
+    const today = todayIn(NOW);
+    const nl = { country: 'NL', from: { name: 'Amsterdam yard', location: { lat: 52.37, lng: 4.9 } }, to: { name: 'Sofia depot', location: { lat: 42.7, lng: 23.32 } }, receiving: null, contract: null };
+    const toSofia = form({ description: 'Tiles', weightKg: '800', destCountry: 'BG', consigneeName: 'Иван Петров' });
+    expect(postGaps(toSofia, { crossing: true, withinUnion: true, contract: false, today })).toContain('noGoodsWithOwnRules');
+    expect(gapStep('noGoodsWithOwnRules')).toBe('route');
+    expect(postGaps({ ...toSofia, noGoodsWithOwnRules: true }, { crossing: true, withinUnion: true, contract: false, today })).not.toContain('noGoodsWithOwnRules');
+    expect(postGaps(toSofia, { crossing: true, contract: false, today })).not.toContain('noGoodsWithOwnRules');
+    expect(loadBody({ ...toSofia, noGoodsWithOwnRules: true }, nl)).toMatchObject({ pickupCountry: 'NL', destCountry: 'BG', noGoodsWithOwnRules: true });
+    // Inside one country, or out of the EU, nothing is asked and nothing is sent.
+    expect(loadBody({ ...toSofia, destCountry: 'NL', noGoodsWithOwnRules: true }, nl)).not.toHaveProperty('noGoodsWithOwnRules');
+    expect(loadBody({ ...toSofia, destCountry: 'UG' }, { ...nl, country: 'KE' })).not.toHaveProperty('noGoodsWithOwnRules');
   });
 
   // 2026-11-13 — what it takes to move it (unusual loads): asked on the goods step, sent only where it was said.
