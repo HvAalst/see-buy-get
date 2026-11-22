@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { customsBorderBetween, unionBetween } from '../../foundation/countries/customs-union';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { BorderRuleService } from './border-rules.service';
@@ -100,7 +101,11 @@ export class LoadPassageService {
     const crossing = crossingCountries(f);
     let step: Pick<LoadPassage, 'post' | 'postKey' | 'from' | 'to' | 'hub'>;
     if (input.kind === 'at_border') {
-      if (!crossing) throw new GlosError('INVALID_STATE', 'This load stays in one country: it crosses no border');
+      if (!crossing) {
+        // 2026-11-22 — between EU countries there is no post to stop at (BG-2).
+        if (unionBetween(f.pickupCountry, f.destCountry)) throw new GlosError('INVALID_STATE', `This load goes from ${f.pickupCountry} to ${f.destCountry}, both in the EU: there is no border post to stop at`);
+        throw new GlosError('INVALID_STATE', 'This load stays in one country: it crosses no border');
+      }
       if (open) throw new GlosError('INVALID_STATE', `It is at ${open.post} already: say it has cleared before it is at another border`);
       if (!post) throw new GlosError('FIELD_REQUIRED', 'Say which border post it is at', { field: 'post' });
       // A post on record keeps the name it is recorded under, however the driver spelt it; any other, the driver's words.
@@ -299,9 +304,10 @@ export class LoadPassageService {
   }
 }
 
-/** The two countries a load crosses between, where they differ. */
+/** The two countries a load crosses between, where customs stand between them: not two EU countries (2026-11-22, BG-2), where
+ *  nobody waits at a post, and the load is expected as one in one country is. */
 export function crossingCountries(f: Pick<Freight, 'pickupCountry' | 'destCountry'>): { from: string; to: string } | undefined {
-  return f.pickupCountry && f.destCountry && f.pickupCountry !== f.destCountry ? { from: f.pickupCountry, to: f.destCountry } : undefined;
+  return f.pickupCountry && f.destCountry && customsBorderBetween(f.pickupCountry, f.destCountry) ? { from: f.pickupCountry, to: f.destCountry } : undefined;
 }
 
 /** The post a load is at now: the last it arrived at and has not cleared. */

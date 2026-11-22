@@ -1543,6 +1543,8 @@ export const words: Record<string, string> = {
   "business.papers.invoiceLine": "{number} · {total} · imetiwa sahihi na {name} {day}",
   "business.papers.invoiceWhoReads": "Dereva anayebeba bidhaa huisoma tangu uchukuaji, ili kuionyesha mpakani. Hakuna mwingine upande wa msafirishaji anayeisoma — hata ofisi yao.",
   "business.papers.invoiceStaysWithYou": "Inabaki kwako: kwa mzigo wa ndani ya nchi moja hakuna msafirishaji anayeisoma.",
+  "business.papers.invoiceInsideEu": "Inahitajika bidhaa zinapopita forodha. Mzigo huu unaenda kati ya nchi za EU, ambazo hazina forodha kati yao.",
+  "business.papers.invoiceStaysWithYouEu": "Inabaki kwako: kati ya nchi za EU hakuna msafirishaji anayeionyesha mpakani.",
   "business.papers.printCopies": "Chapisha nakala 3",
   "business.papers.write": "Andika ankara ya biashara",
   "business.papers.writeAgain": "Andika mpya mahali pake",

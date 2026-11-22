@@ -6,6 +6,7 @@ import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
 import { PapersCard } from './PapersCard';
+import { UnionCard } from './UnionCard';
 import { papersGaps } from '../papers';
 import { chargeOf, dimsComplete, feeLines, handoffLine, mintDangerous, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
@@ -648,6 +649,8 @@ function PriceStep({ state, actions }: MintScreenProps) {
 
           {/* Round 13 — crossing a border, the shipment goes with its commercial invoice: asked for here, printed with the label. */}
           {q.crossesBorder ? <PapersCard quote={q} papers={f.papers} onChange={(papers) => actions.setForm({ papers })} /> : null}
+          {/* 2026-11-22 — to another EU country: no customs, and the store's word on what it holds (BG-2). */}
+          {q.withinUnion ? <UnionCard passage={q.withinUnion} said={f.noGoodsWithOwnRules} onChange={(noGoodsWithOwnRules) => actions.setForm({ noGoodsWithOwnRules })} /> : null}
 
           <Card title={t('vendor.mint.whatHappensTitle')} tone="soft">
             <Checklist
@@ -660,7 +663,7 @@ function PriceStep({ state, actions }: MintScreenProps) {
           </Card>
 
           <div class="scr__cta">
-            <Button onClick={() => void actions.submitMint()} busy={state.busy === 'mint'} disabled={Boolean(q.crossesBorder) && papersGaps(f.papers).length > 0}>
+            <Button onClick={() => void actions.submitMint()} busy={state.busy === 'mint'} disabled={(Boolean(q.crossesBorder) && papersGaps(f.papers).length > 0) || (Boolean(q.withinUnion) && !f.noGoodsWithOwnRules)}>
               {t('vendor.mint.mintCta')}
             </Button>
           </div>

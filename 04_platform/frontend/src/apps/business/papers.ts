@@ -62,6 +62,8 @@ export interface CommercialInvoice {
 export interface CommercialInvoiceView {
   freightId: string;
   crossesBorder: boolean;
+  /** 2026-11-22 — between two EU countries, where no customs read it (BG-2). */
+  withinUnion?: 'EU';
   current?: CommercialInvoice;
   earlier: Array<{ invoiceId: string; number: string; issuedOn: string; signedBy: string; signedAt: string; supersededAt?: string }>;
   /** The shipper said its own paper invoice travels with the goods. */

@@ -1543,6 +1543,8 @@ export const words: Record<string, string> = {
   "business.papers.invoiceLine": "{number} · {total} · በ{name} {day} የተፈረመ",
   "business.papers.invoiceWhoReads": "ዕቃዎቹን የሚያጓጉዘው አሽከርካሪ ከመረከቡ ጀምሮ በድንበሩ ላይ ለማሳየት ያነበዋል። ከአጓጓዡ ወገን ሌላ ማንም አያነበውም — ቢሯቸውም አያነበውም።",
   "business.papers.invoiceStaysWithYou": "ከእርስዎ ጋር ይቆያል፦ በአንድ አገር ውስጥ ባለ ጭነት ላይ ማንም አጓጓዥ አያነበውም።",
+  "business.papers.invoiceInsideEu": "ዕቃዎች በጉምሩክ በሚያልፉበት ቦታ ያስፈልጋል። ይህ ጭነት በአውሮፓ ኅብረት አገሮች መካከል ይሄዳል፤ በመካከላቸው ጉምሩክ የለም።",
+  "business.papers.invoiceStaysWithYouEu": "ከእርስዎ ጋር ይቆያል፦ በአውሮፓ ኅብረት አገሮች መካከል ማንም አጓጓዥ በድንበር ላይ አያሳየውም።",
   "business.papers.printCopies": "3 ቅጂዎች ያትሙ",
   "business.papers.write": "የንግድ ደረሰኙን ይጻፉ",
   "business.papers.writeAgain": "በእሱ ምትክ አዲስ ይጻፉ",

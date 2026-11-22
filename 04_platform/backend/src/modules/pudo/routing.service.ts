@@ -16,7 +16,8 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
-import { BorderCrossing, crossingsOn } from './country';
+import { customsBorderBetween } from '../../foundation/countries/customs-union';
+import { BorderCrossing, crossingsOn, UnionPassage, unionPassageOn } from './country';
 import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
 import { assertSiteTakes } from './site-tools';
 import { PriceCardService } from './price-card.service';
@@ -162,9 +163,13 @@ export interface ShipmentQuote {
   /** The rates this quote was converted at. ABSENT on a single-currency route — nothing was converted,
    *  so there is nothing to expire. Present means the price stands on a rate and has a shelf life. */
   fx?: QuoteFx;
-  /** Whether the goods leave one country for another, and on which legs. Empty on a domestic route. */
+  /** Whether the goods leave one CUSTOMS territory for another, and on which legs. Empty on a domestic route, and on one
+   *  between EU countries (2026-11-22, BG-2): that one is `withinUnion`. */
   crossesBorder: boolean;
   crossings: BorderCrossing[];
+  /** 2026-11-22 — the goods go to another country inside the EU, crossing no customs border: no declaration, no commercial
+   *  invoice, no wait at a post — and its sender says it holds no alcohol, tobacco, medicines or weapons (BG-2). */
+  withinUnion?: UnionPassage;
   totalKm: number;
   nodeFees: number;
   size: ParcelSize;
@@ -625,6 +630,7 @@ export class RoutingService {
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
+      ...(unionPassageOn(plan.hops) ? { withinUnion: unionPassageOn(plan.hops) } : {}),
       totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', ...(measured != null && chargedByOf(measured, carriers.kg) ? { chargedBy: chargedByOf(measured, carriers.kg) } : {}), perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
       ...(zoned ? { zone: { ...zoned.price, plannedCost: plannedCostOf() } } : {}),
@@ -762,7 +768,8 @@ export class RoutingService {
       const transitH = byRoute ? BORDER_ROUTE_LEG_H : distanceKm / VEHICLE_SPEED_KMH[vehicle];
       // A leg that leaves one country for another stops at a post and waits. It is the one leg on a
       // continental route that genuinely does not move, and reading it as if it did was the lie.
-      const crossesBorder = from.country !== to.country;
+      // 2026-11-22 — a CUSTOMS border: from one EU country to another nobody stops it (BG-2).
+      const crossesBorder = customsBorderBetween(from.country, to.country);
       const departAt = cursor;
       const arriveAt = departAt + (transitH + HANDOVER_BUFFER_H + (crossesBorder ? BORDER_DWELL_H : 0)) * 3_600_000;
       // A hub holds a parcel as long as it has been measured to (its last parcels' median), where measured; else the half hour

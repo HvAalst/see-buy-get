@@ -13,7 +13,7 @@ import { VendorService } from './vendor.service';
 import { MediaService } from './media.service';
 import { requireCountryCode } from './country';
 import { declareFor } from './customs';
-import { BorderCrossing } from './country';
+import { BorderCrossing, requireNoGoodsWithOwnRules, UnionPassage } from './country';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { classifySize, measuredFactor, SIZE_WEIGHT_KG } from './pudo.config';
 import { parcelCurrency } from './parcel.service';
@@ -107,7 +107,8 @@ export interface PublicQuote {
    *  the seller commits to one route. Both in `currency`, which is the selling company's money. */
   price: { currency: string; amount: number; minimum: number };
   eta: { readyAt: string; hours: number; arrivesWhileOpen: boolean };
-  route: { hops: string[]; km: number; crossesBorder: boolean; crossings: BorderCrossing[] };
+  /** `withinUnion` (2026-11-22): it goes to another EU country, crossing no customs border (BG-2). */
+  route: { hops: string[]; km: number; crossesBorder: boolean; crossings: BorderCrossing[]; withinUnion?: UnionPassage };
   /** What this shipment will additionally need before it can be sent. Empty for an ordinary domestic one. */
   requires: string[];
   /**
@@ -147,6 +148,8 @@ export interface MintInput {
   routeMode?: 'flexible' | 'locked';
   /** Round 13 — the commercial invoice, for a shipment that crosses a border. */
   invoice?: ParcelInvoiceDto;
+  /** 2026-11-22 — to another EU country: true says it holds no alcohol, tobacco, medicines or weapons (BG-2). */
+  noGoodsWithOwnRules?: boolean;
 }
 
 /**
@@ -315,10 +318,11 @@ export class ShippingApiService {
       // charged 400 has not. `flexible` is also what a store pays by default, so it is the likelier truth.
       price: { currency: quote.currency, amount: quote.flexible.total, minimum: quote.locked.total },
       eta: { readyAt: plan.pickupReadyAt, hours: plan.totalHours, arrivesWhileOpen: plan.arrivesWhileOpen },
-      route: { hops: plan.hops.map((h) => h.label), km: quote.totalKm, crossesBorder: quote.crossesBorder, crossings: quote.crossings },
+      route: { hops: plan.hops.map((h) => h.label), km: quote.totalKm, crossesBorder: quote.crossesBorder, crossings: quote.crossings, ...(quote.withinUnion ? { withinUnion: quote.withinUnion } : {}) },
       // Said out loud rather than left for the mint to refuse: a shipment that crosses a border cannot be
       // sent without a contents list and a declared value, and an integrator should know that at quote time.
-      requires: quote.crossesBorder ? ['customs_declaration'] : [],
+      // 2026-11-22 — to another EU country: no declaration, and the store's word on what it holds (BG-2).
+      requires: quote.crossesBorder ? ['customs_declaration'] : quote.withinUnion ? ['no_goods_with_own_rules'] : [],
       // When the price is held, its own expiry is the one that matters — and it is already the earlier of
       // the two, because a converted price cannot outlive the rate behind it. Unheld, the rate's window is
       // still worth saying: it is when the number stops being worth re-using.
@@ -401,6 +405,8 @@ export class ShippingApiService {
       throw new GlosError('CUSTOMS_INCOMPLETE', 'This shipment crosses a border, so it needs its commercial invoice: each item with its value, weight and country of origin, and the buyer it goes to', { missing: ['invoice'], crossings: quoted.route.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
     }
     const papers = input.invoice ? this.papersChecked(input.invoice, vendor, quoted, dest, input.weightKg) : undefined;
+    // 2026-11-22 — to another EU country: the store's word, in both modes, before anything exists (BG-2).
+    requireNoGoodsWithOwnRules(quoted.route.withinUnion, input.noGoodsWithOwnRules);
     if (quoted.route.crossesBorder) {
       declareFor({
         crossings: quoted.route.crossings,
@@ -455,6 +461,7 @@ export class ShippingApiService {
       ...(papers ? { declaredValue: papers.totalValue, customsCurrency: papers.currency } : {}),
       shippingPolicy: vendor.shippingPolicy,
       routeMode: input.routeMode,
+      noGoodsWithOwnRules: input.noGoodsWithOwnRules,
       // THE HELD PRICE, when there is one. This line is the promise: the parcel is billed at the figure
       // the buyer was shown, not at the one the world has moved to since.
       quote: held ? held.quote : this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size, input.dimensionsCm ? measuredFactor({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[quoted.parcel.size] }) : undefined, { kg: input.weightKg ?? SIZE_WEIGHT_KG[quoted.parcel.size], ...(input.dimensionsCm ? { dims: input.dimensionsCm } : {}), vendorId: vendor.vendorId }),

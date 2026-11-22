@@ -7,7 +7,7 @@ import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import type { OffPlanReason, OffPlanStep } from './route-plan.types';
 import type { NowWithView } from './now-with.types';
 import { FxRate } from '../../foundation/money/fx.service';
-import { BorderCrossing } from './country';
+import { BorderCrossing, UnionPassage } from './country';
 import { UnitHold } from './tamper.types';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
@@ -1550,6 +1550,9 @@ export class Parcel {
   /** The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —
    *  and never absent on one that crosses, because the mint refuses to sell that shipment without it. */
   customs?: CustomsDeclaration;
+  /** 2026-11-22 — it goes to another EU country, with no customs (BG-2): which two, and when its sender said it holds no
+   *  alcohol, tobacco, medicines or weapons. Absent on a parcel staying in one country, and on one that is declared. */
+  withinUnion?: UnionPassage & { saidNoneAt: string };
   /** Round 13 — the shop that took it in saw its commercial invoice in the pouch: when, and which shop. */
   papersSeen?: { at: string; by: string };
   /** The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a

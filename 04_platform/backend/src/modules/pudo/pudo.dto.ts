@@ -1267,6 +1267,9 @@ export class MintShipmentDto {
   @IsOptional() @IsIn(['flexible', 'locked']) routeMode?: 'flexible' | 'locked';
   /** Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item. */
   @IsOptional() @ValidateNested() @Type(() => ParcelInvoiceDto) invoice?: ParcelInvoiceDto;
+  /** 2026-11-22 — to another EU country, which has no customs and so no list of contents (BG-2): true says it holds no alcohol,
+   *  tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
 }
 
 /** Push one currency's standing against the base — from a feed, or by hand when the feed is down. */
@@ -1453,6 +1456,9 @@ export class InboundOrderDto {
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
   /** Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item. */
   @IsOptional() @ValidateNested() @Type(() => ParcelInvoiceDto) invoice?: ParcelInvoiceDto;
+  /** 2026-11-22 — to another EU country, which has no customs and so no list of contents (BG-2): true says it holds no alcohol,
+   *  tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
   /**
    * 2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: dangerous goods
    * (chemical, biological, flammable) by their UN number, proper shipping name and class. A heavy dangerous order without

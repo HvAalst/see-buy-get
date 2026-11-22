@@ -1227,6 +1227,8 @@ export function useVendorApp() {
         ...(f.deliveryWindow.trim() ? { deliveryWindow: f.deliveryWindow.trim() } : {}),
         // Round 13 — crossing a border, its commercial invoice goes with it.
         ...(stateRef.current.quote?.crossesBorder ? { invoice: papersBody(f.papers) } : {}),
+        // 2026-11-22 — to another EU country: the store's word on what it holds (BG-2).
+        ...(stateRef.current.quote?.withinUnion ? { noGoodsWithOwnRules: f.noGoodsWithOwnRules } : {}),
       });
       if (r.error) return fail(r.error);
       // S32: a heavy/oversized order (cargo class P4+) is DIVERTED into the dedicated-freight lane — the

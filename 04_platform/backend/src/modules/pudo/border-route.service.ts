@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { AIRPORT_COUNTRY } from '../../foundation/carriage-law/air';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { unionBetween } from '../../foundation/countries/customs-union';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -134,6 +135,7 @@ export class BorderRouteService {
     const r = this.routes.get(key(from, to));
     if (r?.state === 'on') throw new GlosError('INVALID_STATE', `${from} to ${to} is already on`);
     if (r?.state === 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is already waiting for a second person`);
+    this.refuseInsideUnion(from, to);
     this.refuseMissing(from, to, now);
     const route: Route = { ...(r ? setUp(r) : { from, to, state: 'off' as const }), state: 'waiting', proposedBy: by, proposedAt: new Date(now).toISOString() };
     this.routes.set(key(from, to), route);
@@ -147,6 +149,7 @@ export class BorderRouteService {
     if (!r || r.state !== 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is not waiting for approval`);
     if (r.proposedBy && sameSigner(r.proposedBy, by)) throw new GlosError('FORBIDDEN', 'A route is switched on by two people: somebody else approves the one you proposed');
     // Asked again: something may have lapsed or closed since it was proposed.
+    this.refuseInsideUnion(from, to);
     this.refuseMissing(from, to, now);
     const route: Route = { ...r, state: 'on', approvedBy: by.name, approvedAt: new Date(now).toISOString() };
     this.routes.set(key(from, to), route);
@@ -241,6 +244,7 @@ export class BorderRouteService {
     const to = this.country(toCode);
     const name = (c: string) => catalogueEntry(c)?.name ?? c;
     const r = this.routes.get(key(from, to));
+    this.refuseInsideUnion(from, to);
     if (!r || r.state !== 'on') throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} are not sent from ${name(from)} yet: no route between them is on`, { from, to });
     const w = r.arrival ? this.warehouseAt(to, r.arrival.airport, now) : undefined;
     if (!r.departure || !r.carrier || !r.prices || !r.arrival || !w || !this.openAirports(to, now).includes(r.arrival.airport)) {
@@ -559,6 +563,18 @@ export class BorderRouteService {
       carriers: this.carriersIn(r.from),
       ...(this.entities.forJurisdiction(r.from)?.currency ? { currency: this.entities.forJurisdiction(r.from)!.currency } : {}),
     };
+  }
+
+  /**
+   * 2026-11-22 — NO CUSTOMS BETWEEN EU COUNTRIES (BG-2): a route of this kind lands in a customs warehouse and waits for customs'
+   * decision, which goods going from one EU country to another never meet. Refused when it is put up or approved, and when a
+   * parcel is booked on one that was on before; switched off as any other. A route by road between EU countries is the plan's
+   * part 3.
+   */
+  private refuseInsideUnion(from: string, to: string): void {
+    if (!unionBetween(from, to)) return;
+    const name = (c: string) => catalogueEntry(c)?.name ?? c;
+    throw new GlosError('INVALID_STATE', `${name(from)} and ${name(to)} are both in the EU, where goods pass with no customs: a route through a customs warehouse is not for them`, { from, to });
   }
 
   private pair(fromCode: string, toCode: string): [string, string] {

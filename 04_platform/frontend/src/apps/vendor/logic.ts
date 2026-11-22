@@ -142,6 +142,8 @@ export interface MintForm {
   deliveryWindow: string;
   /** Round 13 — the commercial invoice a shipment crossing a border goes with. Sent only when the quote crosses one. */
   papers: PapersForm;
+  /** 2026-11-22 — to another EU country: the store's word that it holds no alcohol, tobacco, medicines or weapons (BG-2). */
+  noGoodsWithOwnRules: boolean;
   /**
    * 2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: whether its goods
    * are dangerous, and if so by their UN number, name and class. Asked only of such an order; empty means not dangerous.
@@ -170,6 +172,7 @@ export const EMPTY_MINT: MintForm = {
   instructions: '',
   deliveryWindow: '',
   papers: EMPTY_PAPERS,
+  noGoodsWithOwnRules: false,
   dgKind: '',
   dg: EMPTY_DANGEROUS,
 };

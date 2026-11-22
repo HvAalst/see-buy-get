@@ -50,6 +50,11 @@ describe('a load at a border or a hub, said by its driver (round 14)', () => {
     expect(() => svc.record(f, 'did:glos:someone-else', { kind: 'at_border', post: 'Malaba' }, t0 + H)).toThrow(/claimed by another driver/);
     expect(() => svc.record(load({ status: 'claimed' }), driver, { kind: 'at_hub', hub: 'Naivasha ICD' }, t0 + H)).toThrow(/while it is on the road/);
     expect(() => svc.record(load({ destCountry: 'KE' }), driver, { kind: 'at_border', post: 'Malaba' }, t0 + H)).toThrow(/stays in one country/);
+    // 2026-11-22 — between two EU countries there is no post to stop at (BG-2): expected as a load in one country is.
+    const eu = load({ pickupCountry: 'NL', destCountry: 'BG' });
+    expect(() => svc.record(eu, driver, { kind: 'at_border', post: 'Kulata' }, t0 + H)).toThrow(/from NL to BG, both in the EU: there is no border post to stop at/);
+    expect(svc.crossingOf(eu)).toBeUndefined();
+    expect(svc.forDriver(eu)).toMatchObject({ crosses: false, posts: [] });
     expect(() => svc.record(f, driver, { kind: 'cleared_border' }, t0 + H)).toThrow(/not at a border/);
     expect(() => svc.record(f, driver, { kind: 'at_border', post: '  ' }, t0 + H)).toThrow(/which border post/);
     expect(() => svc.record(f, driver, { kind: 'at_hub' }, t0 + H)).toThrow(/Name the hub/);

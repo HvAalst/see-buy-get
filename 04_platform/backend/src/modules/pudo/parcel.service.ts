@@ -35,6 +35,7 @@ import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
 import { CargoService } from './cargo.service';
 import { CargoNature } from './cargo.types';
+import { requireNoGoodsWithOwnRules } from './country';
 import { declareFor } from './customs';
 import type { ShipmentQuote } from './routing.service';
 import type { BookedRoute } from './border-routes.types';
@@ -2484,7 +2485,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; receiverName?: string; emailCode?: boolean; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf'] }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; receiverName?: string; emailCode?: boolean; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf']; noGoodsWithOwnRules?: boolean }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -2528,6 +2529,11 @@ export class ParcelService implements OnApplicationBootstrap {
     if (origin && !input.handInMdpId && !input.returnOf) this.assertRoomToBook(origin.did);
     const now = new Date().toISOString();
     const quote = input.quote;
+    // 2026-11-22 — TO ANOTHER EU COUNTRY (BG-2): no declaration, so the store's word that it holds no alcohol, tobacco, medicines
+    // or weapons, before anything is written; a pharmaceutical parcel is refused whatever is said. A box going back is the same
+    // goods its store sent, under the same word.
+    const withinUnion = input.returnOf ? undefined : quote.withinUnion;
+    requireNoGoodsWithOwnRules(withinUnion, input.noGoodsWithOwnRules, 'noGoodsWithOwnRules', input.natureCode);
     // THE CROSSING IS A STEP, and this is its precondition — checked before an id, a DID or a ledger anchor
     // is spent, because a shipment that cannot legally travel should leave no trace of having been started.
     // A store selling across a border already types both of these at checkout; one that does not cannot
@@ -2650,6 +2656,7 @@ export class ParcelService implements OnApplicationBootstrap {
       currency: quote.currency,
       fx: quote.fx,
       customs,
+      ...(withinUnion ? { withinUnion: { ...withinUnion, saidNoneAt: now } } : {}),
       sellerEntityId: quote.sellerEntityId,
       shipmentCost,
       ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
@@ -2720,6 +2727,12 @@ export class ParcelService implements OnApplicationBootstrap {
         'Sending to another country needs a declared contents list and value, which a counter send cannot take yet — a store can ship there today',
         { crossings: input.quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) },
       );
+    }
+    // 2026-11-22 — to another EU country there is no customs (BG-2), and still no way there for a person's parcel: it is booked
+    // on a route by road between the two countries, which is the plan's part 3. Refused by name until then.
+    if (input.quote.withinUnion) {
+      const w = input.quote.withinUnion;
+      throw new GlosError('INVALID_STATE', `Parcels from ${w.fromCountry} to ${w.toCountry} are not booked here yet — a store can ship there today`, { fromCountry: w.fromCountry, toCountry: w.toCountry });
     }
     const size = classifySize({ ...input.dimensionsCm, kg: input.weightKg });
     const natureCode: CargoNature = input.natureCode ?? 'GEN';

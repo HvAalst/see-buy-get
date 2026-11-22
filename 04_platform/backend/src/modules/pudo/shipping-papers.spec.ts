@@ -1,6 +1,6 @@
 import { gs1CheckDigit, gs1_128SvgGroup, gs1_128Width, gsinOf, isGsin, isSscc, ssccOf } from '../../foundation/gs1/gs1';
 import { Entity } from '../../foundation/entity/entity.types';
-import { CommercialInvoiceService, InvoiceInput, cleanHsCode, crossesBorder, hsDisplay } from './commercial-invoice.service';
+import { CommercialInvoiceService, InvoiceInput, carrierReadsInvoice, cleanHsCode, crossesBorder, crossesCustomsBorder, hsDisplay } from './commercial-invoice.service';
 import { Freight } from './dispatch.types';
 import { packageLabelsHtml, packageLabelsZpl } from './package-labels';
 import { ShipperCodesService, vendorCoder, vendorOfCoder, whereGs1IsSet } from './shipper-codes.service';
@@ -238,6 +238,19 @@ describe('the commercial invoice', () => {
     expect(crossesBorder({ pickupCountry: 'KE', destCountry: 'UG' })).toBe(true);
     expect(crossesBorder({ pickupCountry: 'KE', destCountry: 'KE' })).toBe(false);
     expect(crossesBorder({ pickupCountry: 'KE' })).toBe(false);
+  });
+
+  it('2026-11-22 — is not asked for a load between two EU countries, where no customs read it; the road still leaves the country (BG-2)', () => {
+    const invoices = new CommercialInvoiceService();
+    const eu = load({ pickupCountry: 'NL', destCountry: 'BG' });
+    expect(crossesCustomsBorder(eu)).toBe(false);
+    expect(crossesCustomsBorder(load())).toBe(true);
+    // A company's seal rule and the seven-point inspection read the road, which still crosses.
+    expect(crossesBorder(eu)).toBe(true);
+    expect(invoices.pickupRefusal(eu, true)).toBeUndefined();
+    expect(invoices.view(eu, true)).toMatchObject({ crossesBorder: false, withinUnion: 'EU', collectable: true });
+    expect(invoices.view(load(), true).withinUnion).toBeUndefined();
+    expect(carrierReadsInvoice({ ...eu, claimedBy: 'did:d', pickedUpAt: '2026-11-22T08:00:00Z' }, 'did:d')).toBe(false);
   });
 });
 

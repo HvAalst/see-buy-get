@@ -409,6 +409,8 @@ export interface QuoteView {
   /** Round 13 — the route crosses a border: the shipment goes with its commercial invoice. */
   crossesBorder?: boolean;
   crossings?: Array<{ fromCountry: string; toCountry: string }>;
+  /** 2026-11-22 — to another EU country, with no customs: no invoice, and the store's word on what it holds (BG-2). */
+  withinUnion?: { union: 'EU'; fromCountry: string; toCountry: string };
 }
 
 /** quote/options → one price per drop-off candidate (or the reason there is none). */

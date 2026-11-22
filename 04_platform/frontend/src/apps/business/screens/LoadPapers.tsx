@@ -105,12 +105,12 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
               <>
                 <span class="crow__sub">{t('business.papers.invoiceLine', { number: current.number, total: money(current.currency, current.totalValue), name: current.signed.name, day: current.signed.at.slice(0, 10) })}</span>
                 {/* Round 38 — who reads it: the shipper is told, so the values it writes are written knowing who sees them. */}
-                <span class="crow__sub">{t(invoice?.crossesBorder ? 'business.papers.invoiceWhoReads' : 'business.papers.invoiceStaysWithYou')}</span>
+                <span class="crow__sub">{t(invoice?.crossesBorder ? 'business.papers.invoiceWhoReads' : invoice?.withinUnion ? 'business.papers.invoiceStaysWithYouEu' : 'business.papers.invoiceStaysWithYou')}</span>
               </>
             ) : invoice?.ownPaper ? (
               <span class="crow__sub">{t('business.papers.ownPaperSaid', { name: invoice.ownPaper.by, day: invoice.ownPaper.at.slice(0, 10) })}</span>
             ) : invoice ? (
-              <span class={invoice.collectable ? 'crow__sub' : 'crow__sub biz-papers__held'}>{t(!invoice.crossesBorder ? 'business.papers.invoiceDomestic' : invoice.collectable ? 'business.papers.invoiceNeededOpen' : 'business.papers.invoiceNeeded')}</span>
+              <span class={invoice.collectable ? 'crow__sub' : 'crow__sub biz-papers__held'}>{t(!invoice.crossesBorder ? (invoice.withinUnion ? 'business.papers.invoiceInsideEu' : 'business.papers.invoiceDomestic') : invoice.collectable ? 'business.papers.invoiceNeededOpen' : 'business.papers.invoiceNeeded')}</span>
             ) : null}
             {invoice?.earlier.map((e) => (
               <span class="crow__sub" key={e.invoiceId}>

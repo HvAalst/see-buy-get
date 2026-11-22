@@ -1612,6 +1612,8 @@ export const enBusiness = {
   'business.papers.invoiceLine': '{number} · {total} · signed by {name} on {day}',
   'business.papers.invoiceWhoReads': 'The driver carrying the goods reads it from pickup on, to show at the border. Nobody else on the carrier’s side reads it — not their office.',
   'business.papers.invoiceStaysWithYou': 'It stays with you: on a load in one country no carrier reads it.',
+  'business.papers.invoiceInsideEu': 'Needed where goods pass customs. This load goes between EU countries, which have none between them.',
+  'business.papers.invoiceStaysWithYouEu': 'It stays with you: between EU countries no carrier shows it at a border.',
   'business.papers.printCopies': 'Print 3 copies',
   'business.manifest.title': 'Border manifest — Moyale',
   'business.manifest.why': 'One document for customs, the checkpoints and tax officers at the Moyale post, in English and Amharic. It is the carrier’s transport document: your declarations are lodged in each country’s own system, and their numbers go here.',

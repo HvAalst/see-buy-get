@@ -29,7 +29,7 @@ import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
-import { countryOfSite, crossingsOn, requireCountryCode } from './country';
+import { countryOfSite, crossingsOn, requireCountryCode, unionPassageOn } from './country';
 import { BORDER_DWELL_H, NETWORK_JURISDICTION } from './pudo.config';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
@@ -811,6 +811,91 @@ describe('crossing a border', () => {
       expect(crossingsOn([{ label: 'a', country: 'KE' }, { label: 'b', country: 'KE' }])).toEqual([]);
       expect(crossingsOn([{ label: 'a', country: 'KE' }])).toEqual([]);
       expect(crossingsOn([{ label: 'a', country: 'KE' }, { label: 'b', country: 'ET' }, { label: 'c', country: 'KE' }])).toHaveLength(2);
+    });
+  });
+
+  describe('between EU countries, no customs (the owner’s BG-2, 2026-11-22)', () => {
+    const AMSTERDAM = { lat: 52.37, lng: 4.9 };
+    const SOFIA = { lat: 42.7, lng: 23.32 };
+    const euShops = () => {
+      presence.set({ jurisdiction: 'NL', level: 'matched' });
+      presence.set({ jurisdiction: 'BG', level: 'matched' });
+      const to = shop('Магазин Витоша', 'Sofia', SOFIA, 'BG', 2);
+      corridors.addCorridor({ name: 'Amsterdam–Sofia', originZone: 'Amsterdam', destZone: 'Sofia' });
+      return to;
+    };
+    /** A store whose goods leave from Amsterdam: its own company sells, so the quote stands on the mechanics alone. */
+    const amsterdamStore = () => {
+      const v = vendors.register({ name: 'Grachten Goods', country: 'KE' });
+      vendors.setCollectionPoint(v.vendorId, { label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM });
+      return vendors.get(v.vendorId);
+    };
+    const quoteFrom = (store: ReturnType<typeof amsterdamStore>, to: { did: string }) =>
+      routing.quoteShipmentFrom({ type: 'dock', id: store.did, label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM }, to.did, 'M', vendors.entityIdOf(store));
+
+    it('is no crossing, read off the stops: only a customs border is one', () => {
+      expect(crossingsOn([{ label: 'a', country: 'NL' }, { label: 'b', country: 'BG' }])).toEqual([]);
+      expect(crossingsOn([{ label: 'a', country: 'NL' }, { label: 'b', country: 'KE' }])).toHaveLength(1);
+      expect(crossingsOn([{ label: 'a', country: 'KE' }, { label: 'b', country: 'UG' }])).toHaveLength(1);
+      expect(unionPassageOn([{ country: 'NL' }, { country: 'NL' }, { country: 'BG' }])).toEqual({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
+      // Declared somewhere on the way: customs decide on it, and the declaration lists what is inside.
+      expect(unionPassageOn([{ country: 'NL' }, { country: 'BG' }, { country: 'TR' }])).toBeUndefined();
+      expect(unionPassageOn([{ country: 'NL' }, { country: 'NL' }])).toBeUndefined();
+      expect(unionPassageOn([{ country: 'KE' }, { country: 'UG' }])).toBeUndefined();
+    });
+
+    it('a journey from Amsterdam to Sofia waits at no border post — one from Nairobi to Addis still does', () => {
+      const to = euShops();
+      const store = amsterdamStore();
+      const plan = routing.planJourney({ from: { type: 'dock', id: store.did, label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM }, destAgentDid: to.did });
+      expect(plan.hops.map((h) => h.country)).toEqual(['NL', 'BG']);
+      expect(plan.crossesBorder).toBe(false);
+      expect(plan.crossings).toEqual([]);
+      expect(plan.legs[0]).toMatchObject({ fromCountry: 'NL', toCountry: 'BG', crossesBorder: false, borderDwellH: 0 });
+
+      const ke = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const et = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      expect(routing.planJourney({ originAgentDid: ke.did, destAgentDid: et.did }).legs[0].borderDwellH).toBe(BORDER_DWELL_H);
+    });
+
+    it('a store’s parcel to Bulgaria is sold with no declaration — and says where it goes', () => {
+      const to = euShops();
+      const quote = quoteFrom(amsterdamStore(), to);
+      expect(quote.crossesBorder).toBe(false);
+      expect(quote.crossings).toEqual([]);
+      expect(quote.withinUnion).toEqual({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
+    });
+
+    it('is not written without the store’s word that it holds no alcohol, tobacco, medicines or weapons; with it, it is, and keeps the word', () => {
+      const to = euShops();
+      const store = amsterdamStore();
+      const quote = quoteFrom(store, to);
+      const mint = (extra: object) =>
+        parcels.createInbound({ vendorId: store.vendorId, originZone: 'Amsterdam', destAgentDid: to.did, buyerMobile: '+359888123456', contentPhotoRef: photoOf(store.vendorId), size: 'M', shippingPolicy: store.shippingPolicy, quote, ...extra });
+      const refused = (extra: object) => {
+        try {
+          mint(extra);
+        } catch (e) {
+          return e as { code: string; params?: Record<string, unknown>; message: string };
+        }
+        throw new Error('it was written');
+      };
+      const unsaid = refused({});
+      expect(unsaid.code).toBe('GOODS_WITH_OWN_RULES');
+      expect(unsaid.message).toMatch(/from NL to BG: say that it holds no alcohol, tobacco, medicines or weapons/);
+      expect(unsaid.params).toMatchObject({ field: 'noGoodsWithOwnRules', goods: ['alcohol', 'tobacco', 'medicines', 'weapons'] });
+      expect(refused({ noGoodsWithOwnRules: false }).code).toBe('GOODS_WITH_OWN_RULES');
+      // Medicines by its own kind of goods: refused whatever is said.
+      const pharma = refused({ noGoodsWithOwnRules: true, natureCode: 'HUM' });
+      expect(pharma).toMatchObject({ code: 'GOODS_WITH_OWN_RULES', params: expect.objectContaining({ field: 'natureCode', goods: ['medicines'] }) });
+      expect(parcels.list().filter((x) => x.vendorId === store.vendorId)).toHaveLength(0);
+
+      // Said: written, with no list of contents and no value asked — nothing customs would read.
+      const { parcel } = mint({ noGoodsWithOwnRules: true });
+      expect(parcel.customs).toBeUndefined();
+      expect(parcel.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
+      expect(Date.parse(parcel.withinUnion!.saidNoneAt)).not.toBeNaN();
     });
   });
 

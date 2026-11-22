@@ -115,8 +115,11 @@ export class OwnInvoicePaper {
 /** A load's commercial invoice, as its readers see it. */
 export class CommercialInvoiceView {
   freightId: string;
-  /** The load crosses a border (its two countries are known and differ): customs will ask for the invoice. */
+  /** The load crosses a CUSTOMS border (its two countries are known, differ, and are not both in the EU): customs will ask for
+   *  the invoice. */
   crossesBorder: boolean;
+  /** 2026-11-22 — it goes between two EU countries, where no customs asks for it (BG-2): the invoice stays with the shipper. */
+  withinUnion?: 'EU';
   current?: CommercialInvoice;
   earlier: InvoiceEarlier[];
   /** The shipper said its own paper invoice travels with the goods. */

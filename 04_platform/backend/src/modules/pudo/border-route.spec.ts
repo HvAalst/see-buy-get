@@ -71,6 +71,16 @@ describe('a route across a border', () => {
     expect(setup({ testing: ['KE'] }).missing('NL', 'KE', NOW)).toContain('open-to');
   });
 
+  it('2026-11-22 — is not for two EU countries, where goods pass with no customs: refused when proposed, approved or booked (BG-2)', () => {
+    const svc = setup({ open: ['NL', 'BE', 'KE'], companies: ['NL', 'BE', 'KE'] });
+    expect(() => svc.propose('NL', 'BE', AMINA, NOW)).toThrow(/Netherlands and Belgium are both in the EU, where goods pass with no customs: a route through a customs warehouse is not for them/);
+    expect(() => svc.bookable('BE', 'NL', NOW)).toThrow(/both in the EU/);
+    expect(svc.isOn('NL', 'BE')).toBe(false);
+    // A route out of the EU is as it was.
+    readyKenya(svc);
+    expect(svc.propose('NL', 'KE', AMINA, NOW)).toMatchObject({ state: 'waiting' });
+  });
+
   it('two people switch it on: one proposes, a different one approves — one switches it off', () => {
     const svc = setup();
     readyKenya(svc);

@@ -51,6 +51,7 @@ import { HoldAnswerDto, HoldOverrideDto, HoldQueueResponse, HoldStaffDto } from 
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
+import { requireNoGoodsWithOwnRules, unionPassageBetween } from './country';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import { BorderRouteService } from './border-route.service';
@@ -5592,6 +5593,8 @@ export class SbgController {
       // on purpose until now): the load's consignment note prints them and the driver's papers need them.
       const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
       if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
+      // 2026-11-22 — to another EU country as a load of its own, the same word as a parcel (BG-2).
+      requireNoGoodsWithOwnRules(unionPassageBetween(this.agents.countryOf(origin), this.agents.countryOf(dest)), dto.noGoodsWithOwnRules, 'noGoodsWithOwnRules', dto.natureCode);
       const freight = this.dispatch.registerFreight({
         description: `Order ${dto.externalOrderId ?? handoff?.externalOrderId ?? vendor.name} — ${cargoClass} dedicated cargo`,
         pickupLocation: origin.location,
@@ -5694,6 +5697,7 @@ export class SbgController {
       shippingPolicy: vendor.shippingPolicy,
       routeMode: dto.routeMode,
       quote,
+      noGoodsWithOwnRules: dto.noGoodsWithOwnRules,
     });
     if (handoff) this.vendors.consumeCheckout(handoff.id, result.parcel.parcelId);
     // Its papers, signed and kept with it: what the store prints with the label.

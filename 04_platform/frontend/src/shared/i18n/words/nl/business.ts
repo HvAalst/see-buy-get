@@ -1543,6 +1543,8 @@ export const words: Record<string, string> = {
   "business.papers.invoiceLine": "{number} · {total} · ondertekend door {name} op {day}",
   "business.papers.invoiceWhoReads": "De chauffeur die de goederen vervoert leest hem vanaf het ophalen, om aan de grens te laten zien. Niemand anders aan de kant van de vervoerder leest hem — ook hun kantoor niet.",
   "business.papers.invoiceStaysWithYou": "Hij blijft bij jou: bij een lading binnen één land leest geen enkele vervoerder hem.",
+  "business.papers.invoiceInsideEu": "Nodig waar goederen langs de douane gaan. Deze lading gaat tussen EU-landen, en daartussen is geen douane.",
+  "business.papers.invoiceStaysWithYouEu": "Hij blijft bij jou: tussen EU-landen laat geen enkele vervoerder hem aan een grens zien.",
   "business.papers.printCopies": "3 kopieën printen",
   "business.papers.write": "De handelsfactuur schrijven",
   "business.papers.writeAgain": "Een nieuwe schrijven in zijn plaats",

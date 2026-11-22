@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
+import { customsBorderBetween, unionBetween } from '../../foundation/countries/customs-union';
 import { Entity } from '../../foundation/entity/entity.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
@@ -54,7 +55,8 @@ export class CommercialInvoiceService {
     const ownPaper = this.ownPapers.get(f.freightId);
     return {
       freightId: f.freightId,
-      crossesBorder: crossesBorder(f),
+      crossesBorder: crossesCustomsBorder(f),
+      ...(unionBetween(f.pickupCountry, f.destCountry) ? { withinUnion: unionBetween(f.pickupCountry, f.destCountry) } : {}),
       ...(current ? { current } : {}),
       ...(ownPaper ? { ownPaper } : {}),
       collectable: !this.pickupRefusal(f, postedByBusiness),
@@ -69,7 +71,7 @@ export class CommercialInvoiceService {
    */
   withheldView(f: Freight, postedByBusiness = true): CommercialInvoiceView {
     const travels = Boolean(this.current(f.freightId) || this.ownPapers.get(f.freightId));
-    return { freightId: f.freightId, crossesBorder: crossesBorder(f), collectable: !this.pickupRefusal(f, postedByBusiness), earlier: [], mayWrite: false, withheld: true, travels };
+    return { freightId: f.freightId, crossesBorder: crossesCustomsBorder(f), ...(unionBetween(f.pickupCountry, f.destCountry) ? { withinUnion: unionBetween(f.pickupCountry, f.destCountry) } : {}), collectable: !this.pickupRefusal(f, postedByBusiness), earlier: [], mayWrite: false, withheld: true, travels };
   }
 
   /** May this business write the load's invoice: it posted the load. */
@@ -179,7 +181,7 @@ export class CommercialInvoiceService {
    * store's diverted order has nobody in the app who could, and is not held to it.
    */
   pickupRefusal(f: Freight, postedByBusiness: boolean): string | undefined {
-    if (!postedByBusiness || !crossesBorder(f)) return undefined;
+    if (!postedByBusiness || !crossesCustomsBorder(f)) return undefined;
     if (this.current(f.freightId) || this.ownPapers.has(f.freightId)) return undefined;
     return 'This load crosses a border and the shipper has not signed its commercial invoice, nor said its own travels with the goods. Ask the shipper: the goods are not taken over without it.';
   }
@@ -284,12 +286,19 @@ ${Array.from({ length: i.copies }, (_, n) => copy(n + 1)).join('\n')}
  * shipper. The shipper and staff read it always (ShippingPapersController).
  */
 export function carrierReadsInvoice(f: Pick<Freight, 'claimedBy' | 'pickedUpAt' | 'pickupCountry' | 'destCountry'>, did: string | undefined): boolean {
-  return Boolean(did) && f.claimedBy === did && Boolean(f.pickedUpAt) && crossesBorder(f);
+  return Boolean(did) && f.claimedBy === did && Boolean(f.pickedUpAt) && crossesCustomsBorder(f);
 }
 
-/** The load crosses a border: both countries known, and different. */
+/** The load crosses a border: both countries known, and different. What a company's seal rule and the seven-point inspection
+ *  ask — the road leaves the country, whether or not customs are there. */
 export function crossesBorder(f: Pick<Freight, 'pickupCountry' | 'destCountry'>): boolean {
   return Boolean(f.pickupCountry && f.destCountry && f.pickupCountry !== f.destCountry);
+}
+
+/** 2026-11-22 — the load crosses a CUSTOMS border: both countries known, different, and not both in the EU (BG-2). What the
+ *  commercial invoice is asked for: between EU countries no customs reads it. */
+export function crossesCustomsBorder(f: Pick<Freight, 'pickupCountry' | 'destCountry'>): boolean {
+  return customsBorderBetween(f.pickupCountry, f.destCountry);
 }
 
 /** An HS code as the shipper typed it, as digits: 6 to 10 of them, dots and spaces dropped. Nothing when it is not one. */

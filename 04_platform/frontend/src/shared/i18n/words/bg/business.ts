@@ -1543,6 +1543,8 @@ export const words: Record<string, string> = {
   "business.papers.invoiceLine": "{number} · {total} · подписана от {name} на {day}",
   "business.papers.invoiceWhoReads": "Шофьорът, който носи стоките, я чете от вземането нататък, за да я покаже на границата. Никой друг от страна на превозвача не я чете — нито офисът му.",
   "business.papers.invoiceStaysWithYou": "Остава при Вас: при товар в една държава никой превозвач не я чете.",
+  "business.papers.invoiceInsideEu": "Нужна е, където стоките минават през митница. Този товар е между държави от ЕС, между които няма митници.",
+  "business.papers.invoiceStaysWithYouEu": "Остава при Вас: между държави от ЕС никой превозвач не я показва на граница.",
   "business.papers.printCopies": "Отпечатай 3 копия",
   "business.papers.write": "Напиши търговската фактура",
   "business.papers.writeAgain": "Напиши нова на нейно място",

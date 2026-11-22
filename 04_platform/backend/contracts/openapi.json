@@ -70048,6 +70048,10 @@
               }
             ]
           },
+          "withinUnion": {
+            "type": "object",
+            "description": "2026-11-22 — it goes to another EU country, with no customs (BG-2): which two, and when its sender said it holds no\n alcohol, tobacco, medicines or weapons. Absent on a parcel staying in one country, and on one that is declared."
+          },
           "papersSeen": {
             "type": "object",
             "properties": {
@@ -72421,6 +72425,10 @@
                 "$ref": "#/components/schemas/ParcelInvoiceDto"
               }
             ]
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-22 — to another EU country, which has no customs and so no list of contents (BG-2): true says it holds no alcohol,\n tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else."
           },
           "dangerousGoods": {
             "description": "2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: dangerous goods\n(chemical, biological, flammable) by their UN number, proper shipping name and class. A heavy dangerous order without\nthem is refused, as at every other door a load comes in by.",
@@ -86157,6 +86165,10 @@
                 "$ref": "#/components/schemas/ParcelInvoiceDto"
               }
             ]
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-22 — to another EU country, which has no customs and so no list of contents (BG-2): true says it holds no alcohol,\n tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else."
           }
         },
         "required": [
@@ -87684,7 +87696,11 @@
           },
           "crossesBorder": {
             "type": "boolean",
-            "description": "The load crosses a border (its two countries are known and differ): customs will ask for the invoice."
+            "description": "The load crosses a CUSTOMS border (its two countries are known, differ, and are not both in the EU): customs will ask for\n the invoice."
+          },
+          "withinUnion": {
+            "type": "string",
+            "description": "2026-11-22 — it goes between two EU countries, where no customs asks for it (BG-2): the invoice stays with the shipper."
           },
           "current": {
             "$ref": "#/components/schemas/CommercialInvoice"
