@@ -91,7 +91,7 @@ describe('a page built in Kiswahili', () => {
     expect(sw.head.find((e) => e.props.property === 'og:title')?.props.content).toMatch(/kwa ufupi/);
     expect(sw.canonical).toBe(`${SITE}/sw/about/`);
     expect(sw.ogLocale).toBe('sw_KE');
-    expect(sw.alternates).toEqual({ en: `${SITE}/about/`, sw: `${SITE}/sw/about/`, nl: `${SITE}/nl/about/`, am: `${SITE}/am/about/`, 'x-default': `${SITE}/about/` });
+    expect(sw.alternates).toEqual({ en: `${SITE}/about/`, sw: `${SITE}/sw/about/`, nl: `${SITE}/nl/about/`, am: `${SITE}/am/about/`, bg: `${SITE}/bg/about/`, 'x-default': `${SITE}/about/` });
     expect(sw.html).toContain('href="/sw/for/shops/"');
     // The language row names each language by its own name, at the same page.
     expect(sw.html).toMatch(/<a href="\/nl\/about\/" hreflang="nl" lang="nl"[^>]*>Nederlands<\/a>/);

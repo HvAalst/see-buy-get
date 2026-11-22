@@ -1,0 +1,25 @@
+// Български — version 1, written in for en.site-hours.ts (2026-11-22). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "fleet.sites.opens": "Отваря",
+  "fleet.sites.closes": "Затваря",
+  "fleet.sites.dayName.mon": "Понеделник",
+  "fleet.sites.dayName.tue": "Вторник",
+  "fleet.sites.dayName.wed": "Сряда",
+  "fleet.sites.dayName.thu": "Четвъртък",
+  "fleet.sites.dayName.fri": "Петък",
+  "fleet.sites.dayName.sat": "Събота",
+  "fleet.sites.dayName.sun": "Неделя",
+  "fleet.sites.day.mon": "Пон",
+  "fleet.sites.day.tue": "Вто",
+  "fleet.sites.day.wed": "Сря",
+  "fleet.sites.day.thu": "Чет",
+  "fleet.sites.day.fri": "Пет",
+  "fleet.sites.day.sat": "Съб",
+  "fleet.sites.day.sun": "Нед",
+  "fleet.sites.dayRun": "{from}–{to}",
+  "fleet.sites.openRun": "{days} {hours}",
+  "fleet.sites.closedRun": "{days} затворено",
+  "fleet.sites.baysCount": "{n, plural, one {# рампа} other {# рампи}}",
+  "fleet.sites.loadsLine": "Товарене: {what}",
+};

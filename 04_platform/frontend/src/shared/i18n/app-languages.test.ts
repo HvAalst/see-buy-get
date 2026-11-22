@@ -26,6 +26,12 @@ describe('the languages the apps are written in', () => {
     expect(localesOfCountry('KE')).not.toContain('nl');
   });
 
+  it('offers Bulgarian in Bulgaria, beside English — and nowhere else (2026-11-22)', () => {
+    expect(LOCALE_ENDONYMS.bg).toBe('Български');
+    expect(localesOfCountry('BG')).toEqual(['en', 'bg']);
+    expect(localesOfCountry('NL')).not.toContain('bg');
+  });
+
   it('are downloaded only by a phone that chooses them — named for their language, left out of every app’s offline copy (2026-11-09)', () => {
     const config = readFileSync('vite.config.ts', 'utf8');
     expect(config).toContain("'**/words-*.js'");

@@ -1,0 +1,28 @@
+// Български — version 1, written in for en.privacy.ts (2026-11-22). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "pages.notice.write": "Пишете ни за Вашите данни",
+  "pages.notice.version": "Версия {number}, публикувана на {date}",
+  "pages.notice.changed": "Какво се промени в тази версия: {note}",
+  "pages.notice.earlier": "По-ранни версии",
+  "pages.notice.earlierNone": "Това е първата версия.",
+  "pages.notice.readVersion": "Прочетете версия {number}",
+  "pages.notice.reading": "Четете версия {number} от {date}. Тя вече не е текущата.",
+  "pages.notice.current": "Прочетете текущата версия",
+  "pages.notice.loading": "Зарежда се…",
+  "pages.notice.unavailable": "Тази страница не можа да се зареди сега. Нужен е сигнал: опитайте отново след малко.",
+  "pages.notice.countriesTitle": "Какво добавя държавата",
+  "pages.notice.countriesLede": "Където законът на държавата изисква повече, тази държава има и собствен текст. Там важат и двата.",
+  "pages.notice.forCountry": "Какво добавя {country} към общия текст. В {country} важат и двата.",
+  "pages.notice.general": "Прочетете общия текст",
+  "pages.notice.noneForCountry": "{country} няма собствен текст тук: там важи общият, както навсякъде.",
+  "pages.terms.metaTitle": "Условия за ползване — SeeBuyGet",
+  "pages.terms.metaDescription": "Споразумението между Вас и SeeBuyGet: с кого се споразумявате, Вашият профил, какво SeeBuyGet прави и какво не прави и как се променят тези условия.",
+  "pages.terms.title": "Условия за ползване",
+  "pages.privacy.metaTitle": "Вашите данни в SeeBuyGet — какво се пази, кой го вижда, за колко време",
+  "pages.privacy.metaDescription": "Какво SeeBuyGet пази, за да превози пратка, как е защитено, кой може да го вижда, кои други фирми го обработват, колко дълго се пази и какво можете да направите.",
+  "pages.privacy.title": "Вашите данни в SeeBuyGet",
+  "pages.cookies.metaTitle": "Бисквитки в SeeBuyGet — не се слагат, и какво се пази на Вашия телефон",
+  "pages.cookies.metaDescription": "SeeBuyGet не слага бисквитки и не проследява. Какво приложенията му пазят вместо това във Вашия браузър, защо, какво остава след изход и как да го премахнете.",
+  "pages.cookies.title": "Бисквитки",
+};

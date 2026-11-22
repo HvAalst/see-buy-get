@@ -5,11 +5,11 @@ import { catalogueEntry } from './catalogue';
  * in"). English is the apps' own; the rest are frontend/src/shared/i18n/words/<locale>/. A frontend guard test
  * (shared/i18n/app-languages.test.ts) fails when this list and those folders part, so a language written in is known here.
  */
-export const APP_WORD_LANGUAGES = ['en', 'sw', 'am', 'nl'] as const;
+export const APP_WORD_LANGUAGES = ['en', 'sw', 'am', 'nl', 'bg'] as const;
 
 /** A language's name in English, for a staff screen. A code not here is said as itself. */
 export const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
-  en: 'English', sw: 'Swahili', am: 'Amharic', nl: 'Dutch', fr: 'French', ar: 'Arabic', de: 'German', pt: 'Portuguese', es: 'Spanish',
+  en: 'English', sw: 'Swahili', am: 'Amharic', nl: 'Dutch', bg: 'Bulgarian', fr: 'French', ar: 'Arabic', de: 'German', pt: 'Portuguese', es: 'Spanish',
   it: 'Italian', hi: 'Hindi', zh: 'Chinese', ru: 'Russian', fa: 'Persian', id: 'Indonesian', tr: 'Turkish', so: 'Somali', om: 'Oromo',
   ti: 'Tigrinya', rw: 'Kinyarwanda', rn: 'Kirundi', lg: 'Luganda', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', zu: 'Zulu', xh: 'Xhosa', af: 'Afrikaans',
 };

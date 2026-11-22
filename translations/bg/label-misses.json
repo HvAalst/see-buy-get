@@ -1,0 +1,12 @@
+[
+ {
+  "key": "driver.toast.heldDetail",
+  "label": "Let go",
+  "bg": "Пуснат | Откажи се | Освободен"
+ },
+ {
+  "key": "driver.toast.heldQueuedDetail",
+  "label": "Let go",
+  "bg": "Пуснат | Откажи се | Освободен"
+ }
+]

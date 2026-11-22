@@ -7,21 +7,21 @@
  * Not the terms of use, the data notice or the cookie statement: their text is written by staff in English, and a page in
  * another language around an English text would not be a translation.
  */
-export const PAGE_LOCALES = ['sw', 'nl', 'am'] as const;
+export const PAGE_LOCALES = ['sw', 'nl', 'am', 'bg'] as const;
 export type PageLocale = 'en' | (typeof PAGE_LOCALES)[number];
 export const ALL_PAGE_LOCALES: readonly PageLocale[] = ['en', ...PAGE_LOCALES];
 
 /** Each language by its own name, so a reader finds theirs without reading another. */
-export const LANGUAGE_NAME: Record<PageLocale, string> = { en: 'English', sw: 'Kiswahili', nl: 'Nederlands', am: 'አማርኛ' };
+export const LANGUAGE_NAME: Record<PageLocale, string> = { en: 'English', sw: 'Kiswahili', nl: 'Nederlands', am: 'አማርኛ', bg: 'Български' };
 
 /** Open Graph names a language with a country: where each is mostly read here. */
-export const OG_LOCALE: Record<PageLocale, string> = { en: 'en_GB', sw: 'sw_KE', nl: 'nl_NL', am: 'am_ET' };
+export const OG_LOCALE: Record<PageLocale, string> = { en: 'en_GB', sw: 'sw_KE', nl: 'nl_NL', am: 'am_ET', bg: 'bg_BG' };
 
 export const isPageLocale = (l: string): l is PageLocale => (ALL_PAGE_LOCALES as readonly string[]).includes(l);
 
 /** `/sw/about/` → Kiswahili and `/about/`; `/about/` → English and itself. */
 export function splitLocale(path: string): { locale: PageLocale; rest: string } {
-  const m = /^\/(sw|nl|am)(\/.*)?$/.exec(path || '/');
+  const m = /^\/(sw|nl|am|bg)(\/.*)?$/.exec(path || '/');
   return m ? { locale: m[1] as PageLocale, rest: m[2] || '/' } : { locale: 'en', rest: path || '/' };
 }
 
