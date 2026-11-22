@@ -1,0 +1,14 @@
+{
+ "home.agents.spec.sea_container": "Морски контейнери",
+ "home.agents.spec.air_freight": "Въздушни товари",
+ "home.agents.spec.vehicles": "Превозни средства и техника",
+ "home.agents.spec.bulk_breakbulk": "Насипни и генерални товари",
+ "home.agents.spec.project_heavy_lift": "Проектни и тежки товари",
+ "home.agents.spec.perishables": "Бързо развалящи се стоки",
+ "home.agents.spec.livestock": "Живи животни",
+ "home.agents.spec.pharma_cold_chain": "Лекарства и студена верига",
+ "home.agents.spec.dangerous_goods": "Опасни стоки",
+ "home.agents.spec.personal_effects": "Лични вещи и преместване",
+ "home.agents.spec.courier_express": "Куриерски и експресни пратки",
+ "home.agents.spec.bonded_transit": "Стоки при митнически транзит"
+}

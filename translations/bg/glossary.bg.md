@@ -10,7 +10,7 @@
 | courier (a driver working for themselves) | куриер | |
 | fleet (a carrier company and its office) | превозвач | its vehicles = автопарк |
 | carrier | превозвач | |
-| vehicle | превозно средство | van = бус, truck = камион, car = кола, motorbike = мотоциклет, bicycle = велосипед |
+| vehicle | превозно средство | van = бус, truck = камион, car = автомобил (masculine, like every vehicle word, so „Моят {vehicle}“ agrees), motorbike = мотоциклет, bicycle = велосипед |
 | number plate | регистрационен номер | |
 | sticker (on a dashboard) | стикер | |
 | bag, tote (that parcels travel in) | чувал | |
