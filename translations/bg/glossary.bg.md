@@ -73,4 +73,10 @@
 | customs clearance, clearing agent | митническо освобождаване, агент по митническо освобождаване | |
 | pickup point | пункт за получаване | |
 | bus (vehicle) | автобус | a van is бус |
+| damage claim report | протокол за щета | everywhere; a claim alone stays рекламация |
+| handle (@name) | псевдоним | |
+| fleet office | офис на превозвач | |
+| a business | бизнес | |
+| customs consignment | партида | a parcel stays пратка |
+| decimals and thousands in running text | 7,6 kg; 7 875 | Bulgarian convention |
 
