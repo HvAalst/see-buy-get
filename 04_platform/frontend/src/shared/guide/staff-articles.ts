@@ -307,6 +307,77 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "Sign in with your own staff account: what the shared key opens is noted as nobody’s."
     ]
   }
+,
+  // 2026-11-22 — opening a route across a border, step by step (the owner: "there are no extensive help pages for staff and step by step
+  // instructions on how to legally facilitate cross border routes"; the Netherlands–Bulgaria plan, part 1).
+  {
+    id: "border-route-law",
+    apps: [
+      "console"
+    ],
+    title: "A route across a border, 1: the companies and the law",
+    summary: "Before a parcel crosses, both countries are open to us, somebody of ours answers at each end, and the law of both is checked. Seven checks, each on its screen or with the lawyer. A route is not switched on while any of them is open.",
+    steps: [
+      "Where we operate: the sending country stands at Established. That means a company of ours is registered there and sells. A route is not sold from a country that does not.",
+      "Where we operate: the receiving country stands at Matching only or higher. If it does not, propose its standing; a second member of staff approves it. Testers only keeps a country to the numbers on its test list while you test.",
+      "The companies: open the company that answers at the receiving end. Our own company there has its documents verified by a second member of staff. Where a local partner answers instead, the country stands at Local partner, and the partner’s contract is signed.",
+      "Courier registration: ask the lawyer whether we, and whoever carries for us, must register as a courier in each of the two countries, and register where the answer is yes.",
+      "Parcel reporting: ask the lawyer what the EU’s rules on parcel delivery ask us to report, and to whom, in each of the two countries.",
+      "Terms and notices: the receiving country’s terms are written in its own language and name the company that answers there. A country takes no parcels in until its terms are in force.",
+      "Insurance: check that the carrier’s liability is insured for the whole road: both countries, and every country between them."
+    ],
+    notes: [
+      "The questions for a route between the Netherlands and Bulgaria are with the other legal questions, for the lawyer and the accountant. Until an answer is in, its check stays open.",
+      "Between EU countries there is no customs, but each country’s rules on couriers, buyers and personal data still apply. The company or partner of the receiving country answers to them there.",
+      "Who answers in Bulgaria: a local partner, chosen on 22 November 2026, and not yet signed."
+    ]
+  },
+  // 2026-11-22 — opening a route across a border, step by step (the owner: "there are no extensive help pages for staff and step by step
+  // instructions on how to legally facilitate cross border routes"; the Netherlands–Bulgaria plan, part 1).
+  {
+    id: "border-route-road",
+    apps: [
+      "console"
+    ],
+    title: "A route across a border, 2: the road",
+    summary: "The places at both ends, the fleet that drives between them, its line, the rule for its vehicles in the other country, what may not go, and the price.",
+    steps: [
+      "Zones: both ends have zones. Where a country has none, import its areas and publish them. A company still in draft places its pins on the map only once it is switched on.",
+      "Joining the network: approve the shops that hand parcels out at the receiving end, and the hubs on both sides.",
+      "Papers: check the fleet’s papers for the line: its EU community licence for carrying goods between member states, its insurance, and its drivers’ papers.",
+      "Corridors: publish the fleet’s line between the two zones.",
+      "Borders: record a rule each way, with Vehicles from and Entering, the permits the fleet carries, and whether it may carry loads inside the country it enters. Between two EU countries, leave the crossings empty: there is no border post.",
+      "What may not go: between two EU countries nobody makes a list of contents, so the store says what a parcel does not hold. In the Store app it ticks that the parcel holds no alcohol, tobacco, medicines or weapons, and its system sends the same; without it, the parcel is refused. A parcel or load marked as medicines is refused whatever is said.",
+      "Prices: check the price a shop quotes for the two places."
+    ],
+    notes: [
+      "Between two EU countries the network asks for no customs declaration and no commercial invoice, plans no wait at a border, and holds nothing for customs. A driver is not asked to say they reached a border post. Outside the EU a crossing is papered as before.",
+      "Loads inside a country after a load into it: the EU allows three within seven days, then the vehicle leaves. The network does not count them yet, so until it does, record loads inside as not allowed.",
+      "Dangerous goods follow the road rules for dangerous goods between EU countries, as they do inside one.",
+      "Places inside an EU country that are outside its tax area, such as the Canary Islands or Åland, look like the rest of their country to the network. Open no route to them.",
+      "A price card of its own for a pair of countries is not built yet."
+    ]
+  },
+  // 2026-11-22 — opening a route across a border, step by step (the owner: "there are no extensive help pages for staff and step by step
+  // instructions on how to legally facilitate cross border routes"; the Netherlands–Bulgaria plan, part 1).
+  {
+    id: "border-route-switch-on",
+    apps: [
+      "console"
+    ],
+    title: "A route across a border, 3: switch on, and watch",
+    summary: "One test parcel first. Then two people switch the route on, and the first week is watched.",
+    steps: [
+      "Test: put both countries on Testers only, with your own numbers on their test lists. Send one parcel on test money, from booking to collection, and read its whole journey on Find a parcel.",
+      "Parcels abroad, to a country outside the EU: one member of staff proposes the route, another approves it, once its arrival airport is open with its customs warehouse.",
+      "Between two EU countries, a route through a customs warehouse is refused, because goods pass with no customs. A route by road between them is not built yet. Until it is, only a store sends between them, from the Store app or its own system.",
+      "Watch the first week on Parcels abroad and on Cases. A driver held by police or customs, or goods standing still, shows on Cases."
+    ],
+    notes: [
+      "The Send app and the Business app refuse a parcel to another country until a route by road is built.",
+      "One member of staff switches a route off. Parcels already on the way finish their journey."
+    ]
+  }
 ];
 
 export const STAFF_LINES: Record<string, { steps?: string[]; notes?: string[] }> = {
