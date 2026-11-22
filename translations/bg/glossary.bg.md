@@ -79,4 +79,7 @@
 | a business | бизнес | |
 | customs consignment | партида | a parcel stays пратка |
 | decimals and thousands in running text | 7,6 kg; 7 875 | Bulgarian convention |
+| polite pronoun | Вие, Вас, Ви, Ваш (capitalised) | as every batch so far |
+| bill of lading, air waybill | коносамент, въздушна товарителница | |
+| click-and-collect | поръчка онлайн, получаване в магазин | |
 
