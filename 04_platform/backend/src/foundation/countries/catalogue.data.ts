@@ -29,7 +29,7 @@ BB|BBD|1246|L|en
 BD|BDT|880|L|bn
 BE|EUR|32|R|nl,fr,de
 BF|XOF|226|R|fr
-BG|BGN|359|R|bg
+BG|EUR|359|R|bg
 BH|BHD|973|R|ar
 BI|BIF|257|R|rn,fr,en
 BJ|XOF|229|R|fr

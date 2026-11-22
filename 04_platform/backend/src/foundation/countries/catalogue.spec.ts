@@ -1,4 +1,5 @@
 import { COUNTRY_CATALOGUE, catalogueEntry, isCatalogued } from './catalogue';
+import { currencyForJurisdiction } from '../money/currency';
 
 describe('the country catalogue', () => {
   it('holds every country once, each with a currency, a dialling code and a side of the road', () => {
@@ -26,6 +27,13 @@ describe('the country catalogue', () => {
     expect(catalogueEntry('DE')?.idDocuments).toContain('personalausweis');
     // Uganda's addresses carry no postal code, so a form must not ask for one.
     expect(catalogueEntry('UG')?.postalCode).toBe(false);
+  });
+
+  /* 2026-11-22 — the owner: "fix the currency". Bulgaria adopted the euro on 1 January 2026; the list still said leva. */
+  it('every euro-area country settles in euros — Bulgaria since 1 January 2026, Croatia since 2023', () => {
+    const EURO_AREA = ['AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK'];
+    expect(EURO_AREA.filter((c) => catalogueEntry(c)?.currency !== 'EUR')).toEqual([]);
+    expect(currencyForJurisdiction('BG')).toBe('EUR');
   });
 
   it('is not fooled by two letters that are not a country', () => {
