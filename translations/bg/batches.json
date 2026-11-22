@@ -1,0 +1,71 @@
+[
+ {
+  "batch": 1,
+  "parts": [
+   "base.01",
+   "base.02",
+   "base.03",
+   "base.04"
+  ],
+  "chars": 117412,
+  "phrases": 1766
+ },
+ {
+  "batch": 2,
+  "parts": [
+   "agent.01",
+   "agent.02",
+   "agent.03",
+   "send.01",
+   "send.02"
+  ],
+  "chars": 117445,
+  "phrases": 1946
+ },
+ {
+  "batch": 3,
+  "parts": [
+   "another-way.01",
+   "counter.01",
+   "directory-card.01",
+   "driver.01",
+   "driver.02",
+   "driver.03",
+   "energy.01",
+   "equipment.01",
+   "goods.01",
+   "now-with.01",
+   "refusal.01",
+   "site-hours.01",
+   "site-tools.01",
+   "specialisms.01",
+   "tower-shared.01",
+   "trailers.01",
+   "vehicles.01"
+  ],
+  "chars": 107005,
+  "phrases": 1710
+ },
+ {
+  "batch": 4,
+  "parts": [
+   "help.01",
+   "help.02",
+   "home.01",
+   "home.02"
+  ],
+  "chars": 106914,
+  "phrases": 1091
+ },
+ {
+  "batch": 5,
+  "parts": [
+   "abbr.01",
+   "front.01",
+   "pages.01",
+   "privacy.01"
+  ],
+  "chars": 37423,
+  "phrases": 434
+ }
+]

@@ -1,0 +1,11 @@
+{
+ "tower.papers.needDate": "A new expiry date is needed.",
+ "tower.papers.datePast": "That date has already passed — a renewed licence runs into the future.",
+ "tower.settings.placesTitle": "Your places",
+ "tower.settings.placesCount": "{n} saved",
+ "tower.settings.placesNone": "None yet. You will be offered one the next time you mint a road leg.",
+ "tower.settings.kindPort": "Port",
+ "tower.settings.kindDelivery": "Delivery",
+ "tower.sites.fromPin": "A pin somebody dropped.",
+ "tower.sites.fromAddress": "From “{address}” — the middle of that place, not a gate."
+}

@@ -1,0 +1,20 @@
+{
+ "vehicle.energy.label": "What it runs on",
+ "vehicle.energy.petrol": "Petrol",
+ "vehicle.energy.diesel": "Diesel",
+ "vehicle.energy.electric": "Electric",
+ "vehicle.energy.hybrid": "Hybrid (petrol and electric)",
+ "vehicle.energy.gas": "Gas (autogas or natural gas)",
+ "vehicle.energy.pedal": "Pedalled",
+ "vehicle.energy.hint": "Asked of every vehicle: the emissions of a trip are worked out from what the vehicle runs on.",
+ "vehicle.energy.missing": "Say what the vehicle runs on",
+ "vehicle.energy.missingBike": "Say whether the bike is pedalled or electric",
+ "vehicle.energy.notOnRecord": "What it runs on is not on record",
+ "vehicle.energy.add": "Say what it runs on",
+ "vehicle.energy.change": "Change what it runs on",
+ "vehicle.energy.save": "Save",
+ "vehicle.energy.saved": "Saved: {plate} runs on {energy}",
+ "vehicle.energy.runsOn": "Runs on: {energy}",
+ "vehicle.energy.askTitle": "What does your {vehicle} run on?",
+ "vehicle.energy.askDetail": "Every vehicle is asked now. Tap the one that fits."
+}

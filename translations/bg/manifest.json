@@ -1,0 +1,398 @@
+[
+ {
+  "id": "abbr.01",
+  "file": "abbr",
+  "phrases": 166,
+  "chars": 15199
+ },
+ {
+  "id": "agent.01",
+  "file": "agent",
+  "phrases": 469,
+  "chars": 30027
+ },
+ {
+  "id": "agent.02",
+  "file": "agent",
+  "phrases": 489,
+  "chars": 30156
+ },
+ {
+  "id": "agent.03",
+  "file": "agent",
+  "phrases": 284,
+  "chars": 16341
+ },
+ {
+  "id": "another-way.01",
+  "file": "another-way",
+  "phrases": 15,
+  "chars": 893
+ },
+ {
+  "id": "base.01",
+  "file": "base",
+  "phrases": 525,
+  "chars": 30008
+ },
+ {
+  "id": "base.02",
+  "file": "base",
+  "phrases": 425,
+  "chars": 30122
+ },
+ {
+  "id": "base.03",
+  "file": "base",
+  "phrases": 379,
+  "chars": 30069
+ },
+ {
+  "id": "base.04",
+  "file": "base",
+  "phrases": 437,
+  "chars": 27213
+ },
+ {
+  "id": "business.01",
+  "file": "business",
+  "phrases": 447,
+  "chars": 30036
+ },
+ {
+  "id": "business.02",
+  "file": "business",
+  "phrases": 446,
+  "chars": 30100
+ },
+ {
+  "id": "business.03",
+  "file": "business",
+  "phrases": 418,
+  "chars": 30025
+ },
+ {
+  "id": "business.04",
+  "file": "business",
+  "phrases": 443,
+  "chars": 30035
+ },
+ {
+  "id": "business.05",
+  "file": "business",
+  "phrases": 158,
+  "chars": 10883
+ },
+ {
+  "id": "counter.01",
+  "file": "counter",
+  "phrases": 57,
+  "chars": 3203
+ },
+ {
+  "id": "directory-card.01",
+  "file": "directory-card",
+  "phrases": 32,
+  "chars": 2156
+ },
+ {
+  "id": "directory.01",
+  "file": "directory",
+  "phrases": 78,
+  "chars": 5690
+ },
+ {
+  "id": "driver.01",
+  "file": "driver",
+  "phrases": 467,
+  "chars": 30004
+ },
+ {
+  "id": "driver.02",
+  "file": "driver",
+  "phrases": 498,
+  "chars": 30157
+ },
+ {
+  "id": "driver.03",
+  "file": "driver",
+  "phrases": 313,
+  "chars": 21876
+ },
+ {
+  "id": "energy.01",
+  "file": "energy",
+  "phrases": 18,
+  "chars": 854
+ },
+ {
+  "id": "equipment.01",
+  "file": "equipment",
+  "phrases": 25,
+  "chars": 1922
+ },
+ {
+  "id": "fleet.01",
+  "file": "fleet",
+  "phrases": 431,
+  "chars": 30021
+ },
+ {
+  "id": "fleet.02",
+  "file": "fleet",
+  "phrases": 507,
+  "chars": 30064
+ },
+ {
+  "id": "fleet.03",
+  "file": "fleet",
+  "phrases": 443,
+  "chars": 29961
+ },
+ {
+  "id": "front.01",
+  "file": "front",
+  "phrases": 107,
+  "chars": 5518
+ },
+ {
+  "id": "goods.01",
+  "file": "goods",
+  "phrases": 55,
+  "chars": 4796
+ },
+ {
+  "id": "help-app.01",
+  "file": "help-app",
+  "phrases": 160,
+  "chars": 30250
+ },
+ {
+  "id": "help-app.02",
+  "file": "help-app",
+  "phrases": 91,
+  "chars": 30038
+ },
+ {
+  "id": "help-app.03",
+  "file": "help-app",
+  "phrases": 153,
+  "chars": 30267
+ },
+ {
+  "id": "help-app.04",
+  "file": "help-app",
+  "phrases": 114,
+  "chars": 30052
+ },
+ {
+  "id": "help-app.05",
+  "file": "help-app",
+  "phrases": 147,
+  "chars": 30111
+ },
+ {
+  "id": "help-app.06",
+  "file": "help-app",
+  "phrases": 28,
+  "chars": 4729
+ },
+ {
+  "id": "help.01",
+  "file": "help",
+  "phrases": 222,
+  "chars": 30118
+ },
+ {
+  "id": "help.02",
+  "file": "help",
+  "phrases": 101,
+  "chars": 23612
+ },
+ {
+  "id": "home.01",
+  "file": "home",
+  "phrases": 430,
+  "chars": 30104
+ },
+ {
+  "id": "home.02",
+  "file": "home",
+  "phrases": 338,
+  "chars": 23080
+ },
+ {
+  "id": "mdp.01",
+  "file": "mdp",
+  "phrases": 494,
+  "chars": 30012
+ },
+ {
+  "id": "mdp.02",
+  "file": "mdp",
+  "phrases": 172,
+  "chars": 9608
+ },
+ {
+  "id": "now-with.01",
+  "file": "now-with",
+  "phrases": 30,
+  "chars": 1394
+ },
+ {
+  "id": "pages.01",
+  "file": "pages",
+  "phrases": 137,
+  "chars": 14900
+ },
+ {
+  "id": "partner.01",
+  "file": "partner",
+  "phrases": 93,
+  "chars": 5213
+ },
+ {
+  "id": "privacy.01",
+  "file": "privacy",
+  "phrases": 24,
+  "chars": 1806
+ },
+ {
+  "id": "refusal.01",
+  "file": "refusal",
+  "phrases": 40,
+  "chars": 2354
+ },
+ {
+  "id": "send.01",
+  "file": "send",
+  "phrases": 511,
+  "chars": 30019
+ },
+ {
+  "id": "send.02",
+  "file": "send",
+  "phrases": 193,
+  "chars": 10902
+ },
+ {
+  "id": "site-hours.01",
+  "file": "site-hours",
+  "phrases": 21,
+  "chars": 603
+ },
+ {
+  "id": "site-tools.01",
+  "file": "site-tools",
+  "phrases": 39,
+  "chars": 1892
+ },
+ {
+  "id": "specialisms.01",
+  "file": "specialisms",
+  "phrases": 12,
+  "chars": 597
+ },
+ {
+  "id": "tower-business.01",
+  "file": "tower-business",
+  "phrases": 491,
+  "chars": 30026
+ },
+ {
+  "id": "tower-business.02",
+  "file": "tower-business",
+  "phrases": 429,
+  "chars": 24830
+ },
+ {
+  "id": "tower-shared.01",
+  "file": "tower-shared",
+  "phrases": 9,
+  "chars": 488
+ },
+ {
+  "id": "tower.01",
+  "file": "tower",
+  "phrases": 430,
+  "chars": 30043
+ },
+ {
+  "id": "tower.02",
+  "file": "tower",
+  "phrases": 472,
+  "chars": 30060
+ },
+ {
+  "id": "tower.03",
+  "file": "tower",
+  "phrases": 443,
+  "chars": 30027
+ },
+ {
+  "id": "tower.04",
+  "file": "tower",
+  "phrases": 436,
+  "chars": 30039
+ },
+ {
+  "id": "tower.05",
+  "file": "tower",
+  "phrases": 328,
+  "chars": 30175
+ },
+ {
+  "id": "tower.06",
+  "file": "tower",
+  "phrases": 477,
+  "chars": 30145
+ },
+ {
+  "id": "tower.07",
+  "file": "tower",
+  "phrases": 459,
+  "chars": 30046
+ },
+ {
+  "id": "tower.08",
+  "file": "tower",
+  "phrases": 475,
+  "chars": 30023
+ },
+ {
+  "id": "tower.09",
+  "file": "tower",
+  "phrases": 343,
+  "chars": 19802
+ },
+ {
+  "id": "trailers.01",
+  "file": "trailers",
+  "phrases": 45,
+  "chars": 2076
+ },
+ {
+  "id": "upkeep.01",
+  "file": "upkeep",
+  "phrases": 155,
+  "chars": 7338
+ },
+ {
+  "id": "vehicles.01",
+  "file": "vehicles",
+  "phrases": 34,
+  "chars": 1740
+ },
+ {
+  "id": "vendor.01",
+  "file": "vendor",
+  "phrases": 463,
+  "chars": 30014
+ },
+ {
+  "id": "vendor.02",
+  "file": "vendor",
+  "phrases": 390,
+  "chars": 24178
+ }
+]
