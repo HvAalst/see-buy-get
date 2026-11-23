@@ -12,7 +12,6 @@ import { DirectoryService } from './directory.service';
 import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
-  BORDER_CONDITIONS,
   type BookedRoute,
   type BorderAirport,
   type BorderArrivalAirport,

@@ -127,7 +127,8 @@ describe('the ways a code reaches a phone', () => {
     at.fail = new SmsSendError('failed', 'x');
     await s.send(KE, 'code 1', t0);
     s.entered(KE, t0 + 20_000);
-    const tw1 = s.view().countries.find((c) => c.country === 'KE')!.counts.find((c) => c.route === 'twilio');
+    // Read at the test's own time: the view shows the last week, counted from when it is read (it failed a week after it was written).
+    const tw1 = s.view(t0 + 20_000).countries.find((c) => c.country === 'KE')!.counts.find((c) => c.route === 'twilio');
     expect(tw1).toMatchObject({ asked: 1, delivered: 1, entered: 1 });
     at.fail = undefined;
     await s.send(KE, 'code 2', t0 + 3_600_000);
