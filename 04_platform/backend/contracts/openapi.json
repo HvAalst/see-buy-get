@@ -43161,6 +43161,96 @@
         }
       }
     },
+    "/v1/sbg/border-routes/{from}/{to}/fleet": {
+      "post": {
+        "operationId": "BorderRoutes.fleet",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderFleetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/border-routes/{from}/{to}/hub": {
+      "post": {
+        "operationId": "BorderRoutes.hub",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderHubDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-routes/{from}/{to}/prices": {
       "post": {
         "operationId": "BorderRoutes.prices",
@@ -97742,7 +97832,9 @@
               "price",
               "clearer",
               "fee",
-              "airport"
+              "airport",
+              "fleet",
+              "hub"
             ]
           },
           "met": {
@@ -97752,6 +97844,52 @@
         "required": [
           "key",
           "met"
+        ]
+      },
+      "BorderFleet": {
+        "type": "object",
+        "properties": {
+          "managerDid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "managerDid",
+          "name",
+          "by",
+          "at"
+        ]
+      },
+      "BorderHub": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "by",
+          "at"
         ]
       },
       "BorderDeparture": {
@@ -97912,6 +98050,20 @@
               "$ref": "#/components/schemas/BorderConditionView"
             }
           },
+          "by": {
+            "type": "string",
+            "description": "2026-11-23 — how it goes: by road between two EU countries (no customs), by air through a customs warehouse otherwise.",
+            "enum": [
+              "air",
+              "road"
+            ]
+          },
+          "fleet": {
+            "$ref": "#/components/schemas/BorderFleet"
+          },
+          "hub": {
+            "$ref": "#/components/schemas/BorderHub"
+          },
           "departure": {
             "$ref": "#/components/schemas/BorderDeparture"
           },
@@ -97950,6 +98102,19 @@
               "$ref": "#/components/schemas/BorderOption"
             }
           },
+          "fleets": {
+            "description": "2026-11-23 — on a road route: the active fleets of either country, and the approved hubs in the arrival country.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          },
+          "arrivalHubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderOption"
+            }
+          },
           "currency": {
             "type": "string",
             "description": "The money its prices are in: the sending company's. Absent where none stands."
@@ -97961,10 +98126,13 @@
           "state",
           "mine",
           "conditions",
+          "by",
           "arrivalAirports",
           "departureAirports",
           "departureHubs",
-          "carriers"
+          "carriers",
+          "fleets",
+          "arrivalHubs"
         ]
       },
       "BorderReaddressFees": {
@@ -98342,6 +98510,42 @@
         },
         "required": [
           "entityId"
+        ]
+      },
+      "BorderFleetDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "managerDid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "managerDid"
+        ]
+      },
+      "BorderHubDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "mdpId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "mdpId"
         ]
       },
       "BorderPricesDto": {

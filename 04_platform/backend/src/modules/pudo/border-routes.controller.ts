@@ -4,7 +4,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import type { Signer } from '../../foundation/entity/same-person';
 import { BorderRouteService } from './border-route.service';
-import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderReaddressDto, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
+import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderReaddressDto, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderFleetDto, BorderHubDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
 import { staffOf } from './staff-of';
 
 /**
@@ -78,6 +78,19 @@ export class BorderRoutesController {
   @Post('border-routes/:from/:to/carrier')
   carrier(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderCarrierDto, @Actor() actor: IntrospectionResult): BorderRouteView {
     return this.borders.setCarrier(from, to, dto.entityId, staffOf(actor, dto.by).name);
+  }
+
+  // 2026-11-23 — a road route's fleet and central hub (the plan, part 3, P3-1).
+  @Roles('operator')
+  @Post('border-routes/:from/:to/fleet')
+  fleet(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderFleetDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setFleet(from, to, dto.managerDid, staffOf(actor, dto.by).name);
+  }
+
+  @Roles('operator')
+  @Post('border-routes/:from/:to/hub')
+  hub(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderHubDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setHub(from, to, dto.mdpId, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

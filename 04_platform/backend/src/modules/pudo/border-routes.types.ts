@@ -15,7 +15,8 @@ export const BORDER_ROUTE_STATES = ['off', 'waiting', 'on'] as const;
 export type BorderRouteState = (typeof BORDER_ROUTE_STATES)[number];
 
 /** What a route needs before it may be switched on, each said by name when it is missing. */
-export const BORDER_CONDITIONS = ['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport'] as const;
+// 2026-11-23 — 'fleet' and 'hub': what a road route between two EU countries needs instead (the plan, part 3, P3-1).
+export const BORDER_CONDITIONS = ['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport', 'fleet', 'hub'] as const;
 export type BorderCondition = (typeof BORDER_CONDITIONS)[number];
 
 export const CLEARER_KINDS = ['agent', 'company'] as const;
@@ -173,6 +174,22 @@ export class BorderCarrier {
   @ApiProperty() at: string;
 }
 
+/** 2026-11-23 — a road route's fleet (P3-1): only its drivers carry the route's parcels across — the dedicated route drivers. */
+export class BorderFleet {
+  @ApiProperty() managerDid: string;
+  @ApiProperty() name: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+/** 2026-11-23 — a road route's central distribution hub in the arrival country, named by staff (P3-1). */
+export class BorderHub {
+  @ApiProperty() mdpId: string;
+  @ApiProperty() name: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
 export class BorderPrices {
   /** The international leg for a small, a medium and a large parcel, in the sending company's money. */
   @ApiProperty() S: number;
@@ -199,6 +216,10 @@ export class BorderRouteView {
   /** Said per reader: the person who proposed it may not approve it. */
   @ApiProperty() mine: boolean;
   @ApiProperty({ type: [BorderConditionView] }) conditions: BorderConditionView[];
+  /** 2026-11-23 — how it goes: by road between two EU countries (no customs), by air through a customs warehouse otherwise. */
+  @ApiProperty({ enum: ['air', 'road'] }) by: 'air' | 'road';
+  @ApiPropertyOptional({ type: BorderFleet }) fleet?: BorderFleet;
+  @ApiPropertyOptional({ type: BorderHub }) hub?: BorderHub;
   @ApiPropertyOptional({ type: BorderDeparture }) departure?: BorderDeparture;
   @ApiPropertyOptional({ type: BorderCarrier }) carrier?: BorderCarrier;
   @ApiPropertyOptional({ type: BorderPrices }) prices?: BorderPrices;
@@ -209,6 +230,9 @@ export class BorderRouteView {
   @ApiProperty({ type: [String] }) departureAirports: string[];
   @ApiProperty({ type: [BorderOption] }) departureHubs: BorderOption[];
   @ApiProperty({ type: [BorderOption] }) carriers: BorderOption[];
+  /** 2026-11-23 — on a road route: the active fleets of either country, and the approved hubs in the arrival country. */
+  @ApiProperty({ type: [BorderOption] }) fleets: BorderOption[];
+  @ApiProperty({ type: [BorderOption] }) arrivalHubs: BorderOption[];
   /** The money its prices are in: the sending company's. Absent where none stands. */
   @ApiPropertyOptional() currency?: string;
 }
@@ -265,6 +289,14 @@ export class BorderArrivalAirportDto extends BorderByDto {
 
 export class BorderCarrierDto extends BorderByDto {
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) entityId!: string;
+}
+
+export class BorderFleetDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) managerDid!: string;
+}
+
+export class BorderHubDto extends BorderByDto {
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(80) mdpId!: string;
 }
 
 export class BorderPricesDto extends BorderByDto {

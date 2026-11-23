@@ -1140,6 +1140,9 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/readdress', { params: { path: { country } }, body })),
     setBorderArrival: (from: string, to: string, body: { airport: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/arrival', { params: { path: { from, to } }, body })),
     setBorderCarrier: (from: string, to: string, body: { entityId: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/carrier', { params: { path: { from, to } }, body })),
+    // 2026-11-23 — a road route's fleet and central hub (the plan, part 3, P3-1).
+    setBorderFleet: (from: string, to: string, body: { managerDid: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/fleet', { params: { path: { from, to } }, body })),
+    setBorderHub: (from: string, to: string, body: { mdpId: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/hub', { params: { path: { from, to } }, body })),
     setBorderPrices: (from: string, to: string, body: { S: number; M: number; L: number; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/prices', { params: { path: { from, to } }, body })),
     setBorderAirport: (country: string, airport: string, body: { open: boolean; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/airports/{airport}', { params: { path: { country, airport } }, body })),

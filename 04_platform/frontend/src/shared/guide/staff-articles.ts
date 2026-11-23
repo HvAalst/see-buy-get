@@ -370,11 +370,11 @@ export const STAFF_ARTICLES: GuideArticle[] = [
     steps: [
       "Test: put both countries on Testers only, with your own numbers on their test lists. Send one parcel on test money, from booking to collection, and read its whole journey on Find a parcel.",
       "Parcels abroad, to a country outside the EU: one member of staff proposes the route, another approves it, once its arrival airport is open with its customs warehouse.",
-      "Between two EU countries, a route through a customs warehouse is refused, because goods pass with no customs. A route by road between them is not built yet. Until it is, only a store sends between them, from the Store app or its own system.",
+      "Parcels abroad, between two EU countries: the route goes by road, with no airport, customs warehouse or clearing. Name the fleet whose drivers alone carry it across, its central hub in the arrival country, and its prices per size; then one member of staff proposes it and another approves it.",
       "Watch the first week on Parcels abroad and on Cases. A driver held by police or customs, or goods standing still, shows on Cases."
     ],
     notes: [
-      "The Send app and the Business app refuse a parcel to another country until a route by road is built.",
+      "Booking parcels on a road route is being built: until it is, the Send app and the Business app refuse a parcel to another country, and only a store sends between two EU countries.",
       "One member of staff switches a route off. Parcels already on the way finish their journey."
     ]
   }

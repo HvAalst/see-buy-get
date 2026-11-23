@@ -10,6 +10,7 @@ import { PresenceService } from '../../foundation/presence/presence.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DirectoryService } from './directory.service';
 import { MdpService } from './mdp.service';
+import { FleetManagerService } from './fleet-manager.service';
 import {
   BORDER_CONDITIONS,
   type BookedRoute,
@@ -23,6 +24,8 @@ import {
   type BorderClearer,
   type BorderCondition,
   type BorderFee,
+  type BorderFleet,
+  type BorderHub,
   type BorderRouteState,
   type BorderRouteView,
   type BorderRoutesView,
@@ -44,7 +47,14 @@ interface Route {
   prices?: BorderPrices;
   /** 2026-11-18 — D16: the arrival airport it names. */
   arrival?: BorderArrivalAirport;
+  /** 2026-11-23 — a road route between two EU countries (P3-1): the fleet whose drivers alone carry it, and the central hub it ends at. */
+  fleet?: BorderFleet;
+  hub?: BorderHub;
 }
+
+/** 2026-11-23 — what each kind of route needs, in the order the console lists it (P3-1). */
+const AIR_CONDITIONS: readonly BorderCondition[] = ['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport'];
+const ROAD_CONDITIONS: readonly BorderCondition[] = ['open-from', 'open-to', 'sells-from', 'fleet', 'hub', 'price'];
 
 interface Arrival {
   country: string;
@@ -68,6 +78,8 @@ const MISSING: Record<BorderCondition, (from: string, to: string) => string> = {
   clearer: (_f, t) => `nobody clears in ${t} yet: name a clearing agent who has accepted, or our company with its customs registration`,
   fee: (_f, t) => `the clearance fee in ${t} is not set`,
   airport: (_f, t) => `the route’s arrival airport in ${t} is not named, or not open with its licensed customs warehouse`,
+  fleet: () => 'no fleet is named to run this route, or the one named no longer works',
+  hub: (_f, t) => `no central hub in ${t} is named for this route, or the one named is no longer approved`,
 };
 
 const SHOWN_CHANGES = 40;
@@ -96,7 +108,18 @@ export class BorderRouteService {
     private readonly entities: EntityService,
     private readonly mdps: MdpService,
     @Optional() private readonly directory?: DirectoryService,
+    // 2026-11-23 — a road route names a fleet (P3-1).
+    @Optional() private readonly fleets?: FleetManagerService,
   ) {}
+
+  /** 2026-11-23 — a route between two EU countries goes by road: no airport, no customs warehouse, nobody clearing (P3-1). */
+  byRoad(from: string, to: string): boolean {
+    return Boolean(unionBetween(from, to));
+  }
+
+  private conditionsFor(from: string, to: string): readonly BorderCondition[] {
+    return this.byRoad(from, to) ? ROAD_CONDITIONS : AIR_CONDITIONS;
+  }
 
   /* ------------------------------------------------------------------ reading -- */
 
@@ -114,7 +137,7 @@ export class BorderRouteService {
 
   /** What a route still needs, in the order the console lists it; empty when it may be switched on. */
   missing(from: string, to: string, now: number = Date.now()): BorderCondition[] {
-    return BORDER_CONDITIONS.filter((c) => !this.met(c, from, to, now));
+    return this.conditionsFor(from, to).filter((c) => !this.met(c, from, to, now));
   }
 
   /** Whether parcels may be booked on this route now (step 2 asks it). */
@@ -135,7 +158,6 @@ export class BorderRouteService {
     const r = this.routes.get(key(from, to));
     if (r?.state === 'on') throw new GlosError('INVALID_STATE', `${from} to ${to} is already on`);
     if (r?.state === 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is already waiting for a second person`);
-    this.refuseInsideUnion(from, to);
     this.refuseMissing(from, to, now);
     const route: Route = { ...(r ? setUp(r) : { from, to, state: 'off' as const }), state: 'waiting', proposedBy: by, proposedAt: new Date(now).toISOString() };
     this.routes.set(key(from, to), route);
@@ -149,7 +171,6 @@ export class BorderRouteService {
     if (!r || r.state !== 'waiting') throw new GlosError('INVALID_STATE', `${from} to ${to} is not waiting for approval`);
     if (r.proposedBy && sameSigner(r.proposedBy, by)) throw new GlosError('FORBIDDEN', 'A route is switched on by two people: somebody else approves the one you proposed');
     // Asked again: something may have lapsed or closed since it was proposed.
-    this.refuseInsideUnion(from, to);
     this.refuseMissing(from, to, now);
     const route: Route = { ...r, state: 'on', approvedBy: by.name, approvedAt: new Date(now).toISOString() };
     this.routes.set(key(from, to), route);
@@ -192,6 +213,7 @@ export class BorderRouteService {
   /** Where the route leaves (D13): an airport in the sending country, and our approved hub there that hands parcels to the carrier. */
   setDeparture(fromCode: string, toCode: string, input: { airport: string; mdpId: string }, by: string, now: number = Date.now()): BorderRouteView {
     const [from, to] = this.pair(fromCode, toCode);
+    this.refuseByRoad(from, to, 'a departure airport');
     const airport = this.airportOf(from, input.airport);
     const hub = this.mdps.find(input.mdpId);
     if (!hub) throw new GlosError('NOT_FOUND', 'No such hub', { field: 'mdpId' });
@@ -203,6 +225,7 @@ export class BorderRouteService {
   /** Where the route arrives (D16): an airport in the arrival country. It counts once it is open with its licensed warehouse. */
   setArrival(fromCode: string, toCode: string, airportCode: string, by: string, now: number = Date.now()): BorderRouteView {
     const [from, to] = this.pair(fromCode, toCode);
+    this.refuseByRoad(from, to, 'an arrival airport');
     const airport = this.airportOf(to, airportCode);
     return this.change(from, to, (r) => ({ ...r, arrival: { airport, by, at: new Date(now).toISOString() } }), { what: 'arrival', by, country: from, to, airport }, now);
   }
@@ -210,9 +233,33 @@ export class BorderRouteService {
   /** Who carries the international leg (D14): a forwarder or haulier from the directory. */
   setCarrier(fromCode: string, toCode: string, entityId: string, by: string, now: number = Date.now()): BorderRouteView {
     const [from, to] = this.pair(fromCode, toCode);
+    this.refuseByRoad(from, to, 'an outside carrier');
     const carrier = this.carriersIn(from).find((c) => c.id === entityId);
     if (!carrier) throw new GlosError('NOT_FOUND', `No forwarder or haulier by that name in ${from}'s directory`, { field: 'entityId' });
     return this.change(from, to, (r) => ({ ...r, carrier: { entityId: carrier.id, name: carrier.name, by, at: new Date(now).toISOString() } }), { what: 'carrier', by, country: from, to }, now);
+  }
+
+  /**
+   * 2026-11-23 — WHO RUNS A ROAD ROUTE (P3-1: "dedicated route drivers gather a consolidated full load and take it to the central
+   * distribution hub in that nation"): a fleet of either country, working now. Only its drivers carry the route's parcels across.
+   */
+  setFleet(fromCode: string, toCode: string, managerDid: string, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    this.refuseByAir(from, to, 'a fleet');
+    const fleet = this.fleetOptions(from, to).find((f) => f.id === managerDid);
+    if (!fleet) throw new GlosError('NOT_FOUND', `No working fleet by that name in ${from} or ${to}`, { field: 'managerDid' });
+    return this.change(from, to, (r) => ({ ...r, fleet: { managerDid: fleet.id, name: fleet.name, by, at: new Date(now).toISOString() } }), { what: 'fleet', by, country: from, to }, now);
+  }
+
+  /** 2026-11-23 — WHERE A ROAD ROUTE ENDS (P3-1: "Staff names that hub's location"): an approved hub of ours in the arrival country. */
+  setHub(fromCode: string, toCode: string, mdpId: string, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    this.refuseByAir(from, to, 'a central hub');
+    const hub = this.mdps.find(mdpId);
+    if (!hub) throw new GlosError('NOT_FOUND', 'No such hub', { field: 'mdpId' });
+    if (this.mdps.countryOf(hub) !== to) throw new GlosError('INVALID_INPUT', `${hub.name} is not in ${to}: a road route ends at a hub in the arrival country`, { field: 'mdpId' });
+    if (!this.mdps.isApproved(hub)) throw new GlosError('INVALID_STATE', `${hub.name} is not approved yet`, { field: 'mdpId' });
+    return this.change(from, to, (r) => ({ ...r, hub: { mdpId: hub.mdpId, name: hub.name, by, at: new Date(now).toISOString() } }), { what: 'hub', by, country: from, to }, now);
   }
 
   /** The international leg's price per size (D10: air or road carriage uses a route price), in the sending company's money. */
@@ -471,6 +518,15 @@ export class BorderRouteService {
         return Boolean(a?.clearer?.acceptedAt);
       case 'fee':
         return Boolean(a?.fee);
+      case 'fleet': {
+        const f = this.routes.get(key(from, to))?.fleet;
+        return Boolean(f && this.fleets?.isActive(f.managerDid));
+      }
+      case 'hub': {
+        const h = this.routes.get(key(from, to))?.hub;
+        const hub = h ? this.mdps.find(h.mdpId) : undefined;
+        return Boolean(hub && this.mdps.isApproved(hub) && this.mdps.countryOf(hub) === to);
+      }
       case 'airport': {
         // D16: the airport this route names, open with its licensed warehouse — not just any airport in the country.
         const named = this.routes.get(key(from, to))?.arrival?.airport;
@@ -544,7 +600,10 @@ export class BorderRouteService {
       ...(r.approvedBy ? { approvedBy: r.approvedBy } : {}),
       ...(r.approvedAt ? { approvedAt: r.approvedAt } : {}),
       mine: Boolean(r.state === 'waiting' && r.proposedBy && reader && sameSigner(r.proposedBy, reader)),
-      conditions: BORDER_CONDITIONS.map((c) => ({ key: c, met: this.met(c, r.from, r.to, now) })),
+      conditions: this.conditionsFor(r.from, r.to).map((c) => ({ key: c, met: this.met(c, r.from, r.to, now) })),
+      by: this.byRoad(r.from, r.to) ? ('road' as const) : ('air' as const),
+      ...(r.fleet ? { fleet: r.fleet } : {}),
+      ...(r.hub ? { hub: r.hub } : {}),
       ...(r.departure ? { departure: r.departure } : {}),
       ...(r.carrier ? { carrier: r.carrier } : {}),
       ...(r.prices ? { prices: r.prices } : {}),
@@ -561,6 +620,14 @@ export class BorderRouteService {
         .map((m) => ({ id: m.mdpId, name: m.name }))
         .sort((x, y) => x.name.localeCompare(y.name)),
       carriers: this.carriersIn(r.from),
+      fleets: this.byRoad(r.from, r.to) ? this.fleetOptions(r.from, r.to) : [],
+      arrivalHubs: this.byRoad(r.from, r.to)
+        ? this.mdps
+            .list()
+            .filter((m) => this.mdps.countryOf(m) === r.to && this.mdps.isApproved(m))
+            .map((m) => ({ id: m.mdpId, name: m.name }))
+            .sort((x, y) => x.name.localeCompare(y.name))
+        : [],
       ...(this.entities.forJurisdiction(r.from)?.currency ? { currency: this.entities.forJurisdiction(r.from)!.currency } : {}),
     };
   }
@@ -574,7 +641,27 @@ export class BorderRouteService {
   private refuseInsideUnion(from: string, to: string): void {
     if (!unionBetween(from, to)) return;
     const name = (c: string) => catalogueEntry(c)?.name ?? c;
-    throw new GlosError('INVALID_STATE', `${name(from)} and ${name(to)} are both in the EU, where goods pass with no customs: a route through a customs warehouse is not for them`, { from, to });
+    throw new GlosError('INVALID_STATE', `${name(from)} and ${name(to)} are both in the EU: parcels between them go on a road route, not through a customs warehouse`, { from, to });
+  }
+
+  /** 2026-11-23 — a road route names no airport and no outside carrier (P3-1). */
+  private refuseByRoad(from: string, to: string, what: string): void {
+    if (this.byRoad(from, to)) throw new GlosError('INVALID_STATE', `${from} to ${to} goes by road between two EU countries: it names its fleet and its central hub, not ${what}`);
+  }
+
+  /** …and a route by air names no fleet of ours and no central hub. */
+  private refuseByAir(from: string, to: string, what: string): void {
+    if (!this.byRoad(from, to)) throw new GlosError('INVALID_STATE', `${from} to ${to} goes by air through a customs warehouse: it names a carrier and airports, not ${what}`);
+  }
+
+  /** The fleets that may run a road route: working now, in either of its two countries. */
+  private fleetOptions(from: string, to: string): Array<{ id: string; name: string }> {
+    if (!this.fleets) return [];
+    return this.fleets
+      .list()
+      .filter((m) => [from, to].includes((m.jurisdiction ?? '').toUpperCase()) && this.fleets!.isActive(m.did))
+      .map((m) => ({ id: m.did, name: m.companyName }))
+      .sort((x, y) => x.name.localeCompare(y.name));
   }
 
   private pair(fromCode: string, toCode: string): [string, string] {
@@ -605,4 +692,4 @@ export class BorderRouteService {
 const key = (from: string, to: string) => `${from}-${to}`;
 
 /** What a route is, without who switched it: kept when it is declined or switched off. */
-const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}) });
+const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}), ...(r.fleet ? { fleet: r.fleet } : {}), ...(r.hub ? { hub: r.hub } : {}) });

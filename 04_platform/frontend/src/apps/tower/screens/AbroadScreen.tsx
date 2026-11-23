@@ -150,6 +150,10 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
   const [hub, setHub] = useState(r.departure?.mdpId ?? '');
   const [carrier, setCarrier] = useState(r.carrier?.entityId ?? '');
   const [arrival, setArrival] = useState(r.arrival?.airport ?? '');
+  // 2026-11-23 — a road route between two EU countries (P3-1): its fleet and its central hub.
+  const road = r.by === 'road';
+  const [fleet, setFleet] = useState(r.fleet?.managerDid ?? '');
+  const [central, setCentral] = useState(r.hub?.mdpId ?? '');
   const arrivalOpen = r.conditions.find((c) => c.key === 'airport')?.met ?? false;
   const [prices, setPrices] = useState({ S: r.prices ? String(r.prices.S) : '', M: r.prices ? String(r.prices.M) : '', L: r.prices ? String(r.prices.L) : '' });
   const editable = writer && setUp && r.state === 'off';
@@ -173,22 +177,61 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
           </li>
         ))}
       </ul>
-      <p class="chint" style="margin-top:8px">
-        <b>{t('tower.abroad.departure')}</b> · {r.departure ? t('tower.abroad.departureLine', { airport: r.departure.airport, hub: r.departure.name }) : t('tower.abroad.departureNone')}
-      </p>
-      <p class="chint">
-        <b>{t('tower.abroad.arrival')}</b> · {r.arrival ? r.arrival.airport : t('tower.abroad.arrival.none')}
-      </p>
-      {r.arrival && !arrivalOpen ? <p class="cerr">{t('tower.abroad.arrival.closed', { airport: r.arrival.airport })}</p> : null}
-      <p class="chint">
-        <b>{t('tower.abroad.carrier')}</b> · {r.carrier ? r.carrier.name : t('tower.abroad.carrier.none')}
-      </p>
+      {road ? (
+        <>
+          <p class="chint" style="margin-top:8px">{t('tower.abroad.byRoad')}</p>
+          <p class="chint">
+            <b>{t('tower.abroad.fleet')}</b> · {r.fleet ? r.fleet.name : t('tower.abroad.carrier.none')}
+          </p>
+          <p class="chint">
+            <b>{t('tower.abroad.hub')}</b> · {r.hub ? r.hub.name : t('tower.abroad.carrier.none')}
+          </p>
+        </>
+      ) : (
+        <>
+          <p class="chint" style="margin-top:8px">
+            <b>{t('tower.abroad.departure')}</b> · {r.departure ? t('tower.abroad.departureLine', { airport: r.departure.airport, hub: r.departure.name }) : t('tower.abroad.departureNone')}
+          </p>
+          <p class="chint">
+            <b>{t('tower.abroad.arrival')}</b> · {r.arrival ? r.arrival.airport : t('tower.abroad.arrival.none')}
+          </p>
+          {r.arrival && !arrivalOpen ? <p class="cerr">{t('tower.abroad.arrival.closed', { airport: r.arrival.airport })}</p> : null}
+          <p class="chint">
+            <b>{t('tower.abroad.carrier')}</b> · {r.carrier ? r.carrier.name : t('tower.abroad.carrier.none')}
+          </p>
+        </>
+      )}
       <p class="chint">
         <b>{t('tower.abroad.prices')}</b> · {r.prices ? t('tower.abroad.prices.line', { S: price(r.prices.S), M: price(r.prices.M), L: price(r.prices.L) }) : t('tower.abroad.prices.none')}
       </p>
       {writer && r.state !== 'off' ? <p class="chint">{t('tower.abroad.locked')}</p> : null}
       {editable ? (
         <div style="margin-top:6px">
+          {road ? (
+            <>
+              {r.fleets.length === 0 ? (
+                <p class="chint">{t('tower.abroad.fleet.noFleets', { from, to })}</p>
+              ) : (
+                <>
+                  <ConsolePick label={t('tower.abroad.fleet.pick')} value={fleet} onChange={setFleet} placeholder="—" options={r.fleets.map((f) => ({ value: f.id, label: f.name }))} />
+                  <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !fleet} onClick={() => void setUp.change(`${r.from}-${r.to}:fleet`, () => setUp.api.setBorderFleet(r.from, r.to, { managerDid: fleet, ...setUp.by }) as Promise<Answer>)}>
+                    {t('tower.abroad.fleet.save')}
+                  </button>
+                </>
+              )}
+              {r.arrivalHubs.length === 0 ? (
+                <p class="chint">{t('tower.abroad.hub.noHubs', { to })}</p>
+              ) : (
+                <>
+                  <ConsolePick label={t('tower.abroad.hub.pick', { to })} value={central} onChange={setCentral} placeholder="—" options={r.arrivalHubs.map((h) => ({ value: h.id, label: h.name }))} />
+                  <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !central} onClick={() => void setUp.change(`${r.from}-${r.to}:hub`, () => setUp.api.setBorderHub(r.from, r.to, { mdpId: central, ...setUp.by }) as Promise<Answer>)}>
+                    {t('tower.abroad.hub.save')}
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
           {r.departureHubs.length === 0 ? (
             <p class="chint">{t('tower.abroad.dep.noHubs', { from })}</p>
           ) : (
@@ -212,6 +255,8 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
               <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !carrier} onClick={() => void setUp.change(`${r.from}-${r.to}:carrier`, () => setUp.api.setBorderCarrier(r.from, r.to, { entityId: carrier, ...setUp.by }) as Promise<Answer>)}>
                 {t('tower.abroad.carrier.save')}
               </button>
+            </>
+          )}
             </>
           )}
           {r.currency ? (

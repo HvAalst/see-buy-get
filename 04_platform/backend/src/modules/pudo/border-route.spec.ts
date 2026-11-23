@@ -1,6 +1,7 @@
 import type { EntityService } from '../../foundation/entity/entity.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
 import { BorderRouteService } from './border-route.service';
+import type { FleetManagerService } from './fleet-manager.service';
 import type { DirectoryService } from './directory.service';
 import type { MdpService } from './mdp.service';
 
@@ -37,6 +38,9 @@ describe('a route across a border', () => {
       { mdpId: 'mdp-nbo', name: 'Embakasi Hub', country: 'KE', approved: true },
       { mdpId: 'mdp-new', name: 'New Hub', country: 'KE', approved: false },
       { mdpId: 'mdp-ams', name: 'Schiphol Hub', country: 'NL', approved: true },
+      // 2026-11-23 — Bulgaria's central hub, and one not approved (a road route, P3-1).
+      { mdpId: 'mdp-sof', name: 'Sofia Central Hub', country: 'BG', approved: true },
+      { mdpId: 'mdp-plv', name: 'Plovdiv Hub', country: 'BG', approved: false },
     ];
     const mdps = {
       find: (id: string) => hubs.find((h) => h.mdpId === id),
@@ -45,7 +49,15 @@ describe('a route across a border', () => {
       isApproved: (h: { approved: boolean }) => h.approved,
     } as unknown as MdpService;
     const directory = { kindsOfCompany: (e: { entityId: string }) => (e.entityId === 'agent-1' ? ['clearing_agent'] : ['forwarder']) } as unknown as DirectoryService;
-    return new BorderRouteService(presence, entities, mdps, directory);
+    // 2026-11-23 — the fleets a road route may name: working ones of either country (P3-1).
+    const fleetList = [
+      { did: 'did:fleet:holland', companyName: 'Holland Express', jurisdiction: 'NL' },
+      { did: 'did:fleet:balkan', companyName: 'Balkan Line', jurisdiction: 'BG' },
+      { did: 'did:fleet:asleep', companyName: 'Sleeping Vans', jurisdiction: 'BG' },
+      { did: 'did:fleet:nairobi', companyName: 'Nairobi Movers', jurisdiction: 'KE' },
+    ];
+    const fleets = { list: () => fleetList, isActive: (did: string) => did !== 'did:fleet:asleep' } as unknown as FleetManagerService;
+    return new BorderRouteService(presence, entities, mdps, directory, fleets);
   };
 
   /** Everything Kenya needs as an arrival country — Nairobi open with its warehouse, our company clearing, the fee — and the
@@ -71,11 +83,32 @@ describe('a route across a border', () => {
     expect(setup({ testing: ['KE'] }).missing('NL', 'KE', NOW)).toContain('open-to');
   });
 
-  it('2026-11-22 — is not for two EU countries, where goods pass with no customs: refused when proposed, approved or booked (BG-2)', () => {
-    const svc = setup({ open: ['NL', 'BE', 'KE'], companies: ['NL', 'BE', 'KE'] });
-    expect(() => svc.propose('NL', 'BE', AMINA, NOW)).toThrow(/Netherlands and Belgium are both in the EU, where goods pass with no customs: a route through a customs warehouse is not for them/);
-    expect(() => svc.bookable('BE', 'NL', NOW)).toThrow(/both in the EU/);
-    expect(svc.isOn('NL', 'BE')).toBe(false);
+  it('2026-11-23 — between two EU countries goes by road: its fleet, its central hub in the arrival country and its prices, switched on by two people (P3-1)', () => {
+    const svc = setup({ open: ['NL', 'BG', 'KE'], companies: ['NL', 'KE'] });
+    const route = svc.prepare('NL', 'BG', NOW);
+    expect(route).toMatchObject({ by: 'road', fleets: [{ id: 'did:fleet:balkan', name: 'Balkan Line' }, { id: 'did:fleet:holland', name: 'Holland Express' }], arrivalHubs: [{ id: 'mdp-sof', name: 'Sofia Central Hub' }] });
+    // No airport, no customs warehouse, nobody clearing, and no company of ours needed at the far end: the sender pays it all here.
+    expect(route.conditions.map((c) => c.key)).toEqual(['open-from', 'open-to', 'sells-from', 'fleet', 'hub', 'price']);
+    expect(() => svc.propose('NL', 'BG', AMINA, NOW)).toThrow(/no fleet is named to run this route.*no central hub in BG is named.*prices for a small/);
+    // What an air route names is refused for it, and the other way round.
+    expect(() => svc.setDeparture('NL', 'BG', { airport: 'AMS', mdpId: 'mdp-ams' }, 'Amina Staff', NOW)).toThrow(/goes by road between two EU countries: it names its fleet and its central hub, not a departure airport/);
+    expect(() => svc.setCarrier('NL', 'BG', 'fwd-nl', 'Amina Staff', NOW)).toThrow(/not an outside carrier/);
+    expect(() => svc.setFleet('NL', 'KE', 'did:fleet:holland', 'Amina Staff', NOW)).toThrow(/goes by air through a customs warehouse/);
+    // Only a working fleet of either country, and only an approved hub in the arrival country.
+    expect(() => svc.setFleet('NL', 'BG', 'did:fleet:nairobi', 'Amina Staff', NOW)).toThrow(/No working fleet by that name in NL or BG/);
+    expect(() => svc.setFleet('NL', 'BG', 'did:fleet:asleep', 'Amina Staff', NOW)).toThrow(/No working fleet/);
+    expect(() => svc.setHub('NL', 'BG', 'mdp-ams', 'Amina Staff', NOW)).toThrow(/Schiphol Hub is not in BG: a road route ends at a hub in the arrival country/);
+    expect(() => svc.setHub('NL', 'BG', 'mdp-plv', 'Amina Staff', NOW)).toThrow(/not approved yet/);
+    svc.setFleet('NL', 'BG', 'did:fleet:balkan', 'Amina Staff', NOW);
+    svc.setHub('NL', 'BG', 'mdp-sof', 'Amina Staff', NOW);
+    const priced = svc.setPrices('NL', 'BG', { S: 18, M: 27.5, L: 39 }, 'Amina Staff', NOW);
+    expect(priced).toMatchObject({ fleet: { managerDid: 'did:fleet:balkan', name: 'Balkan Line' }, hub: { mdpId: 'mdp-sof', name: 'Sofia Central Hub' }, prices: { S: 18, M: 27.5, L: 39, currency: 'EUR' } });
+    expect(svc.missing('NL', 'BG', NOW)).toEqual([]);
+    expect(svc.propose('NL', 'BG', AMINA, NOW)).toMatchObject({ state: 'waiting' });
+    expect(svc.approve('NL', 'BG', BRIAN, NOW)).toMatchObject({ state: 'on', approvedBy: 'Brian Staff' });
+    expect(svc.isOn('NL', 'BG')).toBe(true);
+    // Booking on it is the next step: until then a parcel is not booked through a customs warehouse between two EU countries.
+    expect(() => svc.bookable('NL', 'BG', NOW)).toThrow(/both in the EU: parcels between them go on a road route, not through a customs warehouse/);
     // A route out of the EU is as it was.
     readyKenya(svc);
     expect(svc.propose('NL', 'KE', AMINA, NOW)).toMatchObject({ state: 'waiting' });

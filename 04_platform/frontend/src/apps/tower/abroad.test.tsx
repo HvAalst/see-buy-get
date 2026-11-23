@@ -20,11 +20,40 @@ const route = (o: Partial<BorderRoute>): BorderRoute => ({
   arrivalAirports: ['NBO', 'MBA', 'KIS'],
   departureHubs: [],
   carriers: [],
+  by: 'air',
+  fleets: [],
+  arrivalHubs: [],
   ...o,
 });
 const nameOf = (c: string) => ({ NL: 'Netherlands', KE: 'Kenya' })[c] ?? c;
 
 describe('a route on the console', () => {
+  // 2026-11-23 — between two EU countries a route goes by road (the plan, part 3, P3-1).
+  it('a road route shows and sets its fleet and its central hub — never airports or an outside carrier', () => {
+    const road = route({
+      to: 'BG',
+      by: 'road',
+      conditions: (['open-from', 'open-to', 'sells-from', 'fleet', 'hub', 'price'] as const).map((key) => ({ key, met: key !== 'hub' })),
+      fleet: { managerDid: 'did:fleet:balkan', name: 'Balkan Line', by: 'Amina', at: '2026-11-23T08:00:00Z' },
+      fleets: [{ id: 'did:fleet:balkan', name: 'Balkan Line' }],
+      arrivalHubs: [{ id: 'mdp-sof', name: 'Sofia Central Hub' }],
+    });
+    const names = (c: string) => ({ NL: 'Netherlands', BG: 'Bulgaria' })[c] ?? c;
+    const setUp = { api: {} as never, by: {}, change: async () => true };
+    const html = renderToString(<RouteRow r={road} nameOf={names} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(html).toContain(t('tower.abroad.byRoad'));
+    expect(html).toContain('Balkan Line');
+    expect(html).toContain('✗ ' + t('tower.abroad.cond.hub', { from: 'Netherlands', to: 'Bulgaria' }));
+    expect(html).toContain(t('tower.abroad.hub.pick', { to: 'Bulgaria' }));
+    expect(html).not.toContain(t('tower.abroad.dep.airport'));
+    expect(html).not.toContain(t('tower.abroad.carrier.pick'));
+    expect(routeActs(road)).toEqual([]);
+    // And an air route is as it was: airports and a carrier, no fleet.
+    const air = renderToString(<RouteRow r={route({ departureHubs: [{ id: 'mdp-ams', name: 'Schiphol Hub' }] })} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(air).toContain(t('tower.abroad.dep.airport'));
+    expect(air).not.toContain(t('tower.abroad.fleet.pick'));
+  });
+
   it('says what it still needs, each thing by name, and offers nothing until it has it all', () => {
     const missing = route({ conditions: route({}).conditions.map((c) => ({ ...c, met: c.key !== 'airport' && c.key !== 'fee' })) });
     const html = renderToString(<RouteRow r={missing} nameOf={nameOf} writer busy={null} onAct={() => {}} />);
