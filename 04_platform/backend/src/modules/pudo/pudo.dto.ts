@@ -274,6 +274,10 @@ export class AcceptParcelDto {
   @IsOptional() @IsDateString() observedAt?: string;
   /** 2026-11-18 — to a shop in another country, on a route that is on: its declaration (step 2b). */
   @IsOptional() @ValidateNested() @Type(() => AbroadDeclarationDto) abroad?: AbroadDeclarationDto;
+  /** 2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true
+   *  says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
+
 }
 
 /** The driver's pass, shown: the bus's list is read with it (the handover itself checks it again). */
@@ -1487,6 +1491,10 @@ export class ConsumerSendDto {
   /** Priced from the carriers near here, as the quote was when "near me" was asked for (2026-10-25) — so the price
    *  checked at the mint is the one the sender was shown. */
   @IsOptional() @ValidateNested() @Type(() => GeoDto) near?: GeoDto;
+  /** 2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true
+   *  says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
+
 }
 
 export class IntakeDto {

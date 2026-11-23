@@ -1,5 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { euPassage } from '../../shared/eu';
 
 /**
  * A BUSINESS'S PARCELS (backend business-parcel.service.ts; the user, 2026-10-29: "Billed to the business"; "A prepaid
@@ -216,6 +217,8 @@ export interface SendParcel {
   reference?: string;
   routeMode?: 'flexible' | 'locked';
   expectedTotal?: number;
+  /** 2026-11-23 — to another EU country on its road route (step 3b). */
+  noGoodsWithOwnRules?: boolean;
 }
 
 export interface ParcelsApi {
@@ -233,7 +236,7 @@ export interface ParcelsApi {
   move: (parcelId: string, to: string, expectedTotal: number) => Promise<Result<{ parcelId: string; moved: true; now: number; currency?: string }>>;
   callOff: (parcelId: string, reason?: string, choice?: { backTo?: 'door'; maxSpend?: number }) => Promise<Result<ParcelCallOff>>;
   /** What it costs from a shop or from its own place (`own`), before anything is sent. */
-  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } }>>;
+  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; withinUnion?: { fromCountry: string; toCountry: string }; door?: { via: string; viaDid: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } }>>;
   postDoor: (parcelId: string) => Promise<Result<BusinessParcelDetail>>;
   raiseDoor: (parcelId: string, maxSpend: number) => Promise<Result<BusinessParcelDetail>>;
   collectFrom: (siteId: string, bays?: number, closedRoom?: number) => Promise<Result<ParcelAccount>>;
@@ -315,9 +318,11 @@ export interface ParcelForm {
   /** 2026-11-15 — the receiver's email and name, for the emailed code (plan R3). */
   receiverEmail: string;
   receiverName: string;
+  /** 2026-11-23 — to another EU country on its road route: the business's word on what it holds (step 3b). */
+  noGoodsWithOwnRules: boolean;
 }
 
-export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '', most: '', receiverEmail: '', receiverName: '' };
+export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '', most: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false };
 
 const positive = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -350,7 +355,7 @@ export function parcelSendGaps(f: ParcelForm, t: Translate): string[] {
 }
 
 /** The body the server is sent, from a complete form and the price shown. */
-export function sendBody(f: ParcelForm, expectedTotal: number | undefined): SendParcel | null {
+export function sendBody(f: ParcelForm, expectedTotal: number | undefined, withinUnion = false): SendParcel | null {
   const s = parcelSize(f);
   if (!s || !f.originDid || !f.destDid || !f.photoRef) return null;
   return {
@@ -368,12 +373,15 @@ export function sendBody(f: ParcelForm, expectedTotal: number | undefined): Send
     ...(f.reference.trim() ? { reference: f.reference.trim() } : {}),
     routeMode: 'flexible',
     ...(expectedTotal != null ? { expectedTotal } : {}),
+    // 2026-11-23 — to another EU country on its road route: its word, asked there and sent only there (step 3b).
+    ...(withinUnion ? { noGoodsWithOwnRules: f.noGoodsWithOwnRules } : {}),
   };
 }
 
-/** The shops a parcel can be handed in at or collected from: open to new parcels, in the business's own country. */
-export function shopChoices(shops: NetworkShop[], country: string): NetworkShop[] {
-  return shops.filter((s) => s.takesNew !== false && (!s.country || s.country === country)).sort((a, b) => a.shopName.localeCompare(b.shopName));
+/** The shops a parcel can be handed in at or collected from: open to new parcels, in the business's own country. 2026-11-23 — and, to
+ *  be collected at, in another EU country too (`abroad`): a road route between the two is asked when it is priced (step 3b). */
+export function shopChoices(shops: NetworkShop[], country: string, abroad = false): NetworkShop[] {
+  return shops.filter((s) => s.takesNew !== false && (!s.country || s.country === country || (abroad && euPassage(country, s.country) !== null))).sort((a, b) => a.shopName.localeCompare(b.shopName));
 }
 
 /* ---------------------------------------------------------------- the list -- */

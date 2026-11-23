@@ -52,6 +52,7 @@ import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { requireNoGoodsWithOwnRules, unionPassageBetween } from './country';
+import { unionBetween } from '../../foundation/countries/customs-union';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import { BorderRouteService } from './border-route.service';
@@ -4031,8 +4032,10 @@ export class SbgController {
     // 2026-11-08 — and where its country's price card is in force, a walk-up to another shop is priced from the card too: the
     // counter collects that price in cash, as for a booking. Elsewhere it is the flat price it always was.
     // 2026-11-18 — to a shop in another country (step 2b): only on a route that is on — refused by name otherwise — priced by it.
-    const abroad = !sameShopQuote && dto.destPudoDid ? this.abroadQuote(agentDid, dto) : undefined;
-    const walkInQuote = !sameShopQuote && !abroad && dto.destPudoDid ? this.walkInQuote(agentDid, dto) : undefined;
+    // 2026-11-23 — to a shop in another EU country: on its road route, priced by it — refused by name where none is on (step 3b).
+    const road = !sameShopQuote && dto.destPudoDid ? this.roadQuote(agentDid, dto) : undefined;
+    const abroad = !sameShopQuote && !road && dto.destPudoDid ? this.abroadQuote(agentDid, dto) : undefined;
+    const walkInQuote = road ?? (!sameShopQuote && !abroad && dto.destPudoDid ? this.walkInQuote(agentDid, dto) : undefined);
     const taken = this.parcels.accept({ ...dto, agentDid, ...(sameShopQuote ? { sameShopQuote } : {}), ...(walkInQuote ? { walkInQuote } : {}), ...(abroad ? { abroadRoute: abroad.route, abroadQuote: abroad.quote } : {}) });
     // How long it took at the counter, by the app's own clock: kept beside the parcel for the pilot, never on it. Counted in
     // the week it reached us, not the week it was done: a pilot week is frozen when it ends, and a late one must not vanish.
@@ -4088,6 +4091,16 @@ export class SbgController {
    * or nothing for a parcel staying in the country. A route that is not on, or whose arrival airport has closed, is refused by
    * name here, before the parcel is looked at.
    */
+  /** 2026-11-23 — a walk-up to a shop in another EU country: its price on the road route that is on (step 3b), or refused by name. */
+  private roadQuote(agentDid: string, dto: AcceptParcelDto): ShipmentQuote | undefined {
+    const from = this.agents.countryOf(this.agents.get(agentDid));
+    const to = this.agents.countryOf(this.agents.get(dto.destPudoDid!));
+    if (!unionBetween(from, to)) return undefined;
+    const kg = dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'];
+    const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg }) : (dto.size ?? 'M');
+    return this.routing.quoteRoad({ agentDid }, dto.destPudoDid!, size, { kg, fragile: dto.fragile, ...(dto.dimensionsCm ? { dims: dto.dimensionsCm } : {}), consumer: true, at: whenSeen(dto.observedAt).at });
+  }
+
   private abroadQuote(agentDid: string, dto: AcceptParcelDto): { route: BookedRoute; quote: ShipmentQuote } | undefined {
     const from = this.agents.countryOf(this.agents.get(agentDid));
     const to = this.agents.countryOf(this.agents.get(dto.destPudoDid!));
@@ -4110,7 +4123,14 @@ export class SbgController {
     this.assertAgentOwner(did, actor);
     const from = this.agents.countryOf(this.agents.get(did));
     const routes = this.borderRoutes?.onFrom(from) ?? [];
-    return { routes: routes.map((r) => ({ to: r.to, name: catalogueEntry(r.to)?.name ?? r.to, departure: r.departure.airport, arrival: r.arrival.airport })) };
+    // 2026-11-23 — and the road routes to other EU countries (step 3b): no airports, no declaration — the goods word instead.
+    const roads = this.borderRoutes?.roadsFrom(from) ?? [];
+    return {
+      routes: [
+        ...routes.map((r) => ({ to: r.to, name: catalogueEntry(r.to)?.name ?? r.to, by: 'air' as const, departure: r.departure.airport, arrival: r.arrival.airport })),
+        ...roads.map((r) => ({ to: r.to, name: catalogueEntry(r.to)?.name ?? r.to, by: 'road' as const })),
+      ].sort((a, b) => a.to.localeCompare(b.to)),
+    };
   }
 
   /** A parcel's price where it is handed in and collected at the one shop: its size as the counter measured it, one stop. */
@@ -5057,7 +5077,8 @@ export class SbgController {
     // 2026-11-18 — two shops in two countries a route is on between: priced by the route (step 2b; D15), as the counter will be.
     const from = this.agents.countryOf(this.agents.get(origin));
     const to = this.agents.countryOf(this.agents.get(dest));
-    if (from !== to && this.borderRoutes?.isOn(from, to)) return publicQuote(this.routing.quoteAbroad(origin, dest, sized, this.borderRoutes.bookable(from, to), carriers));
+    // 2026-11-23 — two EU countries: on the road route, which quoteShipment asks itself (step 3b).
+    if (from !== to && !unionBetween(from, to) && this.borderRoutes?.isOn(from, to)) return publicQuote(this.routing.quoteAbroad(origin, dest, sized, this.borderRoutes.bookable(from, to), carriers));
     return publicQuote(this.routing.quoteShipment(origin, dest, sized, m?.factor, carriers));
   }
 

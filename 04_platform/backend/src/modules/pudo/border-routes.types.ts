@@ -129,8 +129,11 @@ export class BorderArrivalAirport {
 export class CounterAbroadRoute {
   @ApiProperty() to: string;
   @ApiProperty() name: string;
-  @ApiProperty() departure: string;
-  @ApiProperty() arrival: string;
+  /** 2026-11-23 — by air through a customs warehouse (a declaration at the counter), or by road to another EU country (the goods word). */
+  @ApiProperty({ enum: ['air', 'road'] }) by: 'air' | 'road';
+  /** An air route's airports; absent on a road route. */
+  @ApiPropertyOptional() departure?: string;
+  @ApiPropertyOptional() arrival?: string;
 }
 
 export class CounterAbroadView {
@@ -188,6 +191,21 @@ export class BorderHub {
   @ApiProperty() name: string;
   @ApiProperty() by: string;
   @ApiProperty() at: string;
+}
+
+/** 2026-11-23 — the road route a parcel is booked on (step 3b): its two countries, its central hub and its fleet, as they stood. */
+export class RoadRouteRef {
+  @ApiProperty() from: string;
+  @ApiProperty() to: string;
+  @ApiProperty() hubMdpId: string;
+  @ApiProperty() hubName: string;
+  @ApiProperty() fleetDid: string;
+  @ApiProperty() fleetName: string;
+}
+
+/** …and with its price per size, for the quote. */
+export interface RoadBookedRoute extends RoadRouteRef {
+  prices: { S: number; M: number; L: number; currency: string };
 }
 
 export class BorderPrices {

@@ -374,7 +374,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "Watch the first week on Parcels abroad and on Cases. A driver held by police or customs, or goods standing still, shows on Cases."
     ],
     notes: [
-      "Booking parcels on a road route is being built: until it is, the Send app and the Business app refuse a parcel to another country, and only a store sends between two EU countries.",
+      "Once a road route is on, parcels to the other country are booked only on it, at its price per size, which the sender pays the whole way: in the Send app, in the Business app, at a shop’s counter (in cash) and by stores. Each asks the sender’s word on what the parcel does not hold. With no route on, every one of them refuses, by name.",
       "One member of staff switches a route off. Parcels already on the way finish their journey."
     ]
   }

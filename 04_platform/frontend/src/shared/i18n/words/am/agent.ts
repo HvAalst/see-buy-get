@@ -136,6 +136,7 @@ export const words: Record<string, string> = {
   "agent.accept.abroad.receiverName": "የተቀባዩ ስም",
   "agent.accept.abroad.namesNote": "በመታወቂያቸው ላይ እንዳለው፤ የጉምሩክ ሰነዶቹ ይጠቅሷቸዋል።",
   "agent.accept.abroad.needsSignal": "ወደ ውጭ አገር የሚላክ ጥቅል ኔትወርክ ያስፈልገዋል፤ ዋጋውና የጉምሩክ ሰነዶቹ ከSeeBuyGet ይመጣሉ።",
+  "agent.accept.roadWord": "አልኮል፣ ትምባሆ፣ መድኃኒት ወይም የጦር መሣሪያ እንዳልያዘ ምልክት ያድርጉ።",
   "agent.accept.abroad.needsSignalDetail": "በዚህ ገጽ ላይ ያለው ሁሉ ይጠብቃል፤ ኔትወርክ ሲመለስ ይቀበሉት።",
   "agent.accept.abroad.rowTag": "ውጭ አገር፦ {country}",
   "agent.accept.abroad.papers": "የጉምሩክ ሰነዶቹን ያትሙ",

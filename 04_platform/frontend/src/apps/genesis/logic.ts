@@ -428,6 +428,15 @@ export function cleanPhone(raw: string): string {
 }
 
 /** A phone is ready to submit once it has enough digits to be a real number. */
+/** 2026-11-23 — to another EU country on its road route (step 3b): the sender's word is still missing, or what is sent for it. */
+export function goodsWordMissing(quote: { withinUnion?: unknown } | null | undefined, said: boolean): boolean {
+  return Boolean(quote?.withinUnion) && !said;
+}
+
+export function goodsWordBody(quote: { withinUnion?: unknown } | null | undefined, said: boolean): { noGoodsWithOwnRules?: boolean } {
+  return quote?.withinUnion ? { noGoodsWithOwnRules: said } : {};
+}
+
 export function phoneReady(phone: string): boolean {
   return cleanPhone(phone).replace(/\D/g, '').length >= 9;
 }

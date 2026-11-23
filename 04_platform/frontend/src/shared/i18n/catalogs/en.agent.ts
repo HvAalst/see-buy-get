@@ -171,6 +171,7 @@ export const enAgent = {
   'agent.accept.abroad.receiverName': 'Receiver’s name',
   'agent.accept.abroad.namesNote': 'As on their ID: the customs papers name them.',
   'agent.accept.abroad.needsSignal': 'A parcel abroad needs a signal: its price and its customs papers come from SeeBuyGet.',
+  'agent.accept.roadWord': "Tick that it holds no alcohol, tobacco, medicines or weapons.",
   'agent.accept.abroad.needsSignalDetail': 'Everything else on this screen waits: take it in when the signal is back.',
   'agent.accept.abroad.rowTag': 'Abroad: {country}',
   'agent.accept.abroad.papers': 'Print the customs papers',

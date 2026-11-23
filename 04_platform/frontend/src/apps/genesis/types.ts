@@ -75,6 +75,8 @@ export interface QuoteLegPrice {
 export interface QuoteView {
   /** The money the price is in: the selling company's. */
   currency?: string;
+  /** 2026-11-23 — to another EU country on its road route (step 3b): no customs, and the sender's word on what it holds. */
+  withinUnion?: { union: 'EU'; fromCountry: string; toCountry: string };
   hops: QuoteHop[];
   /** Whether the transport was priced on the box the sender MEASURED or on the tier it was declared as.
    *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */

@@ -13,6 +13,7 @@ import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
 import {
   type BookedRoute,
+  type RoadBookedRoute,
   type BorderAirport,
   type BorderArrivalAirport,
   type BorderCarrier,
@@ -304,6 +305,39 @@ export class BorderRouteService {
       carrier: { entityId: r.carrier.entityId, name: r.carrier.name },
       prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L, currency: r.prices.currency },
     };
+  }
+
+  /**
+   * 2026-11-23 — A PARCEL BOOKED ON A ROAD ROUTE (step 3b; P3-3 "only on a route that is on, at its price"): the route between two
+   * EU countries as it stands now — or refused by name before anything is written: none is on, or its fleet stopped working, or
+   * its central hub is no longer approved.
+   */
+  roadBookable(fromCode: string, toCode: string, now: number = Date.now()): RoadBookedRoute {
+    const from = this.country(fromCode);
+    const to = this.country(toCode);
+    const name = (c: string) => catalogueEntry(c)?.name ?? c;
+    if (!this.byRoad(from, to)) throw new GlosError('INVALID_STATE', `${name(from)} and ${name(to)} are not both in the EU: a parcel between them goes by air, through a customs warehouse`, { from, to });
+    const r = this.routes.get(key(from, to));
+    if (!r || r.state !== 'on') throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} are not sent from ${name(from)} yet: no route between them is on`, { from, to });
+    if (!r.fleet || !r.hub || !r.prices || !this.met('fleet', from, to, now) || !this.met('hub', from, to, now)) {
+      throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} cannot be booked now: the route’s fleet no longer works, or its central hub is no longer approved`, { from, to });
+    }
+    return { from, to, hubMdpId: r.hub.mdpId, hubName: r.hub.name, fleetDid: r.fleet.managerDid, fleetName: r.fleet.name, prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L, currency: r.prices.currency } };
+  }
+
+  /** 2026-11-23 — the road routes on from a country that may be booked now, for its counters to offer (step 3b). */
+  roadsFrom(fromCode: string, now: number = Date.now()): RoadBookedRoute[] {
+    const from = this.country(fromCode);
+    return [...this.routes.values()]
+      .filter((r) => r.from === from && r.state === 'on' && this.byRoad(r.from, r.to))
+      .flatMap((r) => {
+        try {
+          return [this.roadBookable(r.from, r.to, now)];
+        } catch {
+          return [];
+        }
+      })
+      .sort((a, b) => a.to.localeCompare(b.to));
   }
 
   /** The routes on from a country, for a counter there to offer (step 2b): where to, and what each size costs on the route. */

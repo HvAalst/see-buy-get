@@ -44,7 +44,7 @@ import {
 } from './api';
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
-import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
+import { carriersOf, cleanPhone, codeReady, followLanding, goodsWordBody, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
 import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, MoveView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult, BookingPayView } from './types';
 import { refusalSentence } from '../../shared/ui/ErrorNote';
 
@@ -82,6 +82,8 @@ export interface SendState {
   nearMe: boolean;
   /** PG3: the booking half (signed-in only) — receiver + the mint result. */
   receiverMobile: string;
+  /** 2026-11-23 — to another EU country: the sender's word that it holds no alcohol, tobacco, medicines or weapons (step 3b). */
+  noGoodsWithOwnRules: boolean;
   mintBusy: boolean;
   mintError: SbgError | null;
   minted: MintResult | null;
@@ -190,6 +192,7 @@ const INITIAL: SendState = {
   quoteError: null,
   nearMe: false,
   receiverMobile: '',
+  noGoodsWithOwnRules: false,
   mintBusy: false,
   mintError: null,
   minted: null,
@@ -781,6 +784,7 @@ export function useSendApp() {
         quoteError: null,
         nearMe: false,
         receiverMobile: '',
+        noGoodsWithOwnRules: false,
         mintBusy: false,
         mintError: null,
         minted: null,
@@ -818,6 +822,8 @@ export function useSendApp() {
   }, []);
 
   const toBook = useCallback(() => setState((s) => ({ ...s, step: 'book', mintError: null })), []);
+  /** 2026-11-23 — the sender's word on what a parcel to another EU country holds (step 3b). */
+  const setGoodsWord = useCallback((said: boolean) => setState((s) => ({ ...s, noGoodsWithOwnRules: said })), []);
 
   /** The mint: the SAME genesis the vendor console gets, from the sender's own phone. On success the
    *  wizard lands on the label (their drop-off credential) and My Parcels refreshes underneath. */
@@ -844,6 +850,8 @@ export function useSendApp() {
       fragile: fragile || undefined,
       ...(near ? { near } : {}),
       expectedTotal,
+      // 2026-11-23 — to another EU country on its road route: the sender's word (step 3b).
+      ...goodsWordBody(quote, stateRef.current.noGoodsWithOwnRules),
     });
     if (epoch !== mintEpoch.current) return; // the booking was abandoned (back / start again) — don't teleport
     if (r.error) {
@@ -1454,6 +1462,7 @@ export function useSendApp() {
       setReceiver,
       pickReceiverContact,
       toBook,
+      setGoodsWord,
       submitMint,
       // identity
       setAuthPhone,

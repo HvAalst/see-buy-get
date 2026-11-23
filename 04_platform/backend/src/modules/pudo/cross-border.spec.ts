@@ -55,6 +55,18 @@ import { PartnerLedgerService } from './partner-ledger.service';
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 import { STAND_IN_ANSWERS_AFTER_MS } from '../../foundation/payment-hub/stand-in.provider';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
+import { BorderRouteService } from './border-route.service';
+import { GlosError } from '../../foundation/http/glos-error';
+
+/** 2026-11-23 — the road route from the Netherlands to Bulgaria, switched on or off by a test (step 3b): the routing asks it. */
+const ROAD = { from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line', prices: { S: 18, M: 27.5, L: 39, currency: 'EUR' } };
+let roadOn = false;
+const roads = {
+  roadBookable: (from: string, to: string) => {
+    if (!roadOn || from !== 'NL' || to !== 'BG') throw new GlosError('INVALID_STATE', 'Parcels to Bulgaria are not sent from Netherlands yet: no route between them is on');
+    return { ...ROAD, prices: { ...ROAD.prices } };
+  },
+};
 
 /**
  * Crossing a border — the fact the network could not previously state.
@@ -100,8 +112,10 @@ describe('crossing a border', () => {
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
+        { provide: BorderRouteService, useValue: roads },
       ],
     }).compile();
+    roadOn = false;
     photoBy = evidencePhotos(moduleRef);
     photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
@@ -818,15 +832,19 @@ describe('crossing a border', () => {
     const AMSTERDAM = { lat: 52.37, lng: 4.9 };
     const SOFIA = { lat: 42.7, lng: 23.32 };
     const euShops = () => {
-      presence.set({ jurisdiction: 'NL', level: 'matched' });
+      // A company of ours sells in the Netherlands, in euros, and the road route to Bulgaria is on (step 3b).
+      entities.createCompany({ kind: 'sister', jurisdiction: 'NL', name: 'SeeBuyGet Nederland' }, 'Owner');
+      entities.activate('sbg-nl', 'Owner');
+      presence.set({ jurisdiction: 'NL', level: 'established' });
       presence.set({ jurisdiction: 'BG', level: 'matched' });
+      roadOn = true;
       const to = shop('Магазин Витоша', 'Sofia', SOFIA, 'BG', 2);
       corridors.addCorridor({ name: 'Amsterdam–Sofia', originZone: 'Amsterdam', destZone: 'Sofia' });
       return to;
     };
     /** A store whose goods leave from Amsterdam: its own company sells, so the quote stands on the mechanics alone. */
     const amsterdamStore = () => {
-      const v = vendors.register({ name: 'Grachten Goods', country: 'KE' });
+      const v = vendors.register({ name: 'Grachten Goods', country: 'NL' });
       vendors.setCollectionPoint(v.vendorId, { label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM });
       return vendors.get(v.vendorId);
     };
@@ -896,6 +914,64 @@ describe('crossing a border', () => {
       expect(parcel.customs).toBeUndefined();
       expect(parcel.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
       expect(Date.parse(parcel.withinUnion!.saidNoneAt)).not.toBeNaN();
+      // 2026-11-23 — and the road route it was booked on, as it stood (step 3b).
+      expect(parcel.roadRoute).toEqual({ from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
+      expect(parcel.currency).toBe('EUR');
+    });
+
+    // 2026-11-23 — BOOKING ON A ROAD ROUTE (step 3b; P3-2 the sender pays the whole way, P3-3 only on a route that is on).
+    it('is booked only on a road route that is on — refused by name where none is — and priced by it: its price for the size, our fee and the tax', () => {
+      const to = euShops();
+      const store = amsterdamStore();
+      roadOn = false;
+      expect(() => quoteFrom(store, to)).toThrow(/Parcels to Bulgaria are not sent from Netherlands yet: no route between them is on/);
+      roadOn = true;
+      const q = quoteFrom(store, to);
+      expect(q.byRoad).toEqual({ from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
+      expect(q).toMatchObject({ currency: 'EUR', crossesBorder: false, crossings: [], withinUnion: { union: 'EU', fromCountry: 'NL', toCountry: 'BG' } });
+      // From the store's own dock nobody's shop fee: the route's price is the whole way (P3-2), our fee and the tax on top.
+      expect(q.locked.transport).toBe(27.5);
+      expect(q.locked.base).toBe(27.5);
+      expect(q.locked.total).toBeGreaterThanOrEqual(q.locked.base);
+      expect(q.flexible).toEqual(q.locked);
+      // A heavy parcel goes as a load of its own.
+      expect(() => routing.quoteShipmentFrom({ type: 'dock', id: store.did, label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM }, to.did, 'HEAVY', vendors.entityIdOf(store))).toThrow(/a heavy one goes as a load of its own/);
+    });
+
+    it('a walk-up at a Dutch counter to a Bulgarian shop: paid there in cash, with the sender’s word, priced by the route and keeping it', () => {
+      const to = euShops();
+      const counter = shop('Grachten Winkel', 'Amsterdam', AMSTERDAM, 'NL', 3);
+      agents.submitKyc(counter.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['front.jpg'] });
+      agents.decideKyc(counter.did, true, undefined, undefined, '2099-12-31');
+      gate.topUp(counter.did, 100);
+      const quote = routing.quoteRoad({ agentDid: counter.did }, to.did, 'M', { consumer: true });
+      let n = 0;
+      const take = (extra: object) =>
+        parcels.accept({ parcelId: `PUD-NLBG-${(n += 1)}`, agentDid: counter.did, destPudoDid: to.did, destZone: 'Sofia', size: 'M', senderMobile: '+31612345678', receiverMobile: '+359888123456', dropoffPhotoRef: photoBy(counter.did), walkInQuote: quote, ...extra } as never);
+      expect(() => take({ paymentMode: 'credit', noGoodsWithOwnRules: true })).toThrow(/A parcel to another country is paid at this counter, in cash/);
+      expect(() => take({})).toThrow(/from NL to BG: say that it holds no alcohol, tobacco, medicines or weapons/);
+      expect(() => take({ noGoodsWithOwnRules: true, natureCode: 'HUM' })).toThrow(/medicines do not go to another country with us/);
+      const parcel = take({ noGoodsWithOwnRules: true });
+      expect(parcel.roadRoute).toMatchObject({ from: 'NL', to: 'BG', hubName: 'Sofia Central Hub', fleetName: 'Balkan Line' });
+      expect(parcel.withinUnion).toMatchObject({ fromCountry: 'NL', toCountry: 'BG' });
+      expect(parcel.customs).toBeUndefined();
+      expect(parcel.border).toBeUndefined();
+      expect(parcel.currency).toBe('EUR');
+    });
+
+    it('a person sends from a Dutch shop to a Bulgarian one on the route, with their word on what it holds — kept with the parcel', () => {
+      const to = euShops();
+      const from = shop('Grachten Winkel', 'Amsterdam', AMSTERDAM, 'NL', 3);
+      const quote = routing.quoteShipment(from.did, to.did, 'M', undefined, { consumer: true });
+      expect(quote.byRoad?.hubName).toBe('Sofia Central Hub');
+      // The first shop's own fee is on top of the route's price.
+      expect(quote.locked.base).toBe(30.5);
+      const send = (extra: object) =>
+        parcels.createConsumerSend({ senderPersonDid: 'did:person:anna', senderPhoneHash: 'hash-anna', receiverMobile: '+359888123456', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2, quote, ...extra });
+      expect(() => send({})).toThrow(/from NL to BG: say that it holds no alcohol, tobacco, medicines or weapons/);
+      const { parcel } = send({ noGoodsWithOwnRules: true });
+      expect(parcel.roadRoute).toMatchObject({ from: 'NL', to: 'BG', fleetName: 'Balkan Line' });
+      expect(parcel.withinUnion).toMatchObject({ fromCountry: 'NL', toCountry: 'BG' });
     });
   });
 

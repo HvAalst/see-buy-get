@@ -5,10 +5,11 @@ import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pi
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
-import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
+import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, goodsWordMissing, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
+import { GoodsWord } from '../../../shared/ui/GoodsWord';
 
 export interface SendScreenProps {
   state: SendState;
@@ -533,7 +534,8 @@ function BookStep({ state, actions }: SendScreenProps) {
   const q = state.quote;
   const from = state.points.find((p) => p.did === state.fromDid);
   const to = state.points.find((p) => p.did === state.toDid);
-  const ready = phoneReady(cleanPhone(state.receiverMobile));
+  // 2026-11-23 — to another EU country: the sender's word on what it holds, before the label (step 3b).
+  const ready = phoneReady(cleanPhone(state.receiverMobile)) && !goodsWordMissing(q, state.noGoodsWithOwnRules);
 
   return (
     <div class="scr">
@@ -577,6 +579,8 @@ function BookStep({ state, actions }: SendScreenProps) {
         ) : null}
         {q && taxLine(q, t) ? <p class="card__note">{taxLine(q, t)}</p> : null}
       </Card>
+
+      {q?.withinUnion ? <GoodsWord passage={q.withinUnion} said={state.noGoodsWithOwnRules} onChange={actions.setGoodsWord} /> : null}
 
       {state.mintError ? <ErrorNote error={state.mintError} /> : null}
 

@@ -35,7 +35,7 @@ import { signal } from '../../shared/feedback';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { CustodyCapView } from '../../shared/custodyCap';
-import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, weighedFor, type AcceptForm, type DimsForm, abroadBody, abroadMissing, abroadRouteFor, type AbroadForm } from './logic';
+import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, weighedFor, type AcceptForm, type DimsForm, abroadRouteFor, abroadBlock, abroadExtras, type AbroadForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
@@ -1825,7 +1825,8 @@ export function useAgentApp() {
     // 2026-11-18 — a parcel abroad (step 2b): declared, and only with a signal — its price and papers come from SeeBuyGet.
     const { acceptPoints, abroadRoutes, agent } = stateRef.current;
     const abroad = abroadRouteFor(acceptPoints, f.destPudoDid, agent?.country, abroadRoutes);
-    if (abroad && abroadMissing(f.abroad, t)) return;
+    // 2026-11-23 — on a road route to another EU country: no declaration, the sender's word instead (step 3b).
+    if (abroadBlock(abroad, f, t)) return;
     if (abroad && isOfflineNow()) return; // the button says so, and waits for a signal
     await run('accept', async () => {
       const r = await client.api.accept({
@@ -1849,7 +1850,7 @@ export function useAgentApp() {
         ...(terms && !terms.cashAccepted ? { paymentMode: 'prepaid' as const } : {}),
         // 2026-11-08 — the price the sender was told: refused, and said anew, if it has moved since.
         ...(stateRef.current.acceptPrice ? { expectedTotal: stateRef.current.acceptPrice.gross } : {}),
-        ...(abroad ? { abroad: abroadBody(f.abroad) } : {}),
+        ...abroadExtras(abroad, f),
         // 2026-11-20 — paid by phone first (a partner's country, 4b): the payment for this very parcel.
         ...(terms?.payByPhone && stateRef.current.phonePay?.state === 'paid' ? { paymentId: stateRef.current.phonePay.paymentId } : {}),
       });

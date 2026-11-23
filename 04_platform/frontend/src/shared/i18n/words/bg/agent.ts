@@ -136,6 +136,7 @@ export const words: Record<string, string> = {
   "agent.accept.abroad.receiverName": "Име на получателя",
   "agent.accept.abroad.namesNote": "Както в личната им карта: митническите документи ги назовават.",
   "agent.accept.abroad.needsSignal": "Пратка за чужбина изисква сигнал: цената ѝ и митническите ѝ документи идват от SeeBuyGet.",
+  "agent.accept.roadWord": "Отбележете, че не съдържа алкохол, тютюн, лекарства или оръжие.",
   "agent.accept.abroad.needsSignalDetail": "Всичко останало на този екран изчаква: приемете я, когато сигналът се върне.",
   "agent.accept.abroad.rowTag": "Чужбина: {country}",
   "agent.accept.abroad.papers": "Отпечатай митническите документи",

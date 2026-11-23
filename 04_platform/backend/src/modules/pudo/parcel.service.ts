@@ -770,6 +770,8 @@ interface AcceptInput {
   abroadRoute?: BookedRoute;
   abroadQuote?: ShipmentQuote;
   abroad?: { contents: string; itemCount: number; declaredValue: number; currency: string; invoicePhotoRef: string; contentsPhotoRef: string; seal: string; senderName: string; receiverName: string };
+  /** 2026-11-23 — to a shop in another EU country, on its road route: the sender's word on what it does not hold (BG-2). */
+  noGoodsWithOwnRules?: boolean;
   observedAt?: string; // round 23: when the counter took it in, by its phone's clock (a take-in kept with no signal)
 }
 
@@ -1610,6 +1612,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const from = this.agents.countryOf(agent);
     const to = this.agents.countryOf(dest);
     if (to === from) return undefined;
+    // 2026-11-23 — to another EU country it goes on its road route, priced by it (the controller worked it out): no parcel abroad.
+    if (input.walkInQuote?.byRoad) return undefined;
     const name = (c: string) => catalogueEntry(c)?.name ?? c;
     if (!input.abroadRoute || !input.abroadQuote) {
       throw new GlosError('CUSTOMS_INCOMPLETE', `${dest.shopName} is in another country, and no route from ${name(from)} to ${name(to)} is on: parcels cannot be sent there from this counter yet`, { fromCountry: from, toCountry: to });
@@ -1681,6 +1685,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // its invoice, the seal put on it, who sends and who receives it — and paid here in cash. Refused by name before anything is
     // written. Compared shop to shop, as before: a counter with no route there still cannot paper a parcel for a border.
     const abroad = this.abroadOf(input, agent);
+    // 2026-11-23 — A WALK-UP ON A ROAD ROUTE (step 3b): paid here in cash, as any parcel to another country, and only with the
+    // sender's word that it holds no alcohol, tobacco, medicines or weapons (BG-2). Refused before anything is written.
+    if (input.walkInQuote?.byRoad) {
+      if ((input.paymentMode ?? 'cash') !== 'cash') throw new GlosError('INVALID_INPUT', 'A parcel to another country is paid at this counter, in cash', { field: 'paymentMode' });
+      requireNoGoodsWithOwnRules(input.walkInQuote.withinUnion, input.noGoodsWithOwnRules, 'noGoodsWithOwnRules', input.natureCode);
+    }
     /**
      * THE DOOR: may goods be taken in here at all, and under WHOSE promise?
      *
@@ -1826,6 +1836,8 @@ export class ParcelService implements OnApplicationBootstrap {
     else if (abroad) Object.assign(parcel, this.pricedFrom(abroad.quote), { customs: abroad.customs, contentPhotoRef: abroad.declaration.contentsPhotoRef, border: { ...abroad.border, papers: { svg: '' } } });
     // A walk-up priced from its country's card keeps that price and what it was made of, as a booking does.
     else if (input.walkInQuote) Object.assign(parcel, this.pricedFrom(input.walkInQuote));
+    // 2026-11-23 — and the sender's word, where it goes on a road route to another EU country.
+    if (input.walkInQuote?.withinUnion) parcel.withinUnion = { ...input.walkInQuote.withinUnion, saidNoneAt: now };
     // A same-shop parcel goes on this shop's shelf now: the slot FIRST, before the parcel is kept — a full shelf refuses
     // the take-in with nothing written, rather than keeping a parcel that is ready to collect and on no shelf.
     if (sameShop) parcel.binSlot = this.shelf.assign(input.agentDid, parcel.parcelId, parcel.size);
@@ -2222,6 +2234,8 @@ export class ParcelService implements OnApplicationBootstrap {
   private pricedFrom(quote: ShipmentQuote): Partial<Parcel> {
     const chosen = quote.locked;
     return {
+      // 2026-11-23 — on a road route (step 3b): the route it was taken in on.
+      ...(quote.byRoad ? { roadRoute: { ...quote.byRoad } } : {}),
       routeMode: 'locked',
       routeKm: quote.totalKm,
       lockedPerKm: quote.perKm.min,
@@ -2657,6 +2671,7 @@ export class ParcelService implements OnApplicationBootstrap {
       fx: quote.fx,
       customs,
       ...(withinUnion ? { withinUnion: { ...withinUnion, saidNoneAt: now } } : {}),
+      ...(quote.byRoad ? { roadRoute: { ...quote.byRoad } } : {}),
       sellerEntityId: quote.sellerEntityId,
       shipmentCost,
       ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
@@ -2707,7 +2722,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * collects it at the drop-off scan, so the label issues immediately (it is the sender's drop-off
    * credential, not a payment receipt).
    */
-  createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote }): { parcel: Parcel; code: PhygitalLabel } {
+  createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote; noGoodsWithOwnRules?: boolean }): { parcel: Parcel; code: PhygitalLabel } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
     // 2026-11-05 — drop-off and collection at the one shop is a same-shop parcel (it was refused): priced as one stop by
@@ -2728,12 +2743,9 @@ export class ParcelService implements OnApplicationBootstrap {
         { crossings: input.quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) },
       );
     }
-    // 2026-11-22 — to another EU country there is no customs (BG-2), and still no way there for a person's parcel: it is booked
-    // on a route by road between the two countries, which is the plan's part 3. Refused by name until then.
-    if (input.quote.withinUnion) {
-      const w = input.quote.withinUnion;
-      throw new GlosError('INVALID_STATE', `Parcels from ${w.fromCountry} to ${w.toCountry} are not booked here yet — a store can ship there today`, { fromCountry: w.fromCountry, toCountry: w.toCountry });
-    }
+    // 2026-11-23 — to another EU country: only on a road route that is on, at its price (the quote asked it, step 3b), and with the
+    // sender's word that it holds no alcohol, tobacco, medicines or weapons, before anything is written (BG-2).
+    requireNoGoodsWithOwnRules(input.quote.withinUnion, input.noGoodsWithOwnRules, 'noGoodsWithOwnRules', input.natureCode);
     const size = classifySize({ ...input.dimensionsCm, kg: input.weightKg });
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] });
@@ -2778,6 +2790,9 @@ export class ParcelService implements OnApplicationBootstrap {
       status: 'Created',
       trackingKey,
       ...peerSendPriceOf(quote),
+      // 2026-11-23 — to another EU country on its road route (step 3b): the route, and the sender's word.
+      ...(quote.byRoad ? { roadRoute: { ...quote.byRoad } } : {}),
+      ...(quote.withinUnion ? { withinUnion: { ...quote.withinUnion, saidNoneAt: now } } : {}),
       paidStatus: 'unpaid',
       acceptedAt: now,
       // Minted with the parcel (see accept()): the sender holds the release code in their own twin from

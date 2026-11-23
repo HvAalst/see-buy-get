@@ -677,6 +677,20 @@ export function acceptMissing(f: AcceptForm, t: Translate, abroad = false): stri
   return abroad ? abroadMissing(f.abroad, t) : null;
 }
 
+/**
+ * 2026-11-23 — A TAKE-IN TO ANOTHER COUNTRY (step 3b): what it still needs before it is taken in — an air route's declaration, or,
+ * on a road route to another EU country, the sender's word on what it holds — and what it sends besides the parcel.
+ */
+export function abroadBlock(route: AbroadRoute | null, f: AcceptForm, t: Translate): string | null {
+  if (!route) return null;
+  return route.by === 'road' ? (f.noGoodsWithOwnRules ? null : t('agent.accept.roadWord')) : abroadMissing(f.abroad, t);
+}
+
+export function abroadExtras(route: AbroadRoute | null, f: AcceptForm): { abroad?: ReturnType<typeof abroadBody>; noGoodsWithOwnRules?: boolean } {
+  if (!route) return {};
+  return route.by === 'road' ? { noGoodsWithOwnRules: f.noGoodsWithOwnRules } : { abroad: abroadBody(f.abroad) };
+}
+
 /* ----------------------------------------------------------- book freight (F2) -- */
 
 /** Parse the cash budget cap (accepts a decimal comma), or null while it's missing / not a positive amount. */

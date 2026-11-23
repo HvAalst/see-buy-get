@@ -16,7 +16,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
-import { customsBorderBetween } from '../../foundation/countries/customs-union';
+import { customsBorderBetween, unionBetween } from '../../foundation/countries/customs-union';
 import { BorderCrossing, crossingsOn, UnionPassage, unionPassageOn } from './country';
 import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
 import { assertSiteTakes } from './site-tools';
@@ -26,7 +26,9 @@ import { CatchmentService } from './catchment.service';
 import { RoadMapService } from './road-map.service';
 import { BusinessRateService } from './business-rate.service';
 import type { ZonePrice } from './price-card.types';
-import type { BookedRoute } from './border-routes.types';
+import type { BookedRoute, RoadRouteRef } from './border-routes.types';
+import { BorderRouteService } from './border-route.service';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { haversineKm } from './geo';
 
 /** 2026-11-18 — a journey across a border by its route (step 2b): the hub it leaves from, and the warehouse hub it arrives at. */
@@ -223,6 +225,8 @@ export interface ShipmentQuote {
   locked: QuoteLeg;
   /** 2026-11-18 — priced by a route across a border (step 2b; D15): the two countries, its airports and its carrier. */
   border?: { from: string; to: string; departure: string; arrival: string; carrier: string };
+  /** 2026-11-23 — priced by a road route between two EU countries (step 3b; P3-2: the sender pays the whole way): the route as it stood. */
+  byRoad?: RoadRouteRef;
 }
 
 /**
@@ -319,6 +323,8 @@ export class RoutingService {
     @Optional() private readonly catchments?: CatchmentService,
     // 2026-11-12 — the road map of hubs (the plan "Hubs on the Road", step 4): a journey's hubs along the road, where on.
     @Optional() private readonly roadMaps?: RoadMapService,
+    // 2026-11-23 — the road routes between EU countries (step 3b): a journey between two of them only on one that is on.
+    @Optional() private readonly borderRoutes?: BorderRouteService,
     // 2026-11-12 — a large sender's own rate (the owner's D3): its contract card, or its discount.
     @Optional() private readonly businessRates?: BusinessRateService,
   ) {}
@@ -354,6 +360,8 @@ export class RoutingService {
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
+    // 2026-11-23 — two shops in two EU countries: only on a road route that is on, at its price (step 3b; P3-3).
+    if (this.roadPair(this.agents.countryOf(this.agents.get(originAgentDid)), destAgentDid)) return this.quoteRoad({ agentDid: originAgentDid }, destAgentDid, size, carriers);
     this.doorFor(originAgentDid, destAgentDid);
     return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), size, undefined, measured, carriers);
   }
@@ -365,6 +373,10 @@ export class RoutingService {
    * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
    */
   quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
+    if (this.roadPair(this.agents.countryOf(this.agents.get(originAgentDid)), destAgentDid)) {
+      const quote = this.quoteRoad({ agentDid: originAgentDid }, destAgentDid, size, carriers);
+      return { plan: this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), quote };
+    }
     this.doorFor(originAgentDid, destAgentDid);
     const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg });
     return { plan, quote: this.quoteJourney(plan, size, undefined, measured, carriers) };
@@ -378,6 +390,7 @@ export class RoutingService {
    * store's own), which is who the margin belongs to when there is no origin shop to take it from.
    */
   quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
+    if (this.roadPair(from.country, destAgentDid)) return this.quoteRoad({ end: from, sellerEntityId }, destAgentDid, size, carriers);
     this.doorFor(undefined, destAgentDid);
     return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), size, sellerEntityId, measured, carriers);
   }
@@ -443,6 +456,83 @@ export class RoutingService {
       flexible: leg,
       locked: leg,
       border: { from: route.from, to: route.to, departure: route.departure.airport, arrival: route.arrival.airport, carrier: route.carrier.name },
+    };
+  }
+
+  /** 2026-11-23 — whether a journey from this country to this shop goes on a road route: the two in two different EU countries. */
+  private roadPair(fromCountry: string, destAgentDid: string): boolean {
+    return Boolean(unionBetween(fromCountry, this.agents.countryOf(this.agents.get(destAgentDid))));
+  }
+
+  /**
+   * 2026-11-23 — A PARCEL'S PRICE ON A ROAD ROUTE (step 3b; the owner's P3-2 "as recommended": the sender pays one price, the whole
+   * way to the receiving shop; P3-3: only on a route that is on). The route's price for its size, with the first shop's own fee and
+   * our fee on top, and the tax, as for any parcel; to the sending country's cash step where its card has one. Every stop on the way,
+   * in either country, is paid its own fee out of it, as on a card. No customs border, so no declaration: the goods-word instead.
+   */
+  quoteRoad(start: { agentDid: string } | { end: RouteEnd; sellerEntityId?: string }, destAgentDid: string, size: ParcelSize, carriers: QuoteCarriers = {}): ShipmentQuote {
+    const originAgentDid = 'agentDid' in start ? start.agentDid : undefined;
+    this.doorFor(originAgentDid, destAgentDid);
+    const fromCountry = originAgentDid ? this.agents.countryOf(this.agents.get(originAgentDid)) : (start as { end: RouteEnd }).end.country.toUpperCase();
+    const toCountry = this.agents.countryOf(this.agents.get(destAgentDid));
+    const name = (c: string) => catalogueEntry(c)?.name ?? c;
+    if (!this.borderRoutes) throw new GlosError('INVALID_STATE', `Parcels to ${name(toCountry)} are not sent from ${name(fromCountry)} yet: no route between them is on`, { from: fromCountry, to: toCountry });
+    const route = this.borderRoutes.roadBookable(fromCountry, toCountry, carriers.at);
+    if (size === 'HEAVY') throw new GlosError('CARGO_REQUIRES_DEDICATED', 'A road route carries small, medium and large parcels: a heavy one goes as a load of its own');
+    const plan = originAgentDid
+      ? this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg })
+      : this.planJourney({ from: (start as { end: RouteEnd }).end, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg });
+    const sellerId = ('sellerEntityId' in start ? start.sellerEntityId : undefined) ?? (originAgentDid ? this.agents.entityIdOrNone(this.agents.get(originAgentDid)) : undefined);
+    if (!sellerId) throw new GlosError('FORBIDDEN', `Nobody of ours can sell this journey: nobody of ours sells in ${name(fromCountry)}`);
+    const currency = this.currencyOf(sellerId);
+    if (currency !== route.prices.currency) throw new GlosError('INVALID_STATE', `The route’s prices are in ${route.prices.currency}, and this sale is in ${currency}`);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const nodes: QuoteNode[] = plan.hops
+      .filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock')
+      .map((h) => {
+        const isHub = h.type === 'mdp';
+        const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
+        const own = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
+        const native = r2(site.pricePerParcel);
+        const money = own ? this.currencyOf(own) : this.priceableCurrencyOf(h.country);
+        return { type: h.type, id: h.id, label: h.label, entityId: own ?? sellerId, country: h.country, currency: money, nativeFee: native, fee: this.fx.convertForQuote(native, money, currency), ...(own ? {} : { purchased: true }) };
+      });
+    const nodeFees = r2(nodes.reduce((sum, n) => sum + n.fee, 0));
+    const shopFee = nodes[0]?.type === 'pudo' && nodes[0].id === originAgentDid ? nodes[0].fee : 0;
+    const routePrice = route.prices[size];
+    const stack = this.entities.ratesFor(sellerId, SIZE_LANE[size]);
+    const taxRule = this.entities.taxFor(sellerId, SIZE_LANE[size]);
+    const base = r2(shopFee + routePrice);
+    let total = withPlatformFee(base, stack.totalPct);
+    let { tax, gross } = taxOn(total, taxRule.ratePct);
+    const step = carriers.consumer ? (this.priceCards?.inForceFor(route.from, carriers.at ?? Date.now())?.card.cashStep ?? 0) : 0;
+    if (step > 0) ({ total, tax, gross } = cashRounded(base, gross, taxRule.ratePct, step));
+    const leg: QuoteLeg = { transport: routePrice, base, fee: r2(total - base), total, tax, gross, provision: r2(base * stack.costOfRiskPct) };
+    const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
+    const { prices: _prices, ...ref } = route;
+    return {
+      hops: plan.hops,
+      nodes,
+      legs,
+      entityIds: [...new Set(nodes.map((n) => n.entityId))],
+      sellerEntityId: sellerId,
+      currency,
+      crossesBorder: false,
+      crossings: [],
+      withinUnion: unionPassageOn(plan.hops) ?? { union: 'EU', fromCountry, toCountry },
+      totalKm: Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10,
+      nodeFees,
+      size,
+      transportFactor: SIZE_TRANSPORT_FACTOR[size],
+      factorBasis: 'band',
+      perKm: { min: 0, max: 0, from: 'company', carriers: 0 },
+      platformFeePct: stack.totalPct,
+      rates: stack,
+      tax: taxRule,
+      insurance: this.entities.insuranceFor(sellerId, SIZE_LANE[size]),
+      flexible: leg,
+      locked: leg,
+      byRoad: ref,
     };
   }
 

@@ -65,6 +65,9 @@ export class BusinessParcelDto {
   @IsOptional() @IsIn(['flexible', 'locked']) @ApiPropertyOptional({ enum: ['flexible', 'locked'] }) routeMode?: 'flexible' | 'locked';
   /** The price shown when it was quoted. Moved since: refused with the new price, never billed silently. */
   @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
+  /** 2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true
+   *  says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else. */
+  @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
 }
 
 /** What a parcel would cost: from a shop's id, or `own` — its own place — to a shop, at its measurements. */

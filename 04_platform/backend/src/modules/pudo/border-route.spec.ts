@@ -17,6 +17,8 @@ describe('a route across a border', () => {
   const AMINA = { name: 'Amina Staff', key: 'acct-amina' };
   const BRIAN = { name: 'Brian Staff', key: 'acct-brian' };
 
+  /** 2026-11-23 — the fleets not working now; a test may send one to sleep. */
+  const asleep = new Set<string>(['did:fleet:asleep']);
   const setup = (o: { open?: string[]; testing?: string[]; companies?: string[] } = {}) => {
     const open = o.open ?? ['NL', 'KE'];
     const testing = o.testing ?? [];
@@ -56,7 +58,7 @@ describe('a route across a border', () => {
       { did: 'did:fleet:asleep', companyName: 'Sleeping Vans', jurisdiction: 'BG' },
       { did: 'did:fleet:nairobi', companyName: 'Nairobi Movers', jurisdiction: 'KE' },
     ];
-    const fleets = { list: () => fleetList, isActive: (did: string) => did !== 'did:fleet:asleep' } as unknown as FleetManagerService;
+    const fleets = { list: () => fleetList, isActive: (did: string) => !asleep.has(did) } as unknown as FleetManagerService;
     return new BorderRouteService(presence, entities, mdps, directory, fleets);
   };
 
@@ -107,8 +109,19 @@ describe('a route across a border', () => {
     expect(svc.propose('NL', 'BG', AMINA, NOW)).toMatchObject({ state: 'waiting' });
     expect(svc.approve('NL', 'BG', BRIAN, NOW)).toMatchObject({ state: 'on', approvedBy: 'Brian Staff' });
     expect(svc.isOn('NL', 'BG')).toBe(true);
-    // Booking on it is the next step: until then a parcel is not booked through a customs warehouse between two EU countries.
+    // Booked on as a road route (step 3b), never through a customs warehouse.
     expect(() => svc.bookable('NL', 'BG', NOW)).toThrow(/both in the EU: parcels between them go on a road route, not through a customs warehouse/);
+    expect(svc.roadBookable('nl', 'bg', NOW)).toEqual({ from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line', prices: { S: 18, M: 27.5, L: 39, currency: 'EUR' } });
+    expect(svc.roadsFrom('NL', NOW).map((r) => r.to)).toEqual(['BG']);
+    expect(() => svc.roadBookable('NL', 'KE', NOW)).toThrow(/not both in the EU: a parcel between them goes by air/);
+    expect(() => svc.roadBookable('BG', 'NL', NOW)).toThrow(/Parcels to Netherlands are not sent from Bulgaria yet: no route between them is on/);
+    // Its fleet stops working: booked on no longer, until it works again.
+    asleep.add('did:fleet:balkan');
+    expect(() => svc.roadBookable('NL', 'BG', NOW)).toThrow(/cannot be booked now: the route’s fleet no longer works, or its central hub is no longer approved/);
+    expect(svc.roadsFrom('NL', NOW)).toEqual([]);
+    asleep.delete('did:fleet:balkan');
+    svc.switchOff('NL', 'BG', BRIAN, NOW);
+    expect(() => svc.roadBookable('NL', 'BG', NOW)).toThrow(/no route between them is on/);
     // A route out of the EU is as it was.
     readyKenya(svc);
     expect(svc.propose('NL', 'KE', AMINA, NOW)).toMatchObject({ state: 'waiting' });

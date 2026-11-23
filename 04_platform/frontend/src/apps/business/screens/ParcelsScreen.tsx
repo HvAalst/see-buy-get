@@ -1,5 +1,6 @@
 import { AskToOpen } from '../../../shared/opening/AskToOpen';
 import { businessConfig } from '../api';
+import { countryNameIn } from '../../../shared/documents/documents';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -61,6 +62,8 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
   const [account, setAccount] = useState<ParcelAccount | null>(null);
   const [rows, setRows] = useState<BusinessParcel[] | null>(null);
   const [shops, setShops] = useState<NetworkShop[]>([]);
+  // 2026-11-23 — where a parcel may be collected: the business's own country, and other EU countries (step 3b).
+  const [toShops, setToShops] = useState<NetworkShop[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -89,7 +92,11 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
 
   useEffect(() => {
     if (!api || !sending || shops.length) return;
-    void api.shops().then((r) => setShops(r.error ? [] : shopChoices((r.data as NetworkShop[] | undefined) ?? [], business.country)));
+    void api.shops().then((r) => {
+      const all = r.error ? [] : ((r.data as NetworkShop[] | undefined) ?? []);
+      setShops(shopChoices(all, business.country));
+      setToShops(shopChoices(all, business.country, true));
+    });
     const sites = (client?.api as never as { sites?: (entityId: string) => Promise<{ data?: unknown; error?: unknown }> }).sites;
     void sites?.(business.entityId).then((r) => setPlaces(r.error || !r.data ? [] : (((r.data as { sites?: Array<{ siteId: string; name: string; kind: string }> }).sites ?? []).filter((s) => s.kind === 'delivery' || s.kind === 'loading'))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +252,8 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
           <SendForm
             api={api}
             shops={shops}
+            toShops={toShops}
+            country={business.country}
             places={places}
             collection={account.collection}
             balance={account.balance ?? 0}
@@ -621,11 +630,11 @@ function Book({ api, currency }: { api: ReturnType<typeof parcelsApi>; currency:
 
 /* -------------------------------------------------------------------- send -- */
 
-function SendForm({ api, shops, places, collection, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; places: Array<{ siteId: string; name: string }>; collection?: ParcelCollection; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
+function SendForm({ api, shops, toShops, country, places, collection, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; toShops: NetworkShop[]; country: string; places: Array<{ siteId: string; name: string }>; collection?: ParcelCollection; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
   const t = useT();
   // Collected from its own place, where it set one: offered first, as the way it usually sends.
   const [form, setForm] = useState<ParcelForm>({ ...EMPTY_PARCEL, ...(collection ? { originDid: OWN_PLACE } : {}) });
-  const [quote, setQuote] = useState<{ flexible: number; currency: string; door?: { via: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } } | null>(null);
+  const [quote, setQuote] = useState<{ flexible: number; currency: string; withinUnion?: { fromCountry: string; toCountry: string }; door?: { via: string; suggestedMax: number }; priceList?: { from: string; to: string; band: string } } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSaid, setPhotoSaid] = useState<string | null>(null);
@@ -635,7 +644,8 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   const size = parcelSize(form);
   const priceGaps = parcelPriceGaps(form, t);
   const gaps = parcelSendGaps(form, t);
-  const options = shops.map((s) => ({ value: s.did, label: s.shopName, sub: s.zone }));
+  // 2026-11-23 — a shop in another EU country says its country (step 3b).
+  const options = toShops.map((s) => ({ value: s.did, label: s.shopName, sub: s.country && s.country !== country ? `${s.zone} · ${countryNameIn(s.country, 'en')}` : s.zone }));
   // Delivered to one of its own places, by a driver from the shop nearest it — or collected at a shop.
   const toOptions = [...places.map((p) => ({ value: `${TO_PLACE}${p.siteId}`, label: t('business.parcels.f.toPlace', { place: p.name }), sub: t('business.parcels.f.toPlaceSub') })), ...options];
   const toPlace = form.destDid.startsWith(TO_PLACE);
@@ -674,7 +684,7 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   };
 
   const send = async () => {
-    const body = sendBody(form, quote?.flexible);
+    const body = sendBody(form, quote?.flexible, Boolean(quote?.withinUnion));
     if (!body) return;
     setBusy(true);
     setError(null);
@@ -754,10 +764,19 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
           {quote?.priceList ? t('business.parcels.priceList', { price: money(price, quote.currency), from: quote.priceList.from, to: quote.priceList.to }) : t('business.parcels.price', { price: money(price, quote!.currency) })} {price > balance ? t('business.parcels.priceShort') : ''}
         </p>
       ) : null}
+      {quote?.withinUnion ? (
+        <>
+          <p class="chint">{t('common.union.body', { from: countryNameIn(quote.withinUnion.fromCountry, 'en'), to: countryNameIn(quote.withinUnion.toCountry, 'en') })}</p>
+          <label class="cfield--check">
+            <input type="checkbox" checked={form.noGoodsWithOwnRules} onChange={(e) => set({ noGoodsWithOwnRules: e.currentTarget.checked })} />
+            <span>{t('common.union.none')}</span>
+          </label>
+        </>
+      ) : null}
       {gaps.length ? <p class="chint">{t('business.parcels.stillNeeded', { list: gaps.join(', ') })}</p> : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
-        <button type="button" class="cbtn cbtn--primary" disabled={busy || gaps.length > 0 || price == null} onClick={() => void send()}>
+        <button type="button" class="cbtn cbtn--primary" disabled={busy || gaps.length > 0 || price == null || (Boolean(quote?.withinUnion) && !form.noGoodsWithOwnRules)} onClick={() => void send()}>
           {price != null ? t('business.parcels.sendFor', { price: money(price, quote!.currency) }) : t('business.parcels.send')}
         </button>
         <button type="button" class="cbtn cbtn--ghost" onClick={onCancel}>

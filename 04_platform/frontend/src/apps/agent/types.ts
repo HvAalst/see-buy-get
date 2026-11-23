@@ -271,8 +271,10 @@ export interface ParcelView {
 export interface AbroadRoute {
   to: string;
   name: string;
-  departure: string;
-  arrival: string;
+  /** 2026-11-23 — by air through a customs warehouse (declared here), or by road to another EU country (the goods word, step 3b). */
+  by?: 'air' | 'road';
+  departure?: string;
+  arrival?: string;
 }
 
 export interface NetworkPoint {

@@ -390,6 +390,8 @@ export class IdentityController {
       fragile: dto.fragile,
       natureCode: dto.natureCode,
       quote,
+      // 2026-11-23 — to another EU country on its road route: the sender's word on what it holds (step 3b).
+      noGoodsWithOwnRules: dto.noGoodsWithOwnRules,
     });
     // Field-picked response (S25): the sender's authenticated twin view + their drop-off credential + the
     // locked price + the planned journey — never the raw Parcel (it carries the counterparty's number).

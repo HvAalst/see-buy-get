@@ -136,6 +136,7 @@ export const words: Record<string, string> = {
   "agent.accept.abroad.receiverName": "Jina la mpokeaji",
   "agent.accept.abroad.namesNote": "Kama kwenye kitambulisho chao: hati za forodha zinawataja.",
   "agent.accept.abroad.needsSignal": "Kifurushi cha nje ya nchi kinahitaji mtandao: bei yake na hati zake za forodha zinatoka SeeBuyGet.",
+  "agent.accept.roadWord": "Weka alama kwamba haina pombe, tumbaku, dawa wala silaha.",
   "agent.accept.abroad.needsSignalDetail": "Kila kitu kingine kwenye skrini hii kinasubiri: kipokee mtandao ukirudi.",
   "agent.accept.abroad.rowTag": "Nje ya nchi: {country}",
   "agent.accept.abroad.papers": "Chapisha hati za forodha",

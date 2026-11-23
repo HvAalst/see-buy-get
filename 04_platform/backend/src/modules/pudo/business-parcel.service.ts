@@ -268,6 +268,8 @@ export class BusinessParcelService {
       locked: quote.locked.gross,
       currency: quote.currency,
       crossesBorder: quote.crossesBorder,
+      // 2026-11-23 — to another EU country on its road route: the app asks the word on what it holds (step 3b).
+      ...(quote.withinUnion ? { withinUnion: { fromCountry: quote.withinUnion.fromCountry, toCountry: quote.withinUnion.toCountry } } : {}),
       ...(door ? { door: { via: door.shop.shopName, viaDid: door.shop.did, suggestedMax: suggestedMax! } } : {}),
       ...(quote.zone ? { priceList: { from: quote.zone.fromName, to: quote.zone.toName, band: quote.zone.bandName } } : {}),
     };
@@ -360,11 +362,8 @@ export class BusinessParcelService {
     if (quote.crossesBorder) {
       throw new GlosError('INVALID_STATE', 'A parcel across a border goes with its commercial invoice, which the Business app does not take yet: send it to a shop on this side, or as an export', { crossings: quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
     }
-    // 2026-11-22 — to another EU country: no customs (BG-2), but not from the Business app until a route by road joins the two
-    // countries (the plan's part 3).
-    if (quote.withinUnion) {
-      throw new GlosError('INVALID_STATE', `A parcel from ${quote.withinUnion.fromCountry} to ${quote.withinUnion.toCountry} is not sent from the Business app yet: send it to a shop on this side`, { fromCountry: quote.withinUnion.fromCountry, toCountry: quote.withinUnion.toCountry });
-    }
+    // 2026-11-23 — to another EU country: on its road route, at its price (the quote asked it, step 3b); the word on what it holds
+    // is asked where the parcel is written (createInbound).
     const routeMode: 'flexible' | 'locked' = input.routeMode === 'locked' ? 'locked' : 'flexible';
     const price = (routeMode === 'locked' ? quote.locked : quote.flexible).gross;
     // Against the gross: the money that leaves the balance. A price that moved is said, never billed silently.
@@ -413,6 +412,8 @@ export class BusinessParcelService {
       shippingPolicy: v.shippingPolicy,
       routeMode,
       quote,
+      // 2026-11-23 — to another EU country on its road route: the business's word on what it holds (step 3b).
+      noGoodsWithOwnRules: input.noGoodsWithOwnRules,
     });
     // Delivered to its own place: its last leg, posted once it is ready at the shop.
     if (door) {

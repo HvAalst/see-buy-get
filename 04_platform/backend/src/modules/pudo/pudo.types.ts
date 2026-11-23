@@ -8,6 +8,7 @@ import type { OffPlanReason, OffPlanStep } from './route-plan.types';
 import type { NowWithView } from './now-with.types';
 import { FxRate } from '../../foundation/money/fx.service';
 import { BorderCrossing, UnionPassage } from './country';
+import type { RoadRouteRef } from './border-routes.types';
 import { UnitHold } from './tamper.types';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
@@ -1553,6 +1554,8 @@ export class Parcel {
   /** 2026-11-22 — it goes to another EU country, with no customs (BG-2): which two, and when its sender said it holds no
    *  alcohol, tobacco, medicines or weapons. Absent on a parcel staying in one country, and on one that is declared. */
   withinUnion?: UnionPassage & { saidNoneAt: string };
+  /** 2026-11-23 — booked on a road route between two EU countries (step 3b): the route, its central hub and its fleet, as they stood. */
+  roadRoute?: RoadRouteRef;
   /** Round 13 — the shop that took it in saw its commercial invoice in the pouch: when, and which shop. */
   papersSeen?: { at: string; by: string };
   /** The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a

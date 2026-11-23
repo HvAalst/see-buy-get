@@ -47754,6 +47754,10 @@
             "type": "number",
             "description": "The price shown when it was quoted. Moved since: refused with the new price, never billed silently.",
             "minimum": 0
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true\n says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else."
           }
         },
         "required": [
@@ -69056,6 +69060,10 @@
                 "$ref": "#/components/schemas/AbroadDeclarationDto"
               }
             ]
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true\n says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else."
           }
         },
         "required": [
@@ -69270,6 +69278,37 @@
           "exporterId",
           "incoterm",
           "declaredAt"
+        ]
+      },
+      "RoadRouteRef": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "hubMdpId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          },
+          "fleetDid": {
+            "type": "string"
+          },
+          "fleetName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "hubMdpId",
+          "hubName",
+          "fleetDid",
+          "fleetName"
         ]
       },
       "ParcelFx": {
@@ -70143,6 +70182,14 @@
             "type": "object",
             "description": "2026-11-22 — it goes to another EU country, with no customs (BG-2): which two, and when its sender said it holds no\n alcohol, tobacco, medicines or weapons. Absent on a parcel staying in one country, and on one that is declared."
           },
+          "roadRoute": {
+            "description": "2026-11-23 — booked on a road route between two EU countries (step 3b): the route, its central hub and its fleet, as they stood.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoadRouteRef"
+              }
+            ]
+          },
           "papersSeen": {
             "type": "object",
             "properties": {
@@ -70583,8 +70630,17 @@
           "name": {
             "type": "string"
           },
+          "by": {
+            "type": "string",
+            "description": "2026-11-23 — by air through a customs warehouse (a declaration at the counter), or by road to another EU country (the goods word).",
+            "enum": [
+              "air",
+              "road"
+            ]
+          },
           "departure": {
-            "type": "string"
+            "type": "string",
+            "description": "An air route's airports; absent on a road route."
           },
           "arrival": {
             "type": "string"
@@ -70593,8 +70649,7 @@
         "required": [
           "to",
           "name",
-          "departure",
-          "arrival"
+          "by"
         ]
       },
       "CounterAbroadView": {
@@ -83488,6 +83543,10 @@
                 "$ref": "#/components/schemas/GeoDto"
               }
             ]
+          },
+          "noGoodsWithOwnRules": {
+            "type": "boolean",
+            "description": "2026-11-23 — to another EU country on its road route, which has no customs and so no list of contents (BG-2, step 3b): true\n says it holds no alcohol, tobacco, medicines or weapons. Required there, and refused without; not asked anywhere else."
           }
         },
         "required": [

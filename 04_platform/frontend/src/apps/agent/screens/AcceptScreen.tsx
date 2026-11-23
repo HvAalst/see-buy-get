@@ -1,11 +1,12 @@
 import { AskToOpen } from '../../../shared/opening/AskToOpen';
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import { GoodsWord } from '../../../shared/ui/GoodsWord';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, NeedsSignalNote, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField, WeightInput } from '../../../shared/ui';
 import { useConnectivity } from '../../../shared/connectivity';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, NATURES, abroadRouteFor, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, phonePayBlock, termsBlock, termsNeedTelling, weighedFor } from '../logic';
+import { BODY_HINTS, NATURES, abroadBlock, abroadRouteFor, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, phonePayBlock, termsBlock, termsNeedTelling, weighedFor } from '../logic';
 import { FreightBooking } from './FreightBooking';
 import type { AbroadRoute, NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState, TakenInPlace } from '../useAgentApp';
@@ -55,9 +56,12 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   // P3 — the terms are part of what must be complete before the goods are accepted, not a legend beside it.
   // 2026-11-18 — to a shop in another country a route is on to (step 2b): declared here, and only with a signal.
   const abroad = abroadRouteFor(state.acceptPoints, f.destPudoDid, state.agent?.country, state.abroadRoutes);
+  // 2026-11-23 — by road to another EU country: no declaration, the sender's word on what it holds (step 3b).
+  const road = abroad?.by === 'road' ? abroad : null;
   const { online } = useConnectivity();
   const blockReason =
-    acceptMissing(f, t, Boolean(abroad)) ??
+    acceptMissing(f, t) ??
+    abroadBlock(abroad, f, t) ??
     termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t) ??
     (abroad && !online ? t('agent.accept.abroad.needsSignal') : null) ??
     // 2026-11-20 — paid by phone first, where the counter takes no cash (a partner's country, 4b).
@@ -315,7 +319,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         <p class="card__note">{t('agent.accept.photoNote')}</p>
       </Card>
 
-      {abroad ? <AbroadCard route={abroad} state={state} actions={actions} /> : null}
+      {abroad && !road ? <AbroadCard route={abroad} state={state} actions={actions} /> : null}
+      {road && state.agent?.country ? <GoodsWord passage={{ fromCountry: state.agent.country, toCountry: road.to }} said={f.noGoodsWithOwnRules} onChange={(noGoodsWithOwnRules) => actions.setAccept({ noGoodsWithOwnRules })} /> : null}
 
       {terms?.payByPhone ? (
         <PhonePayCard pay={state.phonePay} terms={terms as TakeInTerms & { payByPhone: NonNullable<TakeInTerms['payByPhone']> }} parcelId={f.parcelId} senderPhone={f.senderMobile} online={online} busy={state.busy === 'phonePay'} onAsk={(phone) => void actions.askPhonePayment(phone)} />
@@ -597,7 +602,7 @@ export function AbroadCard({ route, state, actions }: { route: AbroadRoute; stat
   );
   return (
     <Card label={t('agent.accept.abroad.title', { country: route.name })}>
-      <p class="card__note">{t('agent.accept.abroad.route', { departure: route.departure, arrival: route.arrival })}</p>
+      <p class="card__note">{t('agent.accept.abroad.route', { departure: route.departure ?? '', arrival: route.arrival ?? '' })}</p>
       <Note tone="info" icon="box" title={t('agent.accept.abroad.check')} detail="" />
       {field('abroad-contents', t('agent.accept.abroad.contents'), a.contents, (v) => actions.setAbroad({ contents: v }), { placeholder: t('agent.accept.abroad.contentsPh'), maxLength: 200 })}
       {field('abroad-items', t('agent.accept.abroad.items'), a.items, (v) => actions.setAbroad({ items: v }), { inputMode: 'numeric', maxLength: 3 })}

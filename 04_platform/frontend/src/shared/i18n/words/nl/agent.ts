@@ -136,6 +136,7 @@ export const words: Record<string, string> = {
   "agent.accept.abroad.receiverName": "Naam van de ontvanger",
   "agent.accept.abroad.namesNote": "Zoals op hun identiteitsbewijs: de douanepapieren noemen hen.",
   "agent.accept.abroad.needsSignal": "Een pakket naar het buitenland heeft bereik nodig: de prijs en de douanepapieren komen van SeeBuyGet.",
+  "agent.accept.roadWord": "Vink aan dat er geen alcohol, tabak, medicijnen of wapens in zitten.",
   "agent.accept.abroad.needsSignalDetail": "Al het andere op dit scherm wacht: neem het aan zodra er weer bereik is.",
   "agent.accept.abroad.rowTag": "Buitenland: {country}",
   "agent.accept.abroad.papers": "Douanepapieren afdrukken",
