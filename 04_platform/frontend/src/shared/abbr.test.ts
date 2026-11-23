@@ -25,6 +25,9 @@ const PLAIN: Record<string, string> = {
   VK: 'name',
   // 2026-11-13 — a driving-licence category, as it is printed on the card (towing a trailer: BE).
   BE: 'licence',
+  // 2026-11-23 — Romania's money beside an amount, and its system's own name as Romania writes it ("RO e-Transport").
+  RON: 'money',
+  RO: 'name',
 };
 
 describe('the trade’s short forms, said in full', () => {

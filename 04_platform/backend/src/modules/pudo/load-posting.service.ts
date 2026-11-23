@@ -3,6 +3,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { dangerousGoodsGap } from './cargo.types';
 import { requireNoGoodsWithOwnRules, unionPassageBetween } from './country';
+import { fiscalCodesFor } from './fiscal-codes';
 import { ruleRefuses } from '../../foundation/http/api-rules';
 import { tempRangeGap } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
@@ -60,7 +61,7 @@ export class LoadPostingService {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, contractId, deliverOn, orderRef, receivingPoint, receiverRef, noGoodsWithOwnRules, ...load } = dto;
+    const { forClientId, contractId, deliverOn, orderRef, receivingPoint, receiverRef, noGoodsWithOwnRules, fiscalCodes: fiscalGiven, ...load } = dto;
     // Inbound, reading A: "deliver to" a business's receiving point — its place is where the load goes, by its own name.
     const receiving = receivingPoint ? this.receivingPointOf(receivingPoint) : undefined;
     if (receiving) {
@@ -87,9 +88,12 @@ export class LoadPostingService {
     // will have them: a person's from the pins, anyone else's as they said.
     const passage = unionPassageBetween(person?.pickupCountry ?? dto.pickupCountry, person?.destCountry ?? dto.destCountry);
     requireNoGoodsWithOwnRules(passage, noGoodsWithOwnRules, 'noGoodsWithOwnRules', dto.natureCode);
+    // 2026-11-23 — taken over or delivered in Romania or Bulgaria: its UIT or UTN, or the sender's word, with why, that none is
+    // needed (fiscal-codes.ts). A company's system is warned before the rule refuses it (api-rules.ts); a person is asked today.
+    const fiscalCodes = fiscalCodesFor(fiscalGiven, { pickupCountry: person?.pickupCountry ?? dto.pickupCountry, destCountry: person?.destCountry ?? dto.destCountry, weightKg: dto.weightKg }, { now: Date.now(), by: actor?.actorName ?? actor?.did }, ruleRefuses('ro-bg-fiscal-codes'));
     const posted = this.dispatch.registerFreight(
       // 2026-11-15 — it names who receives it: a delivery code once a driver has it (the owner: "yes").
-      { ...load, dimensionsCm, ...(person ?? {}), ...(passage ? { withinUnion: { ...passage, saidNoneAt: new Date().toISOString() } } : {}), ...(dto.buyerMobile?.trim() || dto.receiverEmail?.trim() ? { codeForReceiver: true } : {}), ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
+      { ...load, dimensionsCm, ...(person ?? {}), ...(passage ? { withinUnion: { ...passage, saidNoneAt: new Date().toISOString() } } : {}), ...(fiscalCodes.length ? { fiscalCodes } : {}), ...(dto.buyerMobile?.trim() || dto.receiverEmail?.trim() ? { codeForReceiver: true } : {}), ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),
       checkOnly,
     );

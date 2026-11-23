@@ -9,6 +9,8 @@ import type { SendActions, SendState } from '../useSendApp';
 import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
 import { GoodsWord, goodsWordAsked, type UnionPassage } from '../../../shared/ui/GoodsWord';
+import { FiscalCodeLines, FiscalCodes, FiscalNewCode } from '../../../shared/ui/FiscalCodes';
+import { fiscalBody, fiscalCodesAsked, fiscalReady, type FiscalCountry, type FiscalForm } from '../../../shared/fiscal-codes';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 import { CodeMailBounced } from '../../../shared/CodeMailBounced';
@@ -28,6 +30,9 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
   // 2026-11-22 — to another EU country (BG-2): the server says where the pins fall, and asks the person's word on what it holds.
   const [word, setWord] = useState<UnionPassage | null>(null);
   const [said, setSaid] = useState(false);
+  // 2026-11-23 — taken over or delivered in Romania or Bulgaria: the server asks the UIT or UTN, or the word that none is needed.
+  const [fiscalAsk, setFiscalAsk] = useState<FiscalCountry[] | null>(null);
+  const [fiscal, setFiscal] = useState<FiscalForm>({});
   const blocker = personLoadBlocker(form);
   const set = (patch: Partial<PersonLoadForm>) => setForm((f) => ({ ...f, ...patch }));
   const note = (n: PlaceNote) => (n.kind === 'notFound' ? t('send.load.geoNotFound') : n.kind === 'found' ? t('send.load.geoFound', { where: n.where }) : n.kind === 'pinned' ? t('send.load.pinned') : '');
@@ -35,10 +40,13 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
     if (!api || blocker) return;
     setBusy(true);
     setProblem(null);
-    const r = await api.post({ ...personLoadBody(form), ...(word ? { noGoodsWithOwnRules: said } : {}) });
+    const codes = fiscalAsk ? fiscalBody(fiscal, fiscalAsk) : undefined;
+    const r = await api.post({ ...personLoadBody(form), ...(word ? { noGoodsWithOwnRules: said } : {}), ...(codes ? { fiscalCodes: codes } : {}) });
     setBusy(false);
     const asked = goodsWordAsked(r.error as SbgError);
     if (asked) return setWord(asked);
+    const fiscalAsked = fiscalCodesAsked(r.error as SbgError);
+    if (fiscalAsked) return setFiscalAsk(fiscalAsked);
     if (r.error) return setProblem(refusalSentence(r.error as SbgError));
     setPosted(true);
   };
@@ -140,13 +148,14 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
       </Card>
       <p class="card__note">{t('send.load.howPay')}</p>
       {word ? <GoodsWord passage={word} said={said} onChange={setSaid} /> : null}
+      {fiscalAsk ? <FiscalCodes countries={fiscalAsk} value={fiscal} onChange={setFiscal} idPrefix="load-fiscal" /> : null}
       {problem ? (
         <p class="hint" role="alert">
           {problem}
         </p>
       ) : null}
       <div class="scr__cta">
-        <Button busy={busy} disabled={blocker !== null || !api || (word !== null && !said)} onClick={() => void post()}>
+        <Button busy={busy} disabled={blocker !== null || !api || (word !== null && !said) || (fiscalAsk !== null && !fiscalReady(fiscal, fiscalAsk))} onClick={() => void post()}>
           {t('send.load.post')}
         </Button>
         {blocker ? <p class="hint">{t(blocker)}</p> : null}
@@ -265,6 +274,20 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       {/* 2026-11-15 — who has it now (plan R1). */}
       {load.nowWith ? <p class="hint">{nowWithLine(load.nowWith, t)} · {nowWithSince(load.nowWith, t)}</p> : null}
       <LoadWorkSummary work={load.work} forDriver={false} />
+      {/* 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; a new one until it is delivered. */}
+      <FiscalCodeLines cards={load.fiscalCodes} />
+      {['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(load.status) ? (
+        <FiscalNewCode
+          cards={load.fiscalCodes}
+          idPrefix={`fiscal-${load.freightId}`}
+          save={async (body) => {
+            const r = await api.fiscalCodes(load.freightId, body);
+            if (r.error) return refusalSentence(r.error as SbgError);
+            onChanged();
+            return null;
+          }}
+        />
+      ) : null}
       {waiting ? (
         offers === null ? null : offers.length === 0 ? (
           <p class="hint">{t('send.load.noOffers')}</p>

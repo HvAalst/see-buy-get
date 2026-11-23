@@ -10,6 +10,7 @@
  * English literals. Enumerated presentation (status/size/nature/…) resolves catalog keys via `t`.
  */
 
+import type { FiscalCountry, FiscalForm } from '../../shared/fiscal-codes';
 import { EMPTY_WORK, workBlocker, type LoadWorkForm } from '../../shared/loadWork';
 import { dangerousGoodsValue, isDangerousNature } from '../../shared/dangerousGoods';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
@@ -391,6 +392,9 @@ export interface AcceptForm {
   /** 2026-11-22 — a load to a shop in another EU country (BG-2): the two countries, once the server asked the sender's word on
    *  what it holds; and that word. */
   goodsWord: { fromCountry: string; toCountry: string } | null;
+  /** 2026-11-23 — to or from a shop in Romania or Bulgaria: the countries the server asked a code of, and the answers. */
+  fiscalAsk: FiscalCountry[] | null;
+  fiscal: FiscalForm;
   noGoodsWithOwnRules: boolean;
   /** How the counter is picking the destination: on a map, or by typing an area. */
   destMode: 'map' | 'address';
@@ -573,6 +577,8 @@ export const EMPTY_ACCEPT: AcceptForm = {
   fragile: false,
   natureCode: 'GEN',
   goodsWord: null,
+  fiscalAsk: null,
+  fiscal: {},
   noGoodsWithOwnRules: false,
   destMode: 'map',
   destPudoDid: '',

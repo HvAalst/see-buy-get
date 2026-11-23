@@ -3,6 +3,7 @@ import type { DispatchService } from './dispatch.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
 import type { BusinessClientService } from './business-client.service';
 import type { RegisterFreightDto } from './pudo.dto';
+import { runAsSystemsCall } from '../../foundation/http/api-rules';
 
 /**
  * 2026-11-22 — A LOAD TO ANOTHER EU COUNTRY (the owner's BG-2): no customs list what is inside, so the poster says it holds no
@@ -40,11 +41,32 @@ describe('a load posted to another EU country', () => {
   });
 
   it('with the word: posted, keeping it, and the word itself is not passed on as part of the load', () => {
-    svc.post(load({ noGoodsWithOwnRules: true }), business);
+    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } }), business);
     expect(made).toHaveLength(1);
     expect(made[0].withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
     expect(Date.parse(String((made[0].withinUnion as { saidNoneAt: string }).saidNoneAt))).not.toBeNaN();
     expect(made[0]).not.toHaveProperty('noGoodsWithOwnRules');
+  });
+
+  // 2026-11-23 — the owner: "dedicated fields for both Romanian UIT and Bulgarian UTN codes" (fiscal-codes.ts).
+  it('to Bulgaria or from Romania: refused without the UTN or UIT, or the word that none is needed, before anything is made', () => {
+    expect(refusal(() => svc.post(load({ noGoodsWithOwnRules: true }), business))).toMatchObject({ code: 'FIELD_REQUIRED', params: expect.objectContaining({ field: 'fiscalCodes', countries: 'BG' }) });
+    expect(refusal(() => svc.post(load({ pickupCountry: 'RO', noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } }), business))).toMatchObject({ params: expect.objectContaining({ countries: 'RO' }) });
+    expect(made).toHaveLength(0);
+  });
+
+  it('with a code: kept on the load as a code with its last day, not as what was typed', () => {
+    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { code: 'bg 1234-5678', from: '2099-01-10' } } }), business);
+    expect(made[0].fiscalCodes).toEqual([expect.objectContaining({ country: 'BG', kind: 'UTN', code: 'BG12345678', from: '2099-01-10', validThrough: '2099-01-23' })]);
+  });
+
+  it('a company’s system is warned, not refused, until the rule’s day; a code it gives is still checked', () => {
+    const store = { warned: [] as Array<{ id: string }> };
+    runAsSystemsCall(store as never, () => svc.post(load({ noGoodsWithOwnRules: true }), business));
+    expect(made).toHaveLength(1);
+    expect(made[0].fiscalCodes).toBeUndefined();
+    expect(store.warned.map((r) => r.id)).toEqual(['ro-bg-fiscal-codes']);
+    expect(refusal(() => runAsSystemsCall({ warned: [] }, () => svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { code: '12' } } }), business))).message).toMatch(/6 to 40 letters and digits/);
   });
 
   it('asks nothing of a load inside one country, or across a customs border, where the declaration lists what is inside', () => {

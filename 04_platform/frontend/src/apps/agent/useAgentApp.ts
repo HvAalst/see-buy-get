@@ -28,6 +28,7 @@ import type { BagClosedWith } from '../../shared/bagSeal';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence, refusalSentence } from '../../shared/ui';
 import { goodsWordAsked } from '../../shared/ui/GoodsWord';
+import { fiscalBody, fiscalCodesAsked, type FiscalCard, type FiscalCodeBody } from '../../shared/fiscal-codes';
 import type { RefusalBody } from '../../shared/RefusalCard';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
@@ -146,6 +147,8 @@ export interface PostedFreight {
   /** FP7 — box 13, and whether it is still the sender's to rewrite (before pickup), only to add to (on the road), or closed. */
   instructions?: InstructionsView;
   instructionsMode: 'edit' | 'amend' | 'none';
+  /** 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; whether one ran out. */
+  fiscalCodes?: FiscalCard[];
 }
 
 export interface FreightClaim {
@@ -1963,9 +1966,13 @@ export function useAgentApp() {
         namedPlace: f.namedPlace.trim() || undefined,
         // 2026-11-22 — to a shop in another EU country: the sender's word on what it holds, once the server asked it (BG-2).
         ...(f.goodsWord ? { noGoodsWithOwnRules: f.noGoodsWithOwnRules } : {}),
+        // 2026-11-23 — to or from a shop in Romania or Bulgaria: the UIT or UTN, or the sender's word that none is needed.
+        ...(f.fiscalAsk && fiscalBody(f.fiscal, f.fiscalAsk) ? { fiscalCodes: fiscalBody(f.fiscal, f.fiscalAsk) } : {}),
       });
       const asked = goodsWordAsked(r.error);
       if (asked) return setState((s) => ({ ...s, accept: { ...s.accept, goodsWord: asked } }));
+      const fiscalAsk = fiscalCodesAsked(r.error);
+      if (fiscalAsk) return setState((s) => ({ ...s, accept: { ...s.accept, fiscalAsk } }));
       if (r.error) return fail(r.error);
       buzz();
       const fr = narrow<AgentState['bookedFreight']>(r.data);
@@ -2057,6 +2064,19 @@ export function useAgentApp() {
       });
     },
     [client, run, fail, pushToast, t, loadPosted],
+  );
+
+  /** 2026-11-23 — the shop, as the sender, gives a new UIT or UTN for a load it booked. The refusal in words, or null. */
+  const setFreightFiscalCodes = useCallback(
+    async (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody }): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.setFreightFiscalCodes(freightId, body);
+      if (r.error) return refusalSentence(r.error);
+      pushToast({ tone: 'ok', icon: 'check', title: t('common.fiscal.newSaved') });
+      await loadPosted();
+      return null;
+    },
+    [client, pushToast, t, loadPosted],
   );
 
   /** Refused at the door (the user, 2026-10-27): the shop, as the sender, says where the goods go. The refusal in words, or null. */
@@ -3086,6 +3106,7 @@ export function useAgentApp() {
       loadReceiverEmail,
       rateFreight,
       setFreightInstructions,
+      setFreightFiscalCodes,
       decideRefusal,
       answerNotPaid,
       openFreightClaim,

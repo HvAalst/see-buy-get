@@ -286,6 +286,8 @@ export interface Claimable {
   airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
   /** 2026-11-01 — a truck run as a flight, in words: carried under road law, the waybill a reference only. */
   truckFlight?: string;
+  /** 2026-11-23 — Romania's UIT or Bulgaria's UTN to show at a check, or why none is needed; whether one ran out. */
+  fiscalCodes?: import('../../shared/fiscal-codes').FiscalCard[];
   /** Round 38 — the commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
   /** 2026-11-11 — a bag sent to another hub because the one it went to is down; the extra leg paid where it was on board. */

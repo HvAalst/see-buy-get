@@ -1,3 +1,4 @@
+import type { FiscalCard, FiscalCodeBody } from '../../shared/fiscal-codes';
 import type { SbgClient } from '../../lib/sbg';
 import type { MessageKey } from '../../shared/i18n';
 import type { NowWith } from '../../shared/nowWith';
@@ -87,6 +88,8 @@ export interface PersonLoadRow {
   holdWords?: string;
   /** 2026-11-15 — who has it now: the company carrying it and its vehicle; taken, not picked up yet (plan R1). */
   nowWith?: NowWith;
+  /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: its UIT or UTN, or the word that none is needed. */
+  fiscalCodes?: FiscalCard[];
 }
 
 /** A driver's price on it, and the person's price back where they gave one. */
@@ -119,6 +122,8 @@ export function personLoadApi(sbg: SbgClient) {
   return {
     post: (body: ReturnType<typeof personLoadBody>) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight', { body: body as never })),
     mine: () => sbg.request((c) => c.GET('/v1/sbg/dispatch/posted', {})),
+    /** 2026-11-23 — a new UIT or UTN for a load, or the word that none is needed. */
+    fiscalCodes: (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody }) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/fiscal-codes', { params: { path: { id: freightId } }, body: body as never })),
     offers: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } } })),
     accept: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/accept', { params: { path: { id: proposalId } } })),
     decline: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),

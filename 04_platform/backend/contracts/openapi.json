@@ -24428,6 +24428,38 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/fiscal-codes": {
+      "post": {
+        "operationId": "Sbg.setFreightFiscalCodes",
+        "summary": "",
+        "description": "2026-11-23 — the sender gives a new UIT (Romania) or UTN (Bulgaria): one ran out, or was wrong; or its word that none is needed.\nThe sender or the store that shipped it, until the goods are delivered; the driver holding the load is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FiscalCodesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/instructions": {
       "patch": {
         "operationId": "Sbg.setFreightInstructions",
@@ -70852,6 +70884,41 @@
           "hazardClass"
         ]
       },
+      "FiscalCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The UIT code (Romania, RO e-Transport) or the UTN (Bulgaria, goods with high fiscal risk): letters and digits.",
+            "maxLength": 60
+          },
+          "from": {
+            "type": "string",
+            "description": "Romania: the day the transport was declared to start in RO e-Transport; Bulgaria: the day the UTN was issued. YYYY-MM-DD.",
+            "maxLength": 10
+          },
+          "exempt": {
+            "type": "string",
+            "description": "Why none is needed. Romania: thresholds (no consignment over 500 kg gross or RON 10,000), excise (under an e-AD). Bulgaria: not-listed.",
+            "enum": [
+              "thresholds",
+              "excise",
+              "not-listed"
+            ]
+          }
+        }
+      },
+      "FiscalCodesDto": {
+        "type": "object",
+        "properties": {
+          "ro": {
+            "$ref": "#/components/schemas/FiscalCodeDto"
+          },
+          "bg": {
+            "$ref": "#/components/schemas/FiscalCodeDto"
+          }
+        }
+      },
       "BookFreightDto": {
         "type": "object",
         "properties": {
@@ -71023,6 +71090,14 @@
           },
           "noGoodsWithOwnRules": {
             "type": "boolean"
+          },
+          "fiscalCodes": {
+            "description": "2026-11-23 — to or from a shop in Romania or Bulgaria: the UIT or UTN, or why none is needed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FiscalCodesDto"
+              }
+            ]
           },
           "allowEarlyClaim": {
             "type": "boolean"
@@ -73909,6 +73984,55 @@
           "saidNoneAt"
         ]
       },
+      "FreightFiscalCode": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "enum": [
+              "RO",
+              "BG"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "UIT",
+              "UTN"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "Romania: the day the transport was declared to start; Bulgaria: the day the UTN was issued."
+          },
+          "validThrough": {
+            "type": "string",
+            "description": "The last calendar day the code may be used, in that country's time."
+          },
+          "exempt": {
+            "type": "string",
+            "enum": [
+              "thresholds",
+              "excise",
+              "not-listed"
+            ]
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "kind",
+          "saidAt"
+        ]
+      },
       "FreightReload": {
         "type": "object",
         "properties": {
@@ -75369,6 +75493,20 @@
           },
           "withinUnion": {
             "$ref": "#/components/schemas/FreightWithinUnion"
+          },
+          "fiscalCodes": {
+            "description": "2026-11-23 — taken over or delivered in Romania or Bulgaria: its UIT or UTN, or its sender's word that none is needed.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightFiscalCode"
+            }
+          },
+          "fiscalCodesBefore": {
+            "description": "…and the ones a new code replaced, kept.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightFiscalCode"
+            }
           },
           "carriage": {
             "type": "object",
@@ -79477,6 +79615,14 @@
             "description": "CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities.",
             "maxLength": 500
           },
+          "fiscalCodes": {
+            "description": "2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or why none is needed (rule ro-bg-fiscal-codes).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FiscalCodesDto"
+              }
+            ]
+          },
           "coverRequired": {
             "type": "boolean",
             "description": "THE CARRIER MUST HAVE COVER (the user, 2026-10-28: \"Toggle cover needed/not needed\"): only a carrier whose insurance\nSeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance."
@@ -80723,6 +80869,49 @@
           "basis"
         ]
       },
+      "FiscalCodeCard": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "enum": [
+              "RO",
+              "BG"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "UIT",
+              "UTN"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "validThrough": {
+            "type": "string"
+          },
+          "exempt": {
+            "type": "string",
+            "enum": [
+              "thresholds",
+              "excise",
+              "not-listed"
+            ]
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "endsSoon": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "country",
+          "kind"
+        ]
+      },
       "OutsideWindow": {
         "type": "object",
         "properties": {
@@ -81072,6 +81261,13 @@
       "PostedFreightRow": {
         "type": "object",
         "properties": {
+          "fiscalCodes": {
+            "description": "2026-11-23 — its UIT or UTN, or the word that none is needed: whether one ran out, for the sender to give a new one.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FiscalCodeCard"
+            }
+          },
           "held": {
             "description": "Round 35 — held under the tamper protocol: what was found, where, since when.",
             "allOf": [

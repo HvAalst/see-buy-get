@@ -469,7 +469,7 @@ const CASES: Array<{ name: string; answers: Partial<PostForm>; business?: Busine
 describe('the same request as the one page, for the same answers', () => {
   it('starts from the same answers the page started from — and the temperature and the work, which it never asked, empty', () => {
     // 2026-11-22 — and the word on what goes to another EU country, which it never asked (BG-2).
-    const added = { tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false };
+    const added = { tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false, fiscal: {} };
     expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, ...added });
     expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), ...Object.keys(added)]);
     expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', ...added });
@@ -488,6 +488,22 @@ describe('the same request as the one page, for the same answers', () => {
     // Inside one country, or out of the EU, nothing is asked and nothing is sent.
     expect(loadBody({ ...toSofia, destCountry: 'NL', noGoodsWithOwnRules: true }, nl)).not.toHaveProperty('noGoodsWithOwnRules');
     expect(loadBody({ ...toSofia, destCountry: 'UG' }, { ...nl, country: 'KE' })).not.toHaveProperty('noGoodsWithOwnRules');
+  });
+
+  // 2026-11-23 — the owner: "dedicated fields for both Romanian UIT and Bulgarian UTN codes".
+  it('asks the UTN or UIT for a load to or from Bulgaria or Romania on the route step, and sends what was given', () => {
+    const today = todayIn(NOW);
+    const nl = { country: 'NL', from: { name: 'Amsterdam yard', location: { lat: 52.37, lng: 4.9 } }, to: { name: 'Sofia depot', location: { lat: 42.7, lng: 23.32 } }, receiving: null, contract: null };
+    const toSofia = form({ description: 'Tiles', weightKg: '800', destCountry: 'BG', consigneeName: 'Иван Петров', noGoodsWithOwnRules: true });
+    const ctx = { crossing: true, withinUnion: true, fiscal: ['BG'] as const, contract: false, today };
+    expect(postGaps(toSofia, ctx)).toContain('fiscalCodes');
+    expect(gapStep('fiscalCodes')).toBe('route');
+    expect(gapWords('fiscalCodes')).toBe('common.fiscal.missing');
+    const said = { ...toSofia, fiscal: { BG: { choice: 'code' as const, code: 'BG12345678', from: '2026-11-24' } } };
+    expect(postGaps(said, ctx)).not.toContain('fiscalCodes');
+    expect(loadBody(said, nl).fiscalCodes).toEqual({ bg: { code: 'BG12345678', from: '2026-11-24' } });
+    // To Germany nothing is asked, and nothing is sent, whatever was typed.
+    expect(loadBody({ ...said, destCountry: 'DE' }, nl)).not.toHaveProperty('fiscalCodes');
   });
 
   // 2026-11-13 — what it takes to move it (unusual loads): asked on the goods step, sent only where it was said.

@@ -1,3 +1,4 @@
+import { fiscalBody, fiscalCountriesOf, fiscalReady, type FiscalCountry, type FiscalForm } from '../../shared/fiscal-codes';
 import type { NewLoad } from './api';
 import { euPassage } from '../../shared/eu';
 import { EMPTY_WORK, cleanWorkForm, workBlocker, workBody, type LoadWorkForm } from '../../shared/loadWork';
@@ -39,6 +40,8 @@ export type PostForm = LoadForm & {
   destCountry: string;
   /** 2026-11-22 — to another EU country: the business's word that it holds no alcohol, tobacco, medicines or weapons (BG-2). */
   noGoodsWithOwnRules: boolean;
+  /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or the business's word that none is needed. */
+  fiscal: FiscalForm;
   natureCode: string;
   fragile: boolean;
   commitMode: 'negotiate' | 'instant';
@@ -62,7 +65,7 @@ export type PostForm = LoadForm & {
   work: LoadWorkForm;
 };
 
-export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false };
+export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '', work: EMPTY_WORK, receiverPhone: '', receiverEmail: '', receiverName: '', noGoodsWithOwnRules: false, fiscal: {} };
 
 /** A new load's first answers, as the one page had them: going within the business's own country, arriving tomorrow. */
 export const startForm = (country: string, now: Date = new Date()): PostForm => ({ ...EMPTY_POST, destCountry: country, deliverOn: nextDay(now) });
@@ -120,7 +123,7 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
     case 'carrier':
       return ['forClientId', 'contractId', 'deliverOn', 'orderRef', ...(contract ? (['deliveryWindow'] as const) : [])];
     case 'route':
-      return ['fromSiteId', 'toSiteId', 'receivingPoint', 'receiverRef', 'destCountry', 'noGoodsWithOwnRules', 'consigneeName', 'consigneeAddress', 'customsInstructions'];
+      return ['fromSiteId', 'toSiteId', 'receivingPoint', 'receiverRef', 'destCountry', 'noGoodsWithOwnRules', 'fiscal', 'consigneeName', 'consigneeAddress', 'customsInstructions'];
     case 'goods':
       return ['description', 'natureCode', 'unNumber', 'hazardClass', 'properShippingName', 'packingGroup', 'tempMinC', 'tempMaxC', 'weightKg', 'packaging', 'packages', 'volumeM3', 'fragile', 'work'];
     case 'when':
@@ -141,7 +144,7 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
  * and at most 150 m³ (the box's `min`/`max`, and the server's); and a collection day gone, which the server would quietly
  * turn into "as soon as a carrier can". With a load kept on the phone for days, a day that has gone is likely.
  */
-export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3' | 'noGoodsWithOwnRules' | TempGap | WorkGap;
+export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3' | 'noGoodsWithOwnRules' | 'fiscalCodes' | TempGap | WorkGap;
 
 /** 2026-11-13 — who helps at an end, not said (unless the sender loads or the receiver unloads it). */
 export type WorkGap = 'workPickup' | 'workDelivery';
@@ -157,6 +160,7 @@ const GAP_STEP: Record<PostGap, PostStep> = {
   receivingPoint: 'route',
   crossing: 'route',
   noGoodsWithOwnRules: 'route',
+  fiscalCodes: 'route',
   consigneeName: 'route',
   consigneeAddress: 'route',
   natureCode: 'goods',
@@ -184,6 +188,8 @@ export interface PostCtx {
   crossing: boolean;
   /** 2026-11-22 — and that country and the business's are both in the EU: no customs, and the business's word on what it holds. */
   withinUnion?: boolean;
+  /** 2026-11-23 — the countries whose code it is asked: Romania or Bulgaria, where it is taken over or delivered. */
+  fiscal?: readonly FiscalCountry[];
   /** Ordered under a contract. */
   contract: boolean;
   /** Today, YYYY-MM-DD, in the reader's own calendar. */
@@ -201,6 +207,7 @@ export function postGaps(form: PostForm, ctx: PostCtx): PostGap[] {
   }
   gaps.push(...loadGaps({ ...form, crossing: ctx.crossing }));
   if (ctx.withinUnion && !form.noGoodsWithOwnRules) gaps.push('noGoodsWithOwnRules');
+  if (ctx.fiscal?.length && !fiscalReady(form.fiscal, ctx.fiscal)) gaps.push('fiscalCodes');
   const m3 = Number(form.volumeM3);
   if (form.volumeM3.trim() && !(m3 >= 0.01 && m3 <= 150)) gaps.push('volumeM3');
   gaps.push(...tempGaps(form));
@@ -243,7 +250,7 @@ export function stepGaps(step: PostStep, form: PostForm, ctx: PostCtx): PostGap[
 export const gapStep = (gap: PostGap): PostStep => GAP_STEP[gap];
 
 /** The words a gap is said in, beside its field. */
-export const gapWords = (gap: PostGap): string => gap === 'workPickup' ? 'work.needHandsPickup' : gap === 'workDelivery' ? 'work.needHandsDelivery' : (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' || gap === 'tempRange' || gap === 'tempBounds' || gap === 'tempOrder' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
+export const gapWords = (gap: PostGap): string => gap === 'fiscalCodes' ? 'common.fiscal.missing' : gap === 'workPickup' ? 'work.needHandsPickup' : gap === 'workDelivery' ? 'work.needHandsDelivery' : (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' || gap === 'tempRange' || gap === 'tempBounds' || gap === 'tempOrder' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
 
 /** A place a load is collected from or delivered to, as the board and the consignment note carry it. */
 export interface LoadEnd {
@@ -284,6 +291,8 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
     destCountry: form.destCountry || at.country,
     // 2026-11-22 — to another EU country, its word on what it holds (BG-2); asked nowhere else, so sent nowhere else.
     ...(euPassage(at.country, form.destCountry) ? { noGoodsWithOwnRules: form.noGoodsWithOwnRules } : {}),
+    // 2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or the word that none is needed.
+    ...(fiscalBody(form.fiscal, fiscalCountriesOf(at.country, form.destCountry || at.country)) ? { fiscalCodes: fiscalBody(form.fiscal, fiscalCountriesOf(at.country, form.destCountry || at.country)) } : {}),
     weightKg: Number(form.weightKg),
     ...(form.packaging ? { packaging: form.packaging } : {}),
     ...(counted ? { packages: counted } : {}),

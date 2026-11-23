@@ -3,6 +3,7 @@
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
 import { FreightTruckFlight } from './air-terminal.types';
+import { FISCAL_EXEMPTIONS, type FiscalExemption } from './fiscal-codes';
 import { ClientRef } from './business-client.types';
 import { FreightRailGate } from './rail-leg.types';
 import { FreightReleaseGate } from './air-release.types';
@@ -610,6 +611,31 @@ export class FreightWithinUnion {
   @ApiProperty() saidNoneAt: string;
 }
 
+/** 2026-11-23 — a code Romania or Bulgaria follows goods by (fiscal-codes.ts), or its sender's word, with why, that none is needed. */
+export class FreightFiscalCode {
+  @ApiProperty({ enum: ['RO', 'BG'] }) country: 'RO' | 'BG';
+  @ApiProperty({ enum: ['UIT', 'UTN'] }) kind: 'UIT' | 'UTN';
+  @ApiPropertyOptional() code?: string;
+  /** Romania: the day the transport was declared to start; Bulgaria: the day the UTN was issued. */
+  @ApiPropertyOptional() from?: string;
+  /** The last calendar day the code may be used, in that country's time. */
+  @ApiPropertyOptional() validThrough?: string;
+  @ApiPropertyOptional({ enum: FISCAL_EXEMPTIONS }) exempt?: FiscalExemption;
+  @ApiProperty() saidAt: string;
+  @ApiPropertyOptional() saidBy?: string;
+}
+
+/** …as a driver or the sender reads it: the code and its last day, or why none is needed; whether it ran out or runs out within a day. */
+export class FiscalCodeCard {
+  @ApiProperty({ enum: ['RO', 'BG'] }) country: 'RO' | 'BG';
+  @ApiProperty({ enum: ['UIT', 'UTN'] }) kind: 'UIT' | 'UTN';
+  @ApiPropertyOptional() code?: string;
+  @ApiPropertyOptional() validThrough?: string;
+  @ApiPropertyOptional({ enum: FISCAL_EXEMPTIONS }) exempt?: FiscalExemption;
+  @ApiPropertyOptional() expired?: boolean;
+  @ApiPropertyOptional() endsSoon?: boolean;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -713,6 +739,10 @@ export class Freight {
   @ApiPropertyOptional() pickupCountry?: string;
   @ApiPropertyOptional() destCountry?: string;
   @ApiPropertyOptional({ type: FreightWithinUnion }) withinUnion?: FreightWithinUnion;
+  /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: its UIT or UTN, or its sender's word that none is needed. */
+  @ApiPropertyOptional({ type: [FreightFiscalCode] }) fiscalCodes?: FreightFiscalCode[];
+  /** …and the ones a new code replaced, kept. */
+  @ApiPropertyOptional({ type: [FreightFiscalCode] }) fiscalCodesBefore?: FreightFiscalCode[];
   /**
    * FP2 — WHO took the goods over and IN WHAT, fixed at pickup for the consignment note. Read live it would follow
    * the driver's later shifts; a note must name the vehicle that carried this load.
@@ -1631,6 +1661,8 @@ export class CodeMailBounced {
 export class PostedFreightRow {
   freightId: string;
   code: string;
+  /** 2026-11-23 — its UIT or UTN, or the word that none is needed: whether one ran out, for the sender to give a new one. */
+  @ApiPropertyOptional({ type: [FiscalCodeCard] }) fiscalCodes?: FiscalCodeCard[];
   /** Round 35 — held under the tamper protocol: what was found, where, since when. */
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** One load of an order its carrier split into several. */
@@ -1900,6 +1932,8 @@ export class Claimable {
   airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
   /** 2026-11-01 — a truck run as a flight, in words: carried under road law, the waybill a reference only. */
   truckFlight?: string;
+  /** 2026-11-23 — Romania's UIT or Bulgaria's UTN to show at a check, or why none is needed (fiscal-codes.ts). */
+  @ApiPropertyOptional({ type: [FiscalCodeCard] }) fiscalCodes?: FiscalCodeCard[];
   /** 2026-11-01 — the space the load takes, in cubic metres. */
   volumeM3?: number;
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */

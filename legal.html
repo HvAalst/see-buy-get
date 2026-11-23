@@ -1215,6 +1215,53 @@
       "case": "A buyer in Sofia collects a parcel a Dutch store sent, and later complains that it arrived late.",
       "meanwhile": "The apps are in English, Kiswahili, Amharic and Dutch only; no terms exist for Bulgaria.",
       "source": "The Netherlands – Bulgaria plan of 22 November 2026 (a route across a border), and the code as surveyed that day."
+    },
+    {
+      "id": "L71",
+      "area": "papers",
+      "when": "before-country",
+      "status": "open",
+      "q": "Does a load or our parcel run that only passes through Romania (from the Netherlands to Bulgaria, unloading nothing in Romania) need a UIT code of RO e-Transport? ANAF’s 2025 guide names only Romanian declarants: the buyer, the supplier, the importer or exporter, and a warehouse that unloads goods in transit. And does the carrier’s duty to send the vehicle’s position through the whole route (fines of RON 20,000 to 100,000, no longer suspended after 31 December 2025) bind a Dutch or Bulgarian carrier only crossing Romania?",
+      "moment": "Before a load or a parcel run is carried across Romania on the Netherlands–Bulgaria route.",
+      "nations": [
+        "RO",
+        "BG",
+        "NL"
+      ],
+      "case": "A Dutch van of 3.5 t carries the route’s bags from Venlo to Sofia through Hungary and Romania, and unloads nothing in Romania.",
+      "meanwhile": "A load is asked a UIT only where it is taken over or delivered in Romania; nothing is asked for passing through.",
+      "source": "ANAF, Ghid privind utilizarea Sistemului național RO e-Transport (2025): who declares (art. 8^1 OUG 41/2022), the exceptions (art. 16), the contraventions (art. 13^1); for Bulgaria, art. 127i of the Tax and Social Insurance Procedure Code and Ordinance H-5/2023 as summarised by ANTRAM (2025) and Elan Consulting (2024); the owner’s note of 23 November 2026."
+    },
+    {
+      "id": "L72",
+      "area": "papers",
+      "when": "before-country",
+      "status": "open",
+      "q": "RO e-Transport excludes goods that postal service providers carry in postal parcels (art. 16 OUG 41/2022, as OUG 13/2013 defines them). Is our road route’s run of parcels such a postal service, and must we or our partner hold Romania’s general authorisation for postal services for it? In Bulgaria, is a courier’s vehicle of parcels over 3.5 t inside the control of goods with high fiscal risk, and who declares the UTN for a parcel a person in Bulgaria receives?",
+      "moment": "Before the route runs a vehicle over 3.5 t into Bulgaria, or carries parcels worth together over RON 10,000 in Romania.",
+      "nations": [
+        "RO",
+        "BG"
+      ],
+      "case": "A 7.5 t truck carries 300 parcels, some of them boxes of food, from the Netherlands to the central hub in Sofia.",
+      "meanwhile": "Parcels on the road route are asked no UIT or UTN.",
+      "source": "ANAF, Ghid privind utilizarea Sistemului național RO e-Transport (2025): who declares (art. 8^1 OUG 41/2022), the exceptions (art. 16), the contraventions (art. 13^1); for Bulgaria, art. 127i of the Tax and Social Insurance Procedure Code and Ordinance H-5/2023 as summarised by ANTRAM (2025) and Elan Consulting (2024); the owner’s note of 23 November 2026."
+    },
+    {
+      "id": "L73",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
+      "q": "When a sender says no UIT or UTN is needed and Romanian or Bulgarian officers fine the carrier or hold the goods, may the carrier recover the fine and the costs from the sender (CMR articles 7 and 11: the sender answers for incorrect particulars and missing documents)? Should our terms give the carrier an express indemnity for such fines, and who answers when a code runs out on the way?",
+      "moment": "Before the first load is posted to or from Romania or Bulgaria.",
+      "nations": [
+        "RO",
+        "BG",
+        "EU"
+      ],
+      "case": "A Bucharest supplier posts 700 kg of shoes to Utrecht, saying they are excise goods under their excise document; the police stop the truck near Arad.",
+      "meanwhile": "The sender’s word is kept with its time and name, on box 13 of the consignment note and on the load; taking the goods over is refused once a code has run out.",
+      "source": "ANAF, Ghid privind utilizarea Sistemului național RO e-Transport (2025): who declares (art. 8^1 OUG 41/2022), the exceptions (art. 16), the contraventions (art. 13^1); for Bulgaria, art. 127i of the Tax and Social Insurance Procedure Code and Ordinance H-5/2023 as summarised by ANTRAM (2025) and Elan Consulting (2024); the owner’s note of 23 November 2026."
     }
   ]
 }
@@ -1222,7 +1269,7 @@
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('data').textContent);
-  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', IR: 'Iran', CN: 'China', ID: 'Indonesia', EU: 'European Union', BG: 'Bulgaria', NL: 'The Netherlands' };
+  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', IR: 'Iran', CN: 'China', ID: 'Indonesia', EU: 'European Union', BG: 'Bulgaria', NL: 'The Netherlands', RO: 'Romania' };
   var WHEN = { 'before-test': 'Before the first test', 'before-country': 'Before a country or feature opens', later: 'Later' };
   var STATUS = { open: 'Open', answered: 'Answered in principle', watch: 'To watch' };
   var state = { when: '', nation: '' };
@@ -1230,7 +1277,7 @@
 
   var nations = [];
   data.questions.forEach(function (q) { q.nations.forEach(function (n) { if (nations.indexOf(n) < 0) nations.push(n); }); });
-  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'IR', 'CN', 'ID', 'EU', 'NL'];
+  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'IR', 'CN', 'ID', 'EU', 'NL', 'RO'];
   nations.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
   var box = document.getElementById('nations');
   [''].concat(nations.filter(function (n) { return n !== 'all'; })).forEach(function (n) {

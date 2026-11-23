@@ -17,6 +17,7 @@ import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_RE
 import { PRESENCE_LEVELS, TESTER_ROLES, type PresenceLevel, type TesterRole } from '../../foundation/presence/presence.types';
 import { LoadWork } from './load-work.types';
 import { Type } from 'class-transformer';
+import { FISCAL_EXEMPTIONS } from './fiscal-codes';
 import { HandoverPositionDto } from './handover-position';
 import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -3103,6 +3104,22 @@ export class SuggestRouteDto {
   @IsOptional() @IsNumber() @Min(0) minEarn?: number;
 }
 
+/** 2026-11-23 — one country's code: the code and the day it counts from, or why none is needed (fiscal-codes.ts). */
+export class FiscalCodeDto {
+  /** The UIT code (Romania, RO e-Transport) or the UTN (Bulgaria, goods with high fiscal risk): letters and digits. */
+  @IsOptional() @IsString() @MaxLength(60) code?: string;
+  /** Romania: the day the transport was declared to start in RO e-Transport; Bulgaria: the day the UTN was issued. YYYY-MM-DD. */
+  @IsOptional() @IsString() @MaxLength(10) from?: string;
+  /** Why none is needed. Romania: thresholds (no consignment over 500 kg gross or RON 10,000), excise (under an e-AD). Bulgaria: not-listed. */
+  @IsOptional() @IsIn([...FISCAL_EXEMPTIONS]) exempt?: string;
+}
+
+/** 2026-11-23 — taken over or delivered in Romania or Bulgaria: each country's code, or why none is needed. */
+export class FiscalCodesDto {
+  @IsOptional() @ValidateNested() @Type(() => FiscalCodeDto) ro?: FiscalCodeDto;
+  @IsOptional() @ValidateNested() @Type(() => FiscalCodeDto) bg?: FiscalCodeDto;
+}
+
 export class RegisterFreightDto {
   @IsString() description!: string;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
@@ -3197,6 +3214,8 @@ export class RegisterFreightDto {
   @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
   /** CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities. */
   @IsOptional() @IsString() @MaxLength(500) customsInstructions?: string;
+  /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or why none is needed (rule ro-bg-fiscal-codes). */
+  @IsOptional() @ValidateNested() @Type(() => FiscalCodesDto) fiscalCodes?: FiscalCodesDto;
   /**
    * THE CARRIER MUST HAVE COVER (the user, 2026-10-28: "Toggle cover needed/not needed"): only a carrier whose insurance
    * SeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance.
@@ -3267,6 +3286,8 @@ export class BookFreightDto {
   /** 2026-11-22 — to another EU country, where no customs list what is inside (BG-2): true says it holds no alcohol, tobacco,
    *  medicines or weapons. Required there, and refused without; not asked anywhere else. */
   @IsOptional() @IsBoolean() noGoodsWithOwnRules?: boolean;
+  /** 2026-11-23 — to or from a shop in Romania or Bulgaria: the UIT or UTN, or why none is needed. */
+  @IsOptional() @ValidateNested() @Type(() => FiscalCodesDto) fiscalCodes?: FiscalCodesDto;
 
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
   /** FB2c — can the load be split into two smaller ones? The counter is the one place someone is standing in

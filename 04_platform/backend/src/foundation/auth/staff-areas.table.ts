@@ -623,6 +623,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PATCH sbg/business/me': 'none',
   'PATCH sbg/business/me/clients/:clientId': 'none',
   'PATCH sbg/dispatch/freight/:id/instructions': 'support',
+  // 2026-11-23 — the sender's new UIT or UTN code.
+  'POST sbg/dispatch/freight/:id/fiscal-codes': 'support',
   // The sender's own answer to a carrier's reservations (CMR Art. 8(2)): staff write nothing in its name.
   'POST sbg/dispatch/freight/:id/reservations/answer': 'none',
   'PATCH sbg/identity/profile': 'none',

@@ -252,6 +252,9 @@ export function createAgentApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/not-paid-direct/answer', { params: { path: { id: freightId } }, body: { reference } })),
     decideRefusal: (freightId: string, body: { choice: 'back' | 'elsewhere' | 'give_up'; destLabel?: string; destLocation?: { lat: number; lng: number }; contactName?: string; contactPhone?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/refusal', { params: { path: { id: freightId } }, body })),
+    /** 2026-11-23 — the sender's new UIT (Romania) or UTN (Bulgaria), or its word that none is needed. */
+    setFreightFiscalCodes: (freightId: string, body: { ro?: { code?: string; from?: string; exempt?: string }; bg?: { code?: string; from?: string; exempt?: string } }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/fiscal-codes', { params: { path: { id: freightId } }, body: body as never })),
     /** FP7 — the sender's instructions (CMR box 13): rewritten before pickup, added to on the road. */
     setFreightInstructions: (freightId: string, body: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }) =>
       sbg.request((c) => c.PATCH('/v1/sbg/dispatch/freight/{id}/instructions', { params: { path: { id: freightId } }, body: body as never })),

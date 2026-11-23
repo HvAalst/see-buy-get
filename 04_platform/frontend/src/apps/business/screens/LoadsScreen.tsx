@@ -1,3 +1,4 @@
+import { LoadFiscal } from './FiscalFields';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
@@ -669,6 +670,8 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                 ) : null}
                 {/* At the door: every attempt the driver made, and what the driver is told — the business's to add to (2026-10-27). */}
                 <LoadDoor row={row} client={client} act={act} onChanged={onChanged} />
+                {/* 2026-11-23 — its UIT or UTN, and a new one until the goods are delivered. */}
+                <LoadFiscal row={row} client={client} act={act} onChanged={onChanged} />
               </>
             ),
           },

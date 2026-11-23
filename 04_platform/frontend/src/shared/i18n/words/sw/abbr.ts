@@ -167,4 +167,8 @@ export const words: Record<string, string> = {
   "abbr.formC.1.about": "Fomu ya forodha ambayo wakala wa forodha anawasilisha angalau saa 24 kabla, kuomba maafisa wafanye kazi nje ya saa za ofisi; Jumapili au sikukuu ya umma, angalau saa tatu zinatozwa (EAC Customs Management Regulations 2010).",
   "abbr.empties.name": "Vibebeo vitupu",
   "abbr.empties.about": "Paleti, vizimba au magunia ambayo bidhaa zilikuja nayo, zikishapakuliwa. Vya duka la mtandaoni vinarudi na yeyote aliyevileta, katika ziara hiyo hiyo: kituo kinavihesabu mlangoni kwake, na hakuna kinachohifadhiwa zaidi kuvihusu.",
+  "abbr.uit.name": "Kitambulisho cha kipekee cha usafirishaji (Romania)",
+  "abbr.uit.about": "Msimbo ambao mfumo wa RO e-Transport wa Romania hutoa kwa usafirishaji wa bidhaa uliotangazwa. Mnunuzi au msambazaji wa Romania hutangaza usafirishaji na kumpa mbebaji msimbo; dereva huuonyesha wakati wa ukaguzi.",
+  "abbr.utn.name": "Nambari ya kipekee ya usafirishaji (Bulgaria)",
+  "abbr.utn.about": "Nambari ambayo Mamlaka ya Mapato ya Bulgaria hutoa kwa usafirishaji uliotangazwa wa bidhaa zenye hatari kubwa ya kodi. Mnunuzi au muuzaji wa Bulgaria huitangaza na kuipitisha; dereva huionyesha wakati wa ukaguzi.",
 };

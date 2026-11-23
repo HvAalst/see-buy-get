@@ -8,6 +8,8 @@ import { BODY_HINTS, EXCLUDABLE_BODIES, FREIGHT_STEPS, PACKAGING_HELP, chooseBod
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 import { GoodsWord } from '../../../shared/ui/GoodsWord';
+import { FiscalCodes } from '../../../shared/ui/FiscalCodes';
+import { fiscalReady } from '../../../shared/fiscal-codes';
 
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
@@ -313,10 +315,12 @@ export function FreightBooking({ state, actions, onTakeIn, start, now }: { state
       {step === 'check' ? <FreightCheck state={state} onChange={(s) => (s === 'goods' ? onTakeIn() : go(s))} /> : null}
       {/* 2026-11-22 — to a shop in another EU country: the sender's word on what it holds, as the server asked (BG-2). */}
       {step === 'check' && f.goodsWord ? <GoodsWord passage={f.goodsWord} said={f.noGoodsWithOwnRules} onChange={(noGoodsWithOwnRules) => actions.setAccept({ noGoodsWithOwnRules })} /> : null}
+      {/* 2026-11-23 — to or from a shop in Romania or Bulgaria: the UIT or UTN, or the sender's word that none is needed. */}
+      {step === 'check' && f.fiscalAsk ? <FiscalCodes countries={f.fiscalAsk} value={f.fiscal} onChange={(fiscal) => actions.setAccept({ fiscal })} idPrefix="freight-fiscal" /> : null}
 
       <div class="scr__cta">
         {step === 'check' ? (
-          <Button onClick={() => void actions.submitBookFreight()} disabled={Boolean(missing) || (f.goodsWord !== null && !f.noGoodsWithOwnRules)} busy={state.busy === 'book-freight'}>
+          <Button onClick={() => void actions.submitBookFreight()} disabled={Boolean(missing) || (f.goodsWord !== null && !f.noGoodsWithOwnRules) || (f.fiscalAsk !== null && !fiscalReady(f.fiscal, f.fiscalAsk))} busy={state.busy === 'book-freight'}>
             {t('agent.accept.bookFreight')}
           </Button>
         ) : (

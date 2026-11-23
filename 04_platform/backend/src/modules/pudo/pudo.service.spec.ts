@@ -1,4 +1,5 @@
 ﻿import { StreamableFile } from '@nestjs/common';
+import { fiscalCodesFor } from './fiscal-codes';
 import { ConsignmentNoteService, refusedLine } from './consignment-note.service';
 import { exceptionsInWords } from './receiving';
 import { DepartureNoteService } from './departure-note.service';
@@ -12875,9 +12876,34 @@ describe('PUDO Light', () => {
     expect(() => controller.bookFreight(base as never, { role: 'pudo', did: origin.did } as never)).toThrow(/from NL to BG: say that it holds no alcohol, tobacco, medicines or weapons/);
     expect(() => controller.bookFreight({ ...base, noGoodsWithOwnRules: true, natureCode: 'HUM' } as never, { role: 'pudo', did: origin.did } as never)).toThrow(/medicines do not go to another country with us/);
     expect(dispatch.listFreight()).toHaveLength(before);
-    const res: any = controller.bookFreight({ ...base, noGoodsWithOwnRules: true } as never, { role: 'pudo', did: origin.did } as never);
+    // 2026-11-23 — to a shop in Bulgaria: the UTN, or the word that none of the goods is on the high-fiscal-risk list.
+    expect(() => controller.bookFreight({ ...base, noGoodsWithOwnRules: true } as never, { role: 'pudo', did: origin.did } as never)).toThrow(/Bulgaria the UTN code \(goods with high fiscal risk\)/);
+    expect(dispatch.listFreight()).toHaveLength(before);
+    const res: any = controller.bookFreight({ ...base, noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } } as never, { role: 'pudo', did: origin.did } as never);
     const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
     expect(f.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
+    expect(f.fiscalCodes).toEqual([expect.objectContaining({ country: 'BG', exempt: 'not-listed' })]);
+  });
+
+  it('2026-11-23 — a load from Romania: its UIT on the sender’s row, the taking over refused once it ran out, and a new one from the sender', () => {
+    const here = { lat: 44.43, lng: 26.1 };
+    const sent = Date.parse('2026-11-23T08:00:00Z');
+    const f = dispatch.registerFreight({ description: 'Tiles', pickupLocation: here, pickupLabel: 'Bucharest yard', destLabel: 'Venlo depot', destLocation: here, weightKg: 800, packaging: 'pallet', pickupCountry: 'RO', destCountry: 'NL', postedByDid: 'did:glos:biz-ro', fiscalCodes: fiscalCodesFor({ ro: { code: 'RO1234567890', from: '2026-11-23' } }, { pickupCountry: 'RO', destCountry: 'NL', weightKg: 800 }, { now: sent }) } as never, sent);
+    expect(dispatch.postedBy('did:glos:biz-ro', sent)[0].fiscalCodes).toEqual([{ country: 'RO', kind: 'UIT', code: 'RO1234567890', validThrough: '2026-11-27' }]);
+    const stored = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    stored.status = 'claimed';
+    stored.claimedBy = 'did:glos:drv-ro';
+    // The driver's card shows it, to show at a check (whether it ran out depends on today, so only the code and its last day).
+    expect(dispatch.claimsFor('did:glos:drv-ro').find((c) => c.ref === f.freightId)?.fiscalCodes).toEqual([expect.objectContaining({ country: 'RO', code: 'RO1234567890', validThrough: '2026-11-27' })]);
+    const late = Date.parse('2026-11-28T08:00:00Z');
+    expect(() => dispatch.pickupFreight(f.freightId, 'did:glos:drv-ro', undefined, late)).toThrow(/The UIT code RO1234567890 for Romania \(RO e-Transport\) ran out on 2026-11-27: the sender gives a new one/);
+    // Only its sender gives a new one; the one it replaces is kept beside it.
+    expect(() => controller.setFreightFiscalCodes(f.freightId, { ro: { code: 'RO5555555555', from: '2026-11-28' } } as never, { role: 'business', did: 'did:glos:someone-else' } as never)).toThrow(/Freight not found/);
+    dispatch.setFiscalCodes(f.freightId, 'did:glos:biz-ro', 'Ioana', { ro: { code: 'RO9999999999', from: '2026-11-28' } }, late);
+    expect(stored.fiscalCodes).toEqual([expect.objectContaining({ code: 'RO9999999999', validThrough: '2026-12-02', saidBy: 'Ioana' })]);
+    expect(stored.fiscalCodesBefore).toEqual([expect.objectContaining({ code: 'RO1234567890' })]);
+    // …and the taking over goes on to its next check.
+    expect(() => dispatch.pickupFreight(f.freightId, 'did:glos:drv-ro', undefined, late)).toThrow(/load-safety checklist/);
   });
 
   it('FB2d: ruling nothing out stores no preference at all', () => {

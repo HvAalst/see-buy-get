@@ -111,6 +111,9 @@ export const ABBREVIATIONS = [
   'Verified gross mass',
   'Latest acceptance time',
   'Delivery order',
+  // 2026-11-23 — the codes Romania and Bulgaria follow goods by (shared/fiscal-codes.ts).
+  'UIT',
+  'UTN',
 ] as const;
 
 export type Abbreviation = (typeof ABBREVIATIONS)[number];

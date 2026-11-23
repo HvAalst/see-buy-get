@@ -122,6 +122,8 @@ export const ERROR_CODES = {
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },
   BORDER_MANIFEST_INCOMPLETE: { status: 409, title: 'The border manifest is not complete' },
+  // 2026-11-23 — Romania's UIT or Bulgaria's UTN past its last day: the sender gives a new one before the goods are taken over.
+  FISCAL_CODE_EXPIRED: { status: 409, title: 'A tracking code of Romania or Bulgaria has run out' },
   RECEIVER_REQUIRED: { status: 400, title: 'Record who received the goods' },
   DELIVERY_PHOTO_REQUIRED: { status: 400, title: 'A photo of the goods as delivered is required' },
   REASON_REQUIRED: { status: 400, title: 'A reason is required' },

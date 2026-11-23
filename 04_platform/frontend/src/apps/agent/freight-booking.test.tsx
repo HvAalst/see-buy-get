@@ -94,6 +94,8 @@ describe('booking a walk-up as freight, one part per screen', () => {
       "actions.setAccept({ receiverEmail: e.currentTarget.value })",
       // 2026-11-22 — and the sender's word on what goes to a shop in another EU country, once the server asked it (BG-2).
       "actions.setAccept({ noGoodsWithOwnRules })",
+      // 2026-11-23 — and the UIT or UTN for a shop in Romania or Bulgaria, once the server asked it.
+      "actions.setAccept({ fiscal })",
     ];
     const src = readFileSync(join(HERE, 'screens/FreightBooking.tsx'), 'utf8');
     const now = [...src.matchAll(/actions\.setAccept\((?:\{[^}]*\}|\w+\([^)]*\))\)/g)].map((m) => m[0]);

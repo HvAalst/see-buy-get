@@ -1,3 +1,5 @@
+import { fiscalCountriesOf } from '../../../shared/fiscal-codes';
+import { FiscalFields } from './FiscalFields';
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
@@ -173,7 +175,9 @@ export function PostLoad({
   const countryName = (code: string) => countries.find((c) => c.code === code)?.name ?? countryNameIn(code, 'en');
   const dangerous = isDangerousNature(form.natureCode);
   const cold = isColdNature(form.natureCode);
-  const ctx = { crossing, withinUnion: Boolean(passage), contract: Boolean(contract), today: todayIn(start?.now) };
+  // 2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or the business's word that none is needed.
+  const fiscalAsked = fiscalCountriesOf(business.country, form.destCountry || business.country);
+  const ctx = { crossing, withinUnion: Boolean(passage), fiscal: fiscalAsked, contract: Boolean(contract), today: todayIn(start?.now) };
   const gaps = step === 'done' ? [] : stepGaps(step, form, ctx);
   const back = postBack(step, steps);
   const siteApi = client ? (client.api as never) : null;
@@ -404,6 +408,12 @@ export function PostLoad({
                 <span>{t('common.union.none')}</span>
               </label>
               {gap('noGoodsWithOwnRules')}
+            </>
+          ) : null}
+          {fiscalAsked.length ? (
+            <>
+              <FiscalFields countries={fiscalAsked} value={form.fiscal} onChange={(fiscal) => set({ fiscal })} idPrefix="post-fiscal" />
+              {gap('fiscalCodes')}
             </>
           ) : null}
           {/* Box 2 of the consignment note: who receives the goods. A receiving point is its own consignee. */}

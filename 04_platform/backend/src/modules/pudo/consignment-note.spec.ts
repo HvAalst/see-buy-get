@@ -210,6 +210,27 @@ describe('the consignment note', () => {
     expect(html).not.toMatch(/<span class="no">6<\/span>Seals/);
   });
 
+  // 2026-11-23 — the owner: "dedicated fields for both Romanian UIT and Bulgarian UTN codes", on the note (fiscal-codes.ts).
+  it('box 13 says Romania’s UIT and Bulgaria’s UTN, or why the sender says none is needed', () => {
+    const n = service.build(
+      base({
+        pickupCountry: 'RO',
+        destCountry: 'BG',
+        customsInstructions: 'None',
+        fiscalCodes: [
+          { country: 'RO', kind: 'UIT', code: 'RO1234567890', from: '2026-11-23', validThrough: '2026-11-27', saidAt: '2026-11-23T08:00:00.000Z' },
+          { country: 'BG', kind: 'UTN', exempt: 'not-listed', saidAt: '2026-11-23T08:00:00.000Z' },
+        ],
+      } as never),
+    );
+    expect(n.instructions.slice(0, 3)).toEqual([
+      'For customs: None',
+      'Romania, RO e-Transport: UIT RO1234567890, valid through 2026-11-27',
+      expect.stringMatching(/^Bulgaria, goods with high fiscal risk: no UTN code; the sender says none of the goods is on the Minister of Finance’s list of goods with high fiscal risk \(/),
+    ]);
+    expect(service.htmlFor(n)).toContain('UIT RO1234567890, valid through 2026-11-27');
+  });
+
   it('carries CMR’s particulars where applicable: a declared value, a special interest, no transhipment, an agreed time-limit', () => {
     const contract = { contractId: 'ctr_1', fleetDid: 'did:fleet:kilima', fleetName: 'Kilima Logistics', shipperName: 'Thika Avocados', reference: 'KL-07' };
     const n = service.build(

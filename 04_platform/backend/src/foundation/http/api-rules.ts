@@ -63,6 +63,14 @@ export const API_RULE_CHANGES: readonly ApiRuleChange[] = [
     announcedAt: '2026-11-04',
     enforcedFrom: '2027-02-02',
   },
+  {
+    // 2026-11-23 — the owner: "dedicated fields for both Romanian UIT and Bulgarian UTN codes" (fiscal-codes.ts).
+    id: 'ro-bg-fiscal-codes',
+    version: '1',
+    summary: 'A load taken over or delivered in Romania carries the UIT code of RO e-Transport, and in Bulgaria the UTN of goods with high fiscal risk, or the sender\'s word that none is needed and why (fiscalCodes).',
+    announcedAt: '2026-11-23',
+    enforcedFrom: '2027-02-21',
+  },
 ];
 
 const DAY = 86_400_000;

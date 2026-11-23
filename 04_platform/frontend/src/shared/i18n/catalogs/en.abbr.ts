@@ -170,4 +170,8 @@ export const enAbbr = {
   'abbr.formC.1.about': 'The customs form a clearing agent files at least 24 hours ahead, to ask officers to work outside office hours; on a Sunday or a public holiday at least three hours are charged (EAC Customs Management Regulations 2010).',
   'abbr.empties.name': 'Empty load carriers',
   'abbr.empties.about': 'The pallets, cages or sacks goods came on, once they are unloaded. A store’s go back with whoever brought them, on the same visit: the hub counts them out at its door, and nothing more is kept of them.',
+  'abbr.uit.name': 'Unique transport identifier (Romania)',
+  'abbr.uit.about': 'The code Romania’s RO e-Transport system gives a declared transport of goods. The Romanian buyer or supplier declares the transport and passes the code to the carrier; the driver shows it at a check.',
+  'abbr.utn.name': 'Unique transport number (Bulgaria)',
+  'abbr.utn.about': 'The number Bulgaria’s National Revenue Agency gives a declared transport of goods with high fiscal risk. The Bulgarian buyer or seller declares it and passes it on; the driver shows it at a check.',
 };

@@ -167,4 +167,8 @@ export const words: Record<string, string> = {
   "abbr.formC.1.about": "Het douaneformulier dat een douane-expediteur minstens 24 uur van tevoren indient, om beambten te vragen buiten kantooruren te werken; op een zondag of een officiële feestdag worden minstens drie uur in rekening gebracht (EAC Customs Management Regulations 2010).",
   "abbr.empties.name": "Lege ladingdragers",
   "abbr.empties.about": "De pallets, kooien of zakken waarop goederen kwamen, zodra ze zijn uitgeladen. Die van een webwinkel gaan terug met degene die ze bracht, tijdens hetzelfde bezoek: de hub telt ze uit bij zijn deur, en er wordt verder niets van bewaard.",
+  "abbr.uit.name": "Unieke vervoersidentificatie (Roemenië)",
+  "abbr.uit.about": "De code die het Roemeense systeem RO e-Transport geeft aan een aangemeld goederenvervoer. De Roemeense koper of leverancier meldt het vervoer aan en geeft de code aan de vervoerder; de chauffeur laat hem zien bij een controle.",
+  "abbr.utn.name": "Uniek vervoersnummer (Bulgarije)",
+  "abbr.utn.about": "Het nummer dat de Bulgaarse belastingdienst geeft aan een aangemeld vervoer van goederen met een hoog fiscaal risico. De Bulgaarse koper of verkoper meldt het aan en geeft het door; de chauffeur laat het zien bij een controle.",
 };

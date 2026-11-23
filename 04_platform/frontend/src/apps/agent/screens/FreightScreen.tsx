@@ -1,3 +1,4 @@
+import { FiscalCodeLines, FiscalNewCode } from '../../../shared/ui/FiscalCodes';
 import { useState } from 'preact/hooks';
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
@@ -244,6 +245,13 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
         </Card>
       ) : null}
       <InstructionsSheet load={load} open={instructing} onClose={() => setInstructing(false)} state={state} actions={actions} />
+      {/* 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; a new one until it is delivered. */}
+      {load.fiscalCodes?.length ? (
+        <Card title={t('common.fiscal.title')}>
+          <FiscalCodeLines cards={load.fiscalCodes} />
+          {['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(load.status) ? <FiscalNewCode cards={load.fiscalCodes} idPrefix={`fiscal-${load.freightId}`} save={(body) => actions.setFreightFiscalCodes(load.freightId, body)} /> : null}
+        </Card>
+      ) : null}
 
       <div class="btnrow">
         {/* Once the shop's archive keeps the note, its slide-up shares a link to it — the same links Records › Notes lists. */}
