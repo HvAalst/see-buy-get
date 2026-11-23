@@ -56,15 +56,20 @@ import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.serv
 import { STAND_IN_ANSWERS_AFTER_MS } from '../../foundation/payment-hub/stand-in.provider';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 import { BorderRouteService } from './border-route.service';
+import { JourneyPlanService } from './journey-plan.service';
+import { ROAD_ROUTES } from './road-routes.token';
 import { GlosError } from '../../foundation/http/glos-error';
 
 /** 2026-11-23 — the road route from the Netherlands to Bulgaria, switched on or off by a test (step 3b): the routing asks it. */
 const ROAD = { from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line', prices: { S: 18, M: 27.5, L: 39, currency: 'EUR' } };
 let roadOn = false;
+/** 2026-11-23 — the route's central hub and fleet, as a test registers them (step 3c). */
+let roadHub = ROAD.hubMdpId;
+let roadFleet = ROAD.fleetDid;
 const roads = {
   roadBookable: (from: string, to: string) => {
     if (!roadOn || from !== 'NL' || to !== 'BG') throw new GlosError('INVALID_STATE', 'Parcels to Bulgaria are not sent from Netherlands yet: no route between them is on');
-    return { ...ROAD, prices: { ...ROAD.prices } };
+    return { ...ROAD, hubMdpId: roadHub, fleetDid: roadFleet, prices: { ...ROAD.prices } };
   },
 };
 
@@ -93,6 +98,11 @@ describe('crossing a border', () => {
   let drivers: DriverService;
   let partners: PartnerLedgerService;
   let hub: PaymentHubService;
+  let dispatch: DispatchService;
+  let totes: ToteService;
+  let vehicles: VehicleService;
+  let fleetSvc: FleetService;
+  let journeys: JourneyPlanService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -113,9 +123,18 @@ describe('crossing a border', () => {
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
         { provide: BorderRouteService, useValue: roads },
+        { provide: ROAD_ROUTES, useValue: roads },
+        JourneyPlanService,
       ],
     }).compile();
     roadOn = false;
+    roadHub = ROAD.hubMdpId;
+    roadFleet = ROAD.fleetDid;
+    dispatch = moduleRef.get(DispatchService);
+    totes = moduleRef.get(ToteService);
+    vehicles = moduleRef.get(VehicleService);
+    fleetSvc = moduleRef.get(FleetService);
+    journeys = moduleRef.get(JourneyPlanService);
     photoBy = evidencePhotos(moduleRef);
     photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
@@ -838,6 +857,8 @@ describe('crossing a border', () => {
       presence.set({ jurisdiction: 'NL', level: 'established' });
       presence.set({ jurisdiction: 'BG', level: 'matched' });
       roadOn = true;
+      // …ending at its central hub in Sofia (step 3c).
+      roadHub = mdps.register({ name: 'Sofia Central Hub', zones: ['Sofia'], country: 'BG', location: SOFIA }, { approvedBy: 'staff' }).mdpId;
       const to = shop('Магазин Витоша', 'Sofia', SOFIA, 'BG', 2);
       corridors.addCorridor({ name: 'Amsterdam–Sofia', originZone: 'Amsterdam', destZone: 'Sofia' });
       return to;
@@ -866,7 +887,8 @@ describe('crossing a border', () => {
       const to = euShops();
       const store = amsterdamStore();
       const plan = routing.planJourney({ from: { type: 'dock', id: store.did, label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM }, destAgentDid: to.did });
-      expect(plan.hops.map((h) => h.country)).toEqual(['NL', 'BG']);
+      // Through the hub that serves Sofia, as any journey into its zone (step 3c registers one).
+      expect(plan.hops.map((h) => h.country)).toEqual(['NL', 'BG', 'BG']);
       expect(plan.crossesBorder).toBe(false);
       expect(plan.crossings).toEqual([]);
       expect(plan.legs[0]).toMatchObject({ fromCountry: 'NL', toCountry: 'BG', crossesBorder: false, borderDwellH: 0 });
@@ -915,7 +937,7 @@ describe('crossing a border', () => {
       expect(parcel.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
       expect(Date.parse(parcel.withinUnion!.saidNoneAt)).not.toBeNaN();
       // 2026-11-23 — and the road route it was booked on, as it stood (step 3b).
-      expect(parcel.roadRoute).toEqual({ from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
+      expect(parcel.roadRoute).toEqual({ from: 'NL', to: 'BG', hubMdpId: roadHub, hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
       expect(parcel.currency).toBe('EUR');
     });
 
@@ -927,7 +949,7 @@ describe('crossing a border', () => {
       expect(() => quoteFrom(store, to)).toThrow(/Parcels to Bulgaria are not sent from Netherlands yet: no route between them is on/);
       roadOn = true;
       const q = quoteFrom(store, to);
-      expect(q.byRoad).toEqual({ from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
+      expect(q.byRoad).toEqual({ from: 'NL', to: 'BG', hubMdpId: roadHub, hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
       expect(q).toMatchObject({ currency: 'EUR', crossesBorder: false, crossings: [], withinUnion: { union: 'EU', fromCountry: 'NL', toCountry: 'BG' } });
       // From the store's own dock nobody's shop fee: the route's price is the whole way (P3-2), our fee and the tax on top.
       expect(q.locked.transport).toBe(27.5);
@@ -936,6 +958,97 @@ describe('crossing a border', () => {
       expect(q.flexible).toEqual(q.locked);
       // A heavy parcel goes as a load of its own.
       expect(() => routing.quoteShipmentFrom({ type: 'dock', id: store.did, label: 'Warehouse, Westpoort', zone: 'Amsterdam', country: 'NL', location: AMSTERDAM }, to.did, 'HEAVY', vendors.entityIdOf(store))).toThrow(/a heavy one goes as a load of its own/);
+    });
+
+    // 2026-11-23 — THE RUN (step 3c; P3-1 "dedicated route drivers gather a consolidated full load and take it to the central
+    // distribution hub in that nation").
+    it('goes by the central hub: planned and bagged there; its bags offered only to the route fleet’s drivers, who see the whole load and take it', () => {
+      const to = euShops();
+      const central = mdps.require(roadHub);
+      const from = shop('Grachten Winkel', 'Amsterdam', AMSTERDAM, 'NL', 3);
+      // The journey: straight from the Dutch shop to the central hub, then on in Bulgaria.
+      expect(routing.planJourney({ originAgentDid: from.did, destAgentDid: to.did, central: central.mdpId }).hops.map((h) => h.id)).toEqual([from.did, central.mdpId, to.did]);
+      const quote = routing.quoteShipment(from.did, to.did, 'M', undefined, { consumer: true });
+      expect(quote.hops.map((h) => h.id)).toEqual([from.did, central.mdpId, to.did]);
+      // The route's fleet, a driver of it, and a driver of another fleet, each in a van near the Dutch shop.
+      const fleetOf = (name: string, n: number) => {
+        const m = managers.register({ companyName: name, contactPhone: `+3161000000${n}`, ownerFullName: 'Owner', ownerNationalId: `NID-NL-${n}`, location: AMSTERDAM, jurisdiction: 'NL', requirements: { businessRegistrationNo: `BR-NL-${n}`, transportOperatorLicence: `TOL-NL-${n}`, taxId: `TAX-NL-${n}` } } as never);
+        managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'p' });
+        managers.decideKyc(m.did, true);
+        return managers.recordBond(m.did);
+      };
+      const driverOf = (fleetDid: string, n: number) => {
+        const d = drivers.register({ displayName: `D${n}`, fullName: `Driver ${n}`, nationalId: `NID-D-${n}`, mobile: `+3162000000${n}`, licenceClasses: ['van'], licenceNumber: `L-NL-${n}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetDid } as never);
+        drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' } as never);
+        drivers.decideKyc(d.did, true);
+        const van = vehicles.register({ plate: `NL-V-${n}`, vehicleClass: 'van', capacityKg: 1000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, managerDid: fleetDid } as never);
+        fleetSvc.couple(d.did, van.vehicleId);
+        return d;
+      };
+      const balkan = fleetOf('Balkan Line', 1);
+      const other = fleetOf('Polder Vans', 2);
+      roadFleet = balkan.did;
+      const ours = driverOf(balkan.did, 1);
+      const theirs = driverOf(other.did, 2);
+      // Parcels booked to Bulgaria, and a bag at the Dutch shop for the central hub, sealed and offered.
+      const booked = () => parcels.createConsumerSend({ senderPersonDid: 'did:person:anna', senderPhoneHash: 'hash-anna', receiverMobile: '+359888123456', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2, quote, noGoodsWithOwnRules: true }).parcel.parcelId;
+      const bag = totes.register(from.did);
+      totes.assign(bag.code, central.mdpId, 'Sofia Central Hub');
+      totes.add(bag.code, booked(), 'M');
+      totes.markAvailable(bag.code);
+      // The plan a parcel keeps when it is taken in goes by its route's central hub, wherever staff named it: here one in Varna,
+      // which no ordinary route from Amsterdam to Sofia would pass.
+      const varna = mdps.register({ name: 'Varna Central Hub', zones: ['Varna'], country: 'BG', location: { lat: 43.2141, lng: 27.9147 } }, { approvedBy: 'staff' });
+      roadHub = varna.mdpId;
+      const viaVarna = routing.quoteShipment(from.did, to.did, 'M', undefined, { consumer: true });
+      const sent = parcels.createConsumerSend({ senderPersonDid: 'did:person:anna', senderPhoneHash: 'hash-anna', receiverMobile: '+359888123456', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2, quote: viaVarna, noGoodsWithOwnRules: true }).parcel.parcelId;
+      // …and on inside Bulgaria as any parcel goes: by the hub near the receiving shop.
+      expect(journeys.freeze(sent)?.hops.map((h) => h.id)).toEqual([from.did, varna.mdpId, central.mdpId, to.did]);
+      roadHub = central.mdpId;
+      // Every other way a bag reaches a driver says the same: work around me, the moving driver's nudge, a bag claimed for one
+      // who took it on ahead, and the "a load is near you" bell.
+      expect(dispatch.suggestNearby(theirs.did, AMSTERDAM, 10).some((o) => o.ref === bag.code)).toBe(false);
+      expect(dispatch.suggestNearby(ours.did, AMSTERDAM, 10).some((o) => o.ref === bag.code)).toBe(true);
+      expect(dispatch.offerNear(theirs.did, AMSTERDAM)?.ref).not.toBe(bag.code);
+      expect(dispatch.claimBagFor(bag.code, theirs.did)).toMatch(/only Balkan Line’s drivers carry it/);
+      expect(dispatch.roadBagFor(theirs.did, bag.code)).toEqual({ may: false, to: 'BG' });
+      expect(dispatch.roadBagFor(ours.did, bag.code)).toEqual({ may: true, to: 'BG' });
+      // …and the drivers staff may choose for a bag waiting long, and a bag offered to one of them.
+      fleetSvc.reportLocation(theirs.did, AMSTERDAM);
+      fleetSvc.reportLocation(ours.did, AMSTERDAM);
+      expect(dispatch.driversForBag(bag.code).map((d) => d.driverDid)).toEqual([ours.did]);
+      expect(dispatch.offerBagTo(theirs.did, bag.code)).toBeNull();
+      const offered = (did: string) => dispatch.suggest(did, { from: AMSTERDAM, to: AMSTERDAM }).some((o) => o.ref === bag.code);
+      expect(offered(theirs.did)).toBe(false);
+      expect(offered(ours.did)).toBe(true);
+      // Another fleet's driver sees no load; the route's driver sees it with how full the van would be.
+      expect(dispatch.roadLoad(theirs.did).routes).toEqual([]);
+      const load = dispatch.roadLoad(ours.did);
+      expect(load.routes).toHaveLength(1);
+      expect(load.routes[0]).toMatchObject({ from: 'NL', to: 'BG', hubName: 'Sofia Central Hub', bags: [{ code: bag.code, at: 'Grachten Winkel', parcels: 1 }] });
+      expect(load.vehicle).toMatchObject({ bagPlaces: 15, freeBagPlaces: 15 });
+      // Taking it: another fleet's driver is refused; the route's driver takes it, and it is theirs.
+      expect(dispatch.takeRoadLoad(theirs.did, [bag.code]).refused[0].why).toMatch(/not waiting for a route your fleet runs/);
+      expect(dispatch.takeRoadLoad(ours.did, [bag.code, 'BAG-NONE'])).toMatchObject({ taken: [bag.code], refused: [{ code: 'BAG-NONE' }] });
+      expect(totes.byCodeMaybe(bag.code)).toMatchObject({ status: 'claimed', claimedBy: ours.did });
+      expect(dispatch.roadLoad(ours.did).vehicle?.freeBagPlaces).toBe(14);
+      // With the route switched off, nobody carries a bag across.
+      const bag2 = totes.register(from.did);
+      totes.assign(bag2.code, central.mdpId, 'Sofia Central Hub');
+      totes.add(bag2.code, booked(), 'M');
+      totes.markAvailable(bag2.code);
+      // A counter loading it by another fleet's driver's pass is refused, as is a take-over after a breakdown.
+      mdps.closeBag(bag2.code, { shopDid: from.did }, 'Test', { photoRef: photoBy(from.did) });
+      expect(() => mdps.loadBag(bag2.code, drivers.get(theirs.did).badgeId!)).toThrow(/only Balkan Line’s drivers carry it/);
+      expect(() => dispatch.assertCanTakeLoads([], theirs.did, 0, [bag2.code])).toThrow(/only Balkan Line’s drivers carry it/);
+      // An offer made while the route was another fleet's is refused at the claim once it is not theirs.
+      roadFleet = other.did;
+      const early = dispatch.suggest(theirs.did, { from: AMSTERDAM, to: AMSTERDAM }).find((o) => o.ref === bag2.code);
+      expect(early).toBeDefined();
+      roadFleet = balkan.did;
+      expect(() => dispatch.claim(early!.offerId)).toThrow(/only Balkan Line’s drivers carry it/);
+      roadOn = false;
+      expect(offered(ours.did) || dispatch.suggest(ours.did, { from: AMSTERDAM, to: AMSTERDAM }).some((o) => o.ref === bag2.code)).toBe(false);
     });
 
     it('a walk-up at a Dutch counter to a Bulgarian shop: paid there in cash, with the sender’s word, priced by the route and keeping it', () => {

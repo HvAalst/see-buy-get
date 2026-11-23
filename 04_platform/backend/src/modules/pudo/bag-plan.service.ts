@@ -118,6 +118,8 @@ export class BagPlanService {
   private nextHopFor(parcel: Parcel): { key: string; label: string; via: 'direct' | 'hub' } {
     const next = nextStopOf(parcel);
     if (next && next.type !== 'dock') return { key: next.id, label: next.label, via: next.type === 'mdp' ? 'hub' : 'direct' };
+    // 2026-11-23 — on a road route, not yet planned (step 3c): its bag goes straight to the route's central hub.
+    if (parcel.roadRoute) return { key: parcel.roadRoute.hubMdpId, label: parcel.roadRoute.hubName, via: 'hub' };
     if (parcel.destAgentDid) {
       try {
         const plan = this.routing.planJourney({ originAgentDid: parcel.originAgentDid, destAgentDid: parcel.destAgentDid, weightKg: parcel.weightKg });

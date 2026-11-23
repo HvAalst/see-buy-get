@@ -29037,6 +29037,60 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/road-load": {
+      "get": {
+        "operationId": "Sbg.roadLoad",
+        "summary": "",
+        "description": "2026-11-23 — THE ROAD ROUTE'S LOAD (the Netherlands–Bulgaria plan, step 3c; P3-1): for a driver of a fleet that runs a road\nroute, every bag waiting for it anywhere in the sending country, and how full the vehicle would be. Theirs only.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/road-load/take": {
+      "post": {
+        "operationId": "Sbg.takeRoadLoad",
+        "summary": "",
+        "description": "…and taking the bags chosen from it, each claimed as any bag is, as far as the vehicle holds.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeRoadLoadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/locate": {
       "post": {
         "operationId": "Sbg.locate",
@@ -83015,6 +83069,20 @@
         "required": [
           "from",
           "to"
+        ]
+      },
+      "TakeRoadLoadDto": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "codes"
         ]
       },
       "LocateDto": {

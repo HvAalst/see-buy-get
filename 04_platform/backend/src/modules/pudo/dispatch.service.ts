@@ -10,10 +10,14 @@ import { PresenceService } from '../../foundation/presence/presence.service';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { NotificationService } from './notification.service';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
+import type { BorderRouteService } from './border-route.service';
+import { ROAD_ROUTES } from './road-routes.token';
+import { unionBetween } from '../../foundation/countries/customs-union';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
 import { mobilisationForCarrier, type HandBack, type Mobilisation } from './mobilisation';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -532,6 +536,9 @@ export class DispatchService {
     @Optional() private readonly presence?: PresenceService,
     // 2026-11-13 — a driver told the poster answered their price with one of its own (unusual loads, U4). Optional for the specs.
     @Optional() private readonly notifications?: NotificationService,
+    // 2026-11-23 — the road routes between EU countries (step 3c): who alone carries a bag across one.
+    // 2026-11-23 — the road routes, looked up when first needed and never at construction (see road-routes.token.ts).
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {
     // The manifest reads a load's carrier, seals and steps from here; it never reaches back into dispatch.
     this.manifests?.useFacts((freightId) => {
@@ -544,7 +551,8 @@ export class DispatchService {
     // The hub weighs a bag against what is aboard: the kilos left, when the driver has a vehicle to leave them on.
     this.mdps.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
     // …and a bag of chilled parcels against the cold loads aboard (2026-11-03): one body keeps one temperature.
-    this.mdps.registerCold((did, bagCode) => this.coldRefusal(did, 'tote', bagCode));
+    // 2026-11-23 — …and whether a bag on a road route may go in this driver's vehicle at all (step 3c).
+    this.mdps.registerCold((did, bagCode) => this.roadRefusal(did, { kind: 'tote', ref: bagCode }) ?? this.coldRefusal(did, 'tote', bagCode));
     // …and a counter weighs its parcels against what is aboard the same way (2026-11-05), not against an empty vehicle.
     this.parcels?.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
     // Round 38 — what a rider carries and has delivered, for the custody cap: each load counts as one.
@@ -990,7 +998,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.roadRefusal(driverDid, load) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -1113,7 +1121,7 @@ export class DispatchService {
     const out: Offer[] = [];
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.roadRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
       .filter(({ km }) => km <= radius)
       .sort((a, b) => a.km - b.km);
@@ -1165,7 +1173,7 @@ export class DispatchService {
 
     const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.roadRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
@@ -1275,7 +1283,7 @@ export class DispatchService {
     const load = this.availableLoads().find((l) => l.kind === 'tote' && l.ref === code);
     if (!load) return null;
     if (!this.vehicleCanCarry(vehicle, load, this.remainingCapacity(driverDid), this.remainingTotes(driverDid))) return null;
-    if (this.coverRefusalFor(driverDid, load, now) || this.railRefusalFor(load) || this.securedRefusalFor(driverDid, load, vehicle) || this.coldRefusal(driverDid, load.kind, load.ref)) return null;
+    if (this.roadRefusal(driverDid, load) || this.coverRefusalFor(driverDid, load, now) || this.railRefusalFor(load) || this.securedRefusalFor(driverDid, load, vehicle) || this.coldRefusal(driverDid, load.kind, load.ref)) return null;
     const at = this.fleet.activeForDriver(driverDid)?.location;
     if (!at) return null;
     const profile = this.pricingProfile(vehicle);
@@ -1420,6 +1428,11 @@ export class DispatchService {
     if (offer.kind === 'tote') {
       const at = this.totes.byCodeMaybe(offer.ref)?.locationId;
       if (at && this.atHubDown(at)) throw new GlosError('INVALID_STATE', `${this.mdps.find(at)?.name ?? 'Its hub'} is down: its bags wait there until it opens again`);
+    }
+    // 2026-11-23 — a bag for another EU country: only the road route fleet's drivers carry it (step 3c), asked again here.
+    if (offer.kind === 'tote') {
+      const road = this.roadRefusal(offer.driverDid, { kind: 'tote', ref: offer.ref });
+      if (road) throw new GlosError('FORBIDDEN', road);
     }
     if (offer.kind === 'tote' && this.remainingTotes(offer.driverDid) < 1) {
       throw new GlosError('CAPACITY_EXCEEDED', `Your ${vehicle.vehicleClass} is carrying all ${this.toteCapacityOf(vehicle)} bag(s) it holds — deliver one before taking another`);
@@ -2568,6 +2581,9 @@ export class DispatchService {
     // 2026-11-03 — what is kept cold, beside the cold loads already on the truck taking it over: one body, one temperature.
     // (What comes off the broken vehicle rode together there already.)
     for (const [kind, ref, code] of [...loads.map((f) => ['freight', f.freightId, f.code] as const), ...bagCodes.map((c) => ['tote', c, `bag ${c}`] as const)]) {
+      // 2026-11-23 — a bag on a road route goes on only in a vehicle of the route's fleet (step 3c).
+      const road = this.roadRefusal(driverDid, { kind, ref });
+      if (road) throw new GlosError('FORBIDDEN', `${vehicle.plate} cannot take ${code}: ${road}`);
       const cold = this.coldRefusal(driverDid, kind, ref);
       if (cold) throw new GlosError('CARGO_INCOMPATIBLE', `${vehicle.plate} cannot take ${code}: ${cold}`);
     }
@@ -3277,6 +3293,8 @@ export class DispatchService {
     if (need.capabilities.some((cap) => !vehicle[cap]) || !DispatchService.hasEquipmentFor(vehicle, need.equipment) || (need.bulk && !vehicle.carriesBulk) || (need.fragile && !vehicle.allowsFragile)) {
       return 'Their vehicle cannot carry what is in it';
     }
+    const road = this.roadRefusal(driverDid, { kind: 'tote', ref: code });
+    if (road) return road;
     const cold = this.coldRefusal(driverDid, 'tote', code);
     if (cold) return cold;
     try {
@@ -5407,6 +5425,136 @@ export class DispatchService {
     if (f.status === 'in_transit') return { missing: [], toShow: true };
     const gaps = this.manifests!.gaps(f, this.manifestCarrier(f)).filter((g) => g.blocking);
     return { missing: gaps.map(({ key, who, words }) => ({ key, who, words })), toShow: false };
+  }
+
+  /**
+   * 2026-11-23 — THE ROAD ROUTE A BAG CROSSES (step 3c, P3-1 "dedicated route drivers"): a bag standing in one EU country and
+   * going to a hub or shop in another goes only on the road route between them, carried only by that route's fleet. Undefined for
+   * a bag staying in one country; 'none' where no road route between the two is on, so nobody carries it.
+   */
+  private roadRouteOfBag(code: string): ReturnType<BorderRouteService['roadBookable']> | 'none' | undefined {
+    const t = this.totes.byCodeMaybe(code);
+    if (!t?.locationId || !t.destinationNodeId) return undefined;
+    const countryOf = (id: string): string | undefined => {
+      const hub = this.mdps.find(id);
+      if (hub) return this.mdps.countryOf(hub);
+      const shop = this.agents.find(id);
+      return shop ? this.agents.countryOf(shop) : undefined;
+    };
+    const from = countryOf(t.locationId);
+    const to = countryOf(t.destinationNodeId);
+    if (!from || !to || !unionBetween(from, to)) return undefined;
+    const roads = this.roadRoutes();
+    if (!roads) return undefined;
+    try {
+      return roads.roadBookable(from, to);
+    } catch {
+      return 'none';
+    }
+  }
+
+  /**
+   * For the "a load is near you" bell (2026-11-23, step 3c): whether this driver may carry this bag across a road route (always,
+   * for a bag that crosses none), and the route's arrival country where it crosses one.
+   */
+  roadBagFor(driverDid: string, code: string): { may: boolean; to?: string } {
+    const road = this.roadRouteOfBag(code);
+    return { may: !this.roadRefusal(driverDid, { kind: 'tote', ref: code }), ...(road && road !== 'none' ? { to: road.to } : {}) };
+  }
+
+  private roadRoutesFound?: Pick<BorderRouteService, 'roadBookable'>;
+
+  /** The road routes, found once they are there; nothing in a setting that has none (a test listing its own services). */
+  private roadRoutes(): Pick<BorderRouteService, 'roadBookable'> | undefined {
+    if (!this.roadRoutesFound) {
+      try {
+        this.roadRoutesFound = this.moduleRef?.get<Pick<BorderRouteService, 'roadBookable'>>(ROAD_ROUTES, { strict: false }) ?? undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return this.roadRoutesFound;
+  }
+
+  /** The fleet a driver drives for, or nothing for one who drives for none (or is unknown). */
+  private fleetOfDriver(driverDid: string): string | undefined {
+    try {
+      return this.drivers.get(driverDid).managerDid;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Why this driver may not carry this bag across a road route, in words; nothing where they may, or where it crosses none. */
+  private roadRefusal(driverDid: string, load: Pick<Claimable, 'kind' | 'ref'>): string | undefined {
+    if (load.kind !== 'tote') return undefined;
+    const road = this.roadRouteOfBag(load.ref);
+    if (!road) return undefined;
+    if (road === 'none') return 'This bag goes to another country, and no road route there is on: nobody carries it yet';
+    const fleet = this.fleetOfDriver(driverDid);
+    if (fleet !== road.fleetDid) return `This bag goes on the route from ${road.from} to ${road.to}: only ${road.fleetName}’s drivers carry it`;
+    return undefined;
+  }
+
+  /**
+   * 2026-11-23 — THE ROUTE'S LOAD, AS ITS DRIVER SEES IT (step 3c; the owner's P3-1: "dedicated route drivers gather a consolidated
+   * full load and take it to the central distribution hub"): every bag waiting, anywhere in the sending country, for a road route
+   * this driver's fleet runs — where each stands and what it weighs — and how full the vehicle would be with them all. Not limited
+   * to what is near: the route's drivers go and fetch it, and decide themselves when it is full enough to go.
+   */
+  roadLoad(driverDid: string): { routes: Array<{ from: string; to: string; hubName: string; bags: Array<{ code: string; at: string; atId: string; location: { lat: number; lng: number }; parcels: number; weightKg: number; fillPct: number }>; weightKg: number }>; vehicle?: { bagPlaces: number; freeBagPlaces: number; freeKg: number } } {
+    const fleet = this.fleetOfDriver(driverDid);
+    const routes = new Map<string, { from: string; to: string; hubName: string; bags: Array<{ code: string; at: string; atId: string; location: { lat: number; lng: number }; parcels: number; weightKg: number; fillPct: number }>; weightKg: number }>();
+    if (fleet) {
+      for (const t of this.totes.list({ status: 'available' })) {
+        if (t.waitsForRoom || this.atHubDown(t.locationId)) continue;
+        const road = this.roadRouteOfBag(t.code);
+        if (!road || road === 'none' || road.fleetDid !== fleet) continue;
+        const key = `${road.from}>${road.to}`;
+        const entry = routes.get(key) ?? { from: road.from, to: road.to, hubName: road.hubName, bags: [], weightKg: 0 };
+        const place = this.pickupPlace(t.locationId);
+        const weightKg = Math.round((t.weightKg ?? 0) * 10) / 10;
+        entry.bags.push({ code: t.code, at: place?.label ?? t.locationId ?? '', atId: t.locationId ?? '', location: place?.loc ?? { lat: 0, lng: 0 }, parcels: t.parcels?.length ?? 0, weightKg, fillPct: this.totes.fillPct(t) });
+        entry.weightKg = Math.round((entry.weightKg + weightKg) * 10) / 10;
+        routes.set(key, entry);
+      }
+    }
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    return {
+      routes: [...routes.values()].map((r) => ({ ...r, bags: r.bags.sort((a, b) => a.at.localeCompare(b.at)) })),
+      ...(vehicle ? { vehicle: { bagPlaces: this.toteCapacityOf(vehicle), freeBagPlaces: this.remainingTotes(driverDid), freeKg: Math.round(this.remainingCapacity(driverDid) * 10) / 10 } } : {}),
+    };
+  }
+
+  /**
+   * 2026-11-23 — TAKING THE ROUTE'S LOAD (step 3c): the bags this driver chose from the route's load, claimed one by one through the
+   * same claim every bag goes through — its kilos, its bag place, its route — as far as the vehicle holds; what did not fit, or was
+   * taken meanwhile, is said beside each.
+   */
+  takeRoadLoad(driverDid: string, codes: string[], now: number = Date.now()): { taken: string[]; refused: Array<{ code: string; why: string }> } {
+    if (!this.fleet.vehicleForDriver(driverDid)) throw new GlosError('NOT_COUPLED', 'Couple to a vehicle before taking a load');
+    const mine = new Map(this.roadLoad(driverDid).routes.flatMap((r) => r.bags.map((b) => [b.code, b] as const)));
+    const taken: string[] = [];
+    const refused: Array<{ code: string; why: string }> = [];
+    for (const code of [...new Set(codes.map((c) => String(c).trim().toUpperCase()))]) {
+      if (!mine.has(code)) {
+        refused.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
+        continue;
+      }
+      const load = this.wrapTote(code);
+      if (!load) {
+        refused.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
+        continue;
+      }
+      try {
+        const offer = this.makeOffer(driverDid, load, { detour: 0, minutesAway: 0, ratePerKm: this.pricingProfile(this.fleet.vehicleForDriver(driverDid)!).ratePerKm, now });
+        this.claim(offer.offerId, now);
+        taken.push(code);
+      } catch (e) {
+        refused.push({ code, why: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return { taken, refused };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

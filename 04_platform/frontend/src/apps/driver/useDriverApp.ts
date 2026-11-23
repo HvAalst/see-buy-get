@@ -52,6 +52,7 @@ import type { Uploaded } from '../../shared/upload';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { HeldProblem } from './screens/HeldProblems';
+import type { RoadLoadView } from './screens/RoadLoad';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
 import type { components } from '../../lib/sbg/schema';
 
@@ -161,6 +162,8 @@ export interface DriverState {
   trips: SavedTrip[] | null;
   /** 2026-11-15 — loads delivered whose pay is held for a problem the sender reported; null until read (the hold). */
   heldProblems: HeldProblem[] | null;
+  /** 2026-11-23 — the road route's load, for a driver of the fleet that runs one; null until read (step 3c). */
+  roadLoad: RoadLoadView | null;
   /** A trip whose bell was tapped off shift: run once the shift starts. */
   pendingTrip: SavedTrip | null;
   roadState: 'idle' | 'loading' | 'error' | 'ready';
@@ -268,6 +271,7 @@ const INITIAL: DriverState = {
   road: [],
   trips: null,
   heldProblems: null,
+  roadLoad: null,
   pendingTrip: null,
   roadState: 'idle',
   observationNotice: null,
@@ -1741,6 +1745,35 @@ export function useDriverApp() {
 
   /* ------------------------------------------------- the hold on a delivered load's pay (2026-11-15) */
 
+  /* ------------------------------------------------------- a road route's load (2026-11-23, step 3c) */
+
+  const loadRoadLoad = useCallback(async () => {
+    if (!client || !did) return;
+    const r = await client.api.roadLoad(did);
+    if (!r.error) setState((s) => ({ ...s, roadLoad: narrow<RoadLoadView>(r.data) ?? { routes: [] } }));
+  }, [client, did]);
+
+  /** Take the bags that fit from a route's load: each claimed as any bag is; what was not taken is said, with why. */
+  const takeRoadLoad = useCallback(
+    async (from: string, to: string, codes: string[], hubName: string) => {
+      if (!client || !did || !codes.length) return;
+      await run(`road-${from}-${to}`, async () => {
+        const r = await client.api.takeRoadLoad(did, codes);
+        if (r.error) return fail(r.error);
+        const res = narrow<{ taken: string[]; refused: Array<{ code: string; why: string }> }>(r.data) ?? { taken: [], refused: [] };
+        if (res.taken.length) {
+          buzz();
+          pushToast({ tone: 'ok', icon: 'box', title: t('driver.roadLoad.takenToast', { count: res.taken.length }), detail: t('driver.roadLoad.takenToastDetail', { hub: hubName }) });
+        }
+        if (res.refused.length) {
+          pushToast({ tone: 'warn', icon: 'box', title: t('driver.roadLoad.notTaken', { count: res.refused.length }), detail: res.refused.map((x) => `${x.code}: ${x.why}`).join(' · ') });
+        }
+        await Promise.all([refresh(), loadRoadLoad()]);
+      });
+    },
+    [client, did, run, fail, pushToast, refresh, loadRoadLoad],
+  );
+
   const loadHeldProblems = useCallback(async () => {
     if (!client || !did) return;
     const r = await client.api.heldProblems(did);
@@ -2627,6 +2660,8 @@ export function useDriverApp() {
       takeCounter,
       loadTrips,
       loadHeldProblems,
+      loadRoadLoad,
+      takeRoadLoad,
       answerHeldProblem,
       saveTrips,
       skipTrip,

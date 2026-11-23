@@ -375,6 +375,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Once a road route is on, parcels to the other country are booked only on it, at its price per size, which the sender pays the whole way: in the Send app, in the Business app, at a shop’s counter (in cash) and by stores. Each asks the sender’s word on what the parcel does not hold. With no route on, every one of them refuses, by name.",
+      "On a road route, each parcel goes in a bag from its first shop to the route’s central hub, and on from there inside the arrival country. Those bags are offered only to the drivers of the route’s fleet. In the Driver app they see every bag waiting for the route across the sending country, the way to each, and how full their vehicle would be, and take the ones that fit in one tap. They hand them in at the central hub as any bag is handed in.",
       "One member of staff switches a route off. Parcels already on the way finish their journey."
     ]
   }

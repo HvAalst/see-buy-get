@@ -2638,8 +2638,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const pickup = this.nodeLocation(tote.locationId);
       if (!pickup) return; // the origin isn't a fixed point (on a bus, or unknown) — can't say "near you"
 
-      const nearby = this.nearbyActiveDrivers(pickup);
+      // 2026-11-23 — a bag on a road route: told only to the drivers of the route's fleet, and opened where its whole load is (step 3c).
+      const nearby = this.nearbyActiveDrivers(pickup).filter((d) => this.dispatch.roadBagFor(d.driverDid, tote.code).may);
       if (nearby.length === 0) return;
+      const road = this.dispatch.roadBagFor(nearby[0].driverDid, tote.code).to;
 
       const where = tote.destinationLabel ?? payload.destination;
       await Promise.all(
@@ -2648,7 +2650,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             kind: 'load_nearby',
             title: 'A load is near you',
             body: where ? `A bag heading to ${where} is ready for pickup nearby.` : 'A bag is ready for pickup nearby.',
-            link: '/?go=route',
+            link: road ? '/?go=home' : '/?go=route',
             // One notification per tote per driver — a re-publish collapses onto the same one.
             tag: `load:${tote.code}`,
             data: { code: tote.code },

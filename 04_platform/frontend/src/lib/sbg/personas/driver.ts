@@ -255,6 +255,12 @@ export function createDriverApi(sbg: SbgClient) {
     suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-work', { params: { path: { did } }, body })),
 
+    /** 2026-11-23 — a road route's load: every bag waiting for the route this driver's fleet runs, and how full the vehicle would be (step 3c). */
+    roadLoad: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/road-load', { params: { path: { did } } })),
+    /** …and taking the bags chosen from it, as far as the vehicle holds. */
+    takeRoadLoad: (did: string, codes: string[]) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/road-load/take', { params: { path: { did } }, body: { codes } })),
+
     /** 2026-11-05 — PRE-DROP-OFF: take on ahead what a shop has coming for one next stop; the room is held on the vehicle. */
     takeOnAhead: (did: string, agentDid: string, hopKey: string) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/ahead', { params: { path: { did } }, body: { agentDid, hopKey } })),

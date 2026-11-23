@@ -1425,4 +1425,18 @@ export const enDriver = {
   'driver.own.addedDetail': 'Tap it under “Which vehicle today?” to start a shift on it.',
   'driver.own.noneTitle': 'Your vehicles',
   'driver.own.none': 'No vehicle of yours is on your list. Add the one you ride.',
+  // 2026-11-23 — a road route’s load (the Netherlands–Bulgaria plan, step 3c).
+  'driver.roadLoad.title': 'The route to {to}',
+  'driver.roadLoad.lede': 'Bags waiting at shops and hubs in {from} for the route your fleet runs. Collect them, then take them to {hub}.',
+  'driver.roadLoad.bag': '{count, plural, one {# parcel} other {# parcels}} · {kg} kg · bag {code}',
+  'driver.roadLoad.total': '{count, plural, one {# bag waiting} other {# bags waiting}}, {kg} kg in all.',
+  'driver.roadLoad.onShift': 'Start your shift in a vehicle to take them.',
+  'driver.roadLoad.full': 'Your vehicle has no room left for a bag.',
+  'driver.roadLoad.fits': 'They all fit: your vehicle would hold {used} of its {places, plural, one {# bag} other {# bags}}.',
+  'driver.roadLoad.fitsSome': '{count, plural, one {# bag fits} other {# bags fit}}: your vehicle would hold {used} of its {places, plural, one {# bag} other {# bags}}. The rest wait for the next run.',
+  'driver.roadLoad.takeAll': '{count, plural, one {Take it} other {Take all #}}',
+  'driver.roadLoad.takeSome': '{count, plural, one {Take the one that fits} other {Take the # that fit}}',
+  'driver.roadLoad.takenToast': '{count, plural, one {# bag is yours} other {# bags are yours}}',
+  'driver.roadLoad.takenToastDetail': 'Collect them, then take them to {hub}.',
+  'driver.roadLoad.notTaken': '{count, plural, one {# bag was not taken} other {# bags were not taken}}',
 };

@@ -1476,6 +1476,11 @@ export class InboundOrderDto {
  *  exactly like the vendor mint (no self-declared S/M/L/HEAVY). No routeMode: a person's send is always
  *  priced at the LOCKED (cheapest) leg — the flexible ceiling's delivery rebate rides the vendor prepaid
  *  rail, which a cash-at-counter person doesn't have, so flexible would silently overcharge them. */
+/** 2026-11-23 — the bags a driver takes from the road route's load (step 3c). */
+export class TakeRoadLoadDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsString({ each: true }) codes!: string[];
+}
+
 export class ConsumerSendDto {
   @IsString() receiverMobile!: string;
   @IsString() originPudoDid!: string;

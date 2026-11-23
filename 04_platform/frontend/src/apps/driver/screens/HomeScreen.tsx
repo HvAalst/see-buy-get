@@ -43,6 +43,7 @@ import { trailerApi, trailerLine } from '../../../shared/trailers';
 import { TrailersCard } from '../../../shared/trailers/TrailersCard';
 import { HitchSheet } from './HitchSheet';
 import { TripsCard } from './TripsCard';
+import { RoadLoadCard } from './RoadLoad';
 import { IdPhotoCard } from './IdPhotoCard';
 import { CarrierPlaceCard } from './CarrierPlaceCard';
 import { DriverCoverCard } from './DriverCoverCard';
@@ -241,6 +242,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       <DriverCoverCard state={state} actions={actions} sbg={sbg ?? null} />
       {/* 2026-11-12 — their saved trips, like an alarm (the owner: "much like an alarm"). */}
       <TripsCard state={state} actions={actions} onShift={false} />
+      {/* 2026-11-23 — the road route's load, for a driver of the fleet that runs it: seen here, taken on shift (step 3c). */}
+      <RoadLoadCard state={state} actions={actions} onShift={false} />
       {/* 2026-11-13 — their own trailers, riding for themselves (trailer plan D1); a fleet's driver uses the fleet's, hitched on shift. */}
       {state.driver && !state.driver.managerDid ? <TrailersCard sbg={sbg ?? null} upload={(file) => actions.uploadPhoto('registration', file)} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
@@ -902,6 +905,9 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         alert={isFull(state.remaining) || state.remainingTotes === 0}
         sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined, vehicleWord(v.vehicleClass, t))}
       />
+
+      {/* 2026-11-23 — the road route's load (step 3c): every bag waiting for the fleet's route, and taking the ones that fit. */}
+      <RoadLoadCard state={state} actions={actions} onShift />
 
       <Card
         title={t('driver.home.yourVehicle')}

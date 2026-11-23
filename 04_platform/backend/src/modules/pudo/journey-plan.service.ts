@@ -115,7 +115,9 @@ export class JourneyPlanService implements OnModuleInit {
       const takenIn = from ? NaN : parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
       // 2026-11-18 — a parcel abroad goes by the route it was booked on: its departure hub, then its arrival airport's warehouse (step 2b).
       const via = parcel.border ? { departureMdpId: parcel.border.departure.mdpId, arrivalMdpId: parcel.border.arrival.mdpId } : undefined;
-      const j = this.routing.planJourney({ ...(from ? { from } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}), ...(via ? { via } : {}) });
+      // 2026-11-23 — a parcel on a road route goes by its central hub (step 3c).
+      const central = parcel.roadRoute?.hubMdpId;
+      const j = this.routing.planJourney({ ...(from ? { from } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}), ...(via ? { via } : {}), ...(central && !via ? { central } : {}) });
       const plan: JourneyPlan = {
         hops: j.hops.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone })),
         mdpRouted: j.mdpRouted,

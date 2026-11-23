@@ -375,7 +375,7 @@ export class RoutingService {
   quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
     if (this.roadPair(this.agents.countryOf(this.agents.get(originAgentDid)), destAgentDid)) {
       const quote = this.quoteRoad({ agentDid: originAgentDid }, destAgentDid, size, carriers);
-      return { plan: this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg }), quote };
+      return { plan: this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, central: quote.byRoad!.hubMdpId }), quote };
     }
     this.doorFor(originAgentDid, destAgentDid);
     const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg });
@@ -480,8 +480,8 @@ export class RoutingService {
     const route = this.borderRoutes.roadBookable(fromCountry, toCountry, carriers.at);
     if (size === 'HEAVY') throw new GlosError('CARGO_REQUIRES_DEDICATED', 'A road route carries small, medium and large parcels: a heavy one goes as a load of its own');
     const plan = originAgentDid
-      ? this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg })
-      : this.planJourney({ from: (start as { end: RouteEnd }).end, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg });
+      ? this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, central: route.hubMdpId })
+      : this.planJourney({ from: (start as { end: RouteEnd }).end, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, central: route.hubMdpId });
     const sellerId = ('sellerEntityId' in start ? start.sellerEntityId : undefined) ?? (originAgentDid ? this.agents.entityIdOrNone(this.agents.get(originAgentDid)) : undefined);
     if (!sellerId) throw new GlosError('FORBIDDEN', `Nobody of ours can sell this journey: nobody of ours sells in ${name(fromCountry)}`);
     const currency = this.currencyOf(sellerId);
@@ -492,7 +492,8 @@ export class RoutingService {
       .map((h) => {
         const isHub = h.type === 'mdp';
         const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
-        const own = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
+        // A hub or shop in the arrival country with no company of ours there (a partner's, or one we only match) is work bought by the seller.
+        const own = isHub ? this.mdps.entityIdOrNone(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
         const native = r2(site.pricePerParcel);
         const money = own ? this.currencyOf(own) : this.priceableCurrencyOf(h.country);
         return { type: h.type, id: h.id, label: h.label, entityId: own ?? sellerId, country: h.country, currency: money, nativeFee: native, fee: this.fx.convertForQuote(native, money, currency), ...(own ? {} : { purchased: true }) };
@@ -818,7 +819,7 @@ export class RoutingService {
    * the destination's opening hours — a parcel is never "ready for pickup" while the shop is closed.
    * `startAt`: when the journey began, where that was earlier than now (a take-in kept with no signal — round 23).
    */
-  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number; siteKg?: number; via?: BorderVia }) {
+  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd; startAt?: number; siteKg?: number; via?: BorderVia; central?: string }) {
     const dest = this.agents.get(input.destAgentDid);
     // A journey may start at a place that is not a node (a store's dock). When one is given it is used as
     // it stands; otherwise the origin is a PUDO — named, or the nearest one with room.
@@ -831,13 +832,15 @@ export class RoutingService {
       origin = { type: 'pudo', id: a.did, label: a.shopName, zone: a.zone, country: this.agents.countryOf(a), location: a.location };
     }
 
-    const route = input.via ? this.buildBorderRoute(origin, dest, input.via, { kg: input.siteKg }) : this.buildRoute(origin, dest, { kg: input.siteKg });
+    // 2026-11-23 — on a road route (step 3c, P3-1): from where it starts straight to the route's central hub, gathered there by the
+    // route's own drivers, then on in the arrival country as any parcel there.
+    const route = input.via ? this.buildBorderRoute(origin, dest, input.via, { kg: input.siteKg }) : input.central ? this.buildRoadRoute(origin, dest, input.central, { kg: input.siteKg }) : this.buildRoute(origin, dest, { kg: input.siteKg });
     // 2026-11-13 — every shop and hub on the way takes a parcel of this weight (the owner: "shop and hub tools", T3), or named.
     this.assertSitesTake(route, input.siteKg);
     // 2026-11-12 — THE OWNER'S D3: "Routing never raises the price … stops along the road map are carried by the network". The
     // price is worked out on the route as it would be with no road map: its two ends and their hubs, never the stops on the way.
     // A route across a border is priced by its own price (D15), never by the road: its stops stand as planned.
-    const plain = !input.via && route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false, kg: input.siteKg }) : route;
+    const plain = !input.via && !input.central && route.length > 4 && this.roadMaps ? this.buildRoute(origin, dest, { road: false, kg: input.siteKg }) : route;
     const viaMdp = route.some((h) => h.type === 'mdp');
     if (!viaMdp && origin.zone !== dest.zone) {
       // Cross-zone with no hub → require a direct zone-pair corridor (the pre-MDP behaviour).
@@ -936,6 +939,14 @@ export class RoutingService {
    * hub as any journey goes to a hub — through the hub serving the shop and the road map's stops between, where there are any —
    * then the route's own leg to its arrival airport's warehouse hub, then on to the shop as a journey handed in at that hub goes.
    */
+  /** 2026-11-23 — a road route's journey (step 3c): its start, the central hub, and the arrival country's own way from there. */
+  private buildRoadRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, centralMdpId: string, opts: { kg?: number } = {}): RouteHop[] {
+    const central = this.mdps.require(centralMdpId);
+    const start: RouteHop = { type: origin.type, id: origin.id, label: origin.label, zone: origin.zone, country: origin.country, location: origin.location };
+    const on = this.buildRoute({ type: 'mdp', id: central.mdpId, label: central.name, zone: central.zones[0] ?? dest.zone, country: this.mdps.countryOf(central), location: central.location }, dest, opts);
+    return origin.type === 'mdp' && origin.id === central.mdpId ? on : [start, ...on];
+  }
+
   private buildBorderRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>, via: BorderVia, opts: { kg?: number } = {}): RouteHop[] {
     const departure = this.mdps.require(via.departureMdpId);
     const arrival = this.mdps.require(via.arrivalMdpId);

@@ -996,6 +996,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/fleet/drivers/:did/submit-kyc': 'vetting',
   'POST sbg/fleet/drivers/:did/suggest-nearby': 'support',
   'POST sbg/fleet/drivers/:did/suggest-work': 'support',
+  // 2026-11-23 — a road route's load, and taking it (the plan, part 3, step 3c).
+  'GET sbg/fleet/drivers/:did/road-load': 'support',
+  'POST sbg/fleet/drivers/:did/road-load/take': 'support',
   'GET sbg/fleet/drivers/:did/trips': 'support',
   'GET sbg/fleet/trips': 'none',
   'POST sbg/fleet/trips': 'none',

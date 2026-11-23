@@ -45,6 +45,8 @@ interface HarnessOpts {
   waitingBags?: Array<Record<string, unknown>>;
   /** …and the offer dispatch makes one driver for one of them (null: it cannot be theirs). */
   offerBagTo?: (driverDid: string, code: string) => unknown;
+  /** 2026-11-23 — whether a driver may carry a bag across a road route, and its arrival country (default: may, crosses none). */
+  roadBag?: (driverDid: string, code: string) => { may: boolean; to?: string };
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
   activeOffers?: () => unknown[];
@@ -123,6 +125,7 @@ function harness(opts: HarnessOpts) {
     },
     offerNear: () => (opts.offerNear ? opts.offerNear() : null),
     offerBagTo: (driverDid: string, code: string) => (opts.offerBagTo ? opts.offerBagTo(driverDid, code) : null),
+    roadBagFor: (driverDid: string, code: string) => (opts.roadBag ? opts.roadBag(driverDid, code) : { may: true }),
     // What scanning a bag aboard pays this driver, and in what money — their own company's.
     driverPayTerms: () => ({ bagLoadPay: 0.5, currency: 'KES' }),
     activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
@@ -272,6 +275,22 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     expect(near[0].body).toBe('A bag heading to Kisumu is ready for pickup nearby.');
     expect(notifications.inboxFor('d-far')).toHaveLength(0);
     expect(notifications.inboxFor('d-nogps')).toHaveLength(0);
+  });
+
+  it('a bag on a road route: told only to the drivers of the route’s fleet, opened where its whole load is', async () => {
+    // 2026-11-23 — the Netherlands–Bulgaria plan, step 3c: only the route fleet's drivers carry such a bag; a bell to anybody else
+    // would lead to a refusal.
+    const { events, notifications } = harness({
+      totes: { 'BAG-R': { code: 'BAG-R', locationId: 'did:agent:pickup', destinationLabel: 'Sofia Central Hub' } },
+      agents: { 'did:agent:pickup': { location: at(0, 0) } },
+      activeDrivers: [D('d-route', at(0, 0.01)), D('d-other', at(0, 0.01))],
+      roadBag: (driverDid) => ({ may: driverDid === 'd-route', to: 'BG' }),
+    });
+    await events.publish(GlosEvent.Pudo.ToteAvailable, { code: 'BAG-R' });
+
+    expect(notifications.inboxFor('d-other')).toHaveLength(0);
+    expect(notifications.inboxFor('d-route')).toHaveLength(1);
+    expect(notifications.inboxFor('d-route')[0].link).toBe('/?go=home');
   });
 
   it('does not ping a driver who is past the shift limit and could not take the load anyway', async () => {
