@@ -277,6 +277,16 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     expect(notifications.inboxFor('d-nogps')).toHaveLength(0);
   });
 
+  it('a vehicle in Romania silent for 15 minutes: the driver opens their Home; the office is told where it was last heard', async () => {
+    // 2026-11-24 — the owner's brief, feature 4: "an immediate dispatcher & driver alert if last_ping_at exceeds 15 minutes".
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.TelematicsSignalLost, { session: { sessionId: 'tel_1', driverDid: 'did:drv', fleetDid: 'did:fleet', plate: 'NL-12-AB' }, minutes: 16, lastPoint: { lat: 46.18661, lng: 21.31227 } });
+    expect(notifications.inboxFor('did:drv')[0]).toMatchObject({ kind: 'telematics_signal_lost', title: 'Your position has not reached us for 16 minutes', link: '/?go=home' });
+    const office = notifications.inboxFor('did:fleet')[0];
+    expect(office).toMatchObject({ kind: 'telematics_signal_lost', title: 'NL-12-AB: no position for 16 minutes in Romania' });
+    expect(office.body).toMatch(/Last heard at 46\.18661, 21\.31227/);
+  });
+
   it('a UIT running out within a day: the sender opens the load to give a new one; the driver and the office are told', async () => {
     // 2026-11-24 — the owner's brief, feature 2: "an alert notification to both the Sender and Assigned Carrier/Dispatcher".
     const { events, notifications } = harness({});

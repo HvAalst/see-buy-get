@@ -1,3 +1,4 @@
+import { TelemetryStrip } from './TelemetryStrip';
 import { ManifestSheet } from '../../../shared/ui/ManifestSheet';
 import { createDriverApi } from '../../../lib/sbg/personas/driver';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
@@ -908,6 +909,9 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         alert={isFull(state.remaining) || state.remainingTotes === 0}
         sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined, vehicleWord(v.vehicleClass, t))}
       />
+
+      {/* 2026-11-24 — the GPS watch of RO e-Transport: in or near Romania, a position every minute; a silence, a warning. */}
+      <TelemetryStrip telemetry={state.telemetry} />
 
       {/* 2026-11-23 — the road route's load (step 3c): every bag waiting for the fleet's route, and taking the ones that fit. */}
       <RoadLoadCard state={state} actions={actions} onShift />

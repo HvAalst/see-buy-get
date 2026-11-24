@@ -665,6 +665,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
       });
     });
+    // 2026-11-24 — a vehicle in Romania silent for 15 minutes: its driver checks the phone; its office calls the driver.
+    this.events.subscribe<{ session?: { sessionId: string; driverDid: string; fleetDid?: string; plate: string }; minutes?: number; lastPoint?: { lat: number; lng: number } }>(GlosEvent.Pudo.TelematicsSignalLost, (e) => this.onSignalLost(e.payload));
     // 2026-11-24 — a UIT or UTN within a day of its end: the sender gives a new one; its driver and office know.
     this.events.subscribe<FiscalCodeExpiring>(GlosEvent.Pudo.FiscalCodeExpiring, (e) => this.onFiscalCodeExpiring(e.payload));
     this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
@@ -1797,6 +1799,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * (the Send app's parcel). 2026-11-02 — a tapped notification opens the app there, and Open under it in the bell goes
    * to the same place (the owner: "I need a 'mark as read' or 'respond' button"). Home otherwise.
    */
+  /** 2026-11-24 — the bell for a silence in Romania (TelemetrySweeper): one tag a watch, so a long silence rings once. */
+  private async onSignalLost(p: { session?: { sessionId: string; driverDid: string; fleetDid?: string; plate: string }; minutes?: number; lastPoint?: { lat: number; lng: number } }): Promise<void> {
+    const s = p?.session;
+    if (!s) return;
+    const minutes = p.minutes ?? 15;
+    const where = p.lastPoint ? ` Last heard at ${p.lastPoint.lat.toFixed(5)}, ${p.lastPoint.lng.toFixed(5)}.` : '';
+    const tag = `telematics:${s.sessionId}:lost`;
+    const data = { sessionId: s.sessionId, plate: s.plate, minutes };
+    await this.tell(s.driverDid, { kind: 'telematics_signal_lost', title: `Your position has not reached us for ${minutes} minutes`, body: `You are in Romania, where RO e-Transport follows a load by its position. Check that the phone has signal and its location is on, and keep the Driver app open.${where}`, link: '/?go=home', tag, data });
+    if (s.fleetDid) await this.tell(s.fleetDid, { kind: 'telematics_signal_lost', title: `${s.plate}: no position for ${minutes} minutes in Romania`, body: `RO e-Transport follows its load by its position. Call the driver, and check your GPS system is sending.${where}`, tag, data });
+  }
+
   /** 2026-11-24 — the bell for a code running out (FiscalCodeSweeper): one tag per code, so each is told once on each phone. */
   private async onFiscalCodeExpiring(p: FiscalCodeExpiring): Promise<void> {
     if (!p?.freightId) return;

@@ -1292,4 +1292,9 @@ export const words: Record<string, string> = {
   "driver.roadLoad.takenToast": "{count, plural, one {# zak is van jou} other {# zakken zijn van jou}}",
   "driver.roadLoad.takenToastDetail": "Haal ze op en breng ze naar {hub}.",
   "driver.roadLoad.notTaken": "{count, plural, one {# zak is niet genomen} other {# zakken zijn niet genomen}}",
+  "driver.telemetry.active": "Roemenië: je positie wordt elke minuut verstuurd",
+  "driver.telemetry.near": "Bij Roemenië: je positie wordt vanaf hier elke minuut verstuurd",
+  "driver.telemetry.activeDetail": "RO e-Transport volgt een lading aan zijn positie zolang hij in Roemenië is. Houd de Driver-app open en de locatie van je telefoon aan.",
+  "driver.telemetry.lost": "Je positie heeft ons een tijd niet bereikt",
+  "driver.telemetry.lostDetail": "Je bent in Roemenië, waar RO e-Transport een lading volgt aan zijn positie. Controleer of je telefoon bereik heeft en de locatie aan staat.",
 };

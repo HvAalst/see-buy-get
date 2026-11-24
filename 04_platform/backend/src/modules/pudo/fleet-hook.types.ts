@@ -51,6 +51,11 @@ export const FLEET_HOOK_EVENTS = [
   'vehicle.gone_silent',
   // 2026-11-24 — a UIT or UTN on a load its driver holds runs out within a day, or ran out.
   'load.fiscal_code_expiring',
+  // 2026-11-24 — the GPS watch of RO e-Transport: the UIT codes a vehicle carries, a silence in Romania, its end, a watch closed.
+  'telematics.uit_changed',
+  'telematics.signal_lost',
+  'telematics.signal_back',
+  'telematics.session_closed',
   // Its runs: space booked by a shipper, given back, the run called off.
   'run.booked',
   'run.booking_cancelled',

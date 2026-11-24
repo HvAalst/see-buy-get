@@ -29251,6 +29251,78 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/telematics/positions": {
+      "get": {
+        "operationId": "Sbg.telematicsPositions",
+        "summary": "",
+        "description": "2026-11-24 — THE POSITIONS OF A WATCHED RUN, for the carrier's registered GPS provider (corridor compliance, slice 3): in\nSeeBuyGet's own plain form, the vehicle's plates and UIT codes on each. The driver, their office, or staff.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/telematics": {
+      "get": {
+        "operationId": "Sbg.fleetTelematics",
+        "summary": "",
+        "description": "…which system sends a fleet's positions, and its vehicles' open watches.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "operationId": "Sbg.setFleetTelematics",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelematicsProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/locate": {
       "post": {
         "operationId": "Sbg.locate",
@@ -37492,6 +37564,51 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/telematics/pings": {
+      "post": {
+        "operationId": "CompanyApi.pushPings",
+        "summary": "",
+        "description": "2026-11-24 — POSITIONS FROM ITS OWN SYSTEM (the owner's brief, feature 4: \"POST /api/v1/telematics/ping\"): at most 500 a call,\nfor one of its vehicles on a shift, by plate or by the id of its watch. Kept as the Driver app's are.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelematicsPingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/telematics/active-uit": {
+      "get": {
+        "operationId": "CompanyApi.activeUit",
+        "summary": "",
+        "description": "…and the UIT codes one of its vehicles carries now, so its GPS system needs nobody to type them (\"active-uit\").",
+        "parameters": [
+          {
+            "name": "plate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         }
       }
@@ -83710,6 +83827,24 @@
           "at"
         ]
       },
+      "TelematicsProviderDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "DRIVER_APP_GPS",
+              "WEBFLEET",
+              "TRIMBLE",
+              "TRANSICS",
+              "CUSTOM_WEBHOOK"
+            ]
+          }
+        },
+        "required": [
+          "provider"
+        ]
+      },
       "LocateDto": {
         "type": "object",
         "properties": {
@@ -83718,6 +83853,20 @@
           },
           "lng": {
             "type": "number"
+          },
+          "speedKmh": {
+            "type": "number",
+            "description": "2026-11-24 — for the GPS watch of RO e-Transport: speed, heading and when the phone took the reading.",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "heading": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 360
+          },
+          "recordedAt": {
+            "type": "string"
           }
         },
         "required": [
@@ -90664,6 +90813,60 @@
           "sealClass",
           "appliedBy",
           "photos"
+        ]
+      },
+      "TelematicsPingDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "speedKmh": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "heading": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 360
+          },
+          "recordedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "TelematicsPingsDto": {
+        "type": "object",
+        "properties": {
+          "plate": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "sessionId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "pings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TelematicsPingDto"
+            }
+          }
+        },
+        "required": [
+          "pings"
         ]
       },
       "PlanStopView": {

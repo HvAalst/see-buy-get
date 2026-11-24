@@ -58,6 +58,9 @@ export function systemApi(sbg: SbgClient, did: string) {
     setAddress: (url: string): Promise<Result<SystemView>> => sbg.request((c) => c.PUT('/v1/sbg/fleet/managers/{did}/system', { params: { path }, body: { url } })) as never,
     turnSecret: (): Promise<Result<SystemView>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/system/secret', { params: { path } })) as never,
     setPositions: (everyMin: 0 | (typeof POSITION_EVERY)[number]): Promise<Result<SystemView>> => sbg.request((c) => c.PUT('/v1/sbg/fleet/managers/{did}/system/positions', { params: { path }, body: { everyMin } })) as never,
+    /** 2026-11-24 — which system sends the fleet's positions for the GPS watch of RO e-Transport. */
+    telematics: (): Promise<Result<{ provider: string }>> => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/telematics', { params: { path } })) as never,
+    setTelematics: (provider: string): Promise<Result<{ provider: string }>> => sbg.request((c) => c.PUT('/v1/sbg/fleet/managers/{did}/telematics', { params: { path }, body: { provider: provider as never } })) as never,
     test: (): Promise<Result<SystemMessage>> => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/system/test', { params: { path } })) as never,
     resend: (messageId: string): Promise<Result<SystemMessage>> =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/system/messages/{messageId}/resend', { params: { path: { did, messageId } } })) as never,

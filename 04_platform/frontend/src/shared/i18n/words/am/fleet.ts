@@ -1382,4 +1382,13 @@ export const words: Record<string, string> = {
   "fleet.vehicles.soldBody": "ተሽጧል፣ ከአገልግሎት ውጭ ሆኗል ወይም በስህተት ተጨምሯል። ከእንግዲህ ሥራ አይቀርብለትም፣ በእሱም ፈረቃ አይጀመርም፤ ያደረገው በመዝገቡ ላይ ይቆያል፣ ታርጋውም አሁን ለሚጠቀምበት ነጻ ይሆናል። ፈረቃ እየሄደበት ወይም ጉዞ እየጠበቀው እያለ አይሆንም።",
   "fleet.vehicles.soldYes": "አዎ፣ ያስወግዱት",
   "fleet.vehicles.soldDone": "{plate} ከተሽከርካሪዎችዎ ተወግዷል",
+  "fleet.telematics.title": "ለRO e-Transport ቦታዎች",
+  "fleet.telematics.label": "ቦታዎቹን የሚልከው",
+  "fleet.telematics.saved": "ተቀምጧል።",
+  "fleet.telematics.lede": "ሩማንያ የUIT ኮድ ያላቸውን ጭነቶች በቦታቸው ትከታተላለች። የተመዘገበው የGPS አቅራቢዎ፣ ወይም የANAF የራሱ መተግበሪያ፣ ወደ ANAF ይልካቸዋል። SeeBuyGetም ይከታተላቸዋል፤ በሩማንያ ያለ ተሽከርካሪ ለ15 ደቂቃ ዝም ሲል ለእርስዎና ለሹፌሩ ይነግራል። የተሽከርካሪዎችዎን ቦታ የሚልክልን የትኛው ሥርዓት እንደሆነ ይግለጹ።",
+  "fleet.telematics.driverApp": "የእኛ Driver መተግበሪያ",
+  "fleet.telematics.webfleet": "Webfleet፣ በእኛ ቁልፍ",
+  "fleet.telematics.trimble": "Trimble፣ በእኛ ቁልፍ",
+  "fleet.telematics.transics": "Transics፣ በእኛ ቁልፍ",
+  "fleet.telematics.custom": "የራሳችን ሥርዓት፣ በእኛ ቁልፍ",
 };

@@ -1,3 +1,4 @@
+import { TelemetryService } from './telemetry.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { FxService } from '../../foundation/money/fx.service';
@@ -63,6 +64,8 @@ export class VehicleManifestService {
     @Optional() private readonly parcels?: ParcelService,
     @Optional() private readonly passages?: LoadPassageService,
     @Optional() private readonly fx?: FxService,
+    // 2026-11-24 — the run's GPS watch, whose id the manifest carries while one is open (slice 3).
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   /** The manifest of the vehicle a driver is on now. */
@@ -91,7 +94,7 @@ export class VehicleManifestService {
       .flatMap((i) => (this.passages?.of(i.ref) ?? []).map((p) => ({ freightCode: i.label, kind: p.kind, ...(p.post ? { post: p.post } : {}), ...(p.from ? { from: p.from } : {}), ...(p.to ? { to: p.to } : {}), at: p.at })))
       .sort((a, b) => a.at.localeCompare(b.at));
     return {
-      manifestId: `man_${v.vehicleId}_${shift.startedAt.replace(/[^0-9]/g, '').slice(0, 14)}`,
+      manifestId: this.telemetry?.openFor(driverDid)?.sessionId ?? `man_${v.vehicleId}_${shift.startedAt.replace(/[^0-9]/g, '').slice(0, 14)}`,
       vehicleId: v.vehicleId,
       truckPlate: v.plate,
       ...(v.towing?.plate ? { trailerPlate: v.towing.plate } : {}),

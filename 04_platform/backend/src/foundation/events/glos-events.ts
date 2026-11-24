@@ -92,6 +92,10 @@ export const GlosEvent = {
     VehicleServiceDue: 'pudo.vehicle_service_due',
     // A vehicle broke down on the road (its office and the shippers of what is aboard are told), and how it ended.
     VehicleBrokeDown: 'pudo.vehicle_broke_down',
+    TelematicsUitChanged: 'pudo.telematics_uit_changed', // 2026-11-24 — the UIT codes a watched vehicle carries changed: the fleet's system is told
+    TelematicsSignalLost: 'pudo.telematics_signal_lost', // 2026-11-24 — no position for 15 minutes from a vehicle in Romania: its driver and office told
+    TelematicsSignalBack: 'pudo.telematics_signal_back', // 2026-11-24 — …and heard again
+    TelematicsSessionClosed: 'pudo.telematics_session_closed', // 2026-11-24 — a watch ended: out of Romania, delivered, handed over or its shift ended
     FiscalCodeExpiring: 'pudo.fiscal_code_expiring', // 2026-11-24 — a UIT or UTN within a day of its end, or past it: the sender, the driver and the office told once
     VehicleGoneSilent: 'pudo.vehicle_gone_silent', // round 17 — the phone on a shift said nothing longer than its fleet allows, last heard away from any stop; its fleet's managers are told
     VehicleStandingStill: 'pudo.vehicle_standing_still', // round 16 — a vehicle on a shift stood still longer than its fleet allows, away from any stop; its fleet's managers are told

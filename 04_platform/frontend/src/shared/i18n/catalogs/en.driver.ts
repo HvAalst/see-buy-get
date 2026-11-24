@@ -1439,4 +1439,10 @@ export const enDriver = {
   'driver.roadLoad.takenToast': '{count, plural, one {# bag is yours} other {# bags are yours}}',
   'driver.roadLoad.takenToastDetail': 'Collect them, then take them to {hub}.',
   'driver.roadLoad.notTaken': '{count, plural, one {# bag was not taken} other {# bags were not taken}}',
+  // 2026-11-24 — the GPS watch of RO e-Transport (corridor compliance, slice 3).
+  'driver.telemetry.active': 'Romania: your position is sent every minute',
+  'driver.telemetry.near': 'Near Romania: your position is sent every minute from here',
+  'driver.telemetry.activeDetail': 'RO e-Transport follows a load by its position while it is in Romania. Keep the Driver app open and the phone’s location on.',
+  'driver.telemetry.lost': 'Your position has not reached us for a while',
+  'driver.telemetry.lostDetail': 'You are in Romania, where RO e-Transport follows a load by its position. Check that the phone has signal and its location is on.',
 };

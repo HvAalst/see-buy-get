@@ -1,3 +1,5 @@
+import { TelemetryService } from './telemetry.service';
+import { TelematicsPingsDto } from './pudo.dto';
 import { Body, Controller, Delete, Get, Header, Headers, Optional, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { VehicleManifestService } from './vehicle-manifest.service';
 import { ApiVersionInterceptor } from '../../foundation/http/api-versions';
@@ -77,7 +79,15 @@ export class CompanyApiController {
     private readonly businessParcels: BusinessParcelService,
     // 2026-11-24 — the master manifest of one of a fleet's vehicles, by plate (corridor compliance, slice 2).
     @Optional() private readonly manifestsSvc?: VehicleManifestService,
+    // 2026-11-24 — the GPS watch of RO e-Transport, for a fleet's own system (corridor compliance, slice 3).
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
+
+  /** The GPS watch, where this module holds it. */
+  private watch(): TelemetryService {
+    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    return this.telemetry;
+  }
 
   /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
   private manifests(): VehicleManifestService {
@@ -355,6 +365,26 @@ export class CompanyApiController {
   manifestExport(@Query('plate') plate: string, @CompanyKey() caller: CompanyCaller): string {
     if (!plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say which vehicle: its plate', { field: 'plate' });
     return this.manifests().csv(this.manifests().forPlate(this.fleetOf(caller).did, plate));
+  }
+
+  /**
+   * 2026-11-24 — POSITIONS FROM ITS OWN SYSTEM (the owner's brief, feature 4: "POST /api/v1/telematics/ping"): at most 500 a call,
+   * for one of its vehicles on a shift, by plate or by the id of its watch. Kept as the Driver app's are.
+   */
+  @Public()
+  @RateLimit(600, 60)
+  @Post('fleet/telematics/pings')
+  pushPings(@Body() dto: TelematicsPingsDto, @CompanyKey() caller: CompanyCaller) {
+    return this.watch().pushPings(this.fleetOf(caller).did, dto);
+  }
+
+  /** …and the UIT codes one of its vehicles carries now, so its GPS system needs nobody to type them ("active-uit"). */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('fleet/telematics/active-uit')
+  activeUit(@Query('plate') plate: string, @CompanyKey() caller: CompanyCaller) {
+    if (!plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say which vehicle: its plate', { field: 'plate' });
+    return this.watch().activeUit(this.fleetOf(caller).did, plate);
   }
 
   /** Its plan for a day, as accepted, and what has changed under it since. Accepting a plan is a person's, in the app. */

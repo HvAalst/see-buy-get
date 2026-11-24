@@ -135,3 +135,28 @@ describe('a code running out, told to the fleet’s own system', () => {
     expect(JSON.parse(messages[0].body).data).toMatchObject({ freightId: 'frt_9', country: 'RO', kind: 'UIT', fiscalCode: 'RO123456', expired: false });
   });
 });
+
+/*
+ * 2026-11-24 — THE GPS WATCH, TOLD TO THE FLEET'S OWN SYSTEM (the owner's brief, feature 4): the UIT codes a vehicle carries, a
+ * silence in Romania and its end, a watch closed; to the fleet that set an address, and to no other.
+ */
+describe('the GPS watch, told to the fleet’s own system', () => {
+  it('sends telematics.uit_changed, signal_lost, signal_back and session_closed to its own fleet only', () => {
+    const handlers = new Map<string, (e: { payload: unknown }) => void>();
+    const events = { subscribe: (topic: string, fn: (e: { payload: unknown }) => void) => handlers.set(topic, fn) } as unknown as EventBus;
+    const managers = { get: () => ({ companyName: 'Balkan Line' }) } as unknown as FleetManagerService;
+    const hooks = new FleetHookService(events, {} as DispatchService, {} as DriverService, managers, {} as FleetService, {} as VehicleService, {} as VehicleBreakdownService, { forFleet: () => [] } as unknown as DepartureService, {} as FleetPlanService);
+    hooks.onModuleInit();
+    hooks.setAddress({ fleetDid: 'did:glos:balkan', name: 'Office' }, 'https://tms.example.com/hooks');
+    const session = { sessionId: 'tel_1', fleetDid: 'did:glos:balkan', plate: 'NL-12-AB', roStatus: 'ACTIVE_IN_RO', uitCodes: [{ code: 'RO1234567890' }] };
+    handlers.get(GlosEvent.Pudo.TelematicsUitChanged)!({ payload: { session } });
+    handlers.get(GlosEvent.Pudo.TelematicsSignalLost)!({ payload: { session: { ...session, roStatus: 'SIGNAL_LOST' }, minutes: 16 } });
+    handlers.get(GlosEvent.Pudo.TelematicsSignalBack)!({ payload: { session } });
+    handlers.get(GlosEvent.Pudo.TelematicsSessionClosed)!({ payload: { session: { ...session, roStatus: 'COMPLETED', closedBy: 'left_romania' } } });
+    handlers.get(GlosEvent.Pudo.TelematicsUitChanged)!({ payload: { session: { ...session, fleetDid: 'did:glos:other' } } });
+    const messages = hooks.view('did:glos:balkan').messages;
+    expect(messages.map((m) => m.event)).toEqual(['telematics.uit_changed', 'telematics.signal_lost', 'telematics.signal_back', 'telematics.session_closed']);
+    expect(JSON.parse(messages[1].body).data).toMatchObject({ sessionId: 'tel_1', plate: 'NL-12-AB', roStatus: 'SIGNAL_LOST', minutes: 16, uitCodes: [{ code: 'RO1234567890' }] });
+    expect(JSON.parse(messages[3].body).data).toMatchObject({ closedBy: 'left_romania' });
+  });
+});

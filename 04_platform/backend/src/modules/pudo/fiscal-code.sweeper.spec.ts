@@ -17,4 +17,16 @@ describe('the sweep of codes about to run out', () => {
     expect(told).toEqual(['frt_1:RO:RO123456']);
     expect(sweeper.sweep()).toBe(0);
   });
+
+  it('a UIT on a load whose vehicle has left Romania: kept as told, and nobody is rung', () => {
+    const due = [{ freightId: 'frt_1', code: 'FRT-1', key: 'RO:RO123456', country: 'RO', kind: 'UIT', fiscalCode: 'RO123456', expiresAt: '2026-11-27T21:59:59.999Z', expired: false }];
+    const told: string[] = [];
+    const published: unknown[] = [];
+    const dispatch = { fiscalCodesToTell: () => due.filter((d) => !told.includes(`${d.freightId}:${d.key}`)), markFiscalTold: (id: string, key: string) => told.push(`${id}:${key}`) };
+    const events = { publish: (topic: string, payload: unknown) => (published.push([topic, payload]), Promise.resolve()) };
+    const telemetry = { forFreight: (id: string) => (id === 'frt_1' ? [{ closedBy: 'left_romania' }] : []) };
+    expect(new FiscalCodeSweeper(dispatch as never, events as never, telemetry as never).sweep()).toBe(0);
+    expect(published).toEqual([]);
+    expect(told).toEqual(['frt_1:RO:RO123456']);
+  });
 });

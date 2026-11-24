@@ -1292,4 +1292,9 @@ export const words: Record<string, string> = {
   "driver.roadLoad.takenToast": "{count, plural, one {# ከረጢት የእርስዎ ነው} other {# ከረጢቶች የእርስዎ ናቸው}}",
   "driver.roadLoad.takenToastDetail": "ይሰብስቧቸው፣ ከዚያ ወደ {hub} ይውሰዷቸው።",
   "driver.roadLoad.notTaken": "{count, plural, one {# ከረጢት አልተወሰደም} other {# ከረጢቶች አልተወሰዱም}}",
+  "driver.telemetry.active": "ሩማንያ፦ ያሉበት ቦታ በየደቂቃው ይላካል",
+  "driver.telemetry.near": "ሩማንያ አቅራቢያ፦ ከዚህ ጀምሮ ያሉበት ቦታ በየደቂቃው ይላካል",
+  "driver.telemetry.activeDetail": "RO e-Transport ጭነቱ በሩማንያ እስካለ ድረስ በቦታው ይከታተለዋል። የDriver መተግበሪያውን ክፍት ያድርጉ፣ የስልኩንም አካባቢ ያብሩ።",
+  "driver.telemetry.lost": "ያሉበት ቦታ ለተወሰነ ጊዜ አልደረሰንም",
+  "driver.telemetry.lostDetail": "በሩማንያ ነዎት፤ እዚያ RO e-Transport ጭነትን በቦታው ይከታተላል። ስልኩ ኔትወርክ እንዳለውና አካባቢው እንደበራ ያረጋግጡ።",
 };

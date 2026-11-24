@@ -1,8 +1,8 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
-import { Button, Card, Chip, ErrorNote, Note } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { Button, Card, Chip, Choice, ErrorNote, Note } from '../../../shared/ui';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import { POSITION_EVERY, eventWords, messageLine, positionsLines, subjectOf, systemApi, type SystemView } from '../system';
 import { keyLine, keysInOrder, keyTitle, type CompanyKey } from '../../../shared/companyKeys';
 import { apiChangeLines, useApiChanges } from '../../../shared/apiChanges';
@@ -230,6 +230,7 @@ export function SystemScreen({ sbg, managerDid }: { sbg: SbgClient | null; manag
       </Card>
 
       {api ? <KeysCard api={api} /> : null}
+      {api ? <TelematicsCard api={api} /> : null}
     </div>
   );
 }
@@ -239,6 +240,50 @@ export function SystemScreen({ sbg, managerDid }: { sbg: SbgClient | null; manag
  * live, or a test key that runs every check and keeps nothing — and sees it once; any manager takes one away; each act
  * under their name. Never the key itself after the answer that made it.
  */
+/** The fleet's choice of what sends its vehicles' positions to the GPS watch, each said in words. */
+export const TELEMATICS_WORDS: Record<string, MessageKey> = {
+  DRIVER_APP_GPS: 'fleet.telematics.driverApp',
+  WEBFLEET: 'fleet.telematics.webfleet',
+  TRIMBLE: 'fleet.telematics.trimble',
+  TRANSICS: 'fleet.telematics.transics',
+  CUSTOM_WEBHOOK: 'fleet.telematics.custom',
+};
+
+/**
+ * 2026-11-24 — WHICH SYSTEM SENDS ITS POSITIONS (the owner's brief, feature 4; corridor compliance, slice 3): our Driver app, or the
+ * fleet's own GPS system pushing them by key. RO e-Transport's positions go to ANAF from the fleet's registered provider, or ANAF's
+ * own app; SeeBuyGet watches them, and tells driver and office of a silence in Romania.
+ */
+function TelematicsCard({ api }: { api: ReturnType<typeof systemApi> }) {
+  const t = useT();
+  const [provider, setProvider] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  useEffect(() => {
+    void api.telematics().then((r) => setProvider(r.data?.provider ?? 'DRIVER_APP_GPS'));
+  }, [api]);
+  if (!provider) return null;
+  return (
+    <Card title={t('fleet.telematics.title')}>
+      <p class="card__note">{t('fleet.telematics.lede')}</p>
+      <Choice
+        id="telematics-provider"
+        label={t('fleet.telematics.label')}
+        as="sheet"
+        options={Object.keys(TELEMATICS_WORDS).map((value) => ({ value, label: t(TELEMATICS_WORDS[value]) }))}
+        value={provider}
+        onChange={async (value) => {
+          const r = await api.setTelematics(value);
+          if (!r.error && r.data) {
+            setProvider(r.data.provider);
+            setSaid(t('fleet.telematics.saved'));
+          }
+        }}
+      />
+      {said ? <p class="card__note">{said}</p> : null}
+    </Card>
+  );
+}
+
 function KeysCard({ api }: { api: ReturnType<typeof systemApi> }) {
   const t = useT();
   const [keys, setKeys] = useState<CompanyKey[] | null>(null);

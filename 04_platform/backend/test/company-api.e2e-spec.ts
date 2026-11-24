@@ -279,5 +279,35 @@ describe('a company’s own system, with its key, over the wire', () => {
     await http().get('/v1/sbg/api/fleet/manifests').query({ plate: fleet.plate }).set(keyed(otherKey)).expect(404);
     await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/manifest`).set(bearer(other.driverToken)).expect(403);
     await http().get('/v1/sbg/api/fleet/manifests').set(keyed(key)).expect(400);
+
+    // 2026-11-24 — slice 3, the GPS watch: by key, its own vehicle only; nothing is watched on a vehicle carrying nothing abroad.
+    expect((await http().get('/v1/sbg/api/fleet/telematics/active-uit').query({ plate: fleet.plate }).set(keyed(key)).expect(200)).body).toEqual({ plate: fleet.plate, uitCodes: [] });
+    expect((await http().post('/v1/sbg/api/fleet/telematics/pings').set(keyed(key)).send({ plate: fleet.plate, pings: [{ lat: 46.18, lng: 21.31 }] }).expect(201)).body).toEqual({ kept: 0 });
+    await http().get('/v1/sbg/api/fleet/telematics/active-uit').query({ plate: fleet.plate }).set(keyed(otherKey)).expect(404);
+    await http().post('/v1/sbg/api/fleet/telematics/pings').set(keyed(key)).send({ plate: fleet.plate, pings: [] }).expect(400);
+    const located = (await http().post(`/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/locate`).set(bearer(fleet.driverToken)).send({ lat: 46.18, lng: 21.31, speedKmh: 60, heading: 90 }).expect(201)).body;
+    expect(located).toMatchObject({ located: true });
+    expect(located.telemetry).toBeUndefined();
+    // A load to Romania with its UIT, taken by the fleet's key: the Driver app's next position opens the watch (here already
+    // in Romania, at Arad), the answer says a position goes every minute, and the fleet's system reads the code by plate.
+    const store = app.get(VendorService).register({ name: `Venlo Store ${Date.now()}` });
+    app.get(VendorService).topUp(store.vendorId, 100_000);
+    const toRomania = app.get(DispatchService).registerFreight({ description: 'Machine parts, 800 kg', pickupLocation: { lat: 51.37, lng: 6.17 }, pickupLabel: 'Venlo', pickupCountry: 'NL', destLabel: 'Arad', destLocation: { lat: 46.18, lng: 21.31 }, destCountry: 'RO', weightKg: 800, shipperDid: store.vendorId, fiscalCodes: [{ country: 'RO', kind: 'UIT', code: 'RO7A2B9C4D1E8F', from: '2026-11-24', validThrough: '2026-11-28', saidAt: new Date().toISOString() }] });
+    await http().post(`/v1/sbg/api/fleet/loads/${toRomania.freightId}/take`).set(keyed(key)).send({ driverDid: fleet.driverDid }).expect(201);
+    const watched = (await http().post(`/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/locate`).set(bearer(fleet.driverToken)).send({ lat: 46.18, lng: 21.31 }).expect(201)).body;
+    expect(watched.telemetry).toMatchObject({ roStatus: 'ACTIVE_IN_RO', everyMinute: true });
+    expect((await http().get('/v1/sbg/api/fleet/telematics/active-uit').query({ plate: fleet.plate }).set(keyed(key)).expect(200)).body.uitCodes).toEqual([expect.objectContaining({ code: 'RO7A2B9C4D1E8F', freightId: toRomania.freightId })]);
+    // Its positions, for the carrier's GPS provider: the driver's and their office's are one; another office or driver reads none.
+    const trailOf = `/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/telematics/positions`;
+    const trail = (await http().get(trailOf).set(bearer(fleet.driverToken)).expect(200)).body;
+    expect(trail).toMatchObject({ format: 'sbg-telemetry-1', session: { roStatus: 'ACTIVE_IN_RO', plate: fleet.plate }, positions: [expect.objectContaining({ country: 'RO', source: 'DRIVER_APP_GPS', uitCodes: ['RO7A2B9C4D1E8F'] })] });
+    expect((await http().get(trailOf).set(bearer(fleet.office)).expect(200)).body.session.sessionId).toBe(trail.session.sessionId);
+    await http().get(trailOf).set(bearer(other.office)).expect(404);
+    await http().get(trailOf).set(bearer(other.driverToken)).expect(403);
+    // The office says which system sends its positions; another office cannot.
+    expect((await http().put(`${own}/telematics`).set(bearer(fleet.office)).send({ provider: 'WEBFLEET' }).expect(200)).body).toEqual({ provider: 'WEBFLEET' });
+    expect((await http().get(`${own}/telematics`).set(bearer(fleet.office)).expect(200)).body).toEqual({ provider: 'WEBFLEET' });
+    await http().put(`${own}/telematics`).set(bearer(fleet.office)).send({ provider: 'NAVMAN' }).expect(400);
+    await http().put(`${own}/telematics`).set(bearer(other.office)).send({ provider: 'TRIMBLE' }).expect(403);
   });
 });

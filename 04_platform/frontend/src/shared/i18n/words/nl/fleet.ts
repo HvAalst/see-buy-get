@@ -1382,4 +1382,13 @@ export const words: Record<string, string> = {
   "fleet.vehicles.soldBody": "Verkocht, gesloopt of per vergissing toegevoegd. Er wordt geen werk meer voor aangeboden en er begint geen dienst meer op; wat het deed blijft bewaard, en het kenteken is vrij voor wie het nu voert. Niet zolang er een dienst op loopt of een rit op wacht.",
   "fleet.vehicles.soldYes": "Ja, haal het eraf",
   "fleet.vehicles.soldDone": "{plate} staat niet meer bij je voertuigen",
+  "fleet.telematics.title": "Posities voor RO e-Transport",
+  "fleet.telematics.label": "Wie de posities verstuurt",
+  "fleet.telematics.saved": "Opgeslagen.",
+  "fleet.telematics.lede": "Roemenië volgt ladingen met een UIT-code aan hun positie. Je geregistreerde gps-aanbieder, of de eigen app van ANAF, stuurt ze naar ANAF. SeeBuyGet volgt ze ook, en laat jou en de chauffeur weten wanneer een voertuig in Roemenië 15 minuten stil is geweest. Zeg welk systeem ons de posities van je voertuigen stuurt.",
+  "fleet.telematics.driverApp": "Onze Driver-app",
+  "fleet.telematics.webfleet": "Webfleet, via onze sleutel",
+  "fleet.telematics.trimble": "Trimble, via onze sleutel",
+  "fleet.telematics.transics": "Transics, via onze sleutel",
+  "fleet.telematics.custom": "Ons eigen systeem, via onze sleutel",
 };

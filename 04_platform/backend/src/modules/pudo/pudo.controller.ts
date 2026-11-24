@@ -1,4 +1,5 @@
 ﻿import { TerminalSlotChangeDto } from './air-terminal.types';
+import { TelemetryService } from './telemetry.service';
 import { VehicleManifestService } from './vehicle-manifest.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
@@ -187,7 +188,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, VehicleLoadSpaceDto, VehicleEquipmentDto, SiteToolsDto, HubPriceDto, HubFeeCeilingDto, HubFeeDecisionDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PricingModeDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, OwnVehicleDto, VehiclePlateDto, PlateCorrectedView, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, LoadArrivedDto, LoadReceiverEmailDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, AccountDeviceAgainDto, TruecallerStartDto, StoreReplyDto, TakeRoadLoadDto, FiscalCodesDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DockAnotherWayDto, ShopChoiceAskDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, TakeOnAheadDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, RunPayDto, VehicleLoadSpaceDto, VehicleEquipmentDto, SiteToolsDto, HubPriceDto, HubFeeCeilingDto, HubFeeDecisionDto, CustodyCapsDto, ImportZoneAreasDto, ZoneGroupsDto, ZoneChangeDto, CatchmentAssignDto, ZoneMergeDto, ZoneMoveDto, ZonePublishDto, PriceCardSettingsDto, PricingModeDto, PriceCardStartDto, PriceCardTermsDto, PriceCardRefDto, PriceCardApproveDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, TakeHandOverDto, TakeCarryDto, PairChallengeDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, OwnVehicleDto, VehiclePlateDto, PlateCorrectedView, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, LoadArrivedDto, LoadReceiverEmailDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteGlnDto, OurGs1StatusView, BagTagView, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto, AccountDeviceAgainDto, TruecallerStartDto, StoreReplyDto, TakeRoadLoadDto, FiscalCodesDto, TelematicsProviderDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -444,6 +445,8 @@ export class SbgController {
     @Optional() private readonly borderRoutes?: BorderRouteService,
     // 2026-11-24 — the master manifest of a vehicle on a shift (corridor compliance, slice 2).
     @Optional() private readonly manifestsSvc?: VehicleManifestService,
+    // 2026-11-24 — the GPS watch of RO e-Transport (corridor compliance, slice 3).
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
@@ -9319,13 +9322,47 @@ export class SbgController {
     return this.manifests().csv(this.manifests().forVehicle(did, vehicleId));
   }
 
+  /**
+   * 2026-11-24 — THE POSITIONS OF A WATCHED RUN, for the carrier's registered GPS provider (corridor compliance, slice 3): in
+   * SeeBuyGet's own plain form, the vehicle's plates and UIT codes on each. The driver, their office, or staff.
+   */
+  @Roles('driver', 'fleet_manager', 'operator')
+  @Get('fleet/drivers/:did/telematics/positions')
+  telematicsPositions(@Param('did') did: string, @Query('sessionId') sessionId: string | undefined, @Actor() actor: IntrospectionResult) {
+    if (actor.role === 'fleet_manager') {
+      if (this.drivers.get(did).managerDid !== actor.tenant) throw new GlosError('NOT_FOUND', 'Driver not found');
+    } else this.assertDriverActs(did, actor);
+    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    return this.telemetry.positions(did, sessionId || undefined);
+  }
+
+  /** …which system sends a fleet's positions, and its vehicles' open watches. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/telematics')
+  fleetTelematics(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    return { provider: this.telemetry.providerOf(did) };
+  }
+
+  @Roles('fleet_manager', 'operator')
+  @Put('fleet/managers/:did/telematics')
+  setFleetTelematics(@Param('did') did: string, @Body() dto: TelematicsProviderDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    return { provider: this.telemetry.setProvider(did, dto.provider) };
+  }
+
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */
   @Roles('driver', 'operator')
   @Post('fleet/drivers/:did/locate')
   locate(@Param('did') did: string, @Body() dto: LocateDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
     const a = this.fleet.reportLocation(did, dto);
-    return { located: Boolean(a), location: a?.location };
+    // 2026-11-24 — and to the GPS watch where the vehicle is watched: the app is told where it stands and how often to send.
+    this.telemetry?.ping(did, dto, 'DRIVER_APP_GPS');
+    const telemetry = this.telemetry?.driverView(did, dto);
+    return { located: Boolean(a), location: a?.location, ...(telemetry ? { telemetry } : {}) };
   }
 
   /** Fleet-manager dashboard: vehicle/driver/session counts, working hours, live positions + cargo.

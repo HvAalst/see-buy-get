@@ -3092,6 +3092,31 @@ export class EndSessionDto {
 export class LocateDto {
   @IsNumber() lat!: number;
   @IsNumber() lng!: number;
+  /** 2026-11-24 — for the GPS watch of RO e-Transport: speed, heading and when the phone took the reading. */
+  @IsOptional() @IsNumber() @Min(0) @Max(300) speedKmh?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(360) heading?: number;
+  @IsOptional() @IsDateString() recordedAt?: string;
+}
+
+/** 2026-11-24 — which system sends a fleet's positions (corridor compliance, slice 3). */
+export class TelematicsProviderDto {
+  @IsIn(['DRIVER_APP_GPS', 'WEBFLEET', 'TRIMBLE', 'TRANSICS', 'CUSTOM_WEBHOOK']) provider!: string;
+}
+
+/** One position from a fleet's own system. */
+export class TelematicsPingDto {
+  @IsNumber() @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Min(-180) @Max(180) lng!: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(300) speedKmh?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(360) heading?: number;
+  @IsOptional() @IsDateString() recordedAt?: string;
+}
+
+/** Positions a fleet's system pushes for one of its vehicles, by plate or by its watch's id: at most 500 a call, as ANAF takes. */
+export class TelematicsPingsDto {
+  @IsOptional() @IsString() @MaxLength(20) plate?: string;
+  @IsOptional() @IsString() @MaxLength(40) sessionId?: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => TelematicsPingDto) pings!: TelematicsPingDto[];
 }
 
 // --- dispatch marketplace (Ch 19) ---

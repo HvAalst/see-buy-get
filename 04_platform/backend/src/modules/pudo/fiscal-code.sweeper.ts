@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { DispatchService } from './dispatch.service';
+import { TelemetryService } from './telemetry.service';
 
 /**
  * 2026-11-24 — A CODE ABOUT TO RUN OUT (the owner's brief, feature 2: "an alert notification to both the Sender and Assigned
@@ -16,6 +17,8 @@ export class FiscalCodeSweeper implements OnApplicationBootstrap, OnModuleDestro
   constructor(
     private readonly dispatch: DispatchService,
     private readonly events: EventBus,
+    // 2026-11-24 — a load from Romania whose vehicle has left Romania needs its UIT no more (slice 3).
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -37,9 +40,14 @@ export class FiscalCodeSweeper implements OnApplicationBootstrap, OnModuleDestro
   sweep(now: number = Date.now()): number {
     const due = this.dispatch.fiscalCodesToTell(now);
     for (const d of due) {
+      // A UIT on a load whose vehicle has left Romania is no longer read by anybody: kept as told, without a bell.
+      if (d.country === 'RO' && this.telemetry?.forFreight(d.freightId).some((s) => s.closedBy === 'left_romania')) {
+        this.dispatch.markFiscalTold(d.freightId, d.key);
+        continue;
+      }
       void this.events.publish(GlosEvent.Pudo.FiscalCodeExpiring, d, { source: 'pudo' }).catch(() => undefined);
       this.dispatch.markFiscalTold(d.freightId, d.key);
     }
-    return due.length;
+    return due.filter((d) => !(d.country === 'RO' && this.telemetry?.forFreight(d.freightId).some((s) => s.closedBy === 'left_romania'))).length;
   }
 }

@@ -148,6 +148,16 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       if (e.payload?.fleetDid && e.payload.case) this.live?.toFleet(e.payload.fleetDid, 'cases');
       if (e.payload?.fleetDid && e.payload.case && this.settings.get(e.payload.fleetDid)?.url) this.enqueue(e.payload.fleetDid, 'vehicle.standing_still', { case: e.payload.case });
     });
+    // 2026-11-24 — the GPS watch of RO e-Transport: the UIT codes a vehicle carries, a silence in Romania and its end, a watch closed.
+    const watch = (topic: string, event: 'telematics.uit_changed' | 'telematics.signal_lost' | 'telematics.signal_back' | 'telematics.session_closed') =>
+      this.events.subscribe<{ session?: { fleetDid?: string; sessionId: string; plate: string; trailerPlate?: string; roStatus: string; uitCodes: unknown[]; closedBy?: string; lastPingAt?: string }; minutes?: number }>(topic, (e) => {
+        const s = e.payload?.session;
+        if (s?.fleetDid && this.settings.get(s.fleetDid)?.url) this.enqueue(s.fleetDid, event, { sessionId: s.sessionId, plate: s.plate, ...(s.trailerPlate ? { trailerPlate: s.trailerPlate } : {}), roStatus: s.roStatus, uitCodes: s.uitCodes, ...(s.closedBy ? { closedBy: s.closedBy } : {}), ...(s.lastPingAt ? { lastPingAt: s.lastPingAt } : {}), ...(e.payload?.minutes !== undefined ? { minutes: e.payload.minutes } : {}) });
+      });
+    watch(GlosEvent.Pudo.TelematicsUitChanged, 'telematics.uit_changed');
+    watch(GlosEvent.Pudo.TelematicsSignalLost, 'telematics.signal_lost');
+    watch(GlosEvent.Pudo.TelematicsSignalBack, 'telematics.signal_back');
+    watch(GlosEvent.Pudo.TelematicsSessionClosed, 'telematics.session_closed');
     // 2026-11-24 — a UIT or UTN on a load its driver holds, within a day of its end or past it.
     this.events.subscribe<{ fleetDid?: string; freightId?: string; code?: string; country?: string; kind?: string; fiscalCode?: string; expiresAt?: string; expired?: boolean }>(GlosEvent.Pudo.FiscalCodeExpiring, (e) => {
       const p = e.payload;

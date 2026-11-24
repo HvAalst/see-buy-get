@@ -1382,4 +1382,13 @@ export const words: Record<string, string> = {
   "fleet.vehicles.soldBody": "Продадено, бракувано или добавено по грешка. За него вече не се предлага работа и не започва смяна с него; това, което е правило, остава в записа му, а номерът му е свободен за този, който го кара сега. Не докато върви смяна с него или го чака курс.",
   "fleet.vehicles.soldYes": "Да, махни го",
   "fleet.vehicles.soldDone": "{plate} е махнат от Вашите превозни средства",
+  "fleet.telematics.title": "Местоположения за RO e-Transport",
+  "fleet.telematics.label": "Кой изпраща местоположенията",
+  "fleet.telematics.saved": "Запазено.",
+  "fleet.telematics.lede": "Румъния проследява товарите с код UIT по местоположението им. Вашият регистриран доставчик на GPS или собственото приложение на ANAF ги изпраща до ANAF. SeeBuyGet също ги следи и Ви уведомява, Вас и шофьора, когато превозно средство в Румъния е мълчало 15 минути. Посочете коя система ни изпраща местоположенията на превозните Ви средства.",
+  "fleet.telematics.driverApp": "Нашето приложение Driver",
+  "fleet.telematics.webfleet": "Webfleet, чрез нашия ключ",
+  "fleet.telematics.trimble": "Trimble, чрез нашия ключ",
+  "fleet.telematics.transics": "Transics, чрез нашия ключ",
+  "fleet.telematics.custom": "Нашата собствена система, чрез нашия ключ",
 };

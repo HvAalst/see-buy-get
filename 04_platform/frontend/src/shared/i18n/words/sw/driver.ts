@@ -1292,4 +1292,9 @@ export const words: Record<string, string> = {
   "driver.roadLoad.takenToast": "{count, plural, one {Mfuko # ni wako} other {Mifuko # ni yako}}",
   "driver.roadLoad.takenToastDetail": "Ikusanye, kisha ipeleke {hub}.",
   "driver.roadLoad.notTaken": "{count, plural, one {Mfuko # haukuchukuliwa} other {Mifuko # haikuchukuliwa}}",
+  "driver.telemetry.active": "Romania: mahali ulipo panatumwa kila dakika",
+  "driver.telemetry.near": "Karibu na Romania: mahali ulipo panatumwa kila dakika kuanzia hapa",
+  "driver.telemetry.activeDetail": "RO e-Transport hufuatilia mzigo kwa mahali ulipo ukiwa Romania. Acha programu ya Driver wazi na eneo la simu likiwa limewashwa.",
+  "driver.telemetry.lost": "Mahali ulipo hapajatufikia kwa muda",
+  "driver.telemetry.lostDetail": "Uko Romania, ambapo RO e-Transport hufuatilia mzigo kwa mahali ulipo. Hakikisha simu ina mtandao na eneo lake limewashwa.",
 };

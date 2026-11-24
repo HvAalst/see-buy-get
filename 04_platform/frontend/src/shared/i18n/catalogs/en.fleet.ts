@@ -1514,4 +1514,14 @@ export const enFleet = {
   'fleet.vehicles.soldBody': 'Sold, scrapped, or added by mistake. No work is offered for it any more and no shift starts on it; what it did stays on its record, and its plate is free for whoever carries it now. Not while a shift runs on it or a run waits for it.',
   'fleet.vehicles.soldYes': 'Yes, take it off',
   'fleet.vehicles.soldDone': '{plate} is off your vehicles',
+  // 2026-11-24 — which system sends the fleet’s positions (corridor compliance, slice 3).
+  'fleet.telematics.title': 'Positions for RO e-Transport',
+  'fleet.telematics.label': 'Who sends the positions',
+  'fleet.telematics.saved': 'Saved.',
+  'fleet.telematics.lede': 'Romania follows loads with a UIT code by their position. Your registered GPS provider, or ANAF’s own app, sends them to ANAF. SeeBuyGet watches them too, and tells you and the driver when a vehicle in Romania has been silent for 15 minutes. Say which system sends us your vehicles’ positions.',
+  'fleet.telematics.driverApp': 'Our Driver app',
+  'fleet.telematics.webfleet': 'Webfleet, through our key',
+  'fleet.telematics.trimble': 'Trimble, through our key',
+  'fleet.telematics.transics': 'Transics, through our key',
+  'fleet.telematics.custom': 'Our own system, through our key',
 };

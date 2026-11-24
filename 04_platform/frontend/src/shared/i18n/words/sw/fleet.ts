@@ -1382,4 +1382,13 @@ export const words: Record<string, string> = {
   "fleet.vehicles.soldBody": "Limeuzwa, limeachwa kabisa, au liliongezwa kwa makosa. Halitapewa kazi tena na hakuna zamu itakayoanza nalo; lililofanya linabaki kwenye rekodi yake, na nambari yake iko huru kwa anayelibeba sasa. Si wakati zamu inaendelea nalo au safari inalisubiri.",
   "fleet.vehicles.soldYes": "Ndiyo, liondoe",
   "fleet.vehicles.soldDone": "{plate} limeondolewa kwenye magari yako",
+  "fleet.telematics.title": "Maeneo kwa RO e-Transport",
+  "fleet.telematics.label": "Nani hutuma maeneo",
+  "fleet.telematics.saved": "Imehifadhiwa.",
+  "fleet.telematics.lede": "Romania hufuatilia mizigo yenye msimbo wa UIT kwa maeneo yake. Mtoa huduma wako wa GPS aliyesajiliwa, au programu ya ANAF yenyewe, huyatuma kwa ANAF. SeeBuyGet huyafuatilia pia, na hukuambia wewe na dereva gari likiwa kimya kwa dakika 15 nchini Romania. Sema ni mfumo upi hututumia maeneo ya magari yako.",
+  "fleet.telematics.driverApp": "Programu yetu ya Driver",
+  "fleet.telematics.webfleet": "Webfleet, kupitia ufunguo wetu",
+  "fleet.telematics.trimble": "Trimble, kupitia ufunguo wetu",
+  "fleet.telematics.transics": "Transics, kupitia ufunguo wetu",
+  "fleet.telematics.custom": "Mfumo wetu wenyewe, kupitia ufunguo wetu",
 };

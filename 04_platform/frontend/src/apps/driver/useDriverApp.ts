@@ -1,3 +1,4 @@
+import type { TelemetryView } from './screens/TelemetryStrip';
 import { offerPasskeyAfterCode } from '../../shared/account/PasskeyOffer';
 import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { energyWord } from '../../shared/vehicleEnergy';
@@ -164,6 +165,8 @@ export interface DriverState {
   heldProblems: HeldProblem[] | null;
   /** 2026-11-23 — the road route's load, for a driver of the fleet that runs one; null until read (step 3c). */
   roadLoad: RoadLoadView | null;
+  /** 2026-11-24 — the GPS watch of RO e-Transport, as the server said with the last position sent; null where none. */
+  telemetry: TelemetryView | null;
   /** A trip whose bell was tapped off shift: run once the shift starts. */
   pendingTrip: SavedTrip | null;
   roadState: 'idle' | 'loading' | 'error' | 'ready';
@@ -272,6 +275,7 @@ const INITIAL: DriverState = {
   trips: null,
   heldProblems: null,
   roadLoad: null,
+  telemetry: null,
   pendingTrip: null,
   roadState: 'idle',
   observationNotice: null,
@@ -615,18 +619,25 @@ export function useDriverApp() {
    * A refusal is a normal outcome. Everything degrades to what it was: they can still name a place, still
    * find work, still be offered loads at the moment those loads appear.
    */
+  // 2026-11-24 — each position's answer says whether the run is watched for RO e-Transport, and how often to send.
+  const everyMinute = Boolean(state.telemetry?.everyMinute);
   useEffect(() => {
     if (!client || !did || !state.session.active) return;
-    const stop = watchPosition((p) => {
-      void client.api.locate(did, p);
-    });
+    const send = (p: { lat: number; lng: number }) =>
+      void client.api.locate(did, p).then((r) => {
+        if (r.error) return;
+        const tm = narrow<{ telemetry?: TelemetryView }>(r.data)?.telemetry ?? null;
+        setState((s) => (JSON.stringify(s.telemetry) === JSON.stringify(tm) ? s : { ...s, telemetry: tm }));
+      });
+    const stop = watchPosition(send);
     // Round 16 — a parked phone may never call the watch; asked every few minutes, a vehicle standing still is heard standing there.
-    const stopAsking = askEvery((p) => void client.api.locate(did, p), ASK_EVERY_MS);
+    // 2026-11-24 — every minute in Romania or near it: ANAF wants positions at most 2 minutes apart.
+    const stopAsking = askEvery(send, everyMinute ? 60_000 : ASK_EVERY_MS);
     return () => {
       stop();
       stopAsking();
     };
-  }, [client, did, state.session.active]);
+  }, [client, did, state.session.active, everyMinute]);
 
   /**
    * A notification tap lands here: `?offer=<id>` opens THAT offer and nothing else.

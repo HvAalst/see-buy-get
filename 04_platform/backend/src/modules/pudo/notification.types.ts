@@ -284,6 +284,8 @@ export const NOTIFICATION_KINDS = [
   'vehicle_standstill',
   /** Round 17 — the phone on a shift has said nothing longer than its fleet allows: to its office, with where it was last heard. */
   'vehicle_silent',
+  /** 2026-11-24 — no position for 15 minutes from a vehicle in Romania (RO e-Transport's GPS watch). */
+  'telematics_signal_lost',
   /**
    * Round 18 — two businesses say one GS1 company prefix is theirs: to the business using it when another disputes it, and
    * to both when staff decide — with their reason.
