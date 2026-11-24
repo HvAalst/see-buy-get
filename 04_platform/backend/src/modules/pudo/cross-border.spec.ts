@@ -1104,6 +1104,9 @@ describe('crossing a border', () => {
       };
       const arrived = () => ({ photoRef: photoBy(central.did), asClosed: true });
       const { code, parcelId } = carried();
+      // Under the hub's own sign-in, which names nobody: refused, a person takes it over by name.
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), undefined, Date.now(), { driverBadgeId: fleetSvc.handoverPassFor(ours.did)! })).toThrow(/a person signed in under their own name takes it over/);
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), '  ', Date.now(), { driverBadgeId: fleetSvc.handoverPassFor(ours.did)! })).toThrow(/a person signed in under their own name/);
       // Without the driver's pass, refused, and nothing kept: the bag still on the van, its seal not received.
       expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar')).toThrow(/comes from another country: scan the pass on the driver’s phone/);
       expect(totes.byCodeMaybe(code)).toMatchObject({ status: 'in_transit', carriedBy: ours.did });
@@ -1159,6 +1162,25 @@ describe('crossing a border', () => {
       expect(() => mdps.loadBag(through.code, drivers.get(local.did).badgeId!)).toThrow(/Close bag .* first/);
       expect(() => mdps.closeBag(through.code, { mdpId: central.mdpId }, 'Petar', { photoRef: photoBy(central.did) })).toThrow(/leaves on a coded seal/);
       mdps.closeBag(through.code, { mdpId: central.mdpId }, 'Petar', { seal: 'BG-SEAL-0043', photoRef: photoBy(central.did) });
+      // At a hub that hands out too, a parcel for its own counter goes onto the counter's shelf by hand: the record says so, and
+      // the parcel no longer waits for a coded seal (2026-11-24).
+      const counterShop = shop('Sofia Central Counter', 'Sofia', SOFIA, 'BG', 2);
+      mdps.setCounter(central.mdpId, { agentDid: counterShop.did, openedAt: new Date().toISOString() });
+      const forCounter = parcels.createConsumerSend({ senderPersonDid: 'did:person:anna', senderPhoneHash: 'hash-anna', receiverMobile: '+359888123457', originAgentDid: from.did, destAgentDid: counterShop.did, dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2, quote: routing.quoteShipment(from.did, counterShop.did, 'M', undefined, { consumer: true }), noGoodsWithOwnRules: true }).parcel.parcelId;
+      const counterBag = totes.register(from.did);
+      totes.assign(counterBag.code, central.mdpId, 'Sofia Central Hub');
+      totes.add(counterBag.code, forCounter, 'M');
+      totes.markAvailable(counterBag.code);
+      mdps.closeBag(counterBag.code, { shopDid: from.did }, 'Test', { photoRef: photoBy(from.did) });
+      mdps.loadBag(counterBag.code, drivers.get(ours.did).badgeId!);
+      mdps.takeBag(counterBag.code, ours.did, 'Ivo', { photoRef: photoBy(ours.did), asClosed: true });
+      const atCounter = mdps.dropBag(central.mdpId, counterBag.code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass() });
+      expect(transfers.noteCounter('mdp_elsewhere', forCounter, 'A1', new Date().toISOString())).toBeUndefined();
+      const shelved = mdps.sortParcel(central.mdpId, forCounter);
+      expect(shelved.counterSlot).toBeDefined();
+      expect(transfers.get(atCounter.transferId!)?.onward).toEqual([expect.objectContaining({ kind: 'counter', parcels: [forCounter], slot: shelved.counterSlot })]);
+      expect(transfers.needsCodedSeal(central.mdpId, [forCounter])).toBe(false);
+      mdps.setCounter(central.mdpId, undefined);
       // Inside one country, as before: a Bulgarian shop's bag received at the hub on its seal alone.
       const home = totes.register(to.did);
       totes.assign(home.code, central.mdpId, 'Sofia Central Hub');

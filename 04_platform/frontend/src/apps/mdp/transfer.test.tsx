@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { t } from '../../shared/i18n';
 import { EMPTY_TRANSFER, crossesBorder, transferBody } from './transfer';
 import { TransferFields } from './screens/TransferFields';
-import { waitingOf, type HubTransferRow } from './screens/HubTransfersCard';
+import { onwardWords, waitingOf, type HubTransferRow } from './screens/HubTransfersCard';
 
 /*
  * 2026-11-24 — A BAG HANDED OVER AT THE HUB FROM ANOTHER COUNTRY (corridor compliance, slice 4): the pass of the driver who brought
@@ -49,5 +49,10 @@ describe('a bag from another country at the hub', () => {
     const row: HubTransferRow = { transferId: 'htr_1', bagCode: 'BAG-1', fromCountry: 'NL', parcels: ['p1', 'p2', 'p3'], released: { at: '' }, received: { by: 'Petar', at: '' }, exceptions: [], passedOnWhole: false, onward: [{ bagCode: 'BAG-9', parcels: ['p1', 'p3'], sealNumber: 'S-1' }] };
     expect(waitingOf(row)).toBe(1);
     expect(waitingOf({ ...row, onward: [] })).toBe(3);
+    // 2026-11-24 — one put on this hub's own counter shelf by hand waits no more, and is said so.
+    const counter = { kind: 'counter' as const, bagCode: '', parcels: ['p2'], slot: 'B2' };
+    expect(waitingOf({ ...row, onward: [...row.onward, counter] })).toBe(0);
+    expect(onwardWords(counter, t)).toBe(t('mdp.transfers.counter', { slot: 'B2' }));
+    expect(onwardWords(row.onward[0], t)).toBe(t('mdp.transfers.onward', { bag: 'BAG-9', seal: 'S-1', driver: t('mdp.transfers.aDriver') }));
   });
 });

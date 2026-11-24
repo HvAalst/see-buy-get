@@ -686,4 +686,5 @@ export const words: Record<string, string> = {
   "mdp.transfers.wrong": "{count, plural, one {Tatizo #} other {Matatizo #}}: {first}",
   "mdp.transfers.onward": "Umeendelea katika mfuko {bag}, lakiri {seal}, na {driver}",
   "mdp.transfers.waiting": "{count, plural, one {Kifurushi # kinasubiri} other {Vifurushi # vinasubiri}} mfuko wenye lakiri yenye namba",
+  "mdp.transfers.counter": "Kwenye rafu ya kaunta hapa, {slot}",
 };

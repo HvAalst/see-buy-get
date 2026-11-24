@@ -1454,7 +1454,7 @@ export class MdpService {
     // before anything is kept, as its seal is.
     const origin = this.originOf(before);
     const hubCountry = this.countryOf(mdp);
-    const keepTransfer = origin && this.transfers?.crosses(origin.country, hubCountry) ? this.transfers.checkDrop({ mdpId, did: mdp.did, name: mdp.name, country: hubCountry }, before, origin, byName?.trim() || `${mdp.name} (its own sign-in)`, transfer) : undefined;
+    const keepTransfer = origin && this.transfers?.crosses(origin.country, hubCountry) ? this.transfers.checkDrop({ mdpId, did: mdp.did, name: mdp.name, country: hubCountry }, before, origin, byName, transfer) : undefined;
     const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
     const brought = before.carriedBy ?? before.claimedBy;
     const step = { at: new Date().toISOString() };
@@ -1637,6 +1637,8 @@ export class MdpService {
       const hub = this.require(mdpId);
       const sortPay = this.sortPayOf(hub, parcel);
       const put = this.parcels.acrossToCounter(parcelId, hub, counterDid, now);
+      // 2026-11-24 — handed over here from another country: its record says it went onto the counter's shelf (slice 4).
+      this.transfers?.noteCounter(mdpId, parcelId, put.binSlot, new Date(now).toISOString());
       if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, this.entityIdOrNone(hub), parcel.sellerEntityId, this.countryOf(hub));
       this.parcels.notePaid(this.parcels.get(parcelId), { type: 'mdp', id: mdpId, label: hub.name }, sortPay, this.currencyOf(hub), now);
       void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: '' }, { source: 'pudo' }).catch(() => undefined);

@@ -20,9 +20,16 @@ export interface HubTransferException {
   by: string;
 }
 
-/** A bag that left the hub with parcels from a handover: its coded seal, the photograph of it closed, and who took it. */
+/**
+ * How parcels from a handover went on: in a bag on its coded seal, the photograph of it closed, and who took it; or, at a hub
+ * that hands parcels out too, onto its own counter's shelf by hand (2026-11-24), where the receiver collects with their code.
+ */
 export interface HubTransferOnward {
+  kind?: 'bag' | 'counter';
+  /** The bag's code; empty for the counter. */
   bagCode: string;
+  /** The counter's shelf slot. */
+  slot?: string;
   parcels: string[];
   sealNumber?: string;
   closureId?: string;

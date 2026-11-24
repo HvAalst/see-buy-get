@@ -53,7 +53,12 @@ export class HubTransferService {
    * and what is wrong with it, each with words and, where taken, a photograph of the hub's own. Refused before anything is
    * kept; the record is written with the receipt of its seal.
    */
-  checkDrop(hub: TransferHub, tote: Tote, from: { country: string; place?: string }, clerk: string, input: HubTransferInput | undefined): (step: Step, closure: BagClosure | undefined) => HubTransfer {
+  checkDrop(hub: TransferHub, tote: Tote, from: { country: string; place?: string }, clerk: string | undefined, input: HubTransferInput | undefined): (step: Step, closure: BagClosure | undefined) => HubTransfer {
+    // 2026-11-24 — taken over by a person, by name (the owner: "as recommended"): the hub's people sign in under their own name;
+    // the hub's own sign-in names nobody.
+    if (!clerk?.trim()) {
+      throw new GlosError('FORBIDDEN', `Bag ${tote.code} comes from another country: a person signed in under their own name takes it over. The hub’s owner adds its people in the Hub app, under People, and each signs in by name`);
+    }
     const shown = input?.driverBadgeId?.trim();
     if (!shown) {
       throw new GlosError('FIELD_REQUIRED', `Bag ${tote.code} comes from another country: scan the pass on the driver’s phone (“Show my badge”), so the driver who brought it hands it over by name`, { field: 'driverBadgeId' });
@@ -78,7 +83,7 @@ export class HubTransferService {
       if (e.photoRef) this.media.requireHeld(e.photoRef, hub.did, link, `exceptions.${i}.photoRef`);
       return { note, ...(e.photoRef ? { photoRef: e.photoRef } : {}) };
     });
-    const by = clerk.trim();
+    const by = clerk.trim().replace(/\s+/g, ' ');
     const driverRecord = this.driverOf(driver.driverDid);
     return (step, closure) => {
       const receipt = closure?.receipt;
@@ -164,6 +169,7 @@ export class HubTransferService {
     for (const [id, parcels] of byTransfer) {
       const t = this.transfers.get(id)!;
       const onward = {
+        kind: 'bag' as const,
         bagCode: tote.code,
         parcels,
         ...(closure?.number ? { sealNumber: closure.number } : {}),
@@ -179,6 +185,20 @@ export class HubTransferService {
       out.push(next);
     }
     return out;
+  }
+
+  /**
+   * 2026-11-24 — A PARCEL FROM A HANDOVER PUT ON THE HUB'S OWN COUNTER SHELF (a hub that hands out too): it leaves the floor by
+   * hand, no bag, and waits there for its receiver's code. Its record says so, and it no longer waits for a coded seal.
+   */
+  noteCounter(hubId: string, parcelId: string, slot: string, at: string): HubTransfer | undefined {
+    const id = this.waiting.get(parcelId);
+    const t = id ? this.transfers.get(id) : undefined;
+    if (!t || t.mdpId !== hubId) return undefined;
+    const next = { ...t, onward: [...t.onward, { kind: 'counter' as const, bagCode: '', parcels: [parcelId], slot, badgeId: '', loadedAt: at }] };
+    this.transfers.set(t.transferId, next);
+    this.waiting.delete(parcelId);
+    return next;
   }
 
   /** The handovers at a hub, newest first: for the hub, its owner and staff. */

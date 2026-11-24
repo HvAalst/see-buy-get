@@ -13,7 +13,12 @@ export interface HubTransferRow {
   received: { by: string; at: string; sealNumber?: string; asClosed?: boolean };
   exceptions: Array<{ note: string }>;
   passedOnWhole: boolean;
-  onward: Array<{ bagCode: string; parcels: string[]; sealNumber?: string; driverName?: string }>;
+  onward: Array<{ kind?: 'bag' | 'counter'; bagCode: string; parcels: string[]; sealNumber?: string; driverName?: string; slot?: string }>;
+}
+
+/** How a handover's parcels went on, in words: a bag on its coded seal with its driver, or the counter's shelf here. */
+export function onwardWords(o: HubTransferRow['onward'][number], t: ReturnType<typeof useT>): string {
+  return o.kind === 'counter' ? t('mdp.transfers.counter', { slot: o.slot ?? '—' }) : t('mdp.transfers.onward', { bag: o.bagCode, seal: o.sealNumber ?? '—', driver: o.driverName ?? t('mdp.transfers.aDriver') });
 }
 
 /** How many of a handover's parcels still wait here for a bag on a coded seal. */
@@ -55,9 +60,9 @@ export function HubTransfersCard({ sbg, mdpId }: { sbg: SbgClient | null; mdpId?
               <span class="hint">{t('mdp.transfers.who', { country: r.fromCountry, driver: r.released.driverName ?? t('mdp.transfers.aDriver'), by: r.received.by, when: new Date(r.received.at).toLocaleString() })}</span>
               {r.received.asClosed === false ? <div class="hint">{t('mdp.transfers.notAsClosed')}</div> : null}
               {r.exceptions.length ? <div class="hint">{t('mdp.transfers.wrong', { count: r.exceptions.length, first: r.exceptions[0].note })}</div> : null}
-              {r.onward.map((o) => (
-                <div key={o.bagCode} class="hint">
-                  {t('mdp.transfers.onward', { bag: o.bagCode, seal: o.sealNumber ?? '—', driver: o.driverName ?? t('mdp.transfers.aDriver') })}
+              {r.onward.map((o, i) => (
+                <div key={o.bagCode || `counter-${i}`} class="hint">
+                  {onwardWords(o, t)}
                 </div>
               ))}
               {waiting ? <div class="hint">{t('mdp.transfers.waiting', { count: waiting })}</div> : null}

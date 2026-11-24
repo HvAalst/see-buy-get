@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
 import { CorridorService } from '../src/modules/pudo/corridor.service';
+import { AuthService } from '../src/foundation/auth/auth.service';
 import { AGREED } from './agreed';
 
 /**
@@ -315,12 +316,16 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     const four = await sealedBag(SEAL_FOUR);
     await http().post(`/v1/sbg/totes/${four}/load`).set(amina.token).send({ take: { photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_FOUR, asClosed: true } }).expect(201);
     expect((await http().get(`/v1/sbg/totes/${four}`).set(operator).expect(200)).body.fromCountry).toBe('KE');
-    const dropAbroad = (body: Record<string, unknown>) => http().post(`/v1/sbg/mdps/${abroad.mdpId}/drop-bag`).set(operator).send({ code: four, receipt: { sealNumber: SEAL_FOUR, photoRef: photoOfStaff, asClosed: true }, ...body });
-    const photoOfStaff = await photo(bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: abroad.did }).expect(201)).body.access_token), 'seal');
+    // The hub's own sign-in names nobody; Mukasa, one of its people, signs in by name (as the hub's staff sign-in mints it).
+    const hubOwn = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: abroad.did }).expect(201)).body.access_token);
+    const mukasa = bearer(app.get(AuthService).mintActorToken({ role: 'mdp', did: abroad.did, actorName: 'Mukasa' }).access_token);
+    const photoOfStaff = await photo(hubOwn, 'seal');
+    const dropAbroad = (body: Record<string, unknown>, who = mukasa) => http().post(`/v1/sbg/mdps/${abroad.mdpId}/drop-bag`).set(who).send({ code: four, receipt: { sealNumber: SEAL_FOUR, photoRef: photoOfStaff, asClosed: true }, ...body });
     expect((await dropAbroad({}).expect(400)).body.detail).toMatch(/comes from another country: scan the pass on the driver’s phone/);
     const aminaPass = (await http().get(`/v1/sbg/fleet/drivers/${amina.did}/session`).set(amina.token).expect(200)).body.handoverPass as string;
+    expect((await dropAbroad({ driverBadgeId: aminaPass }, hubOwn).expect(403)).body.detail).toMatch(/a person signed in under their own name takes it over/);
     const handed = (await dropAbroad({ driverBadgeId: aminaPass, exceptions: [{ note: 'Zip tape lifted at one corner' }] }).expect(201)).body;
     expect(handed.transferId).toMatch(/^htr_/);
-    expect((await http().get(`/v1/sbg/mdps/${abroad.mdpId}/transfers`).set(operator).expect(200)).body.transfers).toEqual([expect.objectContaining({ bagCode: four, fromCountry: 'KE', country: 'UG', released: expect.objectContaining({ driverDid: amina.did }), exceptions: [expect.objectContaining({ note: 'Zip tape lifted at one corner' })] })]);
+    expect((await http().get(`/v1/sbg/mdps/${abroad.mdpId}/transfers`).set(operator).expect(200)).body.transfers).toEqual([expect.objectContaining({ bagCode: four, fromCountry: 'KE', country: 'UG', released: expect.objectContaining({ driverDid: amina.did }), received: expect.objectContaining({ by: 'Mukasa' }), exceptions: [expect.objectContaining({ note: 'Zip tape lifted at one corner' })] })]);
   });
 });

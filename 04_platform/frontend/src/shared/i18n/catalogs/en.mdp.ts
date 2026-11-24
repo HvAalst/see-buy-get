@@ -730,4 +730,5 @@ export const enMdp = {
   'mdp.transfers.wrong': '{count, plural, one {# thing wrong} other {# things wrong}}: {first}',
   'mdp.transfers.onward': 'On in bag {bag}, seal {seal}, with {driver}',
   'mdp.transfers.waiting': '{count, plural, one {# parcel waits} other {# parcels wait}} for a bag on a coded seal',
+  'mdp.transfers.counter': 'On the counter’s shelf here, {slot}',
 };

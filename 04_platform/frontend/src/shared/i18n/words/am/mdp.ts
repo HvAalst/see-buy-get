@@ -686,4 +686,5 @@ export const words: Record<string, string> = {
   "mdp.transfers.wrong": "{count, plural, one {# ችግር} other {# ችግሮች}}፦ {first}",
   "mdp.transfers.onward": "በከረጢት {bag}፣ ማኅተም {seal}፣ ከ{driver} ጋር ቀጥሏል",
   "mdp.transfers.waiting": "{count, plural, one {# ጥቅል ይጠብቃል} other {# ጥቅሎች ይጠብቃሉ}} ቁጥር ያለው ማኅተም ያለበት ከረጢት",
+  "mdp.transfers.counter": "እዚህ በካውንተሩ መደርደሪያ ላይ፣ {slot}",
 };
