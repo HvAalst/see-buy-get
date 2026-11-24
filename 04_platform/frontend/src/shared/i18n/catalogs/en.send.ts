@@ -783,4 +783,6 @@ export const enSend = {
   'send.cancel.meansPaid': 'The booking ends and the place held at the shop is given back. What you paid online goes back in full to the account that paid; it can take a few working days to show.',
   'send.cancel.yes': 'Yes, cancel it',
   'send.cancel.keep': 'Keep the booking',
+  // 2026-11-23 — the help page of a parcel to another EU country, linked where it is booked.
+  'send.road.how': 'How a parcel to another EU country goes',
 };

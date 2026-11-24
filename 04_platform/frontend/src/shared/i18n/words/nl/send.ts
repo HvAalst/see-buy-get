@@ -705,4 +705,5 @@ export const words: Record<string, string> = {
   "send.cancel.meansPaid": "De boeking vervalt en de plek in de winkel komt vrij. Wat je online betaalde, gaat in zijn geheel terug naar de rekening waarmee je betaalde; het kan een paar werkdagen duren voor je het ziet.",
   "send.cancel.yes": "Ja, annuleren",
   "send.cancel.keep": "Boeking houden",
+  "send.road.how": "Hoe een pakket naar een ander EU-land gaat",
 };

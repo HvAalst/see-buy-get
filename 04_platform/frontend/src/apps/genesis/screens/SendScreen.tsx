@@ -10,6 +10,7 @@ import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
 import { GoodsWord } from '../../../shared/ui/GoodsWord';
+import { frontDoorUrl } from '../../../shared/frontDoor';
 
 export interface SendScreenProps {
   state: SendState;
@@ -581,6 +582,14 @@ function BookStep({ state, actions }: SendScreenProps) {
       </Card>
 
       {q?.withinUnion ? <GoodsWord passage={q.withinUnion} said={state.noGoodsWithOwnRules} onChange={actions.setGoodsWord} /> : null}
+      {/* 2026-11-23 — how it goes: one price, the route's drivers, its central hub (the plan, step 3d). */}
+      {q?.withinUnion ? (
+        <p class="hint">
+          <a href={`${frontDoorUrl()}help/parcel-in-the-eu/`} target="_blank" rel="noopener">
+            {t('send.road.how')}
+          </a>
+        </p>
+      ) : null}
 
       {state.mintError ? <ErrorNote error={state.mintError} /> : null}
 

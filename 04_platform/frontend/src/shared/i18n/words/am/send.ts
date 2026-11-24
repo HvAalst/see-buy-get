@@ -705,4 +705,5 @@ export const words: Record<string, string> = {
   "send.cancel.meansPaid": "ቦታ ማስያዙ ያበቃል፣ በሱቁ የተያዘው ቦታም ይለቀቃል። በመስመር ላይ የከፈሉት ሙሉ በሙሉ ወደ ከፈለው ሂሳብ ይመለሳል፤ ለመታየት ጥቂት የሥራ ቀናት ሊወስድ ይችላል።",
   "send.cancel.yes": "አዎ፣ ይሰርዙት",
   "send.cancel.keep": "ቦታ ማስያዙን ያቆዩ",
+  "send.road.how": "ጥቅል ወደ ሌላ የአውሮፓ ኅብረት አገር እንዴት እንደሚሄድ",
 };

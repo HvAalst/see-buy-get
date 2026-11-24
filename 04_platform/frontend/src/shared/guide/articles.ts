@@ -161,6 +161,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // 2026-11-19 — a parcel across a border (the plan, step 6): public, as the protocol page is — the sender, the receiver, both
   // shops, the hubs and the clearing agent read the same page, and a receiver abroad may meet SeeBuyGet first through it.
   { id: 'parcel-from-abroad', apps: ['send', 'agent', 'mdp', 'business', 'console'], group: 'daily', site: true, steps: 6, notes: ['why', 'note', 'careful', 'note'] },
+  // 2026-11-23 — a parcel to another EU country by a road route (the Netherlands–Bulgaria plan, step 3d): public, as the page from
+  // abroad is: the sender, both shops, the route's drivers and the receiver read the same page.
+  { id: 'parcel-in-the-eu', apps: ['send', 'agent', 'mdp', 'driver', 'business', 'vendor', 'console'], group: 'daily', site: true, steps: 6, notes: ['why', 'note', 'note'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
   { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why', 'note'] },
   { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare', 'note', 'note'] },

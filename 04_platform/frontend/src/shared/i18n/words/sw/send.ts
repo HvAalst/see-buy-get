@@ -705,4 +705,5 @@ export const words: Record<string, string> = {
   "send.cancel.meansPaid": "Nafasi inaisha na nafasi iliyoshikiliwa dukani inaachiliwa. Ulicholipa mtandaoni kinarudi chote kwenye akaunti iliyolipa; inaweza kuchukua siku chache za kazi kuonekana.",
   "send.cancel.yes": "Ndiyo, ighairi",
   "send.cancel.keep": "Baki na nafasi",
+  "send.road.how": "Jinsi kifurushi kinavyokwenda nchi nyingine ya EU",
 };
