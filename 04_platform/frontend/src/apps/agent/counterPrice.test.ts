@@ -93,3 +93,35 @@ describe('a fixed card on the phone (the owner’s D3, 2026-11-12)', () => {
     expect(priceFromRow({ ...golden.row, maxKg: undefined } as CounterPriceRow, ask, now)).toBeDefined();
   });
 });
+
+/*
+ * 2026-11-24 — A WALK-UP ON A ROAD ROUTE TO ANOTHER EU COUNTRY, PRICED ON THE PHONE (route plan part 9, "so a shop can quote it"):
+ * the server wrote its cases (backend contracts/counter-road-cases.json); the phone reaches the same gross with no signal.
+ */
+const road = JSON.parse(readFileSync(join('..', 'backend', 'contracts', 'counter-road-cases.json'), 'utf8')) as {
+  row: CounterPriceRow;
+  cases: Array<CounterAsk & { gross: number | null }>;
+};
+
+describe('a walk-up to another EU country priced on the phone', () => {
+  it('comes to the server’s price on the road route for every size, with the charges at both ends; heavy is not priced', () => {
+    expect(road.row.abroad?.[0]).toMatchObject({ to: 'BG', fromCharge: 1.5 });
+    expect(road.cases.filter((c) => c.gross != null)).toHaveLength(3);
+    for (const c of road.cases) {
+      const priced = priceFromRow(road.row, c, Date.parse(road.row.at));
+      expect({ ask: c, gross: priced?.gross ?? null }).toEqual({ ask: c, gross: c.gross });
+      if (priced) expect(priced.currency).toBe('EUR');
+    }
+  });
+
+  it('prices nothing to a shop the list does not carry, and nothing from a list made before routes were said', () => {
+    const ask = road.cases[0];
+    expect(priceFromRow(road.row, { ...ask, dest: 'shop-elsewhere' }, Date.parse(road.row.at))).toBeUndefined();
+    expect(priceFromRow({ ...road.row, abroad: undefined }, ask, Date.parse(road.row.at))).toBeUndefined();
+  });
+
+  it('the take-in says the price of a walk-up on a road route, as it does a card’s', () => {
+    const src = readFileSync(join('src/apps/agent', 'useAgentApp.ts'), 'utf8');
+    expect(src).toMatch(/q\?\.locked && \(here \|\| q\.zone \|\| q\.border \|\| q\.byRoad\)/);
+  });
+});

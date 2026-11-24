@@ -11,6 +11,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DirectoryService } from './directory.service';
 import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
+import { ZoneMapService } from './zone-map.service';
 import {
   type BookedRoute,
   type RoadBookedRoute,
@@ -19,6 +20,7 @@ import {
   type BorderCarrier,
   type BorderDeparture,
   type BorderPrices,
+  type BorderEnds,
   type BorderArrivalView,
   type BorderChange,
   type BorderClearer,
@@ -50,6 +52,8 @@ interface Route {
   /** 2026-11-23 — a road route between two EU countries (P3-1): the fleet whose drivers alone carry it, and the central hub it ends at. */
   fleet?: BorderFleet;
   hub?: BorderHub;
+  /** 2026-11-24 — the pair's price card at its ends: a charge per price group of the zone a parcel starts in and goes to (part 9). */
+  ends?: BorderEnds;
 }
 
 /** 2026-11-23 — what each kind of route needs, in the order the console lists it (P3-1). */
@@ -110,6 +114,8 @@ export class BorderRouteService {
     @Optional() private readonly directory?: DirectoryService,
     // 2026-11-23 — a road route names a fleet (P3-1).
     @Optional() private readonly fleets?: FleetManagerService,
+    // 2026-11-24 — each country's price groups, for a road route's end charges (part 9).
+    @Optional() private readonly zones?: ZoneMapService,
   ) {}
 
   /** 2026-11-23 — a route between two EU countries goes by road: no airport, no customs warehouse, nobody clearing (P3-1). */
@@ -275,6 +281,31 @@ export class BorderRouteService {
     return this.change(from, to, (r) => ({ ...r, prices }), { what: 'prices', by, country: from, to }, now);
   }
 
+  /**
+   * 2026-11-24 — A ROAD ROUTE'S PRICE CARD AT ITS ENDS (route plan part 9, BG-6): a charge for each price group of the sending
+   * country's zones and of the arrival country's, added to the route's price for the size; in the sending company's money. Every
+   * group named must be one its country keeps; a group left out adds nothing. Two people are not asked: like the price, it is
+   * set by staff and shown on the route.
+   */
+  setEnds(fromCode: string, toCode: string, input: { from: Record<string, number>; to: Record<string, number> }, by: string, now: number = Date.now()): BorderRouteView {
+    const [from, to] = this.pair(fromCode, toCode);
+    if (!this.byRoad(from, to)) throw new GlosError('INVALID_STATE', 'End charges are for a road route between two EU countries: an air route has its price per size', { field: 'from' });
+    if (!this.entities.forJurisdiction(from)?.currency) throw new GlosError('INVALID_STATE', `No company of ours sells in ${from} to set charges in its money`, { field: 'from' });
+    const side = (country: string, given: Record<string, number> | undefined, field: 'from' | 'to'): Record<string, number> => {
+      const keys = new Set((this.zones?.groupsIn(country) ?? []).map((g) => g.key));
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(given ?? {})) {
+        if (!keys.has(k)) throw new GlosError('INVALID_INPUT', `${country} keeps no price group "${k}"`, { field: `${field}.${k}` });
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000) throw new GlosError('INVALID_INPUT', 'An end charge from 0 to 1,000', { field: `${field}.${k}` });
+        const cents = Math.round(v * 100) / 100;
+        if (cents > 0) out[k] = cents;
+      }
+      return out;
+    };
+    const ends: BorderEnds = { from: side(from, input.from, 'from'), to: side(to, input.to, 'to'), by, at: new Date(now).toISOString() };
+    return this.change(from, to, (r) => ({ ...r, ends }), { what: 'ends', by, country: from, to }, now);
+  }
+
   /** The route as it is set up — for booking a parcel on it (step 2b). Undefined: no such route. */
   routeOf(from: string, to: string): Readonly<Pick<Route, 'from' | 'to' | 'state' | 'departure' | 'carrier' | 'prices' | 'arrival'>> | undefined {
     const r = this.routes.get(key(from, to));
@@ -322,7 +353,7 @@ export class BorderRouteService {
     if (!r.fleet || !r.hub || !r.prices || !this.met('fleet', from, to, now) || !this.met('hub', from, to, now)) {
       throw new GlosError('INVALID_STATE', `Parcels to ${name(to)} cannot be booked now: the route’s fleet no longer works, or its central hub is no longer approved`, { from, to });
     }
-    return { from, to, hubMdpId: r.hub.mdpId, hubName: r.hub.name, fleetDid: r.fleet.managerDid, fleetName: r.fleet.name, prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L, currency: r.prices.currency } };
+    return { from, to, hubMdpId: r.hub.mdpId, hubName: r.hub.name, fleetDid: r.fleet.managerDid, fleetName: r.fleet.name, prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L, currency: r.prices.currency }, ...(r.ends ? { ends: { from: { ...r.ends.from }, to: { ...r.ends.to } } } : {}) };
   }
 
   /** 2026-11-23 — the road routes on from a country that may be booked now, for its counters to offer (step 3b). */
@@ -640,6 +671,8 @@ export class BorderRouteService {
       ...(r.departure ? { departure: r.departure } : {}),
       ...(r.carrier ? { carrier: r.carrier } : {}),
       ...(r.prices ? { prices: r.prices } : {}),
+      ...(r.ends ? { ends: r.ends } : {}),
+      ...(this.byRoad(r.from, r.to) && this.zones ? { fromGroups: this.zones.groupsIn(r.from), toGroups: this.zones.groupsIn(r.to) } : {}),
       ...(r.arrival ? { arrival: r.arrival } : {}),
       arrivalAirports: Object.entries(AIRPORT_COUNTRY)
         .filter(([, c]) => c === r.to)
@@ -725,4 +758,4 @@ export class BorderRouteService {
 const key = (from: string, to: string) => `${from}-${to}`;
 
 /** What a route is, without who switched it: kept when it is declined or switched off. */
-const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}), ...(r.fleet ? { fleet: r.fleet } : {}), ...(r.hub ? { hub: r.hub } : {}) });
+const setUp = (r: Route): Route => ({ from: r.from, to: r.to, state: 'off', ...(r.departure ? { departure: r.departure } : {}), ...(r.carrier ? { carrier: r.carrier } : {}), ...(r.prices ? { prices: r.prices } : {}), ...(r.arrival ? { arrival: r.arrival } : {}), ...(r.fleet ? { fleet: r.fleet } : {}), ...(r.hub ? { hub: r.hub } : {}), ...(r.ends ? { ends: r.ends } : {}) });

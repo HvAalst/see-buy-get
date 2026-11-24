@@ -44,7 +44,8 @@ type Write = () => Promise<{ error?: { detail?: string; title?: string } | null 
 export function ZonesScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const client = actions.client();
-  const sisters = (state.entities ?? []).filter((e) => e.kind === 'sister');
+  // 2026-11-24 — a partner running a country keeps its zones too (route plan part 9): Bulgaria's map, for the road route's ends.
+  const sisters = (state.entities ?? []).filter((e) => e.kind === 'sister' || e.kind === 'partner');
   const own = state.who?.entityId && sisters.some((s) => s.entityId === state.who?.entityId) ? state.who.entityId : undefined;
   const [entityId, setEntityId] = useState<string | null>(own ?? sisters[0]?.entityId ?? null);
   useEffect(() => {

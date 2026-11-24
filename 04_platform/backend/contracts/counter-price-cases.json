@@ -15,7 +15,8 @@
           10
         ],
         "maxKg": 2,
-        "lane": "pudo"
+        "lane": "pudo",
+        "size": "S"
       },
       {
         "maxCm": [
@@ -24,7 +25,8 @@
           25
         ],
         "maxKg": 5,
-        "lane": "pudo"
+        "lane": "pudo",
+        "size": "M"
       },
       {
         "maxCm": [
@@ -33,7 +35,8 @@
           40
         ],
         "maxKg": 15,
-        "lane": "mdp"
+        "lane": "mdp",
+        "size": "L"
       },
       {
         "maxCm": [
@@ -42,7 +45,8 @@
           80
         ],
         "maxKg": 30,
-        "lane": "mdp"
+        "lane": "mdp",
+        "size": "HEAVY"
       }
     ],
     "lanes": {
@@ -230,7 +234,8 @@
           "shop-east": "Z0002"
         }
       }
-    ]
+    ],
+    "abroad": []
   },
   "cases": [
     {

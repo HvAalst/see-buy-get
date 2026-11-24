@@ -1,5 +1,6 @@
 import type { EntityService } from '../../foundation/entity/entity.service';
 import type { PresenceService } from '../../foundation/presence/presence.service';
+import { ZoneMapService } from './zone-map.service';
 import { BorderRouteService } from './border-route.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { DirectoryService } from './directory.service';
@@ -59,7 +60,9 @@ describe('a route across a border', () => {
       { did: 'did:fleet:nairobi', companyName: 'Nairobi Movers', jurisdiction: 'KE' },
     ];
     const fleets = { list: () => fleetList, isActive: (did: string) => !asleep.has(did) } as unknown as FleetManagerService;
-    return new BorderRouteService(presence, entities, mdps, directory, fleets);
+    // 2026-11-24 — each country's price groups, in its own words (route plan part 9).
+    const zones = { groupsIn: (c: string) => (c === 'BG' ? [{ key: 'urban', name: 'Sofia city' }, { key: 'remote', name: 'Mountains' }] : [{ key: 'urban', name: 'Urban' }, { key: 'rural', name: 'Rural' }]) } as unknown as ZoneMapService;
+    return new BorderRouteService(presence, entities, mdps, directory, fleets, zones);
   };
 
   /** Everything Kenya needs as an arrival country — Nairobi open with its warehouse, our company clearing, the fee — and the
@@ -125,6 +128,31 @@ describe('a route across a border', () => {
     // A route out of the EU is as it was.
     readyKenya(svc);
     expect(svc.propose('NL', 'KE', AMINA, NOW)).toMatchObject({ state: 'waiting' });
+  });
+
+  // 2026-11-24 — THE PAIR'S PRICE CARD AT ITS ENDS (route plan part 9, BG-6): a charge per price group of each country's zones.
+  it('names its charges at both ends by each country’s own price groups, in the sending company’s money; an air route has none', () => {
+    const svc = setup({ open: ['NL', 'BG', 'KE'], companies: ['NL', 'KE'] });
+    const route = svc.prepare('NL', 'BG', NOW);
+    expect(route).toMatchObject({ fromGroups: [{ key: 'urban', name: 'Urban' }, { key: 'rural', name: 'Rural' }], toGroups: [{ key: 'urban', name: 'Sofia city' }, { key: 'remote', name: 'Mountains' }] });
+    expect(route.ends).toBeUndefined();
+    // Only a group its country keeps; from 0 to 1,000, to the cent; a zero adds nothing and is not kept.
+    expect(() => svc.setEnds('NL', 'BG', { from: { remote: 2 }, to: {} }, 'Amina Staff', NOW)).toThrow(/NL keeps no price group "remote"/);
+    expect(() => svc.setEnds('NL', 'BG', { from: {}, to: { remote: -1 } }, 'Amina Staff', NOW)).toThrow(/An end charge from 0 to 1,000/);
+    expect(() => svc.setEnds('NL', 'BG', { from: {}, to: { remote: 1000.5 } }, 'Amina Staff', NOW)).toThrow(/An end charge from 0 to 1,000/);
+    const set = svc.setEnds('NL', 'BG', { from: { urban: 1.504, rural: 0 }, to: { remote: 4 } }, 'Amina Staff', NOW);
+    expect(set.ends).toEqual({ from: { urban: 1.5 }, to: { remote: 4 }, by: 'Amina Staff', at: new Date(NOW).toISOString() });
+    // Switched on, a booking reads them; an air route has no ends, and a route nobody of ours sells from is refused.
+    svc.setFleet('NL', 'BG', 'did:fleet:balkan', 'Amina Staff', NOW);
+    svc.setHub('NL', 'BG', 'mdp-sof', 'Amina Staff', NOW);
+    svc.setPrices('NL', 'BG', { S: 18, M: 27.5, L: 39 }, 'Amina Staff', NOW);
+    svc.propose('NL', 'BG', AMINA, NOW);
+    svc.approve('NL', 'BG', BRIAN, NOW);
+    expect(svc.roadBookable('NL', 'BG', NOW).ends).toEqual({ from: { urban: 1.5 }, to: { remote: 4 } });
+    expect(() => svc.setEnds('NL', 'KE', { from: {}, to: {} }, 'Amina Staff', NOW)).toThrow(/End charges are for a road route/);
+    expect(() => setup({ open: ['NL', 'BG'], companies: ['KE'] }).setEnds('NL', 'BG', { from: {}, to: {} }, 'Amina Staff', NOW)).toThrow(/No company of ours sells in NL/);
+    // While it is on, nothing is changed: switched off first, as its prices.
+    expect(() => svc.setEnds('NL', 'BG', { from: {}, to: {} }, 'Amina Staff', NOW)).toThrow(/switch it off/);
   });
 
   it('two people switch it on: one proposes, a different one approves — one switches it off', () => {

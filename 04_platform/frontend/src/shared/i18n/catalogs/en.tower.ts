@@ -4159,6 +4159,15 @@ export const enTowerPrices = {
   'tower.plates.leave': 'Leave it',
   'tower.plates.released': '{plate} is off its owner’s vehicles; both are told',
   'tower.plates.left': '{plate} stays where it is; the one who asked is told',
+  // 2026-11-24 — a road route’s charges at its ends (route plan part 9).
+  'tower.abroad.ends': 'At the ends',
+  'tower.abroad.ends.none': 'nothing added at either end',
+  'tower.abroad.ends.side': '{country}: {groups}',
+  'tower.abroad.ends.group': '{group} +{amount}',
+  'tower.abroad.ends.lede': 'Added to the route’s price for the size, by the price group of the zone a parcel starts in and of the zone it goes to, on each country’s zone map. Leave a group empty to add nothing.',
+  'tower.abroad.ends.err': 'Each charge is a figure from 0 to 1,000.',
+  'tower.abroad.ends.save': 'Save the charges at the ends',
+  'tower.abroad.change.ends': '{who} set the charges at the ends for {from} to {to}',
 };
 
 /** Every one of the console's own words — registered by the console when it starts (apps/tower/english.ts), and by the tests. */

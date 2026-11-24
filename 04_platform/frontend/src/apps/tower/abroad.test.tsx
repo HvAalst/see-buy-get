@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
-import { abroadChangeLine, clearerLine, routeActs, routeStateTag, type BorderArrival, type BorderRoute } from './abroad';
+import { abroadChangeLine, clearerLine, endsBody, endsLines, routeActs, routeStateTag, type BorderArrival, type BorderRoute } from './abroad';
 import { RouteRow } from './screens/AbroadScreen';
 import { SCREEN_ROLES } from './staffRoles';
 import { NAV_GROUPS } from './nav';
@@ -151,5 +151,44 @@ describe('where a route leaves, who carries it, its prices', () => {
     expect(bare).toContain(t('tower.abroad.dep.noHubs', { from: 'Netherlands' }));
     expect(bare).toContain(t('tower.abroad.carrier.noCarriers', { from: 'Netherlands' }));
     expect(bare).toContain(t('tower.abroad.prices.noCompany', { from: 'Netherlands' }));
+  });
+});
+
+/** 2026-11-24 — a road route's charges at its ends, by each country's price groups (route plan part 9, BG-6). */
+describe('a road route’s charges at its ends', () => {
+  const names = (c: string) => ({ NL: 'Netherlands', BG: 'Bulgaria' })[c] ?? c;
+  const money = (n: number) => `€${n.toFixed(2)}`;
+  const road = route({
+    to: 'BG',
+    by: 'road',
+    currency: 'EUR',
+    fromGroups: [{ key: 'urban', name: 'Urban' }, { key: 'rural', name: 'Rural' }],
+    toGroups: [{ key: 'urban', name: 'Sofia city' }, { key: 'remote', name: 'Mountains' }],
+  });
+
+  it('says each end that charges, its groups in their country’s words; nothing where nothing is added', () => {
+    expect(endsLines(road, names, money, t)).toEqual([]);
+    const set = { ...road, ends: { from: { urban: 1.5 }, to: { remote: 4 }, by: 'Amina', at: '2026-11-24T08:00:00Z' } };
+    expect(endsLines(set, names, money, t)).toEqual([
+      t('tower.abroad.ends.side', { country: 'Netherlands', groups: t('tower.abroad.ends.group', { group: 'Urban', amount: '€1.50' }) }),
+      t('tower.abroad.ends.side', { country: 'Bulgaria', groups: t('tower.abroad.ends.group', { group: 'Mountains', amount: '€4.00' }) }),
+    ]);
+  });
+
+  it('sends each figure from 0 to 1,000, an empty one not at all; anything else is not sent', () => {
+    expect(endsBody({ from: { urban: '1,5', rural: '' }, to: { remote: '4' } })).toEqual({ body: { from: { urban: 1.5 }, to: { remote: 4 } } });
+    expect(endsBody({ from: { urban: 'x' }, to: {} })).toEqual({ error: 'tower.abroad.ends.err' });
+    expect(endsBody({ from: {}, to: { remote: '1001' } })).toEqual({ error: 'tower.abroad.ends.err' });
+  });
+
+  it('a road route off shows a field for every group at both ends; an air route none', () => {
+    const setUp = { api: {} as never, by: {}, change: async () => true };
+    const html = renderToString(<RouteRow r={road} nameOf={names} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(html).toContain(t('tower.abroad.ends.lede'));
+    expect(html).toContain('Bulgaria · Mountains (EUR)');
+    expect(html).toContain('Netherlands · Rural (EUR)');
+    expect(html).toContain(t('tower.abroad.ends.none'));
+    const air = renderToString(<RouteRow r={route({ currency: 'EUR' })} nameOf={nameOf} writer busy={null} onAct={() => {}} setUp={setUp} />);
+    expect(air).not.toContain(t('tower.abroad.ends.lede'));
   });
 });

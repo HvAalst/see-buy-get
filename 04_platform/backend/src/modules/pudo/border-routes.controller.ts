@@ -4,7 +4,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import type { Signer } from '../../foundation/entity/same-person';
 import { BorderRouteService } from './border-route.service';
-import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderReaddressDto, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderFleetDto, BorderHubDto, BorderPricesDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
+import { BorderAirportDto, BorderArrivalAirportDto, BorderArrivalView, BorderReaddressDto, BorderByDto, BorderCarrierDto, BorderClearerDto, BorderDepartureDto, BorderFeeDto, BorderFleetDto, BorderHubDto, BorderPricesDto, BorderEndsDto, BorderRouteView, BorderRoutesView, BorderWarehouseDto } from './border-routes.types';
 import { staffOf } from './staff-of';
 
 /**
@@ -97,6 +97,13 @@ export class BorderRoutesController {
   @Post('border-routes/:from/:to/prices')
   prices(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderPricesDto, @Actor() actor: IntrospectionResult): BorderRouteView {
     return this.borders.setPrices(from, to, { S: dto.S, M: dto.M, L: dto.L }, staffOf(actor, dto.by).name);
+  }
+
+  /** 2026-11-24 — a road route's charges at its ends, by each country's price groups (route plan part 9). */
+  @Roles('operator')
+  @Post('border-routes/:from/:to/ends')
+  ends(@Param('from') from: string, @Param('to') to: string, @Body() dto: BorderEndsDto, @Actor() actor: IntrospectionResult): BorderRouteView {
+    return this.borders.setEnds(from, to, { from: dto.from, to: dto.to }, staffOf(actor, dto.by).name);
   }
 
   @Roles('operator')

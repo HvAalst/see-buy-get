@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { AgentService } from './agent.service';
@@ -6,6 +6,7 @@ import { SIZE_LANE, SIZE_LIMITS } from './pudo.config';
 import { PriceCardService } from './price-card.service';
 import type { StoredPriceCard } from './price-card.types';
 import { ZoneMapService } from './zone-map.service';
+import { BorderRouteService } from './border-route.service';
 
 /** One card as a counter keeps it: everything a walk-up's price from this shop needs, worked out where it is wanted. */
 export interface CounterCard {
@@ -31,6 +32,20 @@ export interface CounterCard {
 }
 
 /**
+ * 2026-11-24 — A ROAD ROUTE FROM THIS SHOP'S COUNTRY, AS ITS COUNTER PRICES IT (route plan part 9, "so a shop can quote it"):
+ * the route's price per size, this shop's charge at the sending end, and each receiving shop's at the other; in the sending
+ * company's money. A receiving shop in a zone not served is left out, as the server refuses it.
+ */
+export interface CounterAbroad {
+  to: string;
+  currency: string;
+  prices: { S: number; M: number; L: number };
+  fromCharge: number;
+  /** Each open shop in the arrival country, and its end charge. */
+  shops: Record<string, number>;
+}
+
+/**
  * WHAT A COUNTER NEEDS TO PRICE A WALK-UP WITH NO SIGNAL (2026-11-08 — zone pricing, step 3b, D7). The cards it prices
  * from (in force now, and those coming into force, each from its date), every shop's own fee, our fee and the tax by
  * size class, and the size limits that pick the class. The phone keeps the last one it was given and works out the same
@@ -43,7 +58,7 @@ export interface CounterPriceRow {
   /** When it was made (ISO): the phone says how old the prices it uses are. */
   at: string;
   /** Size classes in order: the first a parcel fits names its lane; one that fits none takes the last. */
-  sizes: Array<{ maxCm: [number, number, number]; maxKg: number; lane: string }>;
+  sizes: Array<{ maxCm: [number, number, number]; maxKg: number; lane: string; size: string }>;
   /** Our fee (a fraction) and the tax (a fraction) on each lane. */
   lanes: Record<string, { feePct: number; taxPct: number }>;
   /** Each shop's own fee, in the country's money, to the cent. */
@@ -52,6 +67,8 @@ export interface CounterPriceRow {
   maxKg: Record<string, number>;
   /** Empty where no card prices from this shop: nothing in force or coming, or its pin in no zone. */
   cards: CounterCard[];
+  /** 2026-11-24 — the road routes on from this country, for a walk-up to another EU country (part 9). */
+  abroad: CounterAbroad[];
 }
 
 @Injectable()
@@ -64,6 +81,8 @@ export class CounterPriceService {
     private readonly zones: ZoneMapService,
     private readonly agents: AgentService,
     private readonly entities: EntityService,
+    // 2026-11-24 — the road routes on from a country, priced at their ends (part 9).
+    @Optional() private readonly borderRoutes?: BorderRouteService,
   ) {}
 
   rowFor(agentDid: string, now: number = Date.now()): CounterPriceRow {
@@ -100,12 +119,31 @@ export class CounterPriceService {
       country,
       currency,
       at: new Date(now).toISOString(),
-      sizes: SIZE_LIMITS.map((l) => ({ maxCm: [...l.maxCm] as [number, number, number], maxKg: l.maxKg, lane: SIZE_LANE[l.size] })),
+      sizes: SIZE_LIMITS.map((l) => ({ maxCm: [...l.maxCm] as [number, number, number], maxKg: l.maxKg, lane: SIZE_LANE[l.size], size: l.size })),
       lanes,
       fees,
       maxKg,
       cards,
+      abroad: sellerId ? this.abroadFrom(shop, country, currency, now) : [],
     };
+  }
+
+  /** The road routes on from this shop's country that may be booked now, each priced at both ends (part 9). */
+  private abroadFrom(shop: { did: string; location: { lat: number; lng: number } }, country: string, currency: string, now: number): CounterAbroad[] {
+    const here = this.zones.zoneAt(country, shop.location, now);
+    if (here?.flags?.includes('notServed')) return [];
+    return (this.borderRoutes?.roadsFrom(country, now) ?? [])
+      .filter((r) => r.prices.currency === currency)
+      .map((r) => {
+        const shops: Record<string, number> = {};
+        for (const a of this.agents.list()) {
+          if (this.agents.countryOf(a) !== r.to || this.agents.isResting(a.did) || this.agents.notOpenYet(a)) continue;
+          const zone = this.zones.zoneAt(r.to, a.location, now);
+          if (zone?.flags?.includes('notServed')) continue;
+          shops[a.did] = zone ? (r.ends?.to[zone.group] ?? 0) : 0;
+        }
+        return { to: r.to, currency: r.prices.currency, prices: { S: r.prices.S, M: r.prices.M, L: r.prices.L }, fromCharge: here ? (r.ends?.from[here.group] ?? 0) : 0, shops };
+      });
   }
 
   private cardFor(entityId: string, card: StoredPriceCard, at: { lat: number; lng: number }, shops: Array<{ did: string; location: { lat: number; lng: number } }>): CounterCard | undefined {

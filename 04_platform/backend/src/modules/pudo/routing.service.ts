@@ -227,6 +227,16 @@ export interface ShipmentQuote {
   border?: { from: string; to: string; departure: string; arrival: string; carrier: string };
   /** 2026-11-23 — priced by a road route between two EU countries (step 3b; P3-2: the sender pays the whole way): the route as it stood. */
   byRoad?: RoadRouteRef;
+  /** 2026-11-24 — on a road route, the pair's charges at its ends (route plan part 9): the zone each end lies in, its group, the charge. */
+  roadEnds?: { from?: RoadEndCharge; to?: RoadEndCharge };
+}
+
+/** One end of a road route as a quote priced it: its zone and price group on its country's map, and what that group adds. */
+export interface RoadEndCharge {
+  zone: string;
+  group: string;
+  groupName: string;
+  charge: number;
 }
 
 /**
@@ -482,6 +492,19 @@ export class RoutingService {
     const plan = originAgentDid
       ? this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, central: route.hubMdpId })
       : this.planJourney({ from: (start as { end: RouteEnd }).end, destAgentDid, weightKg: SIZE_WEIGHT_KG[size], siteKg: carriers.kg, central: route.hubMdpId });
+    // 2026-11-24 — a zone either end does not serve is refused by name, as on any journey (part 9: the road quote skipped it).
+    const first = plan.hops[0];
+    const last = plan.hops[plan.hops.length - 1];
+    const at = carriers.at ?? Date.now();
+    this.zoneMaps?.refuseUnserved(first?.country, first?.location, 'from', at);
+    this.zoneMaps?.refuseUnserved(last?.country, last?.location, 'to', at);
+    // …and the pair's price card at its ends: the charge for the price group of the zone each end lies in.
+    const endOf = (hop: typeof first | undefined, charges: Record<string, number> | undefined): RoadEndCharge | undefined => {
+      const zone = hop ? this.zoneMaps?.zoneAt(hop.country, hop.location, at) : undefined;
+      return zone ? { zone: zone.code, group: zone.group, groupName: zone.groupName, charge: charges?.[zone.group] ?? 0 } : undefined;
+    };
+    const fromEnd = endOf(first, route.ends?.from);
+    const toEnd = endOf(last, route.ends?.to);
     const sellerId = ('sellerEntityId' in start ? start.sellerEntityId : undefined) ?? (originAgentDid ? this.agents.entityIdOrNone(this.agents.get(originAgentDid)) : undefined);
     if (!sellerId) throw new GlosError('FORBIDDEN', `Nobody of ours can sell this journey: nobody of ours sells in ${name(fromCountry)}`);
     const currency = this.currencyOf(sellerId);
@@ -500,7 +523,7 @@ export class RoutingService {
       });
     const nodeFees = r2(nodes.reduce((sum, n) => sum + n.fee, 0));
     const shopFee = nodes[0]?.type === 'pudo' && nodes[0].id === originAgentDid ? nodes[0].fee : 0;
-    const routePrice = route.prices[size];
+    const routePrice = Math.round((route.prices[size] + (fromEnd?.charge ?? 0) + (toEnd?.charge ?? 0)) * 100) / 100;
     const stack = this.entities.ratesFor(sellerId, SIZE_LANE[size]);
     const taxRule = this.entities.taxFor(sellerId, SIZE_LANE[size]);
     const base = r2(shopFee + routePrice);
@@ -510,7 +533,7 @@ export class RoutingService {
     if (step > 0) ({ total, tax, gross } = cashRounded(base, gross, taxRule.ratePct, step));
     const leg: QuoteLeg = { transport: routePrice, base, fee: r2(total - base), total, tax, gross, provision: r2(base * stack.costOfRiskPct) };
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
-    const { prices: _prices, ...ref } = route;
+    const { prices: _prices, ends: _ends, ...ref } = route;
     return {
       hops: plan.hops,
       nodes,
@@ -534,6 +557,7 @@ export class RoutingService {
       flexible: leg,
       locked: leg,
       byRoad: ref,
+      ...(fromEnd || toEnd ? { roadEnds: { ...(fromEnd ? { from: fromEnd } : {}), ...(toEnd ? { to: toEnd } : {}) } } : {}),
     };
   }
 

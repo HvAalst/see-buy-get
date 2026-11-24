@@ -91,6 +91,10 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-routes/NL/KE/arrival').set(bearer(staff)).send({ airport: 'AMS', by: 'Amina Staff' }).expect(404);
     expect((await http().post('/v1/sbg/border-routes/NL/KE/arrival').set(bearer(staff)).send({ airport: 'NBO', by: 'Amina Staff' }).expect(201)).body.arrival).toMatchObject({ airport: 'NBO' });
     await http().post('/v1/sbg/border-routes/NL/KE/prices').set(bearer(staff)).send({ S: 0, M: 1, L: 1, by: 'Amina Staff' }).expect(400);
+    // 2026-11-24 — a road route's charges at its ends (route plan part 9): only on a road route, in the sending company's money.
+    expect((await http().post('/v1/sbg/border-routes/NL/KE/ends').set(bearer(staff)).send({ from: {}, to: {}, by: 'Amina Staff' }).expect(400)).body.detail).toMatch(/End charges are for a road route/);
+    expect((await http().post('/v1/sbg/border-routes/NL/BG/ends').set(bearer(staff)).send({ from: { urban: 1 }, to: {}, by: 'Amina Staff' }).expect(400)).body.detail).toMatch(/No company of ours sells in NL/);
+    await http().post('/v1/sbg/border-routes/NL/BG/ends').set(bearer(staff)).send({ from: 'x', to: {}, by: 'Amina Staff' }).expect(400);
     const view = (await http().get('/v1/sbg/border-routes').set(bearer(staff)).expect(200)).body;
     expect(view.routes.find((r: { from: string; to: string }) => r.from === 'NL' && r.to === 'KE').conditions.map((c: { key: string }) => c.key)).toEqual(['open-from', 'open-to', 'sells-from', 'sells-to', 'departure', 'carrier', 'price', 'clearer', 'fee', 'airport']);
   });
@@ -100,6 +104,7 @@ describe('parcels across a border, on the console', () => {
     await http().post('/v1/sbg/border-routes/NL/KE/propose').send({}).expect(401);
     await http().post('/v1/sbg/border-arrivals/KE/fee').send({ amount: 100 }).expect(401);
     await http().post('/v1/sbg/border-routes/NL/KE/prices').send({ S: 1, M: 1, L: 1 }).expect(401);
+    await http().post('/v1/sbg/border-routes/NL/BG/ends').send({ from: {}, to: {} }).expect(401);
     await http().post('/v1/sbg/border-routes/NL/KE/arrival').send({ airport: 'NBO' }).expect(401);
     await http().get('/v1/sbg/agents/any/abroad').expect(401);
     // 2c — the hub's own doors for parcels abroad.

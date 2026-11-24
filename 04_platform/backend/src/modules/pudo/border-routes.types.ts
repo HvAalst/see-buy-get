@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 
 /*
  * 2026-11-18 — PARCELS ACROSS A BORDER, STEP 1: THE ROUTES ON THE CONSOLE (the plan "Parcels across a border: the traveller
@@ -206,6 +206,26 @@ export class RoadRouteRef {
 /** …and with its price per size, for the quote. */
 export interface RoadBookedRoute extends RoadRouteRef {
   prices: { S: number; M: number; L: number; currency: string };
+  /** 2026-11-24 — the route's charge for each price group at either end (route plan part 9). */
+  ends?: { from: Record<string, number>; to: Record<string, number> };
+}
+
+/**
+ * 2026-11-24 — THE PRICE CARD OF A COUNTRY PAIR, AT ITS ENDS (route plan part 9, BG-6 "as recommended"): what a parcel pays on top
+ * of the route's price for its size, by the price group of the zone it starts in and of the zone it goes to, each on its own
+ * country's zone map; in the sending company's money. A group not named, or a country keeping no zones, adds nothing.
+ */
+export class BorderEnds {
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) from: Record<string, number>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) to: Record<string, number>;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+/** A country's price group, for naming a route's end charges. */
+export class BorderEndGroup {
+  @ApiProperty() key: string;
+  @ApiProperty() name: string;
 }
 
 export class BorderPrices {
@@ -241,6 +261,10 @@ export class BorderRouteView {
   @ApiPropertyOptional({ type: BorderDeparture }) departure?: BorderDeparture;
   @ApiPropertyOptional({ type: BorderCarrier }) carrier?: BorderCarrier;
   @ApiPropertyOptional({ type: BorderPrices }) prices?: BorderPrices;
+  /** 2026-11-24 — on a road route: the charge for each price group at either end, and the groups each country keeps (part 9). */
+  @ApiPropertyOptional({ type: BorderEnds }) ends?: BorderEnds;
+  @ApiPropertyOptional({ type: [BorderEndGroup] }) fromGroups?: BorderEndGroup[];
+  @ApiPropertyOptional({ type: [BorderEndGroup] }) toGroups?: BorderEndGroup[];
   @ApiPropertyOptional({ type: BorderArrivalAirport }) arrival?: BorderArrivalAirport;
   /** The arrival country's airports, for naming where it arrives. */
   @ApiProperty({ type: [String] }) arrivalAirports: string[];
@@ -321,6 +345,12 @@ export class BorderPricesDto extends BorderByDto {
   @ApiProperty() @IsNumber() @Min(0.01) S!: number;
   @ApiProperty() @IsNumber() @Min(0.01) M!: number;
   @ApiProperty() @IsNumber() @Min(0.01) L!: number;
+}
+
+/** 2026-11-24 — a road route's end charges by price group (part 9): from 0, at most 1,000 each, in the sending company's money. */
+export class BorderEndsDto extends BorderByDto {
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) @IsObject() from!: Record<string, number>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } }) @IsObject() to!: Record<string, number>;
 }
 
 export class BorderFeeDto extends BorderByDto {

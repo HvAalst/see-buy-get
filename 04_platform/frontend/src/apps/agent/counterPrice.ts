@@ -29,12 +29,23 @@ export interface CounterPriceRow {
   country: string;
   currency: string;
   at: string;
-  sizes: Array<{ maxCm: [number, number, number]; maxKg: number; lane: string }>;
+  sizes: Array<{ maxCm: [number, number, number]; maxKg: number; lane: string; size?: string }>;
   lanes: Record<string, { feePct: number; taxPct: number }>;
   fees: Record<string, number>;
   /** 2026-11-13 — each shop's heaviest parcel, as its tools let it take; absent in a list made before it was said. */
   maxKg?: Record<string, number>;
   cards: CounterCard[];
+  /** 2026-11-24 — the road routes on from this shop's country (route plan part 9); absent in a list made before. */
+  abroad?: CounterAbroad[];
+}
+
+/** A road route as this counter prices it: its price per size, this shop's charge at its end, each receiving shop's at the other. */
+export interface CounterAbroad {
+  to: string;
+  currency: string;
+  prices: { S: number; M: number; L: number };
+  fromCharge: number;
+  shops: Record<string, number>;
 }
 
 export interface CounterAsk {
@@ -104,6 +115,27 @@ function cardAmount(card: CounterCard, destZone: string, a: CounterAsk): number 
 }
 
 /** A round figure for a person, the tax worked out of it, never below what it costs (the server's cashRounded). */
+/** A walk-up on a road route, as the server's quoteRoad works it out. Heavy goes as a load of its own: no price. */
+function roadPrice(row: CounterPriceRow, road: CounterAbroad, a: CounterAsk, now: number): CounterPrice | undefined {
+  const desc = [a.l, a.w, a.h].sort((x, y) => y - x);
+  const fit = row.sizes.find((s) => {
+    const lim = [...s.maxCm].sort((x, y) => y - x);
+    return a.kg <= s.maxKg && desc.every((d, i) => d <= lim[i]);
+  });
+  const size = fit?.size;
+  if (size !== 'S' && size !== 'M' && size !== 'L') return undefined;
+  const lane = row.lanes[fit!.lane];
+  const ownFee = row.fees[row.shop];
+  if (!lane || ownFee == null) return undefined;
+  const transport = r2(road.prices[size] + road.fromCharge + (road.shops[a.dest] ?? 0));
+  const base = r2(ownFee + transport);
+  const total = r2(base * (1 + lane.feePct));
+  const rate = Math.max(0, lane.taxPct);
+  const gross = r2(total + r2(total * rate));
+  const step = cardAt(row, now)?.cashStep ?? 0;
+  return { gross: step > 0 ? cashRounded(base, gross, rate, step) : gross, currency: road.currency, version: 0, from: row.at };
+}
+
 function cashRounded(base: number, gross: number, ratePct: number, step: number): number {
   const at = (g: number) => {
     const tax = r2((g * ratePct) / (1 + ratePct));
@@ -119,6 +151,10 @@ function cashRounded(base: number, gross: number, ratePct: number, step: number)
  */
 export function priceFromRow(row: CounterPriceRow | null | undefined, a: CounterAsk, now: number): CounterPrice | undefined {
   if (!row) return undefined;
+  // 2026-11-24 — to a shop in another EU country, on a road route (route plan part 9): the route's price for the size, this
+  // shop's charge at its end and the receiving shop's at the other, this shop's own fee, our fee, the tax, the cash step.
+  const road = row.abroad?.find((r) => a.dest in r.shops);
+  if (road) return roadPrice(row, road, a, now);
   // 2026-11-13 — heavier than this shop's or the other shop's tools let it take: no price, as the server refuses it (T3).
   const most = (did: string) => row.maxKg?.[did];
   if ((most(row.shop) != null && a.kg > most(row.shop)!) || (most(a.dest) != null && a.kg > most(a.dest)!)) return undefined;

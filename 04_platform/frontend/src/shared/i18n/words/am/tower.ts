@@ -3877,4 +3877,12 @@ export const words: Record<string, string> = {
   "tower.plates.leave": "ይተዉት",
   "tower.plates.released": "{plate} ከባለቤቱ ተሽከርካሪዎች ተወግዷል፤ ሁለቱም ተነግሯቸዋል",
   "tower.plates.left": "{plate} ባለበት ይቆያል፤ የጠየቀው ተነግሮታል",
+  "tower.abroad.ends": "በጫፎቹ",
+  "tower.abroad.ends.none": "በሁለቱም ጫፍ ምንም አይጨመርም",
+  "tower.abroad.ends.side": "{country}፦ {groups}",
+  "tower.abroad.ends.group": "{group} +{amount}",
+  "tower.abroad.ends.lede": "ጥቅሉ በሚነሳበት ዞንና በሚሄድበት ዞን የዋጋ ቡድን መሠረት፣ በእያንዳንዱ አገር የዞን ካርታ ላይ፣ በመንገዱ የመጠን ዋጋ ላይ ይጨመራል። ምንም እንዳይጨመር ቡድኑን ባዶ ይተዉት።",
+  "tower.abroad.ends.err": "እያንዳንዱ ክፍያ ከ0 እስከ 1,000 ያለ አሃዝ ነው።",
+  "tower.abroad.ends.save": "የጫፎቹን ክፍያዎች ያስቀምጡ",
+  "tower.abroad.change.ends": "{who} የ{from} ወደ {to} የጫፍ ክፍያዎችን አስቀመጡ",
 };

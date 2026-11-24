@@ -1336,9 +1336,10 @@ export function useAgentApp() {
     void client.api.walkUpQuote(did, dest, parsed, f.fragile || undefined).then((r) => {
       if (epoch !== priceEpoch.current) return;
       if (r.error && isOffline(r.error)) return onPhone();
-      const q = r.error ? null : narrow<{ zone?: unknown; border?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
-      // 2026-11-18 — a parcel abroad is priced by its route (step 2b): said, as a card's price is.
-      setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone || q.border) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
+      const q = r.error ? null : narrow<{ zone?: unknown; border?: unknown; byRoad?: unknown; locked?: { gross: number }; currency?: string }>(r.data);
+      // 2026-11-18 — a parcel abroad is priced by its route (step 2b): said, as a card's price is. 2026-11-24 — on a road route too
+      // (route plan part 9): it was not said.
+      setState((s) => ({ ...s, acceptPrice: q?.locked && (here || q.zone || q.border || q.byRoad) ? { gross: q.locked.gross, currency: q.currency ?? '' } : null }));
     });
   }, [client, did, state.accept.destPudoDid, state.acceptDerived, state.accept.fragile, state.accept.dims, state.counterPrices]);
 

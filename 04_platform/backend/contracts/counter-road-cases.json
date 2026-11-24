@@ -1,0 +1,117 @@
+{
+  "note": "Written by cross-border.spec.ts (route plan part 9). The Shop app works out each walk-up on the road route from this list and must reach the same gross.",
+  "row": {
+    "shop": "shop-nl",
+    "country": "NL",
+    "currency": "EUR",
+    "at": "2026-11-24T00:00:00.000Z",
+    "sizes": [
+      {
+        "maxCm": [
+          35,
+          25,
+          10
+        ],
+        "maxKg": 2,
+        "lane": "pudo",
+        "size": "S"
+      },
+      {
+        "maxCm": [
+          45,
+          35,
+          25
+        ],
+        "maxKg": 5,
+        "lane": "pudo",
+        "size": "M"
+      },
+      {
+        "maxCm": [
+          60,
+          50,
+          40
+        ],
+        "maxKg": 15,
+        "lane": "mdp",
+        "size": "L"
+      },
+      {
+        "maxCm": [
+          120,
+          80,
+          80
+        ],
+        "maxKg": 30,
+        "lane": "mdp",
+        "size": "HEAVY"
+      }
+    ],
+    "lanes": {
+      "pudo": {
+        "feePct": 0.02,
+        "taxPct": 0
+      },
+      "mdp": {
+        "feePct": 0.02,
+        "taxPct": 0
+      }
+    },
+    "fees": {
+      "shop-nl": 3
+    },
+    "maxKg": {
+      "shop-nl": 23
+    },
+    "cards": [],
+    "abroad": [
+      {
+        "to": "BG",
+        "currency": "EUR",
+        "prices": {
+          "S": 18,
+          "M": 27.5,
+          "L": 39
+        },
+        "fromCharge": 1.5,
+        "shops": {
+          "shop-bg": 4
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "dest": "shop-bg",
+      "l": 30,
+      "w": 20,
+      "h": 8,
+      "kg": 1.5,
+      "gross": 27.03
+    },
+    {
+      "dest": "shop-bg",
+      "l": 40,
+      "w": 30,
+      "h": 20,
+      "kg": 4,
+      "gross": 36.72
+    },
+    {
+      "dest": "shop-bg",
+      "l": 55,
+      "w": 45,
+      "h": 35,
+      "kg": 12,
+      "gross": 48.45
+    },
+    {
+      "dest": "shop-bg",
+      "l": 100,
+      "w": 70,
+      "h": 60,
+      "kg": 25,
+      "gross": null
+    }
+  ]
+}

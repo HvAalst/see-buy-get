@@ -3877,4 +3877,12 @@ export const words: Record<string, string> = {
   "tower.plates.leave": "Liache",
   "tower.plates.released": "{plate} limeondolewa kwenye magari ya mmiliki; wote wameambiwa",
   "tower.plates.left": "{plate} linabaki lilipo; aliyeuliza ameambiwa",
+  "tower.abroad.ends": "Kwenye ncha",
+  "tower.abroad.ends.none": "hakuna kinachoongezwa kwenye ncha yoyote",
+  "tower.abroad.ends.side": "{country}: {groups}",
+  "tower.abroad.ends.group": "{group} +{amount}",
+  "tower.abroad.ends.lede": "Huongezwa kwenye bei ya njia kwa ukubwa, kulingana na kundi la bei la eneo kifurushi kinapoanzia na la eneo kinapokwenda, kwenye ramani ya maeneo ya kila nchi. Acha kundi tupu ili lisiongeze chochote.",
+  "tower.abroad.ends.err": "Kila ada ni kiasi kati ya 0 na 1,000.",
+  "tower.abroad.ends.save": "Hifadhi ada za ncha",
+  "tower.abroad.change.ends": "{who} aliweka ada za ncha za {from} hadi {to}",
 };

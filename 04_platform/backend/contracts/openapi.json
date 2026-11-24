@@ -43705,6 +43705,53 @@
         }
       }
     },
+    "/v1/sbg/border-routes/{from}/{to}/ends": {
+      "post": {
+        "operationId": "BorderRoutes.ends",
+        "summary": "",
+        "description": "2026-11-24 — a road route's charges at its ends, by each country's price groups (route plan part 9).",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderEndsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRouteView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/border-arrivals/{country}/airports/{airport}": {
       "post": {
         "operationId": "BorderRoutes.airport",
@@ -98986,6 +99033,50 @@
           "at"
         ]
       },
+      "BorderEnds": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "to": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "by",
+          "at"
+        ]
+      },
+      "BorderEndGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
       "BorderArrivalAirport": {
         "type": "object",
         "properties": {
@@ -99081,6 +99172,26 @@
           },
           "prices": {
             "$ref": "#/components/schemas/BorderPrices"
+          },
+          "ends": {
+            "description": "2026-11-24 — on a road route: the charge for each price group at either end, and the groups each country keeps (part 9).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BorderEnds"
+              }
+            ]
+          },
+          "fromGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderEndGroup"
+            }
+          },
+          "toGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderEndGroup"
+            }
           },
           "arrival": {
             "$ref": "#/components/schemas/BorderArrivalAirport"
@@ -99582,6 +99693,32 @@
           "S",
           "M",
           "L"
+        ]
+      },
+      "BorderEndsDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who is doing it, where the sign-in carries no name of its own (the shared key on a laptop).",
+            "maxLength": 80
+          },
+          "from": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "to": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to"
         ]
       },
       "BorderAirportDto": {

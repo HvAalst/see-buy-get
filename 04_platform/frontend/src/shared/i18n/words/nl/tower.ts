@@ -3877,4 +3877,12 @@ export const words: Record<string, string> = {
   "tower.plates.leave": "Laten staan",
   "tower.plates.released": "{plate} staat niet meer bij de eigenaar; beiden zijn ingelicht",
   "tower.plates.left": "{plate} blijft staan; wie het vroeg is ingelicht",
+  "tower.abroad.ends": "Aan de uiteinden",
+  "tower.abroad.ends.none": "aan geen van beide uiteinden iets erbij",
+  "tower.abroad.ends.side": "{country}: {groups}",
+  "tower.abroad.ends.group": "{group} +{amount}",
+  "tower.abroad.ends.lede": "Komt bovenop de prijs van de route voor de maat, naar de prijsgroep van de zone waar een pakket begint en van de zone waar het heen gaat, op de zonekaart van elk land. Laat een groep leeg om niets toe te voegen.",
+  "tower.abroad.ends.err": "Elk bedrag is een getal van 0 tot 1.000.",
+  "tower.abroad.ends.save": "Bedragen aan de uiteinden opslaan",
+  "tower.abroad.change.ends": "{who} stelde de bedragen aan de uiteinden in voor {from} naar {to}",
 };

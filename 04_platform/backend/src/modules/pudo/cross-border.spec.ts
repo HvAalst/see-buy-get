@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HubTransferService } from './hub-transfer.service';
+import { ZoneMapService } from './zone-map.service';
+import { CounterPriceService } from './counter-price.service';
+import { writeFileSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -67,11 +71,14 @@ let roadOn = false;
 /** 2026-11-23 — the route's central hub and fleet, as a test registers them (step 3c). */
 let roadHub = ROAD.hubMdpId;
 let roadFleet = ROAD.fleetDid;
+/** 2026-11-24 — the pair's charges at its ends, by price group (route plan part 9): none unless a test sets them. */
+let roadEnds: { from: Record<string, number>; to: Record<string, number> } | undefined;
 const roads = {
   roadBookable: (from: string, to: string) => {
     if (!roadOn || from !== 'NL' || to !== 'BG') throw new GlosError('INVALID_STATE', 'Parcels to Bulgaria are not sent from Netherlands yet: no route between them is on');
-    return { ...ROAD, hubMdpId: roadHub, fleetDid: roadFleet, prices: { ...ROAD.prices } };
+    return { ...ROAD, hubMdpId: roadHub, fleetDid: roadFleet, prices: { ...ROAD.prices }, ...(roadEnds ? { ends: roadEnds } : {}) };
   },
+  roadsFrom: (from: string) => (roadOn && from === 'NL' ? [roads.roadBookable('NL', 'BG')] : []),
 };
 
 /**
@@ -115,7 +122,7 @@ describe('crossing a border', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService, HubTransferService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService, HubTransferService, ZoneMapService,
         BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
@@ -132,6 +139,7 @@ describe('crossing a border', () => {
     }).compile();
     moduleRefNow = moduleRef;
     roadOn = false;
+    roadEnds = undefined;
     roadHub = ROAD.hubMdpId;
     roadFleet = ROAD.fleetDid;
     dispatch = moduleRef.get(DispatchService);
@@ -1059,6 +1067,73 @@ describe('crossing a border', () => {
       expect(() => dispatch.claim(early!.offerId)).toThrow(/only Balkan Line’s drivers carry it/);
       roadOn = false;
       expect(offered(ours.did) || dispatch.suggest(ours.did, { from: AMSTERDAM, to: AMSTERDAM }).some((o) => o.ref === bag2.code)).toBe(false);
+    });
+
+    // 2026-11-24 — THE PRICE CARD OF THE PAIR, AT ITS ENDS (route plan part 9, BG-6 "as recommended … so a shop can quote it").
+    it('prices a parcel on the road route by the price group of the zone at each end, refuses a zone not served, and gives the counter the same sums', () => {
+      const to = euShops();
+      const counter = shop('Grachten Winkel', 'Amsterdam', AMSTERDAM, 'NL', 3);
+      agents.submitKyc(counter.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['front.jpg'] });
+      agents.decideKyc(counter.did, true, undefined, undefined, '2099-12-31');
+      // Each country's zones: the Netherlands kept by our company, Bulgaria by the partner that runs it (part 4).
+      const zones = moduleRefNow.get(ZoneMapService);
+      const square = (name: string, c: { lat: number; lng: number }) => ({ type: 'Feature', properties: { shapeName: name }, geometry: { type: 'Polygon', coordinates: [[[c.lng - 0.3, c.lat - 0.3], [c.lng + 0.3, c.lat - 0.3], [c.lng + 0.3, c.lat + 0.3], [c.lng - 0.3, c.lat + 0.3], [c.lng - 0.3, c.lat - 0.3]]] } });
+      const mapOf = (entityId: string, name: string, c: { lat: number; lng: number }, group: string) => {
+        zones.importAreas(entityId, { geojson: JSON.stringify({ type: 'FeatureCollection', features: [square(name, c)] }), source: 'A test survey', licence: 'CC BY 4.0', attribution: 'Its contributors' }, 'N');
+        const code = zones.setup(entityId).draft!.zones[0].code;
+        zones.changeZone(entityId, code, { group }, 'N');
+        zones.publish(entityId, undefined, 'N');
+        return code;
+      };
+      mapOf('sbg-nl', 'Amsterdam', AMSTERDAM, 'urban');
+      const partner = entities.createCompany({ kind: 'partner', jurisdiction: 'BG', name: 'Balkan Courier' }, 'Owner');
+      entities.activate(partner.entityId, 'Owner');
+      const sofiaZone = mapOf(partner.entityId, 'Sofia', SOFIA, 'remote');
+      expect(zones.groupsIn('BG').map((g) => g.key)).toEqual(['urban', 'rural', 'remote']);
+      // No charges set: the route's price alone, as before.
+      const bare = routing.quoteRoad({ agentDid: counter.did }, to.did, 'M', { consumer: true });
+      expect(bare.locked.transport).toBe(27.5);
+      expect(bare.roadEnds).toEqual({ from: { zone: expect.any(String), group: 'urban', groupName: 'Urban', charge: 0 }, to: { zone: sofiaZone, group: 'remote', groupName: 'Remote', charge: 0 } });
+      // Urban in the Netherlands adds 1.50, remote in Bulgaria 4: on the route's price for the size.
+      roadEnds = { from: { urban: 1.5 }, to: { remote: 4, rural: 2 } };
+      const q = routing.quoteRoad({ agentDid: counter.did }, to.did, 'M', { consumer: true });
+      expect(q.locked.transport).toBe(33);
+      expect(q.roadEnds).toMatchObject({ from: { group: 'urban', charge: 1.5 }, to: { group: 'remote', charge: 4 } });
+      expect(q.byRoad).toEqual({ from: 'NL', to: 'BG', hubMdpId: roadHub, hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line' });
+      // The counter's list: the route, this shop's charge, each Bulgarian shop's; the phone's sums reach the server's gross.
+      const counterPrices = new CounterPriceService({ cardsFrom: () => undefined } as never, zones, agents, entities, roads as never);
+      const row = counterPrices.rowFor(counter.did);
+      expect(row.abroad).toEqual([{ to: 'BG', currency: 'EUR', prices: { S: 18, M: 27.5, L: 39 }, fromCharge: 1.5, shops: { [to.did]: 4 } }]);
+      expect(row.sizes.map((x) => x.size)).toEqual(['S', 'M', 'L', 'HEAVY']);
+      const asks = [
+        { dest: to.did, l: 30, w: 20, h: 8, kg: 1.5 },
+        { dest: to.did, l: 40, w: 30, h: 20, kg: 4 },
+        { dest: to.did, l: 55, w: 45, h: 35, kg: 12 },
+        { dest: to.did, l: 100, w: 70, h: 60, kg: 25 },
+      ];
+      const sizeOf = (a: { l: number; w: number; h: number; kg: number }) => (a.kg <= 2 && a.l <= 35 ? 'S' : a.kg <= 5 && a.l <= 45 ? 'M' : a.kg <= 15 && a.l <= 60 ? 'L' : 'HEAVY') as 'S' | 'M' | 'L' | 'HEAVY';
+      const cases = asks.map((a) => {
+        const size = sizeOf(a);
+        let gross: number | null = null;
+        try {
+          gross = routing.quoteRoad({ agentDid: counter.did }, to.did, size, { consumer: true }).locked.gross;
+        } catch {
+          gross = null; // heavy goes as a load of its own
+        }
+        return { ...a, gross };
+      });
+      expect(cases.map((c) => c.gross === null)).toEqual([false, false, false, true]);
+      const golden = { note: 'Written by cross-border.spec.ts (route plan part 9). The Shop app works out each walk-up on the road route from this list and must reach the same gross.', row: { ...row, at: '2026-11-24T00:00:00.000Z' }, cases };
+      const file = join(__dirname, '../../../contracts/counter-road-cases.json');
+      const text = JSON.stringify(golden, null, 2).split(counter.did).join('shop-nl').split(to.did).join('shop-bg') + '\n';
+      if (process.env.UPDATE_GOLDEN === '1') writeFileSync(file, text);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(JSON.parse(text));
+      // A Bulgarian zone not served: refused by name, and the counter leaves its shops out.
+      zones.startDraft(partner.entityId, 'N');
+      zones.changeZone(partner.entityId, sofiaZone, { flags: ['notServed'] }, 'N');
+      zones.publish(partner.entityId, undefined, 'N');
+      expect(() => routing.quoteRoad({ agentDid: counter.did }, to.did, 'M', { consumer: true })).toThrow(/We do not deliver in Sofia yet/);
+      expect(counterPrices.rowFor(counter.did).abroad[0].shops).toEqual({});
     });
 
     // 2026-11-24 — THE HANDOVER AT THE CENTRAL HUB (corridor compliance, slice 4; the owner: "Cross-border only").

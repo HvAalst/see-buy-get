@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { formatMoney, useLocale, useT } from '../../../shared/i18n';
-import { abroadChangeLine, clearerLine, conditionLine, routeActs, routeStateTag, type BorderArrival, type BorderRoute, type BorderRoutes } from '../abroad';
+import { abroadChangeLine, clearerLine, conditionLine, endsBody, endsLines, routeActs, routeStateTag, type BorderArrival, type BorderRoute, type BorderRoutes } from '../abroad';
 import { ConsolePick } from '../ConsolePick';
 import { momentWords } from '../connections';
 import { holds } from '../staffRoles';
@@ -156,6 +156,10 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
   const [central, setCentral] = useState(r.hub?.mdpId ?? '');
   const arrivalOpen = r.conditions.find((c) => c.key === 'airport')?.met ?? false;
   const [prices, setPrices] = useState({ S: r.prices ? String(r.prices.S) : '', M: r.prices ? String(r.prices.M) : '', L: r.prices ? String(r.prices.L) : '' });
+  // 2026-11-24 — the pair's price card at its ends (route plan part 9): a charge per price group of each country's zones.
+  const asForm = (charges: Record<string, number> | undefined, groups: Array<{ key: string }> | undefined) => Object.fromEntries((groups ?? []).map((g) => [g.key, charges?.[g.key] ? String(charges[g.key]) : '']));
+  const [ends, setEnds] = useState({ from: asForm(r.ends?.from, r.fromGroups), to: asForm(r.ends?.to, r.toGroups) });
+  const endsSent = endsBody(ends);
   const editable = writer && setUp && r.state === 'off';
   const price = (n: number) => (r.prices ? formatMoney(n, r.prices.currency) : '');
   const tag = routeStateTag(r, t);
@@ -204,6 +208,11 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
       <p class="chint">
         <b>{t('tower.abroad.prices')}</b> · {r.prices ? t('tower.abroad.prices.line', { S: price(r.prices.S), M: price(r.prices.M), L: price(r.prices.L) }) : t('tower.abroad.prices.none')}
       </p>
+      {road ? (
+        <p class="chint">
+          <b>{t('tower.abroad.ends')}</b> · {endsLines(r, nameOf, (n) => formatMoney(n, r.prices?.currency ?? r.currency ?? ''), t).join(' · ') || t('tower.abroad.ends.none')}
+        </p>
+      ) : null}
       {writer && r.state !== 'off' ? <p class="chint">{t('tower.abroad.locked')}</p> : null}
       {editable ? (
         <div style="margin-top:6px">
@@ -277,6 +286,27 @@ export function RouteRow({ r, nameOf, writer, busy, onAct, setUp }: { r: BorderR
               >
                 {t('tower.abroad.prices.save')}
               </button>
+              {road ? (
+                <>
+                  <p class="chint" style="margin-top:8px">{t('tower.abroad.ends.lede')}</p>
+                  {([['from', r.from, r.fromGroups], ['to', r.to, r.toGroups]] as const).map(([end, country, groups]) => (
+                    <div key={end} class="cgrid2">
+                      {(groups ?? []).map((g) => (
+                        <label key={g.key} class="cfield">
+                          <span class="cfield__label">
+                            {nameOf(country)} · {g.name} ({r.currency})
+                          </span>
+                          <input class="cinput" inputMode="decimal" value={ends[end][g.key] ?? ''} onInput={(e) => setEnds({ ...ends, [end]: { ...ends[end], [g.key]: e.currentTarget.value } })} />
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                  {'error' in endsSent ? <p class="cerr">{t(endsSent.error)}</p> : null}
+                  <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || 'error' in endsSent} onClick={() => 'body' in endsSent && void setUp.change(`${r.from}-${r.to}:ends`, () => setUp.api.setBorderEnds(r.from, r.to, { ...endsSent.body, ...setUp.by }) as Promise<Answer>)}>
+                    {t('tower.abroad.ends.save')}
+                  </button>
+                </>
+              ) : null}
             </>
           ) : (
             <p class="chint">{t('tower.abroad.prices.noCompany', { from })}</p>

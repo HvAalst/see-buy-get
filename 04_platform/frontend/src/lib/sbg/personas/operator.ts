@@ -1144,6 +1144,8 @@ export function createOperatorApi(sbg: SbgClient) {
     setBorderFleet: (from: string, to: string, body: { managerDid: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/fleet', { params: { path: { from, to } }, body })),
     setBorderHub: (from: string, to: string, body: { mdpId: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/hub', { params: { path: { from, to } }, body })),
     setBorderPrices: (from: string, to: string, body: { S: number; M: number; L: number; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/prices', { params: { path: { from, to } }, body })),
+    /** 2026-11-24 — a road route's charges at its ends, by each country's price groups (route plan part 9). */
+    setBorderEnds: (from: string, to: string, body: { from: Record<string, number>; to: Record<string, number>; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/border-routes/{from}/{to}/ends', { params: { path: { from, to } }, body })),
     setBorderAirport: (country: string, airport: string, body: { open: boolean; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/border-arrivals/{country}/airports/{airport}', { params: { path: { country, airport } }, body })),
     setBorderWarehouse: (country: string, airport: string, body: { mdpId: string; tstLicence: string; validUntil?: string; agreement: string; by?: string }) =>

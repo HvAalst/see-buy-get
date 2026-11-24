@@ -101,7 +101,7 @@ export class ZoneMapService {
    */
   zoneAt(country: string | undefined, point: GeoPoint | undefined, at: number = Date.now()): PlaceZone | undefined {
     if (!country || !point) return undefined;
-    const company = this.entities.forJurisdiction(country);
+    const company = this.holderOf(country);
     if (!company) return undefined;
     const s = this.setups.get(company.entityId);
     if (!s) return undefined;
@@ -484,8 +484,24 @@ export class ZoneMapService {
 
   private company(entityId: string): Entity {
     const company = this.entities.get(entityId);
-    if (company.kind !== 'sister' || !company.jurisdiction) throw new GlosError('FORBIDDEN', `${company.name} does not run a country: zones belong to the company that does`);
+    // 2026-11-24 — a partner running a country keeps its zones too (route plan part 9): a country with no company of ours.
+    if ((company.kind !== 'sister' && company.kind !== 'partner') || !company.jurisdiction) throw new GlosError('FORBIDDEN', `${company.name} does not run a country: zones belong to the company that does`);
     return company;
+  }
+
+  /** The company that keeps a country's zones: ours there, else the partner running it (2026-11-24). */
+  private holderOf(country: string): Entity | undefined {
+    return this.entities.forJurisdiction(country) ?? this.entities.partnerFor(country);
+  }
+
+  /**
+   * 2026-11-24 — A COUNTRY'S PRICE GROUPS, in its words (route plan part 9): what a road route's end charges are set by. The groups
+   * of the company keeping its zones, or the starting three where it keeps none yet.
+   */
+  groupsIn(country: string): ZoneGroup[] {
+    const company = this.holderOf(country.toUpperCase());
+    const groups = company ? this.setups.get(company.entityId)?.groups : undefined;
+    return (groups ?? DEFAULT_ZONE_GROUPS).map((g) => ({ ...g }));
   }
 
   private stored(company: Entity): StoredZoneSetup {

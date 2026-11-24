@@ -3877,4 +3877,12 @@ export const words: Record<string, string> = {
   "tower.plates.leave": "Остави го",
   "tower.plates.released": "{plate} е махнат от превозните средства на собственика; и двамата са уведомени",
   "tower.plates.left": "{plate} остава където е; този, който е попитал, е уведомен",
+  "tower.abroad.ends": "В краищата",
+  "tower.abroad.ends.none": "нищо не се добавя в нито един край",
+  "tower.abroad.ends.side": "{country}: {groups}",
+  "tower.abroad.ends.group": "{group} +{amount}",
+  "tower.abroad.ends.lede": "Добавя се към цената на маршрута за размера, според ценовата група на зоната, в която пратката тръгва, и на зоната, за която е, по зоновата карта на всяка държава. Оставете група празна, за да не се добавя нищо.",
+  "tower.abroad.ends.err": "Всяка такса е число от 0 до 1 000.",
+  "tower.abroad.ends.save": "Запази таксите в краищата",
+  "tower.abroad.change.ends": "{who} зададе таксите в краищата за {from} до {to}",
 };
