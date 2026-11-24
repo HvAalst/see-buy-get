@@ -171,4 +171,6 @@ export const words: Record<string, string> = {
   "abbr.uit.about": "De code die het Roemeense systeem RO e-Transport geeft aan een aangemeld goederenvervoer. De Roemeense koper of leverancier meldt het vervoer aan en geeft de code aan de vervoerder; de chauffeur laat hem zien bij een controle.",
   "abbr.utn.name": "Uniek vervoersnummer (Bulgarije)",
   "abbr.utn.about": "Het nummer dat de Bulgaarse belastingdienst geeft aan een aangemeld vervoer van goederen met een hoog fiscaal risico. De Bulgaarse koper of verkoper meldt het aan en geeft het door; de chauffeur laat het zien bij een controle.",
+  "abbr.anaf.name": "Nationaal Agentschap voor Belastingadministratie van Roemenië",
+  "abbr.anaf.about": "De Roemeense belastingdienst (Agenția Națională de Administrare Fiscală). Hij beheert RO e-Transport: hij geeft de UIT-codes, en ontvangt de posities van de voertuigen die ze vervoeren van gps-aanbieders die bij hem geregistreerd zijn, of van zijn eigen app.",
 };

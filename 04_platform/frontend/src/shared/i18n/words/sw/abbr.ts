@@ -171,4 +171,6 @@ export const words: Record<string, string> = {
   "abbr.uit.about": "Msimbo ambao mfumo wa RO e-Transport wa Romania hutoa kwa usafirishaji wa bidhaa uliotangazwa. Mnunuzi au msambazaji wa Romania hutangaza usafirishaji na kumpa mbebaji msimbo; dereva huuonyesha wakati wa ukaguzi.",
   "abbr.utn.name": "Nambari ya kipekee ya usafirishaji (Bulgaria)",
   "abbr.utn.about": "Nambari ambayo Mamlaka ya Mapato ya Bulgaria hutoa kwa usafirishaji uliotangazwa wa bidhaa zenye hatari kubwa ya kodi. Mnunuzi au muuzaji wa Bulgaria huitangaza na kuipitisha; dereva huionyesha wakati wa ukaguzi.",
+  "abbr.anaf.name": "Wakala wa Taifa wa Usimamizi wa Kodi wa Romania",
+  "abbr.anaf.about": "Mamlaka ya kodi ya Romania (Agenția Națională de Administrare Fiscală). Huendesha RO e-Transport: hutoa misimbo ya UIT, na hupokea maeneo ya magari yanayoibeba kutoka kwa watoa huduma wa GPS waliosajiliwa nayo, au kutoka kwa programu yake yenyewe.",
 };

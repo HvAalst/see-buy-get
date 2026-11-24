@@ -174,4 +174,6 @@ export const enAbbr = {
   'abbr.uit.about': 'The code Romania’s RO e-Transport system gives a declared transport of goods. The Romanian buyer or supplier declares the transport and passes the code to the carrier; the driver shows it at a check.',
   'abbr.utn.name': 'Unique transport number (Bulgaria)',
   'abbr.utn.about': 'The number Bulgaria’s National Revenue Agency gives a declared transport of goods with high fiscal risk. The Bulgarian buyer or seller declares it and passes it on; the driver shows it at a check.',
+  'abbr.anaf.name': 'Romania’s National Agency for Fiscal Administration',
+  'abbr.anaf.about': 'Romania’s tax authority (Agenția Națională de Administrare Fiscală). It runs RO e-Transport: it gives the UIT codes, and takes the positions of the vehicles carrying them from GPS providers registered with it, or from its own app.',
 };

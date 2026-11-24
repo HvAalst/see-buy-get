@@ -1032,6 +1032,12 @@ describe('crossing a border', () => {
       expect(dispatch.takeRoadLoad(ours.did, [bag.code, 'BAG-NONE'])).toMatchObject({ taken: [bag.code], refused: [{ code: 'BAG-NONE' }] });
       expect(totes.byCodeMaybe(bag.code)).toMatchObject({ status: 'claimed', claimedBy: ours.did });
       expect(dispatch.roadLoad(ours.did).vehicle?.freeBagPlaces).toBe(14);
+      // Loaded, it rides on the van and still says where it left from: the Dutch shop, in the Netherlands (the GPS watch and
+      // the manifest read it, 2026-11-24).
+      mdps.closeBag(bag.code, { shopDid: from.did }, 'Test', { photoRef: photoBy(from.did) });
+      mdps.loadBag(bag.code, drivers.get(ours.did).badgeId!);
+      expect(totes.byCodeMaybe(bag.code)).toMatchObject({ status: 'in_transit', loadedFrom: from.did });
+      expect(dispatch.bagFacts(bag.code)).toMatchObject({ from: 'NL', fromLabel: 'Grachten Winkel', to: 'BG', toLabel: 'Sofia Central Hub' });
       // With the route switched off, nobody carries a bag across.
       const bag2 = totes.register(from.did);
       totes.assign(bag2.code, central.mdpId, 'Sofia Central Hub');

@@ -5537,10 +5537,12 @@ export class DispatchService {
   bagFacts(code: string): { fromLabel?: string; from?: string; toLabel?: string; to?: string; parcels: number; weightKg: number } | undefined {
     const t = this.totes.byCodeMaybe(code);
     if (!t) return undefined;
-    const from = t.locationId ? this.nodeCountry(t.locationId) : undefined;
+    // Aboard a vehicle its locationId names only the vehicle: where it left from is the shop or hub it was loaded at.
+    const at = t.locationId?.startsWith('bus:') ? (t.loadedFrom ?? t.haul?.fromId) : t.locationId;
+    const from = at ? this.nodeCountry(at) : undefined;
     const to = t.destinationNodeId ? this.nodeCountry(t.destinationNodeId) : undefined;
     return {
-      ...(t.locationId ? { fromLabel: this.pickupPlace(t.locationId)?.label ?? t.locationId } : {}),
+      ...(at ? { fromLabel: this.pickupPlace(at)?.label ?? at } : {}),
       ...(from ? { from } : {}),
       ...(t.destinationLabel ? { toLabel: t.destinationLabel } : {}),
       ...(to ? { to } : {}),

@@ -733,6 +733,11 @@ export class Tote {
    */
   carriedBy?: string;
   /**
+   * 2026-11-24 — the shop or hub a bag was loaded at, kept while it rides (its locationId names only the vehicle then): the
+   * country it left, for the GPS watch of RO e-Transport and the vehicle's manifest.
+   */
+  loadedFrom?: string;
+  /**
    * A SHOP bag, published by the shopkeeper's SEAL and by nothing else. A hub bag has no seal step, so the
    * dispatch sweep publishes it the moment it is full or aged; a shop bag that the sweep published behind
    * the counter would advertise a bag still open on the floor — and lock the shop out of the completeness

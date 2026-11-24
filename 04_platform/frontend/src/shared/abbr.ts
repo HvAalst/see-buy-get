@@ -114,6 +114,8 @@ export const ABBREVIATIONS = [
   // 2026-11-23 — the codes Romania and Bulgaria follow goods by (shared/fiscal-codes.ts).
   'UIT',
   'UTN',
+  // 2026-11-24 — the authority that runs RO e-Transport (the GPS watch, corridor compliance slice 3).
+  'ANAF',
 ] as const;
 
 export type Abbreviation = (typeof ABBREVIATIONS)[number];

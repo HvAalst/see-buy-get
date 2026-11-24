@@ -320,6 +320,7 @@ export class ToteService {
     if (tote.status !== 'filling' && tote.status !== 'available' && tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, nothing to load`);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'in_transit';
+    if (!tote.locationId.startsWith('bus:')) tote.loadedFrom = tote.locationId;
     tote.locationId = `bus:${driverBadgeId}`;
     // WHO IS CARRYING IT, as a field. locationId already said so, but as a 'bus:<badge>' string prefix —
     // a fact nothing could query, and so a fact the fleet map and the capacity check both missed.
@@ -345,6 +346,7 @@ export class ToteService {
     tote.waitsForRoom = undefined;
     tote.throughTo = undefined;
     tote.throughToName = undefined;
+    tote.loadedFrom = undefined;
     tote.filledAt = undefined;
     tote.filledReceivedAt = undefined;
     tote.availableAt = undefined;
