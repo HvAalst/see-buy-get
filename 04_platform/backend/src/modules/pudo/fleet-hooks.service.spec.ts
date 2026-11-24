@@ -155,8 +155,10 @@ describe('the GPS watch, told to the fleet’s own system', () => {
     handlers.get(GlosEvent.Pudo.TelematicsSessionClosed)!({ payload: { session: { ...session, roStatus: 'COMPLETED', closedBy: 'left_romania' } } });
     handlers.get(GlosEvent.Pudo.TelematicsUitChanged)!({ payload: { session: { ...session, fleetDid: 'did:glos:other' } } });
     const messages = hooks.view('did:glos:balkan').messages;
-    expect(messages.map((m) => m.event)).toEqual(['telematics.uit_changed', 'telematics.signal_lost', 'telematics.signal_back', 'telematics.session_closed']);
-    expect(JSON.parse(messages[1].body).data).toMatchObject({ sessionId: 'tel_1', plate: 'NL-12-AB', roStatus: 'SIGNAL_LOST', minutes: 16, uitCodes: [{ code: 'RO1234567890' }] });
-    expect(JSON.parse(messages[3].body).data).toMatchObject({ closedBy: 'left_romania' });
+    // Kept in the same millisecond, the list's order is not theirs to promise: each is there once, the other fleet's not at all.
+    expect(messages.map((m) => m.event).sort()).toEqual(['telematics.session_closed', 'telematics.signal_back', 'telematics.signal_lost', 'telematics.uit_changed']);
+    const of = (event: string) => JSON.parse(messages.find((m) => m.event === event)!.body).data;
+    expect(of('telematics.signal_lost')).toMatchObject({ sessionId: 'tel_1', plate: 'NL-12-AB', roStatus: 'SIGNAL_LOST', minutes: 16, uitCodes: [{ code: 'RO1234567890' }] });
+    expect(of('telematics.session_closed')).toMatchObject({ closedBy: 'left_romania' });
   });
 });
