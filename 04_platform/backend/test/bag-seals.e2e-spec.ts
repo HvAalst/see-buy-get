@@ -307,5 +307,20 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     await http().post(`/v1/sbg/totes/${three}/tamper`).set(hubToken).send({ finding: 'wrap_cut', photoRefs: [await photo(hubToken, 'tamper')], note: 'Driver’s phone lost: seal never read on the road' }).expect(201);
     await http().post(`/v1/sbg/ops/tamper/${three}/release`).set(operator).send({ reason: 'Driver called: phone lost on the way; the hub counts the parcel', by: 'Halima at operations' }).expect(201);
     expect((await drop(three, { photoRef: await photo(hubToken, 'seal'), asClosed: false }).expect(201)).body.emptied).toHaveLength(1);
+
+    // 2026-11-24 — ACROSS A BORDER (corridor compliance, slice 4): a Kenyan shop's bag dropped at a hub in Uganda is handed over
+    // by the pass on its driver's phone, with what is wrong said there; the hub's list keeps it.
+    const abroad = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Busia UG Hub ${tag}`, zones: [`BusiaUg${tag}`], country: 'UG', location: { lat: 0.4608, lng: 34.0922 } }).expect(201)).body;
+    const SEAL_FOUR = `KE ${String(Date.now() + 19).slice(-7)}`;
+    const four = await sealedBag(SEAL_FOUR);
+    await http().post(`/v1/sbg/totes/${four}/load`).set(amina.token).send({ take: { photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_FOUR, asClosed: true } }).expect(201);
+    expect((await http().get(`/v1/sbg/totes/${four}`).set(operator).expect(200)).body.fromCountry).toBe('KE');
+    const dropAbroad = (body: Record<string, unknown>) => http().post(`/v1/sbg/mdps/${abroad.mdpId}/drop-bag`).set(operator).send({ code: four, receipt: { sealNumber: SEAL_FOUR, photoRef: photoOfStaff, asClosed: true }, ...body });
+    const photoOfStaff = await photo(bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: abroad.did }).expect(201)).body.access_token), 'seal');
+    expect((await dropAbroad({}).expect(400)).body.detail).toMatch(/comes from another country: scan the pass on the driver’s phone/);
+    const aminaPass = (await http().get(`/v1/sbg/fleet/drivers/${amina.did}/session`).set(amina.token).expect(200)).body.handoverPass as string;
+    const handed = (await dropAbroad({ driverBadgeId: aminaPass, exceptions: [{ note: 'Zip tape lifted at one corner' }] }).expect(201)).body;
+    expect(handed.transferId).toMatch(/^htr_/);
+    expect((await http().get(`/v1/sbg/mdps/${abroad.mdpId}/transfers`).set(operator).expect(200)).body.transfers).toEqual([expect.objectContaining({ bagCode: four, fromCountry: 'KE', country: 'UG', released: expect.objectContaining({ driverDid: amina.did }), exceptions: [expect.objectContaining({ note: 'Zip tape lifted at one corner' })] })]);
   });
 });

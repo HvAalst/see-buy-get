@@ -42,6 +42,17 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /**
+   * 2026-11-24 — a whole bag taken over at a hub from another country goes on resealed (corridor compliance, slice 4): its old
+   * closing, received here, is done with; the hub closes it again on a coded seal before anyone loads it.
+   */
+  reopenForSeal(code: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.closedWith = undefined;
+    tote.closureId = undefined;
+    return this.save(tote);
+  }
+
   /** Round 36 — held under the tamper protocol, and released. */
   hold(toteId: string, hold: UnitHold): Tote {
     const tote = this.requireById(toteId);

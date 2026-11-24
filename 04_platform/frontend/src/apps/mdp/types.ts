@@ -153,6 +153,9 @@ export interface DropView {
   offPlan?: Array<{ parcelId: string; planned: string }>;
   /** 2026-11-12 — a whole bag for a hub further on: received on its seal, not opened, on its way again. */
   passedOn?: { code: string; next: string; final: string };
+  /** 2026-11-24 — a bag from another country, handed over by name (slice 4): its record, and whether it goes on resealed. */
+  transferId?: string;
+  reseal?: boolean;
 }
 
 export interface LoadView {

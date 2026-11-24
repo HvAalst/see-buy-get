@@ -20,6 +20,7 @@ import { HubCounterCard } from './HubCounterCard';
 import { HubDownCard } from './HubDownCard';
 import { HubToolsCard } from './HubToolsCard';
 import { HubRoadCard } from './HubRoadCard';
+import { HubTransfersCard } from './HubTransfersCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -234,6 +235,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       <ZonesServedCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
       {/* 2026-11-12 — its place on the road, once its country's road map of hubs is confirmed. */}
       <HubRoadCard sbg={sbg ?? null} mdpId={hub?.mdpId} />
+      {/* 2026-11-24 — the bags handed over here from another country, by name on both sides (corridor compliance, slice 4). */}
+      <HubTransfersCard sbg={sbg ?? null} mdpId={hub?.mdpId} />
 
       {/* When the hub is open and how to reach it: what drivers and stores working with it see; its owner writes it. */}
       <HubReachCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />

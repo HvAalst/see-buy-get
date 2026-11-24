@@ -391,6 +391,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/fleet/drivers/:did/telematics/positions': 'support',
   'GET sbg/fleet/managers/:did/telematics': 'support',
   'PUT sbg/fleet/managers/:did/telematics': 'support',
+  // 2026-11-24 — the bags handed over at a hub from another country (corridor compliance, slice 4).
+  'GET sbg/mdps/:id/transfers': 'support',
   'GET sbg/fleet/drivers/:did/manifest/export': 'support',
   'GET sbg/fleet/managers/:did/vehicles/:vehicleId/manifest': 'support',
   'GET sbg/fleet/managers/:did/vehicles/:vehicleId/manifest/export': 'support',

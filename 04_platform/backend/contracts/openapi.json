@@ -22115,7 +22115,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Tote"
+                  "type": "object"
                 }
               }
             }
@@ -22419,6 +22419,28 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/transfers": {
+      "get": {
+        "operationId": "Sbg.hubTransfers",
+        "summary": "",
+        "description": "2026-11-24 — THE BAGS HANDED OVER AT A HUB FROM ANOTHER COUNTRY (corridor compliance, slice 4), newest first: both parties,\nthe seal as it arrived, what was wrong, and the bags that took the parcels on, each on its coded seal. The hub, or staff.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           }
         }
@@ -73876,6 +73898,22 @@
           "collectable"
         ]
       },
+      "TransferExceptionDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "note"
+        ]
+      },
       "DropBagDto": {
         "type": "object",
         "properties": {
@@ -73889,6 +73927,18 @@
                 "$ref": "#/components/schemas/BagReceiptDto"
               }
             ]
+          },
+          "driverBadgeId": {
+            "type": "string",
+            "description": "2026-11-24 — a bag from another country (corridor compliance, slice 4): the pass on the phone of the driver handing it over.",
+            "maxLength": 80
+          },
+          "exceptions": {
+            "description": "…and what is wrong with it, said there and then.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransferExceptionDto"
+            }
           }
         },
         "required": [

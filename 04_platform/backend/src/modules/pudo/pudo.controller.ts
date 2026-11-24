@@ -1,5 +1,6 @@
 ﻿import { TerminalSlotChangeDto } from './air-terminal.types';
 import { TelemetryService } from './telemetry.service';
+import { HubTransferService } from './hub-transfer.service';
 import { VehicleManifestService } from './vehicle-manifest.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
@@ -447,6 +448,8 @@ export class SbgController {
     @Optional() private readonly manifestsSvc?: VehicleManifestService,
     // 2026-11-24 — the GPS watch of RO e-Transport (corridor compliance, slice 3).
     @Optional() private readonly telemetry?: TelemetryService,
+    // 2026-11-24 — bags handed over at a hub from another country (corridor compliance, slice 4).
+    @Optional() private readonly transfers?: HubTransferService,
   ) {}
 
   /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
@@ -6408,7 +6411,10 @@ export class SbgController {
   @Get('totes/:code')
   @AtTheCounter()
   getTote(@Param('code') code: string) {
-    return this.totes.requireByCode(code);
+    const tote = this.totes.requireByCode(code);
+    // 2026-11-24 — the country it left, for a hub to know before receiving it whether it is handed over by name (slice 4).
+    const origin = this.mdps.originOf(tote);
+    return origin ? { ...tote, fromCountry: origin.country } : tote;
   }
 
   /**
@@ -6521,7 +6527,19 @@ export class SbgController {
   @AtTheCounter()
   dropBag(@Param('id') id: string, @Body() dto: DropBagDto, @Actor() actor: IntrospectionResult) {
     this.assertMdpActs(id, actor);
-    return this.mdps.dropBag(id, dto.code, dto.receipt, actor?.actorName);
+    return this.mdps.dropBag(id, dto.code, dto.receipt, actor?.actorName, Date.now(), { driverBadgeId: dto.driverBadgeId, exceptions: dto.exceptions });
+  }
+
+  /**
+   * 2026-11-24 — THE BAGS HANDED OVER AT A HUB FROM ANOTHER COUNTRY (corridor compliance, slice 4), newest first: both parties,
+   * the seal as it arrived, what was wrong, and the bags that took the parcels on, each on its coded seal. The hub, or staff.
+   */
+  @Roles('mdp', 'operator')
+  @Get('mdps/:id/transfers')
+  @AtTheCounter()
+  hubTransfers(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator') this.assertMdpActs(id, actor);
+    return { transfers: this.transfers?.forHub(id) ?? [] };
   }
 
   /** Sort a parcel at an MDP → returns its next destination + the bag code to drop it in. */

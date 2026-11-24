@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { HubTransferService } from './hub-transfer.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -56,7 +57,11 @@ export class TelemetryService {
     private readonly fleet: FleetService,
     private readonly vehicles: VehicleService,
     private readonly events: EventBus,
-  ) {}
+    // 2026-11-24 — a bag handed over at a hub across a border (slice 4): the driver's watch closes where nothing aboard asks for it.
+    @Optional() transfers?: HubTransferService,
+  ) {
+    transfers?.onRelease((driverDid) => void this.handedOver(driverDid));
+  }
 
   /* ------------------------------------------------------------------ the fleet's choice -- */
 

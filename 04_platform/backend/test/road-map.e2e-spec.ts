@@ -48,6 +48,10 @@ describe('a road map of hubs, over the wire', () => {
     await http().get('/v1/sbg/entities/sbg-ke/road-map').set(kakuma.token).expect(403);
     await http().post('/v1/sbg/entities/sbg-ke/road-map/propose').set(kakuma.token).expect(403);
     expect((await http().get(`/v1/sbg/mdps/${kakuma.mdpId}/road`).set(kakuma.token).expect(200)).body).toMatchObject({ inForce: false });
+    // 2026-11-24 — the bags handed over at a hub from another country (slice 4): its own, staff's; never another hub's.
+    expect((await http().get(`/v1/sbg/mdps/${kakuma.mdpId}/transfers`).set(kakuma.token).expect(200)).body).toEqual({ transfers: [] });
+    expect((await http().get(`/v1/sbg/mdps/${kakuma.mdpId}/transfers`).set(operator).expect(200)).body).toEqual({ transfers: [] });
+    await http().get(`/v1/sbg/mdps/${kakuma.mdpId}/transfers`).set(lodwar.token).expect(403);
 
     // Staff: the proposal, a role changed and back, a road, the minimum distance, confirmed.
     const proposed = (await http().post('/v1/sbg/entities/sbg-ke/road-map/propose').set(operator).expect(201)).body;

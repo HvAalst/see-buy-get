@@ -38,8 +38,11 @@ export function createMdpApi(sbg: SbgClient) {
     parcelsAtMdp: () => sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_MDP', agent: '' } } })),
 
     /** A bus dropped a bag: empty it — its parcels join the sort queue, the tote frees up. */
-    dropBag: (mdpId: string, code: string, receipt?: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
-      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/drop-bag', { params: { path: { id: mdpId } }, body: { code, ...(receipt ? { receipt } : {}) } })),
+    dropBag: (mdpId: string, code: string, receipt?: { sealNumber?: string; photoRef: string; asClosed: boolean }, transfer?: { driverBadgeId?: string; exceptions?: Array<{ note: string; photoRef?: string }> }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/drop-bag', { params: { path: { id: mdpId } }, body: { code, ...(receipt ? { receipt } : {}), ...(transfer?.driverBadgeId ? { driverBadgeId: transfer.driverBadgeId } : {}), ...(transfer?.exceptions?.length ? { exceptions: transfer.exceptions } : {}) } })),
+
+    /** 2026-11-24 — the bags handed over here from another country: both parties, the seal, what was wrong, what went on. */
+    transfers: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/transfers', { params: { path: { id: mdpId } } })),
 
     /** Round 36 — a bag as the hub may read it before receiving it: how it was closed, never its seal's number. */
     bag: (code: string) => sbg.request((c) => c.GET('/v1/sbg/totes/{code}', { params: { path: { code } } })),

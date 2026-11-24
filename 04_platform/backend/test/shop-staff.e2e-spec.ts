@@ -253,6 +253,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/mdps/:id/parcels/:parcelId/label', 'GET sbg/mdps/:id/parcels/:parcelId/label.zpl',
         // …or going to its store's own door as a load: kept aside, and handed to that load's driver by their pass
         'GET sbg/mdps/:id/handovers', 'POST sbg/mdps/:id/handovers/:parcelId',
+        // 2026-11-24 — the bags handed over at the hub from another country: its floor people took them over, by name
+        'GET sbg/mdps/:id/transfers',
         // 2026-10-29 — a business’s parcel on the shelf for its own door: handed to its last leg’s driver by their pass
         'GET sbg/agents/:did/door-handovers', 'POST sbg/agents/:did/door-handovers/:parcelId',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox

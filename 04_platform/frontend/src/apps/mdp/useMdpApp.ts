@@ -70,7 +70,7 @@ export interface MdpState {
   /** Round 35 — a parcel found cut or opened, being reported: which, its photograph, what is seen. `null` when closed. */
   tamper: { parcelId: string; photoRef: string; note: string } | null;
   /** Round 36 — the bag scanned to drop, looked at before it is opened: how it was closed, held; a seal read that did not match. */
-  drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string; offPlan?: Array<{ parcelId: string; planned: string }> };
+  drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold; fromCountry?: string } | null; mismatch?: string; offPlan?: Array<{ parcelId: string; planned: string }> };
   /** One of the hub's people working its floor on this device, under their own name; null for the hub's own sign-in. */
   staff: StaffAtCounter | null;
   /** 2026-10-27 — an old label scanned of a parcel its store called off here: which new label goes over it. */
@@ -513,19 +513,22 @@ export function useMdpApp() {
       setState((s) => ({ ...s, drop: { bag: null } }));
       return fail(r.error);
     }
-    const v = narrow<{ closedWith?: 'seal' | 'photo'; held?: UnitHold }>(r.data);
-    setState((s) => (s.form.dropCode === code ? { ...s, drop: { bag: { ...(v?.closedWith ? { closedWith: v.closedWith } : {}), ...(v?.held ? { held: v.held } : {}) } } } : s));
+    const v = narrow<{ closedWith?: 'seal' | 'photo'; held?: UnitHold; fromCountry?: string }>(r.data);
+    setState((s) => (s.form.dropCode === code ? { ...s, drop: { bag: { ...(v?.closedWith ? { closedWith: v.closedWith } : {}), ...(v?.held ? { held: v.held } : {}), ...(v?.fromCountry ? { fromCountry: v.fromCountry } : {}) } } } : s));
   }, [client, fail]);
 
-  /** Round 36 — received on its seal, before it is opened. Answers with the refusal the screen acts on. */
-  const submitDrop = useCallback(async (receipt: { sealNumber?: string; photoRef: string; asClosed: boolean }): Promise<string | null> => {
+  /**
+   * Round 36 — received on its seal, before it is opened. Answers with the refusal the screen acts on.
+   * 2026-11-24 — a bag from another country: with the pass of the driver handing it over, and what is wrong with it (slice 4).
+   */
+  const submitDrop = useCallback(async (receipt: { sealNumber?: string; photoRef: string; asClosed: boolean }, transfer?: { driverBadgeId?: string; exceptions?: Array<{ note: string; photoRef?: string }> }): Promise<string | null> => {
     if (!client) return null;
     const hub = stateRef.current.hub;
     const code = stateRef.current.form.dropCode.trim().toUpperCase();
     if (!hub || !code) return null;
     let refused: string | null = null;
     await run('drop', async () => {
-      const r = await client.api.dropBag(hub.mdpId, code, receipt);
+      const r = await client.api.dropBag(hub.mdpId, code, receipt, transfer);
       if (r.error) {
         signal('error');
         refused = r.error.code;
@@ -546,7 +549,8 @@ export function useMdpApp() {
       }));
       // 2026-11-12 — a whole bag for a hub further on: not opened here, on its way again (Hubs on the Road, step 5).
       if (dropped?.passedOn) {
-        pushToast({ tone: 'ok', icon: 'bag', title: t('mdp.toast.passedOn', { code }), detail: t('mdp.toast.passedOnDetail', { next: dropped.passedOn.next, final: dropped.passedOn.final }) });
+        // 2026-11-24 — from another country, it goes on resealed: a coded seal put on here before anyone loads it.
+        pushToast({ tone: 'ok', icon: 'bag', title: t('mdp.toast.passedOn', { code }), detail: dropped.reseal ? t('mdp.transfer.resealDetail', { next: dropped.passedOn.next }) : t('mdp.toast.passedOnDetail', { next: dropped.passedOn.next, final: dropped.passedOn.final }) });
         await refresh();
         return;
       }

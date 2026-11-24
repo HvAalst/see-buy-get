@@ -45,8 +45,11 @@ function world() {
   };
   const vehicles = { list: (f: { managerDid?: string }) => (f.managerDid === 'did:fleet' ? [{ vehicleId: 'veh_1', plate: 'NL-12-AB', managerDid: 'did:fleet' }] : []) };
   const events = { publish: (topic: string, payload: Record<string, unknown>) => (published.push([topic, payload]), Promise.resolve()) };
-  const svc = new TelemetryService(dispatch as never, fleet as never, vehicles as never, events as never);
-  return { svc, loads, bags, published, endShift: () => (onShift = false), topics: () => published.map(([t]) => t) };
+  // 2026-11-24 — a hub's handover tells the watch (slice 4): the hook it registers, kept to call as a hub would.
+  const released: Array<(driverDid: string) => void> = [];
+  const transfers = { onRelease: (fn: (driverDid: string) => void) => released.push(fn) };
+  const svc = new TelemetryService(dispatch as never, fleet as never, vehicles as never, events as never, transfers as never);
+  return { svc, loads, bags, published, endShift: () => (onShift = false), topics: () => published.map(([t]) => t), release: (did: string) => released.forEach((fn) => fn(did)) };
 }
 const uitLoad = (over: Record<string, unknown> = {}) => ({ freightId: 'frt_1', code: 'FRT-1', pickupCountry: 'RO', destCountry: 'NL', fiscalCodes: [{ country: 'RO', kind: 'UIT', code: 'RO1234567890', validThrough: '2026-11-27' }], ...over });
 
@@ -133,6 +136,19 @@ describe('the GPS watch of a run', () => {
     stay.svc.ping('did:drv', BUCHAREST, 'DRIVER_APP_GPS', T0);
     for (let i = 1; i <= 4; i++) stay.svc.ping('did:drv', RUSE, 'DRIVER_APP_GPS', T0 + i * MIN);
     expect(stay.svc.openFor('did:drv')?.roStatus).toBe('ACTIVE_IN_RO');
+  });
+
+  it('closes on a bag handed over at a hub across a border, once nothing aboard asks for it; with more aboard, not', () => {
+    const w = world();
+    w.bags.push({ code: 'BAG-1', from: 'NL', to: 'BG' }, { code: 'BAG-2', from: 'NL', to: 'BG' });
+    w.svc.ping('did:drv', ARAD, 'DRIVER_APP_GPS', T0);
+    w.bags.splice(0, 1);
+    w.release('did:drv');
+    expect(w.svc.openFor('did:drv')?.roStatus).toBe('ACTIVE_IN_RO');
+    w.bags.splice(0, 1);
+    w.release('did:drv');
+    expect(w.svc.openFor('did:drv')).toBeUndefined();
+    expect(w.published.filter(([t]) => t === GlosEvent.Pudo.TelematicsSessionClosed).map(([, p]) => (p.session as { closedBy?: string }).closedBy)).toEqual(['handed_over']);
   });
 
   it('closes when the shift ends, or when the cargo it watched is gone', () => {

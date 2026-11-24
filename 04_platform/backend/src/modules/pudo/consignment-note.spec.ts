@@ -234,6 +234,26 @@ describe('the consignment note', () => {
     expect(service.htmlFor(n)).toContain('UIT RO1234567890, valid through 2026-11-27');
   });
 
+  // 2026-11-24 — the custody chain's positions (corridor compliance, slice 4): what the GPS watch of RO e-Transport saw.
+  it('says the GPS watch of each vehicle that carried it: Romania entered and left, its silences, how the watch ended', () => {
+    const session = {
+      sessionId: 'tel_1', driverDid: 'did:drv:amos', vehicleId: 'veh_1', plate: 'NL-12-AB', trailerPlate: 'WT-99-ZZ', uitCodes: [{ code: 'RO1234567890', freightId: 'fr_1' }],
+      provider: 'WEBFLEET', roStatus: 'COMPLETED', startedAt: '2026-11-24T06:00:00.000Z', enteredRoAt: '2026-11-24T08:00:00.000Z', leftRoAt: '2026-11-24T14:30:00.000Z',
+      closedAt: '2026-11-24T14:30:00.000Z', closedBy: 'left_romania', outsideStreak: 3, longestGapMin: 22, pings: 380,
+      gaps: [{ from: '2026-11-24T09:00:00.000Z', to: '2026-11-24T09:05:00.000Z', minutes: 5 }, { from: '2026-11-24T11:00:00.000Z', to: '2026-11-24T11:22:00.000Z', minutes: 22 }],
+    };
+    const holder = service as unknown as { telemetry?: unknown };
+    holder.telemetry = { forFreight: (id: string) => (id === 'fr_1' ? [session] : []) };
+    try {
+      const n = service.build(base({ pickupCountry: 'NL', destCountry: 'RO' } as never));
+      expect(n.gpsWatch).toEqual(['Vehicle NL-12-AB with trailer WT-99-ZZ, positions from Webfleet (watch tel_1): entered Romania 24 Nov 2026, 08:00 UTC, left it 24 Nov 2026, 14:30 UTC; 380 positions; longest silence 22 min; 1 silence of 15 min or more; watch ended 24 Nov 2026, 14:30 UTC: the vehicle left Romania']);
+      expect(service.htmlFor(n)).toContain('Positions for RO e-Transport — the GPS watch of each vehicle that carried it');
+      expect(service.build(base({ freightId: 'fr_2' } as never)).gpsWatch).toBeUndefined();
+    } finally {
+      holder.telemetry = undefined;
+    }
+  });
+
   it('carries CMR’s particulars where applicable: a declared value, a special interest, no transhipment, an agreed time-limit', () => {
     const contract = { contractId: 'ctr_1', fleetDid: 'did:fleet:kilima', fleetName: 'Kilima Logistics', shipperName: 'Thika Avocados', reference: 'KL-07' };
     const n = service.build(

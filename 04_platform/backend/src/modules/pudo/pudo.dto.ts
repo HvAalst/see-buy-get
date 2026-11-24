@@ -1810,10 +1810,20 @@ export class LoadBagDto {
   @IsOptional() @ValidateNested() @Type(() => HandoverPositionDto) position?: HandoverPositionDto;
 }
 
+/** 2026-11-24 — something wrong with a bag handed over from another country: in words, with a photograph where one was taken. */
+export class TransferExceptionDto {
+  @IsString() @MaxLength(500) note!: string;
+  @IsOptional() @IsString() @MaxLength(120) photoRef?: string;
+}
+
 export class DropBagDto {
   @IsString() code!: string;
   /** Round 36 — the bag as it arrived: its photograph, the number read off its seal, whether it is as it was closed. */
   @IsOptional() @ValidateNested() @Type(() => BagReceiptDto) receipt?: BagReceiptDto;
+  /** 2026-11-24 — a bag from another country (corridor compliance, slice 4): the pass on the phone of the driver handing it over. */
+  @IsOptional() @IsString() @MaxLength(80) driverBadgeId?: string;
+  /** …and what is wrong with it, said there and then. */
+  @IsOptional() @IsArray() @ArrayMaxSize(5) @ValidateNested({ each: true }) @Type(() => TransferExceptionDto) exceptions?: TransferExceptionDto[];
 }
 
 export class ReceiveBagDto {

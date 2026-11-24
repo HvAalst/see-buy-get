@@ -31,6 +31,8 @@ import type { OffPlanSaid, RouteKeeper } from './route-plan.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
+import { HubTransferService } from './hub-transfer.service';
+import type { HubTransferInput } from './hub-transfer.types';
 import type { HandoverPositionDto } from './handover-position';
 import { haversineKm } from './geo';
 import { confirmedInTime, confirmOpen, hubIsDown, HUB_DOWN_CONFIRM_WINDOW_H, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, unconfirmedPast, type HubDownReason } from './hub-down.types';
@@ -111,7 +113,19 @@ export class MdpService {
     @Optional() @Inject(ROUTER) private readonly router?: Router,
     // 2026-11-20 — where a partner contracts and pays (Partnered), its own list is a hub's starting fee (the payments plan, 3a).
     @Optional() private readonly partners?: PartnerLedgerService,
+    // 2026-11-24 — a bag from another country is handed over by name on both sides, and goes on a coded seal (slice 4).
+    @Optional() private readonly transfers?: HubTransferService,
   ) {}
+
+  /** 2026-11-24 — the country a bag left, and the shop or hub it was loaded at: read off where it stands, or where it was loaded. */
+  originOf(t: Tote): { country: string; place: string } | undefined {
+    const at = t.locationId.startsWith('bus:') ? (t.loadedFrom ?? t.haul?.fromId) : t.locationId;
+    if (!at) return undefined;
+    const hub = this.mdps.get(at);
+    if (hub) return { country: this.countryOf(hub), place: hub.name };
+    const shop = this.agents.find(at);
+    return shop ? { country: this.agents.countryOf(shop), place: shop.shopName } : undefined;
+  }
 
   /**
    * 2026-11-02 — WHAT STANDS ON EACH HUB'S FLOOR THAT ITS BAGS NO LONGER SAY: the bags emptied at it on arrival, until every
@@ -1234,6 +1248,8 @@ export class MdpService {
     const ownerDid = hub ? hub.did : placeId;
     // Round 39 — a bag leaves a hub rated high only on a coded seal: asked before anything is written.
     if (hub) this.risk?.assertHubSeal(hub, closure);
+    // 2026-11-24 — and parcels handed over here from another country leave it only on a coded seal (slice 4).
+    if (hub) this.transfers?.assertSeal(hub.mdpId, bag, closure);
     const keep = this.closures.checkClose(bag, { did: ownerDid, name: byName?.trim() || placeName, place: placeName }, ownerDid, closure);
     const step = handedAt(observedAt, Date.now(), [bag.filledAt, bag.availableAt]);
     const announce = bag.status === 'filling';
@@ -1315,6 +1331,8 @@ export class MdpService {
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
     if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
+    // 2026-11-24 — parcels handed over at this hub from another country leave it only on a coded seal (slice 4).
+    if (this.mdps.has(pending.locationId)) this.transfers?.assertLoad(pending.locationId, pending, this.closures.current(pending));
     // Round 39 — a corridor or a hub rated high: a bag goes onto it only on a coded seal, and nothing at night.
     if (this.risk) {
       const hereHub = this.mdps.get(pending.locationId);
@@ -1395,10 +1413,16 @@ export class MdpService {
     const offHubFloor = this.mdps.has(pending.locationId); // read before the load moves it onto the vehicle
     // 2026-11-12 — how long its parcels stood at this hub, measured as they leave it: arrival times count it (the recommendation).
     if (offHubFloor) this.noteDwells(pending.locationId, pending.parcels, Date.now());
+    const leftHub = pending.locationId;
+    const closing = this.closures.current(pending);
     const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
-    keepTake?.(handedAt(observedAt, Date.now(), after));
+    const loadedStep = handedAt(observedAt, Date.now(), after);
+    keepTake?.(loadedStep);
+    // 2026-11-24 — the handover record closed: the bag taking its parcels on, its coded seal, and the driver whose pass took it.
+    const onward = offHubFloor ? (this.transfers?.noteOnward(leftHub, tote, closing, { badgeId: driverBadgeId, ...(fleet ? { driverDid: fleet.driverDid } : {}) }, loadedStep.at) ?? []) : [];
+    const onSeal = onward.length && closing?.number ? ` · on seal ${closing.number}` : '';
     for (const parcelId of tote.parcels) {
-      this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}`, tote.toteId, { observedAt, after });
+      this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}${onSeal}`, tote.toteId, { observedAt, after });
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     }
@@ -1416,7 +1440,7 @@ export class MdpService {
    * past its places takes the bag all the same, and says so in red on the hub's start screen (spaceOf.overBy). The bag
    * stands on the floor until its parcels are sorted.
    */
-  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }>; passedOn?: { code: string; next: string; final: string } } {
+  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now(), transfer?: HubTransferInput): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }>; passedOn?: { code: string; next: string; final: string }; transferId?: string; reseal?: boolean } {
     const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
@@ -1425,19 +1449,39 @@ export class MdpService {
     const HELD = before.held;
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
     const keepReceipt = this.closures.checkReceipt(before, { did: mdp.did, name: byName?.trim() || mdp.name, place: mdp.name }, mdp.did, receipt);
+    // 2026-11-24 — A BAG FROM ANOTHER COUNTRY (corridor compliance, slice 4; the owner: "Cross-border only"): handed over by name
+    // on both sides, the driver's pass and the person receiving it, and what is wrong with it said there and then. Asked
+    // before anything is kept, as its seal is.
+    const origin = this.originOf(before);
+    const hubCountry = this.countryOf(mdp);
+    const keepTransfer = origin && this.transfers?.crosses(origin.country, hubCountry) ? this.transfers.checkDrop({ mdpId, did: mdp.did, name: mdp.name, country: hubCountry }, before, origin, byName?.trim() || `${mdp.name} (its own sign-in)`, transfer) : undefined;
     const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
-    keepReceipt({ at: new Date().toISOString() });
+    const brought = before.carriedBy ?? before.claimedBy;
+    const step = { at: new Date().toISOString() };
+    keepReceipt(step);
+    const handover = keepTransfer?.(step, this.closures.current(before));
     // 2026-11-12 — A WHOLE BAG FOR A HUB FURTHER ON (step 5): received on its seal, as any bag — and not opened. It stands on
     // this floor addressed to its next stop, offered at once; its driver is paid the leg; this hub is paid its pass-on fee
     // for the bag (D5); its parcels' plans move on to here.
-    if (before.throughTo && before.throughTo !== mdpId) return this.passOnHere(mdp, before, carrier, byName, now);
+    if (before.throughTo && before.throughTo !== mdpId) {
+      const passed = this.passOnHere(mdp, before, carrier, byName, now);
+      // 2026-11-24 — from another country, it goes on resealed: a coded seal put on here, photographed, before anyone loads it.
+      if (handover) {
+        this.transfers!.passedOnWhole(handover.transferId);
+        this.totes.reopenForSeal(code);
+        if (brought) this.transfers!.released(brought);
+      }
+      return { ...passed, ...(handover ? { transferId: handover.transferId, reseal: true } : {}) };
+    }
     const { parcels } = this.totes.empty(code, mdpId);
     this.payHaul(before, carrier);
+    // 2026-11-24 — said on each parcel's trail: who handed it over, to whom, on which seal.
+    const where = handover ? `handed over at ${mdp.name} by ${handover.released.driverName ?? 'the driver'} to ${handover.received.by}${handover.received.sealNumber ? `, seal ${handover.received.sealNumber}` : ''}${handover.received.asClosed === false ? ' (not as closed)' : ''}` : `dropped at ${mdp.name}`;
     // 2026-11-06 — each kept, and planned on from here; those its plan did not have coming here, nobody having said why, are
     // said to the hub (its drop screen): not its fault, and planned on from here — sorted as the screen says.
     const offPlan: Array<{ parcelId: string; planned: string }> = [];
     for (const parcelId of parcels) {
-      const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
+      const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `${where} · awaiting sort`, undefined);
       p.atMdpId = mdpId; // scope the inbound queue to this hub
       const off = this.routeKeeper?.arrived(p, mdpId, byName?.trim() || mdp.name);
       if (off) offPlan.push({ parcelId, planned: off.planned });
@@ -1446,7 +1490,9 @@ export class MdpService {
     void this.events.publish(GlosEvent.Pudo.BagArrivedAtMdp, { mdpId, mdpName: mdp.name, code, emptied: parcels.length }, { source: 'pudo' }).catch(() => undefined);
     // A bag sent to another hub and dropped here instead is no longer on its way there: room may have freed at that one.
     this.letWaitingGo(now);
-    return { mdpId, emptied: parcels, ...(offPlan.length ? { offPlan } : {}) };
+    // 2026-11-24 — off the driver's vehicle: the GPS watch closes where nothing aboard asks for it any more.
+    if (handover && brought) this.transfers!.released(brought);
+    return { mdpId, emptied: parcels, ...(offPlan.length ? { offPlan } : {}), ...(handover ? { transferId: handover.transferId } : {}) };
   }
 
   private passOnHere(mdp: Mdp, before: Tote, carrier: string | undefined, byName: string | undefined, now: number): { mdpId: string; emptied: string[]; passedOn: { code: string; next: string; final: string } } {

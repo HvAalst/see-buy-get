@@ -6,6 +6,8 @@ import { EMPTY_BAG_RECEIPT, receiptBody, receiptReady, type BagReceiptForm } fro
 import { heldLine } from '../../../shared/tamper';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { DueTag, dueById } from './DueTag';
+import { TransferFields } from './TransferFields';
+import { EMPTY_TRANSFER, crossesBorder, transferBody, type TransferForm } from '../transfer';
 
 export interface DropScreenProps {
   state: MdpState;
@@ -27,9 +29,14 @@ export function DropScreen({ state, actions }: DropScreenProps) {
   const due = dueById(state.inbound);
   const [receipt, setReceipt] = useState<BagReceiptForm>(EMPTY_BAG_RECEIPT);
   const [reporting, setReporting] = useState(false);
+  // 2026-11-24 — a bag from another country: the driver's pass and what is wrong with it (slice 4).
+  const [transfer, setTransfer] = useState<TransferForm>(EMPTY_TRANSFER);
+  const crossing = looked && crossesBorder(bag.fromCountry, state.hub?.country);
+  const handover = crossing ? transferBody(transfer) : null;
   useEffect(() => {
     setReceipt(EMPTY_BAG_RECEIPT);
     setReporting(false);
+    setTransfer(EMPTY_TRANSFER);
   }, [code]);
 
   return (
@@ -75,13 +82,19 @@ export function DropScreen({ state, actions }: DropScreenProps) {
             ) : null}
             <BagReceiptFields id="drop-receive" closedWith={bag.closedWith} value={receipt} onChange={setReceipt} upload={(f) => actions.uploadPhoto(f, 'seal')} onReport={() => setReporting(true)} disabled={busy} />
           </Card>
+          {crossing ? (
+            <Card>
+              <TransferFields fromCountry={bag.fromCountry!} value={transfer} onChange={setTransfer} upload={(f) => actions.uploadPhoto(f, 'seal')} disabled={busy} />
+              {handover && 'error' in handover && transfer.pass.trim() ? <p class="hint">{t(handover.error)}</p> : null}
+            </Card>
+          ) : null}
           <div class="scr__cta">
             <Button
               onClick={async () => {
-                const refused = await actions.submitDrop(receiptBody(receipt));
+                const refused = await actions.submitDrop(receiptBody(receipt), handover && 'body' in handover ? handover.body : undefined);
                 if (refused === 'TAMPER_REPORT_FIRST') setReporting(true);
               }}
-              disabled={!receiptReady(receipt, bag.closedWith)}
+              disabled={!receiptReady(receipt, bag.closedWith) || Boolean(handover && 'error' in handover)}
               busy={busy}
             >
               {t('mdp.drop.empty')}

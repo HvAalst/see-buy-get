@@ -1,4 +1,5 @@
-import { Test } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
+import { HubTransferService } from './hub-transfer.service';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -108,11 +109,13 @@ describe('crossing a border', () => {
   let photoOf: (vendorId: string) => string;
   /** Round 31 — an evidence photo we hold, uploaded by the party the act checks. */
   let photoBy: (ownerDid: string) => string;
+  /** 2026-11-24 — the module itself, for the services a test reaches for once (the hub handover, slice 4). */
+  let moduleRefNow: TestingModule;
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService, HubTransferService,
         BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
@@ -127,6 +130,7 @@ describe('crossing a border', () => {
         JourneyPlanService,
       ],
     }).compile();
+    moduleRefNow = moduleRef;
     roadOn = false;
     roadHub = ROAD.hubMdpId;
     roadFleet = ROAD.fleetDid;
@@ -1055,6 +1059,115 @@ describe('crossing a border', () => {
       expect(() => dispatch.claim(early!.offerId)).toThrow(/only Balkan Line’s drivers carry it/);
       roadOn = false;
       expect(offered(ours.did) || dispatch.suggest(ours.did, { from: AMSTERDAM, to: AMSTERDAM }).some((o) => o.ref === bag2.code)).toBe(false);
+    });
+
+    // 2026-11-24 — THE HANDOVER AT THE CENTRAL HUB (corridor compliance, slice 4; the owner: "Cross-border only").
+    it('a bag from another country is handed over at the hub by name on both sides, what is wrong said there; its parcels leave on a coded seal', () => {
+      const to = euShops();
+      const central = mdps.require(roadHub);
+      const from = shop('Grachten Winkel', 'Amsterdam', AMSTERDAM, 'NL', 3);
+      const transfers = moduleRefNow.get(HubTransferService);
+      const closures = moduleRefNow.get(BagClosureService);
+      const fleetOf = (name: string, n: number) => {
+        const m = managers.register({ companyName: name, contactPhone: `+3161000001${n}`, ownerFullName: 'Owner', ownerNationalId: `NID-NL-H${n}`, location: AMSTERDAM, jurisdiction: 'NL', requirements: { businessRegistrationNo: `BR-NL-H${n}`, transportOperatorLicence: `TOL-NL-H${n}`, taxId: `TAX-NL-H${n}` } } as never);
+        managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'p' });
+        managers.decideKyc(m.did, true);
+        return managers.recordBond(m.did);
+      };
+      const driverOf = (fleetDid: string, n: number, name: string) => {
+        const d = drivers.register({ displayName: name, fullName: `Driver ${n}`, nationalId: `NID-DH-${n}`, mobile: `+3162000001${n}`, licenceClasses: ['van'], licenceNumber: `L-NL-H${n}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetDid } as never);
+        drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' } as never);
+        drivers.decideKyc(d.did, true);
+        const van = vehicles.register({ plate: `NL-H-${n}`, vehicleClass: 'van', capacityKg: 1000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, managerDid: fleetDid } as never);
+        fleetSvc.couple(d.did, van.vehicleId);
+        return d;
+      };
+      const balkan = fleetOf('Balkan Line', 1);
+      roadFleet = balkan.did;
+      roadOn = true;
+      const ours = driverOf(balkan.did, 1, 'Ivo');
+      const local = driverOf(fleetOf('Sofia Vans', 2).did, 2, 'Mila');
+      const quote = routing.quoteShipment(from.did, to.did, 'M', undefined, { consumer: true });
+      const booked = () => parcels.createConsumerSend({ senderPersonDid: 'did:person:anna', senderPhoneHash: 'hash-anna', receiverMobile: '+359888123456', originAgentDid: from.did, destAgentDid: to.did, dimensionsCm: { l: 30, w: 20, h: 15 }, weightKg: 2, quote, noGoodsWithOwnRules: true }).parcel.parcelId;
+      // A bag from the Dutch shop to the central hub in Sofia, closed, loaded by the route driver's pass and read by them.
+      const carried = (throughTo?: { id: string; name: string }) => {
+        const bag = totes.register(from.did);
+        totes.assign(bag.code, central.mdpId, 'Sofia Central Hub');
+        const parcelId = booked();
+        totes.add(bag.code, parcelId, 'M');
+        if (throughTo) totes.markThrough(bag.code, throughTo.id, throughTo.name);
+        totes.markAvailable(bag.code);
+        mdps.closeBag(bag.code, { shopDid: from.did }, 'Test', { photoRef: photoBy(from.did) });
+        mdps.loadBag(bag.code, drivers.get(ours.did).badgeId!);
+        mdps.takeBag(bag.code, ours.did, 'Ivo', { photoRef: photoBy(ours.did), asClosed: true });
+        return { code: bag.code, parcelId };
+      };
+      const arrived = () => ({ photoRef: photoBy(central.did), asClosed: true });
+      const { code, parcelId } = carried();
+      // Without the driver's pass, refused, and nothing kept: the bag still on the van, its seal not received.
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar')).toThrow(/comes from another country: scan the pass on the driver’s phone/);
+      expect(totes.byCodeMaybe(code)).toMatchObject({ status: 'in_transit', carriedBy: ours.did });
+      expect(closures.current(totes.byCodeMaybe(code)!)?.receipt).toBeUndefined();
+      // A badge number alone hands over nothing; another driver's pass is not the one carrying it.
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar', Date.now(), { driverBadgeId: drivers.get(ours.did).badgeId! })).toThrow(/badge number on its own hands over nothing/);
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar', Date.now(), { driverBadgeId: fleetSvc.handoverPassFor(local.did)! })).toThrow(/not the driver carrying bag/);
+      // What is wrong: said in words, at most five things.
+      const pass = () => fleetSvc.handoverPassFor(ours.did)!;
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass(), exceptions: [{ note: 'x' }] })).toThrow(/Say in words what is wrong/);
+      expect(() => mdps.dropBag(central.mdpId, code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass(), exceptions: Array.from({ length: 6 }, () => ({ note: 'Wet corner' })) })).toThrow(/at most 5 things/);
+      expect(totes.byCodeMaybe(code)?.status).toBe('in_transit');
+      // Handed over: the driver by pass, Petar signed in, the seal as found, a torn corner with its photograph. The GPS watch hears
+      // the driver released it.
+      const told: string[] = [];
+      transfers.onRelease((did) => told.push(did));
+      const dropped = mdps.dropBag(central.mdpId, code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass(), exceptions: [{ note: '  Corner   torn ', photoRef: photoBy(central.did) }] });
+      expect(dropped.emptied).toEqual([parcelId]);
+      const record = transfers.get(dropped.transferId!)!;
+      expect(record).toMatchObject({ mdpId: central.mdpId, country: 'BG', bagCode: code, fromCountry: 'NL', fromPlace: 'Grachten Winkel', parcels: [parcelId], released: { driverDid: ours.did, driverName: 'Ivo', fleetDid: balkan.did }, received: { by: 'Petar', sealKind: 'photo', asClosed: true }, exceptions: [{ note: 'Corner torn', by: 'Petar' }], passedOnWhole: false, onward: [] });
+      expect(record.exceptions[0].photoRef).toBeDefined();
+      expect(transfers.forHub(central.mdpId).map((t) => t.transferId)).toEqual([record.transferId]);
+      expect(told).toEqual([ours.did]);
+      // Its parcel waits for a coded seal at this hub, and at no other.
+      expect(transfers.needsCodedSeal(central.mdpId, [parcelId])).toBe(true);
+      expect(transfers.needsCodedSeal('mdp_elsewhere', [parcelId])).toBe(false);
+      expect((parcels.get(parcelId).custody ?? []).slice(-1)[0]?.note).toMatch(/handed over at Sofia Central Hub by Ivo to Petar/);
+      // Onward: a bag of the hub's with that parcel leaves only on a coded seal; the pass that loads it closes the record.
+      const onward = totes.register(central.mdpId);
+      totes.assign(onward.code, to.did, 'Sofia shop');
+      totes.add(onward.code, parcelId, 'M');
+      expect(() => mdps.closeBag(onward.code, { mdpId: central.mdpId }, 'Petar', { photoRef: photoBy(central.did) })).toThrow(/leaves on a coded seal/);
+      mdps.closeBag(onward.code, { mdpId: central.mdpId }, 'Petar', { seal: 'BG-SEAL-0042', photoRef: photoBy(central.did) });
+      mdps.loadBag(onward.code, drivers.get(local.did).badgeId!);
+      expect(transfers.get(record.transferId)?.onward).toEqual([expect.objectContaining({ bagCode: onward.code, parcels: [parcelId], sealNumber: 'BG-SEAL-0042', driverDid: local.did, driverName: 'Mila' })]);
+      expect(transfers.needsCodedSeal(central.mdpId, [parcelId])).toBe(false);
+      expect((parcels.get(parcelId).custody ?? []).slice(-1)[0]?.note).toMatch(/on seal BG-SEAL-0042/);
+      // A bag of such parcels closed on a photograph alone, however it came to be, does not go.
+      const second = carried();
+      mdps.dropBag(central.mdpId, second.code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass() });
+      const loose = totes.register(central.mdpId);
+      totes.assign(loose.code, to.did, 'Sofia shop');
+      totes.add(loose.code, second.parcelId, 'M');
+      closures.checkClose(totes.byCodeMaybe(loose.code)!, { did: central.did, name: 'Petar', place: 'Sofia Central Hub' }, central.did, { photoRef: photoBy(central.did) })({ at: new Date().toISOString() });
+      expect(() => mdps.loadBag(loose.code, drivers.get(local.did).badgeId!)).toThrow(/close it on a coded seal/);
+      // A whole bag passed on to a hub further on: received here by name, then resealed before anyone loads it.
+      const varna = mdps.register({ name: 'Varna Hub', zones: ['Varna'], country: 'BG', location: { lat: 43.2141, lng: 27.9147 } }, { approvedBy: 'staff' });
+      const through = carried({ id: varna.mdpId, name: 'Varna Hub' });
+      const passed = mdps.dropBag(central.mdpId, through.code, arrived(), 'Petar', Date.now(), { driverBadgeId: pass() });
+      expect(passed).toMatchObject({ reseal: true, passedOn: { final: 'Varna Hub' } });
+      expect(transfers.get(passed.transferId!)?.passedOnWhole).toBe(true);
+      expect(totes.byCodeMaybe(through.code)?.closureId).toBeUndefined();
+      expect(() => mdps.loadBag(through.code, drivers.get(local.did).badgeId!)).toThrow(/Close bag .* first/);
+      expect(() => mdps.closeBag(through.code, { mdpId: central.mdpId }, 'Petar', { photoRef: photoBy(central.did) })).toThrow(/leaves on a coded seal/);
+      mdps.closeBag(through.code, { mdpId: central.mdpId }, 'Petar', { seal: 'BG-SEAL-0043', photoRef: photoBy(central.did) });
+      // Inside one country, as before: a Bulgarian shop's bag received at the hub on its seal alone.
+      const home = totes.register(to.did);
+      totes.assign(home.code, central.mdpId, 'Sofia Central Hub');
+      totes.add(home.code, booked(), 'M');
+      totes.markAvailable(home.code);
+      mdps.closeBag(home.code, { shopDid: to.did }, 'Test', { photoRef: photoBy(to.did) });
+      mdps.loadBag(home.code, drivers.get(local.did).badgeId!);
+      mdps.takeBag(home.code, local.did, 'Mila', { photoRef: photoBy(local.did), asClosed: true });
+      expect(mdps.dropBag(central.mdpId, home.code, arrived(), 'Petar').transferId).toBeUndefined();
     });
 
     it('a walk-up at a Dutch counter to a Bulgarian shop: paid there in cash, with the sender’s word, priced by the route and keeping it', () => {

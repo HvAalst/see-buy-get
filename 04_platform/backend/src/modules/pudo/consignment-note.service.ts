@@ -34,6 +34,8 @@ import { ShipperCodesService } from './shipper-codes.service';
 import { noteFingerprint } from './note-archive.types';
 import { retentionFor, retentionWords } from './retention';
 import { exceptionsInWords } from './receiving';
+import { TelemetryService } from './telemetry.service';
+import { RO_SIGNAL_LOST_MIN, type TransportTelemetrySession } from './telemetry.types';
 
 /**
  * Builds the consignment note for a load from what the network knows (see consignment-note.types.ts), renders it as
@@ -73,6 +75,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // The papers the shipper adds to a load: its commercial invoice (box 5) and its packages' GS1 codes (box 6).
     @Optional() private readonly invoices?: CommercialInvoiceService,
     @Optional() private readonly codes?: ShipperCodesService,
+    // 2026-11-24 — the GPS watch of RO e-Transport, on the note's custody chain (corridor compliance, slice 4).
+    @Optional() private readonly telemetry?: TelemetryService,
   ) {}
 
   onModuleInit(): void {
@@ -226,6 +230,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
     const seals = this.dispatch.sealsOnNote?.(f.freightId, opts.sealNumbers ?? Boolean(f.pickedUpAt)) ?? { lines: [], observations: [] };
     reservations.push(...seals.observations);
+    // 2026-11-24 — the positions of the vehicles that carried it, where a GPS watch of RO e-Transport followed them.
+    const gpsWatch = (this.telemetry?.forFreight(f.freightId) ?? []).map(gpsWatchLine);
     // Refused goods carried on as a new load: where they were refused, and that they never left the vehicle.
     if (f.returnOf) reservations.push(`Carried on from load ${f.returnOf.code}, refused by its consignee at ${f.pickupLabel}: taken over ${when(f.pickedUpAt ?? f.createdAt)} without leaving the vehicle`);
     // Round 35 — each exception under the tamper protocol, where and when, and its release by operations.
@@ -288,6 +294,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       // A door the carrier stood at and could not hand over at is the carrier's observation: box 18, for good.
       reservations: [...reservations, ...attempts],
       ...(seals.lines.length ? { seals: seals.lines } : {}),
+      ...(gpsWatch.length ? { gpsWatch } : {}),
       attempts,
       ...(claim ? { claim } : {}),
       established: { place: f.pickupLabel, at: f.createdAt },
@@ -678,6 +685,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
   ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? `<br><b>${e(dangerousWords(g))}</b>` : ''}</td><td>${g.packages == null ? (g.packaging === 'loose' ? 'In bulk' : '<span class="empty">Not stated by the sender</span>') : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.natureWords ?? g.nature)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
   ${n.seals?.length ? box('', 'Seals on the load — their numbers and what became of each', list(n.seals), 'wide') : ''}
+  ${n.gpsWatch?.length ? box('', 'Positions for RO e-Transport — the GPS watch of each vehicle that carried it', list(n.gpsWatch), 'wide') : ''}
   ${box(13, 'Sender’s instructions', list(n.instructions))}
   ${box(14, 'Instructions as to payment for carriage', e(n.carriage.paidBy === 'sender' ? 'Carriage paid' : n.carriage.paidBy === 'between-parties' ? 'Carriage settled between the parties' : 'Not yet agreed'))}
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}
@@ -781,6 +789,22 @@ function withoutSeals(p: LoadPassageView): LoadPassageView {
 function countryName(code: string | undefined): string | undefined {
   if (!code) return undefined;
   return catalogueEntry(code)?.name ?? code;
+}
+
+const PROVIDER_WORDS: Record<string, string> = { DRIVER_APP_GPS: 'the SeeBuyGet Driver app', WEBFLEET: 'Webfleet', TRIMBLE: 'Trimble', TRANSICS: 'Transics', CUSTOM_WEBHOOK: 'the fleet’s own system' };
+const CLOSED_WORDS: Record<string, string> = { left_romania: 'the vehicle left Romania', delivered: 'the cargo watched was delivered', handed_over: 'handed over at a hub', shift_ended: 'the shift ended', never_entered: 'it never entered Romania' };
+
+/**
+ * 2026-11-24 — one GPS watch of RO e-Transport, as the note's custody chain says it (slice 4): the vehicle, where its positions
+ * came from, Romania entered and left, the longest silence and those of 15 minutes or more, and how the watch ended.
+ */
+export function gpsWatchLine(s: TransportTelemetrySession): string {
+  const vehicle = s.trailerPlate ? `${s.plate} with trailer ${s.trailerPlate}` : s.plate;
+  const romania = s.enteredRoAt ? `entered Romania ${when(s.enteredRoAt)}${s.leftRoAt ? `, left it ${when(s.leftRoAt)}` : ''}` : 'not in Romania';
+  const long = s.gaps.filter((g) => (g.minutes ?? 0) >= RO_SIGNAL_LOST_MIN).length;
+  const silences = s.longestGapMin ? `longest silence ${s.longestGapMin} min; ${long === 1 ? '1 silence' : `${long} silences`} of ${RO_SIGNAL_LOST_MIN} min or more` : 'no silence over 2 minutes';
+  const ended = s.closedAt ? `watch ended ${when(s.closedAt)}: ${CLOSED_WORDS[s.closedBy ?? ''] ?? s.closedBy}` : 'watch still open';
+  return `Vehicle ${vehicle}, positions from ${PROVIDER_WORDS[s.provider] ?? s.provider} (watch ${s.sessionId}): ${romania}; ${s.pings} positions; ${silences}; ${ended}`;
 }
 
 function when(iso: string): string {

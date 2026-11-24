@@ -108,6 +108,11 @@ export interface ConsignmentNote {
   reservations: string[];
   /** Round 15 — the seals on the load, one line each: number, ISO 17712 class, maker, who closed it, what became of it. */
   seals?: string[];
+  /**
+   * 2026-11-24 — the custody chain's positions (corridor compliance, slice 4): each GPS watch of RO e-Transport on a vehicle that
+   * carried the load, one line each: the vehicle, where the positions came from, Romania entered and left, its silences.
+   */
+  gpsWatch?: string[];
   /** Box 21 — established in / on. */
   established: { place: string; at: string };
   /** Boxes 22–24 — the three confirmations, in the order the goods travel. */
