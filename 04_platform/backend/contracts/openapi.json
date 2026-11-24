@@ -72354,6 +72354,10 @@
           "carriedBy": {
             "type": "string"
           },
+          "loadedFrom": {
+            "type": "string",
+            "description": "2026-11-24 — the shop or hub a bag was loaded at, kept while it rides (its locationId names only the vehicle then): the\ncountry it left, for the GPS watch of RO e-Transport and the vehicle's manifest."
+          },
           "sealRequired": {
             "type": "boolean",
             "description": "A SHOP bag, published by the shopkeeper's SEAL and by nothing else. A hub bag has no seal step, so the\ndispatch sweep publishes it the moment it is full or aged; a shop bag that the sweep published behind\nthe counter would advertise a bag still open on the floor — and lock the shop out of the completeness\ngate, which only accepts a filling bag. The sweep asks the shop to close it instead (see publishReady).\nUndefined on a hub bag and on every pre-slice record, which is the correct default for both."
