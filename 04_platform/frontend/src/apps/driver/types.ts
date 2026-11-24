@@ -288,6 +288,7 @@ export interface Claimable {
   truckFlight?: string;
   /** 2026-11-23 — Romania's UIT or Bulgaria's UTN to show at a check, or why none is needed; whether one ran out. */
   fiscalCodes?: import('../../shared/fiscal-codes').FiscalCard[];
+  fiscalCompliance?: import('../../shared/fiscal-codes').FiscalCompliance;
   /** Round 38 — the commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
   /** 2026-11-11 — a bag sent to another hub because the one it went to is down; the extra leg paid where it was on board. */

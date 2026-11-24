@@ -275,7 +275,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       {load.nowWith ? <p class="hint">{nowWithLine(load.nowWith, t)} · {nowWithSince(load.nowWith, t)}</p> : null}
       <LoadWorkSummary work={load.work} forDriver={false} />
       {/* 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; a new one until it is delivered. */}
-      <FiscalCodeLines cards={load.fiscalCodes} />
+      <FiscalCodeLines cards={load.fiscalCodes} compliance={load.fiscalCompliance} />
       {['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(load.status) ? (
         <FiscalNewCode
           cards={load.fiscalCodes}

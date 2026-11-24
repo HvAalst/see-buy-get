@@ -52,7 +52,7 @@ import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, PresenceTester, PresenceTesterList, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { requireNoGoodsWithOwnRules, unionPassageBetween } from './country';
-import { fiscalCardOf, fiscalCodesFor } from './fiscal-codes';
+import { fiscalCardOf, fiscalCodesFor, fiscalIndemnityFor } from './fiscal-codes';
 import { unionBetween } from '../../foundation/countries/customs-union';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
@@ -4176,6 +4176,7 @@ export class SbgController {
     requireNoGoodsWithOwnRules(passage, dto.noGoodsWithOwnRules, 'noGoodsWithOwnRules', dto.natureCode);
     // 2026-11-23 — to or from a shop in Romania or Bulgaria: its UIT or UTN, or the sender's word that none is needed, at the counter.
     const fiscalCodes = fiscalCodesFor(dto.fiscalCodes, { pickupCountry: this.agents.countryOf(origin), destCountry: this.agents.countryOf(dest), weightKg: dto.weightKg }, { now: Date.now(), by: actor?.actorName ?? agentDid });
+    const fiscalIndemnity = fiscalIndemnityFor(dto.fiscalCodes, fiscalCodes, { now: Date.now(), by: actor?.actorName ?? agentDid });
     const freight = this.dispatch.registerFreight({
       description: `Counter freight (${cargoClass}) booked at ${origin.shopName}`,
       pickupLocation: origin.location,
@@ -4199,6 +4200,7 @@ export class SbgController {
       destCountry: this.agents.countryOf(dest),
       ...(passage ? { withinUnion: { ...passage, saidNoneAt: new Date().toISOString() } } : {}),
       ...(fiscalCodes.length ? { fiscalCodes } : {}),
+      ...(fiscalIndemnity ? { fiscalIndemnity } : {}),
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       commitMode: dto.commitMode,
       // 2026-11-13 — what it takes to move it (unusual loads): any extra work makes it negotiated.

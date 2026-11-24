@@ -90,6 +90,7 @@ export interface PersonLoadRow {
   nowWith?: NowWith;
   /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: its UIT or UTN, or the word that none is needed. */
   fiscalCodes?: FiscalCard[];
+  fiscalCompliance?: import('../../shared/fiscal-codes').FiscalCompliance;
 }
 
 /** A driver's price on it, and the person's price back where they gave one. */
@@ -123,7 +124,7 @@ export function personLoadApi(sbg: SbgClient) {
     post: (body: ReturnType<typeof personLoadBody>) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight', { body: body as never })),
     mine: () => sbg.request((c) => c.GET('/v1/sbg/dispatch/posted', {})),
     /** 2026-11-23 — a new UIT or UTN for a load, or the word that none is needed. */
-    fiscalCodes: (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody }) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/fiscal-codes', { params: { path: { id: freightId } }, body: body as never })),
+    fiscalCodes: (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody; indemnity?: true }) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/fiscal-codes', { params: { path: { id: freightId } }, body: body as never })),
     offers: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } } })),
     accept: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/accept', { params: { path: { id: proposalId } } })),
     decline: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),

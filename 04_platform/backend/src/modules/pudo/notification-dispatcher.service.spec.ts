@@ -277,6 +277,18 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     expect(notifications.inboxFor('d-nogps')).toHaveLength(0);
   });
 
+  it('a UIT running out within a day: the sender opens the load to give a new one; the driver and the office are told', async () => {
+    // 2026-11-24 — the owner's brief, feature 2: "an alert notification to both the Sender and Assigned Carrier/Dispatcher".
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FiscalCodeExpiring, { freightId: 'frt_9', code: 'FRT-9', key: 'RO:RO123456', country: 'RO', kind: 'UIT', fiscalCode: 'RO123456', expiresAt: '2026-11-27T21:59:59.999Z', expired: false, senderDid: 'did:biz', driverDid: 'did:drv', fleetDid: 'did:fleet' });
+    const sender = notifications.inboxFor('did:biz');
+    expect(sender).toHaveLength(1);
+    expect(sender[0]).toMatchObject({ kind: 'fiscal_code_expiring', title: 'Load FRT-9: its UIT code for Romania runs out within a day', link: '/?load=frt_9' });
+    expect(sender[0].body).toMatch(/UIT RO123456 runs out at 27 Nov, 23:59 \(Romania’s time\)\. Give a new one on the load/);
+    expect(notifications.inboxFor('did:drv')[0]).toMatchObject({ link: '/?go=loads' });
+    expect(notifications.inboxFor('did:fleet')).toHaveLength(1);
+  });
+
   it('a bag on a road route: told only to the drivers of the route’s fleet, opened where its whole load is', async () => {
     // 2026-11-23 — the Netherlands–Bulgaria plan, step 3c: only the route fleet's drivers carry such a bag; a bell to anybody else
     // would lead to a refusal.

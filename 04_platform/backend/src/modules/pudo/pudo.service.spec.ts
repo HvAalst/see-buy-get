@@ -12879,7 +12879,9 @@ describe('PUDO Light', () => {
     // 2026-11-23 — to a shop in Bulgaria: the UTN, or the word that none of the goods is on the high-fiscal-risk list.
     expect(() => controller.bookFreight({ ...base, noGoodsWithOwnRules: true } as never, { role: 'pudo', did: origin.did } as never)).toThrow(/Bulgaria the UTN code \(goods with high fiscal risk\)/);
     expect(dispatch.listFreight()).toHaveLength(before);
-    const res: any = controller.bookFreight({ ...base, noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } } as never, { role: 'pudo', did: origin.did } as never);
+    // 2026-11-24 — and the sender's certification of it.
+    expect(() => controller.bookFreight({ ...base, noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } } as never, { role: 'pudo', did: origin.did } as never)).toThrow(/Certify that the codes/);
+    const res: any = controller.bookFreight({ ...base, noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' }, indemnity: true } } as never, { role: 'pudo', did: origin.did } as never);
     const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
     expect(f.withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
     expect(f.fiscalCodes).toEqual([expect.objectContaining({ country: 'BG', exempt: 'not-listed' })]);
@@ -12889,7 +12891,7 @@ describe('PUDO Light', () => {
     const here = { lat: 44.43, lng: 26.1 };
     const sent = Date.parse('2026-11-23T08:00:00Z');
     const f = dispatch.registerFreight({ description: 'Tiles', pickupLocation: here, pickupLabel: 'Bucharest yard', destLabel: 'Venlo depot', destLocation: here, weightKg: 800, packaging: 'pallet', pickupCountry: 'RO', destCountry: 'NL', postedByDid: 'did:glos:biz-ro', fiscalCodes: fiscalCodesFor({ ro: { code: 'RO1234567890', from: '2026-11-23' } }, { pickupCountry: 'RO', destCountry: 'NL', weightKg: 800 }, { now: sent }) } as never, sent);
-    expect(dispatch.postedBy('did:glos:biz-ro', sent)[0].fiscalCodes).toEqual([{ country: 'RO', kind: 'UIT', code: 'RO1234567890', validThrough: '2026-11-27' }]);
+    expect(dispatch.postedBy('did:glos:biz-ro', sent)[0].fiscalCodes).toEqual([{ country: 'RO', kind: 'UIT', code: 'RO1234567890', validThrough: '2026-11-27', expiresAt: '2026-11-27T21:59:59.999Z', status: 'valid' }]);
     const stored = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
     stored.status = 'claimed';
     stored.claimedBy = 'did:glos:drv-ro';
@@ -12899,7 +12901,21 @@ describe('PUDO Light', () => {
     expect(() => dispatch.pickupFreight(f.freightId, 'did:glos:drv-ro', undefined, late)).toThrow(/The UIT code RO1234567890 for Romania \(RO e-Transport\) ran out on 2026-11-27: the sender gives a new one/);
     // Only its sender gives a new one; the one it replaces is kept beside it.
     expect(() => controller.setFreightFiscalCodes(f.freightId, { ro: { code: 'RO5555555555', from: '2026-11-28' } } as never, { role: 'business', did: 'did:glos:someone-else' } as never)).toThrow(/Freight not found/);
-    dispatch.setFiscalCodes(f.freightId, 'did:glos:biz-ro', 'Ioana', { ro: { code: 'RO9999999999', from: '2026-11-28' } }, late);
+    // 2026-11-24 — certified again, as the first was; and told of its end once, within the day before it (FiscalCodeSweeper).
+    expect(() => dispatch.setFiscalCodes(f.freightId, 'did:glos:biz-ro', 'Ioana', { ro: { code: 'RO9999999999', from: '2026-11-28' } }, late)).toThrow(/Certify that the codes/);
+    expect(dispatch.fiscalCodesToTell(late).map((d) => d.key)).toEqual(['RO:RO1234567890']);
+    expect(dispatch.fiscalCodesToTell(late)[0]).toMatchObject({ freightId: f.freightId, country: 'RO', expired: true, senderDid: 'did:glos:biz-ro', driverDid: 'did:glos:drv-ro' });
+    dispatch.markFiscalTold(f.freightId, 'RO:RO1234567890');
+    expect(dispatch.fiscalCodesToTell(late)).toEqual([]);
+    dispatch.setFiscalCodes(f.freightId, 'did:glos:biz-ro', 'Ioana', { ro: { code: 'RO9999999999', from: '2026-11-28' }, indemnity: true }, late);
+    expect(stored.fiscalIndemnity).toEqual({ at: new Date(late).toISOString(), by: 'Ioana' });
+    expect(dispatch.fiscalCodesToTell(late)).toEqual([]);
+    expect(dispatch.fiscalCodesToTell(Date.parse('2026-12-02T08:00:00Z')).map((d) => d.key)).toEqual(['RO:RO9999999999']);
+    expect(dispatch.postedBy('did:glos:biz-ro', late)[0].fiscalCompliance).toBe('declared_with_codes');
+    // Delivered, nobody is told of its code any more.
+    stored.status = 'delivered';
+    expect(dispatch.fiscalCodesToTell(Date.parse('2026-12-02T08:00:00Z'))).toEqual([]);
+    stored.status = 'claimed';
     expect(stored.fiscalCodes).toEqual([expect.objectContaining({ code: 'RO9999999999', validThrough: '2026-12-02', saidBy: 'Ioana' })]);
     expect(stored.fiscalCodesBefore).toEqual([expect.objectContaining({ code: 'RO1234567890' })]);
     // …and the taking over goes on to its next check.

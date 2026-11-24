@@ -192,7 +192,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Box 13 first for what customs reads (Art. 6(1)(j)): the sender's own instructions for it, and a bonded load's licence.
     if (f.customsInstructions) instructions.push(`For customs: ${f.customsInstructions}`);
     // 2026-11-23 — Romania's UIT and Bulgaria's UTN, where the goods are taken over or delivered there, or why none is needed.
-    instructions.push(...fiscalNoteLines(f.fiscalCodes, when));
+    instructions.push(...fiscalNoteLines(f.fiscalCodes, when, f.fiscalIndemnity));
     if (f.coverRequired) instructions.push('Insurance: the sender requires a carrier whose insurance cover SeeBuyGet has checked');
     // CMR Art. 6(2)(a): said where the carrier reads its instructions, and held against any reload below.
     if (f.noTranshipment) instructions.push('Transhipment is not allowed: the goods stay on the vehicle that took them over');

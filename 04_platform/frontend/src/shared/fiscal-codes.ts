@@ -20,7 +20,8 @@ export interface FiscalEntry {
   /** Romania: the day the transport was declared to start; Bulgaria: the day the UTN was issued. YYYY-MM-DD. */
   from: string;
 }
-export type FiscalForm = Partial<Record<FiscalCountry, FiscalEntry>>;
+/** `indemnity`: 2026-11-24 — the sender certifies the codes, or its reasons for none, are accurate (CMR art. 7 and 11). */
+export type FiscalForm = Partial<Record<FiscalCountry, FiscalEntry>> & { indemnity?: boolean };
 export const EMPTY_FISCAL_ENTRY: FiscalEntry = { choice: '', code: '', from: '' };
 
 /** The words of each answer a sender can give. */
@@ -58,7 +59,7 @@ export function fiscalEntryReady(e: FiscalEntry | undefined): boolean {
 }
 
 export function fiscalReady(form: FiscalForm, countries: readonly FiscalCountry[]): boolean {
-  return countries.every((c) => fiscalEntryReady(form[c]));
+  return countries.every((c) => fiscalEntryReady(form[c])) && (countries.length === 0 || form.indemnity === true);
 }
 
 export interface FiscalCodeBody {
@@ -68,14 +69,16 @@ export interface FiscalCodeBody {
 }
 
 /** What is sent: each asked country's code with its day, or its reason. Nothing where nothing is asked. */
-export function fiscalBody(form: FiscalForm, countries: readonly FiscalCountry[]): { ro?: FiscalCodeBody; bg?: FiscalCodeBody } | undefined {
-  const out: { ro?: FiscalCodeBody; bg?: FiscalCodeBody } = {};
+export function fiscalBody(form: FiscalForm, countries: readonly FiscalCountry[]): { ro?: FiscalCodeBody; bg?: FiscalCodeBody; indemnity?: true } | undefined {
+  const out: { ro?: FiscalCodeBody; bg?: FiscalCodeBody; indemnity?: true } = {};
   for (const c of countries) {
     const e = form[c];
     if (!e?.choice) continue;
     out[c === 'RO' ? 'ro' : 'bg'] = e.choice === 'code' ? { code: e.code.trim(), from: e.from } : { exempt: e.choice };
   }
-  return out.ro || out.bg ? out : undefined;
+  if (!out.ro && !out.bg) return undefined;
+  if (form.indemnity) out.indemnity = true;
+  return out;
 }
 
 /** A code as the server shows it, to a driver or the sender. */
@@ -85,18 +88,32 @@ export interface FiscalCard {
   code?: string;
   validThrough?: string;
   exempt?: 'thresholds' | 'excise' | 'not-listed';
-  expired?: boolean;
-  endsSoon?: boolean;
+  /** 2026-11-24 — the moment it stops, and its state now: still good, running out within 24 hours, or run out. */
+  expiresAt?: string;
+  status?: 'valid' | 'expiring_soon' | 'expired';
 }
 
-/** The words of a code: what it is, and whether it ran out or its last day is today or tomorrow. */
-export function fiscalCardWords(c: FiscalCard, t: (key: MessageKey, params?: Record<string, string | number>) => string, country: string, day: (iso: string) => string): { line: string; warn?: string; tone: 'ok' | 'warn' | 'danger' } {
+/** Codes only, or with any reason for none the sender gave. */
+export type FiscalCompliance = 'declared_with_codes' | 'exempt_declared_by_sender';
+export const FISCAL_COMPLIANCE_WORDS: Record<FiscalCompliance, MessageKey> = {
+  declared_with_codes: 'common.fiscal.declaredWithCodes',
+  exempt_declared_by_sender: 'common.fiscal.exemptDeclared',
+};
+
+/** The words of a code: what it is, and whether it ran out or runs out within 24 hours (when, to the minute). */
+export function fiscalCardWords(c: FiscalCard, t: (key: MessageKey, params?: Record<string, string | number>) => string, country: string, day: (iso: string) => string, moment: (iso: string) => string = day): { line: string; warn?: string; tone: 'ok' | 'warn' | 'danger' } {
   const line = c.code
     ? t('common.fiscal.cardCode', { country, kind: c.kind, code: c.code, date: day(c.validThrough ?? '') })
     : t(c.exempt === 'thresholds' ? 'common.fiscal.cardThresholds' : c.exempt === 'excise' ? 'common.fiscal.cardExcise' : 'common.fiscal.cardNotListed', { country });
-  if (c.expired) return { line, warn: t('common.fiscal.cardExpired', { date: day(c.validThrough ?? '') }), tone: 'danger' };
-  if (c.endsSoon) return { line, warn: t('common.fiscal.cardEndsSoon', { date: day(c.validThrough ?? '') }), tone: 'warn' };
+  if (c.status === 'expired') return { line, warn: t('common.fiscal.cardExpired', { date: day(c.validThrough ?? '') }), tone: 'danger' };
+  if (c.status === 'expiring_soon') return { line, warn: t('common.fiscal.cardEndsSoon', { date: c.expiresAt ? moment(c.expiresAt) : day(c.validThrough ?? '') }), tone: 'warn' };
   return { line, tone: 'ok' };
+}
+
+/** The moment a code stops, in the reader's language and time: "27 Nov, 22:59". */
+export function fiscalMoment(iso: string, locale: string): string {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? iso : new Date(t).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 /** A day of a code, said in the reader's language: "27 Nov 2026". */

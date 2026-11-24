@@ -625,15 +625,23 @@ export class FreightFiscalCode {
   @ApiPropertyOptional() saidBy?: string;
 }
 
-/** …as a driver or the sender reads it: the code and its last day, or why none is needed; whether it ran out or runs out within a day. */
+/** 2026-11-24 — the sender's certification that its codes, or its reasons for none, are accurate (CMR art. 7 and 11). */
+export class FreightFiscalIndemnity {
+  @ApiProperty() at: string;
+  @ApiPropertyOptional() by?: string;
+}
+
+/** …as a driver or the sender reads it: the code, its last day and the moment it stops, or why none is needed; its state now. */
 export class FiscalCodeCard {
   @ApiProperty({ enum: ['RO', 'BG'] }) country: 'RO' | 'BG';
   @ApiProperty({ enum: ['UIT', 'UTN'] }) kind: 'UIT' | 'UTN';
   @ApiPropertyOptional() code?: string;
   @ApiPropertyOptional() validThrough?: string;
+  /** 2026-11-24 — the last millisecond of its last day, in its country's time. */
+  @ApiPropertyOptional() expiresAt?: string;
+  /** 2026-11-24 — still good, running out within 24 hours, or run out. */
+  @ApiPropertyOptional({ enum: ['valid', 'expiring_soon', 'expired'] }) status?: 'valid' | 'expiring_soon' | 'expired';
   @ApiPropertyOptional({ enum: FISCAL_EXEMPTIONS }) exempt?: FiscalExemption;
-  @ApiPropertyOptional() expired?: boolean;
-  @ApiPropertyOptional() endsSoon?: boolean;
 }
 
 export class Freight {
@@ -743,6 +751,9 @@ export class Freight {
   @ApiPropertyOptional({ type: [FreightFiscalCode] }) fiscalCodes?: FreightFiscalCode[];
   /** …and the ones a new code replaced, kept. */
   @ApiPropertyOptional({ type: [FreightFiscalCode] }) fiscalCodesBefore?: FreightFiscalCode[];
+  /** 2026-11-24 — the sender's certification of them, and which codes' end its people were already told of. */
+  @ApiPropertyOptional({ type: FreightFiscalIndemnity }) fiscalIndemnity?: FreightFiscalIndemnity;
+  @ApiPropertyOptional({ type: [String] }) fiscalTold?: string[];
   /**
    * FP2 — WHO took the goods over and IN WHAT, fixed at pickup for the consignment note. Read live it would follow
    * the driver's later shifts; a note must name the vehicle that carried this load.
@@ -1663,6 +1674,7 @@ export class PostedFreightRow {
   code: string;
   /** 2026-11-23 — its UIT or UTN, or the word that none is needed: whether one ran out, for the sender to give a new one. */
   @ApiPropertyOptional({ type: [FiscalCodeCard] }) fiscalCodes?: FiscalCodeCard[];
+  @ApiPropertyOptional({ enum: ['declared_with_codes', 'exempt_declared_by_sender'] }) fiscalCompliance?: 'declared_with_codes' | 'exempt_declared_by_sender';
   /** Round 35 — held under the tamper protocol: what was found, where, since when. */
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** One load of an order its carrier split into several. */
@@ -1934,6 +1946,8 @@ export class Claimable {
   truckFlight?: string;
   /** 2026-11-23 — Romania's UIT or Bulgaria's UTN to show at a check, or why none is needed (fiscal-codes.ts). */
   @ApiPropertyOptional({ type: [FiscalCodeCard] }) fiscalCodes?: FiscalCodeCard[];
+  /** 2026-11-24 — codes only, or with any reason for none the sender gave. */
+  @ApiPropertyOptional({ enum: ['declared_with_codes', 'exempt_declared_by_sender'] }) fiscalCompliance?: 'declared_with_codes' | 'exempt_declared_by_sender';
   /** 2026-11-01 — the space the load takes, in cubic metres. */
   volumeM3?: number;
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */

@@ -89,7 +89,7 @@ import { railRefusal, type FreightRailGate } from './rail-leg.types';
 import { releaseRefusal, type FreightReleaseGate } from './air-release.types';
 import { animalVehicleRefusal, type FreightLiveAnimals } from './live-animals.types';
 import { palletVehicleRefusal, truckFlightOf, truckFlightWords, volumeRefusal } from './air-terminal.types';
-import { fiscalCardOf, fiscalCodesFor, fiscalNoteLines, fiscalPickupRefusal, type FiscalCode, type FiscalCodesInput } from './fiscal-codes';
+import { expiresAtOf, fiscalCardOf, fiscalCodesDue, fiscalCodesFor, fiscalComplianceOf, fiscalIndemnityFor, fiscalKey, fiscalNoteLines, fiscalPickupRefusal, type FiscalCode, type FiscalCodesInput, type FiscalIndemnity } from './fiscal-codes';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -652,7 +652,7 @@ export class DispatchService {
     return { code: t.code, status: t.status, ...(t.waitsForRoom ? { waitsForRoom: t.waitsForRoom } : {}) };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; receiverEmail?: string; receiverName?: string; codeForReceiver?: boolean; codeByEmailOnly?: boolean; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number; work?: unknown; escrow?: boolean; withinUnion?: UnionPassage & { saidNoneAt: string }; fiscalCodes?: FiscalCode[] }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; receiverEmail?: string; receiverName?: string; codeForReceiver?: boolean; codeByEmailOnly?: boolean; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number; work?: unknown; escrow?: boolean; withinUnion?: UnionPassage & { saidNoneAt: string }; fiscalCodes?: FiscalCode[]; fiscalIndemnity?: FiscalIndemnity }, now: number = Date.now(), checkOnly = false): Freight {
     // 2026-11-13 — what it takes to move it, checked before anything is worked out (unusual loads, U1–U3).
     const work = cleanWork(input.work);
     // How many packages: a whole number, or not said at all — never a fraction of a box.
@@ -789,6 +789,7 @@ export class DispatchService {
       // 2026-11-22 — to another EU country: the poster's word on what it holds, as the door asked it (BG-2).
       ...(input.withinUnion ? { withinUnion: { ...input.withinUnion } } : {}),
       ...(input.fiscalCodes?.length ? { fiscalCodes: input.fiscalCodes.map((c) => ({ ...c })) } : {}),
+      ...(input.fiscalIndemnity ? { fiscalIndemnity: { ...input.fiscalIndemnity } } : {}),
       // S32d — keep the buyer joined to their diverted order by phone HASH only (never the cleartext number:
       // the raw Freight goes to drivers/operators). Plus a public tracking key + the order ref. Only when a
       // buyer is known (a diverted order; not a bulletin freight).
@@ -2052,7 +2053,7 @@ export class DispatchService {
         freightId: f.freightId,
         code: f.code,
         ...(f.held ? { held: f.held } : {}),
-        ...(f.fiscalCodes?.length ? { fiscalCodes: fiscalCardOf(f.fiscalCodes, now) } : {}),
+        ...(f.fiscalCodes?.length ? { fiscalCodes: fiscalCardOf(f.fiscalCodes, now), fiscalCompliance: fiscalComplianceOf(f.fiscalCodes) } : {}),
         description: f.description,
         destLabel: f.destLabel,
         weightKg: f.weightKg,
@@ -2154,15 +2155,43 @@ export class DispatchService {
     if (!['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(f.status)) throw new GlosError('INVALID_STATE', `Freight is ${f.status}: its codes are no longer read`);
     const next = fiscalCodesFor(input, { pickupCountry: f.pickupCountry, destCountry: f.destCountry, weightKg: f.weightKg }, { now, by: byName }, false);
     if (!next.length) throw new GlosError('FIELD_REQUIRED', 'Give the code of Romania or Bulgaria, where this load is taken over or delivered', { field: 'fiscalCodes' });
+    // 2026-11-24 — a new code is certified again, as the first was.
+    const indemnity = fiscalIndemnityFor(input, next, { now, by: byName });
     const replaced = (f.fiscalCodes ?? []).filter((c) => next.some((n) => n.country === c.country));
     f.fiscalCodes = [...(f.fiscalCodes ?? []).filter((c) => !next.some((n) => n.country === c.country)), ...next];
     if (replaced.length) f.fiscalCodesBefore = [...(f.fiscalCodesBefore ?? []), ...replaced];
+    if (indemnity) f.fiscalIndemnity = indemnity;
     this.freights.set(f.freightId, f);
     if (f.claimedBy) {
       const text = fiscalNoteLines(next, (iso) => iso.slice(0, 10)).join('; ');
       void this.events.publish(GlosEvent.Pudo.FreightInstructed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, amended: true, text }, { source: 'pudo' }).catch(() => undefined);
     }
     return f;
+  }
+
+  /**
+   * 2026-11-24 — THE CODES WITHIN A DAY OF THEIR END (the owner's brief, feature 2; FiscalCodeSweeper): each UIT or UTN on a load
+   * still moving whose end is within 24 hours, or past, that its sender, driver and office were not told of yet.
+   */
+  fiscalCodesToTell(now: number = Date.now()): Array<{ freightId: string; code: string; key: string; country: 'RO' | 'BG'; kind: 'UIT' | 'UTN'; fiscalCode: string; expiresAt: string; expired: boolean; senderDid?: string; driverDid?: string; fleetDid?: string }> {
+    const out: ReturnType<DispatchService['fiscalCodesToTell']> = [];
+    for (const f of this.freights.values()) {
+      if (!(['scheduled', 'available', 'ordered', 'claimed', 'in_transit'] as string[]).includes(f.status)) continue;
+      for (const c of fiscalCodesDue(f.fiscalCodes, f.fiscalTold, now)) {
+        const expiresAt = expiresAtOf(c)!;
+        const fleetDid = f.claimedBy ? this.fleetOfDriver(f.claimedBy) : undefined;
+        out.push({ freightId: f.freightId, code: f.code, key: fiscalKey(c), country: c.country, kind: c.kind, fiscalCode: c.code ?? '', expiresAt, expired: Date.parse(expiresAt) < now, ...(f.postedByDid ? { senderDid: f.postedByDid } : {}), ...(f.claimedBy ? { driverDid: f.claimedBy } : {}), ...(fleetDid ? { fleetDid } : {}) });
+      }
+    }
+    return out;
+  }
+
+  /** …and kept as told, so each is told once. */
+  markFiscalTold(freightId: string, key: string): void {
+    const f = this.freights.get(freightId);
+    if (!f) return;
+    f.fiscalTold = [...new Set([...(f.fiscalTold ?? []), key])];
+    this.freights.set(f.freightId, f);
   }
 
   setInstructions(freightId: string, byDid: string, input: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, now: number = Date.now()): Freight {
@@ -5396,7 +5425,7 @@ export class DispatchService {
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
     // 2026-11-10 — between Kenya and Ethiopia: what the border manifest still lacks before pickup, and its page from then on.
     const borderManifest = this.manifests?.pairOf(f) && (f.status === 'claimed' || f.status === 'in_transit') ? this.manifestCard(f) : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(borderManifest ? { borderManifest } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.fiscalCodes?.length ? { fiscalCodes: fiscalCardOf(f.fiscalCodes, Date.now()) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}), ...(f.deliveryCode && !f.posterConfirmedAt ? { deliveryCodeNeeded: true, ...(f.codeEmailedAt && f.receiverName ? { checkName: f.receiverName } : {}) } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(borderManifest ? { borderManifest } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(workViewOf(f.work, f.dimensionsCm) ? { work: workViewOf(f.work, f.dimensionsCm) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}), ...(f.airTerminal ? { airTerminal: { side: f.airTerminal.side, awb: f.airTerminal.awb, airline: f.airTerminal.airline, handler: f.airTerminal.handler, pieces: f.airTerminal.pieces } } : {}), ...(f.truckFlight ? { truckFlight: truckFlightWords(f.truckFlight) } : {}), ...(f.fiscalCodes?.length ? { fiscalCodes: fiscalCardOf(f.fiscalCodes, Date.now()), fiscalCompliance: fiscalComplianceOf(f.fiscalCodes) } : {}), ...(f.volumeM3 ? { volumeM3: f.volumeM3 } : {}), ...(f.deliveryCode && !f.posterConfirmedAt ? { deliveryCodeNeeded: true, ...(f.codeEmailedAt && f.receiverName ? { checkName: f.receiverName } : {}) } : {}) };
   }
 
   /**

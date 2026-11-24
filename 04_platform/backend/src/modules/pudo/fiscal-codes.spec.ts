@@ -1,4 +1,4 @@
-import { dayIn, fiscalCardOf, fiscalCodesFor, fiscalCountriesOf, fiscalNoteLines, fiscalPickupRefusal, lastDayOf } from './fiscal-codes';
+import { dayIn, expiresAtOf, fiscalCardOf, fiscalCodesDue, fiscalCodesFor, fiscalComplianceOf, fiscalCountriesOf, fiscalIndemnityFor, fiscalKey, fiscalNoteLines, fiscalPickupRefusal, fiscalStatusOf, lastDayOf } from './fiscal-codes';
 
 /*
  * 2026-11-23 — THE CODES ROMANIA AND BULGARIA FOLLOW GOODS BY (the owner: "dedicated fields for both Romanian UIT and Bulgarian UTN
@@ -80,9 +80,56 @@ describe('the codes Romania and Bulgaria follow goods by', () => {
       'Romania, RO e-Transport: UIT 9A1B2C3D, valid through 2026-11-27',
       'Bulgaria, goods with high fiscal risk: no UTN code; the sender says none of the goods is on the Minister of Finance’s list of goods with high fiscal risk (2026-11-23)',
     ]);
-    expect(fiscalCardOf(codes, Date.parse('2026-11-26T10:00:00Z'))[0]).toMatchObject({ code: '9A1B2C3D', validThrough: '2026-11-27', endsSoon: true });
-    expect(fiscalCardOf(codes, Date.parse('2026-11-28T10:00:00Z'))[0]).toMatchObject({ expired: true });
-    expect(fiscalCardOf(codes, NOW)[0].endsSoon).toBeUndefined();
+    // The card: when it stops, and its state now (2026-11-24).
+    expect(fiscalCardOf(codes, NOW)[0]).toEqual({ country: 'RO', kind: 'UIT', code: '9A1B2C3D', validThrough: '2026-11-27', expiresAt: '2026-11-27T21:59:59.999Z', status: 'valid' });
+    expect(fiscalCardOf(codes, Date.parse('2026-11-27T00:00:00Z'))[0].status).toBe('expiring_soon');
+    expect(fiscalCardOf(codes, Date.parse('2026-11-28T10:00:00Z'))[0].status).toBe('expired');
     expect(fiscalCardOf(codes, NOW)[1]).toEqual({ country: 'BG', kind: 'UTN', exempt: 'not-listed' });
+  });
+
+  // 2026-11-24 — the owner's brief: a value threshold, a certification, the status, and the moment a code stops.
+  it('refuses “below the thresholds” for a load worth over RON 10,000, whatever it weighs', () => {
+    expect(() => fiscalCodesFor({ ro: { exempt: 'thresholds' } }, { ...toRO, weightKg: 100, valueRon: 12_000 }, said)).toThrow(/worth about RON 12,000: over RON 10,000, Romania asks a UIT code/);
+    expect(fiscalCodesFor({ ro: { exempt: 'thresholds' } }, { ...toRO, weightKg: 100, valueRon: 10_000 }, said)[0].exempt).toBe('thresholds');
+    expect(fiscalCodesFor({ ro: { exempt: 'thresholds' } }, { ...toRO, weightKg: 100 }, said)[0].exempt).toBe('thresholds');
+  });
+
+  it('asks the sender’s certification wherever a code or a reason is given, and keeps when and who', () => {
+    const codes = fiscalCodesFor({ bg: { exempt: 'not-listed' } }, toBG, said);
+    expect(() => fiscalIndemnityFor({ bg: { exempt: 'not-listed' } }, codes, said)).toThrow(/Certify that the codes, or your reasons for none, are accurate/);
+    try {
+      fiscalIndemnityFor({}, codes, said);
+    } catch (e) {
+      expect((e as { params?: Record<string, unknown> }).params).toMatchObject({ field: 'fiscalCodes.indemnity' });
+    }
+    expect(fiscalIndemnityFor({ indemnity: true }, codes, said)).toEqual({ at: '2026-11-23T10:00:00.000Z', by: 'Anna' });
+    expect(fiscalIndemnityFor({}, codes, said, false)).toBeUndefined();
+    expect(fiscalIndemnityFor({}, [], said)).toBeUndefined();
+    expect(fiscalNoteLines(codes, (iso) => iso.slice(0, 10), { at: '2026-11-23T10:00:00.000Z', by: 'Anna' }).pop()).toBe('The sender certifies that these codes, or its reasons for none, are accurate, and answers for them (CMR articles 7 and 11): Anna, 2026-11-23');
+  });
+
+  it('says whether a load went with codes only, or with a reason for none', () => {
+    const ro = fiscalCodesFor({ ro: { code: '9A1B2C3D', from: '2026-11-23' } }, toRO, said);
+    const bg = fiscalCodesFor({ bg: { exempt: 'not-listed' } }, toBG, said);
+    expect(fiscalComplianceOf(ro)).toBe('declared_with_codes');
+    expect(fiscalComplianceOf([...ro, ...bg])).toBe('exempt_declared_by_sender');
+    expect(fiscalComplianceOf([])).toBeUndefined();
+  });
+
+  it('a code stops at the end of its last day in its country’s time, across a change of clocks too', () => {
+    expect(expiresAtOf({ country: 'RO', validThrough: '2026-11-27' })).toBe('2026-11-27T21:59:59.999Z'); // winter: UTC+2
+    expect(expiresAtOf({ country: 'BG', validThrough: '2026-07-01' })).toBe('2026-07-01T20:59:59.999Z'); // summer: UTC+3
+    expect(expiresAtOf({ country: 'RO', validThrough: '2027-03-28' })).toBe('2027-03-28T20:59:59.999Z'); // the night clocks go forward
+    expect(expiresAtOf({ country: 'RO' })).toBeUndefined();
+    expect(fiscalStatusOf({ country: 'RO', validThrough: '2026-11-27' }, Date.parse('2026-11-26T22:00:00Z'))).toBe('expiring_soon');
+    expect(fiscalStatusOf({ country: 'RO', validThrough: '2026-11-27' }, Date.parse('2026-11-26T21:59:00Z'))).toBe('valid');
+  });
+
+  it('the codes due to be told: within a day of their end or past it, each once', () => {
+    const codes = fiscalCodesFor({ ro: { code: '9A1B2C3D', from: '2026-11-23' } }, { pickupCountry: 'RO', destCountry: 'NL', weightKg: 800 }, said);
+    expect(fiscalCodesDue(codes, [], NOW)).toEqual([]);
+    expect(fiscalCodesDue(codes, [], Date.parse('2026-11-27T00:00:00Z')).map(fiscalKey)).toEqual(['RO:9A1B2C3D']);
+    expect(fiscalCodesDue(codes, ['RO:9A1B2C3D'], Date.parse('2026-11-27T00:00:00Z'))).toEqual([]);
+    expect(fiscalCodesDue(fiscalCodesFor({ bg: { exempt: 'not-listed' } }, toBG, said), [], Date.parse('2027-01-01T00:00:00Z'))).toEqual([]);
   });
 });

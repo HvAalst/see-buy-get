@@ -38,6 +38,8 @@ export const FISCAL_RULES: Record<FiscalCountry, { kind: 'UIT' | 'UTN'; country:
 
 /** Romania's weight above which a consignment is declared (gross), whatever it is worth. */
 export const RO_THRESHOLD_KG = 500;
+/** …and its value, in lei, above which it is declared whatever it weighs (2026-11-24). */
+export const RO_THRESHOLD_RON = 10_000;
 
 /** What a sender gives for one country: the code and the day it counts from, or why none is needed. */
 export interface FiscalCodeInput {
@@ -46,7 +48,17 @@ export interface FiscalCodeInput {
   from?: string;
   exempt?: string;
 }
-export type FiscalCodesInput = Partial<Record<'ro' | 'bg', FiscalCodeInput>>;
+/** `indemnity`: the sender certifies its codes, or its reasons for none, are accurate (CMR art. 7 and 11; 2026-11-24). */
+export type FiscalCodesInput = Partial<Record<'ro' | 'bg', FiscalCodeInput>> & { indemnity?: boolean };
+
+/** The sender's certification, kept with when and by whom it was given. */
+export interface FiscalIndemnity {
+  at: string;
+  by?: string;
+}
+
+/** Whether a load went with codes only, or with any reason for none the sender gave (the owner's brief, 2026-11-24). */
+export type FiscalCompliance = 'declared_with_codes' | 'exempt_declared_by_sender';
 
 /** One country's code on a load, or the sender's word that none is needed: kept with when it was said and by whom. */
 export interface FiscalCode {
@@ -99,18 +111,27 @@ function asked(countries: FiscalCountry[]): string {
  * given, where a code is not letters and digits, has no day, or has run out, and where Romania's weight threshold is passed but
  * the sender says it is not.
  */
-export function fiscalCodesFor(input: FiscalCodesInput | undefined, load: { pickupCountry?: string; destCountry?: string; weightKg: number }, said: { now: number; by?: string }, requireAll = true): FiscalCode[] {
+export function fiscalCodesFor(input: FiscalCodesInput | undefined, load: FiscalLoad, said: { now: number; by?: string }, requireAll: boolean | (() => boolean) = true): FiscalCode[] {
   const countries = fiscalCountriesOf(load.pickupCountry, load.destCountry);
   const given = (c: FiscalCountry) => {
     const v = input?.[keyOf(c)];
     return v && (v.code?.trim() || v.exempt?.trim()) ? v : undefined;
   };
   const missing = countries.filter((c) => !given(c));
-  if (missing.length && requireAll) throw new GlosError('FIELD_REQUIRED', asked(missing), { field: 'fiscalCodes', countries: missing.join(',') });
+  // Asked only when something is missing, so a company's system is warned of a rule only where it would refuse this call.
+  if (missing.length && (typeof requireAll === 'function' ? requireAll() : requireAll)) throw new GlosError('FIELD_REQUIRED', asked(missing), { field: 'fiscalCodes', countries: missing.join(',') });
   return countries.filter((c) => given(c)).map((c) => oneCode(c, given(c)!, load, said));
 }
 
-function oneCode(country: FiscalCountry, v: FiscalCodeInput, load: { pickupCountry?: string; destCountry?: string; weightKg: number }, said: { now: number; by?: string }): FiscalCode {
+/** The load a code is asked of: its two countries, its weight, and its declared value in lei where it has one. */
+export interface FiscalLoad {
+  pickupCountry?: string;
+  destCountry?: string;
+  weightKg: number;
+  valueRon?: number;
+}
+
+function oneCode(country: FiscalCountry, v: FiscalCodeInput, load: FiscalLoad, said: { now: number; by?: string }): FiscalCode {
   const rule = FISCAL_RULES[country];
   const field = `fiscalCodes.${keyOf(country)}`;
   const code = (v.code ?? '').replace(/[\s.-]/g, '').toUpperCase();
@@ -121,6 +142,9 @@ function oneCode(country: FiscalCountry, v: FiscalCodeInput, load: { pickupCount
     if (!(rule.exemptions as readonly string[]).includes(exempt)) throw new GlosError('VALIDATION_FAILED', `${rule.country}: why no ${rule.kind} code is needed is one of ${rule.exemptions.join(', ')}`, { field });
     if (exempt === 'thresholds' && load.weightKg > RO_THRESHOLD_KG) {
       throw new GlosError('VALIDATION_FAILED', `This load weighs ${load.weightKg} kg: over ${RO_THRESHOLD_KG} kg, Romania asks a UIT code for it`, { field });
+    }
+    if (exempt === 'thresholds' && load.valueRon !== undefined && load.valueRon > RO_THRESHOLD_RON) {
+      throw new GlosError('VALIDATION_FAILED', `This load is worth about RON ${Math.round(load.valueRon).toLocaleString('en-GB')}: over RON 10,000, Romania asks a UIT code for it`, { field });
     }
     return { ...base, exempt: exempt as FiscalExemption };
   }
@@ -146,9 +170,55 @@ export function fiscalPickupRefusal(codes: readonly FiscalCode[] | undefined, no
   return undefined;
 }
 
-/** Each code as box 13 of the consignment note says it. `when` writes a moment as the note does. */
-export function fiscalNoteLines(codes: readonly FiscalCode[] | undefined, when: (iso: string) => string): string[] {
-  return (codes ?? []).map((c) => {
+/**
+ * The sender's certification that its codes, or its reasons for none, are accurate (the owner, 2026-11-24: "a required tick";
+ * CMR art. 7 and 11, the sender answers for its particulars). Asked wherever a load carries a code or a reason; refused without
+ * it unless `require` is false (a company's system before the rule refuses it).
+ */
+export function fiscalIndemnityFor(input: FiscalCodesInput | undefined, codes: readonly FiscalCode[], said: { now: number; by?: string }, require: boolean | (() => boolean) = true): FiscalIndemnity | undefined {
+  if (!codes.length) return undefined;
+  if (input?.indemnity === true) return { at: new Date(said.now).toISOString(), ...(said.by ? { by: said.by.slice(0, 80) } : {}) };
+  if (typeof require === 'function' ? require() : require) throw new GlosError('FIELD_REQUIRED', 'Certify that the codes, or your reasons for none, are accurate: you answer for them as the sender (CMR articles 7 and 11)', { field: 'fiscalCodes.indemnity' });
+  return undefined;
+}
+
+/** Codes only, or any reason for none the sender gave; nothing for a load asked none. */
+export function fiscalComplianceOf(codes: readonly FiscalCode[] | undefined): FiscalCompliance | undefined {
+  if (!codes?.length) return undefined;
+  return codes.every((c) => c.code) ? 'declared_with_codes' : 'exempt_declared_by_sender';
+}
+
+/** The minutes a time zone is ahead of UTC at a moment. */
+function offsetMinutes(timeZone: string, at: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(at));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return Math.round((asUtc - Math.floor(at / 1000) * 1000) / 60_000);
+}
+
+/** The moment a code stops: the last millisecond of its last day, in its country's time; nothing for a reason without a code. */
+export function expiresAtOf(c: Pick<FiscalCode, 'country' | 'validThrough'>): string | undefined {
+  if (!c.validThrough) return undefined;
+  const timeZone = FISCAL_RULES[c.country].timeZone;
+  const midnight = Date.parse(`${c.validThrough}T00:00:00Z`) + DAY;
+  // Its next midnight there, asked twice: once at the guess, once at the answer, so a change of clocks that night is counted.
+  const first = midnight - offsetMinutes(timeZone, midnight) * 60_000;
+  const at = midnight - offsetMinutes(timeZone, first) * 60_000;
+  return new Date(at - 1).toISOString();
+}
+
+/** A code's state as a reader sees it: still good, running out within 24 hours, or run out. */
+export type FiscalCodeStatus = 'valid' | 'expiring_soon' | 'expired';
+export function fiscalStatusOf(c: Pick<FiscalCode, 'country' | 'validThrough'>, now: number): FiscalCodeStatus | undefined {
+  const end = expiresAtOf(c);
+  if (!end) return undefined;
+  const left = Date.parse(end) - now;
+  return left < 0 ? 'expired' : left < DAY ? 'expiring_soon' : 'valid';
+}
+
+/** Each code as box 13 of the consignment note says it, and the sender's certification. `when` writes a moment as the note does. */
+export function fiscalNoteLines(codes: readonly FiscalCode[] | undefined, when: (iso: string) => string, indemnity?: FiscalIndemnity): string[] {
+  const lines = (codes ?? []).map((c) => {
     const rule = FISCAL_RULES[c.country];
     const head = `${rule.country}, ${rule.system}`;
     if (c.code) return `${head}: ${rule.kind} ${c.code}, valid through ${c.validThrough}`;
@@ -158,15 +228,25 @@ export function fiscalNoteLines(codes: readonly FiscalCode[] | undefined, when: 
       : 'none of the goods is on the Minister of Finance’s list of goods with high fiscal risk';
     return `${head}: no ${rule.kind} code; the sender says ${why} (${when(c.saidAt)})`;
   });
+  if (lines.length && indemnity) lines.push(`The sender certifies that these codes, or its reasons for none, are accurate, and answers for them (CMR articles 7 and 11): ${indemnity.by ?? 'the sender'}, ${when(indemnity.at)}`);
+  return lines;
 }
 
-/** For the driver's card: each code, the last day it holds, and whether it has run out or runs out within a day. */
-export function fiscalCardOf(codes: readonly FiscalCode[] | undefined, now: number): Array<{ country: FiscalCountry; kind: 'UIT' | 'UTN'; code?: string; validThrough?: string; exempt?: FiscalExemption; expired?: true; endsSoon?: true }> {
+/** For the driver's and the sender's card: each code, when it stops, and whether it is still good, running out, or run out. */
+export function fiscalCardOf(codes: readonly FiscalCode[] | undefined, now: number): Array<{ country: FiscalCountry; kind: 'UIT' | 'UTN'; code?: string; validThrough?: string; expiresAt?: string; status?: FiscalCodeStatus; exempt?: FiscalExemption }> {
   return (codes ?? []).map((c) => {
-    const today = dayIn(FISCAL_RULES[c.country].timeZone, now);
-    const tomorrow = dayIn(FISCAL_RULES[c.country].timeZone, now + DAY);
-    const expired = c.validThrough !== undefined && today > c.validThrough;
-    const endsSoon = !expired && c.validThrough !== undefined && tomorrow >= c.validThrough;
-    return { country: c.country, kind: c.kind, ...(c.code ? { code: c.code, validThrough: c.validThrough } : {}), ...(c.exempt ? { exempt: c.exempt } : {}), ...(expired ? { expired: true as const } : {}), ...(endsSoon ? { endsSoon: true as const } : {}) };
+    const status = fiscalStatusOf(c, now);
+    return { country: c.country, kind: c.kind, ...(c.code ? { code: c.code, validThrough: c.validThrough, expiresAt: expiresAtOf(c), status } : {}), ...(c.exempt ? { exempt: c.exempt } : {}) };
+  });
+}
+
+/** The codes whose end is within a day, or already past, that their load's people have not been told of: by their key. */
+export function fiscalKey(c: Pick<FiscalCode, 'country' | 'code'>): string {
+  return `${c.country}:${c.code ?? ''}`;
+}
+export function fiscalCodesDue(codes: readonly FiscalCode[] | undefined, told: readonly string[] | undefined, now: number): FiscalCode[] {
+  return (codes ?? []).filter((c) => {
+    const end = expiresAtOf(c);
+    return end !== undefined && Date.parse(end) - now < DAY && !(told ?? []).includes(fiscalKey(c));
   });
 }

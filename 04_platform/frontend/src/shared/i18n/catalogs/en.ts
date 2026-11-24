@@ -551,12 +551,16 @@ export const en = {
   'common.fiscal.cardExcise': '{country}: no UIT code. The sender says these are excise goods under their excise document.',
   'common.fiscal.cardNotListed': '{country}: no UTN. The sender says none of the goods is on the list of goods with high fiscal risk.',
   'common.fiscal.cardExpired': 'It ran out on {date}. A new one is needed before the goods are taken over.',
-  'common.fiscal.cardEndsSoon': 'Its last day is {date}.',
+  'common.fiscal.cardEndsSoon': 'It runs out on {date}.',
   'common.fiscal.showTitle': 'Show at a check',
   'common.fiscal.newCode': 'Give a new code',
   'common.fiscal.newSave': 'Save the new code',
   'common.fiscal.newSaved': 'The new code is on the load, and the driver is told.',
   'common.fiscal.cancel': 'Cancel',
+  // 2026-11-24 — the sender certifies them; whether a load went with codes only.
+  'common.fiscal.indemnity': 'I certify that these codes, or the reasons given for none, are accurate. As the sender I answer for them (CMR articles 7 and 11).',
+  'common.fiscal.declaredWithCodes': 'Declared with codes',
+  'common.fiscal.exemptDeclared': 'No code needed for some, as the sender declared',
   'common.bar.readAloud': 'Read aloud',
   'common.bar.allApps': 'All apps',
   // Under every box an address is typed into to find shops (OsmCredit): OpenStreetMap's service, credited as it asks.

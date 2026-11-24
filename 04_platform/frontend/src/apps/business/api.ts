@@ -224,6 +224,7 @@ export interface PostedLoad {
   returnOf?: { freightId: string; code: string };
   /** 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; whether one ran out. */
   fiscalCodes?: import('../../shared/fiscal-codes').FiscalCard[];
+  fiscalCompliance?: import('../../shared/fiscal-codes').FiscalCompliance;
   /** FP7 — box 13: what the driver is told, and whether the business may still rewrite it ('edit'), only add to it ('amend'), or neither. */
   instructions?: import('../../shared/instructions').InstructionsView;
   instructionsMode?: 'edit' | 'amend' | 'none';
@@ -354,7 +355,7 @@ export interface NewLoad {
   /** 2026-11-22 — to another EU country: it holds no alcohol, tobacco, medicines or weapons (BG-2). */
   noGoodsWithOwnRules?: boolean;
   /** 2026-11-23 — taken over or delivered in Romania or Bulgaria: the UIT or UTN, or why none is needed. */
-  fiscalCodes?: { ro?: import('../../shared/fiscal-codes').FiscalCodeBody; bg?: import('../../shared/fiscal-codes').FiscalCodeBody };
+  fiscalCodes?: { ro?: import('../../shared/fiscal-codes').FiscalCodeBody; bg?: import('../../shared/fiscal-codes').FiscalCodeBody; indemnity?: true };
   weightKg: number;
   packaging?: string;
   /** CMR box 2 — who receives the goods. */

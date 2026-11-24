@@ -3,10 +3,11 @@ import { Abbreviated } from './Abbr';
 import { Button } from './Button';
 import { Card } from './Card';
 import { Choice } from './Choice';
+import { CheckGate } from './CheckGate';
 import { Note } from './ErrorNote';
 import { useLocale, useT } from '../i18n';
 import { countryNameIn } from '../documents/documents';
-import { EMPTY_FISCAL_ENTRY, FISCAL_CHOICES, FISCAL_CHOICE_WORDS, fiscalBody, fiscalBodyWords, fiscalCardWords, fiscalDay, fiscalFromWords, fiscalHeadWords, fiscalReady, type FiscalCard, type FiscalChoice, type FiscalCodeBody, type FiscalCountry, type FiscalForm } from '../fiscal-codes';
+import { EMPTY_FISCAL_ENTRY, FISCAL_CHOICES, FISCAL_CHOICE_WORDS, FISCAL_COMPLIANCE_WORDS, fiscalBody, fiscalBodyWords, fiscalCardWords, fiscalDay, fiscalFromWords, fiscalHeadWords, fiscalMoment, fiscalReady, type FiscalCard, type FiscalChoice, type FiscalCodeBody, type FiscalCompliance, type FiscalCountry, type FiscalForm } from '../fiscal-codes';
 
 /**
  * 2026-11-23 — THE CODES ROMANIA AND BULGARIA FOLLOW GOODS BY, ASKED (shared/fiscal-codes.ts; the owner: "dedicated fields for both
@@ -49,6 +50,8 @@ export function FiscalCodes({ countries, value, onChange, idPrefix, bare = false
           </div>
         );
       })}
+      {/* 2026-11-24 — the sender's certification (the owner: "a required tick"). */}
+      <CheckGate items={[{ key: 'indemnity', label: t('common.fiscal.indemnity') }]} checked={value.indemnity ? ['indemnity'] : []} onChange={(keys) => onChange({ ...value, indemnity: keys.length > 0 })} />
     </>
   );
   // `bare`: inside a card that already says what this is (a load's own codes), without a second card around it.
@@ -62,14 +65,15 @@ export function FiscalCodes({ countries, value, onChange, idPrefix, bare = false
 }
 
 /** Each code on a load, said: the code and its last day, or why none is needed; one that ran out or is about to, warned. */
-export function FiscalCodeLines({ cards, title }: { cards?: readonly FiscalCard[]; title?: string }) {
+export function FiscalCodeLines({ cards, title, compliance }: { cards?: readonly FiscalCard[]; title?: string; compliance?: FiscalCompliance }) {
   const t = useT();
   const locale = useLocale();
   if (!cards?.length) return null;
   return (
     <>
+      {compliance ? <p class="card__note">{t(FISCAL_COMPLIANCE_WORDS[compliance])}</p> : null}
       {cards.map((c) => {
-        const w = fiscalCardWords(c, t, countryNameIn(c.country, locale), (iso) => fiscalDay(iso, locale));
+        const w = fiscalCardWords(c, t, countryNameIn(c.country, locale), (iso) => fiscalDay(iso, locale), (iso) => fiscalMoment(iso, locale));
         return w.warn ? (
           <Note key={c.country} tone={w.tone === 'danger' ? 'danger' : 'warn'} icon="warning" title={w.line} detail={w.warn} />
         ) : (
@@ -87,7 +91,7 @@ export function FiscalCodeLines({ cards, title }: { cards?: readonly FiscalCard[
  * The sender gives a new code: one that ran out, or was wrong, until the goods are delivered. `save` sends what was given and
  * answers with why it was refused, or nothing.
  */
-export function FiscalNewCode({ cards, idPrefix, save }: { cards?: readonly FiscalCard[]; idPrefix: string; save: (body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody }) => Promise<string | null> }) {
+export function FiscalNewCode({ cards, idPrefix, save }: { cards?: readonly FiscalCard[]; idPrefix: string; save: (body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody; indemnity?: true }) => Promise<string | null> }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FiscalForm>({});

@@ -209,7 +209,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* 2026-11-23 — Romania's UIT or Bulgaria's UTN, to show at a check; one that ran out, said. */}
                   {c.fiscalCodes?.length ? (
                     <div class="load__nav">
-                      <FiscalCodeLines cards={c.fiscalCodes} title={t('common.fiscal.showTitle')} />
+                      <FiscalCodeLines cards={c.fiscalCodes} title={t('common.fiscal.showTitle')} compliance={c.fiscalCompliance} />
                     </div>
                   ) : null}
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
@@ -571,7 +571,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
           {/* 2026-11-01 — a truck run as a flight: said where the goods change hands. */}
           {claim.truckFlight ? <Note tone="info" icon="info" title={t('driver.air.truckFlightTitle')} detail={claim.truckFlight} /> : null}
           {/* 2026-11-23 — Romania's UIT or Bulgaria's UTN: what to show at a check, and one that ran out stops the taking over. */}
-          <FiscalCodeLines cards={claim.fiscalCodes} title={t('common.fiscal.showTitle')} />
+          <FiscalCodeLines cards={claim.fiscalCodes} title={t('common.fiscal.showTitle')} compliance={claim.fiscalCompliance} />
           {isPickup && claim.collectAtHub && !claim.collectAtHub.handed ? <Note tone="warn" icon="warning" title={t('driver.loads.collectFirstTitle')} detail={t('driver.loads.collectFirstDetail', { parcel: claim.collectAtHub.parcelId, hub: claim.collectAtHub.hubName })} /> : null}
           {isPickup && claim.sealMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.sealMissingTitle')} detail={t('driver.loads.sealMissingDetail', { why: claim.sealMissing })} /> : null}
           {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}

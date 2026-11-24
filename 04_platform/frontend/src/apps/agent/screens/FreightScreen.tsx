@@ -248,7 +248,7 @@ function Prices({ load, state, actions, sbg }: { load: PostedFreight } & Freight
       {/* 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; a new one until it is delivered. */}
       {load.fiscalCodes?.length ? (
         <Card title={t('common.fiscal.title')}>
-          <FiscalCodeLines cards={load.fiscalCodes} />
+          <FiscalCodeLines cards={load.fiscalCodes} compliance={load.fiscalCompliance} />
           {['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(load.status) ? <FiscalNewCode cards={load.fiscalCodes} idPrefix={`fiscal-${load.freightId}`} save={(body) => actions.setFreightFiscalCodes(load.freightId, body)} /> : null}
         </Card>
       ) : null}

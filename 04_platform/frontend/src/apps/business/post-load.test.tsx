@@ -499,9 +499,11 @@ describe('the same request as the one page, for the same answers', () => {
     expect(postGaps(toSofia, ctx)).toContain('fiscalCodes');
     expect(gapStep('fiscalCodes')).toBe('route');
     expect(gapWords('fiscalCodes')).toBe('common.fiscal.missing');
-    const said = { ...toSofia, fiscal: { BG: { choice: 'code' as const, code: 'BG12345678', from: '2026-11-24' } } };
+    // 2026-11-24 — and only once the business certifies it.
+    expect(postGaps({ ...toSofia, fiscal: { BG: { choice: 'code' as const, code: 'BG12345678', from: '2026-11-24' } } }, ctx)).toContain('fiscalCodes');
+    const said = { ...toSofia, fiscal: { BG: { choice: 'code' as const, code: 'BG12345678', from: '2026-11-24' }, indemnity: true } };
     expect(postGaps(said, ctx)).not.toContain('fiscalCodes');
-    expect(loadBody(said, nl).fiscalCodes).toEqual({ bg: { code: 'BG12345678', from: '2026-11-24' } });
+    expect(loadBody(said, nl).fiscalCodes).toEqual({ bg: { code: 'BG12345678', from: '2026-11-24' }, indemnity: true });
     // To Germany nothing is asked, and nothing is sent, whatever was typed.
     expect(loadBody({ ...said, destCountry: 'DE' }, nl)).not.toHaveProperty('fiscalCodes');
   });

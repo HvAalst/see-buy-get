@@ -49,6 +49,8 @@ export const FLEET_HOOK_EVENTS = [
   'vehicle.standing_still',
   // Round 17 — the phone on one of its vehicles said nothing on a shift longer than it allows; where it was last heard.
   'vehicle.gone_silent',
+  // 2026-11-24 — a UIT or UTN on a load its driver holds runs out within a day, or ran out.
+  'load.fiscal_code_expiring',
   // Its runs: space booked by a shipper, given back, the run called off.
   'run.booked',
   'run.booking_cancelled',

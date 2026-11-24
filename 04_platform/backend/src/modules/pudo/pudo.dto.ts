@@ -3118,6 +3118,8 @@ export class FiscalCodeDto {
 export class FiscalCodesDto {
   @IsOptional() @ValidateNested() @Type(() => FiscalCodeDto) ro?: FiscalCodeDto;
   @IsOptional() @ValidateNested() @Type(() => FiscalCodeDto) bg?: FiscalCodeDto;
+  /** 2026-11-24 — the sender certifies its codes, or its reasons for none, are accurate (CMR art. 7 and 11; rule ro-bg-fiscal-indemnity). */
+  @IsOptional() @IsBoolean() indemnity?: boolean;
 }
 
 export class RegisterFreightDto {

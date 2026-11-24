@@ -149,6 +149,7 @@ export interface PostedFreight {
   instructionsMode: 'edit' | 'amend' | 'none';
   /** 2026-11-23 — its UIT (Romania) or UTN (Bulgaria), or the word that none is needed; whether one ran out. */
   fiscalCodes?: FiscalCard[];
+  fiscalCompliance?: import('../../shared/fiscal-codes').FiscalCompliance;
 }
 
 export interface FreightClaim {
@@ -2068,7 +2069,7 @@ export function useAgentApp() {
 
   /** 2026-11-23 — the shop, as the sender, gives a new UIT or UTN for a load it booked. The refusal in words, or null. */
   const setFreightFiscalCodes = useCallback(
-    async (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody }): Promise<string | null> => {
+    async (freightId: string, body: { ro?: FiscalCodeBody; bg?: FiscalCodeBody; indemnity?: true }): Promise<string | null> => {
       if (!client) return null;
       const r = await client.api.setFreightFiscalCodes(freightId, body);
       if (r.error) return refusalSentence(r.error);

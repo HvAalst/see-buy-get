@@ -114,3 +114,24 @@ describe('a fleet’s runs, told to its own system', () => {
     expect(hooks.view(fleetDid).messages.map((m) => m.event).sort()).toEqual(['load.at_border', 'load.at_hub', 'load.border_cleared']);
   });
 });
+
+/*
+ * 2026-11-24 — A CODE RUNNING OUT, TOLD TO THE FLEET'S OWN SYSTEM (the owner's brief, feature 2): the UIT or UTN on a load its
+ * driver holds, within a day of its end or past it, goes to the fleet that set an address, and to no other.
+ */
+describe('a code running out, told to the fleet’s own system', () => {
+  it('sends load.fiscal_code_expiring to the fleet whose driver holds the load, where it set an address', () => {
+    const handlers = new Map<string, (e: { payload: unknown }) => void>();
+    const events = { subscribe: (topic: string, fn: (e: { payload: unknown }) => void) => handlers.set(topic, fn) } as unknown as EventBus;
+    const managers = { get: () => ({ companyName: 'Balkan Line' }) } as unknown as FleetManagerService;
+    const hooks = new FleetHookService(events, {} as DispatchService, {} as DriverService, managers, {} as FleetService, {} as VehicleService, {} as VehicleBreakdownService, { forFleet: () => [] } as unknown as DepartureService, {} as FleetPlanService);
+    hooks.onModuleInit();
+    hooks.setAddress({ fleetDid: 'did:glos:balkan', name: 'Office' }, 'https://tms.example.com/hooks');
+    const tell = handlers.get(GlosEvent.Pudo.FiscalCodeExpiring)!;
+    tell({ payload: { freightId: 'frt_9', code: 'FRT-9', country: 'RO', kind: 'UIT', fiscalCode: 'RO123456', expiresAt: '2026-11-27T21:59:59.999Z', expired: false, fleetDid: 'did:glos:balkan' } });
+    tell({ payload: { freightId: 'frt_10', code: 'FRT-10', country: 'RO', kind: 'UIT', fiscalCode: 'RO999999', expiresAt: '2026-11-27T21:59:59.999Z', expired: false, fleetDid: 'did:glos:other' } });
+    const messages = hooks.view('did:glos:balkan').messages;
+    expect(messages.map((m) => m.event)).toEqual(['load.fiscal_code_expiring']);
+    expect(JSON.parse(messages[0].body).data).toMatchObject({ freightId: 'frt_9', country: 'RO', kind: 'UIT', fiscalCode: 'RO123456', expired: false });
+  });
+});

@@ -221,8 +221,11 @@ describe('the consignment note', () => {
           { country: 'RO', kind: 'UIT', code: 'RO1234567890', from: '2026-11-23', validThrough: '2026-11-27', saidAt: '2026-11-23T08:00:00.000Z' },
           { country: 'BG', kind: 'UTN', exempt: 'not-listed', saidAt: '2026-11-23T08:00:00.000Z' },
         ],
+        // 2026-11-24 — and the sender's certification of them.
+        fiscalIndemnity: { at: '2026-11-23T08:00:00.000Z', by: 'Ioana' },
       } as never),
     );
+    expect(n.instructions).toContainEqual(expect.stringMatching(/^The sender certifies that these codes, or its reasons for none, are accurate, and answers for them \(CMR articles 7 and 11\): Ioana, /));
     expect(n.instructions.slice(0, 3)).toEqual([
       'For customs: None',
       'Romania, RO e-Transport: UIT RO1234567890, valid through 2026-11-27',

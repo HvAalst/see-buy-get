@@ -41,7 +41,7 @@ describe('a load posted to another EU country', () => {
   });
 
   it('with the word: posted, keeping it, and the word itself is not passed on as part of the load', () => {
-    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } }), business);
+    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' }, indemnity: true } }), business);
     expect(made).toHaveLength(1);
     expect(made[0].withinUnion).toMatchObject({ union: 'EU', fromCountry: 'NL', toCountry: 'BG' });
     expect(Date.parse(String((made[0].withinUnion as { saidNoneAt: string }).saidNoneAt))).not.toBeNaN();
@@ -56,8 +56,28 @@ describe('a load posted to another EU country', () => {
   });
 
   it('with a code: kept on the load as a code with its last day, not as what was typed', () => {
-    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { code: 'bg 1234-5678', from: '2099-01-10' } } }), business);
+    svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { code: 'bg 1234-5678', from: '2099-01-10' }, indemnity: true } }), business);
     expect(made[0].fiscalCodes).toEqual([expect.objectContaining({ country: 'BG', kind: 'UTN', code: 'BG12345678', from: '2099-01-10', validThrough: '2099-01-23' })]);
+    expect(made[0].fiscalIndemnity).toEqual(expect.objectContaining({ at: expect.any(String) }));
+  });
+
+  // 2026-11-24 — Romania's value threshold: a load worth over RON 10,000 is not "below the thresholds", whatever it weighs.
+  it('refuses “below the thresholds” for a load from Romania worth over RON 10,000', () => {
+    const light = { pickupCountry: 'RO', destCountry: 'NL', weightKg: 100, noGoodsWithOwnRules: true } as Partial<RegisterFreightDto>;
+    expect(refusal(() => svc.post(load({ ...light, declaredValue: { amount: 12_000, currency: 'RON' }, fiscalCodes: { ro: { exempt: 'thresholds' }, indemnity: true } } as never), business)).message).toMatch(/worth about RON 12,000: over RON 10,000/);
+    svc.post(load({ ...light, declaredValue: { amount: 9_000, currency: 'RON' }, fiscalCodes: { ro: { exempt: 'thresholds' }, indemnity: true } } as never), business);
+    expect(made).toHaveLength(1);
+  });
+
+  // 2026-11-24 — the owner: "a required tick" by which the sender certifies them (CMR art. 7 and 11).
+  it('refuses the codes without the sender’s certification; a company’s system is warned of it first', () => {
+    expect(refusal(() => svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } }), business))).toMatchObject({ code: 'FIELD_REQUIRED', params: expect.objectContaining({ field: 'fiscalCodes.indemnity' }) });
+    expect(made).toHaveLength(0);
+    const store = { warned: [] as Array<{ id: string }> };
+    runAsSystemsCall(store as never, () => svc.post(load({ noGoodsWithOwnRules: true, fiscalCodes: { bg: { exempt: 'not-listed' } } }), business));
+    expect(made).toHaveLength(1);
+    expect(made[0].fiscalIndemnity).toBeUndefined();
+    expect(store.warned.map((r) => r.id)).toEqual(['ro-bg-fiscal-indemnity']);
   });
 
   it('a company’s system is warned, not refused, until the rule’s day; a code it gives is still checked', () => {

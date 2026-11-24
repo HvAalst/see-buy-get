@@ -26,6 +26,8 @@ import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import { loadLink, runLink, type NotificationKind } from './notification.types';
+/** 2026-11-24 — a UIT or UTN running out, as FiscalCodeSweeper publishes it (DispatchService.fiscalCodesToTell). */
+type FiscalCodeExpiring = ReturnType<DispatchService['fiscalCodesToTell']>[number];
 import { FINDING_WORDS, type TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
@@ -663,6 +665,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
       });
     });
+    // 2026-11-24 — a UIT or UTN within a day of its end: the sender gives a new one; its driver and office know.
+    this.events.subscribe<FiscalCodeExpiring>(GlosEvent.Pudo.FiscalCodeExpiring, (e) => this.onFiscalCodeExpiring(e.payload));
     this.events.subscribe<VehicleBreakdownResolved>(GlosEvent.Pudo.VehicleBreakdownResolved, (e) => this.onBreakdownResolved(e.payload));
     this.events.subscribe<VehicleLoadsHandedOver>(GlosEvent.Pudo.VehicleLoadsHandedOver, (e) => this.onLoadsHandedOver(e.payload));
     // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
@@ -1793,6 +1797,21 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * (the Send app's parcel). 2026-11-02 — a tapped notification opens the app there, and Open under it in the bell goes
    * to the same place (the owner: "I need a 'mark as read' or 'respond' button"). Home otherwise.
    */
+  /** 2026-11-24 — the bell for a code running out (FiscalCodeSweeper): one tag per code, so each is told once on each phone. */
+  private async onFiscalCodeExpiring(p: FiscalCodeExpiring): Promise<void> {
+    if (!p?.freightId) return;
+    const country = p.country === 'RO' ? 'Romania' : 'Bulgaria';
+    const zone = p.country === 'RO' ? 'Europe/Bucharest' : 'Europe/Sofia';
+    const when = `${new Date(p.expiresAt).toLocaleString('en-GB', { timeZone: zone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} (${country}’s time)`;
+    const title = p.expired ? `Load ${p.code}: its ${p.kind} code for ${country} has run out` : `Load ${p.code}: its ${p.kind} code for ${country} runs out within a day`;
+    const ends = `${p.kind} ${p.fiscalCode} ${p.expired ? 'ran out' : 'runs out'} at ${when}.`;
+    const tag = `fiscal:${p.freightId}:${p.country}:${p.fiscalCode}`;
+    const data = { freightId: p.freightId, country: p.country, code: p.fiscalCode, expiresAt: p.expiresAt };
+    if (p.senderDid) await this.tell(p.senderDid, { kind: 'fiscal_code_expiring', title, body: `${ends} Give a new one on the load: without it the goods are not taken over${p.country === 'RO' ? ', and a driver in Romania may be fined' : ''}.`, link: loadLink(p.freightId), tag, data });
+    if (p.driverDid) await this.tell(p.driverDid, { kind: 'fiscal_code_expiring', title, body: `${ends} The sender is asked for a new one; it shows on the load once given.`, link: '/?go=loads', tag, data });
+    if (p.fleetDid) await this.tell(p.fleetDid, { kind: 'fiscal_code_expiring', title, body: `${ends} The sender is asked for a new one.`, tag, data });
+  }
+
   private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown>; link?: string }): Promise<void> {
     try {
       await this.notifications.notify(to, { ...n, link: n.link ?? '/' });

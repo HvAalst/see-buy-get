@@ -70916,6 +70916,10 @@
           },
           "bg": {
             "$ref": "#/components/schemas/FiscalCodeDto"
+          },
+          "indemnity": {
+            "type": "boolean",
+            "description": "2026-11-24 — the sender certifies its codes, or its reasons for none, are accurate (CMR art. 7 and 11; rule ro-bg-fiscal-indemnity)."
           }
         }
       },
@@ -74033,6 +74037,20 @@
           "saidAt"
         ]
       },
+      "FreightFiscalIndemnity": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
       "FreightReload": {
         "type": "object",
         "properties": {
@@ -75506,6 +75524,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/FreightFiscalCode"
+            }
+          },
+          "fiscalIndemnity": {
+            "description": "2026-11-24 — the sender's certification of them, and which codes' end its people were already told of.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightFiscalIndemnity"
+              }
+            ]
+          },
+          "fiscalTold": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "carriage": {
@@ -80892,6 +80924,19 @@
           "validThrough": {
             "type": "string"
           },
+          "expiresAt": {
+            "type": "string",
+            "description": "2026-11-24 — the last millisecond of its last day, in its country's time."
+          },
+          "status": {
+            "type": "string",
+            "description": "2026-11-24 — still good, running out within 24 hours, or run out.",
+            "enum": [
+              "valid",
+              "expiring_soon",
+              "expired"
+            ]
+          },
           "exempt": {
             "type": "string",
             "enum": [
@@ -80899,12 +80944,6 @@
               "excise",
               "not-listed"
             ]
-          },
-          "expired": {
-            "type": "boolean"
-          },
-          "endsSoon": {
-            "type": "boolean"
           }
         },
         "required": [
@@ -81267,6 +81306,13 @@
             "items": {
               "$ref": "#/components/schemas/FiscalCodeCard"
             }
+          },
+          "fiscalCompliance": {
+            "type": "string",
+            "enum": [
+              "declared_with_codes",
+              "exempt_declared_by_sender"
+            ]
           },
           "held": {
             "description": "Round 35 — held under the tamper protocol: what was found, where, since when.",

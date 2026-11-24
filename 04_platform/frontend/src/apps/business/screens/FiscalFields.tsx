@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useLocale, useT } from '../../../shared/i18n';
 import { countryNameIn } from '../../../shared/documents/documents';
-import { EMPTY_FISCAL_ENTRY, FISCAL_CHOICES, FISCAL_CHOICE_WORDS, fiscalBody, fiscalBodyWords, fiscalCardWords, fiscalDay, fiscalFromWords, fiscalHeadWords, fiscalReady, type FiscalChoice, type FiscalCountry, type FiscalForm } from '../../../shared/fiscal-codes';
+import { EMPTY_FISCAL_ENTRY, FISCAL_CHOICES, FISCAL_CHOICE_WORDS, FISCAL_COMPLIANCE_WORDS, fiscalBody, fiscalBodyWords, fiscalCardWords, fiscalDay, fiscalFromWords, fiscalHeadWords, fiscalMoment, fiscalReady, type FiscalChoice, type FiscalCountry, type FiscalForm } from '../../../shared/fiscal-codes';
 import type { BusinessClient, PostedLoad } from '../api';
 
 /**
@@ -49,6 +49,11 @@ export function FiscalFields({ countries, value, onChange, idPrefix = 'fiscal' }
           </fieldset>
         );
       })}
+      {/* 2026-11-24 — the business's certification (the owner: "a required tick"). */}
+      <label class="cfield--check">
+        <input type="checkbox" checked={value.indemnity === true} onChange={(ev) => onChange({ ...value, indemnity: (ev.target as HTMLInputElement).checked })} />
+        <span>{t('common.fiscal.indemnity')}</span>
+      </label>
     </div>
   );
 }
@@ -83,10 +88,11 @@ export function LoadFiscal({ row, client, act, onChanged }: { row: PostedLoad; c
     <section class="cons__panel">
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('common.fiscal.title')}</span>
-        {cards.some((c) => c.expired) ? <span class="ctag ctag--warn">{t('common.fiscal.newCode')}</span> : null}
+        {cards.some((c) => c.status === 'expired') ? <span class="ctag ctag--warn">{t('common.fiscal.newCode')}</span> : null}
       </div>
+      {row.fiscalCompliance ? <p class="cons__lede">{t(FISCAL_COMPLIANCE_WORDS[row.fiscalCompliance])}</p> : null}
       {cards.map((c) => {
-        const w = fiscalCardWords(c, t, countryNameIn(c.country, locale), (iso) => fiscalDay(iso, locale));
+        const w = fiscalCardWords(c, t, countryNameIn(c.country, locale), (iso) => fiscalDay(iso, locale), (iso) => fiscalMoment(iso, locale));
         return (
           <p class="cons__lede" key={c.country}>
             <Abbreviated text={w.line} />

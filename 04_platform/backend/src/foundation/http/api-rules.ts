@@ -71,6 +71,14 @@ export const API_RULE_CHANGES: readonly ApiRuleChange[] = [
     announcedAt: '2026-11-23',
     enforcedFrom: '2027-02-21',
   },
+  {
+    // 2026-11-24 — the owner: a required tick by which the sender certifies them (CMR art. 7 and 11).
+    id: 'ro-bg-fiscal-indemnity',
+    version: '1',
+    summary: 'A load with a UIT or UTN code, or a reason for none, carries the sender\'s certification that they are accurate (fiscalCodes.indemnity: true).',
+    announcedAt: '2026-11-24',
+    enforcedFrom: '2027-02-22',
+  },
 ];
 
 const DAY = 86_400_000;

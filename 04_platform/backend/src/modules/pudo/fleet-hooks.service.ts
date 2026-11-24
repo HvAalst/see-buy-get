@@ -148,6 +148,11 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       if (e.payload?.fleetDid && e.payload.case) this.live?.toFleet(e.payload.fleetDid, 'cases');
       if (e.payload?.fleetDid && e.payload.case && this.settings.get(e.payload.fleetDid)?.url) this.enqueue(e.payload.fleetDid, 'vehicle.standing_still', { case: e.payload.case });
     });
+    // 2026-11-24 — a UIT or UTN on a load its driver holds, within a day of its end or past it.
+    this.events.subscribe<{ fleetDid?: string; freightId?: string; code?: string; country?: string; kind?: string; fiscalCode?: string; expiresAt?: string; expired?: boolean }>(GlosEvent.Pudo.FiscalCodeExpiring, (e) => {
+      const p = e.payload;
+      if (p?.fleetDid && this.settings.get(p.fleetDid)?.url) this.enqueue(p.fleetDid, 'load.fiscal_code_expiring', { freightId: p.freightId, code: p.code, country: p.country, kind: p.kind, fiscalCode: p.fiscalCode, expiresAt: p.expiresAt, expired: p.expired });
+    });
     // Round 17 — the phone on one of its vehicles gone silent: the case, with where it was last heard.
     this.events.subscribe<{ fleetDid?: string; case?: Record<string, unknown> }>(GlosEvent.Pudo.VehicleGoneSilent, (e) => {
       if (e.payload?.fleetDid && e.payload.case) this.live?.toFleet(e.payload.fleetDid, 'cases');
