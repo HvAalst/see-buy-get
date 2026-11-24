@@ -37,6 +37,9 @@ export function createFleetApi(sbg: SbgClient) {
       sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings', { params: { path: { did }, query: query as never } })),
     earningsSummary: (did: string, query: Record<string, string | undefined>) =>
       sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings/summary', { params: { path: { did }, query: query as never } })),
+    /** 2026-11-24 — the master manifest of one of the fleet's vehicles on a shift: as JSON, and as CSV to keep. */
+    vehicleManifest: (did: string, vehicleId: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/vehicles/{vehicleId}/manifest', { params: { path: { did, vehicleId } } })),
+    vehicleManifestCsv: (did: string, vehicleId: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/vehicles/{vehicleId}/manifest/export', { params: { path: { did, vehicleId } }, parseAs: 'text' })),
     earningsExport: (did: string, query: Record<string, string | undefined>) =>
       sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings/export', { params: { path: { did }, query: query as never }, parseAs: 'text' })),
 

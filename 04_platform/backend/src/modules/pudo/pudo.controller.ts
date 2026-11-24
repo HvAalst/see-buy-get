@@ -1,4 +1,5 @@
 ﻿import { TerminalSlotChangeDto } from './air-terminal.types';
+import { VehicleManifestService } from './vehicle-manifest.service';
 import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { standInCode } from '../../foundation/runtime/standin-code';
@@ -441,7 +442,15 @@ export class SbgController {
     @Optional() private readonly storeActivity?: StoreActivityService,
     // 2026-11-18 — routes across a border (the plan "Parcels across a border", step 2b): a parcel abroad at the counter.
     @Optional() private readonly borderRoutes?: BorderRouteService,
+    // 2026-11-24 — the master manifest of a vehicle on a shift (corridor compliance, slice 2).
+    @Optional() private readonly manifestsSvc?: VehicleManifestService,
   ) {}
+
+  /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
+  private manifests(): VehicleManifestService {
+    if (!this.manifestsSvc) throw new GlosError('INVALID_STATE', 'Manifests are not available here');
+    return this.manifestsSvc;
+  }
 
   /**
    * 2026-11-05 — WHAT IS BOOKED TO BE HANDED IN AT THIS COUNTER, each holding a place on its shelf for 24 hours (pre-drop-off).
@@ -9271,6 +9280,43 @@ export class SbgController {
   takeRoadLoad(@Param('did') did: string, @Body() dto: TakeRoadLoadDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
     return this.dispatch.takeRoadLoad(did, dto.codes);
+  }
+
+  /**
+   * 2026-11-24 — THE MASTER MANIFEST of the vehicle a driver is on (the owner's brief, feature 3): everything aboard or to collect,
+   * the totals, the crossings, and what wants a look. As JSON here, as CSV at /export.
+   */
+  @Roles('driver', 'operator')
+  @Get('fleet/drivers/:did/manifest')
+  driverManifest(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
+    return this.manifests().forDriver(did);
+  }
+
+  @Roles('driver', 'operator')
+  @Get('fleet/drivers/:did/manifest/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="manifest.csv"')
+  driverManifestExport(@Param('did') did: string, @Actor() actor: IntrospectionResult): string {
+    this.assertDriverActs(did, actor);
+    return this.manifests().csv(this.manifests().forDriver(did));
+  }
+
+  /** …and of one of a fleet's vehicles on a shift, for its office. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/vehicles/:vehicleId/manifest')
+  fleetVehicleManifest(@Param('did') did: string, @Param('vehicleId') vehicleId: string, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    return this.manifests().forVehicle(did, vehicleId);
+  }
+
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/vehicles/:vehicleId/manifest/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="manifest.csv"')
+  fleetVehicleManifestExport(@Param('did') did: string, @Param('vehicleId') vehicleId: string, @Actor() actor: IntrospectionResult): string {
+    this.assertFleetSelf(did, actor);
+    return this.manifests().csv(this.manifests().forVehicle(did, vehicleId));
   }
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */

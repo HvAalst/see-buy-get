@@ -29123,6 +29123,134 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/manifest": {
+      "get": {
+        "operationId": "Sbg.driverManifest",
+        "summary": "",
+        "description": "2026-11-24 — THE MASTER MANIFEST of the vehicle a driver is on (the owner's brief, feature 3): everything aboard or to collect,\nthe totals, the crossings, and what wants a look. As JSON here, as CSV at /export.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/manifest/export": {
+      "get": {
+        "operationId": "Sbg.driverManifestExport",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/vehicles/{vehicleId}/manifest": {
+      "get": {
+        "operationId": "Sbg.fleetVehicleManifest",
+        "summary": "",
+        "description": "…and of one of a fleet's vehicles on a shift, for its office.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/vehicles/{vehicleId}/manifest/export": {
+      "get": {
+        "operationId": "Sbg.fleetVehicleManifestExport",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/locate": {
       "post": {
         "operationId": "Sbg.locate",
@@ -37308,6 +37436,62 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/manifests": {
+      "get": {
+        "operationId": "CompanyApi.manifest",
+        "summary": "",
+        "description": "2026-11-24 — THE MASTER MANIFEST of one of its vehicles on a shift, by plate (the owner's brief, feature 3): its system reads\nthe plates, the UIT and UTN codes and the crossings without anybody typing them. As JSON here, as CSV at /export.",
+        "parameters": [
+          {
+            "name": "plate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/fleet/manifests/export": {
+      "get": {
+        "operationId": "CompanyApi.manifestExport",
+        "parameters": [
+          {
+            "name": "plate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -83325,6 +83509,205 @@
         },
         "required": [
           "codes"
+        ]
+      },
+      "ManifestAmount": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
+      "ManifestItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "freight",
+              "bag",
+              "booking",
+              "parcel"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "description": "The load's id, the bag's code, the booking's id or the parcel's id."
+          },
+          "label": {
+            "type": "string",
+            "description": "What a person reads: the load's or bag's code, the booking's description, the parcel's id."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "aboard",
+              "to_collect"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "pickupCountry": {
+            "type": "string"
+          },
+          "destCountry": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "parcels": {
+            "type": "number"
+          },
+          "declaredValue": {
+            "$ref": "#/components/schemas/ManifestAmount"
+          },
+          "valueRon": {
+            "type": "number",
+            "description": "The declared value in lei, where the day's rate is known: Romania's threshold is RON 10,000."
+          },
+          "fiscalCodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FiscalCodeCard"
+            }
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "missing_code",
+                "over_500kg",
+                "over_ron_10000",
+                "code_expiring",
+                "code_expired"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "label",
+          "state",
+          "weightKg",
+          "flags"
+        ]
+      },
+      "ManifestCrossing": {
+        "type": "object",
+        "properties": {
+          "freightCode": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "at_border, cleared, …: the load passage kind"
+          },
+          "post": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightCode",
+          "kind",
+          "at"
+        ]
+      },
+      "VehicleManifest": {
+        "type": "object",
+        "properties": {
+          "manifestId": {
+            "type": "string",
+            "description": "The run's own id: the vehicle and the start of the shift it is on."
+          },
+          "vehicleId": {
+            "type": "string"
+          },
+          "truckPlate": {
+            "type": "string"
+          },
+          "trailerPlate": {
+            "type": "string"
+          },
+          "driverDid": {
+            "type": "string"
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "fleetDid": {
+            "type": "string"
+          },
+          "shiftStartedAt": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestItem"
+            }
+          },
+          "totalWeightKg": {
+            "type": "number"
+          },
+          "totalValue": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestAmount"
+            }
+          },
+          "totalValueRon": {
+            "type": "number",
+            "description": "The declared values together in lei, where every one has a rate; absent where any has none."
+          },
+          "flagged": {
+            "type": "number"
+          },
+          "crossings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManifestCrossing"
+            }
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "manifestId",
+          "vehicleId",
+          "truckPlate",
+          "driverDid",
+          "shiftStartedAt",
+          "items",
+          "totalWeightKg",
+          "totalValue",
+          "flagged",
+          "crossings",
+          "at"
         ]
       },
       "LocateDto": {

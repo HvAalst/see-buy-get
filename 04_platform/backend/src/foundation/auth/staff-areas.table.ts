@@ -385,6 +385,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/fleet/drivers/:did/hours': 'support',
   'GET sbg/fleet/drivers/:did/jobs': 'money',
   'GET sbg/fleet/drivers/:did/jobs/export': 'money',
+  // 2026-11-24 — the master manifest of a vehicle on a shift (corridor compliance, slice 2).
+  'GET sbg/fleet/drivers/:did/manifest': 'support',
+  'GET sbg/fleet/drivers/:did/manifest/export': 'support',
+  'GET sbg/fleet/managers/:did/vehicles/:vehicleId/manifest': 'support',
+  'GET sbg/fleet/managers/:did/vehicles/:vehicleId/manifest/export': 'support',
   'GET sbg/fleet/drivers/:did/jobs/summary': 'money',
   'GET sbg/fleet/drivers/:did/legs': 'support',
   'GET sbg/fleet/drivers/:did/licence-card/:mediaId': 'none',

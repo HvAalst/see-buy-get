@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Headers, Optional, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { VehicleManifestService } from './vehicle-manifest.service';
 import { ApiVersionInterceptor } from '../../foundation/http/api-versions';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -74,7 +75,15 @@ export class CompanyApiController {
     private readonly exportsSvc: ExportService,
     // 2026-10-29 — a business's parcels, from its own system: the same steps its people take in the app.
     private readonly businessParcels: BusinessParcelService,
+    // 2026-11-24 — the master manifest of one of a fleet's vehicles, by plate (corridor compliance, slice 2).
+    @Optional() private readonly manifestsSvc?: VehicleManifestService,
   ) {}
+
+  /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
+  private manifests(): VehicleManifestService {
+    if (!this.manifestsSvc) throw new GlosError('INVALID_STATE', 'Manifests are not available here');
+    return this.manifestsSvc;
+  }
 
   /* --------------------------------------------------------------- a business -- */
 
@@ -324,6 +333,28 @@ export class CompanyApiController {
   orders(@Query() q: ApiOrdersQueryDto, @CompanyKey() caller: CompanyCaller) {
     const items = this.dispatch.ordersForFleet(this.fleetOf(caller).did, q);
     return { items, total: items.length };
+  }
+
+  /**
+   * 2026-11-24 — THE MASTER MANIFEST of one of its vehicles on a shift, by plate (the owner's brief, feature 3): its system reads
+   * the plates, the UIT and UTN codes and the crossings without anybody typing them. As JSON here, as CSV at /export.
+   */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('fleet/manifests')
+  manifest(@Query('plate') plate: string, @CompanyKey() caller: CompanyCaller) {
+    if (!plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say which vehicle: its plate', { field: 'plate' });
+    return this.manifests().forPlate(this.fleetOf(caller).did, plate);
+  }
+
+  @Public()
+  @RateLimit(60, 60)
+  @Get('fleet/manifests/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="manifest.csv"')
+  manifestExport(@Query('plate') plate: string, @CompanyKey() caller: CompanyCaller): string {
+    if (!plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say which vehicle: its plate', { field: 'plate' });
+    return this.manifests().csv(this.manifests().forPlate(this.fleetOf(caller).did, plate));
   }
 
   /** Its plan for a day, as accepted, and what has changed under it since. Accepting a plan is a person's, in the app. */

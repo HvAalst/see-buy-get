@@ -5490,14 +5490,8 @@ export class DispatchService {
   private roadRouteOfBag(code: string): ReturnType<BorderRouteService['roadBookable']> | 'none' | undefined {
     const t = this.totes.byCodeMaybe(code);
     if (!t?.locationId || !t.destinationNodeId) return undefined;
-    const countryOf = (id: string): string | undefined => {
-      const hub = this.mdps.find(id);
-      if (hub) return this.mdps.countryOf(hub);
-      const shop = this.agents.find(id);
-      return shop ? this.agents.countryOf(shop) : undefined;
-    };
-    const from = countryOf(t.locationId);
-    const to = countryOf(t.destinationNodeId);
+    const from = this.nodeCountry(t.locationId);
+    const to = this.nodeCountry(t.destinationNodeId);
     if (!from || !to || !unionBetween(from, to)) return undefined;
     const roads = this.roadRoutes();
     if (!roads) return undefined;
@@ -5529,6 +5523,30 @@ export class DispatchService {
       }
     }
     return this.roadRoutesFound;
+  }
+
+  /** The country of a hub or a shop by its id; nothing for one we do not know. */
+  private nodeCountry(id: string): string | undefined {
+    const hub = this.mdps.find(id);
+    if (hub) return this.mdps.countryOf(hub);
+    const shop = this.agents.find(id);
+    return shop ? this.agents.countryOf(shop) : undefined;
+  }
+
+  /** 2026-11-24 — a bag as the master manifest reads it: where it was taken from and goes, their countries, its parcels and kilos. */
+  bagFacts(code: string): { fromLabel?: string; from?: string; toLabel?: string; to?: string; parcels: number; weightKg: number } | undefined {
+    const t = this.totes.byCodeMaybe(code);
+    if (!t) return undefined;
+    const from = t.locationId ? this.nodeCountry(t.locationId) : undefined;
+    const to = t.destinationNodeId ? this.nodeCountry(t.destinationNodeId) : undefined;
+    return {
+      ...(t.locationId ? { fromLabel: this.pickupPlace(t.locationId)?.label ?? t.locationId } : {}),
+      ...(from ? { from } : {}),
+      ...(t.destinationLabel ? { toLabel: t.destinationLabel } : {}),
+      ...(to ? { to } : {}),
+      parcels: t.parcels?.length ?? 0,
+      weightKg: t.weightKg ?? 0,
+    };
   }
 
   /** The fleet a driver drives for, or nothing for one who drives for none (or is unknown). */

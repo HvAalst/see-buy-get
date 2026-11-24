@@ -1,3 +1,5 @@
+import { ManifestSheet } from '../../../shared/ui/ManifestSheet';
+import { createDriverApi } from '../../../lib/sbg/personas/driver';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { DarkSpellNote } from './DarkSpellNote';
 import { useState } from 'preact/hooks';
@@ -870,6 +872,7 @@ function WorkCard({ state, actions }: HomeScreenProps) {
 function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
+  const [aboardOpen, setAboardOpen] = useState(false);
   const [endOdo, setEndOdo] = useState('');
   const [defectOpen, setDefectOpen] = useState(false);
   const [loadOpen, setLoadOpen] = useState(false);
@@ -938,6 +941,10 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
             {t('trailer.hitch')}
           </Button>
         ) : null}
+        {/* 2026-11-24 — everything aboard, with its codes and totals (corridor compliance, slice 2). */}
+        <Button variant="link" full={false} onClick={() => setAboardOpen(true)}>
+          {t('common.aboard.open')}
+        </Button>
         <Button variant="link" full={false} onClick={() => setDefectOpen(true)}>
           {t('driver.defect.open')}
         </Button>
@@ -953,6 +960,7 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         {loadOpen ? <LoadSpaceSheet open={loadOpen} actions={actions} onClose={() => setLoadOpen(false)} vehicle={v} word={vehicleWord(v.vehicleClass, t)} own={!v.managerDid && Boolean(state.driver?.did) && v.ownerDriverDid === state.driver?.did} sbg={sbg ?? null} onShift helpers={state.session.helpers} /> : null}
         {hitchOpen && state.driver ? <HitchSheet open onClose={() => setHitchOpen(false)} sbg={sbg ?? null} driverDid={state.driver.did} towing={state.driver.licence?.towing ?? []} onDone={() => void actions.refresh()} /> : null}
         <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
+        {aboardOpen && sbg && state.driver ? <ManifestSheet open onClose={() => setAboardOpen(false)} fetchManifest={() => createDriverApi(sbg).manifest(state.driver!.did)} fetchCsv={() => createDriverApi(sbg).manifestCsv(state.driver!.did)} /> : null}
       </Card>
 
       {band ? (

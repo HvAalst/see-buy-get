@@ -142,7 +142,7 @@ describe('a company’s own system, with its key, over the wire', () => {
   });
 
   /** An active fleet, its office signed in, and one of its drivers out on a shift in one of its trucks. */
-  async function aFleetWithADriver(): Promise<{ did: string; name: string; office: string; driverDid: string; driverToken: string }> {
+  async function aFleetWithADriver(): Promise<{ did: string; name: string; office: string; driverDid: string; driverToken: string; plate: string; vehicleId: string }> {
     const managers = app.get(FleetManagerService);
     const n = digits();
     const m = managers.register({
@@ -168,7 +168,7 @@ describe('a company’s own system, with its key, over the wire', () => {
     const driverToken = session.body.token.access_token as string;
     const truck = app.get(VehicleService).register({ plate: `API ${n.slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: m.companyName, equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
     await http().post(`/v1/sbg/fleet/drivers/${driverDid}/start-session`).set(bearer(driverToken)).send({ vehicleId: truck.vehicleId, pin: PIN }).expect(201);
-    return { did: m.did, name: m.companyName, office, driverDid, driverToken };
+    return { did: m.did, name: m.companyName, office, driverDid, driverToken, plate: truck.plate, vehicleId: truck.vehicleId };
   }
 
   it('a fleet’s key sends orders in as a sheet is checked, reads its orders, plan and board, and takes a board load at its price', async () => {
@@ -255,5 +255,29 @@ describe('a company’s own system, with its key, over the wire', () => {
     // Staff read the counts.
     const rows = (await http().get('/v1/sbg/fleet/managers').set(bearer(operator)).expect(200)).body as Array<{ did: string; system?: { keys?: unknown } }>;
     expect(rows.find((r) => r.did === fleet.did)?.system?.keys).toEqual({ live: 1, test: 1 });
+  });
+
+  // 2026-11-24 — the master manifest (the owner's brief, feature 3): the driver's, the office's and the fleet's system's are one.
+  it('a vehicle’s manifest: the driver, the office and the fleet’s own system by plate read the same; nobody else does', async () => {
+    const fleet = await aFleetWithADriver();
+    const other = await aFleetWithADriver();
+    const own = `/v1/sbg/fleet/managers/${encodeURIComponent(fleet.did)}`;
+    const key = (await http().post(`${own}/keys`).set(bearer(fleet.office)).send({ mode: 'live', label: 'TMS' }).expect(201)).body.secret as string;
+    const otherKey = (await http().post(`/v1/sbg/fleet/managers/${encodeURIComponent(other.did)}/keys`).set(bearer(other.office)).send({ mode: 'live' }).expect(201)).body.secret as string;
+    const mine = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/manifest`).set(bearer(fleet.driverToken)).expect(200)).body;
+    expect(mine).toMatchObject({ truckPlate: fleet.plate, vehicleId: fleet.vehicleId, driverDid: fleet.driverDid, items: [], totalWeightKg: 0, flagged: 0 });
+    const office = (await http().get(`${own}/vehicles/${fleet.vehicleId}/manifest`).set(bearer(fleet.office)).expect(200)).body;
+    const system = (await http().get('/v1/sbg/api/fleet/manifests').query({ plate: fleet.plate.toLowerCase() }).set(keyed(key)).expect(200)).body;
+    const strip = (m: { at?: string }) => ({ ...m, at: undefined });
+    expect(strip(office)).toEqual(strip(mine));
+    expect(strip(system)).toEqual(strip(mine));
+    const csv = (await http().get(`${own}/vehicles/${fleet.vehicleId}/manifest/export`).set(bearer(fleet.office)).expect(200)).text;
+    expect(csv.split(/\r?\n/)[0]).toMatch(/^manifest_id,truck_plate,trailer_plate,driver,kind/);
+    // Nobody else's: another fleet's office and system, another driver; a key without a plate.
+    await http().get(`/v1/sbg/fleet/managers/${encodeURIComponent(other.did)}/vehicles/${fleet.vehicleId}/manifest`).set(bearer(other.office)).expect(404);
+    await http().get(`${own}/vehicles/${fleet.vehicleId}/manifest`).set(bearer(other.office)).expect(403);
+    await http().get('/v1/sbg/api/fleet/manifests').query({ plate: fleet.plate }).set(keyed(otherKey)).expect(404);
+    await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(fleet.driverDid)}/manifest`).set(bearer(other.driverToken)).expect(403);
+    await http().get('/v1/sbg/api/fleet/manifests').set(keyed(key)).expect(400);
   });
 });

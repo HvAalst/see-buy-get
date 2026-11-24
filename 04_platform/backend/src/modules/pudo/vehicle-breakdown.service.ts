@@ -1,3 +1,4 @@
+import { loadsAboard } from './vehicle-manifest.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -536,36 +537,8 @@ export class VehicleBreakdownService {
    * own orders are told to nobody: the office is the one telling.
    */
   private loadsOf(v: Vehicle, driverDid: string): Load[] {
-    const freight = this.dispatch.loadsOnVehicle(driverDid, v.vehicleId).map((f) => ({
-      kind: 'freight' as const,
-      id: f.freightId,
-      freightId: f.freightId,
-      label: f.code,
-      state: f.state,
-      weightKg: f.weightKg,
-      ...(f.shipperDid ? { shipperDid: f.shipperDid } : {}),
-    }));
-    const bookings = this.departures.bookingsAboard(v.vehicleId).map((b) => ({
-      kind: 'booking' as const,
-      id: b.bookingId,
-      label: b.description,
-      state: 'aboard' as const,
-      lineName: b.lineName,
-      departureId: b.departureId,
-      weightKg: b.weightKg,
-      ...(b.shipperDid ? { shipperDid: b.shipperDid } : {}),
-    }));
-    // The driver's bags — on the vehicle, or claimed and still to collect — and the parcels a shop handed them loose.
-    // Nobody is told about these here: each parcel's receiver hears by its own running-late rule.
-    const bags = this.dispatch.bagsWith(driverDid).map((t) => ({
-      kind: 'bag' as const,
-      id: t.code,
-      label: t.code,
-      state: t.status === 'claimed' ? ('to_collect' as const) : ('aboard' as const),
-      weightKg: t.weightKg,
-    }));
-    const loose = (this.parcels?.onBusWith(this.drivers.get(driverDid).badgeId) ?? []).map((p) => ({ kind: 'parcel' as const, id: p.parcelId, label: p.parcelId, state: 'aboard' as const, weightKg: p.weightKg }));
-    return [...freight, ...bookings, ...bags, ...loose] as Load[];
+    // 2026-11-24 — one list with the master manifest (vehicle-manifest.service.ts), so the two never read the vehicle differently.
+    return loadsAboard({ dispatch: this.dispatch, departures: this.departures, parcels: this.parcels, drivers: this.drivers }, v, driverDid) as Load[];
   }
 
   /** Today's planned orders that were waiting for this vehicle, held in the plan's own words: their codes. */

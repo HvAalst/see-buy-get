@@ -1,3 +1,4 @@
+import { ManifestSheet } from '../../../shared/ui/ManifestSheet';
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Pill, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -24,6 +25,8 @@ export interface SessionsScreenProps {
  * offering an empty list a manager has no way to fill.
  */
 export function SessionsScreen({ state, actions }: SessionsScreenProps) {
+  // 2026-11-24 — the vehicle whose manifest is open (corridor compliance, slice 2).
+  const [aboardOf, setAboardOf] = useState<string | null>(null);
   const t = useT();
   const f = state.cForm;
   const drivers = freeDrivers(state.drivers, state.assignments);
@@ -97,6 +100,9 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
                       <Button variant="link" full={false} onClick={() => actions.openDispatch(a.driverDid)}>
                         {t('fleet.dispatch.findLoad')}
                       </Button>
+                      <Button variant="link" full={false} onClick={() => setAboardOf(a.vehicleId)}>
+                        {t('common.aboard.open')}
+                      </Button>
                       <Button variant="link" full={false} danger busy={state.busy === `uncouple:${a.driverDid}`} onClick={() => void actions.uncouple(a.driverDid)}>
                         {t('fleet.sessions.endSession')}
                       </Button>
@@ -108,6 +114,7 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
             })}
           </div>
         )}
+        {aboardOf ? <ManifestSheet open onClose={() => setAboardOf(null)} fetchManifest={() => actions.vehicleManifest(aboardOf)} fetchCsv={() => actions.vehicleManifestCsv(aboardOf)} /> : null}
       </Card>
 
       <div class="scr__foot">

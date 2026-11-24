@@ -603,6 +603,18 @@ export function useFleetApp() {
     },
     [fetchEarningsWith],
   );
+  /** 2026-11-24 — the master manifest of a vehicle on a shift, and its CSV (the owner's brief, feature 3). */
+  const vehicleManifest = useCallback(async (vehicleId: string) => {
+    const did = stateRef.current.manager?.did;
+    if (!client || !did) return { error: { code: 'NOT_SIGNED_IN', status: 0, title: '', detail: '', retryable: false } };
+    return client.api.vehicleManifest(did, vehicleId);
+  }, [client]);
+  const vehicleManifestCsv = useCallback(async (vehicleId: string) => {
+    const did = stateRef.current.manager?.did;
+    if (!client || !did) return { error: { code: 'NOT_SIGNED_IN', status: 0, title: '', detail: '', retryable: false } };
+    return client.api.vehicleManifestCsv(did, vehicleId);
+  }, [client]);
+
   const exportEarnings = useCallback(async () => {
     const did = stateRef.current.manager?.did;
     if (!client || !did) return;
@@ -1595,6 +1607,8 @@ export function useFleetApp() {
       waiveWait,
       queryEarnings,
       exportEarnings,
+      vehicleManifest,
+      vehicleManifestCsv,
       sayPaid,
       sayNotPaid,
       openDispatch,

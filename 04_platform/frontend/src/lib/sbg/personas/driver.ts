@@ -103,6 +103,10 @@ export function createDriverApi(sbg: SbgClient) {
     jobsExport: (did: string, query?: DriverJobsQuery) =>
       sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/jobs/export', { params: { path: { did }, query: query ?? {} }, parseAs: 'text' })),
 
+    /** 2026-11-24 — the master manifest of the vehicle the driver is on: as JSON, and as CSV to keep. */
+    manifest: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/manifest', { params: { path: { did } } })),
+    manifestCsv: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/manifest/export', { params: { path: { did } }, parseAs: 'text' })),
+
     /** What the driver has claimed (totes / freight in hand). */
     claims: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/claims', { params: { path: { did } } })),
     /** Round 38 — where an independent rider stands under their company's custody cap; `capped` false when none applies. */
