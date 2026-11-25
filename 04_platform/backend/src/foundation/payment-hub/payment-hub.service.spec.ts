@@ -297,13 +297,15 @@ describe('the payment hub', () => {
     function aBgHub() {
       const sent: Array<{ account: OpenedAccount; req: PayoutRequest }> = [];
       const looked: OpenedAccount[] = [];
+      /** Transfers its status keeps on their way. */
+      const stays = new Set<string>();
       const fakeRevolut: HubProvider = {
         id: 'revolut',
         collect: async () => ({ state: 'failed', why: 'not_offered' }),
         refund: async () => ({ state: 'failed', why: 'not_offered' }),
         status: async (a, ref) => {
           looked.push(a);
-          return { state: 'paid', ...(ref.providerRef ? { providerRef: ref.providerRef } : {}) };
+          return { state: stays.has(ref.providerRef ?? '') ? 'asked' : 'paid', ...(ref.providerRef ? { providerRef: ref.providerRef } : {}) };
         },
         payout: async (account, req) => {
           sent.push({ account, req });
@@ -320,7 +322,7 @@ describe('the payment hub', () => {
         amountsFor: () => ({}),
       };
       const hub = new PaymentHubService(entities as never, { publish: async () => undefined } as never, [fakeRevolut], new FieldEncryption());
-      return { hub, sent, looked };
+      return { hub, sent, looked, stays };
     }
 
     it('its hands are paid to bank accounts, through Revolut, chosen by its country; with no key, on the stand-in’s test money', async () => {
@@ -357,6 +359,31 @@ describe('the payment hub', () => {
       await expect(hub.payout(BG.entityId, { reference: 'pp_bg3', amount: 10, payeePhone: '+359888123456', description: 'x' }, T0)).rejects.toThrow(/pays to a bank account/);
       await expect(hub.payout(BG.entityId, { reference: 'pp_bg4', amount: 10, description: 'x' }, T0)).rejects.toThrow(/one of the two/);
       expect(() => hub.switchLive(BG.entityId, BEN, T0)).toThrow(/test key/);
+    });
+
+it('a transfer still on its way is asked about every half minute at first, then every quarter hour — never at every sweep', async () => {
+      const { hub, looked, stays } = aBgHub();
+      await hub.setKey(BG.entityId, { key: 'good-test-key-0123456789', test: true }, ANN, T0);
+      const out = await hub.payout(BG.entityId, { reference: 'pp_slow', amount: 10, payeeAccount: IBAN, description: 'later' }, T0);
+      stays.add(out.providerRef as string);
+      const askedAt = (from: number, to: number, step: number) => {
+        const before = looked.length;
+        return (async () => {
+          for (let t = from; t <= to; t += step) await hub.sweep(t);
+          return looked.length - before;
+        })();
+      };
+      // Sweeps every 5 seconds for the first minute: asked at 5 s and 35 s — twice, not twelve.
+      expect(await askedAt(T0 + 5_000, T0 + 60_000, 5_000)).toBe(2);
+      // An hour later, sweeping every 5 seconds for 30 minutes: asked twice, once each quarter hour.
+      expect(await askedAt(T0 + 3_600_000, T0 + 3_600_000 + 30 * 60_000 - 5_000, 5_000)).toBe(2);
+      // Paid at last: asked no more.
+      stays.clear();
+      await hub.sweep(T0 + 3 * 3_600_000);
+      const n = looked.length;
+      await hub.sweep(T0 + 4 * 3_600_000);
+      expect(looked.length).toBe(n);
+      expect(hub.get(out.paymentId)?.state).toBe('paid');
     });
 
     it('a live key pays nothing real until a second person switches it on; a new key is switched on again', async () => {

@@ -24,6 +24,18 @@ export const REFUND_AGAIN_AFTER_MS = 60 * 60_000;
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
+ * 2026-11-25 — HOW OFTEN A PAYMENT STILL ON ITS WAY IS ASKED OF ITS PROVIDER by the sweep: a payment prompt at every sweep (a payer
+ * is looking at the phone); money sent out or given back every half minute for its first ten minutes, then every quarter hour —
+ * a bank transfer may take a working day, and a provider asked every few seconds about one transfer is asked thousands of times.
+ */
+export const OUT_ASKED_EVERY_MS = 30_000;
+export const OUT_ASKED_LATER_EVERY_MS = 15 * 60_000;
+export function askEveryMs(p: Pick<HubPayment, 'kind' | 'askedAt'>, now: number): number {
+  if (p.kind === 'in') return 0;
+  return now - Date.parse(p.askedAt) < 10 * 60_000 ? OUT_ASKED_EVERY_MS : OUT_ASKED_LATER_EVERY_MS;
+}
+
+/**
  * THE PAYMENT HUB (the payments plan, step 4; the owner: "a software that combines PSP's and becomes actually a payment hub").
  * A partner's money goes through its own account at its own provider, and every provider is reached through here: a payment
  * prompt asked of a payer's phone, kept as asked until the provider says paid or failed — a callback where one comes, and
@@ -49,6 +61,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   private refundsLookedAt = 0;
+  /** When the sweep last asked about each payment still on its way (askEveryMs). */
+  private readonly lastAsked = new Map<string, number>();
 
   constructor(
     private readonly entities: EntityService,
@@ -248,7 +262,12 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     if (this.running) return;
     this.running = true;
     try {
-      for (const id of [...this.waitingSet()]) await this.settle(id, now);
+      for (const id of [...this.waitingSet()]) {
+        const p = this.payments.get(id);
+        if (p && now - (this.lastAsked.get(id) ?? -Infinity) < askEveryMs(p, now)) continue;
+        this.lastAsked.set(id, now);
+        await this.settle(id, now);
+      }
       if (now - this.refundsLookedAt >= REFUND_AGAIN_AFTER_MS) {
         this.refundsLookedAt = now;
         await this.refundsAgain(now);
@@ -449,6 +468,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     this.payments.set(paymentId, next);
     if (next.state !== 'asked') {
       this.waitingSet().delete(paymentId);
+      this.lastAsked.delete(paymentId);
       this.told(next);
     }
     return next;
