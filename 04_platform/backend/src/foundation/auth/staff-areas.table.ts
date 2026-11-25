@@ -514,6 +514,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-20 — what a partner owes, step by step (the payments plan, 3a): its whole record, for staff who keep the money;
   // and a hand's own, read by the hand.
   'GET sbg/entities/:entityId/partner-owed': 'money',
+  // 2026-11-24 — what companies of ours owe a partner, week by week (route plan part 4).
+  'GET sbg/entities/:entityId/partner-statements': 'money',
+  'POST sbg/entities/:entityId/partner-statements/:statementId/paid': 'money',
+  'GET sbg/partner/me/statements': 'none',
   'GET sbg/partner-owed/mine': 'none',
   // 2026-11-20 — the checks on a partner's figures (the payments plan, 3b): read and closed by staff who keep the money.
   'GET sbg/entities/:entityId/partner-checks': 'money',

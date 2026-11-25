@@ -1426,7 +1426,7 @@ export class MdpService {
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     }
-    if (fleet) this.gate.payBagLoad(fleet.driverDid, tote.code); // for scanning it aboard, at the driver's own company's figure
+    if (fleet) this.gate.payBagLoad(fleet.driverDid, tote.code, tote.parcels.map((id) => this.parcels.sellerOfOrNone(id))); // for scanning it aboard, at the driver's own company's figure
     void this.events.publish(GlosEvent.Pudo.BagLoaded, { toteId: tote.toteId, code: tote.code, driverBadgeId, destinationNodeId: tote.destinationNodeId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
     // 2026-11-02 — a bag collected off a hub's floor frees its place: bags held for room there go on.
     if (offHubFloor) this.letWaitingGo();
@@ -1511,7 +1511,7 @@ export class MdpService {
     }
     const tote = this.totes.passOn(before.code, mdp.mdpId, next?.mdpId ?? finalId, next?.name ?? before.throughToName ?? finalId, now);
     const fee = this.passOnFeeOf(mdp);
-    if (fee > 0) this.gate.passOnLabour(mdp.mdpId, fee, tote.code, this.entityIdOrNone(mdp), this.countryOf(mdp));
+    if (fee > 0) this.gate.passOnLabour(mdp.mdpId, fee, tote.code, this.entityIdOrNone(mdp), this.countryOf(mdp), before.parcels.map((id) => this.parcels.sellerOfOrNone(id)));
     void this.events.publish(GlosEvent.Pudo.BagPassedOn, { mdpId: mdp.mdpId, code: tote.code, next: tote.destinationNodeId, final: finalId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
     return { mdpId: mdp.mdpId, emptied: [], passedOn: { code: tote.code, next: next?.name ?? finalId, final: final?.name ?? before.throughToName ?? finalId } };
   }
@@ -1582,7 +1582,8 @@ export class MdpService {
     if (!driverDid || !tote.haul || !(tote.haul.road > 0)) return;
     // The road is paid once: a stretch already paid to a driver it was taken over from on the way is not paid again.
     const left = roadLeftToPay(tote.haul);
-    if (left > 0) this.gate.driverPayout(driverDid, left, { work: 'road', reference: tote.code });
+    // 2026-11-24 — in a Partnered country the partner pays the road; the bag's parcels we sold owe the partner their share (part 4).
+    if (left > 0) this.gate.driverPayout(driverDid, left, { work: 'road', reference: tote.code, sellers: tote.parcels.map((id) => this.parcels.sellerOfOrNone(id)) });
   }
 
   /**

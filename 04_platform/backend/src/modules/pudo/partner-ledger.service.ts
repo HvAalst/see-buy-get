@@ -9,6 +9,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import type { AmountKey } from './amount-keys';
+import type { BoughtShare } from './bought-by';
 
 /** Who did the step: a shop, a hub, a driver who rides for itself — or the fleet a driver rides for, which is paid for it. */
 export type PartnerPayeeKind = 'shop' | 'hub' | 'driver' | 'fleet';
@@ -63,6 +64,11 @@ export interface PartnerOwedLine {
   work?: PartnerWork;
   /** What the partner's own list said for that work when it was owed — what "paid off the list" is read against. */
   listed?: number;
+  /**
+   * 2026-11-24 — the companies of ours that sold the parcels this step was for, and what each owes the partner for it (route plan
+   * part 4; the owner: "we owe it weekly"): read into the week's statement. Absent where the parcels were the partner's own.
+   */
+  boughtBy?: BoughtShare[];
 }
 
 export class PartnerOwedRow {
@@ -141,7 +147,7 @@ export class PartnerLedgerService {
    * that country, or nothing is owed — and never a refusal: this runs inside a custody step, which must not fail on a money
    * question (the P2 lesson).
    */
-  owe(input: { country?: string; payeeId: string; payeeKind: PartnerPayeeKind; amount: number; reference: string; refType: string; step: PartnerStep; work?: PartnerWork }, now: number = Date.now()): PartnerOwedLine | undefined {
+  owe(input: { country?: string; payeeId: string; payeeKind: PartnerPayeeKind; amount: number; reference: string; refType: string; step: PartnerStep; work?: PartnerWork; boughtBy?: BoughtShare[] }, now: number = Date.now()): PartnerOwedLine | undefined {
     const partner = this.partnerAt(input.country);
     if (!partner || !(input.amount > 0) || !input.payeeId) return undefined;
     const key = input.work ? LISTED_AT[input.work] : undefined;
@@ -161,6 +167,7 @@ export class PartnerLedgerService {
       at: new Date(now).toISOString(),
       ...(input.work ? { work: input.work } : {}),
       ...(typeof listed === 'number' ? { listed } : {}),
+      ...(input.boughtBy?.length ? { boughtBy: input.boughtBy.map((b) => ({ entityId: b.entityId, amount: round2(b.amount) })) } : {}),
     };
     this.lines.set(line.lineId, line);
     void this.events?.publish(GlosEvent.Pudo.PartnerOwed, { ...line }, { source: 'pudo' }).catch(() => undefined);
@@ -185,7 +192,8 @@ export class PartnerLedgerService {
       .filter((l) => !l.undoes && !undone.has(l.lineId) && l.payeeId === input.payeeId && l.step === input.step && l.reference === input.reference && sameWork(l) && Math.round(l.amount * 100) === cents)
       .sort((a, b) => b.at.localeCompare(a.at))[0];
     if (!owed) return undefined;
-    const line: PartnerOwedLine = { ...owed, lineId: `po_${randomBytes(9).toString('base64url')}`, amount: -owed.amount, undoes: owed.lineId, at: new Date(now).toISOString() };
+    // …and what our companies owed the partner for it, taken back with it (route plan part 4).
+    const line: PartnerOwedLine = { ...owed, lineId: `po_${randomBytes(9).toString('base64url')}`, amount: -owed.amount, undoes: owed.lineId, at: new Date(now).toISOString(), ...(owed.boughtBy ? { boughtBy: owed.boughtBy.map((b) => ({ entityId: b.entityId, amount: -b.amount })) } : {}) };
     this.lines.set(line.lineId, line);
     void this.events?.publish(GlosEvent.Pudo.PartnerOwed, { ...line }, { source: 'pudo' }).catch(() => undefined);
     return line;

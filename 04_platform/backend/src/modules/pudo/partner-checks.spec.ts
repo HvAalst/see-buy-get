@@ -286,13 +286,15 @@ describe('wired', () => {
     expect(parcels).toMatch(/payShelving[\s\S]{0,1500}this\.gate\.payLabour\(agentDid, pay, parcel\.parcelId, 'parcel', parcel\.sellerEntityId, 'shelving'\);/);
     expect(parcels).toMatch(/payRelease[\s\S]{0,400}this\.gate\.payLabour\(agentDid, pay, parcel\.parcelId, 'parcel', parcel\.sellerEntityId, 'release'\);/);
     expect(parcels.match(/'parcel', parcel\.sellerEntityId, 'take_in'\);/g)).toHaveLength(4);
-    expect(parcels).toMatch(/manifestId, 'manifest', undefined, 'handover'\);/);
+    // 2026-11-24 — with the sheet's parcels' sellers, for what our companies owe the partner (route plan part 4).
+    expect(parcels).toMatch(/manifestId, 'manifest', undefined, 'handover', handed\.map\(\(id\) => this\.sellerOfOrNone\(id\)\)\);/);
     expect(parcels).toMatch(/this\.gate\.owedByPartner\(input\.agentDid, pay, parcel\.parcelId, 'parcel', 'take_in'\)/);
     expect(parcels.match(/this\.gate\.clawbackLabour\([^;]*'take_in'\);/g)).toHaveLength(2);
     expect(parcels).toMatch(/this\.gate\.clawbackLabour\([^;]*'shelving'\);/);
     for (const f of ['return.service.ts', 'unclaimed.service.ts', 'business-door.service.ts']) expect(read(f)).toMatch(/this\.gate\.payLabour\([^;]*'holding'\);/);
     const hubs = read('mdp.service.ts');
-    expect(hubs).toMatch(/this\.gate\.driverPayout\(driverDid, left, \{ work: 'road', reference: tote\.code \}\);/);
-    expect(hubs.match(/this\.gate\.payBagLoad\([^;]*tote\.code\)/g)).toHaveLength(2);
+    // 2026-11-24 — and the bag's parcels' sellers, for what our companies owe the partner (route plan part 4).
+    expect(hubs).toMatch(/this\.gate\.driverPayout\(driverDid, left, \{ work: 'road', reference: tote\.code, sellers: tote\.parcels\.map\(\(id\) => this\.parcels\.sellerOfOrNone\(id\)\) \}\);/);
+    expect(hubs.match(/this\.gate\.payBagLoad\([^;]*tote\.code[,)]/g)).toHaveLength(2);
   });
 });

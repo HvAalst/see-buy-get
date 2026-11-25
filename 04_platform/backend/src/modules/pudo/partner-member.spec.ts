@@ -205,8 +205,9 @@ describe('wired', () => {
     expect(doors.match(/@Roles\('operator'\)\s*@(Get|Post|Delete)\('entities\/:entityId\/partner-members/g)).toHaveLength(3);
     expect(doors.match(/@Roles\('consumer'\)\s*@(Get|Post)\('partner\//g)).toHaveLength(4);
     // 4c — and its own payouts.
-    // 4e — and its money.
-    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(4);
+    // 4e — and its money. 2026-11-24 — and what our companies owe it, week by week (route plan part 4).
+    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(5);
+    expect(STAFF_AREAS['GET sbg/partner/me/statements']).toBe('none');
     expect(STAFF_AREAS['GET sbg/partner/me/payouts']).toBe('none');
     expect(STAFF_AREAS['GET sbg/partner/me/money']).toBe('none');
     expect(read('account-closing.service.ts')).toMatch(/this\.partnerMembers\?\.forgetPerson\(personDid, phoneHash, now\);/);

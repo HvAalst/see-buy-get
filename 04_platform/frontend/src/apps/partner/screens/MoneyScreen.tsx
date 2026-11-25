@@ -1,7 +1,7 @@
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import type { LiveState } from '../../../shared/live';
 import { cash } from '../../../shared/money';
-import type { PartnerMoney } from '../api';
+import type { PartnerMoney, PartnerStatements } from '../api';
 import type { PartnerState } from '../usePartnerApp';
 import { KIND, LiveTag, when } from './HomeScreen';
 
@@ -121,7 +121,41 @@ export function MoneyBody({ money, failed, live, t }: { money: PartnerMoney | nu
   );
 }
 
+/**
+ * 2026-11-24 — WHAT SEEBUYGET OWES YOU, WEEK BY WEEK (route plan part 4; the owner: "we owe it weekly"): for your hands' work on
+ * parcels a company of ours sold, each week Sunday to Saturday, and whether it was paid, with the bank transfer's reference.
+ */
+export function StatementsSection({ view, t }: { view: PartnerStatements | null; t: Translate }) {
+  if (!view || view.statements.length === 0) return null;
+  const unpaid = Object.entries(view.unpaid).map(([currency, amount]) => cash(amount, currency));
+  return (
+    <section class="cons__panel">
+      <p class="cfield__label">{t('partner.app.statements.title')}</p>
+      <p class="chint">{unpaid.length ? t('partner.app.statements.unpaid', { amount: unpaid.join(' + ') }) : t('partner.app.statements.allPaid')}</p>
+      <div class="crows">
+        {view.statements.slice(0, 26).map((s) => (
+          <div class="crow" key={s.statementId}>
+            <span class="crow__body">
+              <span class="crow__top">
+                <span class="crow__name">{t('partner.app.statements.week', { from: s.weekStart, to: s.weekEnd })}</span>
+                <span class={`ctag ${s.paidAt ? 'ctag--ok' : s.closed ? 'ctag--warn' : 'ctag--quiet'}`}>{s.paidAt ? t('partner.app.statements.paid', { date: s.paidAt.slice(0, 10), reference: s.paidReference ?? '' }) : t(s.closed ? 'partner.app.statements.toPay' : 'partner.app.statements.open')}</span>
+              </span>
+              <span class="crow__sub">{t('partner.app.statements.who', { company: s.sellerName, n: s.steps })}</span>
+            </span>
+            <span class="crow__end">{cash(s.amount, s.currency)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function MoneyScreen({ state }: { state: PartnerState }) {
   const t = useT();
-  return <MoneyBody money={state.money} failed={state.owedFailed} live={state.live} t={t} />;
+  return (
+    <>
+      <MoneyBody money={state.money} failed={state.owedFailed} live={state.live} t={t} />
+      <StatementsSection view={state.statements} t={t} />
+    </>
+  );
 }

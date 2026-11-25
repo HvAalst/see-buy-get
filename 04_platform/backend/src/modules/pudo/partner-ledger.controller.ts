@@ -13,6 +13,7 @@ import { MdpService } from './mdp.service';
 import { MyPartnerOwed, PartnerLedgerService, PartnerLedgerView } from './partner-ledger.service';
 import { PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
 import { PartnerChecksService, PartnerChecksView, PartnerFlagLookedDto, PartnerFlagRow, PartnerReviewRow } from './partner-checks.service';
+import { PartnerStatementPaidDto, PartnerStatementService, PartnerStatementView, PartnerStatementsView } from './partner-statement.service';
 
 /**
  * 2026-11-20 — WHAT A PARTNER OWES, READ (the payments plan, 3a; the owner: "console for staff"; the hands see it, "named"). Our
@@ -29,7 +30,25 @@ export class PartnerLedgerController {
     private readonly checks: PartnerChecksService,
     private readonly hub: PaymentHubService,
     private readonly payouts: PartnerPayoutService,
+    // 2026-11-24 — what a company of ours owes the partner, week by week (route plan part 4).
+    private readonly statements: PartnerStatementService,
   ) {}
+
+  /** 2026-11-24 — what companies of ours owe a partner, week by week, Sunday to Saturday (route plan part 4), for our staff. */
+  @Roles('operator')
+  @Get('entities/:entityId/partner-statements')
+  statementsOf(@Param('entityId') entityId: string): PartnerStatementsView {
+    this.requirePartner(entityId);
+    return this.statements.statementsOf(entityId);
+  }
+
+  /** …paid by bank transfer: said by staff with the transfer's reference, and booked paid by the company that owed it. */
+  @Roles('operator')
+  @Post('entities/:entityId/partner-statements/:statementId/paid')
+  statementPaid(@Param('entityId') entityId: string, @Param('statementId') statementId: string, @Body() dto: PartnerStatementPaidDto, @Actor() actor: IntrospectionResult): PartnerStatementView {
+    this.requirePartner(entityId);
+    return this.statements.markPaid(entityId, statementId, { by: auditActor(actor, dto.by) ?? 'SeeBuyGet staff', reference: dto.reference });
+  }
 
   /** A partner's record, for our staff: every line it owes, and what it owes each hand in all. */
   @Roles('operator')

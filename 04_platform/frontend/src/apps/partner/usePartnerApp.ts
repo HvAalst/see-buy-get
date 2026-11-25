@@ -28,6 +28,7 @@ import {
   type PartnerMe,
   type PartnerOwed,
   type PartnerMoney,
+  type PartnerStatements,
   type PartnerPayouts,
   type PersonAuth,
   type PersonClient,
@@ -66,6 +67,8 @@ export interface PartnerState {
   payouts: PartnerPayouts | null;
   /** 2026-11-21 — its money: paid in, paid out, waiting (4e). */
   money: PartnerMoney | null;
+  /** 2026-11-24 — what SeeBuyGet's companies owe it, week by week (route plan part 4). */
+  statements: PartnerStatements | null;
   /** The last read failed: the figures on screen are the ones before it, and it says so. */
   owedFailed: boolean;
   /** Whether the live view is open: the figures follow each step as it is done. */
@@ -92,6 +95,7 @@ const INITIAL: PartnerState = {
   owed: null,
   payouts: null,
   money: null,
+  statements: null,
   owedFailed: false,
   live: 'off',
   section: 'home',
@@ -144,10 +148,10 @@ export function usePartnerApp(): { state: PartnerState; actions: PartnerActions 
 
   /** Read what the partner owes. A failed read keeps the figures already on screen, and says so. */
   const refresh = useCallback(async () => {
-    const [r, paid, money] = await Promise.all([partner.current.owed(), partner.current.payouts(), partner.current.money()]);
+    const [r, paid, money, weeks] = await Promise.all([partner.current.owed(), partner.current.payouts(), partner.current.money(), partner.current.statements()]);
     if (r.error?.status === 401 || r.error?.status === 403) return void (await backToListRef.current());
     if (r.error || !r.data) return patch({ owedFailed: true });
-    patch({ owed: r.data, owedFailed: false, ...(paid.data ? { payouts: paid.data } : {}), ...(money.data ? { money: money.data } : {}) });
+    patch({ owed: r.data, owedFailed: false, ...(paid.data ? { payouts: paid.data } : {}), ...(money.data ? { money: money.data } : {}), ...(weeks.data ? { statements: weeks.data } : {}) });
   }, []);
 
   const enterPartner = useCallback(
@@ -188,7 +192,7 @@ export function usePartnerApp(): { state: PartnerState; actions: PartnerActions 
     rememberLast(null);
     partner.current = createPartnerClient();
     setPartnerOpen(false);
-    patch({ partner: null, owed: null, payouts: null, money: null, owedFailed: false, phase: 'boot', section: 'home' });
+    patch({ partner: null, owed: null, payouts: null, money: null, statements: null, owedFailed: false, phase: 'boot', section: 'home' });
     await loadMine();
   }, [loadMine]);
   const backToListRef = useRef(backToList);

@@ -11,6 +11,7 @@ import { MdpService } from './mdp.service';
 import { PartnerLedgerService, type PartnerPayeeKind } from './partner-ledger.service';
 import { PartnerPayoutRow, PartnerPayoutService, PartnerPayoutsView } from './partner-payout.service';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PartnerStatementService, PartnerStatementsView } from './partner-statement.service';
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 
 /** 4e — one sender's payment into the partner's account: for which parcel, how much, where it stands — never the phone. */
@@ -60,7 +61,17 @@ export class PartnerAppController {
     private readonly fleets: FleetManagerService,
     private readonly payouts: PartnerPayoutService,
     @Optional() private readonly hub?: PaymentHubService,
+    // 2026-11-24 — what companies of ours owe the partner, week by week (route plan part 4).
+    @Optional() private readonly statements?: PartnerStatementService,
   ) {}
+
+  /** 2026-11-24 — what SeeBuyGet's companies owe this partner for its hands' work on parcels they sold, week by week. */
+  @Roles('partner')
+  @Get('partner/me/statements')
+  myStatements(@Actor() actor: IntrospectionResult): PartnerStatementsView {
+    const { entity } = this.members.requireMember(actor);
+    return this.statements?.statementsOf(entity.entityId) ?? { statements: [], unpaid: {} };
+  }
 
   /* ------------------------------------------------------------------ our staff -- */
 

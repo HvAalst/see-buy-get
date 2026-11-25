@@ -39028,6 +39028,82 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/partner-statements": {
+      "get": {
+        "operationId": "PartnerLedger.statementsOf",
+        "summary": "",
+        "description": "2026-11-24 — what companies of ours owe a partner, week by week, Sunday to Saturday (route plan part 4), for our staff.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerStatementsView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/partner-statements/{statementId}/paid": {
+      "post": {
+        "operationId": "PartnerLedger.statementPaid",
+        "summary": "",
+        "description": "…paid by bank transfer: said by staff with the transfer's reference, and booked paid by the company that owed it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "statementId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerStatementPaidDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerStatementView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/partner-owed": {
       "get": {
         "operationId": "PartnerLedger.ofPartner",
@@ -39349,6 +39425,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MyPartnerOwed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/me/statements": {
+      "get": {
+        "operationId": "PartnerApp.myStatements",
+        "summary": "",
+        "description": "2026-11-24 — what SeeBuyGet's companies owe this partner for its hands' work on parcels they sold, week by week.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerStatementsView"
                 }
               }
             }
@@ -93447,6 +93543,107 @@
         },
         "required": [
           "available"
+        ]
+      },
+      "PartnerStatementView": {
+        "type": "object",
+        "properties": {
+          "statementId": {
+            "type": "string"
+          },
+          "partnerEntityId": {
+            "type": "string"
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "sellerEntityId": {
+            "type": "string"
+          },
+          "sellerName": {
+            "type": "string"
+          },
+          "weekStart": {
+            "type": "string"
+          },
+          "weekEnd": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "number"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "owedInBooks": {
+            "type": "number"
+          },
+          "booksCurrency": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string"
+          },
+          "paidBy": {
+            "type": "string"
+          },
+          "paidReference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "statementId",
+          "partnerEntityId",
+          "partnerName",
+          "sellerEntityId",
+          "sellerName",
+          "weekStart",
+          "weekEnd",
+          "amount",
+          "currency",
+          "steps",
+          "closed"
+        ]
+      },
+      "PartnerStatementsView": {
+        "type": "object",
+        "properties": {
+          "statements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerStatementView"
+            }
+          },
+          "unpaid": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "statements",
+          "unpaid"
+        ]
+      },
+      "PartnerStatementPaidDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
         ]
       },
       "PartnerOwedTotal": {

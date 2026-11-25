@@ -466,6 +466,9 @@ export function createOperatorApi(sbg: SbgClient) {
     companyRecord: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } } })),
     /** 2026-11-20 — a partner company's record: what it owes each hand, step by step (the payments plan, 3a). */
     partnerOwed: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-owed', { params: { path: { entityId } } })),
+    /** 2026-11-24 — what companies of ours owe a partner, week by week, and a week paid by bank transfer (route plan part 4). */
+    partnerStatements: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-statements', { params: { path: { entityId } } })),
+    partnerStatementPaid: (entityId: string, statementId: string, reference: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-statements/{statementId}/paid', { params: { path: { entityId, statementId } }, body: { reference } })),
     /** 2026-11-20 — the checks on a partner's figures: what to look at, what was looked at, the last AI review (3b). */
     partnerChecks: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-checks', { params: { path: { entityId } } })),
     partnerCheckLooked: (entityId: string, flagId: string, note?: string) =>

@@ -81,12 +81,34 @@ describe('what the partner owes, step by step', () => {
     expect(w.ledger.ledgerOf(PARTNER.entityId).owed).toBe(0);
   });
 
-  it('a step a company of ours sold is paid as before, on our books — never owed by the partner', () => {
+  // 2026-11-24 — THE OWNER'S PART 4 ("we owe it weekly"), in place of 3a's "never owed by the partner": the partner pays its hand for
+  // a step on a parcel a company of ours sold, and that company owes the partner for it, read into the week's statement.
+  it('a step on a parcel a company of ours sold: the partner pays its hand, and that company owes the partner — never a payable of ours to the hand', () => {
     const w = aWorld();
     const row = w.gate.payLabour('did:glos:shop-addis', 40, 'PUD-3', 'parcel', 'sbg-ke');
-    expect(row?.owedBy).toBeUndefined();
+    expect(row?.owedBy).toMatchObject({ entityId: PARTNER.entityId });
+    expect(w.posted).toEqual([]);
+    expect(w.ledger.linesOf(PARTNER.entityId)[0]).toMatchObject({ payeeId: 'did:glos:shop-addis', amount: 40, boughtBy: [{ entityId: 'sbg-ke', amount: 40 }] });
+    // A hub's sort on it (it booked nothing before), a hand-over sheet of two parcels one of them ours, a bag's road and its loading.
+    w.gate.sortLabour('mdp_addis', 25, 'PUD-3', undefined, 'sbg-ke', 'ET');
+    w.gate.payLabour('did:glos:shop-addis', 30, 'MAN-1', 'manifest', undefined, 'handover', ['sbg-ke', undefined]);
+    w.gate.driverPayout('did:glos:courier-addis', 90, { work: 'road', reference: 'BAG-1', sellers: ['sbg-ke', 'sbg-ug', undefined] });
+    w.gate.passOnLabour('mdp_addis', 15, 'BAG-1', undefined, 'ET', ['sbg-ke']);
+    const bought = w.ledger.linesOf(PARTNER.entityId).map((l) => [l.step, l.amount, l.boughtBy]);
+    expect(bought).toEqual([
+      ['labour', 40, [{ entityId: 'sbg-ke', amount: 40 }]],
+      ['sort', 25, [{ entityId: 'sbg-ke', amount: 25 }]],
+      ['labour', 30, [{ entityId: 'sbg-ke', amount: 15 }]],
+      ['haul', 90, [{ entityId: 'sbg-ke', amount: 30 }, { entityId: 'sbg-ug', amount: 30 }]],
+      ['pass_on', 15, [{ entityId: 'sbg-ke', amount: 15 }]],
+    ]);
+    expect(w.posted).toEqual([]);
+    // Taken back, what our company owed for it comes back with it.
+    w.ledger.takeBack({ payeeId: 'did:glos:shop-addis', amount: 40, reference: 'PUD-3', step: 'labour' });
+    expect(w.ledger.linesOf(PARTNER.entityId).slice(-1)[0]).toMatchObject({ amount: -40, boughtBy: [{ entityId: 'sbg-ke', amount: -40 }] });
+    // Where no partner contracts (a shop in Uganda), the shop is a supplier the seller bought from, on its books, as before.
+    w.gate.payLabour('did:glos:shop-kampala', 40, 'PUD-4', 'parcel', 'sbg-ke');
     expect(w.posted).toHaveLength(1);
-    expect(w.ledger.ledgerOf(PARTNER.entityId).owed).toBe(0);
   });
 
   it('a step undone — a parcel voided or called off at the shop — is taken back as a line of its own, once, and never what was not owed', () => {
@@ -145,7 +167,8 @@ describe('wired', () => {
   const read = (...p: string[]) => readFileSync(join(__dirname, ...p), 'utf8');
 
   it('every rate of such a step is the partner’s own list: a shop’s, a driver’s, a hub’s', () => {
-    expect(read('parcel.service.ts')).toMatch(/return this\.entities\.amountsFor\(own \?\? sellerEntityId \?\? this\.partners\?\.ratesEntityAt\(country\)\);/);
+    // 2026-11-24 — on a parcel a company of ours sold too: it buys the step at the partner's list (route plan part 4).
+    expect(read('parcel.service.ts')).toMatch(/return this\.entities\.amountsFor\(own \?\? this\.partners\?\.ratesEntityAt\(country\) \?\? sellerEntityId\);/);
     expect(read('driver.service.ts')).toMatch(/this\.entities\.amountsFor\(this\.payeeOrNone\(did\)\.entityId \?\? this\.partners\?\.ratesEntityAt\(this\.countryOfWork\(did\)\)\)/);
     const hubs = read('mdp.service.ts');
     expect(hubs).toMatch(/const list = this\.entities\.amountsFor\(entityId \?\? this\.partners\?\.ratesEntityAt\(this\.countryOf\(mdp\)\)\);/);
@@ -160,7 +183,8 @@ describe('wired', () => {
   it('every hub step says the hub’s country, so the partner there is found', () => {
     const hubs = read('mdp.service.ts');
     expect(hubs.match(/this\.gate\.sortLabour\([^;]*this\.countryOf\(hub\)\);/g)).toHaveLength(2);
-    expect(hubs).toMatch(/this\.gate\.passOnLabour\([^;]*this\.countryOf\(mdp\)\);/);
+    // 2026-11-24 — and the bag's parcels' sellers after it, for what our companies owe the partner (route plan part 4).
+    expect(hubs).toMatch(/this\.gate\.passOnLabour\([^;]*this\.countryOf\(mdp\), before\.parcels\.map\(\(id\) => this\.parcels\.sellerOfOrNone\(id\)\)\);/);
     expect(read('hub-arrival.service.ts')).toMatch(/this\.gate\.receivingLabour\([^;]*this\.mdps\.countryOf\(hub\)\);/);
   });
 

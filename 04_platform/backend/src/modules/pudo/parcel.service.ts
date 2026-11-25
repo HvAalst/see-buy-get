@@ -1098,8 +1098,18 @@ export class ParcelService implements OnApplicationBootstrap {
     } catch {
       own = undefined;
     }
-    // 2026-11-20 — no company of ours here and no seller: the partner's own list, where a partner contracts and pays (3a).
-    return this.entities.amountsFor(own ?? sellerEntityId ?? this.partners?.ratesEntityAt(country));
+    // 2026-11-20 — no company of ours here: the partner's own list, where a partner contracts and pays (3a); 2026-11-24 — on a
+    // parcel a company of ours sold too: that company buys the step from the partner at the partner's list (route plan part 4).
+    return this.entities.amountsFor(own ?? this.partners?.ratesEntityAt(country) ?? sellerEntityId);
+  }
+
+  /** 2026-11-24 — the company of ours that sold a parcel, or none: the partner's own, or one this server no longer knows (part 4). */
+  sellerOfOrNone(parcelId: string): string | undefined {
+    try {
+      return this.require(parcelId).sellerEntityId;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -2049,7 +2059,8 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     // Pay the agent the handover fee once for the batch.
-    if (handed.length) this.gate.payLabour(input.agentDid, this.amountsAt(input.agentDid).handoverFee, manifestId, 'manifest', undefined, 'handover');
+    // 2026-11-24 — in a Partnered country, the sheet's parcels a company of ours sold owe the partner their share (route plan part 4).
+    if (handed.length) this.gate.payLabour(input.agentDid, this.amountsAt(input.agentDid).handoverFee, manifestId, 'manifest', undefined, 'handover', handed.map((id) => this.sellerOfOrNone(id)));
 
     // REP2 — surface the DID of the fleet driver who took the batch, so the shop can rate them for this leg
     // (a legacy corridor-whitelist driver has no registry DID and isn't rateable → undefined).

@@ -140,12 +140,19 @@ export interface PartnerMoney {
   names: Record<string, string>;
 }
 
+/** 2026-11-24 — what SeeBuyGet's companies owe the partner, week by week (route plan part 4; backend PartnerStatementsView). */
+export interface PartnerStatements {
+  statements: Array<{ statementId: string; sellerName: string; weekStart: string; weekEnd: string; amount: number; currency: string; steps: number; closed: boolean; paidAt?: string; paidReference?: string }>;
+  unpaid: Record<string, number>;
+}
+
 export interface PartnerClient {
   client: SeededAppClient;
   me(): Promise<Result<PartnerMe>>;
   owed(): Promise<Result<PartnerOwed>>;
   payouts(): Promise<Result<PartnerPayouts>>;
   money(): Promise<Result<PartnerMoney>>;
+  statements(): Promise<Result<PartnerStatements>>;
 }
 
 export function createPartnerClient(): PartnerClient {
@@ -157,6 +164,7 @@ export function createPartnerClient(): PartnerClient {
     owed: () => call((c) => c.GET('/v1/sbg/partner/me/owed', {}) as never),
     payouts: () => call((c) => c.GET('/v1/sbg/partner/me/payouts', {}) as never),
     money: () => call((c) => c.GET('/v1/sbg/partner/me/money', {}) as never),
+    statements: () => call((c) => c.GET('/v1/sbg/partner/me/statements', {}) as never),
   };
 }
 
