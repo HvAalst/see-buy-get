@@ -4,7 +4,7 @@ import { Button, Card, Note, PhoneField, PlacePicker, Pill, refusalSentence, typ
 import { formatMoney, useT } from '../../../shared/i18n';
 import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
-import { EMPTY_PERSON_LOAD, personLoadApi, personLoadBlocker, personLoadBody, type LoadOffer, type LoadPaymentView, type PersonLoadForm, type PersonLoadRow } from '../personLoads';
+import { EMPTY_PERSON_LOAD, choosesPayWay, personLoadApi, personLoadBlocker, personLoadBody, type LoadOffer, type LoadPaymentView, type LoadPayWays, type PersonLoadForm, type PersonLoadRow } from '../personLoads';
 import type { SendActions, SendState } from '../useSendApp';
 import type { Uploaded } from '../../../shared/upload';
 import { HoldBlock } from './HoldBlock';
@@ -23,7 +23,24 @@ import { CodeMailBounced } from '../../../shared/CodeMailBounced';
 export function LoadPostScreen({ state, actions, client }: { state: SendState; actions: SendActions; client: SbgClient | null }) {
   const t = useT();
   const api = useMemo(() => (client ? personLoadApi(client) : null), [client]);
-  const [form, setForm] = useState<PersonLoadForm>(() => EMPTY_PERSON_LOAD(state.authPhone));
+  // 2026-11-24 — from the parcel the person was sending, its weight comes along (route plan part 9).
+  const [form, setForm] = useState<PersonLoadForm>(() => EMPTY_PERSON_LOAD(state.authPhone, state.dims.kg));
+  // 2026-11-24 — when they may pay, by the pickup's country (route plan part 9): asked only where it offers both.
+  const [ways, setWays] = useState<LoadPayWays | null>(null);
+  useEffect(() => {
+    const pin = form.from.pin;
+    if (!api || !pin) return setWays(null);
+    let live = true;
+    void api.payWays(pin).then((r) => {
+      if (!live || r.error) return;
+      const got = (r.data as unknown as { ways?: LoadPayWays }).ways ?? null;
+      setWays(got);
+      if (!choosesPayWay(got)) setForm((f) => (f.payWay ? { ...f, payWay: '' } : f));
+    });
+    return () => {
+      live = false;
+    };
+  }, [api, form.from.pin?.lat, form.from.pin?.lng]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [posted, setPosted] = useState(false);
@@ -50,6 +67,19 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
     if (r.error) return setProblem(refusalSentence(r.error as SbgError));
     setPosted(true);
   };
+
+  const payChoice = choosesPayWay(ways) ? (
+    <Card title={t('send.load.payWhen')}>
+      <div class="chips" role="radiogroup" aria-label={t('send.load.payWhen')}>
+        {(['held', 'at_pickup'] as const).map((w) => (
+          <button key={w} type="button" role="radio" aria-checked={(form.payWay || 'held') === w} class={'chip chip--tap' + ((form.payWay || 'held') === w ? ' chip--on' : '')} onClick={() => set({ payWay: w })}>
+            {t(w === 'held' ? 'send.load.payHeld' : 'send.load.payAtPickup')}
+          </button>
+        ))}
+      </div>
+      <p class="hint">{t((form.payWay || 'held') === 'held' ? 'send.load.payHeldHint' : 'send.load.payAtPickupHint')}</p>
+    </Card>
+  ) : null;
 
   if (posted) {
     return (
@@ -146,7 +176,7 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
           <input id="load-rcv-email" class="input" type="email" inputMode="email" maxLength={120} autoComplete="off" value={form.receiverEmail} onInput={(e) => set({ receiverEmail: e.currentTarget.value })} />
         </div>
       </Card>
-      <p class="card__note">{t('send.load.howPay')}</p>
+      {payChoice ?? <p class="card__note">{t('send.load.howPay')}</p>}
       {word ? <GoodsWord passage={word} said={said} onChange={setSaid} /> : null}
       {fiscalAsk ? <FiscalCodes countries={fiscalAsk} value={fiscal} onChange={setFiscal} idPrefix="load-fiscal" /> : null}
       {problem ? (
@@ -165,7 +195,7 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
 }
 
 /** One driver's price on the person's load: accept it, answer with your own, or say no thanks. */
-function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, phone = '' }: { offer: LoadOffer; currency?: string; api: ReturnType<typeof personLoadApi>; onChanged: () => void; escrow?: boolean; freightId: string; phone?: string }) {
+function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, phone = '', needsPhone = true }: { offer: LoadOffer; currency?: string; api: ReturnType<typeof personLoadApi>; onChanged: () => void; escrow?: boolean; freightId: string; phone?: string; needsPhone?: boolean }) {
   const t = useT();
   // 2026-11-13 — a load paid first: accepting is paying, from a number M-Pesa asks (part 3b).
   const [paying, setPaying] = useState(false);
@@ -175,6 +205,16 @@ function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, 
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const amount = Number(answer.replace(',', '.'));
+  const payOnPage = async () => {
+    setBusy(true);
+    setProblem(null);
+    const r = await api.pay(freightId, offer.proposalId);
+    setBusy(false);
+    if (r.error) return setProblem(refusalSentence(r.error as SbgError));
+    const link = (r.data as unknown as LoadPaymentView | undefined)?.link;
+    onChanged();
+    if (link) window.location.assign(link);
+  };
   const act = async (call: () => Promise<{ error?: unknown }>) => {
     setBusy(true);
     setProblem(null);
@@ -194,9 +234,16 @@ function OfferRow({ offer, currency, api, onChanged, escrow = false, freightId, 
         {offer.counter ? <span class="row__s">{t('send.load.countered', { amount: formatMoney(offer.counter.price, currency) })}</span> : null}
         <span class="freight__acts">
           {escrow ? (
-            <Button variant="link" full={false} onClick={() => setPaying(!paying)}>
-              {t('send.load.pay', { amount: formatMoney(offer.charge ?? offer.price, currency) })}
-            </Button>
+            needsPhone ? (
+              <Button variant="link" full={false} onClick={() => setPaying(!paying)}>
+                {t('send.load.pay', { amount: formatMoney(offer.charge ?? offer.price, currency) })}
+              </Button>
+            ) : (
+              // 2026-11-24 — paid on the country's payment page (iDEAL in the Netherlands): no number asked; the page opens (part 9).
+              <Button variant="link" full={false} busy={busy} onClick={() => void payOnPage()}>
+                {t('send.load.pay', { amount: formatMoney(offer.charge ?? offer.price, currency) })}
+              </Button>
+            )
           ) : (
             <Button variant="link" full={false} busy={busy} onClick={() => void act(() => api.accept(offer.proposalId))}>
               {t('send.load.accept')}
@@ -294,7 +341,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
         ) : (
           <div class="rows" role="list">
             {offers.map((o) => (
-              <OfferRow key={o.proposalId} offer={o} currency={load.currency} api={api} escrow={Boolean(load.escrow)} freightId={load.freightId} phone={phone} onChanged={() => {
+              <OfferRow key={o.proposalId} offer={o} currency={load.currency} api={api} escrow={Boolean(load.escrow)} freightId={load.freightId} phone={phone} needsPhone={load.payNeedsPhone !== false} onChanged={() => {
                 void read();
                 onChanged();
               }} />
@@ -305,7 +352,19 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       {/* 2026-11-13 — a load paid first (part 3b): the payment waiting, the delivery code, money back. */}
       {payment?.state === 'awaiting' ? (
         <>
-          <Note tone="info" icon="clock" title={t('send.load.payWaiting', { phone: payment.phoneMasked, amount: formatMoney(payment.amount, payment.currency), time: when(payment.until) })} detail={payment.instructions ?? ''} />
+          {payment.phoneMasked ? (
+            <Note tone="info" icon="clock" title={t('send.load.payWaiting', { phone: payment.phoneMasked, amount: formatMoney(payment.amount, payment.currency), time: when(payment.until) })} detail={payment.instructions ?? ''} />
+          ) : (
+            // 2026-11-24 — paid on a page (iDEAL in the Netherlands): opened again from here, until it is paid or its time runs out.
+            <>
+              <Note tone="info" icon="clock" title={t('send.load.payWaitingPage', { amount: formatMoney(payment.amount, payment.currency), time: when(payment.until) })} detail={payment.instructions ?? ''} />
+              {payment.link ? (
+                <Button variant="outline" full={false} chevron={false} onClick={() => window.location.assign(payment.link!)}>
+                  {t('send.load.payOpenPage')}
+                </Button>
+              ) : null}
+            </>
+          )}
           <Button variant="link" full={false} onClick={() => void readPayment().then(onChanged)}>
             {t('send.load.checkAgain')}
           </Button>

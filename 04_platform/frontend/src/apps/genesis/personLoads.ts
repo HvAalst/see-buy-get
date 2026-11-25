@@ -26,9 +26,21 @@ export interface PersonLoadForm {
   receiverName: string;
   receiverPhone: string;
   receiverEmail: string;
+  /** 2026-11-24 — when they pay, where the country lets them choose (route plan part 9): '' is the country's own way. */
+  payWay: '' | LoadPayWay;
 }
 
-export const EMPTY_PERSON_LOAD = (phone = ''): PersonLoadForm => ({ description: '', weightKg: '', from: { label: '', pin: null }, to: { label: '', pin: null }, contactPhone: phone, note: '', work: EMPTY_WORK, receiverName: '', receiverPhone: '', receiverEmail: '' });
+/** 2026-11-24 — when a person pays for a load: to the driver at pickup, or now, held until delivery; how is the country's. */
+export type LoadPayWay = 'at_pickup' | 'held';
+/** What the server says a pickup's country allows: one or both of those, or paying the driver directly. */
+export type LoadPayWays = Array<LoadPayWay | 'direct'>;
+
+/** Whether the person is asked when they pay: only where the country offers both. */
+export function choosesPayWay(ways: LoadPayWays | null | undefined): boolean {
+  return Boolean(ways?.includes('at_pickup') && ways.includes('held'));
+}
+
+export const EMPTY_PERSON_LOAD = (phone = '', kg = ''): PersonLoadForm => ({ description: '', weightKg: kg, from: { label: '', pin: null }, to: { label: '', pin: null }, contactPhone: phone, note: '', work: EMPTY_WORK, receiverName: '', receiverPhone: '', receiverEmail: '', payWay: '' });
 
 /** What still needs saying, in the order the form asks it — or null. */
 export function personLoadBlocker(f: PersonLoadForm): MessageKey | null {
@@ -53,6 +65,7 @@ export function personLoadBody(f: PersonLoadForm) {
     destLabel: f.to.label.trim(),
     destLocation: f.to.pin!,
     contactPhone: f.contactPhone.trim(),
+    ...(f.payWay ? { payWay: f.payWay } : {}),
     ...(f.note.trim() ? { instructions: f.note.trim() } : {}),
     // 2026-11-15 — who receives it (plan R2): on their number they see it and its code in the Send app; else by email.
     ...(f.receiverPhone.trim() ? { buyerMobile: f.receiverPhone.trim() } : {}),
@@ -75,6 +88,8 @@ export interface PersonLoadRow {
   work?: LoadWorkView;
   /** 2026-11-13 — paid first to SeeBuyGet and held until delivery (part 3b); its delivery code; a price being paid. */
   escrow?: boolean;
+  /** 2026-11-24 — whether paying for it asks a phone number (M-Pesa rings one; a payment page needs none). */
+  payNeedsPhone?: boolean;
   deliveryCode?: string;
   /** 2026-11-15 — they said it arrived: the driver may deliver without the code. */
   arrivedSaid?: boolean;
@@ -112,7 +127,9 @@ export interface LoadPaymentView {
   currency: string;
   price: number;
   until: string;
-  phoneMasked: string;
+  phoneMasked?: string;
+  /** 2026-11-24 — the page to pay on, where the country's way has one (iDEAL in the Netherlands). */
+  link?: string;
   instructions?: string;
   reference?: string;
   pushed?: boolean;
@@ -130,7 +147,9 @@ export function personLoadApi(sbg: SbgClient) {
     decline: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),
     counter: (proposalId: string, price: number) => sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/counter', { params: { path: { id: proposalId } }, body: { price } })),
     // 2026-11-13 — a load paid first (part 3b): pay to accept, read the payment, say it arrived.
-    pay: (freightId: string, proposalId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pay', { params: { path: { id: freightId } }, body: { proposalId, phone } })),
+    pay: (freightId: string, proposalId: string, phone?: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pay', { params: { path: { id: freightId } }, body: { proposalId, ...(phone ? { phone } : {}) } })),
+    /** 2026-11-24 — when a person may pay for a load picked up at a pin (route plan part 9). */
+    payWays: (pin: { lat: number; lng: number }) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/pay-ways', { params: { query: { lat: String(pin.lat), lng: String(pin.lng) } } })),
     payment: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/payment', { params: { path: { id: freightId } } })),
     arrived: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/arrived', { params: { path: { id: freightId } }, body: { spokeToReceiver: true } })),
     /** 2026-11-16 — the code email to the receiver came back: send the code to another address. */

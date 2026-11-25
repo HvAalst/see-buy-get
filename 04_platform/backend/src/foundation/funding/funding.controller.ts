@@ -56,12 +56,14 @@ export class FundingController {
      */
     @Ip() ip: string,
   ) {
-    if (provider !== this.rail.provider) {
+    // 2026-11-24 — the rail that speaks for this provider, where the payment hub runs several (one per country's money).
+    const rail = this.railFor(provider);
+    if (!rail) {
       // Named rather than swallowed: a callback for a provider nobody wired up is a deployment mistake,
       // and answering 200 to it would hide a rail that is quietly dropping every payment it carries.
       throw new GlosError('NOT_FOUND', `No payment rail is configured for ${provider}`);
     }
-    const outcome = await this.rail.verify(headers, body, { ip });
+    const outcome = await rail.verify(headers, body, { ip });
     /*
      * THE PAYER SAID NO, and that is an answer rather than a failure.
      *
@@ -95,10 +97,17 @@ export class FundingController {
   @ApiExcludeEndpoint()
   @Post(':provider/answer')
   async answer(@Param('provider') provider: string, @Headers() headers: Record<string, string | undefined>, @Body() body: Record<string, unknown>, @Ip() ip: string) {
-    if (provider !== this.rail.provider || !this.rail.readAnswer) throw new GlosError('NOT_FOUND', `No payment rail answers for ${provider}`);
-    const answer = await this.rail.readAnswer(headers, body, { ip });
+    const rail = this.railFor(provider);
+    if (!rail?.readAnswer) throw new GlosError('NOT_FOUND', `No payment rail answers for ${provider}`);
+    const answer = await rail.readAnswer(headers, body, { ip });
     const held = this.funding.answer(answer);
     return { ok: true, matched: Boolean(held), status: held?.outcome ?? (held ? 'checking' : 'unknown') };
+  }
+
+  /** The rail behind a provider's name: the router's own, or the one rail there is. A method: the route audits walk members. */
+  private railFor(provider: string): FundingRail | undefined {
+    if (this.rail.forProvider) return this.rail.forProvider(provider);
+    return provider === this.rail.provider ? this.rail : undefined;
   }
 
   /* ------------------------------------------------------- the operator's side -- */

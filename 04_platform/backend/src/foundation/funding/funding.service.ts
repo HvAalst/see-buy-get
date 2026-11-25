@@ -47,6 +47,11 @@ export class FundingService {
 
   constructor(@Inject(FUNDING_RAIL) private readonly rail: FundingRail) {}
 
+  /** 2026-11-24 — whether paying in this money needs the payer's phone number: the rail the hub chooses for it says. */
+  needsPhone(currency: string): boolean {
+    return this.rail.needsPhone?.(currency) ?? true;
+  }
+
   /** Say how a kind of payer is resolved and credited. One registration at boot — see FundingPayer. */
   register(kind: FundingPayerKind, payer: FundingPayer): void {
     this.payers.set(kind, payer);
@@ -88,8 +93,9 @@ export class FundingService {
       currency,
       status: 'awaiting',
       reference: railed.reference || payerReference(),
-      provider: this.rail.provider,
+      provider: railed.provider ?? this.rail.provider,
       instructions: railed.instructions,
+      ...(railed.link ? { link: railed.link } : {}),
       ...(railed.pushed ? { pushed: true } : {}),
       ...(railed.railRef ? { railRef: railed.railRef } : {}),
       openedAt: new Date(now).toISOString(),
@@ -111,7 +117,9 @@ export class FundingService {
    * taken it (its answer arrives later, at `answer`). Every other payment goes straight to `confirm`, as before.
    */
   receive(payment: RailPayment, now: number = Date.now()): { funding?: Funding; unmatched?: UnmatchedPayment; held?: HeldPayment; duplicate: boolean; asked?: Promise<HeldPayment> } {
-    if (!payment.uncorroborated || !this.rail.canAsk?.() || !this.rail.askAbout) return this.confirm(payment, now);
+    // 2026-11-24 — asked of the rail that carried it, where one router serves several.
+    const rail = this.rail.forProvider?.(payment.provider) ?? this.rail;
+    if (!payment.uncorroborated || !rail.canAsk?.() || !rail.askAbout) return this.confirm(payment, now);
     const seen = this.byProviderRef(payment.provider, payment.providerRef);
     if (seen) return { ...seen, duplicate: true };
     const match = this.byReference(payment.reference);
@@ -126,7 +134,7 @@ export class FundingService {
       match.checking = { amount: payment.amount, currency: payment.currency, providerRef: payment.providerRef, since: record.at };
       this.save(match);
     }
-    const asked = this.rail
+    const asked = rail
       .askAbout(payment)
       .then(({ askedRef }) => this.updateHeld(record.id, { askedRef, askedAt: new Date().toISOString() }))
       .catch((err: Error) => this.updateHeld(record.id, { askFailed: err.message || 'M-Pesa could not be asked' }));

@@ -238,6 +238,13 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
       <StepDots at={from ? 2 : 3} />
       <h1 class="scr__title">{from ? t('send.point.titleFrom') : t('send.point.titleTo')}</h1>
       <p class="scr__lede">{from ? t('send.point.ledeFrom') : t('send.point.ledeTo')}</p>
+      {/* 2026-11-24 — always beside the shops (route plan part 9; the owner: "Always, beside shops"): a load instead, picked up and
+          delivered where the person says — to another EU country too, where no shop or hub is near. */}
+      <p class="hint">
+        <button type="button" class="linkbtn" onClick={() => actions.go('load')}>
+          {t('send.point.asLoad')}
+        </button>
+      </p>
 
       {state.pointsState === 'loading' ? <p class="hint">{t('send.point.finding')}</p> : null}
       {state.pointsState === 'error' && state.pointsError ? <ErrorNote error={state.pointsError} onRetry={() => void actions.loadPoints()} /> : null}

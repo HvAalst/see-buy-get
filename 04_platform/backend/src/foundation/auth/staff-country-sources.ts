@@ -133,6 +133,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/damage-reports': list({ at: 'items', row: { of: 'parcel', id: 'parcelId' } }),
   'GET sbg/lost-parcels': list({ row: { of: 'parcel', id: 'parcelId' } }),
   'GET sbg/dispatch/freight': list({ row: { of: 'freight', id: 'freightId' } }),
+  'GET sbg/dispatch/freight/pay-ways': network('when a person may pay for a load at a pin: the same rule for everybody'),
   'GET sbg/freight-claims': list({ at: 'claims', row: { of: 'freight', id: 'freightId' } }),
   'POST sbg/freight-claims/:id/resolve': record('freight', 'id'),
   'GET sbg/imports': list({ at: 'items', row: { field: ['originCountry', 'destCountry'] } }),

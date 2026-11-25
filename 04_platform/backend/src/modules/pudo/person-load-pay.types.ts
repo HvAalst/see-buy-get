@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length } from 'class-validator';
 
 /**
  * 2026-11-13 — A PERSON PAYS FOR THEIR LOAD, HELD UNTIL DELIVERY (unusual loads, part 3b; the owner: "It should normally be kept in
@@ -23,9 +23,12 @@ export interface LoadPayment {
   /** The driver's price agreed (their earning) — and what the person pays, all in. */
   price: number;
   amount: number;
-  phone: string;
-  phoneMasked: string;
+  /** The number M-Pesa rings; none where the payment hub's rail for this money needs none (Mollie's page, 2026-11-24). */
+  phone?: string;
+  phoneMasked?: string;
   fundingId?: string;
+  /** 2026-11-24 — the page the person pays on, where the rail has one (iDEAL through Mollie). */
+  link?: string;
   reference?: string;
   instructions?: string;
   pushed?: boolean;
@@ -46,7 +49,9 @@ export class LoadPaymentView {
   /** The driver's price the person accepted. */
   price: number;
   until: string;
-  phoneMasked: string;
+  @ApiPropertyOptional() phoneMasked?: string;
+  /** 2026-11-24 — the page to pay on, where the payment hub's rail for this country has one: the app opens it. */
+  @ApiPropertyOptional() link?: string;
   @ApiPropertyOptional() instructions?: string;
   @ApiPropertyOptional() reference?: string;
   @ApiPropertyOptional() pushed?: boolean;
@@ -56,6 +61,6 @@ export class LoadPaymentView {
 
 export class LoadPayDto {
   @IsString() @Length(4, 40) proposalId!: string;
-  /** The number M-Pesa asks to pay from. */
-  @IsString() @Length(7, 20) phone!: string;
+  /** The number M-Pesa asks to pay from — where the payment hub's rail for this country rings one (2026-11-24). */
+  @IsOptional() @IsString() @Length(7, 20) phone?: string;
 }

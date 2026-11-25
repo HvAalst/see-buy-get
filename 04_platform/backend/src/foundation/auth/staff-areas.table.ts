@@ -864,6 +864,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/depots/:entityId/boxes': 'support',
   'POST sbg/depots/:entityId/close': 'vetting',
   'POST sbg/dispatch/freight': 'support',
+  // 2026-11-24 — when a person may pay for a load at a pin (route plan part 9).
+  'GET sbg/dispatch/freight/pay-ways': 'support',
   'POST sbg/dispatch/freight/:id/cancel': 'support',
   'POST sbg/dispatch/freight/:id/claim': 'support',
   'POST sbg/dispatch/freight/:id/commercial-invoice': 'none',

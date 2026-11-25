@@ -128,6 +128,17 @@ describe('a person posts a load, over the wire', () => {
     expect(load).toMatchObject({ commitMode: 'negotiate', escrow: true, pickupCountry: 'KE', postedCurrency: 'KES' });
     expect(load.settlement).toBeUndefined();
     expect(load.sellerEntityId).toEqual(expect.any(String));
+    // 2026-11-24 — when a person may pay, by the pickup's country (route plan part 9): Kenya holds it; Uganda, to the driver.
+    expect((await http().get('/v1/sbg/dispatch/freight/pay-ways').query({ lat: nairobi.lat, lng: nairobi.lng }).set(bearer(kePerson)).expect(200)).body).toEqual({ country: 'KE', ways: ['held'] });
+    expect((await http().get('/v1/sbg/dispatch/freight/pay-ways').query({ lat: 0.3476, lng: 32.5825 }).set(bearer(kePerson)).expect(200)).body).toEqual({ country: 'UG', ways: ['direct'] });
+    await http().get('/v1/sbg/dispatch/freight/pay-ways').query({ lat: 'x', lng: 1 }).set(bearer(kePerson)).expect(400);
+    await http().get('/v1/sbg/dispatch/freight/pay-ways').query({ lat: 1, lng: 1 }).expect(401);
+    // A provider's notice reaches only a rail wired for it: one for nobody is named, not answered.
+    expect((await http().post('/v1/rails/funding/nobody/callback').send({ id: 'tr_x' }).expect(404)).body.detail).toMatch(/No payment rail is configured for nobody/);
+    expect((await post(kePerson, fridge({ pickupLocation: nairobi, pickupLabel: 'Kilimani', destLocation: thika, destLabel: 'Thika', contactPhone: '+254700123456', payWay: 'at_pickup' })).expect(400)).body.detail).toMatch(/Paying the driver at pickup is not offered in Kenya yet/);
+    // …and a load paid first says that paying it asks a phone number (M-Pesa rings it).
+    const mine = (await http().get('/v1/sbg/dispatch/posted').set(bearer(kePerson)).expect(200)).body.items as Array<{ freightId: string; payNeedsPhone?: boolean }>;
+    expect(mine.find((r) => r.freightId === keLoad)?.payNeedsPhone).toBe(true);
   });
 
   it('5 · a driver names a price; the person accepts it only by paying, all in; nothing else is taken meanwhile', async () => {

@@ -1,5 +1,6 @@
 ﻿import { TerminalSlotChangeDto } from './air-terminal.types';
 import { TelemetryService } from './telemetry.service';
+import { countryNear } from './geo-gazetteer';
 import { HubTransferService } from './hub-transfer.service';
 import { VehicleManifestService } from './vehicle-manifest.service';
 import { CarriageContractService } from './carriage-contract.service';
@@ -8306,6 +8307,20 @@ export class SbgController {
     return { published: this.dispatch.publishReady() };
   }
 
+  /**
+   * 2026-11-24 — WHEN A PERSON MAY PAY FOR A LOAD PICKED UP AT THIS PIN (route plan part 9): at pickup, now and held until delivery,
+   * or directly to the driver. The Send app asks before the person posts; how each is paid is the country's.
+   */
+  @SignedIn()
+  @Get('dispatch/freight/pay-ways')
+  loadPayWays(@Query('lat') lat: string, @Query('lng') lng: string) {
+    const at = { lat: Number(lat), lng: Number(lng) };
+    if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng) || Math.abs(at.lat) > 90 || Math.abs(at.lng) > 180) throw new GlosError('VALIDATION_FAILED', 'Give the pickup’s pin', { field: 'lat' });
+    const country = countryNear(at);
+    if (!country) return { ways: ['direct'] };
+    return { country, ways: this.loadPosting!.payWaysIn(country) };
+  }
+
   /** Register a bulk freight job (trucks only) into the same marketplace as totes. */
   @SignedIn()
   @Post('dispatch/freight')
@@ -8566,7 +8581,9 @@ export class SbgController {
     const rows = store ? [...this.dispatch.postedBy(who), ...this.dispatch.postedBy(store.vendorId)] : this.dispatch.postedBy(who);
     // Where its note is in the archive, once there is a copy this party may read: what the note's links hang on.
     // Said here so that no screen builds a document's id.
-    return { items: rows.map((r) => (this.archive.hasFor(boardDocId(r.freightId), who) ? { ...r, noteId: boardDocId(r.freightId) } : r)) };
+    // 2026-11-24 — a load paid first says whether paying asks a phone number: M-Pesa rings one, Mollie's page needs none (part 9).
+    const asks = (r: (typeof rows)[number]) => (r.escrow && r.currency ? { ...r, payNeedsPhone: this.funding.needsPhone(r.currency) } : r);
+    return { items: rows.map((r) => (this.archive.hasFor(boardDocId(r.freightId), who) ? { ...asks(r), noteId: boardDocId(r.freightId) } : asks(r))) };
   }
 
   /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */

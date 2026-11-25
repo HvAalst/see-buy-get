@@ -1705,6 +1705,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional() holdWords?: string;
   /** 2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid. */
   @ApiPropertyOptional() escrow?: boolean;
+  /** 2026-11-24 — whether paying for it asks the person's phone number: the payment hub's way for its country says (part 9). */
+  @ApiPropertyOptional() payNeedsPhone?: boolean;
   @ApiPropertyOptional() deliveryCode?: string;
   /** 2026-11-16 — the email with that code to the receiver came back: to where, and when. The poster names another address. */
   @ApiPropertyOptional({ type: CodeMailBounced }) codeMailBounced?: CodeMailBounced;

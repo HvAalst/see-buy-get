@@ -80,7 +80,8 @@ export class PersonLoadPayService implements OnModuleInit {
       currency: p.currency,
       price: p.price,
       until: p.until,
-      phoneMasked: p.phoneMasked,
+      ...(p.phoneMasked ? { phoneMasked: p.phoneMasked } : {}),
+      ...(p.link ? { link: p.link } : {}),
       ...(p.instructions ? { instructions: p.instructions } : {}),
       ...(p.reference ? { reference: p.reference } : {}),
       ...(p.pushed != null ? { pushed: p.pushed } : {}),
@@ -94,7 +95,7 @@ export class PersonLoadPayService implements OnModuleInit {
    * Refused before anything is written: not their load, a load they pay the driver for directly, not open, a payment already
    * waiting, a number M-Pesa could not ask.
    */
-  async pay(personDid: string, freightId: string, input: { proposalId: string; phone: string }, now: number = Date.now()): Promise<LoadPaymentView> {
+  async pay(personDid: string, freightId: string, input: { proposalId: string; phone?: string }, now: number = Date.now()): Promise<LoadPaymentView> {
     const f = this.dispatch.requireFreightPublic(freightId);
     if (f.postedByDid !== personDid) throw new GlosError('FORBIDDEN', 'That load is not yours');
     if (!f.escrow || !f.sellerEntityId) throw new GlosError('INVALID_STATE', 'You pay the driver of this load directly: accept the price instead');
@@ -103,11 +104,13 @@ export class PersonLoadPayService implements OnModuleInit {
     if (waiting?.state === 'awaiting') throw new GlosError('INVALID_STATE', 'A payment for this load is already waiting: pay it, or wait until its time runs out');
     const proposal = this.dispatch.requireProposalPublic(input.proposalId);
     if (proposal.freightId !== freightId || proposal.status !== 'open') throw new GlosError('INVALID_STATE', 'That price is no longer open');
-    const phone = (input.phone ?? '').trim();
-    if (!isPlausiblePhone(phone)) throw new GlosError('INVALID_INPUT', 'Give the number M-Pesa should ask, with its country code', { field: 'phone' });
     const price = proposal.counterTaken && proposal.counter ? proposal.counter.price : proposal.price;
     const entity = this.entities.get(f.sellerEntityId);
     const currency = entity.currency ?? f.postedCurrency ?? '';
+    // 2026-11-24 — the payment hub chooses the way by the country's money (the owner): a number only where its rail rings one.
+    const ringsPhone = this.funding.needsPhone(currency);
+    const phone = ringsPhone ? (input.phone ?? '').trim() : '';
+    if (ringsPhone && !isPlausiblePhone(phone)) throw new GlosError('INVALID_INPUT', 'Give the number M-Pesa should ask, with its country code', { field: 'phone' });
     const gross = this.dispatch.chargeFor(freightId, price);
     const amount = WHOLE_UNITS.has(currency.toUpperCase()) ? Math.ceil(gross - 1e-9) : round2(gross);
     const until = new Date(now + LOAD_PAY_WINDOW_MIN * 60_000).toISOString();
@@ -121,8 +124,7 @@ export class PersonLoadPayService implements OnModuleInit {
       currency,
       price,
       amount,
-      phone,
-      phoneMasked: maskMsisdn(phone),
+      ...(phone ? { phone, phoneMasked: maskMsisdn(phone) } : {}),
       openedAt: new Date(now).toISOString(),
       until,
       state: 'awaiting',
@@ -131,7 +133,7 @@ export class PersonLoadPayService implements OnModuleInit {
     this.payments.set(payment.payId, payment);
     let funding;
     try {
-      funding = await this.funding.open({ payerKind: 'person', payerDid: personDid, purpose: 'load', amount, payerPhone: phone }, now);
+      funding = await this.funding.open({ payerKind: 'person', payerDid: personDid, purpose: 'load', amount, ...(phone ? { payerPhone: phone } : {}) }, now);
     } catch (err) {
       this.payments.delete(payment.payId);
       throw err;
@@ -140,6 +142,7 @@ export class PersonLoadPayService implements OnModuleInit {
     payment.reference = funding.reference;
     if (funding.instructions) payment.instructions = funding.instructions;
     payment.pushed = Boolean(funding.pushed);
+    if (funding.link) payment.link = funding.link;
     this.payments.set(payment.payId, payment);
     this.dispatch.holdForPayment(freightId, proposal.proposalId, until);
     this.tellDriver(proposal.driverDid, `Your price for ${f.code} is accepted`, `The sender is paying ${this.money(price, currency)} now. The load is yours once it is paid — by ${until.slice(11, 16)} UTC.`, freightId);
@@ -383,7 +386,7 @@ export class PersonLoadPayService implements OnModuleInit {
 
   private refundDestination(payeeId: string): { numberId: string; masked: string } | undefined {
     const p = [...this.payments.values()].filter((x) => x.personDid === payeeId && x.phone).sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))[0];
-    return p ? { numberId: `load:${p.payId}`, masked: p.phoneMasked } : undefined;
+    return p?.phoneMasked ? { numberId: `load:${p.payId}`, masked: p.phoneMasked } : undefined;
   }
 
   private refundNumber(payeeId: string, numberId: string): string | undefined {

@@ -20,6 +20,8 @@ import { SiteService } from './site.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { RegisterFreightDto } from './pudo.dto';
 import { countryNear } from './geo-gazetteer';
+import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
+import { directPayWayOf } from '../../foundation/mollie/mollie.types';
 import { PersonService } from './person.service';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { ShipperCodesService, clientCoder } from './shipper-codes.service';
@@ -49,7 +51,23 @@ export class LoadPostingService {
     @Optional() private readonly persons?: PersonService,
     // 2026-11-24 — a declared value in lei, for Romania's threshold of RON 10,000.
     @Optional() private readonly fx?: FxService,
+    // 2026-11-24 — whether a person may pay the driver at pickup by QR (route plan part 9; the payments plan, 2b).
+    @Optional() private readonly mollie?: MollieConnectService,
   ) {}
+
+  /**
+   * 2026-11-24 — WHEN A PERSON MAY PAY FOR A LOAD THEY POST, IN A COUNTRY (route plan part 9; the owner: "sender can choose", and
+   * "the system will choose the right method depending on the country without the user noticing it"): to the driver at pickup,
+   * where the driver can ask for it by QR (the payments plan, 2b); now, held until delivery, where a company of ours may hold
+   * money there; or, where neither, to the driver directly, as always. How each is paid is the country's, never theirs to pick.
+   */
+  payWaysIn(country: string): Array<'at_pickup' | 'held' | 'direct'> {
+    const code = country.toUpperCase();
+    const ways: Array<'at_pickup' | 'held' | 'direct'> = [];
+    if (directPayWayOf(code) === 'mollie' && this.mollie?.via()) ways.push('at_pickup');
+    if (this.entities?.forJurisdiction(code) && this.presence.can(code, 'holdFloat')) ways.push('held');
+    return ways.length ? ways : ['direct'];
+  }
 
   /** A declared value in lei, where the rate is known; nothing where it is not. */
   private inRon(v: { amount: number; currency: string } | undefined): number | undefined {
@@ -75,7 +93,7 @@ export class LoadPostingService {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, contractId, deliverOn, orderRef, receivingPoint, receiverRef, noGoodsWithOwnRules, fiscalCodes: fiscalGiven, ...load } = dto;
+    const { forClientId, contractId, deliverOn, orderRef, receivingPoint, receiverRef, noGoodsWithOwnRules, fiscalCodes: fiscalGiven, payWay: _payWay, ...load } = dto;
     // Inbound, reading A: "deliver to" a business's receiving point — its place is where the load goes, by its own name.
     const receiving = receivingPoint ? this.receivingPointOf(receivingPoint) : undefined;
     if (receiving) {
@@ -139,8 +157,14 @@ export class LoadPostingService {
     if (!dto.contactPhone?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give a number the driver can call about the load', { field: 'contactPhone' });
     // 2026-11-13 — where a company of ours takes the money, the person pays it when they accept a price, and it is held until the
     // load is delivered (part 3b, the owner: "kept in escrow until delivery is accomplished").
+    // 2026-11-24 — or, where the driver can ask for it by QR, paid to the driver at pickup, as the person chooses (part 9).
+    const ways = this.payWaysIn(country);
+    if (dto.payWay && !ways.includes(dto.payWay)) {
+      throw new GlosError('INVALID_INPUT', dto.payWay === 'at_pickup' ? `Paying the driver at pickup is not offered in ${name} yet` : `Paying now, held until delivery, is not offered in ${name} yet`, { field: 'payWay' });
+    }
+    const way = dto.payWay ?? (ways.includes('held') ? 'held' : ways[0]);
     const company = this.entities?.forJurisdiction(country);
-    if (company && this.presence.can(country, 'holdFloat')) return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', sellerEntityId: company.entityId, escrow: true };
+    if (way === 'held' && company) return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', sellerEntityId: company.entityId, escrow: true };
     return { pickupCountry: country, destCountry: dest, commitMode: 'negotiate', betweenParties: true };
   }
 

@@ -26420,6 +26420,43 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/pay-ways": {
+      "get": {
+        "operationId": "Sbg.loadPayWays",
+        "summary": "",
+        "description": "2026-11-24 — WHEN A PERSON MAY PAY FOR A LOAD PICKED UP AT THIS PIN (route plan part 9): at pickup, now and held until delivery,\nor directly to the driver. The Send app asks before the person posts; how each is paid is the country's.",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight": {
       "post": {
         "operationId": "Sbg.registerFreight",
@@ -45962,6 +45999,10 @@
           "railRef": {
             "type": "string",
             "description": "The provider's handle for the request behind that prompt — a CheckoutRequestID. What you quote when\n a shopkeeper says no prompt ever came."
+          },
+          "link": {
+            "type": "string",
+            "description": "2026-11-24 — where the payer pays, where the rail gives a page for it (Mollie's iDEAL checkout)."
           },
           "openedAt": {
             "type": "string"
@@ -79769,6 +79810,14 @@
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
+          "payWay": {
+            "type": "string",
+            "description": "2026-11-24 — a person's load: when they pay (route plan part 9). The payment hub chooses how, by the country.",
+            "enum": [
+              "at_pickup",
+              "held"
+            ]
+          },
           "incoterm": {
             "type": "string",
             "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
@@ -81814,6 +81863,10 @@
             "type": "boolean",
             "description": "2026-11-13 — a load the person pays SeeBuyGet for first, held until delivery; its delivery code; a price being paid."
           },
+          "payNeedsPhone": {
+            "type": "boolean",
+            "description": "2026-11-24 — whether paying for it asks the person's phone number: the payment hub's way for its country says (part 9)."
+          },
           "deliveryCode": {
             "type": "string"
           },
@@ -82344,14 +82397,13 @@
           },
           "phone": {
             "type": "string",
-            "description": "The number M-Pesa asks to pay from.",
+            "description": "The number M-Pesa asks to pay from — where the payment hub's rail for this country rings one (2026-11-24).",
             "minLength": 7,
             "maxLength": 20
           }
         },
         "required": [
-          "proposalId",
-          "phone"
+          "proposalId"
         ]
       },
       "LoadPaymentView": {
@@ -82367,6 +82419,13 @@
               "delivered",
               "reversed"
             ]
+          },
+          "phoneMasked": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "description": "2026-11-24 — the page to pay on, where the payment hub's rail for this country has one: the app opens it."
           },
           "instructions": {
             "type": "string"
@@ -82395,9 +82454,6 @@
           },
           "until": {
             "type": "string"
-          },
-          "phoneMasked": {
-            "type": "string"
           }
         },
         "required": [
@@ -82405,8 +82461,7 @@
           "amount",
           "currency",
           "price",
-          "until",
-          "phoneMasked"
+          "until"
         ]
       },
       "LoadArrivedDto": {

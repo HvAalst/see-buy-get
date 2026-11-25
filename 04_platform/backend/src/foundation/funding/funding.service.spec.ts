@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { FundingService } from './funding.service';
 import { SandboxFundingRail } from './sandbox-funding-rail.adapter';
 import { FUNDING_RAIL, FundingPayer, FundingRail, RailPayment } from './funding.types';
+import { CountryFundingRail } from './country-funding-rail';
 
 /**
  * Money coming in — rule 5 of the money model, finally enforced.
@@ -418,5 +419,34 @@ describe('money coming in', () => {
       const { headers, body } = signed();
       await expect(rail.verify(headers, { ...body, providerRef: '' })).rejects.toThrow(/provider’s own reference/);
     });
+  });
+});
+
+/*
+ * 2026-11-24 — THE PAYMENT HUB CHOOSES BY COUNTRY (the owner): a payment in euros is opened through Mollie and the request says so,
+ * with the page to pay on; a payment Mollie reports is credited at once, never held to be asked about as a paybill notice is.
+ */
+describe('the payment hub, as the funding service sees it', () => {
+  it('records which rail opened a request and its page; asks a phone only where that rail rings one', async () => {
+    const mpesa: FundingRail = { provider: 'mpesa', open: async () => ({ reference: 'SBG-KE-1', instructions: 'Paybill' }), verify: async () => ({ provider: 'mpesa', providerRef: 'x', amount: 1, currency: 'KES' }), canAsk: () => true, askAbout: async () => ({ askedRef: 'Q' }) };
+    const euros: FundingRail = { provider: 'mollie', open: async () => ({ reference: 'NLREF234', instructions: 'Pay on the iDEAL page that opens.', link: 'https://www.mollie.com/checkout/x', railRef: 'tr_9' }), verify: async () => ({ provider: 'mollie', paid: false, reason: 'x' }) };
+    const hub = new CountryFundingRail({ EUR: euros }, mpesa);
+    const moduleRef = await Test.createTestingModule({ providers: [FundingService, { provide: FUNDING_RAIL, useValue: hub }] }).compile();
+    const funding = moduleRef.get(FundingService);
+    const credited: number[] = [];
+    funding.register('person', {
+      resolve: () => ({ entityId: 'sbg-nl', currency: 'EUR', label: 'Anna' }),
+      credit: (_p, c) => (credited.push(c.gross), { entryId: 'je_1' }),
+      reverse: () => ({ entryId: 'je_rev' }),
+    });
+    const request = await funding.open({ payerKind: 'person', payerDid: 'did:person:anna', purpose: 'load', amount: 42.5 });
+    expect(request).toMatchObject({ provider: 'mollie', reference: 'NLREF234', railRef: 'tr_9', link: 'https://www.mollie.com/checkout/x', currency: 'EUR' });
+    expect(funding.needsPhone('EUR')).toBe(false);
+    expect(funding.needsPhone('KES')).toBe(true);
+    // Mollie's word is credited at once: it is not a paybill notice to be asked about.
+    const r = funding.receive({ provider: 'mollie', providerRef: 'tr_9', reference: 'NLREF234', amount: 42.5, currency: 'EUR', uncorroborated: true });
+    expect(r.held).toBeUndefined();
+    expect(credited).toEqual([42.5]);
+    expect(funding.get(request.fundingId)?.status).not.toBe('awaiting');
   });
 });

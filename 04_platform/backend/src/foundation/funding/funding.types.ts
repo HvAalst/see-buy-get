@@ -96,6 +96,8 @@ export class Funding {
   /** The provider's handle for the request behind that prompt — a CheckoutRequestID. What you quote when
    *  a shopkeeper says no prompt ever came. */
   railRef?: string;
+  /** 2026-11-24 — where the payer pays, where the rail gives a page for it (Mollie's iDEAL checkout). */
+  link?: string;
   openedAt: string;
   /** The provider's own reference for the money that arrived. The thing you quote when somebody says
    *  they paid and we say we never saw it. */
@@ -325,6 +327,13 @@ export interface FundingRail {
    */
   verify(headers: Record<string, string | undefined>, body: unknown, meta?: CallbackMeta): Promise<RailCallback>;
   /**
+   * 2026-11-24 — THE PAYMENT HUB CHOOSES BY COUNTRY (the owner: "the system will choose the right method depending on the country
+   * without the user noticing it"): where one router serves several rails, the rail that speaks for a provider's callbacks…
+   */
+  forProvider?(provider: string): FundingRail | undefined;
+  /** …and whether paying in a currency needs the payer's phone number (M-Pesa rings it; Mollie's page does not). */
+  needsPhone?(currency: string): boolean;
+  /**
    * SANDBOX ONLY: build a signed callback exactly as the provider would send one.
    *
    * So that pressing "confirm" in a sandbox demo goes through the real door — signature, replay window
@@ -370,6 +379,10 @@ export interface RailOpening {
   /** Why no prompt was sent, in words an operator can act on. Present only when `pushed` is false and
    *  a push was actually attempted — never for a payer who simply gave no number. */
   pushError?: string;
+  /** 2026-11-24 — the rail that opened it, where one router serves several (the payment hub chooses by country). */
+  provider?: string;
+  /** …and the page the payer pays on, where the rail has one (Mollie's checkout). */
+  link?: string;
 }
 
 /** What the door knows about a callback beyond its body. `ip` is the only verification an unsigned

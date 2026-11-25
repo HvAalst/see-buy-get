@@ -3157,8 +3157,14 @@ export class FiscalCodesDto {
   @IsOptional() @IsBoolean() indemnity?: boolean;
 }
 
+/** 2026-11-24 — when a person pays for a load they post (route plan part 9): to the driver at pickup, or now, held until delivery. */
+export const LOAD_PAY_WAYS = ['at_pickup', 'held'] as const;
+export type LoadPayWay = (typeof LOAD_PAY_WAYS)[number];
+
 export class RegisterFreightDto {
   @IsString() description!: string;
+  /** 2026-11-24 — a person's load: when they pay (route plan part 9). The payment hub chooses how, by the country. */
+  @IsOptional() @IsIn(LOAD_PAY_WAYS as unknown as string[]) @ApiPropertyOptional({ enum: LOAD_PAY_WAYS }) payWay?: LoadPayWay;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
   @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
   @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;

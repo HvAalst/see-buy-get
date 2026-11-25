@@ -4,6 +4,9 @@ import { SandboxFundingRail } from './sandbox-funding-rail.adapter';
 import { MpesaFundingRail, mpesaConfigFromEnv } from './mpesa-funding-rail.adapter';
 import { FUNDING_RAIL, FundingRail } from './funding.types';
 import { FundingController } from './funding.controller';
+import { MollieConnectService } from '../mollie/mollie-connect.service';
+import { MollieFundingRail } from './mollie-funding-rail.adapter';
+import { CountryFundingRail } from './country-funding-rail';
 
 /**
  * Global, like the books it posts to and like the payouts it mirrors: money arriving is not one module's
@@ -28,16 +31,22 @@ import { FundingController } from './funding.controller';
     SandboxFundingRail,
     {
       provide: FUNDING_RAIL,
-      inject: [SandboxFundingRail],
-      useFactory: (sandbox: SandboxFundingRail): FundingRail => {
+      inject: [SandboxFundingRail, MollieConnectService],
+      useFactory: (sandbox: SandboxFundingRail, mollie: MollieConnectService): FundingRail => {
         const logger = new Logger('FundingRail');
         const config = mpesaConfigFromEnv();
+        let base: FundingRail = sandbox;
         if (!config) {
           logger.log('no payment provider is configured — money can only be confirmed by staff against a statement');
-          return sandbox;
+        } else {
+          logger.log(`M-Pesa (${config.env}) on ${config.kind} ${config.shortcode}: STK push, with the paybill as the fallback`);
+          base = new MpesaFundingRail(config);
         }
-        logger.log(`M-Pesa (${config.env}) on ${config.kind} ${config.shortcode}: STK push, with the paybill as the fallback`);
-        return new MpesaFundingRail(config);
+        // 2026-11-24 — THE PAYMENT HUB CHOOSES BY COUNTRY (the owner): euros through our own Mollie account where its key is set.
+        const euros = new MollieFundingRail(mollie);
+        if (!euros.ready()) return base;
+        logger.log('Euros are paid to us online through Mollie (iDEAL)');
+        return new CountryFundingRail({ EUR: euros }, base);
       },
     },
   ],
