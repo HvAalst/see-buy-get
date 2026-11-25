@@ -173,4 +173,8 @@ export const words: Record<string, string> = {
   "abbr.utn.about": "Nambari ambayo Mamlaka ya Mapato ya Bulgaria hutoa kwa usafirishaji uliotangazwa wa bidhaa zenye hatari kubwa ya kodi. Mnunuzi au muuzaji wa Bulgaria huitangaza na kuipitisha; dereva huionyesha wakati wa ukaguzi.",
   "abbr.anaf.name": "Wakala wa Taifa wa Usimamizi wa Kodi wa Romania",
   "abbr.anaf.about": "Mamlaka ya kodi ya Romania (Agenția Națională de Administrare Fiscală). Huendesha RO e-Transport: hutoa misimbo ya UIT, na hupokea maeneo ya magari yanayoibeba kutoka kwa watoa huduma wa GPS waliosajiliwa nayo, au kutoka kwa programu yake yenyewe.",
+  "abbr.iban.name": "Nambari ya Kimataifa ya Akaunti ya Benki",
+  "abbr.iban.about": "Nambari ya akaunti ya benki kama kila benki barani Ulaya inavyoiandika: herufi mbili za nchi yake, tarakimu mbili za ukaguzi, kisha benki na akaunti. Kosa la kuandika ndani yake hugunduliwa na tarakimu zake za ukaguzi.",
+  "abbr.bic.name": "Msimbo wa Utambulisho wa Benki",
+  "abbr.bic.about": "Msimbo wa benki yenyewe, herufi na tarakimu nane au kumi na moja. Ndani ya Ulaya, uhamisho kwa euro hupata benki kwa nambari ya akaunti pekee.",
 };

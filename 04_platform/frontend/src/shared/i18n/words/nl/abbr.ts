@@ -173,4 +173,8 @@ export const words: Record<string, string> = {
   "abbr.utn.about": "Het nummer dat de Bulgaarse belastingdienst geeft aan een aangemeld vervoer van goederen met een hoog fiscaal risico. De Bulgaarse koper of verkoper meldt het aan en geeft het door; de chauffeur laat het zien bij een controle.",
   "abbr.anaf.name": "Nationaal Agentschap voor Belastingadministratie van Roemenië",
   "abbr.anaf.about": "De Roemeense belastingdienst (Agenția Națională de Administrare Fiscală). Hij beheert RO e-Transport: hij geeft de UIT-codes, en ontvangt de posities van de voertuigen die ze vervoeren van gps-aanbieders die bij hem geregistreerd zijn, of van zijn eigen app.",
+  "abbr.iban.name": "Internationaal bankrekeningnummer",
+  "abbr.iban.about": "Het nummer van een bankrekening zoals elke bank in Europa het schrijft: twee letters van het land, twee controlecijfers, dan de bank en de rekening. Een tikfout erin wordt door de controlecijfers gevangen.",
+  "abbr.bic.name": "Bankidentificatiecode",
+  "abbr.bic.about": "De eigen code van een bank, acht of elf letters en cijfers. Binnen Europa vindt een overboeking in euro de bank aan het rekeningnummer alleen.",
 };

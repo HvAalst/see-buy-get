@@ -5,6 +5,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
+import type { PayeeAccount } from '../../foundation/payment-hub/hub.types';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { PartnerLedgerService, type PartnerOwedLine, type PartnerPayeeKind } from './partner-ledger.service';
 import { PayoutNumberService } from './payout-number.service';
@@ -16,7 +17,8 @@ export const PAYOUT_AGAIN_AFTER_MS = 60 * 60_000;
 /** How often the run looks whether anything is due. */
 const LOOK_EVERY_MS = 10 * 60_000;
 
-export const PAYOUT_WAITS = ['no_number', 'number_new', 'balance', 'refused', 'unreachable'] as const;
+/** Route plan part 4 — no_bank / bank_new: where the partner pays to bank accounts, none set yet, or one changed less than a day ago. */
+export const PAYOUT_WAITS = ['no_number', 'number_new', 'balance', 'refused', 'unreachable', 'no_bank', 'bank_new'] as const;
 export type PayoutWait = (typeof PAYOUT_WAITS)[number];
 
 /**
@@ -35,6 +37,8 @@ export interface PartnerPayout {
   payeeKind: PartnerPayeeKind;
   amount: number;
   currency: string;
+  /** Route plan part 4 — the country its steps were done in: whether it is paid to a phone or to a bank account. */
+  country?: string;
   /** The owed lines it pays — and the take-backs netted in. Each line is paid once: by this payout, and no other. */
   lineIds: string[];
   state: 'waiting' | 'paid';
@@ -80,6 +84,8 @@ export class PartnerPayoutsView {
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+/** Why a hand's destination cannot be paid today, as the payout says it. */
+const WAIT_OF: Record<string, PayoutWait> = { no_number: 'no_number', number_new: 'number_new', no_bank: 'no_bank', bank_new: 'bank_new' };
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 @Injectable()
@@ -162,6 +168,7 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
         payeeKind: first.payeeKind,
         amount,
         currency: first.currency,
+        country: first.country,
         lineIds: lines.map((l) => l.lineId),
         state: 'waiting',
         day: dayOf(now),
@@ -198,11 +205,23 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
       if (earlier?.state === 'asked') return this.save({ ...p, lastTriedAt: new Date(now).toISOString(), why: 'unreachable' });
     }
     const tried = { ...p, tries: p.tries + 1, lastTriedAt: new Date(now).toISOString() };
-    const to = this.numbers.partnerDestination(p.payeeId, now);
-    if ('reason' in to) return this.save({ ...tried, why: to.reason === 'number_new' ? 'number_new' : 'no_number' });
-    const msisdn = this.numbers.fullNumber(p.payeeId, to.numberId);
-    if (!msisdn) return this.save({ ...tried, why: 'no_number' });
-    const paid = await this.hub.payout(p.partnerEntityId, { reference: p.payoutId, amount: p.amount, payeePhone: `+${msisdn}`, description: `${p.partnerName}: ${p.lineIds.length} steps` }, now);
+    // Route plan part 4 — to the hand's bank account where the country pays to bank accounts (the European Union), its phone elsewhere.
+    const country = p.country ?? this.ledger.linesOf(p.partnerEntityId).find((l) => l.lineId === p.lineIds[0])?.country;
+    const kind = country ? (this.numbers.paysTo(country) ?? 'phone') : 'phone';
+    const to = this.numbers.partnerDestination(p.payeeId, now, kind);
+    if ('reason' in to) return this.save({ ...tried, why: WAIT_OF[to.reason] ?? (kind === 'bank' ? 'no_bank' : 'no_number') });
+    const description = `${p.partnerName}: ${p.lineIds.length} steps`;
+    let payee: { payeePhone: string } | { payeeAccount: PayeeAccount };
+    if (kind === 'bank') {
+      const account = this.numbers.fullBank(p.payeeId, to.numberId);
+      if (!account) return this.save({ ...tried, why: 'no_bank' });
+      payee = { payeeAccount: { ...account, person: p.payeeKind === 'driver' } };
+    } else {
+      const msisdn = this.numbers.fullNumber(p.payeeId, to.numberId);
+      if (!msisdn) return this.save({ ...tried, why: 'no_number' });
+      payee = { payeePhone: `+${msisdn}` };
+    }
+    const paid = await this.hub.payout(p.partnerEntityId, { reference: p.payoutId, amount: p.amount, ...payee, description }, now);
     const next: PartnerPayout = { ...tried, hubPaymentId: paid.paymentId, numberMasked: to.masked };
     if (paid.state === 'paid') return this.save({ ...next, state: 'paid', paidAt: paid.settledAt ?? new Date(now).toISOString(), why: undefined });
     if (paid.state === 'asked') return this.save({ ...next, why: 'unreachable' });

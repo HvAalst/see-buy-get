@@ -18,6 +18,8 @@ const IN_STATE: Record<PartnerMoney['ins'][number]['state'], MessageKey> = {
 const WAIT: Record<NonNullable<PartnerMoney['payouts'][number]['why']>, MessageKey> = {
   no_number: 'partner.app.money.wait.no_number',
   number_new: 'partner.app.money.wait.number_new',
+  no_bank: 'partner.app.money.wait.no_bank',
+  bank_new: 'partner.app.money.wait.bank_new',
   balance: 'partner.app.money.wait.balance',
   refused: 'partner.app.money.wait.refused',
   unreachable: 'partner.app.money.wait.unreachable',

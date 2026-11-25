@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { hasPayoutNumber, payoutNumberSub, payoutSavedSays } from './payoutNumber';
+import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, payoutTitleKey } from './payoutNumber';
 
 const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
 
@@ -39,5 +39,20 @@ describe('a payee’s own payout number, in Settings', () => {
     const changed = payoutSavedSays({ way: 'mpesa', country: 'KE', masked: '254110***222', heldUntil: '2026-10-19T09:00:00Z', oldNumber: 'not_sent' }, t, when);
     expect(changed.detail).toContain('2026-10-19 09:00');
     expect(changed.detail).toContain(t('account.payout.oldNotSent'));
+  });
+});
+
+/* 2026-11-25 — route plan part 4: where the partner pays to bank accounts, Settings asks for one, under its own title. */
+describe('a payout bank account, where the partner pays to one (route plan part 4)', () => {
+  it('is titled as a bank account, and Settings shows the bank form for it — never the phone code', () => {
+    expect(payoutTitleKey({ way: 'partner', paysTo: 'bank', country: 'BG' })).toBe('account.payout.titleBank');
+    expect(payoutTitleKey({ way: 'partner', paysTo: 'phone', country: 'ET' })).toBe('account.payout.title');
+    expect(payoutTitleKey({ way: 'mpesa', country: 'KE' })).toBe('account.payout.title');
+    expect(hasPayoutNumber({ way: 'partner', paysTo: 'bank', country: 'BG' })).toBe(true);
+    expect(payoutNumberSub({ way: 'partner', paysTo: 'bank', country: 'BG', masked: 'BG•• •••• 5678' }, t as never, when)).toBe('BG•• •••• 5678');
+    const sheet = readFileSync(join('src', 'shared/account/SettingsSheet.tsx'), 'utf8');
+    expect(sheet).toContain("view === 'payout' && api.payout?.paysTo === 'bank' ? <PayoutBankForm");
+    expect(sheet).toContain("view === 'payout' && api.payout?.paysTo !== 'bank' ? <PayoutForm");
+    expect(t('account.payout.bodyBank', { partner: 'Sofia Partner OOD' })).toContain('Sofia Partner OOD pays you to your own bank account');
   });
 });

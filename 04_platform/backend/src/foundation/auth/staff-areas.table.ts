@@ -530,6 +530,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-20 — our fee on a partner's payments (4b, P4-c): set by staff who keep the money. A walk-up's payment by phone is the
   // shop's own, at its counter: staff ask nothing in its name.
   'POST sbg/entities/:entityId/payment-account/fee': 'money',
+  'POST sbg/entities/:entityId/payment-account/key': 'money',
+  'POST sbg/entities/:entityId/payment-account/live': 'money',
   // 2026-11-20 — a partner's payouts to its hands (4c): read by staff who keep the money, and paid now by them, by name; the
   // partner's own people read theirs in the Partner app.
   'GET sbg/entities/:entityId/partner-payouts': 'money',
@@ -1234,6 +1236,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/parcels/handover/manifest': 'support',
   'POST sbg/payout-number': 'none',
   'POST sbg/payout-number/code': 'none',
+  'POST sbg/payout-number/bank': 'none',
   'POST sbg/payouts/:payoutId/fail': 'money',
   'POST sbg/payouts/:payoutId/reverse': 'money',
   'POST sbg/payouts/:payoutId/settle': 'money',

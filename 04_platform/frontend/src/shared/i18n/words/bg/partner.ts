@@ -93,6 +93,8 @@ export const words: Record<string, string> = {
   "partner.app.money.wait.balance": "Вашата сметка няма достатъчно",
   "partner.app.money.wait.refused": "доставчикът го е отказал",
   "partner.app.money.wait.unreachable": "доставчикът още не е отговорил",
+  "partner.app.money.wait.no_bank": "още няма банкова сметка",
+  "partner.app.money.wait.bank_new": "банковата му сметка току-що е сменена, пауза от един ден",
   "partner.app.hands.title": "По участник",
   "partner.app.hands.lede": "Какво дължим общо на всеки магазин, хъб и шофьор и за колко стъпки.",
   "partner.app.hands.none": "Още никому не се дължи нищо.",

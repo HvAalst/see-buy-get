@@ -94,6 +94,8 @@ export const words: Record<string, string> = {
   "partner.app.money.wait.balance": "er staat niet genoeg op je rekening",
   "partner.app.money.wait.refused": "de aanbieder weigerde het",
   "partner.app.money.wait.unreachable": "de aanbieder heeft nog niet geantwoord",
+  "partner.app.money.wait.no_bank": "nog geen bankrekening ingesteld",
+  "partner.app.money.wait.bank_new": "de bankrekening is net gewijzigd, een dag pauze",
   "partner.app.hands.title": "Per partij",
   "partner.app.hands.lede": "Wat we elke winkel, hub en chauffeur in totaal verschuldigd zijn, en voor hoeveel stappen.",
   "partner.app.hands.none": "We zijn nog niemand iets verschuldigd.",

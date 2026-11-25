@@ -154,6 +154,8 @@ export interface AccountApi {
   sendPayoutCode: (phone: string, via?: CodeWay) => Promise<Result<Sent & { masked: string; via?: CodeWay }>>;
   /** The code back: that number is the payout number from now. A change pauses payouts for a day. */
   savePayoutNumber: (code: string) => Promise<Result<PayoutNumberSaved>>;
+  /** 2026-11-25 (route plan part 4) — the payee's own bank account, where its partner pays to one. A change pauses payouts for a day. */
+  savePayoutBank: (input: { account: string; holder: string; bic?: string }) => Promise<Result<PayoutNumberSaved>>;
   /**
    * 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT (the payments plan, part 2): read only in an app that asks for it (a courier's,
    * a fleet office's). Null until read, and where Mollie is not for this sign-in.
@@ -208,6 +210,7 @@ const IDLE: AccountApi = {
   payout: null,
   sendPayoutCode: async () => NO_CLIENT,
   savePayoutNumber: async () => NO_CLIENT,
+  savePayoutBank: async () => NO_CLIENT,
   mollie: null,
   connectMollie: async () => NO_CLIENT,
   disconnectMollie: async () => NO_CLIENT,
@@ -465,6 +468,14 @@ export function useAccount(client: SbgClient | null, enabled = true, opts: { mol
     },
     [post],
   );
+  const savePayoutBank = useCallback(
+    async (input: { account: string; holder: string; bic?: string }) => {
+      const r = await post<PayoutNumberSaved>('/v1/sbg/payout-number/bank', { account: input.account, holder: input.holder, ...(input.bic?.trim() ? { bic: input.bic.trim() } : {}) });
+      if (!r.error && r.data) setPayout(narrow<PayoutNumberSaved>(r.data));
+      return r;
+    },
+    [post],
+  );
 
   // 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT: read only where the app asks for it (a courier's app, a fleet office's).
   const [mollie, setMollie] = useState<MollieView | null>(null);
@@ -504,5 +515,5 @@ export function useAccount(client: SbgClient | null, enabled = true, opts: { mol
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber, mollie, connectMollie, disconnectMollie, mollieInvoices, mollieInvoice };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, phoneWays, truecaller, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber, savePayoutBank, mollie, connectMollie, disconnectMollie, mollieInvoices, mollieInvoice };
 }

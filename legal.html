@@ -1278,6 +1278,21 @@
       "case": "A Dutch fleet’s driver carries a load with a UIT from Venlo to Bucharest; the Driver app sends a position every minute in Romania and near it.",
       "meanwhile": "Positions are kept only for a run watched for RO e-Transport, from the watch’s start to its end, and deleted 90 days later. The driver sees on their Home when their position is sent every minute, and nothing is sent off shift.",
       "source": "The owner’s corridor brief of 24 November 2026 (feature 4); ANAF’s RO e-Transport guide (2025) on the transport operator’s duty to send positions; ANAF’s interface notes (positions at most 2 minutes apart)."
+    },
+    {
+      "id": "L75",
+      "area": "money",
+      "when": "before-country",
+      "status": "open",
+      "q": "Our server sends the Bulgarian partner’s daily payouts to its shops, hubs and drivers from the partner’s own Revolut Business account, with an API key the partner made and our staff entered; the money never passes through an account of ours. Are we then a technical service provider (PSD2 art. 3(j)), or a payment initiation service that needs a licence (PSD2 art. 4(15); in Bulgaria the Payment Services and Payment Systems Act)? Does the answer change because our staff, not the partner, switch the live key on? And for the hands’ bank account numbers we keep encrypted for the partner: do we need a processor agreement with the partner (GDPR art. 28), and who answers a hand who asks to see or delete theirs?",
+      "moment": "Before the partner’s live key is switched on.",
+      "nations": [
+        "BG",
+        "EU"
+      ],
+      "case": "A Sofia shop is owed €30 for a week of hand-outs; at 15:00 UTC our server asks Revolut to pay it from the partner’s account to the shop’s IBAN.",
+      "meanwhile": "Payouts run on test money until a second member of staff switches the live key on. Each hand sets its own bank account; it is kept encrypted, shown by its last four characters, and deleted with the account.",
+      "source": "The owner’s choice of 24 November 2026 (“Provider we connect”); Revolut Business API (revolut-engineering/revolut-openapi, 2025); Directive (EU) 2015/2366 art. 3(j) and 4(15); Regulation (EU) 2016/679 art. 28."
     }
   ]
 }

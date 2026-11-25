@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { narrow, type Result } from '../../../lib/sbg';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { cash } from '../../../shared/money';
+import { Abbreviated } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
 
 /**
@@ -10,7 +11,7 @@ import { ConsoleFold } from '../ConsoleFold';
  * stand-in, test money, until its own provider is added and two of our staff switch it live — what the account holds, its
  * payments, and a try: a payment prompt to a phone, seen waiting, then paid or not.
  */
-export type HubProviderId = 'stand-in' | 'telebirr' | 'mpesa-et' | 'chapa';
+export type HubProviderId = 'stand-in' | 'telebirr' | 'mpesa-et' | 'chapa' | 'revolut';
 export type HubWhy = 'declined' | 'expired' | 'unreachable' | 'insufficient';
 
 export interface HubPaymentRow {
@@ -20,6 +21,8 @@ export interface HubPaymentRow {
   amount: number;
   currency: string;
   phoneEnds: string;
+  /** 2026-11-25 — paid to a bank account: phoneEnds is then the account's last three digits. */
+  toBank?: boolean;
   state: 'asked' | 'paid' | 'failed';
   why?: HubWhy;
   test: boolean;
@@ -32,7 +35,7 @@ export interface HubPaymentRow {
 }
 
 /** 2026-11-20 — a partner's payouts to its hands (4c): what waits, and why; what was paid. */
-export type PayoutWait = 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable';
+export type PayoutWait = 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable' | 'no_bank' | 'bank_new';
 export interface PartnerPayoutsView {
   currency: string;
   waiting: number;
@@ -48,6 +51,8 @@ const WAIT: Record<PayoutWait, MessageKey> = {
   balance: 'tower.partner.pay.wait.balance',
   refused: 'tower.partner.pay.wait.refused',
   unreachable: 'tower.partner.pay.wait.unreachable',
+  no_bank: 'tower.partner.pay.wait.no_bank',
+  bank_new: 'tower.partner.pay.wait.bank_new',
 };
 const PAYEE: Record<PartnerPayoutsView['rows'][number]['payeeKind'], MessageKey> = { shop: 'tower.partner.kind.shop', hub: 'tower.partner.kind.hub', driver: 'tower.partner.kind.driver', fleet: 'tower.partner.kind.fleet' };
 
@@ -89,7 +94,28 @@ export function PayoutsBody({ payouts, t, busy, onPayNow }: { payouts: PartnerPa
 }
 
 export interface PaymentAccountRead {
-  account: { provider: HubProviderId; test: boolean; currency: string; ready: HubProviderId[]; balance?: number; feePct?: number; feeSetBy?: string; feeSetAt?: string; feeOwed: number };
+  account: {
+    provider: HubProviderId;
+    test: boolean;
+    currency: string;
+    ready: HubProviderId[];
+    balance?: number;
+    feePct?: number;
+    feeSetBy?: string;
+    feeSetAt?: string;
+    feeOwed: number;
+    /** 2026-11-25 (route plan part 4) — how its hands are paid: the provider its country uses, its key, and whether it is live. */
+    payoutProvider?: HubProviderId;
+    paysTo?: 'phone' | 'bank';
+    payoutTest?: boolean;
+    payoutBalance?: number;
+    keyEnds?: string;
+    keyTest?: boolean;
+    keyBy?: string;
+    keyAt?: string;
+    liveBy?: string;
+    liveAt?: string;
+  };
   /** 2026-11-21 — what came in, went back and went out, paid (4e). */
   totals?: { paidIn: number; givenBack: number; paidOut: number };
   payments: HubPaymentRow[];
@@ -100,6 +126,7 @@ const PROVIDER: Record<HubProviderId, MessageKey> = {
   telebirr: 'tower.partner.pay.provider.telebirr',
   'mpesa-et': 'tower.partner.pay.provider.mpesaEt',
   chapa: 'tower.partner.pay.provider.chapa',
+  revolut: 'tower.partner.pay.provider.revolut',
 };
 const KIND: Record<HubPaymentRow['kind'], MessageKey> = { in: 'tower.partner.pay.kind.in', out: 'tower.partner.pay.kind.out', refund: 'tower.partner.pay.kind.refund' };
 const WHY: Record<HubWhy, MessageKey> = {
@@ -120,8 +147,75 @@ export function paymentState(p: HubPaymentRow, t: Translate): string {
   return p.why ? t('tower.partner.pay.state.failedWhy', { why: t(WHY[p.why]) }) : t('tower.partner.pay.state.failed');
 }
 
+/** Where the key stands, in words: none, a test key, a live key waiting for a second person, or switched live. */
+export function keySays(a: PaymentAccountRead['account'], t: Translate): string {
+  if (!a.keyEnds) return t('tower.partner.pay.keyNone');
+  const base = { ends: a.keyEnds, by: a.keyBy ?? '', at: a.keyAt ? when(a.keyAt) : '' };
+  if (a.keyTest) return t('tower.partner.pay.keyTestNow', base);
+  if (!a.liveBy) return t('tower.partner.pay.keyWaiting', base);
+  return t('tower.partner.pay.keyLiveNow', { ...base, liveBy: a.liveBy, liveAt: a.liveAt ? when(a.liveAt) : '' });
+}
+
+/**
+ * 2026-11-25 (route plan part 4) — HOW ITS HANDS ARE PAID: to their bank accounts or their phones, through the provider its
+ * country uses (Revolut Business in the European Union), with the partner's key — entered here by name, asked of the provider
+ * first and kept sealed — and a live key switched on by a second person. No provider for its country: test money.
+ */
+export function HandsBody({ a, t, busy, onKey, onLive }: { a: PaymentAccountRead['account']; t: Translate; busy?: boolean; onKey?: (key: string, test: boolean) => void; onLive?: () => void }) {
+  const [key, setKey] = useState('');
+  const [test, setTest] = useState(true);
+  const keyReady = /^\S{16,400}$/.test(key.trim());
+  const provider = a.payoutProvider ? t(PROVIDER[a.payoutProvider]) : '';
+  return (
+    <>
+      <p class="cfield__label">{t('tower.partner.pay.handsTitle')}</p>
+      <p class="chint">{a.paysTo === 'bank' ? t('tower.partner.pay.paysToBank') : t('tower.partner.pay.paysToPhone')}</p>
+      {a.payoutProvider ? (
+        <>
+          <div class="crow">
+            <span class="crow__body">
+              <span class="crow__top">
+                <span class="crow__name">{provider}</span>
+                <span class={`ctag ${a.payoutTest ? 'ctag--warn' : 'ctag--ok'}`}>{a.payoutTest ? t('tower.partner.pay.test') : t('tower.partner.pay.liveTag')}</span>
+              </span>
+              <span class="crow__sub">{keySays(a, t)}</span>
+              {a.payoutBalance != null ? <span class="crow__sub">{t('tower.partner.pay.payoutHolds', { amount: cash(a.payoutBalance, a.currency) })}</span> : null}
+            </span>
+          </div>
+          {onKey ? (
+            <>
+              <label class="cfield__label" for="partner-payout-key">{t('tower.partner.pay.keyLabel', { provider })}</label>
+              <p class="chint"><Abbreviated text={t('tower.partner.pay.keyHint', { provider })} /></p>
+              <div class="crow">
+                <input id="partner-payout-key" class="cinput cinput--sm" type="password" autoComplete="off" spellcheck={false} value={key} onInput={(e) => setKey((e.target as HTMLInputElement).value)} />
+                <label class="checkline">
+                  <input type="checkbox" checked={test} onChange={(e) => setTest((e.target as HTMLInputElement).checked)} />
+                  <span>{t('tower.partner.pay.keyIsTest')}</span>
+                </label>
+                <button type="button" class="cbtn cbtn--sm" disabled={!keyReady || busy} onClick={() => { onKey(key.trim(), test); setKey(''); }}>
+                  {t('tower.partner.pay.keySave')}
+                </button>
+              </div>
+            </>
+          ) : null}
+          {onLive && a.keyEnds && !a.keyTest && !a.liveBy ? (
+            <>
+              <p class="chint">{t('tower.partner.pay.liveHint')}</p>
+              <button type="button" class="cbtn cbtn--sm" disabled={busy} onClick={onLive}>
+                {t('tower.partner.pay.liveBtn')}
+              </button>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <p class="chint">{t('tower.partner.pay.noPayoutProvider')}</p>
+      )}
+    </>
+  );
+}
+
 /** The fold's inside, from what the server said — pure, for the test. */
-export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: PaymentAccountRead; t: Translate; busy?: boolean; onTry?: (phone: string, amount: number) => void; onFee?: (pct: number) => void }) {
+export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive }: { read: PaymentAccountRead; t: Translate; busy?: boolean; onTry?: (phone: string, amount: number) => void; onFee?: (pct: number) => void; onKey?: (key: string, test: boolean) => void; onLive?: () => void }) {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [pct, setPct] = useState('');
@@ -172,6 +266,7 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: Paym
           </div>
         </>
       ) : null}
+      {a.paysTo ? <HandsBody a={a} t={t} busy={busy} onKey={onKey} onLive={onLive} /> : null}
       <p class="cfield__label">{t('tower.partner.pay.paymentsTitle')}</p>
       {read.payments.length === 0 ? (
         <p class="cons__empty">{t('tower.partner.pay.none')}</p>
@@ -186,7 +281,7 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: Paym
                   {p.test ? <span class="ctag ctag--quiet">{t('tower.partner.pay.test')}</span> : null}
                 </span>
                 <span class="crow__sub">
-                  {cash(p.amount, p.currency)} · {t('tower.partner.pay.phoneEnds', { ends: p.phoneEnds })} · {when(p.askedAt)}
+                  {cash(p.amount, p.currency)} · {p.toBank ? t('tower.partner.pay.accountEnds', { ends: p.phoneEnds }) : t('tower.partner.pay.phoneEnds', { ends: p.phoneEnds })} · {when(p.askedAt)}
                   {p.usedFor ? ` · ${t('tower.partner.pay.forParcel', { parcel: p.usedFor })}` : ''}
                   {p.fee != null ? ` · ${t('tower.partner.pay.feeOn', { amount: cash(p.fee, p.currency) })}` : ''}
                 </span>
@@ -201,7 +296,7 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee }: { read: Paym
 
 type Load = (entityId: string) => Promise<Result<unknown>>;
 
-export function PartnerPaymentFold({ entityId, load, tryIt, setFee, loadPayouts, payNow }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>>; setFee: (entityId: string, pct: number) => Promise<Result<unknown>>; loadPayouts: Load; payNow: (entityId: string) => Promise<Result<unknown>> }) {
+export function PartnerPaymentFold({ entityId, load, tryIt, setFee, loadPayouts, payNow, setKey, switchLive }: { entityId: string; load: Load; tryIt: (entityId: string, phone: string, amount: number) => Promise<Result<unknown>>; setFee: (entityId: string, pct: number) => Promise<Result<unknown>>; loadPayouts: Load; payNow: (entityId: string) => Promise<Result<unknown>>; setKey?: (entityId: string, key: string, test: boolean) => Promise<Result<unknown>>; switchLive?: (entityId: string) => Promise<Result<unknown>> }) {
   const t = useT();
   const [read, setRead] = useState<PaymentAccountRead | null>(null);
   const [busy, setBusy] = useState(false);
@@ -249,12 +344,29 @@ export function PartnerPaymentFold({ entityId, load, tryIt, setFee, loadPayouts,
     if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
     await refresh();
   };
+  /** One staff act, then the account read again: its refusal said in the fold, as the server gave it. */
+  const act = async (run: () => Promise<Result<unknown>>) => {
+    setBusy(true);
+    setFailed(null);
+    const r = await run();
+    setBusy(false);
+    if (r.error) setFailed(r.error.detail || r.error.title || t('tower.partner.pay.failed'));
+    await refresh();
+  };
   if (!read) return null;
   const hint = read.account.test ? t('tower.partner.pay.hintTest', { provider: t(PROVIDER[read.account.provider]) }) : t(PROVIDER[read.account.provider]);
   return (
     <ConsoleFold title={t('tower.partner.pay.title')} hint={hint}>
       {failed ? <p class="cerr">{failed}</p> : null}
-      <PaymentAccountBody read={read} t={t} busy={busy} onTry={(phone, amount) => void tryPayment(phone, amount)} onFee={(pct) => void fee(pct)} />
+      <PaymentAccountBody
+        read={read}
+        t={t}
+        busy={busy}
+        onTry={(phone, amount) => void tryPayment(phone, amount)}
+        onFee={(pct) => void fee(pct)}
+        {...(setKey ? { onKey: (key: string, test: boolean) => void act(() => setKey(entityId, key, test)) } : {})}
+        {...(switchLive ? { onLive: () => void act(() => switchLive(entityId)) } : {})}
+      />
       {payouts ? <PayoutsBody payouts={payouts} t={t} busy={busy} onPayNow={() => void payOut()} /> : null}
     </ConsoleFold>
   );

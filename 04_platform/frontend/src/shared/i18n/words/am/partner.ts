@@ -94,6 +94,8 @@ export const words: Record<string, string> = {
   "partner.app.money.wait.balance": "ሂሳብዎ በቂ ገንዘብ የለውም",
   "partner.app.money.wait.refused": "አቅራቢው አልተቀበለውም",
   "partner.app.money.wait.unreachable": "አቅራቢው ገና አልመለሰም",
+  "partner.app.money.wait.no_bank": "ገና የባንክ ሂሳብ አልተቀመጠም",
+  "partner.app.money.wait.bank_new": "የባንክ ሂሳቡ አሁን ተቀይሯል፣ የአንድ ቀን እረፍት",
   "partner.app.hands.title": "በየአካሉ",
   "partner.app.hands.lede": "ለእያንዳንዱ ሱቅ፣ ማዕከልና አሽከርካሪ በአጠቃላይ ያለብን ዕዳ፣ እና ለስንት እርምጃዎች።",
   "partner.app.hands.none": "እስካሁን ለማንም ዕዳ የለብንም።",

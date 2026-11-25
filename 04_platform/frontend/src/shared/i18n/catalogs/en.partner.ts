@@ -96,6 +96,8 @@ export const enPartner = {
   'partner.app.money.wait.balance': 'your account does not hold enough',
   'partner.app.money.wait.refused': 'the provider refused it',
   'partner.app.money.wait.unreachable': 'the provider has not answered yet',
+  'partner.app.money.wait.no_bank': 'no bank account set yet',
+  'partner.app.money.wait.bank_new': 'its bank account just changed, a day’s pause',
   'partner.app.hands.title': 'Per hand',
   'partner.app.hands.lede': 'What we owe each shop, hub and driver in all, and for how many steps.',
   'partner.app.hands.none': 'Nobody is owed anything yet.',

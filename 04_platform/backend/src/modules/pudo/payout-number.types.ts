@@ -1,5 +1,6 @@
 import { CODE_WAYS, CodeWay } from '../../foundation/sms/code-routes.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { PAYOUT_WAYS, type PayoutWay } from '../../foundation/payouts/payout-ways';
 
 /**
@@ -51,6 +52,7 @@ export class PayoutNumberRecord {
 export class PayoutNumberView {
   @ApiProperty({ enum: NUMBER_WAYS, description: 'How payees in this country are paid: by M-Pesa, by hand, or by the partner to this number.' }) way: NumberWay;
   @ApiPropertyOptional({ description: 'Who pays to this number, where a partner does: its name.' }) paidBy?: string;
+  @ApiPropertyOptional({ enum: ['phone', 'bank'], description: 'Route plan part 4 — where the partner pays: a phone number, or a bank account (the European Union). Absent where no partner pays.' }) paysTo?: 'phone' | 'bank';
   @ApiProperty() country: string;
   @ApiPropertyOptional({ description: 'Why this account has no payout number of its own (a fleet driver, a shop).' }) notPayee?: string;
   @ApiPropertyOptional() masked?: string;
@@ -72,4 +74,44 @@ export class PayoutCodeSent {
 export class PayoutNumberSaved extends PayoutNumberView {
   @ApiPropertyOptional({ enum: ['texted', 'kept', 'not_sent'], description: 'The old number, told it was replaced: texted · kept (a sandbox texts nobody) · not_sent.' })
   oldNumber?: 'texted' | 'kept' | 'not_sent';
+}
+
+/**
+ * 2026-11-25 (route plan part 4) — A PAYEE'S OWN BANK ACCOUNT, where its partner pays to bank accounts (the European Union: the
+ * owner, "the system will choose the right method depending on the country"). Set by the payee itself, signed in — never by
+ * staff; the account, its holder's name and its BIC kept encrypted together, opened only by the payout that sends to it; shown
+ * by its country and last four characters. A change pauses payouts for a day, as a changed number does, and the partner's money
+ * checks flag a payout to an account changed in the last days.
+ */
+export class PayoutBankRecord {
+  payeeId: string;
+  country: string;
+  /** The account, holder and BIC, encrypted ('enc:…'): never shown, never on a payout record. */
+  sealed: string;
+  /** Its country and last four characters, as screens show it. */
+  masked: string;
+  /** Changes with every account: a payout raised to one is never sent to another. */
+  bankId: string;
+  confirmedAt: string;
+  heldUntil?: string;
+  history: PayoutNumberEvent[];
+}
+
+/** A payee's bank account, as it types it in its own Settings. */
+export class PayoutBankDto {
+  @ApiProperty({ description: 'The IBAN, as the bank writes it; spaces are fine.', example: 'BG80 BNBG 9661 1020 3456 78' })
+  @IsString()
+  @MaxLength(42)
+  account: string;
+
+  @ApiProperty({ description: 'The account holder’s name, exactly as the bank has it: the receiving bank checks it.' })
+  @IsString()
+  @Length(2, 70)
+  holder: string;
+
+  @ApiPropertyOptional({ description: 'The bank’s BIC, where the bank gives one. Not needed for a transfer in euros within SEPA.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(14)
+  bic?: string;
 }

@@ -4,7 +4,8 @@ import { GlosEvent } from '../events/glos-events';
 import { STAFF_AREAS } from '../auth/staff-areas.table';
 import { PaymentHubService, PROMPT_LAPSES_AFTER_MS, REFUND_AGAIN_AFTER_MS } from './payment-hub.service';
 import { STAND_IN_ANSWERS_AFTER_MS, STAND_IN_LAPSES_AFTER_MS } from './stand-in.provider';
-import type { HubProvider, OpenedAccount, ProviderAnswer } from './hub.types';
+import type { HubProvider, OpenedAccount, PayoutRequest, ProviderAnswer } from './hub.types';
+import { FieldEncryption } from '../data-firewall/field-encryption.service';
 
 /*
  * 2026-11-20 — THE PAYMENT HUB (the payments plan, step 4a; the owner: "a software that combines PSP's and becomes actually a
@@ -33,8 +34,8 @@ function aHub(extra?: HubProvider[]) {
 describe('the payment hub', () => {
   it('a partner’s account is the stand-in’s for now: test money, in the partner’s own money, holding nothing yet', async () => {
     const { hub } = aHub();
-    expect(hub.ready()).toEqual(['stand-in']);
-    expect(await hub.accountView(PARTNER.entityId, T0)).toEqual({ provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in'], balance: 0, feeOwed: 0 });
+    expect(hub.ready()).toEqual(['stand-in', 'revolut']);
+    expect(await hub.accountView(PARTNER.entityId, T0)).toEqual({ provider: 'stand-in', test: true, currency: 'ETB', ready: ['stand-in', 'revolut'], balance: 0, feeOwed: 0, paysTo: 'phone', payoutTest: true, payoutBalance: 0 });
     expect(hub.paymentsOf(PARTNER.entityId)).toEqual([]);
   });
 
@@ -273,10 +274,113 @@ describe('the payment hub', () => {
     expect(STAFF_AREAS['GET sbg/entities/:entityId/payment-account']).toBe('money');
     expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/try']).toBe('money');
     expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/fee']).toBe('money');
+    expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/key']).toBe('money');
+    expect(STAFF_AREAS['POST sbg/entities/:entityId/payment-account/live']).toBe('money');
     // A walk-up's payment is the shop's own, at its counter: staff ask nothing in its name.
     expect(STAFF_AREAS['POST sbg/parcels/phone-payment']).toBe('none');
     expect(STAFF_AREAS['GET sbg/parcels/phone-payment/:paymentId']).toBe('none');
     const app = readFileSync(join(__dirname, '../../app.module.ts'), 'utf8');
     expect(app).toMatch(/PaymentHubModule,/);
+  });
+
+  /*
+   * 2026-11-25 — ROUTE PLAN PART 4: a partner in the European Union pays its hands from its own Revolut Business account, chosen by
+   * its country, to their bank accounts. Its key is entered by our staff, asked of the provider first and kept sealed; a test key
+   * pays test money at once, a live key only once a second person switches it on; payments in stay on the stand-in.
+   */
+  describe('a partner in the European Union, paying its hands by bank (route plan part 4)', () => {
+    const BG = { entityId: 'partner-bg-sofia', name: 'Sofia Partner OOD', kind: 'partner', jurisdiction: 'BG', currency: 'EUR', status: 'active' };
+    const ANN = { name: 'Staff Ann', key: 'rk-ann' };
+    const BEN = { name: 'Staff Ben', key: 'rk-ben' };
+    const IBAN = { account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov' };
+
+    function aBgHub() {
+      const sent: Array<{ account: OpenedAccount; req: PayoutRequest }> = [];
+      const looked: OpenedAccount[] = [];
+      const fakeRevolut: HubProvider = {
+        id: 'revolut',
+        collect: async () => ({ state: 'failed', why: 'not_offered' }),
+        refund: async () => ({ state: 'failed', why: 'not_offered' }),
+        status: async (a, ref) => {
+          looked.push(a);
+          return { state: 'paid', ...(ref.providerRef ? { providerRef: ref.providerRef } : {}) };
+        },
+        payout: async (account, req) => {
+          sent.push({ account, req });
+          return { state: req.description === 'later' ? 'asked' : 'paid', providerRef: `tx-${sent.length}` };
+        },
+        balance: async (account) => (String(account.keys.apiKey ?? '').startsWith('good') ? { amount: account.live ? 900 : 500, currency: 'EUR' } : undefined),
+      };
+      const entities = {
+        get: (id: string) => {
+          if (id === BG.entityId) return BG;
+          if (id === PARTNER.entityId) return PARTNER;
+          throw new Error(`no ${id}`);
+        },
+        amountsFor: () => ({}),
+      };
+      const hub = new PaymentHubService(entities as never, { publish: async () => undefined } as never, [fakeRevolut], new FieldEncryption());
+      return { hub, sent, looked };
+    }
+
+    it('its hands are paid to bank accounts, through Revolut, chosen by its country; with no key, on the stand-in’s test money', async () => {
+      const { hub, sent } = aBgHub();
+      expect(await hub.accountView(BG.entityId, T0)).toMatchObject({ provider: 'stand-in', payoutProvider: 'revolut', paysTo: 'bank', payoutTest: true, currency: 'EUR' });
+      const out = await hub.payout(BG.entityId, { reference: 'pp_bg1', amount: 10, payeeAccount: IBAN, description: 'x' }, T0);
+      expect(out).toMatchObject({ provider: 'stand-in', state: 'failed', why: 'insufficient', toBank: true, phoneEnds: '678', test: true });
+      expect(out.phoneHash).toBeUndefined();
+      expect(JSON.stringify(out)).not.toContain('96611020345678');
+      expect(sent).toEqual([]);
+      // Payments in stay on the stand-in: Revolut takes none.
+      expect(hub.account(BG.entityId).provider).toBe('stand-in');
+    });
+
+    it('a key is refused where the country pays through no provider, and where it does not open an account in the partner’s money', async () => {
+      const { hub } = aBgHub();
+      await expect(hub.setKey(PARTNER.entityId, { key: 'good-key-0123456789', test: true }, ANN, T0)).rejects.toThrow(/No payout provider is connected for ET/);
+      await expect(hub.setKey(BG.entityId, { key: 'wrong-key-0123456789', test: true }, ANN, T0)).rejects.toThrow(/did not open an account in EUR: check it is a test \(sandbox\) key, made without request signing/);
+      await expect(hub.setKey(BG.entityId, { key: 'good key with spaces', test: true }, ANN, T0)).rejects.toThrow(/whole key, with no spaces/);
+      expect((await hub.accountView(BG.entityId, T0)).keyEnds).toBeUndefined();
+    });
+
+    it('a test key pays test money through Revolut at once, sealed — never kept as typed — and refuses a phone', async () => {
+      const { hub, sent } = aBgHub();
+      const rec = await hub.setKey(BG.entityId, { key: 'good-test-key-0123456789', test: true }, ANN, T0);
+      expect(rec.keySealed?.startsWith('enc:')).toBe(true);
+      expect(JSON.stringify(rec)).not.toContain('good-test-key-0123456789');
+      expect(await hub.accountView(BG.entityId, T0)).toMatchObject({ payoutProvider: 'revolut', payoutTest: true, payoutBalance: 500, keyEnds: '6789', keyTest: true, keyBy: 'Staff Ann' });
+      const out = await hub.payout(BG.entityId, { reference: 'pp_bg2', amount: 10, payeeAccount: IBAN, description: 'Sofia Partner OOD: 2 steps' }, T0);
+      expect(out).toMatchObject({ provider: 'revolut', state: 'paid', test: true, toBank: true, providerRef: 'tx-1' });
+      expect(sent[0].account).toMatchObject({ live: false, keys: { apiKey: 'good-test-key-0123456789' }, currency: 'EUR' });
+      expect(sent[0].req).toMatchObject({ ourRef: out.paymentId, amount: 10, currency: 'EUR', payeeAccount: IBAN });
+      expect(sent[0].req.payeePhone).toBeUndefined();
+      await expect(hub.payout(BG.entityId, { reference: 'pp_bg3', amount: 10, payeePhone: '+359888123456', description: 'x' }, T0)).rejects.toThrow(/pays to a bank account/);
+      await expect(hub.payout(BG.entityId, { reference: 'pp_bg4', amount: 10, description: 'x' }, T0)).rejects.toThrow(/one of the two/);
+      expect(() => hub.switchLive(BG.entityId, BEN, T0)).toThrow(/test key/);
+    });
+
+    it('a live key pays nothing real until a second person switches it on; a new key is switched on again', async () => {
+      const { hub, sent, looked } = aBgHub();
+      await hub.setKey(BG.entityId, { key: 'good-live-key-0123456789', test: false }, ANN, T0);
+      expect(hub.account(BG.entityId, 'out').provider).toBe('stand-in');
+      expect(await hub.accountView(BG.entityId, T0)).toMatchObject({ payoutTest: true, keyTest: false, keyBy: 'Staff Ann' });
+      expect(() => hub.switchLive(BG.entityId, ANN, T0)).toThrow(/second person/);
+      // The same sign-in under another name is refused: it is the sign-in that counts, not the name typed.
+      expect(() => hub.switchLive(BG.entityId, { name: 'Somebody Else', key: 'rk-ann' }, T0)).toThrow(/second person/);
+      // The same person under another sign-in, by name, is refused too.
+      expect(() => hub.switchLive(BG.entityId, { name: 'staff ann', key: 'rk-other' }, T0)).toThrow(/second person/);
+      hub.switchLive(BG.entityId, BEN, T0 + 1000);
+      expect(() => hub.switchLive(BG.entityId, { name: 'Staff Cy', key: 'rk-cy' }, T0)).toThrow(/already, by Staff Ben/);
+      expect(await hub.accountView(BG.entityId, T0)).toMatchObject({ payoutTest: false, payoutBalance: 900, liveBy: 'Staff Ben', liveAt: new Date(T0 + 1000).toISOString() });
+      const out = await hub.payout(BG.entityId, { reference: 'pp_bg5', amount: 10, payeeAccount: IBAN, description: 'later' }, T0);
+      expect(out).toMatchObject({ provider: 'revolut', test: false, state: 'asked' });
+      expect(sent[0].account.live).toBe(true);
+      await hub.setKey(BG.entityId, { key: 'good-live-key-new-0123456789', test: false }, BEN, T0 + 2000);
+      expect(hub.account(BG.entityId, 'out').provider).toBe('stand-in');
+      expect((await hub.accountView(BG.entityId, T0)).liveBy).toBeUndefined();
+      // A payout made through Revolut is asked about through Revolut, by the test-or-live it was made with.
+      expect((await hub.settle(out.paymentId, T0)).state).toBe('paid');
+      expect(looked.at(-1)).toMatchObject({ live: true, keys: { apiKey: 'good-live-key-new-0123456789' } });
+    });
   });
 });

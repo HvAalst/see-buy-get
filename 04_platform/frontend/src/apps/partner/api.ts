@@ -120,7 +120,7 @@ export interface PartnerPayouts {
   waitingAmount: number;
   shortAmount: number;
   paidAmount: number;
-  rows: Array<{ payoutId: string; payeeId: string; payeeKind: PartnerOwedRow['payeeKind']; amount: number; currency: string; steps: number; state: 'waiting' | 'paid'; why?: 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable'; day: string; paidAt?: string }>;
+  rows: Array<{ payoutId: string; payeeId: string; payeeKind: PartnerOwedRow['payeeKind']; amount: number; currency: string; steps: number; state: 'waiting' | 'paid'; why?: 'no_number' | 'number_new' | 'balance' | 'refused' | 'unreachable' | 'no_bank' | 'bank_new'; day: string; paidAt?: string }>;
 }
 
 /** 2026-11-21 — the partner's money (4e): paid in, given back, paid out, waiting, what the account holds, our fee it owes. */

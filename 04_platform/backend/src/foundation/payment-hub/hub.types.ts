@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { customsUnionOf } from '../countries/customs-union';
 
 /**
  * 2026-11-20 — THE PAYMENT HUB (the payments plan, step 4; the owner: "the system might have to ingest a variety of payment
@@ -8,8 +9,40 @@ import { IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validat
  * behind it. The stand-in first, so the whole loop is tried with no partner and no real money; a real provider's adapter
  * (telebirr, M-PESA Ethiopia, Chapa…) comes when a chosen partner uses it, with its keys and the two-person switch to live.
  */
-export const HUB_PROVIDERS = ['stand-in', 'telebirr', 'mpesa-et', 'chapa'] as const;
+export const HUB_PROVIDERS = ['stand-in', 'telebirr', 'mpesa-et', 'chapa', 'revolut'] as const;
 export type HubProviderId = (typeof HUB_PROVIDERS)[number];
+
+/** 2026-11-25 (route plan part 4) — what a provider pays money out to: a phone, or a bank account. */
+export const PROVIDER_PAYS_TO: Record<HubProviderId, 'phone' | 'bank'> = { 'stand-in': 'phone', telebirr: 'phone', 'mpesa-et': 'phone', chapa: 'phone', revolut: 'bank' };
+
+/**
+ * Where a partner pays a hand in this country: to its bank account in the European Union (a SEPA transfer, in euros: mobile money
+ * is not how people there are paid), to its phone elsewhere. By the country alone — nobody chooses it (the owner: "the system will
+ * choose the right method depending on the country without the user noticing it").
+ */
+export function payeeKindIn(country: string | undefined): 'phone' | 'bank' {
+  return customsUnionOf(country) === 'EU' ? 'bank' : 'phone';
+}
+
+/**
+ * The provider a partner's hands are paid through, by the partner's country: Revolut Business in the European Union (the owner:
+ * "Provider we connect"; the partner's own account). None elsewhere until a partner's own is built (telebirr, M-PESA, Chapa):
+ * there the stand-in pays, on test money.
+ */
+export function payoutProviderFor(country: string | undefined): HubProviderId | undefined {
+  return payeeKindIn(country) === 'bank' ? 'revolut' : undefined;
+}
+
+/** A bank account a payout goes to, opened for the one call that sends it and never kept here. */
+export interface PayeeAccount {
+  /** The IBAN, as the bank writes it, no spaces. */
+  account: string;
+  /** The account holder's name, as the bank has it: the receiving bank checks it (Verification of Payee). */
+  holder: string;
+  bic?: string;
+  /** A person (a courier) rather than a business (a shop, a hub, a fleet): their name goes as a first and a last name. */
+  person?: boolean;
+}
 
 /** What a provider answers about one request: asked (waiting on the phone or the provider), paid, or failed and why. */
 export interface ProviderAnswer {
@@ -43,7 +76,9 @@ export interface PayoutRequest {
   ourRef: string;
   amount: number;
   currency: string;
-  payeePhone: string;
+  /** The phone it goes to — or, with a provider that pays bank accounts, the account (`payeeAccount`). One of the two. */
+  payeePhone?: string;
+  payeeAccount?: PayeeAccount;
   description: string;
 }
 
@@ -82,9 +117,12 @@ export interface HubPayment {
   reference: string;
   amount: number;
   currency: string;
-  /** The last three digits of the phone, so a counter can say which phone; the number itself is never kept here. */
+  /** The last three digits of the phone — or of the bank account paid to — so a counter can say which; the number itself is never kept here. */
   phoneEnds: string;
-  phoneHash: string;
+  /** The phone's hash: absent on a payout to a bank account. */
+  phoneHash?: string;
+  /** 4b — paid to a bank account rather than a phone. */
+  toBank?: boolean;
   state: 'asked' | 'paid' | 'failed';
   providerRef?: string;
   why?: string;
@@ -110,6 +148,22 @@ export interface HubAccountRecord {
   feePct?: number;
   feeSetBy?: string;
   feeSetAt?: string;
+  /**
+   * 2026-11-25 (route plan part 4) — THE PARTNER'S OWN ACCOUNT FOR ITS PAYOUTS, at the provider its country uses: its key entered
+   * by our staff by name, kept sealed, never shown or sent anywhere but that provider. A test key pays test money at once; a live
+   * one pays real money only once a second member of staff switches it on — and a new key needs switching on again.
+   */
+  provider?: HubProviderId;
+  keySealed?: string;
+  /** The key's last four characters, so staff can tell which key is kept. */
+  keyEnds?: string;
+  keyTest?: boolean;
+  keyBy?: string;
+  /** Who entered it, as their sign-in knows them: the second person is never this one. */
+  keyByKey?: string;
+  keyAt?: string;
+  liveBy?: string;
+  liveAt?: string;
 }
 
 /** Why a payment did not go, in a word each screen says in its own language. */
@@ -122,7 +176,8 @@ export class HubPaymentView {
   @ApiProperty() reference: string;
   @ApiProperty() amount: number;
   @ApiProperty() currency: string;
-  @ApiProperty({ description: 'The last three digits of the phone.' }) phoneEnds: string;
+  @ApiProperty({ description: 'The last three digits of the phone, or of the bank account paid to.' }) phoneEnds: string;
+  @ApiPropertyOptional({ description: 'Paid to a bank account rather than a phone.' }) toBank?: boolean;
   @ApiProperty({ enum: ['asked', 'paid', 'failed'] }) state: 'asked' | 'paid' | 'failed';
   @ApiPropertyOptional({ enum: HUB_WHY, description: 'Why it did not go. Absent where the provider gave a reason of its own.' }) why?: HubWhy;
   @ApiProperty() test: boolean;
@@ -144,6 +199,28 @@ export class PaymentAccountView {
   @ApiPropertyOptional({ description: 'Who set the fee, by name, and when.' }) feeSetBy?: string;
   @ApiPropertyOptional() feeSetAt?: string;
   @ApiProperty({ description: 'Our fee counted so far on payments kept, less any given back: owed by the partner, as a loan until a company of ours can invoice it.' }) feeOwed: number;
+  @ApiPropertyOptional({ enum: HUB_PROVIDERS, description: 'Route plan part 4 — the provider the partner’s hands are paid through, chosen by its country. Absent where its country has none yet: the stand-in pays them, on test money.' }) payoutProvider?: HubProviderId;
+  @ApiProperty({ enum: ['phone', 'bank'], description: 'Where its hands are paid: their phone, or their bank account (the European Union).' }) paysTo: 'phone' | 'bank';
+  @ApiProperty({ description: 'The hands’ payouts are test money: no key, a test key, or a live key not switched on yet.' }) payoutTest: boolean;
+  @ApiPropertyOptional({ description: 'What the payout account holds, where its provider says.' }) payoutBalance?: number;
+  @ApiPropertyOptional({ description: 'The last four characters of the key kept. Absent until one is entered.' }) keyEnds?: string;
+  @ApiPropertyOptional({ description: 'The key kept is a test key.' }) keyTest?: boolean;
+  @ApiPropertyOptional({ description: 'Who entered the key, by name, and when.' }) keyBy?: string;
+  @ApiPropertyOptional() keyAt?: string;
+  @ApiPropertyOptional({ description: 'Who switched the live key on — never the person who entered it — and when.' }) liveBy?: string;
+  @ApiPropertyOptional() liveAt?: string;
+}
+
+/** Route plan part 4 — the partner's key at its payout provider, entered by our staff by name. */
+export class PayoutKeyDto {
+  @ApiProperty({ description: 'The key, as the provider shows it once when it is made. Kept sealed; never shown again.' })
+  @IsString()
+  @Matches(/^\S{16,400}$/, { message: 'Paste the whole key, with no spaces' })
+  key: string;
+
+  @ApiProperty({ description: 'A test (sandbox) key: tried at once, on test money. A live key pays real money only once a second member of staff switches it on.' })
+  @IsBoolean()
+  test: boolean;
 }
 
 /** 4e — what came in, went back and went out of the account, paid. */

@@ -116,6 +116,9 @@ export const ABBREVIATIONS = [
   'UTN',
   // 2026-11-24 — the authority that runs RO e-Transport (the GPS watch, corridor compliance slice 3).
   'ANAF',
+  // 2026-11-25 — a hand's bank account, where its partner pays to bank accounts (route plan part 4).
+  'IBAN',
+  'BIC',
 ] as const;
 
 export type Abbreviation = (typeof ABBREVIATIONS)[number];

@@ -6,8 +6,9 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
-import { HubPaymentView, PartnerFeeDto, PaymentAccountRead, PaymentAccountView, TryPaymentDto } from '../../foundation/payment-hub/hub.types';
+import { HubPaymentView, PartnerFeeDto, PaymentAccountRead, PaymentAccountView, PayoutKeyDto, TryPaymentDto } from '../../foundation/payment-hub/hub.types';
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
+import { staffOf } from './staff-of';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { MyPartnerOwed, PartnerLedgerService, PartnerLedgerView } from './partner-ledger.service';
@@ -112,6 +113,28 @@ export class PartnerLedgerController {
   async setFee(@Param('entityId') entityId: string, @Body() dto: PartnerFeeDto, @Actor() actor: IntrospectionResult): Promise<PaymentAccountView> {
     this.requirePartner(entityId);
     this.hub.setFee(entityId, dto.pct, auditActor(actor));
+    return this.hub.accountView(entityId);
+  }
+
+  /**
+   * Route plan part 4 — THE PARTNER'S KEY AT ITS PAYOUT PROVIDER (Revolut Business in the European Union), entered by our staff by
+   * name: asked of the provider first, then kept sealed and never shown again. A test key pays test money at once; a live key
+   * waits for a second person.
+   */
+  @Roles('operator')
+  @Post('entities/:entityId/payment-account/key')
+  async setPayoutKey(@Param('entityId') entityId: string, @Body() dto: PayoutKeyDto, @Actor() actor: IntrospectionResult): Promise<PaymentAccountView> {
+    this.requirePartner(entityId);
+    await this.hub.setKey(entityId, dto, staffOf(actor));
+    return this.hub.accountView(entityId);
+  }
+
+  /** The live key switched on, by a second member of staff — never the one who entered it: the hands' payouts are real money from now. */
+  @Roles('operator')
+  @Post('entities/:entityId/payment-account/live')
+  async switchLive(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): Promise<PaymentAccountView> {
+    this.requirePartner(entityId);
+    this.hub.switchLive(entityId, staffOf(actor));
     return this.hub.accountView(entityId);
   }
 

@@ -2,7 +2,7 @@ import { OtherWays, rememberWay, rememberedWay, type CodeWay } from './CodeWays'
 import { TruecallerOffer } from './Truecaller';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, Note, RefusalNote, Sheet, PhoneField } from '../ui';
+import { Abbreviated, Button, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import type { IconName } from '../ui/Icon';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
@@ -22,7 +22,7 @@ import { PinGuessHint } from './PinGuessHint';
 import { PasskeyForm, passkeyRowSub, usePasskeyHere } from './PasskeySettings';
 import { CarForm, useCarHere } from './CarSettings';
 import { carRowSub, type CarApi } from './carMessages';
-import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
+import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, payoutTitleKey, type PayoutNumberSaved } from './payoutNumber';
 import { MollieForm } from './MollieSettings';
 import { mollieSub, showsMollie, type MollieBack } from './mollie';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
@@ -117,7 +117,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const carSub = car ? carRowSub(carState, t as never) : null;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'mollie' ? t('account.mollie.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'car' ? t('account.car.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t(payoutTitleKey(api.payout)) : view === 'mollie' ? t('account.mollie.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'car' ? t('account.car.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -183,7 +183,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {/* MESSAGES IN THE CAR (the owner, 2026-11-02): read aloud and answered by voice — only inside the Play app. */}
             {carSub ? <Row icon="speaker" label={t('account.car.title')} sub={carSub} onClick={() => setView('car')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
-            {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
+            {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t(payoutTitleKey(api.payout))} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* 2026-11-19 — A CARRIER'S OWN MOLLIE ACCOUNT (the payments plan, part 2): a shipper pays it at the handover. */}
             {showsMollie(api.mollie) ? <Row icon="wallet" label={t('account.mollie.title')} sub={mollieSub(api.mollie, t as never)} onClick={() => setView('mollie')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
@@ -227,7 +227,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
-      {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
+      {view === 'payout' && api.payout?.paysTo === 'bank' ? <PayoutBankForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
+      {view === 'payout' && api.payout?.paysTo !== 'bank' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'mollie' ? <MollieForm api={api} back={mollieBack ?? null} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'passkey' ? <PasskeyForm api={passkeyApi} state={passkey} /> : null}
@@ -702,6 +703,52 @@ function CloseForm({ api, onClosed }: { api: AccountApi; onClosed: () => void })
       ) : (
         <Refused error={error} />
       )}
+    </>
+  );
+}
+
+/**
+ * 2026-11-25 (route plan part 4) — THE BANK ACCOUNT PAYOUTS GO TO, where the partner pays to one (the European Union): its IBAN,
+ * the name on it as the bank has it, and a BIC where the bank gives one. Checked by the server; a change pauses payouts for a
+ * day (said before it is made).
+ */
+function PayoutBankForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNumberSaved) => void }) {
+  const t = useT();
+  const [account, setAccount] = useState('');
+  const [holder, setHolder] = useState('');
+  const [bic, setBic] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const ready = account.replace(/\s/g, '').length >= 15 && holder.trim().length >= 2;
+  const save = async () => {
+    setBusy(true);
+    const r = await api.savePayoutBank({ account, holder, bic });
+    setBusy(false);
+    if (r.error || !r.data) return setError(r.error ?? null);
+    onDone(r.data);
+  };
+  return (
+    <>
+      <p class="t-body">{t('account.payout.bodyBank', { partner: api.payout?.paidBy ?? '' })}</p>
+      {api.payout?.masked ? <p class="t-body">{t('account.payout.changeBank')}</p> : null}
+      <div class="field">
+        <label class="field__label" for="acct-payout-iban">{t('account.payout.ibanLabel')}</label>
+        <input id="acct-payout-iban" class="input" type="text" inputMode="text" autocomplete="off" autocapitalize="characters" spellcheck={false} value={account} disabled={busy} onInput={(e) => { setAccount((e.target as HTMLInputElement).value); setError(null); }} />
+        <p class="hint"><Abbreviated text={t('account.payout.ibanHint')} /></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="acct-payout-holder">{t('account.payout.holderLabel')}</label>
+        <input id="acct-payout-holder" class="input" type="text" autocomplete="name" value={holder} disabled={busy} onInput={(e) => { setHolder((e.target as HTMLInputElement).value); setError(null); }} />
+      </div>
+      <div class="field">
+        <label class="field__label" for="acct-payout-bic">{t('account.payout.bicLabel')}</label>
+        <input id="acct-payout-bic" class="input" type="text" autocomplete="off" autocapitalize="characters" spellcheck={false} value={bic} disabled={busy} onInput={(e) => { setBic((e.target as HTMLInputElement).value); setError(null); }} />
+        <p class="hint"><Abbreviated text={t('account.payout.bicHint')} /></p>
+      </div>
+      <Refused error={error} />
+      <Button chevron={false} busy={busy} disabled={!ready} onClick={() => void save()}>
+        {t('account.payout.saveBank')}
+      </Button>
     </>
   );
 }

@@ -56,7 +56,7 @@ export class StandInProvider implements HubProvider {
 
   async payout(account: OpenedAccount, req: PayoutRequest, now: number = Date.now()): Promise<ProviderAnswer> {
     if (this.held(account.accountId, now) < round2(req.amount) - 1e-9) return { state: 'failed', why: 'insufficient' };
-    const r: StandInRequest = { ref: `si_${randomBytes(9).toString('base64url')}`, accountId: account.accountId, kind: 'out', amount: round2(req.amount), currency: req.currency, ends: lastFour(req.payeePhone), at: now };
+    const r: StandInRequest = { ref: `si_${randomBytes(9).toString('base64url')}`, accountId: account.accountId, kind: 'out', amount: round2(req.amount), currency: req.currency, ends: lastFour(req.payeePhone ?? req.payeeAccount?.account ?? ''), at: now };
     this.requests.set(r.ref, r);
     return { state: 'paid', providerRef: r.ref };
   }

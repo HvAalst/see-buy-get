@@ -34,7 +34,7 @@ const line = (payeeId: string, payeeKind: PartnerOwedLine['payeeKind'], amount: 
   ...extra,
 });
 
-function aWorld(extra?: HubProvider[]) {
+function aWorld(extra?: HubProvider[], partner: { entityId: string; name: string; jurisdiction: string; currency: string } = PARTNER) {
   const lines: PartnerOwedLine[] = [];
   const ledger = {
     linesOf: (id: string) => lines.filter((l) => l.partnerEntityId === id),
@@ -42,27 +42,40 @@ function aWorld(extra?: HubProvider[]) {
     ledgerOf: () => ({ currency: 'ETB' }),
   };
   const set = new Map<string, { numberId: string; msisdn: string; heldUntil?: number }>();
+  const banks = new Map<string, { bankId: string; account: string; holder: string; heldUntil?: number }>();
   const numbers = {
-    partnerDestination: (payeeId: string, now: number) => {
+    paysTo: (country: string) => (country === 'BG' ? 'bank' : 'phone'),
+    partnerDestination: (payeeId: string, now: number, kind: 'phone' | 'bank' = 'phone') => {
+      if (kind === 'bank') {
+        const b = banks.get(payeeId);
+        if (!b) return { reason: 'no_bank' };
+        if (b.heldUntil && b.heldUntil > now) return { reason: 'bank_new' };
+        return { numberId: b.bankId, masked: `${b.account.slice(0, 2)}•• •••• ${b.account.slice(-4)}` };
+      }
       const n = set.get(payeeId);
       if (!n) return { reason: 'no_number' };
       if (n.heldUntil && n.heldUntil > now) return { reason: 'number_new' };
       return { numberId: n.numberId, masked: `${n.msisdn.slice(0, 6)}***${n.msisdn.slice(-3)}` };
     },
     fullNumber: (payeeId: string, numberId: string) => (set.get(payeeId)?.numberId === numberId ? set.get(payeeId)?.msisdn : undefined),
+    fullBank: (payeeId: string, bankId: string) => {
+      const b = banks.get(payeeId);
+      return b && b.bankId === bankId ? { account: b.account, holder: b.holder } : undefined;
+    },
   };
-  const entities = { get: () => PARTNER, amountsFor: () => ({}) };
+  const entities = { get: () => partner, amountsFor: () => ({}) };
   const told: Array<[string, Record<string, unknown>]> = [];
   const events = { publish: async (name: string, payload: Record<string, unknown>) => void told.push([name, payload]) };
   const hub = new PaymentHubService(entities as never, events as never, extra);
   const payouts = new PartnerPayoutService(ledger as never, numbers as never, hub, events as never);
   /** Money into the partner's account, as senders pay it: a prompt, paid. */
   const fund = async (amount: number, now = at('08:00')) => {
-    const p = await hub.collect(PARTNER.entityId, { reference: `FUND-${++seq}`, amount, payerPhone: '+251911000123', description: 'x' }, now);
+    const p = await hub.collect(partner.entityId, { reference: `FUND-${++seq}`, amount, payerPhone: '+251911000123', description: 'x' }, now);
     await hub.settle(p.paymentId, now + STAND_IN_ANSWERS_AFTER_MS);
   };
   const number = (payeeId: string, msisdn: string, heldUntil?: number) => set.set(payeeId, { numberId: `pn_${++seq}`, msisdn, ...(heldUntil ? { heldUntil } : {}) });
-  return { lines, hub, payouts, fund, number, told };
+  const bank = (payeeId: string, account: string, holder: string, heldUntil?: number) => banks.set(payeeId, { bankId: `pb_${++seq}`, account, holder, ...(heldUntil ? { heldUntil } : {}) });
+  return { lines, hub, payouts, fund, number, bank, told };
 }
 
 describe('what a partner owes, paid once a day', () => {
@@ -191,5 +204,64 @@ describe('what a partner owes, paid once a day', () => {
     expect(STAFF_AREAS['GET sbg/entities/:entityId/partner-payouts']).toBe('money');
     expect(STAFF_AREAS['POST sbg/entities/:entityId/partner-payouts/run']).toBe('money');
     expect(STAFF_AREAS['GET sbg/partner/me/payouts']).toBe('none');
+  });
+
+  /*
+   * 2026-11-25 — ROUTE PLAN PART 4: in a country where the partner pays to bank accounts (the European Union), each hand is paid
+   * to its own bank account — never to a phone, even one it set — and waits, saying so, without one or after a change.
+   */
+  describe('in Bulgaria: to each hand’s bank account (route plan part 4)', () => {
+    const BG = { entityId: 'partner-bg', name: 'Sofia Partner OOD', jurisdiction: 'BG', currency: 'EUR' };
+    const bgLine = (payeeId: string, kind: PartnerOwedLine['payeeKind'], amount: number) => line(payeeId, kind, amount, { partnerEntityId: BG.entityId, partnerName: BG.name, country: 'BG', currency: 'EUR' });
+
+    it('a hand with no bank account waits, though it set a phone; one set is paid, shown by its last four characters', async () => {
+      const w = aWorld(undefined, BG);
+      await w.fund(500);
+      w.lines.push(bgLine('did:shop-vitosha', 'shop', 30), bgLine('did:courier-ivan', 'driver', 20));
+      w.number('did:shop-vitosha', '359888000201');
+      w.bank('did:courier-ivan', 'BG80BNBG96611020345678', 'Ivan Petrov');
+      await w.payouts.tick(at('15:00'));
+      const rows = w.payouts.viewOf(BG.entityId).rows;
+      expect(rows.find((r) => r.payeeId === 'did:shop-vitosha')).toMatchObject({ state: 'waiting', why: 'no_bank' });
+      expect(rows.find((r) => r.payeeId === 'did:courier-ivan')).toMatchObject({ state: 'paid', amount: 20, currency: 'EUR', numberMasked: 'BG•• •••• 5678' });
+      const out = w.hub.kept(BG.entityId).find((p) => p.kind === 'out');
+      expect(out).toMatchObject({ toBank: true, phoneEnds: '678', state: 'paid' });
+      expect(JSON.stringify(w.hub.kept(BG.entityId))).not.toContain('96611020345678');
+    });
+
+    it('a bank account changed less than a day ago waits, and is paid the hour after the pause', async () => {
+      const w = aWorld(undefined, BG);
+      await w.fund(500);
+      w.lines.push(bgLine('did:courier-ivan', 'driver', 20));
+      w.bank('did:courier-ivan', 'BG80BNBG96611020345678', 'Ivan Petrov', at('15:30'));
+      await w.payouts.tick(at('15:00'));
+      expect(w.payouts.viewOf(BG.entityId).rows[0]).toMatchObject({ state: 'waiting', why: 'bank_new' });
+      await w.payouts.tick(at('15:00') + H);
+      expect(w.payouts.viewOf(BG.entityId).rows[0]).toMatchObject({ state: 'paid' });
+    });
+
+    it('through the partner’s own provider once its test key is kept: a courier by its name as a person, a shop as a business', async () => {
+      const sent: Array<Record<string, unknown>> = [];
+      const fakeRevolut: HubProvider = {
+        id: 'revolut',
+        collect: async () => ({ state: 'failed', why: 'not_offered' }),
+        refund: async () => ({ state: 'failed', why: 'not_offered' }),
+        status: async () => ({ state: 'asked' }),
+        payout: async (_a, req) => {
+          sent.push(req.payeeAccount as never);
+          return { state: 'paid', providerRef: `tx-${sent.length}` };
+        },
+        balance: async () => ({ amount: 1000, currency: 'EUR' }),
+      };
+      const w = aWorld([fakeRevolut], BG);
+      await w.hub.setKey(BG.entityId, { key: 'good-test-key-0123456789', test: true }, { name: 'Staff Ann', key: 'rk-ann' }, at('09:00'));
+      w.lines.push(bgLine('did:shop-vitosha', 'shop', 30), bgLine('did:courier-ivan', 'driver', 20));
+      w.bank('did:shop-vitosha', 'NL91ABNA0417164300', 'Magazin Vitosha EOOD');
+      w.bank('did:courier-ivan', 'BG80BNBG96611020345678', 'Ivan Petrov');
+      await w.payouts.tick(at('15:00'));
+      expect(w.payouts.viewOf(BG.entityId).rows.every((r) => r.state === 'paid')).toBe(true);
+      expect(sent).toEqual(expect.arrayContaining([{ account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov', person: true }, { account: 'NL91ABNA0417164300', holder: 'Magazin Vitosha EOOD', person: false }]));
+      expect(w.hub.kept(BG.entityId).filter((p) => p.kind === 'out').map((p) => [p.provider, p.test])).toEqual([['revolut', true], ['revolut', true]]);
+    });
   });
 });

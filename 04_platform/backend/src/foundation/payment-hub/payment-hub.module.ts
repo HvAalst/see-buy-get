@@ -12,6 +12,6 @@ import { PaymentHubService } from './payment-hub.service';
 })
 export class PaymentHubModule {
   constructor(hub: PaymentHubService) {
-    new Logger('PaymentHubModule').log(`The payment hub reaches: ${hub.ready().join(', ')} (test money only, until a real provider is added and switched live)`);
+    new Logger('PaymentHubModule').log(`The payment hub reaches: ${hub.ready().join(', ')} (test money only, until a partner's key is kept and switched live)`);
   }
 }

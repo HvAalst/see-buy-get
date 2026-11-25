@@ -6,6 +6,7 @@ import type { DriverService } from './driver.service';
 import type { FleetManagerService } from './fleet-manager.service';
 import type { MdpService } from './mdp.service';
 import { PayoutNumberService } from './payout-number.service';
+import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 
 /**
  * WHO SETS A PAYOUT NUMBER, and what the payout run is told. A courier is paid itself; a fleet driver is not — its fleet
@@ -114,7 +115,7 @@ describe('a payee’s own payout number', () => {
     const partners = { partnerAt: (c: string) => (c === 'ET' ? { entityId: 'partner-et', name: 'Addis Courier PLC' } : undefined) };
     const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never);
     const shop = { role: 'agent', did: 'did:shop-addis', actorName: 'Almaz' } as IntrospectionResult;
-    expect(svc.view(shop)).toEqual({ way: 'partner', paidBy: 'Addis Courier PLC', country: 'ET' });
+    expect(svc.view(shop)).toEqual({ way: 'partner', paidBy: 'Addis Courier PLC', paysTo: 'phone', country: 'ET' });
     expect(svc.view({ role: 'mdp', did: 'did:hub-addis' } as IntrospectionResult)).toMatchObject({ way: 'partner', paidBy: 'Addis Courier PLC' });
     // A shop where no partner contracts is still paid into its float.
     expect(svc.view({ role: 'agent', did: 'did:shop-nairobi' } as IntrospectionResult).notPayee).toMatch(/float/);
@@ -132,5 +133,51 @@ describe('a payee’s own payout number', () => {
     expect(svc.partnerDestination('did:shop-addis', T0 + 4 * 60_000)).toEqual({ reason: 'number_new' });
     expect(svc.partnerDestination('did:shop-addis', T0 + 3 * 60_000 + 24 * H + 1)).toMatchObject({ masked: '251911***456' });
     expect(svc.partnerDestination('did:nobody', T0)).toEqual({ reason: 'no_number' });
+  });
+
+  /*
+   * 2026-11-25 — ROUTE PLAN PART 4: where the partner pays to bank accounts (the European Union), a hand sets its own bank
+   * account in Settings — checked, kept sealed, shown by its last four characters; a change pauses payouts for a day — and sets
+   * no phone number there.
+   */
+  it('in Bulgaria a hand sets its own bank account, sealed and checked; a change pauses it a day; no number is set there', async () => {
+    const payouts = { registerDestinations: (d: PayoutDestinations) => (registered = d) } as unknown as PayoutService;
+    const drivers = { get: (did: string) => ({ did, jurisdiction: 'BG' }) } as unknown as DriverService;
+    const managers = { get: (did: string) => ({ did, jurisdiction: 'BG' }) } as unknown as FleetManagerService;
+    const mdps = { list: () => [], countryOf: () => 'BG' } as unknown as MdpService;
+    const sms = { sends: () => false, mayGoTo: () => true } as unknown as SmsService;
+    const agents = { get: (did: string) => ({ did, shopName: 'Magazin Vitosha' }), countryOf: () => 'BG' };
+    const partners = { partnerAt: (c: string) => (c === 'BG' ? { entityId: 'partner-bg', name: 'Sofia Partner OOD' } : undefined) };
+    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption());
+    const ivan = { role: 'driver', did: 'did:courier-ivan', actorName: 'Ivan' } as IntrospectionResult;
+    expect(svc.view(ivan)).toEqual({ way: 'partner', paidBy: 'Sofia Partner OOD', paysTo: 'bank', country: 'BG' });
+    await expect(svc.requestCode(ivan, '+359 888 123 456', T0)).rejects.toThrow('In Bulgaria you are paid to your bank account: set that instead of a number.');
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 79', holder: 'Ivan Petrov' }, T0)).toThrow(/does not add up/);
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'I' }, T0)).toThrow(/holder’s name/);
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'Ivan Petrov', bic: 'BNBG12' }, T0)).toThrow(/Not a BIC/);
+    const saved = svc.setBank(ivan, { account: 'bg80 bnbg 9661 1020 3456 78', holder: ' Ivan  Petrov ', bic: 'bnbgbgsf' }, T0);
+    expect(saved).toEqual({ way: 'partner', paidBy: 'Sofia Partner OOD', paysTo: 'bank', country: 'BG', masked: 'BG•• •••• 5678', confirmedAt: new Date(T0).toISOString() });
+    const to = svc.partnerDestination('did:courier-ivan', T0, 'bank');
+    expect(to).toEqual({ numberId: expect.stringMatching(/^pb_/), masked: 'BG•• •••• 5678' });
+    expect(svc.fullBank('did:courier-ivan', (to as { numberId: string }).numberId)).toEqual({ account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov', bic: 'BNBGBGSF' });
+    expect(svc.fullBank('did:courier-ivan', 'pb_other')).toBeUndefined();
+    // Sealed where it is kept: the account is in no record as typed.
+    expect(JSON.stringify((svc as unknown as { banks: Map<string, unknown> }).banks.get('did:courier-ivan'))).not.toContain('96611020345678');
+    expect(() => svc.setBank(ivan, { account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov' }, T0 + 1000)).toThrow('That is already your payout account.');
+    // Changed: nothing paid to the new account for a day, and the money checks see the change.
+    svc.setBank(ivan, { account: 'LT12 1000 0111 0100 1000', holder: 'Ivan Petrov' }, T0 + 60_000);
+    expect(svc.partnerDestination('did:courier-ivan', T0 + 2 * 60_000, 'bank')).toEqual({ reason: 'bank_new' });
+    expect(svc.partnerDestination('did:courier-ivan', T0 + 60_000 + 24 * H + 1, 'bank')).toMatchObject({ masked: 'LT•• •••• 1000' });
+    expect(svc.changesOf('did:courier-ivan')).toEqual([new Date(T0 + 60_000).toISOString()]);
+    expect(svc.partnerDestination('did:nobody', T0, 'bank')).toEqual({ reason: 'no_bank' });
+    // Staff set none; a country that pays by M-Pesa takes no bank account.
+    expect(() => svc.setBank({ role: 'operator', actorName: 'Staff Ann' } as IntrospectionResult, { account: 'BG80BNBG96611020345678', holder: 'X Y' }, T0)).toThrow(/sets its own payout number/);
+    svc.forget('did:courier-ivan');
+    expect(svc.partnerDestination('did:courier-ivan', T0 + 3 * 24 * H, 'bank')).toEqual({ reason: 'no_bank' });
+  });
+
+  it('a bank account is refused where the payee is paid by M-Pesa', () => {
+    const svc = make();
+    expect(() => svc.setBank({ role: 'driver', did: 'did:courier', actorName: 'Amos' } as IntrospectionResult, { account: 'BG80BNBG96611020345678', holder: 'Amos K' }, T0)).toThrow('In Kenya payouts do not go to a bank account.');
   });
 });

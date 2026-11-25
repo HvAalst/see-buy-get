@@ -94,6 +94,8 @@ export const words: Record<string, string> = {
   "partner.app.money.wait.balance": "akaunti yako haina pesa ya kutosha",
   "partner.app.money.wait.refused": "mtoa huduma ameyakataa",
   "partner.app.money.wait.unreachable": "mtoa huduma bado hajajibu",
+  "partner.app.money.wait.no_bank": "bado hakuna akaunti ya benki",
+  "partner.app.money.wait.bank_new": "akaunti yake ya benki imebadilishwa sasa hivi, mapumziko ya siku moja",
   "partner.app.hands.title": "Kwa kila mhusika",
   "partner.app.hands.lede": "Tunachodaiwa na kila duka, kituo na dereva kwa jumla, na kwa hatua ngapi.",
   "partner.app.hands.none": "Bado hakuna anayetudai kitu.",

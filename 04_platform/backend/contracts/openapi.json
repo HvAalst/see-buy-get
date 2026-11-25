@@ -38817,6 +38817,36 @@
         }
       }
     },
+    "/v1/sbg/payout-number/bank": {
+      "post": {
+        "operationId": "PayoutNumber.bank",
+        "summary": "",
+        "description": "Route plan part 4 — the payee's own bank account, where its partner pays to bank accounts (the European Union). No code: the\npayee is signed in as itself, and a change pauses payouts for a day.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutBankDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutNumberSaved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mollie/invoices": {
       "get": {
         "operationId": "Mollie.invoices",
@@ -39340,6 +39370,74 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/payment-account/key": {
+      "post": {
+        "operationId": "PartnerLedger.setPayoutKey",
+        "summary": "",
+        "description": "Route plan part 4 — THE PARTNER'S KEY AT ITS PAYOUT PROVIDER (Revolut Business in the European Union), entered by our staff by\nname: asked of the provider first, then kept sealed and never shown again. A test key pays test money at once; a live key\nwaits for a second person.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutKeyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/payment-account/live": {
+      "post": {
+        "operationId": "PartnerLedger.switchLive",
+        "summary": "",
+        "description": "The live key switched on, by a second member of staff — never the one who entered it: the hands' payouts are real money from now.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": "",
@@ -71156,7 +71254,11 @@
           },
           "phoneEnds": {
             "type": "string",
-            "description": "The last three digits of the phone."
+            "description": "The last three digits of the phone, or of the bank account paid to."
+          },
+          "toBank": {
+            "type": "boolean",
+            "description": "Paid to a bank account rather than a phone."
           },
           "state": {
             "type": "string",
@@ -93163,6 +93265,14 @@
             "type": "string",
             "description": "Who pays to this number, where a partner does: its name."
           },
+          "paysTo": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "bank"
+            ],
+            "description": "Route plan part 4 — where the partner pays: a phone number, or a bank account (the European Union). Absent where no partner pays."
+          },
           "country": {
             "type": "string"
           },
@@ -93265,6 +93375,14 @@
             "type": "string",
             "description": "Who pays to this number, where a partner does: its name."
           },
+          "paysTo": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "bank"
+            ],
+            "description": "Route plan part 4 — where the partner pays: a phone number, or a bank account (the European Union). Absent where no partner pays."
+          },
           "country": {
             "type": "string"
           },
@@ -93295,6 +93413,32 @@
         "required": [
           "way",
           "country"
+        ]
+      },
+      "PayoutBankDto": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "maxLength": 42,
+            "description": "The IBAN, as the bank writes it; spaces are fine.",
+            "example": "BG80 BNBG 9661 1020 3456 78"
+          },
+          "holder": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 70,
+            "description": "The account holder’s name, exactly as the bank has it: the receiving bank checks it."
+          },
+          "bic": {
+            "type": "string",
+            "maxLength": 14,
+            "description": "The bank’s BIC, where the bank gives one. Not needed for a transfer in euros within SEPA."
+          }
+        },
+        "required": [
+          "account",
+          "holder"
         ]
       },
       "FeeInvoiceRow": {
@@ -94033,7 +94177,8 @@
               "stand-in",
               "telebirr",
               "mpesa-et",
-              "chapa"
+              "chapa",
+              "revolut"
             ]
           },
           "test": {
@@ -94052,7 +94197,8 @@
                 "stand-in",
                 "telebirr",
                 "mpesa-et",
-                "chapa"
+                "chapa",
+                "revolut"
               ]
             }
           },
@@ -94074,6 +94220,55 @@
           "feeOwed": {
             "type": "number",
             "description": "Our fee counted so far on payments kept, less any given back: owed by the partner, as a loan until a company of ours can invoice it."
+          },
+          "payoutProvider": {
+            "type": "string",
+            "enum": [
+              "stand-in",
+              "telebirr",
+              "mpesa-et",
+              "chapa",
+              "revolut"
+            ],
+            "description": "Route plan part 4 — the provider the partner’s hands are paid through, chosen by its country. Absent where its country has none yet: the stand-in pays them, on test money."
+          },
+          "paysTo": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "bank"
+            ],
+            "description": "Where its hands are paid: their phone, or their bank account (the European Union)."
+          },
+          "payoutTest": {
+            "type": "boolean",
+            "description": "The hands’ payouts are test money: no key, a test key, or a live key not switched on yet."
+          },
+          "payoutBalance": {
+            "type": "number",
+            "description": "What the payout account holds, where its provider says."
+          },
+          "keyEnds": {
+            "type": "string",
+            "description": "The last four characters of the key kept. Absent until one is entered."
+          },
+          "keyTest": {
+            "type": "boolean",
+            "description": "The key kept is a test key."
+          },
+          "keyBy": {
+            "type": "string",
+            "description": "Who entered the key, by name, and when."
+          },
+          "keyAt": {
+            "type": "string"
+          },
+          "liveBy": {
+            "type": "string",
+            "description": "Who switched the live key on — never the person who entered it — and when."
+          },
+          "liveAt": {
+            "type": "string"
           }
         },
         "required": [
@@ -94081,7 +94276,9 @@
           "test",
           "currency",
           "ready",
-          "feeOwed"
+          "feeOwed",
+          "paysTo",
+          "payoutTest"
         ]
       },
       "PaymentTotalsView": {
@@ -94163,6 +94360,24 @@
           "pct"
         ]
       },
+      "PayoutKeyDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "/^\\S{16,400}$/",
+            "description": "The key, as the provider shows it once when it is made. Kept sealed; never shown again."
+          },
+          "test": {
+            "type": "boolean",
+            "description": "A test (sandbox) key: tried at once, on test money. A live key pays real money only once a second member of staff switches it on."
+          }
+        },
+        "required": [
+          "key",
+          "test"
+        ]
+      },
       "PartnerPayoutRow": {
         "type": "object",
         "properties": {
@@ -94204,7 +94419,9 @@
               "number_new",
               "balance",
               "refused",
-              "unreachable"
+              "unreachable",
+              "no_bank",
+              "bank_new"
             ]
           },
           "numberMasked": {

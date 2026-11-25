@@ -7,7 +7,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { PayoutNumberService } from './payout-number.service';
-import { PayoutCodeSent, PayoutNumberSaved, PayoutNumberView } from './payout-number.types';
+import { PayoutBankDto, PayoutCodeSent, PayoutNumberSaved, PayoutNumberView } from './payout-number.types';
 
 export class PayoutNumberCodeDto {
   @ApiProperty({ description: 'The M-Pesa number to be paid to, as the payee writes it: 07XX XXX XXX.' })
@@ -57,5 +57,17 @@ export class PayoutNumberController {
   @Post()
   confirm(@Body() dto: PayoutNumberConfirmDto, @Actor() actor: IntrospectionResult): Promise<PayoutNumberSaved> {
     return this.numbers.confirm(actor, dto.code);
+  }
+
+  /**
+   * Route plan part 4 — the payee's own bank account, where its partner pays to bank accounts (the European Union). No code: the
+   * payee is signed in as itself, and a change pauses payouts for a day.
+   */
+  @Roles('driver', 'fleet_manager', 'mdp', 'agent')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('bank')
+  bank(@Body() dto: PayoutBankDto, @Actor() actor: IntrospectionResult): PayoutNumberSaved {
+    return this.numbers.setBank(actor, dto);
   }
 }

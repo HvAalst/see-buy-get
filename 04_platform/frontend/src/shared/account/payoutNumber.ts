@@ -10,6 +10,8 @@ export interface PayoutNumberView {
   way: 'mpesa' | 'by_hand' | 'partner';
   /** Who pays to the number, where a partner does. */
   paidBy?: string;
+  /** 2026-11-25 (route plan part 4) — where the partner pays: a phone number, or a bank account (the European Union). */
+  paysTo?: 'phone' | 'bank';
   country: string;
   notPayee?: string;
   masked?: string;
@@ -19,6 +21,11 @@ export interface PayoutNumberView {
 
 export interface PayoutNumberSaved extends PayoutNumberView {
   oldNumber?: 'texted' | 'kept' | 'not_sent';
+}
+
+/** The row's and the sheet's title: a payout number, or a payout bank account where the partner pays to one. */
+export function payoutTitleKey(view: PayoutNumberView | null | undefined): 'account.payout.title' | 'account.payout.titleBank' {
+  return view?.paysTo === 'bank' ? 'account.payout.titleBank' : 'account.payout.title';
 }
 
 /** Settings has a payout-number row only for a payee whose country pays to a number of its own. */

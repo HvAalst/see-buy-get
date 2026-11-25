@@ -490,6 +490,10 @@ export function createOperatorApi(sbg: SbgClient) {
     partnerPayouts: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/partner-payouts', { params: { path: { entityId } } })),
     payPartnerNow: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/partner-payouts/run', { params: { path: { entityId } } })),
     setPartnerFee: (entityId: string, pct: number) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/fee', { params: { path: { entityId } }, body: { pct } })),
+    /** 2026-11-25 (route plan part 4) — the partner's key at its payout provider, by name; and its live key switched on by a second person. */
+    setPartnerPayoutKey: (entityId: string, key: string, test: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/key', { params: { path: { entityId } }, body: { key, test } })),
+    switchPartnerPayoutLive: (entityId: string) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payment-account/live', { params: { path: { entityId } } })),
 
     saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),

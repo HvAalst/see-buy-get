@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from './i18n';
-import { PaymentAccountBody, PayoutsBody, paymentState, type HubPaymentRow, type PartnerPayoutsView, type PaymentAccountRead } from '../apps/tower/screens/PartnerPaymentFold';
+import { HandsBody, keySays, PaymentAccountBody, PayoutsBody, paymentState, type HubPaymentRow, type PartnerPayoutsView, type PaymentAccountRead } from '../apps/tower/screens/PartnerPaymentFold';
 
 /*
  * 2026-11-20 — THE PARTNER'S PAYMENT ACCOUNT, SEEN (the payments plan, step 4a). What is held to here: staff see which provider
@@ -128,5 +128,51 @@ describe('the fold, for our staff', () => {
       const words = readFileSync(join('src', `shared/i18n/words/${locale}/tower.ts`), 'utf8');
       expect(words).toContain('"tower.partner.pay.tryHint"');
     }
+  });
+});
+
+/*
+ * 2026-11-25 — ROUTE PLAN PART 4, SEEN: how a partner's hands are paid — to bank accounts in the European Union, through the
+ * provider its country uses — the key's standing in words (none, test, waiting for a second person, live), the key entered as a
+ * password and never shown, the live switch offered only for a live key not switched on yet, and a payout by the account's last
+ * digits.
+ */
+describe('paying its hands (route plan part 4)', () => {
+  const bank = (over: Partial<PaymentAccountRead['account']> = {}) => read({ currency: 'EUR', paysTo: 'bank', payoutProvider: 'revolut', payoutTest: true, ...over }, []).account;
+
+  it('says where its hands are paid and through whom; no provider for its country: test money', () => {
+    const html = renderToString(<HandsBody a={bank()} t={tt} />);
+    expect(html).toContain(t('tower.partner.pay.paysToBank'));
+    expect(html).toContain('Revolut Business');
+    expect(html).toContain(t('tower.partner.pay.keyNone'));
+    const none = renderToString(<HandsBody a={read({ paysTo: 'phone' }, []).account} t={tt} />);
+    expect(none).toContain(t('tower.partner.pay.paysToPhone'));
+    expect(none).toContain(t('tower.partner.pay.noPayoutProvider'));
+  });
+
+  it('the key in words: test, waiting for a second person, live by whom', () => {
+    expect(keySays(bank({ keyEnds: '6789', keyTest: true, keyBy: 'Staff Ann', keyAt: '2026-11-25T10:00:00Z' }), tt)).toBe('Test key …6789, entered by Staff Ann on 2026-11-25 10:00: test money only.');
+    expect(keySays(bank({ keyEnds: '6789', keyTest: false, keyBy: 'Staff Ann', keyAt: '2026-11-25T10:00:00Z' }), tt)).toContain('waiting for a second person');
+    expect(keySays(bank({ keyEnds: '6789', keyTest: false, keyBy: 'Staff Ann', keyAt: '2026-11-25T10:00:00Z', liveBy: 'Staff Ben', liveAt: '2026-11-25T11:00:00Z' }), tt)).toContain('switched on by Staff Ben on 2026-11-25 11:00: real money');
+  });
+
+  it('the key is typed as a password; the live switch only for a live key nobody switched on yet', () => {
+    const typing = renderToString(<HandsBody a={bank()} t={tt} onKey={() => undefined} onLive={() => undefined} />);
+    expect(typing).toMatch(/id="partner-payout-key"[^>]*type="password"|type="password"[^>]*id="partner-payout-key"/);
+    expect(typing).not.toContain(t('tower.partner.pay.liveBtn'));
+    const waiting = renderToString(<HandsBody a={bank({ keyEnds: '6789', keyTest: false, keyBy: 'Staff Ann' })} t={tt} onKey={() => undefined} onLive={() => undefined} />);
+    expect(waiting).toContain(t('tower.partner.pay.liveBtn'));
+    const live = renderToString(<HandsBody a={bank({ keyEnds: '6789', keyTest: false, keyBy: 'Staff Ann', liveBy: 'Staff Ben', payoutTest: false })} t={tt} onKey={() => undefined} onLive={() => undefined} />);
+    expect(live).not.toContain(t('tower.partner.pay.liveBtn'));
+    expect(live).toContain(t('tower.partner.pay.liveTag'));
+  });
+
+  it('a payout to a bank account by its last digits, and the two new waits in words', () => {
+    const html = renderToString(<PaymentAccountBody read={read({ currency: 'EUR', paysTo: 'bank' }, [row({ kind: 'out', reference: 'pp_1', askedBy: undefined, toBank: true, phoneEnds: '678', currency: 'EUR', state: 'paid' })])} t={tt} />);
+    expect(html).toContain('account ending 678');
+    expect(html).not.toContain('phone ending 678');
+    const waits = renderToString(<PayoutsBody payouts={{ currency: 'EUR', waiting: 2, waitingAmount: 50, shortAmount: 0, paidAmount: 0, rows: [{ payoutId: 'p1', payeeId: 'did:a', payeeKind: 'driver', amount: 20, currency: 'EUR', steps: 1, state: 'waiting', why: 'no_bank', day: '2026-11-25' }, { payoutId: 'p2', payeeId: 'did:b', payeeKind: 'shop', amount: 30, currency: 'EUR', steps: 1, state: 'waiting', why: 'bank_new', day: '2026-11-25' }] }} t={tt} />);
+    expect(waits).toContain(t('tower.partner.pay.wait.no_bank'));
+    expect(waits).toContain(t('tower.partner.pay.wait.bank_new'));
   });
 });

@@ -176,4 +176,8 @@ export const enAbbr = {
   'abbr.utn.about': 'The number Bulgaria’s National Revenue Agency gives a declared transport of goods with high fiscal risk. The Bulgarian buyer or seller declares it and passes it on; the driver shows it at a check.',
   'abbr.anaf.name': 'Romania’s National Agency for Fiscal Administration',
   'abbr.anaf.about': 'Romania’s tax authority (Agenția Națională de Administrare Fiscală). It runs RO e-Transport: it gives the UIT codes, and takes the positions of the vehicles carrying them from GPS providers registered with it, or from its own app.',
+  'abbr.iban.name': 'International Bank Account Number',
+  'abbr.iban.about': 'A bank account’s number as every bank in Europe writes it: two letters of its country, two check digits, then the bank and the account. A typing slip in it is caught by its check digits.',
+  'abbr.bic.name': 'Bank Identifier Code',
+  'abbr.bic.about': 'A bank’s own code, eight or eleven letters and digits. Within Europe a transfer in euros finds the bank by the account number alone.',
 };
