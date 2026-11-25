@@ -19,6 +19,8 @@ export interface MollieConnectedView {
 
 export interface MollieView {
   available: boolean;
+  /** 2026-11-25 — a load a sender paid upfront is paid into the connected account once its pay is released (route plan part 9b). */
+  paysLoads?: boolean;
   /** `country`: not the Netherlands; `fleet`: a fleet driver, whose office connects it; `off`: not set up on this server yet. */
   why?: 'country' | 'fleet' | 'off';
   via?: 'oauth' | 'test_key';

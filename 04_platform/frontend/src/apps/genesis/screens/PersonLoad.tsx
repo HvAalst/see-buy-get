@@ -394,7 +394,7 @@ function LoadCard({ load, api, onChanged, phone, client, upload }: { load: Perso
       {payment?.state === 'lapsed' && waiting ? <p class="hint">{t('send.load.lapsed')}</p> : null}
       {/* 2026-11-15 — delivered: the driver's pay held 24 hours; a problem reported within them, decided by the protocol. */}
       <HoldBlock freightId={load.freightId} hold={load} client={client} upload={upload} onChanged={onChanged} />
-      {payment?.owedBack ? <p class="hint">{t('send.load.refunded', { amount: formatMoney(payment.owedBack, payment.currency) })}</p> : null}
+      {payment?.owedBack ? <p class="hint">{t(payment.backTo === 'account' ? 'send.load.refundedAccount' : 'send.load.refunded', { amount: formatMoney(payment.owedBack, payment.currency) })}</p> : null}
       <p class="card__note">{t(load.escrow ? 'send.load.escrowNote' : 'send.load.payDirect')}</p>
     </Card>
   );

@@ -290,6 +290,7 @@ export const words: Record<string, string> = {
   "send.load.arrivedDone": "እናመሰግናለን፦ ሾፌሩ ርክክቡን ማጠናቀቅ ይችላል።",
   "send.load.lapsed": "በሰዓቱ አልተከፈለም፦ ሾፌሩ እንደገና ነፃ ነው። ዝግጁ ሲሆኑ እንደገና ዋጋ ይቀበሉ።",
   "send.load.refunded": "{amount} በሚቀጥለው ክፍያ ወደ ቁጥርዎ ይመለሳል።",
+  "send.load.refundedAccount": "{amount} ወደከፈሉበት ሂሳብ ይመለሳል።",
   "send.load.escrowNote": "ዋጋ ሲቀበሉ SeeBuyGetን ይከፍላሉ። ጭነቱ በኮድዎ እስኪደርስ ድረስ እንይዘዋለን፣ ሾፌሩንም የምንከፍለው ያኔ ብቻ ነው።",
   "send.load.counterTaken": "ሾፌሩ ዋጋዎን ተቀብሏል፦ ለማረጋገጥ ይክፈሉ።",
   "send.parcel.howTitle": "እንዴት እንደሚሠራ",

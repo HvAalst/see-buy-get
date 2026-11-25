@@ -42,6 +42,12 @@ export interface MollieConfig {
   publicBase?: string;
   /** A stand-in for Mollie on a laptop or in a test. Never taken outside a sandbox. */
   host?: string;
+  /**
+   * 2026-11-25 — DELAYED ROUTING SWITCHED ON FOR OUR ACCOUNT (route plan part 9b, step 2): a load a person paid first is paid to its
+   * carrier's own Mollie account at release. Mollie enables it on request; the owner then sets GLOS_MOLLIE_ROUTING=on. Off, the
+   * carrier is paid the way the country pays (by hand in the Netherlands).
+   */
+  routing?: boolean;
 }
 
 /** How a carrier is connected: its own account through the Connect app, or our test key (test money only). */
@@ -123,6 +129,8 @@ export class MollieConnectionView {
   @ApiPropertyOptional({ enum: ['country', 'fleet', 'off'] }) why?: 'country' | 'fleet' | 'off';
   @ApiPropertyOptional({ enum: ['oauth', 'test_key'] }) via?: MollieVia;
   @ApiPropertyOptional({ type: MollieConnectedView }) connected?: MollieConnectedView;
+  /** 2026-11-25 (route plan part 9b, step 2) — a load a sender paid upfront is paid into the connected account once its pay is released. */
+  @ApiPropertyOptional() paysLoads?: boolean;
 }
 
 /** Connecting: through the Connect app, the address of Mollie's own sign-in; with our test key, connected at once. */

@@ -1182,6 +1182,7 @@ export const words: Record<string, string> = {
   "account.mollie.subFleet": "Het bedrijf waarvoor je rijdt wordt betaald voor je werk: het kantoor daar koppelt Mollie.",
   "account.mollie.body": "Koppel je eigen Mollie-account, dan kan een verlader die je rechtstreeks betaalt bij de overdracht betalen, met iDEAL of een kaart, via een QR-code op je telefoon. Het geld komt op je Mollie-rekening, nooit via SeeBuyGet. Mollie laat ons weten wanneer er betaald is, en dat staat dan bij de lading.",
   "account.mollie.fee": "SeeBuyGet houdt van elke betaling een kleine vergoeding voor serverkosten in, via Mollie. Je ziet die voordat je om een betaling vraagt, en krijgt er één factuur per maand voor.",
+  "account.mollie.paysLoads": "Een lading die een verzender vooraf via SeeBuyGet betaalde, wordt ook op deze rekening betaald, zodra je loon vrijkomt, 24 uur na de aflevering.",
   "account.mollie.testKeyTitle": "Alleen om te testen",
   "account.mollie.testKeyBody": "Betalingen gaan naar het eigen testaccount van SeeBuyGet, in testgeld. Er wordt niets echt betaald.",
   "account.mollie.connectedTitle": "Gekoppeld: {name}",

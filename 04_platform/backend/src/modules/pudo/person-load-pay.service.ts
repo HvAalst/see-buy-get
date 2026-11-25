@@ -12,16 +12,23 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { isPlausiblePhone } from '../../foundation/identity/phone';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { MollieError } from '../../foundation/mollie/mollie-client';
+import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
+import { DriverService } from './driver.service';
 import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { NotificationService } from './notification.service';
-import type { LoadPayment, LoadPaymentView } from './person-load-pay.types';
+import type { LoadPayment, LoadPaymentView, LoadRefund, LoadRoute } from './person-load-pay.types';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 /** Moneys paid in whole units: what is asked is rounded up, and what was not used goes back. */
 const WHOLE_UNITS = new Set(['KES', 'UGX', 'TZS', 'RWF', 'BIF']);
 /** How long a person has to pay after accepting a price, before the driver is let go. */
 export const LOAD_PAY_WINDOW_MIN = 15;
+/** Mollie routes a payment within 90 days of it; a day is kept in hand. */
+export const ROUTE_WITHIN_MS = 89 * 24 * 60 * 60_000;
+/** A route or a refund Mollie did not answer is asked again this often, under the same key — after first asking what is there. */
+export const MOLLIE_AGAIN_AFTER_MS = 5 * 60_000;
 
 /**
  * 2026-11-13 — A PERSON'S LOAD, PAID FIRST AND HELD UNTIL DELIVERY (unusual loads, part 3b; the owner: "It should normally be kept
@@ -50,6 +57,9 @@ export class PersonLoadPayService implements OnModuleInit {
     private readonly payouts: PayoutService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly events?: EventBus,
+    // 2026-11-25 — route plan part 9b, step 2: the carrier's pay routed through Mollie, money back as a Mollie refund.
+    @Optional() private readonly mollie?: MollieConnectService,
+    @Optional() private readonly drivers?: DriverService,
   ) {}
 
   onModuleInit(): void {
@@ -60,6 +70,7 @@ export class PersonLoadPayService implements OnModuleInit {
       giveBack: (f, charged, why) => this.giveBack(f, charged, why),
       refundCarriage: (f, charged, why) => this.refundCarriage(f, charged, why),
       payerOf: (f) => this.latest(f.freightId)?.personDid,
+      roadPaid: (f, payee, amount) => this.roadPaid(f, payee, amount),
     });
     this.payouts.registerDestinations({
       of: (payeeId) => this.refundDestination(payeeId),
@@ -86,6 +97,7 @@ export class PersonLoadPayService implements OnModuleInit {
       ...(p.reference ? { reference: p.reference } : {}),
       ...(p.pushed != null ? { pushed: p.pushed } : {}),
       ...(p.owedBack ? { owedBack: p.owedBack } : {}),
+      ...(p.owedBack ? { backTo: this.mollieOf(p) ? 'account' : 'number' } : {}),
       ...(p.why ? { why: p.why } : {}),
     };
   }
@@ -140,6 +152,9 @@ export class PersonLoadPayService implements OnModuleInit {
     }
     payment.fundingId = funding.fundingId;
     payment.reference = funding.reference;
+    // 2026-11-25 — where the carrier's pay will go, decided now: Mollie routes only to an account connected before the payment.
+    const routeTo = this.routeFor(proposal.driverDid, currency, entity.entityId, funding.provider);
+    if (routeTo) payment.routeTo = routeTo;
     if (funding.instructions) payment.instructions = funding.instructions;
     payment.pushed = Boolean(funding.pushed);
     if (funding.link) payment.link = funding.link;
@@ -185,6 +200,7 @@ export class PersonLoadPayService implements OnModuleInit {
     if (p && p.state === 'awaiting') {
       p.state = 'paid';
       p.paid = gross;
+      p.paidAt = new Date(now).toISOString();
       this.payments.set(p.payId, p);
       try {
         this.dispatch.releasePayHold(p.freightId);
@@ -198,7 +214,7 @@ export class PersonLoadPayService implements OnModuleInit {
         p.why = 'the driver could no longer take it';
         this.payments.set(p.payId, p);
         this.owe(p, gross);
-        this.tell(personDid, `Your payment for ${p.loadCode} goes back to you`, `The driver could no longer take it. ${this.money(gross, p.currency)} goes back to your number with the next payout; choose another price.`, p.freightId);
+        this.tell(personDid, `Your payment for ${p.loadCode} goes back to you`, `The driver could no longer take it. ${this.money(gross, p.currency)} ${this.backWords(p)}; choose another price.`, p.freightId);
         return { entryId: entry.entryId };
       }
     }
@@ -278,7 +294,7 @@ export class PersonLoadPayService implements OnModuleInit {
     p.why = why;
     this.payments.set(p.payId, p);
     this.owe(p, p.paid ?? 0);
-    this.tell(p.personDid, `${p.loadCode}: your money goes back to you`, `The driver did not carry it (${why}). ${this.money(p.paid ?? 0, p.currency)} goes back to your number with the next payout, and the load is open for prices again.`, p.freightId);
+    this.tell(p.personDid, `${p.loadCode}: your money goes back to you`, `The driver did not carry it (${why}). ${this.money(p.paid ?? 0, p.currency)} ${this.backWords(p)}, and the load is open for prices again.`, p.freightId);
   }
 
   /** 2026-11-15 — the protocol gave the carriage price back after delivery: the bill reversed, and it goes back to the person. */
@@ -312,6 +328,214 @@ export class PersonLoadPayService implements OnModuleInit {
     this.payments.set(p.payId, p);
     const left = round2((p.paid ?? 0) - (p.billed ?? 0));
     if (left > 0) this.owe(p, left);
+  }
+
+  /* ------------------------------------------- 9b step 2: through Mollie -- */
+
+  /**
+   * WHERE THE CARRIER'S PAY GOES, decided when the person pays (route plan part 9b, step 2; the owner: "the system will choose the
+   * right method depending on the country"): the carrier's own Mollie account — where routing is switched on for our account, the
+   * money is euros paid through Mollie, the carrier (or its fleet) is paid by the same company of ours, and its account was
+   * connected through the Connect app, can take payments, and was not taken away. Else nothing: paid the country's way.
+   */
+  private routeFor(driverDid: string, currency: string, entityId: string, provider: string | undefined): LoadPayment['routeTo'] {
+    if (!this.mollie?.cfg.routing || provider !== 'mollie' || currency.toUpperCase() !== 'EUR' || !this.drivers) return undefined;
+    let payee: { entityId?: string; payeeDid: string };
+    try {
+      payee = this.drivers.payeeOrNone(driverDid);
+    } catch {
+      return undefined;
+    }
+    if (payee.entityId !== entityId) return undefined;
+    const c = this.mollie.connection(payee.payeeDid);
+    if (!c || c.via !== 'oauth' || c.lostAt || !c.organization?.id || c.canReceivePayments === false) return undefined;
+    return { payeeId: payee.payeeDid, organizationId: c.organization.id };
+  }
+
+  /** The payment on our Mollie account this load's money came in by, where it came in through Mollie. */
+  private mollieOf(p: LoadPayment): { paymentId: string } | undefined {
+    if (!p.fundingId) return undefined;
+    try {
+      const f = this.funding.get(p.fundingId);
+      return f.provider === 'mollie' && f.railRef?.startsWith('tr_') ? { paymentId: f.railRef } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Where money owed back goes, said to the person. */
+  private backWords(p: LoadPayment): string {
+    return this.mollieOf(p) ? 'goes back to the account you paid from' : 'goes back to your number with the next payout';
+  }
+
+  /**
+   * THE DRIVER'S PAY WAS JUST OWED (dispatch's payTheRoad, after the 24-hour hold): where it was to go through Mollie, it is settled in
+   * our books IN THIS SAME TURN — so no payout run can also raise it — and Mollie is asked to route it from the person's payment to
+   * the carrier's account. Too late for Mollie (90 days), or a payee other than the one decided at payment: paid the country's way.
+   */
+  roadPaid(f: Freight, payee: { payeeDid: string; entityId: string }, amount: number, now: number = Date.now()): void {
+    const p = this.settled(f.freightId) ?? this.held(f.freightId);
+    if (!p?.routeTo || p.route || payee.payeeDid !== p.routeTo.payeeId || payee.entityId !== p.entityId || !(amount > 0) || !this.mollieOf(p)) return;
+    const exact = round2(amount);
+    if (now - Date.parse(p.paidAt ?? p.openedAt) > ROUTE_WITHIN_MS) {
+      p.route = { state: 'failed', amount: exact, at: new Date(now).toISOString(), tries: 0, why: 'too_late' };
+      this.payments.set(p.payId, p);
+      this.logger.warn(`load ${p.loadCode}: past Mollie's 90 days, its carrier is paid the country's way`);
+      return;
+    }
+    this.books.post({
+      entityId: p.entityId,
+      kind: 'driver-payout-routed',
+      ref: f.freightId,
+      currency: p.currency,
+      lines: [
+        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payee.payeeDid, amount: exact },
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -exact },
+      ],
+    });
+    p.route = { state: 'asked', amount: exact, at: new Date(now).toISOString(), tries: 0 };
+    this.payments.set(p.payId, p);
+    void this.routeNow(p.payId, now).catch((err: Error) => this.logger.warn(`load ${p.loadCode}: route not asked: ${err.message}`));
+  }
+
+  /**
+   * ASK MOLLIE TO ROUTE IT: first whether a route to the carrier is there already (a retry never routes twice), then the route, under
+   * a key of its own. Routed: the carrier told. Refused: our books undone, the carrier paid the country's way. No answer: asked again.
+   */
+  async routeNow(payId: string, now: number = Date.now()): Promise<LoadPayment | undefined> {
+    const p = this.payments.get(payId);
+    if (!p?.route || p.route.state !== 'asked' || !p.routeTo) return p;
+    const to = p.routeTo;
+    const route: LoadRoute = { ...p.route, tries: p.route.tries + 1, lastTriedAt: new Date(now).toISOString() };
+    p.route = route;
+    this.payments.set(p.payId, p);
+    const paid = this.mollieOf(p);
+    const token = this.mollie?.ownToken();
+    if (!paid || !token || !this.mollie) return this.routeUndone(p, 'not_set_up');
+    try {
+      const there = (await this.mollie.api().listRoutes(token.bearer, paid.paymentId)).find((r) => (r.destination as { organizationId?: string } | undefined)?.organizationId === to.organizationId);
+      const made =
+        there ??
+        (await this.mollie.api().createRoute(
+          token.bearer,
+          paid.paymentId,
+          { amount: { currency: p.currency.toUpperCase(), value: route.amount.toFixed(2) }, description: `SeeBuyGet ${p.loadCode}`.slice(0, 255), destination: { type: 'organization', organizationId: to.organizationId } },
+          `route-${p.payId}`,
+        ));
+      p.route = { ...route, state: 'routed', routedAt: new Date(now).toISOString(), ...(typeof made.id === 'string' ? { routeId: made.id } : {}) };
+      this.payments.set(p.payId, p);
+      this.tellCarrier(to.payeeId, `Paid to your Mollie account: ${p.loadCode}`, `${this.money(route.amount, p.currency)} for ${p.loadCode} is in your Mollie account.`, p.freightId);
+      return p;
+    } catch (err) {
+      if (err instanceof MollieError && err.status < 500) return this.routeUndone(p, err.detail || err.title);
+      if (route.tries % 12 === 0) this.logger.warn(`load ${p.loadCode}: Mollie has not answered the route ${route.tries} times; asked again`);
+      return p;
+    }
+  }
+
+  /** Mollie refused the route: nothing moved there, so our books are undone and the carrier is owed again — paid the country's way. */
+  private routeUndone(p: LoadPayment, why: string): LoadPayment {
+    const route = p.route as LoadRoute;
+    const payeeId = (p.routeTo as { payeeId: string }).payeeId;
+    this.books.post({
+      entityId: p.entityId,
+      kind: 'driver-payout-routed-undone',
+      ref: p.freightId,
+      currency: p.currency,
+      lines: [
+        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payeeId, amount: -route.amount },
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: route.amount },
+      ],
+    });
+    p.route = { ...route, state: 'failed', why: why.slice(0, 200) };
+    this.payments.set(p.payId, p);
+    this.logger.warn(`load ${p.loadCode}: Mollie did not route the carrier's pay (${why}); it is paid the country's way`);
+    return p;
+  }
+
+  /**
+   * MONEY BACK THROUGH MOLLIE, to the account the person paid from: settled in our books first — so no payout run raises it — then
+   * asked of Mollie. Never on a payment part of which went to the carrier: that is given back by hand.
+   */
+  private refundThroughMollie(p: LoadPayment, amount: number, now: number = Date.now()): void {
+    if (p.route && p.route.state !== 'failed') return;
+    if (!this.mollieOf(p) || !this.mollie?.ownToken()) return;
+    const exact = round2(amount);
+    this.books.post({
+      entityId: p.entityId,
+      kind: 'load-refund',
+      ref: p.payId,
+      currency: p.currency,
+      lines: [
+        { code: ACCOUNT_CODES.PAYABLE_PERSON, counterparty: p.personDid, amount: exact },
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -exact },
+      ],
+    });
+    const back: LoadRefund = { n: (p.refunds?.length ?? 0) + 1, amount: exact, state: 'asked', at: new Date(now).toISOString(), tries: 0 };
+    p.refunds = [...(p.refunds ?? []), back];
+    this.payments.set(p.payId, p);
+    void this.refundNow(p.payId, back.n, now).catch((err: Error) => this.logger.warn(`load ${p.loadCode}: refund not asked: ${err.message}`));
+  }
+
+  /** Ask Mollie for one refund: first whether it is there already (by its own marks), then the refund. Refused: undone, by hand. */
+  async refundNow(payId: string, n: number, now: number = Date.now()): Promise<LoadRefund | undefined> {
+    const p = this.payments.get(payId);
+    const r = p?.refunds?.find((x) => x.n === n);
+    if (!p || !r || r.state !== 'asked') return r;
+    const tried: LoadRefund = { ...r, tries: r.tries + 1, lastTriedAt: new Date(now).toISOString() };
+    const save = (next: LoadRefund): LoadRefund => {
+      p.refunds = (p.refunds ?? []).map((x) => (x.n === n ? next : x));
+      this.payments.set(p.payId, p);
+      return next;
+    };
+    save(tried);
+    const paid = this.mollieOf(p);
+    const token = this.mollie?.ownToken();
+    if (!paid || !token || !this.mollie) return this.refundUndone(p, tried, 'not_set_up');
+    const mark = `${p.payId}:${n}`;
+    try {
+      const there = (await this.mollie.api().listRefunds(token.bearer, paid.paymentId)).find((x) => (x.metadata as { mark?: string } | undefined)?.mark === mark);
+      const made =
+        there ??
+        (await this.mollie.api().createRefund(
+          token.bearer,
+          paid.paymentId,
+          { amount: { currency: p.currency.toUpperCase(), value: tried.amount.toFixed(2) }, description: `SeeBuyGet ${p.loadCode}: money back`.slice(0, 255), metadata: { mark } },
+          `load-refund-${mark}`,
+        ));
+      return save({ ...tried, state: 'sent', ...(typeof made.id === 'string' ? { refundId: made.id } : {}) });
+    } catch (err) {
+      if (err instanceof MollieError && err.status < 500) return this.refundUndone(p, tried, err.detail || err.title);
+      return tried;
+    }
+  }
+
+  /** Mollie refused the refund: our books undone, the person owed again — given back by hand. */
+  private refundUndone(p: LoadPayment, r: LoadRefund, why: string): LoadRefund {
+    this.books.post({
+      entityId: p.entityId,
+      kind: 'load-refund-undone',
+      ref: p.payId,
+      currency: p.currency,
+      lines: [
+        { code: ACCOUNT_CODES.PAYABLE_PERSON, counterparty: p.personDid, amount: -r.amount },
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: r.amount },
+      ],
+    });
+    const next: LoadRefund = { ...r, state: 'failed', why: why.slice(0, 200) };
+    p.refunds = (p.refunds ?? []).map((x) => (x.n === r.n ? next : x));
+    this.payments.set(p.payId, p);
+    this.logger.warn(`load ${p.loadCode}: Mollie did not take the refund (${why}); it is given back by hand`);
+    return next;
+  }
+
+  /** Every route and refund Mollie has not answered yet, asked again — at most every five minutes each. */
+  async mollieAgain(now: number = Date.now()): Promise<void> {
+    const due = (lastTriedAt?: string) => !lastTriedAt || now - Date.parse(lastTriedAt) >= MOLLIE_AGAIN_AFTER_MS;
+    for (const p of [...this.payments.values()]) {
+      if (p.route?.state === 'asked' && due(p.route.lastTriedAt)) await this.routeNow(p.payId, now);
+      for (const r of p.refunds ?? []) if (r.state === 'asked' && due(r.lastTriedAt)) await this.refundNow(p.payId, r.n, now);
+    }
   }
 
   /* ---------------------------------------------------------------- time -- */
@@ -380,6 +604,8 @@ export class PersonLoadPayService implements OnModuleInit {
     if (p) {
       p.owedBack = round2((p.owedBack ?? 0) + owed);
       this.payments.set(p.payId, p);
+      // 2026-11-25 — paid through Mollie: given back there, to the account it came from (route plan part 9b, step 2).
+      this.refundThroughMollie(p, owed);
     }
     return owed;
   }
@@ -406,6 +632,13 @@ export class PersonLoadPayService implements OnModuleInit {
       .catch((err: Error) => this.logger.warn(`load notice not sent: ${err.message}`));
   }
 
+  /** The carrier paid for the load: the courier, or its fleet's office — in its own app. */
+  private tellCarrier(payeeDid: string, title: string, body: string, freightId: string): void {
+    void this.notifications
+      ?.notify(payeeDid, { kind: 'load_payment', title, body, link: '/?board', tag: `load:${freightId}:routed`, data: { freightId } })
+      .catch((err: Error) => this.logger.warn(`load notice not sent: ${err.message}`));
+  }
+
   private tellDriver(driverDid: string, title: string, body: string, freightId: string): void {
     void this.notifications
       ?.notify(driverDid, { kind: 'load_payment', title, body, link: '/?board', tag: `load:${freightId}:${title}`, data: { freightId } })
@@ -428,6 +661,7 @@ export class PersonLoadPaySweeper implements OnApplicationBootstrap, OnModuleDes
       } catch (err) {
         this.logger.warn(`the load payment sweep did not run: ${(err as Error).message}`);
       }
+      void this.loads.mollieAgain().catch((err: Error) => this.logger.warn(`routes and refunds not asked again: ${err.message}`));
     }, 60_000);
     this.timer.unref?.();
   }

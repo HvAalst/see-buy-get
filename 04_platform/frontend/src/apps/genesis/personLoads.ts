@@ -134,6 +134,8 @@ export interface LoadPaymentView {
   reference?: string;
   pushed?: boolean;
   owedBack?: number;
+  /** 2026-11-25 — where it goes back: the account paid from (through Mollie), or the number paid from, with the next payout. */
+  backTo?: 'account' | 'number';
 }
 
 export function personLoadApi(sbg: SbgClient) {

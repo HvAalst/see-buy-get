@@ -1356,6 +1356,7 @@ export const en = {
   'account.mollie.subFleet': 'The company you drive for is paid for your work: its office connects Mollie.',
   'account.mollie.body': 'Connect your own Mollie account, and a shipper who pays you directly can pay at the handover, by iDEAL or card, from a QR code on your phone. The money goes into your Mollie account, never through SeeBuyGet. Mollie tells us when it is paid, and the load says so.',
   'account.mollie.fee': 'SeeBuyGet takes a small fee for server costs from each payment, through Mollie. You see it before you ask for a payment, and get one invoice a month for it.',
+  'account.mollie.paysLoads': 'A load a sender paid upfront through SeeBuyGet is paid into this account too, once its pay is released, 24 hours after delivery.',
   'account.mollie.testKeyTitle': 'For testing only',
   'account.mollie.testKeyBody': 'Payments go to SeeBuyGet’s own test account, in test money. Nothing real is paid.',
   'account.mollie.connectedTitle': 'Connected: {name}',

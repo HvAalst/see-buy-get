@@ -82637,6 +82637,14 @@
           "owedBack": {
             "type": "number"
           },
+          "backTo": {
+            "type": "string",
+            "enum": [
+              "account",
+              "number"
+            ],
+            "description": "2026-11-25 — where money owed back goes: the account paid from (through Mollie), or the number paid from, with the next payout."
+          },
           "why": {
             "type": "string"
           },
@@ -93574,6 +93582,10 @@
           },
           "connected": {
             "$ref": "#/components/schemas/MollieConnectedView"
+          },
+          "paysLoads": {
+            "type": "boolean",
+            "description": "2026-11-25 (route plan part 9b, step 2) — a load a sender paid upfront is paid into the connected account once its pay is released."
           }
         },
         "required": [

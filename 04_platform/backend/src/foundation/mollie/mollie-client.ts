@@ -108,6 +108,29 @@ export class MollieClient {
     return this.call('POST', `/v2/payments/${encodeURIComponent(paymentId)}/refunds`, { bearer, json: body, idempotencyKey });
   }
 
+  /** 2026-11-25 — the refunds already made on a payment: what a retry asks first, so one refund is never made twice. */
+  async listRefunds(bearer: string, paymentId: string): Promise<Array<Record<string, unknown>>> {
+    const got = await this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}/refunds?limit=250`, { bearer });
+    const list = (got._embedded as { refunds?: unknown } | undefined)?.refunds;
+    return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
+  }
+
+  /**
+   * 2026-11-25 — DELAYED ROUTING (route plan part 9b, step 2; docs.mollie.com, Delayed routing): part of a payment paid on our own
+   * account moved to a connected organization's balance — the carrier's — once its work is done. Within 90 days of the payment;
+   * euros only; switched on for our account by Mollie on request.
+   */
+  createRoute(bearer: string, paymentId: string, body: Record<string, unknown>, idempotencyKey: string): Promise<Record<string, unknown>> {
+    return this.call('POST', `/v2/payments/${encodeURIComponent(paymentId)}/routes`, { bearer, json: body, idempotencyKey });
+  }
+
+  /** The routes already made on a payment: what a retry asks first, so a carrier is never routed twice. */
+  async listRoutes(bearer: string, paymentId: string): Promise<Array<Record<string, unknown>>> {
+    const got = await this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}/routes`, { bearer });
+    const list = (got._embedded as { routes?: unknown } | undefined)?.routes;
+    return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
+  }
+
   /** A test payment is only found when asked for as one. */
   getPayment(bearer: string, paymentId: string, testmode: boolean): Promise<Record<string, unknown>> {
     return this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}${testmode ? '?testmode=true' : ''}`, { bearer });

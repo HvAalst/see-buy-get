@@ -290,6 +290,7 @@ export const words: Record<string, string> = {
   "send.load.arrivedDone": "Asante: dereva anaweza kumaliza kufikisha.",
   "send.load.lapsed": "Haikulipwa kwa wakati: dereva yuko huru tena. Kubali bei tena ukiwa tayari.",
   "send.load.refunded": "{amount} inarudi kwenye namba yako katika malipo yajayo.",
+  "send.load.refundedAccount": "{amount} inarudi kwenye akaunti uliyolipa kutoka kwayo.",
   "send.load.escrowNote": "Unailipa SeeBuyGet unapokubali bei. Tunaishikilia hadi mzigo ufikishwe kwa msimbo wako, na hapo tu tunamlipa dereva.",
   "send.load.counterTaken": "Dereva amekubali bei yako: ilipe kuthibitisha.",
   "send.parcel.howTitle": "Jinsi inavyofanya kazi",

@@ -290,6 +290,7 @@ export const words: Record<string, string> = {
   "send.load.arrivedDone": "Dank je: de chauffeur kan de levering afronden.",
   "send.load.lapsed": "Niet op tijd betaald: de chauffeur is weer vrij. Neem opnieuw een prijs aan als je klaar bent.",
   "send.load.refunded": "{amount} gaat terug naar je nummer bij de volgende uitbetaling.",
+  "send.load.refundedAccount": "{amount} gaat terug naar de rekening waarvan je betaalde.",
   "send.load.escrowNote": "Je betaalt SeeBuyGet als je een prijs aanneemt. Wij houden het vast tot de lading met jouw code is afgeleverd, en betalen pas dan de chauffeur.",
   "send.load.counterTaken": "De chauffeur nam jouw prijs aan: betaal om te bevestigen.",
   "send.parcel.howTitle": "Zo werkt het",

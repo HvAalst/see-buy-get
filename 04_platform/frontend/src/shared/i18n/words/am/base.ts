@@ -1182,6 +1182,7 @@ export const words: Record<string, string> = {
   "account.mollie.subFleet": "ለሥራዎ የሚከፈለው ለሚሠሩለት ድርጅት ነው፤ Mollieን የሚያገናኘው የድርጅቱ ቢሮ ነው።",
   "account.mollie.body": "የራስዎን Mollie መለያ ያገናኙ፤ በቀጥታ የሚከፍልዎ ጭነት ላኪ በርክክቡ ጊዜ በስልክዎ ላይ ካለው QR ኮድ በiDEAL ወይም በካርድ መክፈል ይችላል። ገንዘቡ ወደ Mollie መለያዎ ይገባል፤ በፍጹም በSeeBuyGet በኩል አያልፍም። Mollie ሲከፈል ያሳውቀናል፤ ጭነቱም ይህንኑ ያሳያል።",
   "account.mollie.fee": "SeeBuyGet ከእያንዳንዱ ክፍያ ለሰርቨር ወጪ ትንሽ ክፍያ በMollie በኩል ይወስዳል። ክፍያ ከመጠየቅዎ በፊት ያዩታል፤ ለእሱም በወር አንድ ደረሰኝ ይደርስዎታል።",
+  "account.mollie.paysLoads": "ላኪ በSeeBuyGet በኩል አስቀድሞ የከፈለበት ጭነትም ክፍያው ሲለቀቅ፣ ከመድረሱ 24 ሰዓት በኋላ፣ ወደዚህ ሂሳብ ይከፈላል።",
   "account.mollie.testKeyTitle": "ለሙከራ ብቻ",
   "account.mollie.testKeyBody": "ክፍያዎች በሙከራ ገንዘብ ወደ SeeBuyGet የራሱ የሙከራ መለያ ይሄዳሉ። ምንም እውነተኛ ክፍያ አይፈጸምም።",
   "account.mollie.connectedTitle": "ተገናኝቷል፦ {name}",

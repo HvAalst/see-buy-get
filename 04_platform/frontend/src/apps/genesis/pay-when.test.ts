@@ -42,3 +42,11 @@ describe('when a person pays for a load', () => {
     expect(send).toMatch(/onClick=\{\(\) => actions\.go\('load'\)\}>\s*\{t\('send\.point\.asLoad'\)\}/);
   });
 });
+
+/* 2026-11-25 — route plan part 9b, step 2: money back said where it goes — the account paid from, or the number, with the next payout. */
+describe('money back on a load paid first', () => {
+  it('says the account paid from where the server gives it back through Mollie', () => {
+    const screen = readFileSync(join('src/apps/genesis/screens', 'PersonLoad.tsx'), 'utf8');
+    expect(screen).toContain("payment.backTo === 'account' ? 'send.load.refundedAccount' : 'send.load.refunded'");
+  });
+});

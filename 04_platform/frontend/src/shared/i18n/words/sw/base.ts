@@ -1182,6 +1182,7 @@ export const words: Record<string, string> = {
   "account.mollie.subFleet": "Kampuni unayoendeshea inalipwa kwa kazi yako: ofisi yake ndiyo inaunganisha Mollie.",
   "account.mollie.body": "Unganisha akaunti yako mwenyewe ya Mollie, na mtumaji wa mzigo anayekulipa moja kwa moja anaweza kulipa wakati wa kukabidhi, kwa iDEAL au kadi, kupitia msimbo wa QR kwenye simu yako. Pesa zinaingia kwenye akaunti yako ya Mollie, kamwe hazipiti kwa SeeBuyGet. Mollie inatuambia malipo yanapofanyika, na mzigo unaonyesha hivyo.",
   "account.mollie.fee": "SeeBuyGet inachukua ada ndogo ya gharama za seva kutoka kila malipo, kupitia Mollie. Unaiona kabla ya kuomba malipo, na unapata ankara moja kwa mwezi kwa ajili yake.",
+  "account.mollie.paysLoads": "Mzigo ambao mtumaji aliulipia mapema kupitia SeeBuyGet pia hulipwa kwenye akaunti hii, malipo yake yanapotolewa, saa 24 baada ya kufikishwa.",
   "account.mollie.testKeyTitle": "Kwa majaribio tu",
   "account.mollie.testKeyBody": "Malipo yanaenda kwenye akaunti ya majaribio ya SeeBuyGet yenyewe, kwa pesa za majaribio. Hakuna kinacholipwa kweli.",
   "account.mollie.connectedTitle": "Imeunganishwa: {name}",

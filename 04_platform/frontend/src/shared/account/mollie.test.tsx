@@ -142,11 +142,20 @@ describe('wired', () => {
   it('every word in Kiswahili, Dutch and Amharic too', () => {
     const en = read('shared', 'i18n', 'catalogs', 'en.ts');
     const keys = [...en.matchAll(/'(account\.mollie\.[a-zA-Z]+)'/g)].map((m) => m[1]);
-    // 25 for connecting (part 2a), and five for the monthly fee invoices (part 2c, 2026-11-20).
-    expect(keys.length).toBe(30);
+    // 25 for connecting (part 2a), five for the monthly fee invoices (part 2c, 2026-11-20), and one for loads paid upfront (route plan 9b, 2026-11-25).
+    expect(keys.length).toBe(31);
     for (const locale of ['sw', 'nl', 'am']) {
       const words = read('shared', 'i18n', 'words', locale, 'base.ts');
       expect(keys.filter((k) => !words.includes(`"${k}":`))).toEqual([]);
     }
+  });
+});
+
+/* 2026-11-25 — route plan part 9b, step 2: said in the form only where the server routes loads paid upfront to the carrier's account. */
+describe('a load paid upfront, paid into the carrier’s Mollie account', () => {
+  const api = (mollie: MollieView) => ({ mollie, connectMollie: async () => ({}), disconnectMollie: async () => ({}), mollieInvoices: async () => ({}), mollieInvoice: async () => ({}) }) as unknown as AccountApi;
+  it('says so where the server routes them, and not where it does not', () => {
+    expect(renderToString(<MollieForm api={api({ ...connected(), paysLoads: true })} back={null} />)).toContain(t('account.mollie.paysLoads'));
+    expect(renderToString(<MollieForm api={api(connected())} back={null} />)).not.toContain(t('account.mollie.paysLoads'));
   });
 });

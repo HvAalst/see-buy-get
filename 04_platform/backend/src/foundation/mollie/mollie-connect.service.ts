@@ -48,6 +48,7 @@ export function mollieConfigFromEnv(env: NodeJS.ProcessEnv, logger?: Logger): Mo
     testmode: (env.GLOS_MOLLIE_LIVE ?? '').trim().toLowerCase() !== 'true',
     publicBase: text(env.SBG_PUBLIC_URL)?.replace(/\/+$/, ''),
     ...(host && isSandbox() ? { host: host.replace(/\/+$/, '') } : {}),
+    ...(['on', 'true', '1'].includes((env.GLOS_MOLLIE_ROUTING ?? '').trim().toLowerCase()) ? { routing: true } : {}),
   };
 }
 
@@ -105,7 +106,7 @@ export class MollieConnectService {
     if (!via) return { available: false, why: 'off' };
     const c = this.connections.get(payee.payeeId);
     if (c?.via === 'oauth' && !c.lostAt && (!c.checkedAt || now - Date.parse(c.checkedAt) > CHECK_EVERY_MS)) void this.check(payee.payeeId, now);
-    return { available: true, via, ...(c ? { connected: viewOf(c) } : {}) };
+    return { available: true, via, ...(c ? { connected: viewOf(c) } : {}), ...(this.cfg.routing && via === 'oauth' ? { paysLoads: true } : {}) };
   }
 
   connection(payeeId: string): MollieConnection | undefined {

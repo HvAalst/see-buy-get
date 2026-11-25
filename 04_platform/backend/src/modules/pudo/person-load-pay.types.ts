@@ -39,6 +39,44 @@ export interface LoadPayment {
   billed?: number;
   owedBack?: number;
   why?: string;
+  /** When the rail said it was paid. */
+  paidAt?: string;
+  /**
+   * 2026-11-25 (route plan part 9b, step 2) — WHERE THE CARRIER'S PAY IS ROUTED, decided when the person paid (Mollie routes only to
+   * an account connected before the payment): the payee and its Mollie organization. Absent: the carrier is paid the country's way.
+   */
+  routeTo?: { payeeId: string; organizationId: string };
+  /** The carrier's pay, routed from the person's payment on our Mollie account to the carrier's own, once released. */
+  route?: LoadRoute;
+  /** Money given back through Mollie, to the account the person paid from. */
+  refunds?: LoadRefund[];
+}
+
+/**
+ * The carrier's pay through Mollie: asked (settled in our books, Mollie not yet answered — asked again until it does), routed, or
+ * failed (Mollie refused, or too late: our books undone, and the carrier paid the country's way).
+ */
+export interface LoadRoute {
+  state: 'asked' | 'routed' | 'failed';
+  amount: number;
+  at: string;
+  tries: number;
+  lastTriedAt?: string;
+  routeId?: string;
+  routedAt?: string;
+  why?: string;
+}
+
+/** Money back through Mollie: asked (settled in our books, Mollie not yet answered), sent, or failed (undone: given back by hand). */
+export interface LoadRefund {
+  n: number;
+  amount: number;
+  state: 'asked' | 'sent' | 'failed';
+  at: string;
+  tries: number;
+  lastTriedAt?: string;
+  refundId?: string;
+  why?: string;
 }
 
 /** What the person reads of their payment. Their number only masked. */
@@ -56,6 +94,7 @@ export class LoadPaymentView {
   @ApiPropertyOptional() reference?: string;
   @ApiPropertyOptional() pushed?: boolean;
   @ApiPropertyOptional() owedBack?: number;
+  @ApiPropertyOptional({ enum: ['account', 'number'], description: '2026-11-25 — where money owed back goes: the account paid from (through Mollie), or the number paid from, with the next payout.' }) backTo?: 'account' | 'number';
   @ApiPropertyOptional() why?: string;
 }
 

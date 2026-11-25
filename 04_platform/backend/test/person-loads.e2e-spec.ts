@@ -276,10 +276,15 @@ describe('a person posts a load, over the wire', () => {
     expect(await myRow(kePerson, keLoad)).toMatchObject({ heldUntil: expect.any(String), canReport: true });
     // Held with nothing reported: nothing for staff to decide.
     expect((await queue()).some((r) => r.freightId === keLoad)).toBe(false);
+    // 2026-11-25 — the pay owed is handed, in the same turn, to whoever holds what was paid first (route plan part 9b, step 2).
+    const routed = jest.spyOn(app.get(PersonLoadPayService), 'roadPaid');
     d.releaseDueHolds(Date.now() + 23 * H);
     expect(d.requireFreightPublic(keLoad).driverPaid).toBeFalsy();
+    expect(routed).not.toHaveBeenCalled();
     d.releaseDueHolds(Date.now() + 25 * H);
     expect(d.requireFreightPublic(keLoad).driverPaid).toBe(true);
+    expect(routed).toHaveBeenCalledWith(expect.objectContaining({ freightId: keLoad }), expect.objectContaining({ payeeDid: expect.any(String), entityId: expect.any(String) }), expect.any(Number));
+    routed.mockRestore();
     const after = await myRow(kePerson, keLoad);
     expect([after.heldUntil, after.canReport]).toEqual([undefined, undefined]);
     // Delivered: with nobody of ours any more (R1).

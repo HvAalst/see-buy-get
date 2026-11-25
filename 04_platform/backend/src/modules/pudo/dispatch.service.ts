@@ -457,6 +457,7 @@ export class DispatchService {
       giveBack: (f, charged, why) => ownerOf(f)?.giveBack(f, charged, why),
       refundCarriage: (f, charged, why) => ownerOf(f)?.refundCarriage?.(f, charged, why),
       payerOf: (f) => ownerOf(f)?.payerOf?.(f),
+      roadPaid: (f, payee, amount) => ownerOf(f)?.roadPaid?.(f, payee, amount),
     };
   }
   /**
@@ -4111,6 +4112,8 @@ export class DispatchService {
       // Billed by a company of ours: never owed by a partner where none of ours pays this driver (3a).
       if (this.gate.driverPayout(f.claimedBy, f.lockedPrice, { ours: true }) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
       f.driverPaid = true;
+      // 2026-11-25 — in the same turn it was owed: a load paid first through Mollie pays its carrier there (route plan part 9b, step 2).
+      if (f.driverPayee) this.prepaid?.roadPaid?.(f, f.driverPayee, f.lockedPrice);
     }
   }
 

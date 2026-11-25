@@ -82,6 +82,7 @@ export function MollieForm({ api, back }: { api: AccountApi; back: MollieBack | 
         <>
           <p class="t-body">{t('account.mollie.body')}</p>
           <p class="t-body">{t('account.mollie.fee')}</p>
+          {v.paysLoads ? <p class="t-body">{t('account.mollie.paysLoads')}</p> : null}
           {v.via === 'test_key' ? <Note tone="info" icon="info" title={t('account.mollie.testKeyTitle')} detail={t('account.mollie.testKeyBody')} /> : null}
           {c && !c.lostAt ? (
             <>

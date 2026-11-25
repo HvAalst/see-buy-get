@@ -249,6 +249,8 @@ export interface PrepaidShipper {
   bill(f: Freight, bill: { gross: number; tax: number; provision: number }): boolean;
   /** Give back exactly what was billed: the load went back on the board, or was withdrawn. */
   giveBack(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void;
+  /** 2026-11-25 (route plan part 9b, step 2) — the driver's pay was just owed, to this payee: it may be paid from what was paid first. */
+  roadPaid?(f: Freight, payee: { payeeDid: string; entityId: string }, amount: number): void;
 }
 
 /** One load, by its id and its code: a return and the load its goods were refused on point at each other. */
