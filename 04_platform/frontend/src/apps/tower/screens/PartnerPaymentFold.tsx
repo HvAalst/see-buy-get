@@ -23,6 +23,10 @@ export interface HubPaymentRow {
   phoneEnds: string;
   /** 2026-11-25 — paid to a bank account: phoneEnds is then the account's last three digits. */
   toBank?: boolean;
+  /** 2026-11-26 — asked by a page paid from a QR code (the partner's Mollie account): no phone; its code while it can be paid. */
+  byQr?: boolean;
+  link?: string;
+  qrSvg?: string;
   state: 'asked' | 'paid' | 'failed';
   why?: HubWhy;
   test: boolean;
@@ -117,7 +121,7 @@ export interface PaymentAccountRead {
     liveAt?: string;
     /** 2026-11-26 — the counters' payments: the partner's own Mollie account in its country, connected by the partner or not yet. */
     collectProvider?: HubProviderId;
-    collect?: { connected: boolean; organizationName?: string; testmode?: boolean; canReceivePayments?: boolean; lostAt?: string; connectedBy?: string; connectedAt?: string };
+    collect?: { connected: boolean; organizationName?: string; testmode?: boolean; canReceivePayments?: boolean; lostAt?: string; connectedBy?: string; connectedAt?: string; registrationNumber?: string; sameCompany?: 'yes' | 'no' | 'unknown'; expectedRegistration?: string };
   };
   /** 2026-11-21 — what came in, went back and went out, paid (4e). */
   totals?: { paidIn: number; givenBack: number; paidOut: number };
@@ -143,10 +147,12 @@ const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
 /** Read again this often while a prompt waits, and for no longer than a prompt can wait. */
 const LOOK_EVERY_MS = 3_000;
 const LOOK_FOR_MS = 3 * 60_000;
+/** 2026-11-26 — a page paid from a QR code may be paid for as long as Mollie keeps it open. */
+const LOOK_FOR_QR_MS = 16 * 60_000;
 
 /** Where one payment stands, in words: waiting, paid, or not paid and why. */
 export function paymentState(p: HubPaymentRow, t: Translate): string {
-  if (p.state === 'asked') return t('tower.partner.pay.state.asked');
+  if (p.state === 'asked') return t(p.byQr ? 'tower.partner.pay.state.askedQr' : 'tower.partner.pay.state.asked');
   if (p.state === 'paid') return t('tower.partner.pay.state.paid');
   return p.why ? t('tower.partner.pay.state.failedWhy', { why: t(WHY[p.why]) }) : t('tower.partner.pay.state.failed');
 }
@@ -229,11 +235,15 @@ export function CollectLine({ read, t }: { read: PaymentAccountRead; t: Translat
   const c = a.collect;
   const line = !c?.connected
     ? t('tower.partner.pay.collectNone')
-    : c.lostAt
+    : c.sameCompany === 'no'
+      ? t('tower.partner.pay.collectNotUsed', { name: c.organizationName ?? '', reg: c.registrationNumber ?? '', expected: c.expectedRegistration ?? '' })
+      : c.lostAt
       ? t('tower.partner.pay.collectLost')
       : c.canReceivePayments === false
         ? t('tower.partner.pay.collectChecking')
         : t('tower.partner.pay.collectOn', { name: c.organizationName ?? t(PROVIDER[a.collectProvider]), by: c.connectedBy ?? '', at: c.connectedAt ? when(c.connectedAt) : '' });
+  // 2026-11-26 — whose company it is: the partner's own registration, or what staff check against the contract.
+  const reg = !c?.connected || c.sameCompany === 'no' ? null : c.sameCompany === 'yes' ? t('tower.partner.pay.collectRegOwn', { reg: c.registrationNumber ?? '' }) : c.registrationNumber ? t('tower.partner.pay.collectCheckReg', { reg: c.registrationNumber }) : t('tower.partner.pay.collectNoReg');
   return (
     <>
       <p class="cfield__label">{t('tower.partner.pay.collectTitle')}</p>
@@ -241,6 +251,7 @@ export function CollectLine({ read, t }: { read: PaymentAccountRead; t: Translat
         {line}
         {c?.connected && c.testmode ? <span class="ctag ctag--warn"> {t('tower.partner.pay.test')}</span> : null}
       </p>
+      {reg ? <p class="chint">{reg}</p> : null}
     </>
   );
 }
@@ -254,7 +265,9 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive 
   const pctReady = pct.trim() !== '' && Number.isFinite(pctFigure) && pctFigure >= 0 && pctFigure <= 50;
   const a = read.account;
   const figure = Number(amount);
-  const ready = /^\+\d{9,15}$/.test(phone.replace(/[\s-]/g, '')) && Number.isFinite(figure) && figure >= 1;
+  // 2026-11-26 — on the partner's Mollie account a try is a page paid from a QR code: no phone is asked.
+  const byQr = a.provider === 'mollie';
+  const ready = (byQr || /^\+\d{9,15}$/.test(phone.replace(/[\s-]/g, ''))) && Number.isFinite(figure) && figure >= 1;
   return (
     <>
       <p class="chint">{t('tower.partner.pay.lede')}</p>
@@ -288,11 +301,11 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive 
       {onTry && a.test ? (
         <>
           <p class="cfield__label">{t('tower.partner.pay.tryTitle')}</p>
-          <p class="chint">{t('tower.partner.pay.tryHint')}</p>
+          <p class="chint">{t(byQr ? 'tower.partner.pay.tryHintQr' : 'tower.partner.pay.tryHint')}</p>
           <div class="crow">
-            <input class="cinput cinput--sm" type="tel" inputMode="tel" autoComplete="off" aria-label={t('tower.partner.pay.phone')} placeholder={t('tower.partner.pay.phone')} value={phone} onInput={(e) => setPhone((e.target as HTMLInputElement).value)} />
+            {byQr ? null : <input class="cinput cinput--sm" type="tel" inputMode="tel" autoComplete="off" aria-label={t('tower.partner.pay.phone')} placeholder={t('tower.partner.pay.phone')} value={phone} onInput={(e) => setPhone((e.target as HTMLInputElement).value)} />}
             <input class="cinput cinput--sm" type="number" inputMode="decimal" min={1} step="0.01" aria-label={t('tower.partner.pay.amount', { currency: a.currency })} placeholder={t('tower.partner.pay.amount', { currency: a.currency })} value={amount} onInput={(e) => setAmount((e.target as HTMLInputElement).value)} />
-            <button type="button" class="cbtn cbtn--sm" disabled={!ready || busy} onClick={() => onTry(phone.replace(/[\s-]/g, ''), Math.round(figure * 100) / 100)}>
+            <button type="button" class="cbtn cbtn--sm" disabled={!ready || busy} onClick={() => onTry(byQr ? '' : phone.replace(/[\s-]/g, ''), Math.round(figure * 100) / 100)}>
               {t('tower.partner.pay.tryBtn')}
             </button>
           </div>
@@ -313,10 +326,16 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive 
                   {p.test ? <span class="ctag ctag--quiet">{t('tower.partner.pay.test')}</span> : null}
                 </span>
                 <span class="crow__sub">
-                  {cash(p.amount, p.currency)} · {p.toBank ? t('tower.partner.pay.accountEnds', { ends: p.phoneEnds }) : t('tower.partner.pay.phoneEnds', { ends: p.phoneEnds })} · {when(p.askedAt)}
+                  {cash(p.amount, p.currency)} · {p.byQr ? t('tower.partner.pay.byQr') : p.toBank ? t('tower.partner.pay.accountEnds', { ends: p.phoneEnds }) : t('tower.partner.pay.phoneEnds', { ends: p.phoneEnds })} · {when(p.askedAt)}
                   {p.usedFor ? ` · ${t('tower.partner.pay.forParcel', { parcel: p.usedFor })}` : ''}
                   {p.fee != null ? ` · ${t('tower.partner.pay.feeOn', { amount: cash(p.fee, p.currency) })}` : ''}
                 </span>
+                {p.askedBy && p.byQr && p.state === 'asked' && p.qrSvg ? (
+                  <span class="crow__sub">
+                    <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(p.qrSvg)}`} width={200} height={200} alt={t('tower.partner.pay.tryScan')} style="display:block;max-width:100%;height:auto;background:#fff;margin:8px 0" />
+                    {t('tower.partner.pay.tryScan')}
+                  </span>
+                ) : null}
               </span>
             </div>
           ))}
@@ -347,8 +366,8 @@ export function PartnerPaymentFold({ entityId, load, tryIt, setFee, loadPayouts,
   }, [entityId]);
   // While a prompt waits, read again every few seconds — and never past the time a prompt can wait.
   useEffect(() => {
-    const waiting = (read?.payments ?? []).filter((p) => p.state === 'asked').map((p) => Date.parse(p.askedAt));
-    if (!waiting.length || Date.now() > Math.max(...waiting) + LOOK_FOR_MS) return;
+    const waiting = (read?.payments ?? []).filter((p) => p.state === 'asked').map((p) => Date.parse(p.askedAt) + (p.byQr ? LOOK_FOR_QR_MS : LOOK_FOR_MS));
+    if (!waiting.length || Date.now() > Math.max(...waiting)) return;
     const timer = setTimeout(() => void refresh(), LOOK_EVERY_MS);
     return () => clearTimeout(timer);
   }, [read]);

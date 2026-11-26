@@ -10,7 +10,7 @@ import { ConsoleFold } from '../ConsoleFold';
  * scrutiny on the figures"). On a partner company's own page: each finding of the fixed rules and of the daily AI review, why —
  * in figures — and a "Looked at" with what was found. Nothing here stops a step or holds a payout: it tells staff where to look.
  */
-export type PartnerCheckRule = 'twice' | 'never_held' | 'own_parcels' | 'off_list' | 'volume' | 'money_no_parcel' | 'payout_new_number' | 'paid_beyond_owed' | 'ai';
+export type PartnerCheckRule = 'twice' | 'never_held' | 'own_parcels' | 'off_list' | 'volume' | 'money_no_parcel' | 'payout_new_number' | 'paid_beyond_owed' | 'mollie_account' | 'ai';
 
 export interface PartnerFlagRow {
   flagId: string;
@@ -18,7 +18,7 @@ export interface PartnerFlagRow {
   payeeId: string;
   payeeKind: PartnerOwedRow['payeeKind'];
   lineIds: string[];
-  facts: { work?: PartnerWork; reference?: string; times?: number; amount?: number; listed?: number; currency?: string; day?: string; count?: number; usual?: number; parcels?: string[]; missing?: boolean; owed?: number; changedOn?: string };
+  facts: { work?: PartnerWork; reference?: string; times?: number; amount?: number; listed?: number; currency?: string; day?: string; count?: number; usual?: number; parcels?: string[]; missing?: boolean; owed?: number; changedOn?: string; organizationName?: string; registrationNumber?: string; connectedBy?: string; same?: 'yes' | 'no' | 'unknown' };
   reason?: string;
   severity: 'look' | 'urgent';
   foundAt: string;
@@ -50,6 +50,7 @@ const RULE: Record<PartnerCheckRule, MessageKey> = {
   money_no_parcel: 'tower.partner.checks.rule.money_no_parcel',
   payout_new_number: 'tower.partner.checks.rule.payout_new_number',
   paid_beyond_owed: 'tower.partner.checks.rule.paid_beyond_owed',
+  mollie_account: 'tower.partner.checks.rule.mollie_account',
   ai: 'tower.partner.checks.rule.ai',
 };
 const KIND: Record<PartnerOwedRow['payeeKind'], MessageKey> = { shop: 'tower.partner.kind.shop', hub: 'tower.partner.kind.hub', driver: 'tower.partner.kind.driver', fleet: 'tower.partner.kind.fleet' };
@@ -83,6 +84,11 @@ export function flagWhy(f: PartnerFlagRow, t: Translate): string {
       return t('tower.partner.checks.say.payoutNewNumber', { amount: cash(x.amount, x.currency), day: x.day ?? '', changedOn: x.changedOn ?? '' });
     case 'paid_beyond_owed':
       return t('tower.partner.checks.say.paidBeyondOwed', { amount: cash(x.amount, x.currency), owed: cash(x.owed, x.currency) });
+    // 2026-11-26 — the counters' Mollie account: whose company, by whom; another company's is not used.
+    case 'mollie_account': {
+      const vars = { by: x.connectedBy ?? '', name: x.organizationName ?? '', reg: x.registrationNumber ?? t('tower.partner.checks.noReg'), day: x.day ?? '' };
+      return t(x.same === 'yes' ? 'tower.partner.checks.say.mollieYes' : x.same === 'no' ? 'tower.partner.checks.say.mollieNo' : 'tower.partner.checks.say.mollieUnknown', vars);
+    }
     default:
       return f.reason ?? '';
   }
@@ -120,7 +126,7 @@ export function PartnerChecksBody({ view, t, busy, onLooked, onReview }: { view:
               <span class="crow__body">
                 <span class="crow__top">
                   <span class="crow__name">{t(RULE[f.rule])}</span>
-                  <span class="ctag ctag--quiet">{t(KIND[f.payeeKind])}</span>
+                  {f.rule === 'mollie_account' ? null : <span class="ctag ctag--quiet">{t(KIND[f.payeeKind])}</span>}
                   {f.severity === 'urgent' ? <span class="ctag ctag--warn">{t('tower.partner.checks.urgent')}</span> : null}
                 </span>
                 <span class="crow__sub">{flagWhy(f, t)}</span>
@@ -158,7 +164,7 @@ export function PartnerChecksBody({ view, t, busy, onLooked, onReview }: { view:
                 <span class="crow__body">
                   <span class="crow__top">
                     <span class="crow__name">{t(RULE[f.rule])}</span>
-                    <span class="ctag ctag--quiet">{t(KIND[f.payeeKind])}</span>
+                    {f.rule === 'mollie_account' ? null : <span class="ctag ctag--quiet">{t(KIND[f.payeeKind])}</span>}
                   </span>
                   <span class="crow__sub">{flagWhy(f, t)}</span>
                   {f.looked ? (

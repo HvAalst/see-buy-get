@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
+import type { MolliePartnerChange } from '../../foundation/mollie/mollie.types';
+import { MailService } from '../../foundation/mail/mail.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { randomBytes } from 'crypto';
@@ -117,8 +120,35 @@ export class PartnerMemberService {
     private readonly entities: EntityService,
     private readonly persons: PersonService,
     private readonly auth: AuthService,
+    // 2026-11-26 — every member told when the counters' Mollie account is connected or disconnected.
+    @Optional() private readonly mollie?: MollieConnectService,
+    @Optional() private readonly mail?: MailService,
   ) {
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
+    this.mollie?.onPartnerChange((c) => this.tellMollieChange(c));
+  }
+
+  /**
+   * 2026-11-26 — THE COUNTERS' MOLLIE ACCOUNT CHANGED: every member who joined is told by email — who did it, and which company's
+   * account it is now — so a member who connected an account that is not the company's own is seen at once. Never a text.
+   */
+  private tellMollieChange(c: MolliePartnerChange): void {
+    const entity = this.entities.get(c.entityId);
+    const org = c.organization?.name ? `${c.organization.name}${c.organization.registrationNumber ? `, registration ${c.organization.registrationNumber}` : ''}` : 'a Mollie account';
+    const headline = c.change === 'connected' ? `${entity.name}: the counters' Mollie account was connected` : `${entity.name}: the counters' Mollie account was disconnected`;
+    const what = c.change === 'connected' ? `${c.by} connected ${org}. From now on the money your counters take goes into it.` : `${c.by} disconnected ${org}. Your counters take test money until an account is connected again.`;
+    const next = c.change === 'connected' ? 'If that is not your company’s own account, disconnect it in the Partner app, under Money, and tell SeeBuyGet straight away.' : 'If that was not meant, connect your company’s own account again in the Partner app, under Money.';
+    for (const m of this.members.values()) {
+      if (m.entityId !== c.entityId || !m.personDid || m.removedAt || !m.joinedAt) continue;
+      let address: string | undefined;
+      try {
+        const person = this.persons.findByDid(m.personDid);
+        address = person ? this.persons.emailOf(person) : undefined;
+      } catch {
+        address = undefined;
+      }
+      if (address) void this.mail?.send('account-safety', { address }, { headline, what, next, when: c.at }).catch(() => false);
+    }
   }
 
   /* ------------------------------------------------------------------ our staff -- */

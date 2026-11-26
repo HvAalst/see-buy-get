@@ -19,6 +19,14 @@ export const MOLLIE_SCOPES = ['payments.read', 'payments.write', 'profiles.read'
 export const MOLLIE_PARTNER_SCOPES = [...MOLLIE_SCOPES, 'refunds.read', 'refunds.write'] as const;
 /** Where a return from Mollie's sign-in goes back to: the Driver app, the Fleet app, or (2026-11-26) the Partner app. */
 export type MollieBackTo = 'driver' | 'fleet' | 'partner';
+/** 2026-11-26 — a partner's Mollie account connected or disconnected: by whom, and what it is now. */
+export interface MolliePartnerChange {
+  entityId: string;
+  change: 'connected' | 'disconnected';
+  by: string;
+  organization?: MollieOrganization;
+  at: string;
+}
 
 /** How a payment straight to the carrier is watched, one way per country: Mollie in the Netherlands (the owner's D2). */
 export type DirectPayWay = 'mollie';
@@ -145,8 +153,16 @@ export class MollieConnectionView {
  * in its country (the European Union), and if so whether it is connected. `country`: payments in go another way there; `off`: Mollie
  * is not set up on this server yet.
  */
+export class MollieNotYoursView {
+  @ApiPropertyOptional() organizationName?: string;
+  @ApiPropertyOptional() registrationNumber?: string;
+  @ApiPropertyOptional({ description: 'The partner’s own registration number, as its record has it.' }) expected?: string;
+}
+
 export class MolliePartnerView {
   @ApiProperty() available: boolean;
+  /** 2026-11-26 — connected to another company than the partner's own (its registration number): not used. */
+  @ApiPropertyOptional({ type: MollieNotYoursView }) notYours?: MollieNotYoursView;
   @ApiPropertyOptional({ enum: ['country', 'off'] }) why?: 'country' | 'off';
   @ApiPropertyOptional({ enum: ['oauth', 'test_key'] }) via?: MollieVia;
   @ApiPropertyOptional({ type: MollieConnectedView }) connected?: MollieConnectedView;

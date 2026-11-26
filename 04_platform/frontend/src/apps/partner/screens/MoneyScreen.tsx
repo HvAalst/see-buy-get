@@ -182,6 +182,7 @@ export function CounterPaymentsSection({ view, back, busy, error, onConnect, onD
               <span class="crow__sub">{when(c.connectedAt)}</span>
             </span>
           </div>
+          {view.notYours ? <p class="cerr">{t('partner.app.mollie.notYours', { name: view.notYours.organizationName ?? '', reg: view.notYours.registrationNumber ?? '', expected: view.notYours.expected ?? '' })}</p> : null}
           {c.lostAt ? <p class="cerr">{t('partner.app.mollie.lost')}</p> : c.canReceivePayments === false ? <p class="chint">{t('partner.app.mollie.checking')}</p> : null}
           {c.lostAt ? (
             <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={onConnect}>

@@ -17,6 +17,7 @@ import { FeeInvoiceList, FeeInvoiceService } from './fee-invoice.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
+import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 
 /** Mollie's notice: a payment's id, form-encoded, and nothing else. */
 export class MollieWebhookDto {
@@ -43,6 +44,8 @@ export class MollieController {
     private readonly feeInvoices: FeeInvoiceService,
     // 2026-11-21 — a Send-app booking paid online (5a): the same notice names its payment.
     @Optional() private readonly bookings?: BookingPayService,
+    // 2026-11-26 — and a partner counter's payment on the partner's own Mollie account.
+    @Optional() private readonly hub?: PaymentHubService,
   ) {}
 
   /** 2026-11-20 — the invoices for our fee on this carrier's payments by Mollie, one a month (part 2c): newest first. */
@@ -78,7 +81,10 @@ export class MollieController {
   @Post('webhook')
   async webhook(@Body() dto: MollieWebhookDto): Promise<{ ok: true }> {
     // A load paid direct, or a booking paid online (5a): each looks after its own and leaves the other's.
-    if (dto?.id && !(await this.bookings?.onWebhook(dto.id).catch(() => false))) await this.direct.onWebhook(dto.id);
+    if (dto?.id && !(await this.bookings?.onWebhook(dto.id).catch(() => false))) {
+      // 2026-11-26 — or a partner counter's payment, on the partner's own account (the payment hub).
+      if (!(await this.hub?.onMollieNotice(dto.id).catch(() => false))) await this.direct.onWebhook(dto.id);
+    }
     return { ok: true };
   }
 

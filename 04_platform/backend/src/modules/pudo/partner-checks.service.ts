@@ -13,6 +13,8 @@ import { LISTED_AT, PARTNER_WORKS, PartnerLedgerService, type PartnerOwedLine, t
 import { PaymentHubService } from '../../foundation/payment-hub/payment-hub.service';
 import { PartnerPayoutService } from './partner-payout.service';
 import { PayoutNumberService } from './payout-number.service';
+import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
+import type { SameCompany } from '../../foundation/payment-hub/same-company';
 
 /**
  * 2026-11-20 — CHECKS ON THE PARTNER'S FIGURES (the payments plan, 3b; the owner: "We also need AI anti fraud scrutiny on the
@@ -21,7 +23,7 @@ import { PayoutNumberService } from './payout-number.service';
  * then once a day by an AI review of the week's figures, which sees tokens in place of names, phone numbers and ids. Each
  * finding says why, in figures, and waits for our staff to look; nothing here stops a step, holds a payout or moves money.
  */
-export const PARTNER_CHECK_RULES = ['twice', 'never_held', 'own_parcels', 'off_list', 'volume', 'money_no_parcel', 'payout_new_number', 'paid_beyond_owed', 'ai'] as const;
+export const PARTNER_CHECK_RULES = ['twice', 'never_held', 'own_parcels', 'off_list', 'volume', 'money_no_parcel', 'payout_new_number', 'paid_beyond_owed', 'mollie_account', 'ai'] as const;
 export type PartnerCheckRule = (typeof PARTNER_CHECK_RULES)[number];
 export type PartnerReviewWhy = 'refused' | 'cut_short' | 'unreadable' | 'unreachable';
 
@@ -71,6 +73,11 @@ export interface PartnerFlagFacts {
   owed?: number;
   /** 4e — the day the hand's payout number was changed. */
   changedOn?: string;
+  /** 2026-11-26 — the counters' Mollie account: its company, its registration, who connected it, and whether it is the partner's own. */
+  organizationName?: string;
+  registrationNumber?: string;
+  connectedBy?: string;
+  same?: SameCompany;
 }
 
 export interface PartnerFlag {
@@ -384,6 +391,10 @@ export class PartnerFlagFactsView {
   @ApiPropertyOptional() missing?: boolean;
   @ApiPropertyOptional({ description: 'What the steps owed the hand come to (4e).' }) owed?: number;
   @ApiPropertyOptional({ description: 'The day the hand’s payout number was changed (4e).' }) changedOn?: string;
+  @ApiPropertyOptional({ description: '2026-11-26 — the counters’ Mollie account: its company.' }) organizationName?: string;
+  @ApiPropertyOptional({ description: '…its registration number, as Mollie gives it.' }) registrationNumber?: string;
+  @ApiPropertyOptional({ description: '…who connected it, by name.' }) connectedBy?: string;
+  @ApiPropertyOptional({ enum: ['yes', 'no', 'unknown'], description: '…whether it is the partner’s own company (no: not used).' }) same?: SameCompany;
 }
 
 export class PartnerFlagLookedView {
@@ -469,7 +480,13 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
     @Optional() private readonly hub?: PaymentHubService,
     @Optional() private readonly payouts?: PartnerPayoutService,
     @Optional() private readonly numbers?: PayoutNumberService,
-  ) {}
+    // 2026-11-26 — the counters' Mollie account, checked the moment it is connected.
+    @Optional() private readonly mollie?: MollieConnectService,
+  ) {
+    this.mollie?.onPartnerChange((c) => {
+      if (c.change === 'connected') this.check(c.entityId);
+    });
+  }
 
   onApplicationBootstrap(): void {
     void this.due().catch((err) => this.logger.warn(`partner checks: ${(err as Error).message}`));
@@ -499,7 +516,27 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
   /** The fixed rules over the partner's last month. Returns what was found new, or found again with something new in it. */
   check(partnerEntityId: string, now: number = Date.now()): PartnerFlag[] {
     const lines = this.ledger.linesOf(partnerEntityId, now - 30 * DAY_MS);
-    return [...findFlags(lines, this.world(), now), ...this.moneyFindings(partnerEntityId, now)].flatMap((f) => this.keep(partnerEntityId, f, now) ?? []);
+    return [...findFlags(lines, this.world(), now), ...this.moneyFindings(partnerEntityId, now), ...this.mollieFindings(partnerEntityId)].flatMap((f) => this.keep(partnerEntityId, f, now) ?? []);
+  }
+
+  /**
+   * 2026-11-26 — THE COUNTERS' MOLLIE ACCOUNT, for our staff to check, once per connection: which company, its registration, who
+   * connected it. Urgent where it is another company's (and so not used); to look at otherwise — against the partner's contract.
+   */
+  private mollieFindings(partnerEntityId: string): Finding[] {
+    const c = this.hub?.collectCheck?.(partnerEntityId);
+    if (!c) return [];
+    return [
+      {
+        key: `mollie_account|${c.connectedAt}`,
+        rule: 'mollie_account',
+        payeeId: partnerEntityId,
+        payeeKind: 'shop',
+        lineIds: [],
+        facts: { ...(c.organizationName ? { organizationName: c.organizationName } : {}), ...(c.registrationNumber ? { registrationNumber: c.registrationNumber } : {}), connectedBy: c.connectedBy, day: dayOf(c.connectedAt), same: c.same },
+        severity: c.same === 'no' ? 'urgent' : 'look',
+      },
+    ];
   }
 
   /** 4e — the money checks over the partner's account, payouts and every step it ever owed. */
@@ -530,7 +567,7 @@ export class PartnerChecksService implements OnApplicationBootstrap, OnModuleDes
     if (!lines.length) return record({ state: 'done', flags: 0, rows: 0 });
     const amounts = this.entities.amountsFor(partnerEntityId);
     const list = Object.fromEntries(PARTNER_WORKS.flatMap((w) => (LISTED_AT[w] ? [[w, amounts[LISTED_AT[w] as keyof typeof amounts] as number]] : [])));
-    const raised = [...this.flags.values()].filter((f) => f.partnerEntityId === partnerEntityId && !f.looked && f.rule !== 'ai');
+    const raised = [...this.flags.values()].filter((f) => f.partnerEntityId === partnerEntityId && !f.looked && f.rule !== 'ai' && f.rule !== 'mollie_account');
     const input = reviewInput(lines, raised, list, amounts.currency ?? this.entities.get(partnerEntityId).currency ?? '');
     let reply: ClaudeReply;
     try {

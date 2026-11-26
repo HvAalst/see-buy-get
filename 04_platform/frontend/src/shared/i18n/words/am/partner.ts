@@ -81,6 +81,7 @@ export const words: Record<string, string> = {
   "partner.app.mollie.lost": "Mollie ፈቃዱን መልሶ ወስዷል። እንደገና ያገናኙት፤ እስከዚያው ቆጣሪዎችዎ የሙከራ ገንዘብ ይቀበላሉ።",
   "partner.app.mollie.disconnect": "ያላቅቁ",
   "partner.app.mollie.off": "ይህ በSeeBuyGet ላይ ገና አልተዘጋጀም። ማገናኘት ሲችሉ እናሳውቅዎታለን።",
+  "partner.app.mollie.notYours": "ይህ የMollie ሂሳብ የ{name} ነው፣ ምዝገባ {reg}፣ የድርጅትዎ አይደለም (ምዝገባ {expected})። የድርጅትዎን የራሱን ሂሳብ እስኪያገናኙ ድረስ ቆጣሪዎችዎ የሙከራ ገንዘብ ይቀበላሉ።",
   "partner.app.money.insTitle": "የላኪዎች ክፍያዎች",
   "partner.app.money.insNone": "እስካሁን ምንም ክፍያ የለም።",
   "partner.app.money.state.asked": "በስልኩ ላይ በመጠባበቅ ላይ",

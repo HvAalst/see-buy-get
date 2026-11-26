@@ -22,6 +22,9 @@ export interface MollieHubSource {
   api(): Pick<MollieClient, 'createPayment' | 'getPayment' | 'createRefund' | 'listRefunds' | 'listPayments'>;
 }
 
+/** 2026-11-26 — where Mollie's notices about payments arrive (MollieController.webhook): the one address for all of ours. */
+export const MOLLIE_NOTICE_PATH = '/v1/sbg/mollie/webhook';
+
 /** Where the payer lands after Mollie's checkout: a page saying how the payment went (PaymentHubController). */
 export const HUB_PAID_PAGE_PATH = '/v1/sbg/payment-hub/paid';
 
@@ -73,6 +76,8 @@ export class MollieHubProvider implements HubProvider {
       amount: { currency: req.currency.toUpperCase(), value: req.amount.toFixed(2) },
       description: req.description.slice(0, 255),
       redirectUrl: `${base}${HUB_PAID_PAGE_PATH}/${encodeURIComponent(req.ourRef)}`,
+      // 2026-11-26 — Mollie tells us when the payment changes, on the site's own address (never a laptop's, which it cannot reach).
+      ...(base && !/\/\/(localhost|127\.|\[::1\])/.test(base) ? { webhookUrl: `${base}${MOLLIE_NOTICE_PATH}` } : {}),
       metadata: { ourRef: req.ourRef },
       ...(token.via === 'oauth' ? { profileId: token.profileId } : {}),
       ...testFlag(token),

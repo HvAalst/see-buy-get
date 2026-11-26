@@ -224,6 +224,10 @@ export class CollectConnectionView {
   @ApiPropertyOptional({ description: 'Mollie took the access back: connected again in the Partner app.' }) lostAt?: string;
   @ApiPropertyOptional() connectedBy?: string;
   @ApiPropertyOptional() connectedAt?: string;
+  /** 2026-11-26 — the Mollie organization's registration number, and whether it is the partner's own (same-company.ts). */
+  @ApiPropertyOptional() registrationNumber?: string;
+  @ApiPropertyOptional({ enum: ['yes', 'no', 'unknown'], description: 'no: another company — not used; unknown: check it against the partner’s contract.' }) sameCompany?: 'yes' | 'no' | 'unknown';
+  @ApiPropertyOptional({ description: 'The partner’s own registration number, as its record has it.' }) expectedRegistration?: string;
 }
 
 export class PaymentAccountView {
@@ -278,10 +282,11 @@ export class PaymentAccountRead {
 
 /** A try of the account by our staff: a payment prompt to a phone, for an amount. */
 export class TryPaymentDto {
-  @ApiProperty({ description: 'The phone the prompt goes to, with its country code (+251…).', example: '+251911000123' })
+  @ApiPropertyOptional({ description: 'The phone the prompt goes to, with its country code (+251…). None on an account paid from a QR code (2026-11-26).', example: '+251911000123' })
+  @IsOptional()
   @IsString()
   @Matches(/^\+\d{9,15}$/, { message: 'Give the whole phone number with its country code, starting with +' })
-  phone: string;
+  phone?: string;
 
   @ApiProperty({ description: 'How much, in the account’s money.', example: 250 })
   @IsNumber({ maxDecimalPlaces: 2 })

@@ -11,6 +11,7 @@ import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { RevolutProvider } from './revolut.provider';
 import { StandInProvider } from './stand-in.provider';
 import { MollieHubProvider } from './mollie.provider';
+import { sameCompany, type SameCompany } from './same-company';
 import { MollieConnectService } from '../mollie/mollie-connect.service';
 import { qrSvgGroup } from '../label/qr';
 import { escapeHtml } from '../mail/mail.blocks';
@@ -34,8 +35,13 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  */
 export const OUT_ASKED_EVERY_MS = 30_000;
 export const OUT_ASKED_LATER_EVERY_MS = 15 * 60_000;
-export function askEveryMs(p: Pick<HubPayment, 'kind' | 'askedAt'>, now: number): number {
-  if (p.kind === 'in') return 0;
+/** 2026-11-26 — a page paid from a QR code: Mollie tells us when it changes (its notice); asked by the sweep only every half minute. */
+export const QR_ASKED_EVERY_MS = 30_000;
+/** …and by a counter reading it, at most this often: in between, what was last heard is said. */
+export const QR_SETTLE_AGAIN_MS = 15_000;
+
+export function askEveryMs(p: Pick<HubPayment, 'kind' | 'askedAt' | 'byQr' | 'providerRef'>, now: number): number {
+  if (p.kind === 'in') return p.byQr && p.providerRef ? QR_ASKED_EVERY_MS : 0;
   return now - Date.parse(p.askedAt) < 10 * 60_000 ? OUT_ASKED_EVERY_MS : OUT_ASKED_LATER_EVERY_MS;
 }
 
@@ -67,6 +73,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   private refundsLookedAt = 0;
   /** When the sweep last asked about each payment still on its way (askEveryMs). */
   private readonly lastAsked = new Map<string, number>();
+  /** 2026-11-26 — when a page paid from a QR code was last asked of its provider, by anyone. */
+  private readonly lastHeard = new Map<string, number>();
 
   constructor(
     private readonly entities: EntityService,
@@ -106,6 +114,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       // can take payments on it, and the access was not taken back. Its token is the adapter's to fetch: no key is opened here.
       const c = collectProviderFor(entity.jurisdiction) === 'mollie' && this.providers.has('mollie') ? this.mollie?.connection(ownerEntityId) : undefined;
       if (!c || c.lostAt || c.canReceivePayments === false) return standIn;
+      // 2026-11-26 — never another company's account: its registration is not the partner's (same-company.ts).
+      if (sameCompany(entity.record?.registrationNumber, c.organization) === 'no') return standIn;
       return { accountId: ownerEntityId, currency, keys: {}, live: !c.testmode, provider: 'mollie' };
     }
     const chosen = payoutProviderFor(entity.jurisdiction);
@@ -262,10 +272,13 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   }
 
   /** Where a waiting prompt stands, asked of its provider; one waiting too long has lapsed. Settled once, never changed after. */
-  async settle(paymentId: string, now: number = Date.now()): Promise<HubPayment> {
+  async settle(paymentId: string, now: number = Date.now(), opts: { heard?: boolean } = {}): Promise<HubPayment> {
     const p = this.payments.get(paymentId);
     if (!p) throw new GlosError('NOT_FOUND', `No payment ${paymentId}`);
     if (p.state !== 'asked') return p;
+    // 2026-11-26 — a page Mollie tells us about (its notice: `heard`) is not asked again and again by every counter reading it.
+    if (p.byQr && p.providerRef && !opts.heard && now - (this.lastHeard.get(paymentId) ?? -Infinity) < QR_SETTLE_AGAIN_MS) return p;
+    if (p.byQr) this.lastHeard.set(paymentId, now);
     // A prompt nobody answers lapses; money sent out, or given back, never does by itself — taken for failed, it would be
     // sent again while it may have gone. Its provider is asked until it answers.
     // 2026-11-26 — a page the payer opens (a QR code) lapses by its provider's word, never by our clock: it may be paid until the
@@ -518,6 +531,34 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     return `<!doctype html><html lang="${lang ?? 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeeBuyGet</title><style>body{font-family:system-ui,sans-serif;margin:0;padding:48px 20px;background:#f7f7f8;color:#1a1a1a;text-align:center}main{max-width:420px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 20px}p{font-size:18px;line-height:1.45;margin:0 0 12px}.en{color:#555;font-size:16px}.ref{color:#777;font-size:14px}</style></head><body><main>${ref}${own}<p class="${lang ? 'en' : ''}" lang="en">${escapeHtml(said.en)}</p></main></body></html>`;
   }
 
+  /**
+   * 2026-11-26 — MOLLIE'S NOTICE about a payment it made for a counter: only its id, never its status and never signed — so Mollie is
+   * asked, on the partner's own token, and that answer is what counts. An id that is not one of ours is ignored. True when it was ours.
+   */
+  async onMollieNotice(providerRef: string, now: number = Date.now()): Promise<boolean> {
+    const p = [...this.payments.values()].find((x) => x.provider === 'mollie' && x.kind === 'in' && x.providerRef === providerRef);
+    if (!p) return false;
+    await this.settle(p.paymentId, now, { heard: true }).catch(() => p);
+    return true;
+  }
+
+  /**
+   * 2026-11-26 — the partner's counters' Mollie account as our staff check it: which company, its registration, by whom and when, and
+   * whether it is the partner's own. Nothing where none is connected.
+   */
+  collectCheck(ownerEntityId: string): { organizationName?: string; registrationNumber?: string; connectedBy: string; connectedAt: string; same: SameCompany } | undefined {
+    const c = this.mollie?.connection(ownerEntityId);
+    if (!c) return undefined;
+    const expected = this.entities.get(ownerEntityId).record?.registrationNumber;
+    return {
+      ...(c.organization?.name ? { organizationName: c.organization.name } : {}),
+      ...(c.organization?.registrationNumber ? { registrationNumber: c.organization.registrationNumber } : {}),
+      connectedBy: c.connectedBy,
+      connectedAt: c.connectedAt,
+      same: sameCompany(expected, c.organization),
+    };
+  }
+
   /** 2026-11-26 — how the money a partner's counters take is asked: by a phone, or by a QR code (a page the payer opens). */
   collectsBy(ownerEntityId: string): 'phone' | 'qr' {
     return PROVIDER_ASKS_BY[this.account(ownerEntityId).provider];
@@ -529,6 +570,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     if (!provider || !this.providers.has(provider)) return {};
     const c = this.mollie?.connection(ownerEntityId);
     if (!c) return { collectProvider: provider, collect: { connected: false } };
+    const expected = this.entities.get(ownerEntityId).record?.registrationNumber;
     return {
       collectProvider: provider,
       collect: {
@@ -539,6 +581,9 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
         ...(c.lostAt ? { lostAt: c.lostAt } : {}),
         connectedBy: c.connectedBy,
         connectedAt: c.connectedAt,
+        ...(c.organization?.registrationNumber ? { registrationNumber: c.organization.registrationNumber } : {}),
+        sameCompany: sameCompany(expected, c.organization),
+        ...(expected ? { expectedRegistration: expected } : {}),
       },
     };
   }

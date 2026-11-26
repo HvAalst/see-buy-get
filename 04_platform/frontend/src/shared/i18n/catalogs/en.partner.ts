@@ -83,6 +83,7 @@ export const enPartner = {
   'partner.app.mollie.lost': 'Mollie took the access back. Connect it again; until then your counters take test money.',
   'partner.app.mollie.disconnect': 'Disconnect',
   'partner.app.mollie.off': 'This is not set up on SeeBuyGet yet. We will tell you when you can connect it.',
+  'partner.app.mollie.notYours': 'This Mollie account belongs to {name}, registration {reg}, not to your company (registration {expected}). Your counters take test money until you connect your company’s own account.',
   'partner.app.money.insTitle': 'Senders’ payments',
   'partner.app.money.insNone': 'No payments yet.',
   'partner.app.money.state.asked': 'Waiting on the phone',

@@ -2,7 +2,9 @@ import type { FieldEncryption } from '../data-firewall/field-encryption.service'
 import { STAFF_AREAS } from '../auth/staff-areas.table';
 import { MollieConnectService } from '../mollie/mollie-connect.service';
 import type { MollieConfig } from '../mollie/mollie.types';
-import { PaymentHubService, PROMPT_LAPSES_AFTER_MS } from './payment-hub.service';
+import { askEveryMs, PaymentHubService, PROMPT_LAPSES_AFTER_MS, QR_ASKED_EVERY_MS, QR_SETTLE_AGAIN_MS } from './payment-hub.service';
+import { sameCompany } from './same-company';
+import type { MolliePartnerChange } from '../mollie/mollie.types';
 
 /*
  * 2026-11-26 — MONEY IN THROUGH THE PARTNER'S OWN MOLLIE ACCOUNT (the weakness after route plan part 4b, fixed as recommended; the
@@ -38,7 +40,7 @@ const PARTNER_KE = { entityId: 'partner-ke', name: 'Nairobi Partner Ltd', kind: 
 const T0 = Date.parse('2026-11-26T09:00:00Z');
 const json = (c: Call) => JSON.parse(c.body ?? '{}') as Record<string, unknown>;
 
-function aWorld(opts: { canReceivePayments?: boolean } = {}) {
+function aWorld(opts: { canReceivePayments?: boolean; orgReg?: string; partnerReg?: string } = {}) {
   let status = 'open';
   let refundStatus = 'pending';
   const payments: Array<Record<string, unknown>> = [];
@@ -46,7 +48,7 @@ function aWorld(opts: { canReceivePayments?: boolean } = {}) {
   const mollie = aMollie({
     'POST /oauth2/tokens': () => ({ status: 200, body: { access_token: 'access_bg', refresh_token: 'refresh_bg', expires_in: 3600, token_type: 'bearer' } }),
     'GET /v2/profiles': () => ({ status: 200, body: { _embedded: { profiles: [{ id: 'pfl_bg', name: 'Sofia Partner', status: 'verified' }] } } }),
-    'GET /v2/organizations/me': () => ({ status: 200, body: { id: 'org_bg', name: 'Sofia Partner OOD', address: { country: 'BG' } } }),
+    'GET /v2/organizations/me': () => ({ status: 200, body: { id: 'org_bg', name: 'Sofia Partner OOD', ...(opts.orgReg ? { registrationNumber: opts.orgReg } : {}), address: { country: 'BG' } } }),
     'GET /v2/onboarding/me': () => ({ status: 200, body: { status: 'completed', canReceivePayments: opts.canReceivePayments ?? true } }),
     'POST /v2/payments': (c) => {
       const made = { resource: 'payment', id: `tr_${payments.length + 1}`, status: 'open', amount: json(c).amount, metadata: json(c).metadata, _links: { checkout: { href: `https://mollie.stand-in/checkout/tr_${payments.length + 1}` } } };
@@ -65,19 +67,22 @@ function aWorld(opts: { canReceivePayments?: boolean } = {}) {
   const connect = new MollieConnectService(crypt, APP, mollie.fetchImpl);
   const entities = {
     get: (id: string) => {
-      const e = [PARTNER_BG, PARTNER_KE].find((x) => x.entityId === id);
+      const bg = opts.partnerReg ? { ...PARTNER_BG, record: { registrationNumber: opts.partnerReg } } : PARTNER_BG;
+      const e = [bg, PARTNER_KE].find((x) => x.entityId === id);
       if (!e) throw new Error(`no ${id}`);
       return e;
     },
     amountsFor: () => ({}),
   };
   const hub = new PaymentHubService(entities as never, undefined, undefined, undefined, connect);
+  const changes: MolliePartnerChange[] = [];
+  connect.onPartnerChange((c) => changes.push(c));
   /** The partner's own person connects, through Mollie's sign-in. */
   const connectPartner = async () => {
     const url = new URL(connect.connectPartner(PARTNER_BG.entityId, 'BG', 'Elena Petrova', T0).url!);
     return { url, back: await connect.finish({ code: 'auth_code', state: url.searchParams.get('state') ?? '' }, T0 + 20_000) };
   };
-  return { mollie, connect, hub, connectPartner, setStatus: (s: string) => (status = s), setRefund: (s: string) => (refundStatus = s), payments, refunds };
+  return { mollie, connect, hub, connectPartner, changes, setStatus: (s: string) => (status = s), setRefund: (s: string) => (refundStatus = s), payments, refunds };
 }
 
 describe('the partner connects its own Mollie account, in the Partner app', () => {
@@ -92,7 +97,12 @@ describe('the partner connects its own Mollie account, in the Partner app', () =
     expect(w.connect.partnerView(PARTNER_KE.entityId, 'KE')).toEqual({ available: false, why: 'country' });
     expect(() => w.connect.connectPartner(PARTNER_BG.entityId, 'BG', ' ', T0)).toThrow('Say who connects it');
     // Disconnected: the leave given back, and its counters take test money by phone again.
-    expect(await w.connect.disconnectPartner(PARTNER_BG.entityId, 'BG')).toEqual({ available: true, via: 'oauth' });
+    expect(await w.connect.disconnectPartner(PARTNER_BG.entityId, 'BG', 'Georgi Ivanov', T0 + 40_000)).toEqual({ available: true, via: 'oauth' });
+    // 2026-11-26 — each change told, by whom, with the company: what the members' emails and staff's checks are made from.
+    expect(w.changes).toEqual([
+      { entityId: PARTNER_BG.entityId, change: 'connected', by: 'Elena Petrova', organization: expect.objectContaining({ id: 'org_bg', name: 'Sofia Partner OOD' }), at: new Date(T0 + 20_000).toISOString() },
+      { entityId: PARTNER_BG.entityId, change: 'disconnected', by: 'Georgi Ivanov', organization: expect.objectContaining({ id: 'org_bg' }), at: new Date(T0 + 40_000).toISOString() },
+    ]);
     expect(w.mollie.calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/oauth2/tokens'))).toBe(true);
     expect(w.hub.collectsBy(PARTNER_BG.entityId)).toBe('phone');
   });
@@ -129,6 +139,7 @@ describe('a counter’s payment into the partner’s Mollie account', () => {
       amount: { currency: 'EUR', value: '9.50' },
       description: 'Parcel BG-1, taken in at Magazin Vitosha',
       redirectUrl: `https://seebuyget.test/v1/sbg/payment-hub/paid/${asked.paymentId}`,
+      webhookUrl: 'https://seebuyget.test/v1/sbg/mollie/webhook',
       metadata: { ourRef: asked.paymentId },
       profileId: 'pfl_bg',
       testmode: true,
@@ -149,7 +160,7 @@ describe('a counter’s payment into the partner’s Mollie account', () => {
     // Long past the time a phone prompt lapses: still open at Mollie, so still open here.
     expect((await w.hub.settle(asked.paymentId, T0 + 60_000 + PROMPT_LAPSES_AFTER_MS + 1)).state).toBe('asked');
     w.setStatus('paid');
-    const paid = await w.hub.settle(asked.paymentId, T0 + 60_000 + PROMPT_LAPSES_AFTER_MS + 2);
+    const paid = await w.hub.settle(asked.paymentId, T0 + 60_000 + PROMPT_LAPSES_AFTER_MS + 1 + QR_SETTLE_AGAIN_MS);
     expect(paid).toMatchObject({ state: 'paid' });
     expect(paid.link).toBeUndefined();
     expect((await import('./payment-hub.service')).viewOf(paid).qrSvg).toBeUndefined();
@@ -226,11 +237,74 @@ describe('a counter’s payment into the partner’s Mollie account', () => {
     expect(waiting).toContain('Още не е потвърдено');
     expect(waiting).toContain('Not confirmed yet');
     w.setStatus('paid');
-    const paid = await w.hub.paidPage(asked.paymentId, T0 + 62_000);
+    const paid = await w.hub.paidPage(asked.paymentId, T0 + 61_000 + QR_SETTLE_AGAIN_MS);
     expect(paid).toContain('Платено.');
     expect(paid).toContain('Paid. The counter sees it in a moment.');
     expect(paid).toContain('BG-7');
     expect(paid).not.toContain('9.5');
     expect(await w.hub.paidPage('hp_nobody', T0)).toContain('This link is not known.');
+  });
+});
+
+/*
+ * 2026-11-26 — THE ACCOUNT MUST BE THE PARTNER'S OWN COMPANY'S (the owner: "Go ahead"): any member could connect a Mollie account, a
+ * personal one too. Mollie says the account's registration number; the partner's record says its own. Another company's: never used.
+ * And Mollie tells us when a counter's payment changes (its notice), so the hub asks Mollie far less often.
+ */
+describe('the counters’ Mollie account is the partner’s own company’s', () => {
+  it('compared by registration number, or the VAT number, letters and digits only — another registration is not the partner', () => {
+    expect(sameCompany('BG 204 567 890', { registrationNumber: '204567890' })).toBe('yes');
+    expect(sameCompany('204567890', { vatNumber: 'BG204567890' })).toBe('yes');
+    expect(sameCompany('204567890', { registrationNumber: '999999999', vatNumber: 'BG204567890' })).toBe('yes');
+    expect(sameCompany('204567890', { registrationNumber: '999999999' })).toBe('no');
+    // A VAT number that is another number than the registration (the Netherlands'): not a reason to refuse.
+    expect(sameCompany('12345678', { vatNumber: 'NL123456789B01' })).toBe('unknown');
+    expect(sameCompany(undefined, { registrationNumber: '204567890' })).toBe('unknown');
+    expect(sameCompany('204567890', undefined)).toBe('unknown');
+  });
+
+  it('the partner’s own: used; another company’s: never used, said to staff as such; none on record: used, staff to check', async () => {
+    const own = aWorld({ orgReg: '204567890', partnerReg: 'BG204567890' });
+    await own.connectPartner();
+    expect(own.hub.account(PARTNER_BG.entityId).provider).toBe('mollie');
+    expect(own.hub.collectCheck(PARTNER_BG.entityId)).toMatchObject({ organizationName: 'Sofia Partner OOD', registrationNumber: '204567890', connectedBy: 'Elena Petrova', same: 'yes' });
+
+    const other = aWorld({ orgReg: '999999999', partnerReg: '204567890' });
+    await other.connectPartner();
+    expect(other.hub.account(PARTNER_BG.entityId).provider).toBe('stand-in');
+    expect(other.hub.collectsBy(PARTNER_BG.entityId)).toBe('phone');
+    expect(await other.hub.accountView(PARTNER_BG.entityId, T0 + 30_000)).toMatchObject({ provider: 'stand-in', collect: { connected: true, registrationNumber: '999999999', sameCompany: 'no', expectedRegistration: '204567890' } });
+
+    const unknown = aWorld({ orgReg: '204567890' });
+    await unknown.connectPartner();
+    expect(unknown.hub.account(PARTNER_BG.entityId).provider).toBe('mollie');
+    expect(unknown.hub.collectCheck(PARTNER_BG.entityId)?.same).toBe('unknown');
+    expect(aWorld().hub.collectCheck(PARTNER_BG.entityId)).toBeUndefined();
+  });
+});
+
+describe('Mollie tells us when a counter’s payment changes', () => {
+  it('its notice settles the payment at once, asked of Mollie on the partner’s token; an id not ours is left alone', async () => {
+    const w = aWorld();
+    await w.connectPartner();
+    const asked = await w.hub.collect(PARTNER_BG.entityId, { reference: 'BG-8', amount: 9.5, description: 'Parcel BG-8' }, T0 + 60_000);
+    await w.hub.settle(asked.paymentId, T0 + 61_000);
+    w.setStatus('paid');
+    // Read again by the counter a second later: what was last heard, Mollie not asked again.
+    const gets = () => w.mollie.calls.filter((c) => c.method === 'GET' && c.url.includes('/v2/payments/tr_1')).length;
+    const before = gets();
+    expect((await w.hub.settle(asked.paymentId, T0 + 62_000)).state).toBe('asked');
+    expect(gets()).toBe(before);
+    // Mollie's notice: asked at once, whatever the time.
+    expect(await w.hub.onMollieNotice('tr_1', T0 + 62_500)).toBe(true);
+    expect(w.hub.get(asked.paymentId)).toMatchObject({ state: 'paid' });
+    expect(gets()).toBe(before + 1);
+    expect(await w.hub.onMollieNotice('tr_nobody', T0 + 63_000)).toBe(false);
+  });
+
+  it('the sweep asks Mollie about an open page every half minute, not every five seconds; a phone prompt as before', () => {
+    expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString(), byQr: true, providerRef: 'tr_1' }, T0 + 1)).toBe(QR_ASKED_EVERY_MS);
+    expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString(), byQr: true }, T0 + 1)).toBe(0);
+    expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString() }, T0 + 1)).toBe(0);
   });
 });

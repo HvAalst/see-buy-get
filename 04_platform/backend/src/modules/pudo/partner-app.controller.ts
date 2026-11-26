@@ -4,6 +4,7 @@ import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
 import { MollieConnectStarted, MolliePartnerView } from '../../foundation/mollie/mollie.types';
+import { sameCompany } from '../../foundation/payment-hub/same-company';
 import { auditActor } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -82,7 +83,12 @@ export class PartnerAppController {
   @Get('partner/me/mollie')
   myMollie(@Actor() actor: IntrospectionResult): MolliePartnerView {
     const { entity } = this.members.requireMember(actor);
-    return this.mollie?.partnerView(entity.entityId, entity.jurisdiction) ?? { available: false, why: 'off' };
+    const view = this.mollie?.partnerView(entity.entityId, entity.jurisdiction) ?? { available: false, why: 'off' };
+    // 2026-11-26 — connected to another company than the partner's own: said, with both numbers — its counters do not use it.
+    const org = this.mollie?.connection(entity.entityId)?.organization;
+    const expected = entity.record?.registrationNumber;
+    if (view.connected && sameCompany(expected, org) === 'no') return { ...view, notYours: { ...(org?.name ? { organizationName: org.name } : {}), ...(org?.registrationNumber ? { registrationNumber: org.registrationNumber } : {}), ...(expected ? { expected } : {}) } };
+    return view;
   }
 
   /** Mollie's own sign-in, back to the Partner app; kept by the name of the member who connected it. */
@@ -100,9 +106,9 @@ export class PartnerAppController {
   @Roles('partner')
   @Delete('partner/me/mollie')
   disconnectMollie(@Actor() actor: IntrospectionResult): Promise<MolliePartnerView> {
-    const { entity } = this.members.requireMember(actor);
+    const { entity, member } = this.members.requireMember(actor);
     if (!this.mollie) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
-    return this.mollie.disconnectPartner(entity.entityId, entity.jurisdiction);
+    return this.mollie.disconnectPartner(entity.entityId, entity.jurisdiction, member.name);
   }
 
   /**

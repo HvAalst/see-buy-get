@@ -6,7 +6,7 @@ import { isSandbox } from '../runtime/sandbox';
 import { PersistentMap } from '../store/persistent-map';
 import { customsUnionOf } from '../countries/customs-union';
 import { MollieClient, MollieError, type FetchLike } from './mollie-client';
-import { directPayWayOf, type MollieConfig, type MollieConnectedView, type MollieConnection, type MollieConnectionView, type MollieConnectStarted, type MolliePayee, type MollieReturn, type MollieVia, MOLLIE_PARTNER_SCOPES, MolliePartnerView, type MollieBackTo } from './mollie.types';
+import { directPayWayOf, type MollieConfig, type MollieConnectedView, type MollieConnection, type MollieConnectionView, type MollieConnectStarted, type MolliePayee, type MollieReturn, type MollieVia, MOLLIE_PARTNER_SCOPES, MolliePartnerView, type MollieBackTo, type MolliePartnerChange } from './mollie.types';
 
 export const MOLLIE_CONFIG = 'MOLLIE_CONFIG';
 export const MOLLIE_FETCH = 'MOLLIE_FETCH';
@@ -58,6 +58,8 @@ export class MollieConnectService {
   private readonly client: MollieClient;
   private readonly connections = new PersistentMap<string, MollieConnection>('mollie-connections');
   private readonly states = new PersistentMap<string, { payeeId: string; by: string; back: MollieBackTo; at: string }>('mollie-oauth-states');
+  /** 2026-11-26 — whoever is told when a partner's Mollie account is connected or disconnected (its members; our staff's checks). */
+  private readonly partnerListeners: Array<(c: MolliePartnerChange) => void> = [];
 
   constructor(
     @Optional() private readonly crypt?: FieldEncryption,
@@ -137,6 +139,21 @@ export class MollieConnectService {
     return { available: true, via, ...(c ? { connected: viewOf(c) } : {}) };
   }
 
+  /** 2026-11-26 — be told when a partner's Mollie account is connected or disconnected. */
+  onPartnerChange(listener: (c: MolliePartnerChange) => void): void {
+    this.partnerListeners.push(listener);
+  }
+
+  private toldPartner(c: MolliePartnerChange): void {
+    for (const l of this.partnerListeners) {
+      try {
+        l(c);
+      } catch (err) {
+        this.logger.warn(`a partner's Mollie change could not be told: ${(err as Error).message}`);
+      }
+    }
+  }
+
   /** Mollie's sign-in for the partner, back to the Partner app; with our test key, connected at once (test money). */
   connectPartner(entityId: string, country: string | undefined, by: string, now: number = Date.now()): MollieConnectStarted {
     if (customsUnionOf(country) !== 'EU') throw new GlosError('FORBIDDEN', 'Counter payments go into a Mollie account in the European Union only');
@@ -146,6 +163,7 @@ export class MollieConnectService {
     if (via === 'test_key') {
       const c: MollieConnection = { payeeId: entityId, via, testmode: true, connectedAt: new Date(now).toISOString(), connectedBy: by.trim() };
       this.connections.set(entityId, c);
+      this.toldPartner({ entityId, change: 'connected', by: c.connectedBy, at: c.connectedAt });
       return { connected: viewOf(c) };
     }
     this.prune(now);
@@ -155,10 +173,11 @@ export class MollieConnectService {
   }
 
   /** Disconnected by the partner: the leave given back to Mollie, the connection forgotten. Its counters take test money again. */
-  async disconnectPartner(entityId: string, country: string | undefined): Promise<MolliePartnerView> {
+  async disconnectPartner(entityId: string, country: string | undefined, by: string, now: number = Date.now()): Promise<MolliePartnerView> {
     const c = this.connections.get(entityId);
     if (c?.via === 'oauth' && c.refreshToken) await this.client.revoke(this.open(c.refreshToken), 'refresh_token').catch(() => undefined);
     this.connections.delete(entityId);
+    if (c) this.toldPartner({ entityId, change: 'disconnected', by, ...(c.organization ? { organization: c.organization } : {}), at: new Date(now).toISOString() });
     return this.partnerView(entityId, country);
   }
 
@@ -199,6 +218,7 @@ export class MollieConnectService {
         ...(ready?.dashboardUrl ? { dashboardUrl: ready.dashboardUrl } : {}),
         checkedAt: new Date(now).toISOString(),
       });
+      if (s.back === 'partner') this.toldPartner({ entityId: s.payeeId, change: 'connected', by: s.by, ...(organization?.id ? { organization } : {}), at: new Date(now).toISOString() });
       return { back: s.back, outcome: 'connected' };
     } catch (err) {
       this.logger.warn(`a Mollie sign-in could not be finished: ${(err as Error).message}`);

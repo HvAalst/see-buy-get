@@ -155,6 +155,8 @@ export interface PartnerMollie {
   why?: 'country' | 'off';
   via?: 'oauth' | 'test_key';
   connected?: { via: 'oauth' | 'test_key'; organizationName?: string; testmode: boolean; connectedAt: string; lostAt?: string; canReceivePayments?: boolean };
+  /** 2026-11-26 — another company's account than the partner's own (its registration number): its counters do not use it. */
+  notYours?: { organizationName?: string; registrationNumber?: string; expected?: string };
 }
 
 export interface PartnerClient {

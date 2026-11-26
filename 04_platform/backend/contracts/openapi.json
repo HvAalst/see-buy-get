@@ -94117,6 +94117,27 @@
           "changedOn": {
             "type": "string",
             "description": "The day the hand’s payout number was changed (4e)."
+          },
+          "organizationName": {
+            "type": "string",
+            "description": "2026-11-26 — the counters’ Mollie account: its company."
+          },
+          "registrationNumber": {
+            "type": "string",
+            "description": "…its registration number, as Mollie gives it."
+          },
+          "connectedBy": {
+            "type": "string",
+            "description": "…who connected it, by name."
+          },
+          "same": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "description": "…whether it is the partner’s own company (no: not used)."
           }
         }
       },
@@ -94155,6 +94176,7 @@
               "money_no_parcel",
               "payout_new_number",
               "paid_beyond_owed",
+              "mollie_account",
               "ai"
             ]
           },
@@ -94313,6 +94335,23 @@
           },
           "connectedAt": {
             "type": "string"
+          },
+          "registrationNumber": {
+            "type": "string",
+            "description": "2026-11-26 — the Mollie organization's registration number, and whether it is the partner's own (same-company.ts)."
+          },
+          "sameCompany": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "description": "no: another company — not used; unknown: check it against the partner’s contract."
+          },
+          "expectedRegistration": {
+            "type": "string",
+            "description": "The partner’s own registration number, as its record has it."
           }
         },
         "required": [
@@ -94498,7 +94537,7 @@
           "phone": {
             "type": "string",
             "pattern": "/^\\+\\d{9,15}$/",
-            "description": "The phone the prompt goes to, with its country code (+251…).",
+            "description": "The phone the prompt goes to, with its country code (+251…). None on an account paid from a QR code (2026-11-26).",
             "example": "+251911000123"
           },
           "amount": {
@@ -94510,7 +94549,6 @@
           }
         },
         "required": [
-          "phone",
           "amount"
         ]
       },
@@ -94697,11 +94735,34 @@
           "lines"
         ]
       },
+      "MollieNotYoursView": {
+        "type": "object",
+        "properties": {
+          "organizationName": {
+            "type": "string"
+          },
+          "registrationNumber": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string",
+            "description": "The partner’s own registration number, as its record has it."
+          }
+        }
+      },
       "MolliePartnerView": {
         "type": "object",
         "properties": {
           "available": {
             "type": "boolean"
+          },
+          "notYours": {
+            "description": "2026-11-26 — connected to another company than the partner's own (its registration number): not used.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MollieNotYoursView"
+              }
+            ]
           },
           "why": {
             "type": "string",
