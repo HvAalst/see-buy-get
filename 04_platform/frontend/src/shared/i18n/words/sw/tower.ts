@@ -973,6 +973,7 @@ export const words: Record<string, string> = {
   "tower.partner.pay.collectRegOwn": "Usajili {reg}: wa mshirika mwenyewe.",
   "tower.partner.pay.collectCheckReg": "Ilinganishe na mkataba wa mshirika: Mollie inasema usajili {reg}, na rekodi ya mshirika haina nambari ya usajili.",
   "tower.partner.pay.collectNoReg": "Ilinganishe na mkataba wa mshirika: Mollie haikutoa nambari ya usajili kwa akaunti hii.",
+  "tower.partner.pay.collectNeedsReg": "Akaunti halisi, na hakuna nambari ya usajili kwenye rekodi ya mshirika: kaunta zake hupokea pesa ya majaribio hadi uongeze nambari kwenye rekodi ya kampuni.",
   "tower.partner.pay.state.askedQr": "Inasubiri ukurasa ulipwe",
   "tower.partner.pay.tryHintQr": "Malipo ya pesa ya majaribio kwenye akaunti ya Mollie ya mshirika: msimbo wa kuchanganua unaonekana hapa chini. Lipa kwenye ukurasa wa majaribio wa Mollie.",
   "tower.partner.pay.byQr": "kupitia msimbo wa QR",

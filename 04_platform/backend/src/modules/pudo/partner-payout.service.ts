@@ -1,3 +1,5 @@
+import { NotificationService } from './notification.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { randomBytes } from 'crypto';
@@ -102,7 +104,13 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
     private readonly numbers: PayoutNumberService,
     @Optional() private readonly hub?: PaymentHubService,
     @Optional() private readonly events?: EventBus,
+    // 2026-11-26 — payouts waiting for the partner's account, told in its own bell once a day.
+    @Optional() private readonly entities?: EntityService,
+    @Optional() private readonly notices?: NotificationService,
   ) {}
+
+  /** 2026-11-26 — the days a partner was told its account is short: once a day, however many payouts wait. */
+  private readonly toldShort = new PersistentMap<string, string>('partner-payout-told-short');
 
   onApplicationBootstrap(): void {
     this.timer = setInterval(() => void this.tick().catch((err) => this.logger.warn(`partner payouts: ${(err as Error).message}`)), LOOK_EVERY_MS);
@@ -225,7 +233,28 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
     const next: PartnerPayout = { ...tried, hubPaymentId: paid.paymentId, numberMasked: to.masked };
     if (paid.state === 'paid') return this.save({ ...next, state: 'paid', paidAt: paid.settledAt ?? new Date(now).toISOString(), why: undefined });
     if (paid.state === 'asked') return this.save({ ...next, why: 'unreachable' });
-    return this.save({ ...next, why: paid.why === 'insufficient' ? 'balance' : 'refused' });
+    const waits = this.save({ ...next, why: paid.why === 'insufficient' ? 'balance' : 'refused' });
+    if (waits.why === 'balance') this.tellShort(p.partnerEntityId, now);
+    return waits;
+  }
+
+  /** 2026-11-26 — the partner's account cannot cover its payouts: said in its own bell, once a day, with what waits. */
+  private tellShort(partnerEntityId: string, now: number): void {
+    const day = new Date(now).toISOString().slice(0, 10);
+    const key = `${partnerEntityId}|${day}`;
+    if (!this.notices || !this.entities || this.toldShort.has(key)) return;
+    let did: string;
+    try {
+      did = this.entities.get(partnerEntityId).did;
+    } catch {
+      return;
+    }
+    this.toldShort.set(key, new Date(now).toISOString());
+    const v = this.viewOf(partnerEntityId);
+    const short = [...this.payouts.values()].filter((x) => x.partnerEntityId === partnerEntityId && x.state === 'waiting' && x.why === 'balance');
+    void this.notices
+      .notify(did, { kind: 'partner_money', title: 'Payouts wait: your payout account is short', body: `${short.length} payouts to your people, ${v.currency} ${v.shortAmount.toFixed(2)} in all, wait until your payout account holds enough. They are tried again every hour.`, link: '/?go=money', tag: `short:${key}` })
+      .catch(() => undefined);
   }
 
   /** A partner's payouts: what waits and why, what was paid. Newest first. */

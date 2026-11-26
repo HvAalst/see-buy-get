@@ -144,6 +144,7 @@ export const words: Record<string, string> = {
   "agreement.gate.agree": "ተስማምተው ይቀጥሉ",
   "agreement.gate.signOut": "አሁን አይደለም: ይውጡ",
   "notify.readIt": "ያንብቡት",
+  "notify.sharedPartner": "ይህ የድርጅትዎ የመልእክት ሳጥን ነው፤ በውስጡ ያለ ሁሉ ያንኑ ያነባል። ከእናንተ አንዱ ያነበበው ማሳወቂያ ተነቧል።",
   "notify.markRead": "እንደተነበበ ምልክት ያድርጉ",
   "notify.reply": "ምላሽ ይስጡ",
   "notify.open": "ይክፈቱ",

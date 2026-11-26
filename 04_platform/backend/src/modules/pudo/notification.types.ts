@@ -151,6 +151,11 @@ export const NOTIFICATION_KINDS = [
    */
   'money_in',
   /**
+   * 2026-11-26 — a partner's money, told in its own bell (the Partner app): what a company of ours owes it for a week, that it was
+   * paid, and payouts waiting because its account is short.
+   */
+  'partner_money',
+  /**
    * GOODS A SHIPPER SENT REACHED THE OTHER END.
    *
    * Its own kind rather than folded into `freight_problem`, because it is the only message in this list

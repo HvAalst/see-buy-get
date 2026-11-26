@@ -1059,6 +1059,7 @@ export const enTower = {
   'tower.partner.pay.collectRegOwn': 'Registration {reg}: the partner’s own.',
   'tower.partner.pay.collectCheckReg': 'Check it against the partner’s contract: Mollie says registration {reg}, and the partner’s record has no registration number.',
   'tower.partner.pay.collectNoReg': 'Check it against the partner’s contract: Mollie gave no registration number for it.',
+  'tower.partner.pay.collectNeedsReg': 'A live account, and no registration number on the partner’s record: its counters take test money until you add the number to the company record.',
   'tower.partner.pay.state.askedQr': 'Waiting for the page to be paid',
   'tower.partner.pay.tryHintQr': 'A payment of test money on the partner’s Mollie account: a code to scan appears below. Pay it on Mollie’s test page.',
   'tower.partner.pay.byQr': 'from a QR code',

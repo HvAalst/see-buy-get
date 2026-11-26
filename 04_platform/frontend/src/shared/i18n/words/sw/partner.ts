@@ -82,6 +82,8 @@ export const words: Record<string, string> = {
   "partner.app.mollie.disconnect": "Tenganisha",
   "partner.app.mollie.off": "Hii bado haijawekwa kwenye SeeBuyGet. Tutakuambia utakapoweza kuiunganisha.",
   "partner.app.mollie.notYours": "Akaunti hii ya Mollie ni ya {name}, usajili {reg}, si ya kampuni yako (usajili {expected}). Kaunta zako hupokea pesa ya majaribio hadi uunganishe akaunti ya kampuni yako mwenyewe.",
+  "partner.app.mollie.connectedBy": "Imeunganishwa na {name} tarehe {at}",
+  "partner.app.mollie.needsRegistration": "Nambari ya usajili ya kampuni yako bado haiko kwenye rekodi ya SeeBuyGet. Iombe SeeBuyGet iiongeze: hadi wakati huo kaunta zako hupokea pesa ya majaribio.",
   "partner.app.money.insTitle": "Malipo ya watumaji",
   "partner.app.money.insNone": "Bado hakuna malipo.",
   "partner.app.money.state.asked": "Inasubiri kwenye simu",

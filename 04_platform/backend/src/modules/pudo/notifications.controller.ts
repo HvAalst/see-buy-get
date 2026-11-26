@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Optional, Param, Post, UseGuards } from '@nestjs/common';
+import { PartnerMemberService } from './partner-member.service';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -31,7 +32,11 @@ import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 @Controller('sbg/notifications')
 @UseGuards(BusinessMemberGuard)
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationService) {}
+  constructor(
+    private readonly notifications: NotificationService,
+    // 2026-11-26 — a partner's people: whether they are still in it is asked on every request, as on its other doors.
+    @Optional() private readonly partnerMembers?: PartnerMemberService,
+  ) {}
 
   /** The `applicationServerKey` the browser needs to build a PushSubscription. Public, not a secret. */
   @Public()
@@ -85,6 +90,7 @@ export class NotificationsController {
   @Get('inbox')
   @AtTheCounter()
   inbox(@Actor() actor: IntrospectionResult) {
+    this.stillIn(actor);
     const did = actingDid(actor);
     // 2026-11-02 — the first read of a bell in an app — right after the first sign-in there, or a business's people's
     // next — finds its welcome: what arrives here, and the way to the app's guide. Once per inbox (welcome.ts).
@@ -98,6 +104,7 @@ export class NotificationsController {
   @Post('inbox/:id/read')
   @AtTheCounter()
   markRead(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.stillIn(actor);
     this.notifications.markRead(actingDid(actor), id, readerOf(actor));
     return { ok: true };
   }
@@ -107,6 +114,7 @@ export class NotificationsController {
   @Post('inbox/read-all')
   @AtTheCounter()
   markAllRead(@Actor() actor: IntrospectionResult) {
+    this.stillIn(actor);
     this.notifications.markAllRead(actingDid(actor), readerOf(actor));
     return { ok: true };
   }
@@ -118,10 +126,18 @@ export class NotificationsController {
    */
   private noDeviceFor(actor: IntrospectionResult): void {
     if (actor?.role === 'business') throw new GlosError('FORBIDDEN', 'A business’s notices are read in the Business app, by its own people. They are not sent to a device.');
+    if (actor?.role === 'partner') throw new GlosError('FORBIDDEN', 'A partner’s notices are read in the Partner app, by its own people. They are not sent to a device.');
+  }
+
+  /** 2026-11-26 — a partner's inbox is read only by a person still in it: taken out, refused on the next click. */
+  private stillIn(actor: IntrospectionResult): void {
+    if (actor?.role !== 'partner') return;
+    if (!this.partnerMembers) throw new GlosError('FORBIDDEN', 'This needs a Partner app sign-in');
+    this.partnerMembers.requireMember(actor);
   }
 }
 
 /** An inbox several people share says who read a notice. A person's own inbox has nobody else to name. */
 function readerOf(actor: IntrospectionResult): string | undefined {
-  return actor?.role === 'business' ? actor.actorName : undefined;
+  return actor?.role === 'business' || actor?.role === 'partner' ? actor.actorName : undefined;
 }

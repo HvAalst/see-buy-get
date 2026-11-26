@@ -40,7 +40,7 @@ const PARTNER_KE = { entityId: 'partner-ke', name: 'Nairobi Partner Ltd', kind: 
 const T0 = Date.parse('2026-11-26T09:00:00Z');
 const json = (c: Call) => JSON.parse(c.body ?? '{}') as Record<string, unknown>;
 
-function aWorld(opts: { canReceivePayments?: boolean; orgReg?: string; partnerReg?: string } = {}) {
+function aWorld(opts: { canReceivePayments?: boolean; orgReg?: string; partnerReg?: string; live?: boolean } = {}) {
   let status = 'open';
   let refundStatus = 'pending';
   const payments: Array<Record<string, unknown>> = [];
@@ -64,7 +64,7 @@ function aWorld(opts: { canReceivePayments?: boolean; orgReg?: string; partnerRe
     },
     'GET /v2/payments/tr_1/refunds': () => ({ status: 200, body: { _embedded: { refunds: refunds.map((r) => ({ ...r, status: refundStatus })) } } }),
   });
-  const connect = new MollieConnectService(crypt, APP, mollie.fetchImpl);
+  const connect = new MollieConnectService(crypt, opts.live ? { ...APP, testmode: false } : APP, mollie.fetchImpl);
   const entities = {
     get: (id: string) => {
       const bg = opts.partnerReg ? { ...PARTNER_BG, record: { registrationNumber: opts.partnerReg } } : PARTNER_BG;
@@ -306,5 +306,24 @@ describe('Mollie tells us when a counter’s payment changes', () => {
     expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString(), byQr: true, providerRef: 'tr_1' }, T0 + 1)).toBe(QR_ASKED_EVERY_MS);
     expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString(), byQr: true }, T0 + 1)).toBe(0);
     expect(askEveryMs({ kind: 'in', askedAt: new Date(T0).toISOString() }, T0 + 1)).toBe(0);
+  });
+});
+
+/* 2026-11-26 — REAL MONEY ONLY ONCE THE PARTNER'S REGISTRATION NUMBER IS ON ITS RECORD (the owner: "go ahead"); test money meanwhile. */
+describe('a live Mollie account at the counters', () => {
+  it('waits for the partner’s own registration number on its record; test money does not', async () => {
+    const live = aWorld({ live: true, orgReg: '204567890' });
+    await live.connectPartner();
+    expect(live.hub.account(PARTNER_BG.entityId).provider).toBe('stand-in');
+    expect(await live.hub.accountView(PARTNER_BG.entityId, T0 + 30_000)).toMatchObject({ provider: 'stand-in', collect: { connected: true, testmode: false, needsRegistration: true } });
+
+    const recorded = aWorld({ live: true, orgReg: '204567890', partnerReg: '204567890' });
+    await recorded.connectPartner();
+    expect(recorded.hub.account(PARTNER_BG.entityId)).toMatchObject({ provider: 'mollie', live: true });
+    expect((await recorded.hub.accountView(PARTNER_BG.entityId, T0 + 30_000)).collect).not.toHaveProperty('needsRegistration');
+
+    const test = aWorld({ orgReg: '204567890' });
+    await test.connectPartner();
+    expect(test.hub.account(PARTNER_BG.entityId)).toMatchObject({ provider: 'mollie', live: false });
   });
 });

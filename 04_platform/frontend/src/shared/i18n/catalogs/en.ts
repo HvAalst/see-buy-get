@@ -202,6 +202,7 @@ export const en = {
   'agreement.gate.signOut': 'Not now: sign out',
   // The bell: a notice about a new version of what people agreed to links to the text itself.
   'notify.readIt': 'Read it',
+  'notify.sharedPartner': 'This is your company’s inbox: everybody in it reads the same one. A notice one of you has read is read.',
   // 2026-11-02 — under each notice in the bell (the owner: "I need a 'mark as read' or 'respond' button"): that one marked
   // read without opening it; a chat message answered in its chat; anything else opened where it points.
   'notify.markRead': 'Mark as read',

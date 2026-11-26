@@ -81,6 +81,8 @@ export const words: Record<string, string> = {
   "partner.app.mollie.disconnect": "Прекъснете връзката",
   "partner.app.mollie.off": "Това още не е настроено в SeeBuyGet. Ще ви кажем, когато можете да я свържете.",
   "partner.app.mollie.notYours": "Тази сметка в Mollie е на {name}, регистрация {reg}, а не на вашата фирма (регистрация {expected}). Гишетата ви приемат тестови пари, докато не свържете сметката на собствената си фирма.",
+  "partner.app.mollie.connectedBy": "Свързано от {name} на {at}",
+  "partner.app.mollie.needsRegistration": "Регистрационният номер на вашата фирма още не е в досието на SeeBuyGet. Помолете SeeBuyGet да го добави: дотогава гишетата ви приемат тестови пари.",
   "partner.app.money.insTitle": "Плащания на подателите",
   "partner.app.money.insNone": "Още няма плащания.",
   "partner.app.money.state.asked": "Чака на телефона",

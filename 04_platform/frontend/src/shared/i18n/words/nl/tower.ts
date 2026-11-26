@@ -973,6 +973,7 @@ export const words: Record<string, string> = {
   "tower.partner.pay.collectRegOwn": "Inschrijving {reg}: die van de partner zelf.",
   "tower.partner.pay.collectCheckReg": "Controleer het aan de hand van het contract van de partner: Mollie zegt inschrijving {reg}, en het dossier van de partner heeft geen inschrijvingsnummer.",
   "tower.partner.pay.collectNoReg": "Controleer het aan de hand van het contract van de partner: Mollie gaf er geen inschrijvingsnummer voor.",
+  "tower.partner.pay.collectNeedsReg": "Een echte rekening, en geen inschrijvingsnummer in het dossier van de partner: zijn balies nemen testgeld aan tot je het nummer aan het bedrijfsdossier toevoegt.",
   "tower.partner.pay.state.askedQr": "Wacht tot de pagina betaald is",
   "tower.partner.pay.tryHintQr": "Een betaling met testgeld op de Mollie-rekening van de partner: hieronder verschijnt een code om te scannen. Betaal op de testpagina van Mollie.",
   "tower.partner.pay.byQr": "via een QR-code",

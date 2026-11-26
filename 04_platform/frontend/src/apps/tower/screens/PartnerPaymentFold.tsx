@@ -121,7 +121,7 @@ export interface PaymentAccountRead {
     liveAt?: string;
     /** 2026-11-26 — the counters' payments: the partner's own Mollie account in its country, connected by the partner or not yet. */
     collectProvider?: HubProviderId;
-    collect?: { connected: boolean; organizationName?: string; testmode?: boolean; canReceivePayments?: boolean; lostAt?: string; connectedBy?: string; connectedAt?: string; registrationNumber?: string; sameCompany?: 'yes' | 'no' | 'unknown'; expectedRegistration?: string };
+    collect?: { connected: boolean; organizationName?: string; testmode?: boolean; canReceivePayments?: boolean; lostAt?: string; connectedBy?: string; connectedAt?: string; registrationNumber?: string; sameCompany?: 'yes' | 'no' | 'unknown'; expectedRegistration?: string; needsRegistration?: boolean };
   };
   /** 2026-11-21 — what came in, went back and went out, paid (4e). */
   totals?: { paidIn: number; givenBack: number; paidOut: number };
@@ -252,6 +252,7 @@ export function CollectLine({ read, t }: { read: PaymentAccountRead; t: Translat
         {c?.connected && c.testmode ? <span class="ctag ctag--warn"> {t('tower.partner.pay.test')}</span> : null}
       </p>
       {reg ? <p class="chint">{reg}</p> : null}
+      {c?.connected && c.needsRegistration && c.sameCompany !== 'no' ? <p class="cerr">{t('tower.partner.pay.collectNeedsReg')}</p> : null}
     </>
   );
 }

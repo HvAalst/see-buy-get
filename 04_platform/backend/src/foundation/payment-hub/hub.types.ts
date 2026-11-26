@@ -228,6 +228,7 @@ export class CollectConnectionView {
   @ApiPropertyOptional() registrationNumber?: string;
   @ApiPropertyOptional({ enum: ['yes', 'no', 'unknown'], description: 'no: another company — not used; unknown: check it against the partner’s contract.' }) sameCompany?: 'yes' | 'no' | 'unknown';
   @ApiPropertyOptional({ description: 'The partner’s own registration number, as its record has it.' }) expectedRegistration?: string;
+  @ApiPropertyOptional({ description: '2026-11-26 — a live account, and no registration number on the partner’s record: not used for real money until it is.' }) needsRegistration?: boolean;
 }
 
 export class PaymentAccountView {

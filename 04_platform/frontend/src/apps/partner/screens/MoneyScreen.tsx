@@ -179,9 +179,10 @@ export function CounterPaymentsSection({ view, back, busy, error, onConnect, onD
                 <span class="crow__name">{c.organizationName ? t('partner.app.mollie.connected', { name: c.organizationName }) : t('partner.app.mollie.connectedPlain')}</span>
                 {c.testmode ? <span class="ctag ctag--warn">{t('partner.app.mollie.test')}</span> : null}
               </span>
-              <span class="crow__sub">{when(c.connectedAt)}</span>
+              <span class="crow__sub">{view.connectedBy ? t('partner.app.mollie.connectedBy', { name: view.connectedBy, at: when(c.connectedAt) }) : when(c.connectedAt)}</span>
             </span>
           </div>
+          {view.needsRegistration && !view.notYours ? <p class="cerr">{t('partner.app.mollie.needsRegistration')}</p> : null}
           {view.notYours ? <p class="cerr">{t('partner.app.mollie.notYours', { name: view.notYours.organizationName ?? '', reg: view.notYours.registrationNumber ?? '', expected: view.notYours.expected ?? '' })}</p> : null}
           {c.lostAt ? <p class="cerr">{t('partner.app.mollie.lost')}</p> : c.canReceivePayments === false ? <p class="chint">{t('partner.app.mollie.checking')}</p> : null}
           {c.lostAt ? (

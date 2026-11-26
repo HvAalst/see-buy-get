@@ -9,7 +9,7 @@
  * bell, and that a tap opens where it is acted on. Its link opens the app's guide to getting the most out of it (home
  * screen, notifications, battery) — `/?guide=1`, read in the apps by shared/launch.ts.
  */
-export type WelcomeApp = 'business' | 'driver' | 'shop' | 'hub' | 'store' | 'fleet' | 'send';
+export type WelcomeApp = 'business' | 'driver' | 'shop' | 'hub' | 'store' | 'fleet' | 'send' | 'partner';
 
 const TAP = 'Tap one and it opens where you act on it.';
 
@@ -38,6 +38,11 @@ export const WELCOME: Record<WelcomeApp, { title: string; body: string }> = {
     title: 'Your fleet’s notices arrive here',
     body: `Your drivers, runs, orders and vehicles: each is told here. ${TAP}`,
   },
+  // 2026-11-26 — the Partner app's bell.
+  partner: {
+    title: 'Your company’s notices arrive here',
+    body: `What SeeBuyGet owes you each week and when it is paid, payouts waiting for your account, and changes to your counters’ Mollie account: each is told here. ${TAP}`,
+  },
   send: {
     title: 'Your notices arrive here',
     body: `Your parcels — on their way, ready to collect, or needing you: each is told here. ${TAP}`,
@@ -64,6 +69,8 @@ export function welcomeAppOf(role: string | undefined): WelcomeApp | null {
       return 'fleet';
     case 'consumer':
       return 'send';
+    case 'partner':
+      return 'partner';
     default:
       return null;
   }

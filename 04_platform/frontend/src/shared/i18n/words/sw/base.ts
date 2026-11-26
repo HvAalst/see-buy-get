@@ -144,6 +144,7 @@ export const words: Record<string, string> = {
   "agreement.gate.agree": "Kubali na uendelee",
   "agreement.gate.signOut": "Si sasa: toka",
   "notify.readIt": "Isome",
+  "notify.sharedPartner": "Hiki ni kisanduku cha kampuni yako: kila mtu ndani yake husoma kilekile. Taarifa iliyosomwa na mmoja wenu imesomwa.",
   "notify.markRead": "Weka kuwa imesomwa",
   "notify.reply": "Jibu",
   "notify.open": "Fungua",

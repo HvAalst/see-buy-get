@@ -11,7 +11,7 @@ import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { RevolutProvider } from './revolut.provider';
 import { StandInProvider } from './stand-in.provider';
 import { MollieHubProvider } from './mollie.provider';
-import { sameCompany, type SameCompany } from './same-company';
+import { normaliseRegistration, sameCompany, type SameCompany } from './same-company';
 import { MollieConnectService } from '../mollie/mollie-connect.service';
 import { qrSvgGroup } from '../label/qr';
 import { escapeHtml } from '../mail/mail.blocks';
@@ -116,6 +116,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       if (!c || c.lostAt || c.canReceivePayments === false) return standIn;
       // 2026-11-26 — never another company's account: its registration is not the partner's (same-company.ts).
       if (sameCompany(entity.record?.registrationNumber, c.organization) === 'no') return standIn;
+      // …and real money only once the partner's own registration number is on its record: until then, test money (the owner: "go ahead").
+      if (!c.testmode && !normaliseRegistration(entity.record?.registrationNumber)) return standIn;
       return { accountId: ownerEntityId, currency, keys: {}, live: !c.testmode, provider: 'mollie' };
     }
     const chosen = payoutProviderFor(entity.jurisdiction);
@@ -584,6 +586,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
         ...(c.organization?.registrationNumber ? { registrationNumber: c.organization.registrationNumber } : {}),
         sameCompany: sameCompany(expected, c.organization),
         ...(expected ? { expectedRegistration: expected } : {}),
+        ...(!c.testmode && !normaliseRegistration(expected) ? { needsRegistration: true } : {}),
       },
     };
   }

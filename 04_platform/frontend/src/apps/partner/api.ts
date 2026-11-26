@@ -157,6 +157,10 @@ export interface PartnerMollie {
   connected?: { via: 'oauth' | 'test_key'; organizationName?: string; testmode: boolean; connectedAt: string; lostAt?: string; canReceivePayments?: boolean };
   /** 2026-11-26 — another company's account than the partner's own (its registration number): its counters do not use it. */
   notYours?: { organizationName?: string; registrationNumber?: string; expected?: string };
+  /** 2026-11-26 — a live account, and the company's registration number not on SeeBuyGet's record: real money waits until it is. */
+  needsRegistration?: boolean;
+  /** …and who connected it, by name. */
+  connectedBy?: string;
 }
 
 export interface PartnerClient {

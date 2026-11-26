@@ -1,3 +1,4 @@
+import { NotificationService } from './notification.service';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
@@ -81,6 +82,8 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
     private readonly entities: EntityService,
     private readonly books: BooksService,
     @Optional() private readonly fx?: FxService,
+    // 2026-11-26 — told in the partner's own bell: a week that stands, and a week paid.
+    @Optional() private readonly notices?: NotificationService,
   ) {}
 
   onModuleInit(): void {
@@ -169,6 +172,7 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
         });
         this.records.set(s.statementId, { ...this.records.get(s.statementId), accrued: { at: new Date(now).toISOString(), entryId: entry.entryId, amount, currency } });
         booked += 1;
+        this.tell(partner.did, `${s.sellerName} owes you ${moneyOf(amount, currency)} for the week of ${s.weekStart} to ${s.weekEnd}`, `For ${s.steps} steps your people did on parcels it sold. It is paid by bank transfer, and you are told here when.`, `statement:${s.statementId}:owed`);
       }
     }
     return booked;
@@ -200,7 +204,13 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
       ],
     });
     this.records.set(statementId, { ...r, paid: { at: new Date(now).toISOString(), by: input.by, reference, entryId: entry.entryId } });
+    this.tell(this.entities.get(partnerEntityId).did, `${s.sellerName} paid you ${moneyOf(r.accrued.amount, r.accrued.currency)} for the week of ${s.weekStart} to ${s.weekEnd}`, `By bank transfer, reference ${reference}.`, `statement:${statementId}:paid`);
     return this.statementsOf(partnerEntityId, now).statements.find((x) => x.statementId === statementId)!;
+  }
+
+  /** 2026-11-26 — a notice in the partner's own bell, opening its Money section. */
+  private tell(partnerDid: string, title: string, body: string, tag: string): void {
+    void this.notices?.notify(partnerDid, { kind: 'partner_money', title, body, link: '/?go=money', tag }).catch(() => undefined);
   }
 
   private currencyOf(entityId: string): string | undefined {
@@ -215,4 +225,9 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
 /** A statement's id: the partner, the week, the company that owes it, and the money. */
 function statementIdOf(partnerEntityId: string, weekStart: string, sellerEntityId: string, currency: string): string {
   return `pst_${weekStart}_${sellerEntityId}_${partnerEntityId}_${currency}`.replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
+/** 2026-11-26 — a sum as a notice says it: the money's code and two decimals. */
+function moneyOf(amount: number, currency: string): string {
+  return `${currency} ${amount.toFixed(2)}`;
 }

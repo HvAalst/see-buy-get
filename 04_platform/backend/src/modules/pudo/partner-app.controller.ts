@@ -4,7 +4,7 @@ import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
 import { MollieConnectStarted, MolliePartnerView } from '../../foundation/mollie/mollie.types';
-import { sameCompany } from '../../foundation/payment-hub/same-company';
+import { normaliseRegistration, sameCompany } from '../../foundation/payment-hub/same-company';
 import { auditActor } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -87,8 +87,11 @@ export class PartnerAppController {
     // 2026-11-26 — connected to another company than the partner's own: said, with both numbers — its counters do not use it.
     const org = this.mollie?.connection(entity.entityId)?.organization;
     const expected = entity.record?.registrationNumber;
-    if (view.connected && sameCompany(expected, org) === 'no') return { ...view, notYours: { ...(org?.name ? { organizationName: org.name } : {}), ...(org?.registrationNumber ? { registrationNumber: org.registrationNumber } : {}), ...(expected ? { expected } : {}) } };
-    return view;
+    const c = this.mollie?.connection(entity.entityId);
+    // 2026-11-26 — who connected it, for every member to see; and a live account waiting for the company's registration number.
+    const said = { ...view, ...(c ? { connectedBy: c.connectedBy } : {}), ...(c && !c.testmode && !normaliseRegistration(expected) ? { needsRegistration: true } : {}) };
+    if (view.connected && sameCompany(expected, org) === 'no') return { ...said, notYours: { ...(org?.name ? { organizationName: org.name } : {}), ...(org?.registrationNumber ? { registrationNumber: org.registrationNumber } : {}), ...(expected ? { expected } : {}) } };
+    return said;
   }
 
   /** Mollie's own sign-in, back to the Partner app; kept by the name of the member who connected it. */

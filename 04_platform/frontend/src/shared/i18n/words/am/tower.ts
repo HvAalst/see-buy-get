@@ -973,6 +973,7 @@ export const words: Record<string, string> = {
   "tower.partner.pay.collectRegOwn": "ምዝገባ {reg}፤ የአጋሩ የራሱ።",
   "tower.partner.pay.collectCheckReg": "ከአጋሩ ውል ጋር ያመሳክሩት፤ Mollie ምዝገባ {reg} ይላል፣ የአጋሩ መዝገብ ግን የምዝገባ ቁጥር የለውም።",
   "tower.partner.pay.collectNoReg": "ከአጋሩ ውል ጋር ያመሳክሩት፤ Mollie ለዚህ ሂሳብ የምዝገባ ቁጥር አልሰጠም።",
+  "tower.partner.pay.collectNeedsReg": "እውነተኛ ሂሳብ ነው፣ በአጋሩ መዝገብ ላይ ግን የምዝገባ ቁጥር የለም፤ ቁጥሩን በድርጅቱ መዝገብ ላይ እስኪጨምሩ ድረስ ቆጣሪዎቹ የሙከራ ገንዘብ ይቀበላሉ።",
   "tower.partner.pay.state.askedQr": "ገጹ እስኪከፈል በመጠባበቅ ላይ",
   "tower.partner.pay.tryHintQr": "በአጋሩ የMollie ሂሳብ ላይ የሙከራ ገንዘብ ክፍያ፤ የሚቃኝ ኮድ ከታች ይታያል። በMollie የሙከራ ገጽ ላይ ይክፈሉ።",
   "tower.partner.pay.byQr": "በQR ኮድ",

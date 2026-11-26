@@ -84,7 +84,8 @@ describe('a partner’s own people', () => {
     const actor = asPartner(selam.personDid);
     expect(actor).toMatchObject({ role: 'partner', tenant: partnerId, personDid: selam.personDid, actorName: 'Selam Tesfaye' });
     expect(members.me(actor)).toMatchObject({ entityId: partnerId, country: 'UG', currency: 'UGX', memberName: 'Selam Tesfaye' });
-    expect(ROLE_SCOPES.partner).toEqual(['partner:read:own']);
+    // 2026-11-26 — and its own inbox, the Partner app's bell (partner-bell.spec.ts).
+    expect(ROLE_SCOPES.partner).toEqual(['partner:read:own', 'notification:manage:self']);
   });
 
   it('taken out by our staff: from the next request, nothing more — and kept on the record, by name', () => {

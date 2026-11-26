@@ -67,7 +67,10 @@ function aWorld(extra?: HubProvider[], partner: { entityId: string; name: string
   const told: Array<[string, Record<string, unknown>]> = [];
   const events = { publish: async (name: string, payload: Record<string, unknown>) => void told.push([name, payload]) };
   const hub = new PaymentHubService(entities as never, events as never, extra);
-  const payouts = new PartnerPayoutService(ledger as never, numbers as never, hub, events as never);
+  // 2026-11-26 — the partner's own bell: what it is told, by its company's DID.
+  const rang: Array<{ owner: string; kind: string; title: string; body: string; link?: string }> = [];
+  const notices = { notify: async (owner: string, n: { kind: string; title: string; body: string; link?: string }) => void rang.push({ owner, kind: n.kind, title: n.title, body: n.body, link: n.link }) };
+  const payouts = new PartnerPayoutService(ledger as never, numbers as never, hub, events as never, { get: () => ({ ...partner, did: `did:glos:${partner.entityId}` }) } as never, notices as never);
   /** Money into the partner's account, as senders pay it: a prompt, paid. */
   const fund = async (amount: number, now = at('08:00')) => {
     const p = await hub.collect(partner.entityId, { reference: `FUND-${++seq}`, amount, payerPhone: '+251911000123', description: 'x' }, now);
@@ -75,7 +78,7 @@ function aWorld(extra?: HubProvider[], partner: { entityId: string; name: string
   };
   const number = (payeeId: string, msisdn: string, heldUntil?: number) => set.set(payeeId, { numberId: `pn_${++seq}`, msisdn, ...(heldUntil ? { heldUntil } : {}) });
   const bank = (payeeId: string, account: string, holder: string, heldUntil?: number) => banks.set(payeeId, { bankId: `pb_${++seq}`, account, holder, ...(heldUntil ? { heldUntil } : {}) });
-  return { lines, hub, payouts, fund, number, bank, told };
+  return { lines, hub, payouts, fund, number, bank, told, rang };
 }
 
 describe('what a partner owes, paid once a day', () => {
@@ -114,6 +117,18 @@ describe('what a partner owes, paid once a day', () => {
     expect(w.told.filter(([name]) => name === GlosEvent.Pudo.PartnerPayout).length).toBeGreaterThan(0);
   });
 
+  it('2026-11-26 — the account still short an hour later: the partner’s bell is rung once that day, not at every try', async () => {
+    const w = aWorld();
+    await w.fund(100);
+    w.lines.push(line('did:shop-bole', 'shop', 300));
+    w.number('did:shop-bole', '251911000201');
+    await w.payouts.tick(at('15:00'));
+    await w.payouts.tick(at('15:00') + PAYOUT_AGAIN_AFTER_MS);
+    await w.payouts.tick(at('15:00') + 2 * PAYOUT_AGAIN_AFTER_MS);
+    expect(w.payouts.viewOf(PARTNER.entityId).rows[0]).toMatchObject({ state: 'waiting', why: 'balance' });
+    expect(w.rang).toHaveLength(1);
+  });
+
   it('the partner’s account short: the payout waits, says so, and goes once the account holds enough', async () => {
     const w = aWorld();
     await w.fund(100);
@@ -126,6 +141,8 @@ describe('what a partner owes, paid once a day', () => {
     await w.fund(500, at('15:20'));
     await w.payouts.tick(at('15:30'));
     expect(w.payouts.viewOf(PARTNER.entityId).rows[0]).toMatchObject({ state: 'waiting', why: 'balance' });
+    // 2026-11-26 — told in the partner's own bell, once that day however often it is tried, opening its Money.
+    expect(w.rang).toEqual([{ owner: `did:glos:${PARTNER.entityId}`, kind: 'partner_money', title: 'Payouts wait: your payout account is short', body: '1 payouts to your people, ETB 300.00 in all, wait until your payout account holds enough. They are tried again every hour.', link: '/?go=money' }]);
     await w.payouts.tick(at('15:00') + PAYOUT_AGAIN_AFTER_MS);
     expect(w.payouts.viewOf(PARTNER.entityId)).toMatchObject({ waiting: 0, shortAmount: 0, paidAmount: 300 });
     expect((await w.hub.accountView(PARTNER.entityId, at('16:10'))).balance).toBe(300);

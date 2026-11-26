@@ -1,3 +1,4 @@
+import { NotificationService } from './notification.service';
 import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
 import type { MolliePartnerChange } from '../../foundation/mollie/mollie.types';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -123,6 +124,8 @@ export class PartnerMemberService {
     // 2026-11-26 — every member told when the counters' Mollie account is connected or disconnected.
     @Optional() private readonly mollie?: MollieConnectService,
     @Optional() private readonly mail?: MailService,
+    // 2026-11-26 — and in the partner's own bell (the Partner app), where every member reads it.
+    @Optional() private readonly notices?: NotificationService,
   ) {
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
     this.mollie?.onPartnerChange((c) => this.tellMollieChange(c));
@@ -138,6 +141,7 @@ export class PartnerMemberService {
     const headline = c.change === 'connected' ? `${entity.name}: the counters' Mollie account was connected` : `${entity.name}: the counters' Mollie account was disconnected`;
     const what = c.change === 'connected' ? `${c.by} connected ${org}. From now on the money your counters take goes into it.` : `${c.by} disconnected ${org}. Your counters take test money until an account is connected again.`;
     const next = c.change === 'connected' ? 'If that is not your company’s own account, disconnect it in the Partner app, under Money, and tell SeeBuyGet straight away.' : 'If that was not meant, connect your company’s own account again in the Partner app, under Money.';
+    void this.notices?.notify(entity.did, { kind: 'security', title: headline, body: `${what} ${next}`, link: '/?go=money', tag: `mollie:${c.entityId}:${c.at}`, data: { change: c.change } }).catch(() => undefined);
     for (const m of this.members.values()) {
       if (m.entityId !== c.entityId || !m.personDid || m.removedAt || !m.joinedAt) continue;
       let address: string | undefined;

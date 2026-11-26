@@ -82,6 +82,8 @@ export const words: Record<string, string> = {
   "partner.app.mollie.disconnect": "Ontkoppelen",
   "partner.app.mollie.off": "Dit is nog niet ingesteld bij SeeBuyGet. We laten je weten wanneer je kunt koppelen.",
   "partner.app.mollie.notYours": "Deze Mollie-rekening is van {name}, inschrijving {reg}, niet van je bedrijf (inschrijving {expected}). Je balies nemen testgeld aan tot je de rekening van je eigen bedrijf koppelt.",
+  "partner.app.mollie.connectedBy": "Gekoppeld door {name} op {at}",
+  "partner.app.mollie.needsRegistration": "Het inschrijvingsnummer van je bedrijf staat nog niet in het dossier van SeeBuyGet. Vraag SeeBuyGet het toe te voegen: tot dan nemen je balies testgeld aan.",
   "partner.app.money.insTitle": "Betalingen van afzenders",
   "partner.app.money.insNone": "Nog geen betalingen.",
   "partner.app.money.state.asked": "Wacht op de telefoon",

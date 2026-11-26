@@ -973,6 +973,7 @@ export const words: Record<string, string> = {
   "tower.partner.pay.collectRegOwn": "Регистрация {reg}: собствената на партньора.",
   "tower.partner.pay.collectCheckReg": "Проверете я спрямо договора с партньора: Mollie казва регистрация {reg}, а досието на партньора няма регистрационен номер.",
   "tower.partner.pay.collectNoReg": "Проверете я спрямо договора с партньора: Mollie не даде регистрационен номер за нея.",
+  "tower.partner.pay.collectNeedsReg": "Истинска сметка, а в досието на партньора няма регистрационен номер: гишетата му приемат тестови пари, докато не добавите номера в досието на фирмата.",
   "tower.partner.pay.state.askedQr": "Чакаме страницата да бъде платена",
   "tower.partner.pay.tryHintQr": "Плащане с тестови пари по сметката на партньора в Mollie: по-долу се появява код за сканиране. Платете на тестовата страница на Mollie.",
   "tower.partner.pay.byQr": "чрез QR код",

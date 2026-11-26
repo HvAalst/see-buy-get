@@ -144,6 +144,7 @@ export const words: Record<string, string> = {
   "agreement.gate.agree": "Съгласен съм и продължавам",
   "agreement.gate.signOut": "Не сега: изход",
   "notify.readIt": "Прочетете",
+  "notify.sharedPartner": "Това е входящата кутия на вашата фирма: всички в нея четат една и съща. Известие, прочетено от един от вас, е прочетено.",
   "notify.markRead": "Отбележи като прочетено",
   "notify.reply": "Отговор",
   "notify.open": "Отвори",

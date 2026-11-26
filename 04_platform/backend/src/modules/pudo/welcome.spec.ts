@@ -59,6 +59,8 @@ describe('the bell’s first notice', () => {
       store: /shipments, and what reaches your dock/,
       fleet: /drivers, runs, orders and vehicles/,
       send: /Your parcels/,
+      // 2026-11-26 — the Partner app's bell.
+      partner: /What SeeBuyGet owes you each week and when it is paid, payouts waiting for your account/,
     };
     for (const [app, words] of Object.entries(says) as Array<[WelcomeApp, RegExp]>) {
       expect(WELCOME[app].body).toMatch(words);
@@ -69,7 +71,7 @@ describe('the bell’s first notice', () => {
   });
 
   it('knows each app by the role it signs in with — and staff read no bell', () => {
-    expect(['business', 'driver', 'agent', 'mdp', 'genesis', 'fleet_manager', 'consumer'].map(welcomeAppOf)).toEqual(['business', 'driver', 'shop', 'hub', 'store', 'fleet', 'send']);
+    expect(['business', 'driver', 'agent', 'mdp', 'genesis', 'fleet_manager', 'consumer', 'partner'].map(welcomeAppOf)).toEqual(['business', 'driver', 'shop', 'hub', 'store', 'fleet', 'send', 'partner']);
     expect(welcomeAppOf('operator')).toBeNull();
     expect(welcomeAppOf(undefined)).toBeNull();
   });

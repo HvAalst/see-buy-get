@@ -94352,6 +94352,10 @@
           "expectedRegistration": {
             "type": "string",
             "description": "The partner’s own registration number, as its record has it."
+          },
+          "needsRegistration": {
+            "type": "boolean",
+            "description": "2026-11-26 — a live account, and no registration number on the partner’s record: not used for real money until it is."
           }
         },
         "required": [
@@ -94763,6 +94767,14 @@
                 "$ref": "#/components/schemas/MollieNotYoursView"
               }
             ]
+          },
+          "needsRegistration": {
+            "type": "boolean",
+            "description": "2026-11-26 — a live account, and the partner's registration number not on its record: real money waits until it is."
+          },
+          "connectedBy": {
+            "type": "string",
+            "description": "…and who connected it, by name: every member sees it on Money."
           },
           "why": {
             "type": "string",

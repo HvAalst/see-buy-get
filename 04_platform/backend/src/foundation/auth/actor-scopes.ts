@@ -55,7 +55,8 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   business: ['business:read:own', 'business:manage:own', 'notification:manage:self'],
   // 2026-11-20 — a partner's own people (the payments plan, 3c): they read what their company owes its hands, live. Nothing
   // else: who is in it is our staff's to say, and whether they are still in it is asked on every request.
-  partner: ['partner:read:own'],
+  // 2026-11-26 — and its own inbox (the owner: "wire in the notification bell as well"): the company's, read by its people.
+  partner: ['partner:read:own', 'notification:manage:self'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

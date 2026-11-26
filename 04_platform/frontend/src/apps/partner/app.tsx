@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { PasskeyOffer } from '../../shared/account/PasskeyOffer';
 import { SettingsSheet } from '../../shared/account/SettingsSheet';
@@ -9,7 +9,8 @@ import { HelpLink } from '../../shared/guide/HelpLink';
 import { useT, type MessageKey } from '../../shared/i18n';
 import { onLaunch } from '../../shared/launch';
 import { screensOf, useScreenNav } from '../../shared/nav';
-import { BottomNav, BrandMark, Icon } from '../../shared/ui';
+import { BottomNav, BrandMark, Icon, NotificationBell } from '../../shared/ui';
+import { createNotificationsApi } from '../../lib/sbg/personas/notifications';
 import { AppsSheet } from '../../shared/ui/AppLauncher';
 import type { IconName } from '../../shared/ui/Icon';
 import { InstallGuideSheet } from '../../shared/ui/InstallBar';
@@ -63,6 +64,9 @@ export function App() {
   // The person's own account (PIN, recovery email, phone), reached through the partner session, which carries them.
   const account = useAccount(client?.client.sbg ?? null, state.phase === 'ready');
   const open = state.phase === 'ready' && Boolean(state.partner);
+  // 2026-11-26 — THE PARTNER'S OWN BELL (the owner: "wire in the notification bell as well"): the company's inbox, read by its
+  // people, through the session that reads for it; each notice opens where it is acted on (Money), on one tap.
+  const bell = useMemo(() => (client ? createNotificationsApi(client.client.sbg) : null), [client]);
   useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: open, go: actions.go, launch: SECTIONS });
   // The bell's welcome elsewhere, and the menu here: the guide to getting the most out of the app, on one tap.
   useEffect(() => onLaunch('guide', () => setGuide(true)), []);
@@ -81,6 +85,7 @@ export function App() {
           <span class="cons__mastwork pa-mast__name">· {partner.name}</span>
         </div>
         <div class="pa-mast__end">
+          <NotificationBell api={bell} shared={{ canMark: true, whose: 'partner' }} />
           {needRefresh ? (
             <button type="button" class="topbar__lead" onClick={() => void sw.updateServiceWorker(true)} aria-label={t('update.ready.aria')} title={t('update.ready.title')}>
               <Icon name="refresh" size={22} />

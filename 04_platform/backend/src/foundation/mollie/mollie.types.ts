@@ -163,6 +163,10 @@ export class MolliePartnerView {
   @ApiProperty() available: boolean;
   /** 2026-11-26 — connected to another company than the partner's own (its registration number): not used. */
   @ApiPropertyOptional({ type: MollieNotYoursView }) notYours?: MollieNotYoursView;
+  /** 2026-11-26 — a live account, and the partner's registration number not on its record: real money waits until it is. */
+  @ApiPropertyOptional() needsRegistration?: boolean;
+  /** …and who connected it, by name: every member sees it on Money. */
+  @ApiPropertyOptional() connectedBy?: string;
   @ApiPropertyOptional({ enum: ['country', 'off'] }) why?: 'country' | 'off';
   @ApiPropertyOptional({ enum: ['oauth', 'test_key'] }) via?: MollieVia;
   @ApiPropertyOptional({ type: MollieConnectedView }) connected?: MollieConnectedView;

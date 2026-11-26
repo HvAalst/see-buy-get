@@ -20,7 +20,7 @@ export interface NotificationBellProps {
    * them has read is read and says by whom, and `canMark: false` is somebody who reads and changes nothing (a
    * viewer) — a notice opens for them and stays unread for the people who can act on it.
    */
-  shared?: { canMark: boolean };
+  shared?: { canMark: boolean; /** 2026-11-26 — whose inbox it is: a business's (as before) or a partner company's. */ whose?: 'business' | 'partner' };
 }
 
 /** Icon per notification kind (typed set — never an emoji). Unknown kinds fall back to the bell. */
@@ -108,6 +108,7 @@ const KIND_ICON: Record<string, IconName> = {
   papers_sent: 'badge',
   /** A payment the shop made was confirmed by the provider — or came back. */
   money_in: 'wallet',
+  partner_money: 'wallet',
   box_due: 'clock',
   signup_incomplete: 'edit',
   signup_rejected: 'warning',
@@ -210,6 +211,7 @@ export function noticeAction(item: InboxItem, act: NoticeAct | undefined, t: Tra
  * somewhere is itself the button: one tap opens it (2026-11-02).
  */
 export function NotificationBell({ api, shared, act }: NotificationBellProps & { act?: NoticeAct }) {
+  const t = useT();
   const canMark = shared?.canMark ?? true;
   const [open, setOpen] = useState(false);
   // The notices opened in full, by id: kept by the sheet, so marking one read from its row leaves it as it was.
@@ -249,7 +251,9 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
       <Sheet open={open} onClose={() => setOpen(false)} title="Notifications">
         {push.flash ? <Note tone={push.flash.tone} title={push.flash.text} /> : null}
 
-        {shared ? (
+        {shared?.whose === 'partner' ? (
+          <p class="hint nlist__shared">{t('notify.sharedPartner')}</p>
+        ) : shared ? (
           <p class="hint nlist__shared">
             {canMark
               ? 'This is the business’s inbox: everybody in it reads the same one. A notice one of you has read is read.'
