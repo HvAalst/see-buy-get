@@ -167,8 +167,17 @@ describe('a person posts a load, over the wire', () => {
     expect(Number.isInteger(paying.amount)).toBe(true);
     await http().post(`/v1/sbg/dispatch/freight/${keLoad}/pay`).set(bearer(kePerson)).send({ proposalId, phone: '+254711000111' }).expect(400);
     // The driver sees it accepted and being paid.
-    const board = (await http().get('/v1/sbg/dispatch/board').query({ lat: nairobi.lat, lng: nairobi.lng }).set(bearer(keDriver.token)).expect(200)).body.items as Array<{ freightId: string; mine?: { awaitingPayment?: string } }>;
+    // 2026-11-26 — and the board asks, for a load paid first, whether its pay would go to the carrier's own Mollie account (in
+    // Kenya it never could: nothing said; answered "connect", the card says so — PersonLoadPayService.mollieFirst is its own spec).
+    const asked = jest.spyOn(app.get(PersonLoadPayService), 'mollieFirst');
+    const board = (await http().get('/v1/sbg/dispatch/board').query({ lat: nairobi.lat, lng: nairobi.lng }).set(bearer(keDriver.token)).expect(200)).body.items as Array<{ freightId: string; mine?: { awaitingPayment?: string }; mollieFirst?: string }>;
     expect(board.find((r) => r.freightId === keLoad)?.mine?.awaitingPayment).toEqual(expect.any(String));
+    expect(board.find((r) => r.freightId === keLoad)?.mollieFirst).toBeUndefined();
+    expect(asked).toHaveBeenCalledWith(expect.objectContaining({ freightId: keLoad }), keDriver.did);
+    asked.mockReturnValue('connect');
+    const again = (await http().get('/v1/sbg/dispatch/board').query({ lat: nairobi.lat, lng: nairobi.lng }).set(bearer(keDriver.token)).expect(200)).body.items as Array<{ freightId: string; mollieFirst?: string }>;
+    expect(again.find((r) => r.freightId === keLoad)?.mollieFirst).toBe('connect');
+    asked.mockRestore();
   });
 
   it('6 · paid: the load is the driver’s, billed out of what was paid; the person holds the delivery code', async () => {

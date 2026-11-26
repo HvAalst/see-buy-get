@@ -24,6 +24,10 @@ import { normalizePhone } from '../../foundation/identity/phone';
 import { AgentService } from './agent.service';
 import { PartnerLedgerService } from './partner-ledger.service';
 import type { NumberWay } from './payout-number.types';
+import { MailService } from '../../foundation/mail/mail.service';
+import { PersonService } from './person.service';
+import { AccountService } from './account.service';
+import { NotificationService } from './notification.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -64,6 +68,11 @@ export class PayoutNumberService implements OnModuleInit {
     @Optional() private readonly agents?: AgentService,
     @Optional() private readonly partners?: PartnerLedgerService,
     @Optional() private readonly crypt?: FieldEncryption,
+    // 2026-11-26 — the sign-in asked again before a bank account is kept, and a change told (the PIN, or a shop's or hub's password).
+    @Optional() private readonly persons?: PersonService,
+    @Optional() private readonly accounts?: AccountService,
+    @Optional() private readonly notices?: NotificationService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   /** Where a partner pays a hand in this country: its bank account in the European Union, its phone elsewhere — by the country alone. */
@@ -197,8 +206,14 @@ export class PayoutNumberService implements OnModuleInit {
    * ROUTE PLAN PART 4 — THE PAYEE'S OWN BANK ACCOUNT, where its partner pays to bank accounts. Refused where it does not, for an
    * IBAN that is not one (its check digits, its country's length, a SEPA country), and for the account it already is. Kept sealed.
    * Replacing one pauses payouts to the new one for a day, as a changed number does.
+   *
+   * 2026-11-26 — WITH THE SIGN-IN ASKED AGAIN (the weakness after part 4b, fixed as recommended): an open app is not proof of who
+   * holds the phone, and an IBAN typed in is not proven by a code the way a number is. So the PIN of the person signed in (the
+   * Driver and Fleet apps) or the password of the shop or hub (the Shop and Hub apps) is asked — after the account is checked, so
+   * a mistyped IBAN costs no try, and before anything is kept; the same count and lock as the door. A change is told at once, in
+   * the bell and by email, so a change somebody else made is seen while the day's pause still holds the money.
    */
-  setBank(actor: IntrospectionResult | undefined, input: { account: string; holder: string; bic?: string }, now: number = Date.now()): PayoutNumberSaved {
+  setBank(actor: IntrospectionResult | undefined, input: { account: string; holder: string; bic?: string; pin?: string; password?: string }, now: number = Date.now()): PayoutNumberSaved {
     const payee = this.requirePayee(actor);
     const name = catalogueEntry(payee.country)?.name ?? payee.country;
     if (this.paysTo(payee.country) !== 'bank') throw new GlosError('INVALID_STATE', `In ${name} payouts do not go to a bank account.`);
@@ -211,6 +226,7 @@ export class PayoutNumberService implements OnModuleInit {
     if (bic && !isBic(bic)) throw new GlosError('VALIDATION_FAILED', 'Not a BIC: eight or eleven letters and digits, as the bank writes it', { field: 'bic' });
     const before = this.banks.get(payee.payeeId);
     if (before && this.openBank(before)?.account === account) throw new GlosError('INVALID_STATE', 'That is already your payout account.');
+    this.proveSignIn(actor, input);
     const at = new Date(now).toISOString();
     const masked = maskIban(account);
     const record: PayoutBankRecord = {
@@ -224,7 +240,46 @@ export class PayoutNumberService implements OnModuleInit {
       history: [...(before?.history ?? []), { at, act: before ? 'changed' : 'set', masked, by: auditActor(actor as IntrospectionResult) }],
     };
     this.banks.set(payee.payeeId, record);
+    if (before) this.tellBankChanged(actor as IntrospectionResult, payee, masked, now);
     return this.viewOf(payee, now);
+  }
+
+  /**
+   * 2026-11-26 — THE SIGN-IN AGAIN, before a bank account is kept: the PIN where a person signed in, the password where a shop or
+   * a hub did. Refused when neither is given, or where this server cannot check it — never let through unchecked.
+   */
+  private proveSignIn(actor: IntrospectionResult | undefined, input: { pin?: string; password?: string }): void {
+    const byPassword = actor?.role === 'agent' || actor?.role === 'mdp';
+    const pin = input.pin?.trim();
+    if (pin && actor?.personDid) {
+      if (!this.persons) throw new GlosError('INVALID_STATE', 'Your PIN cannot be checked on this server, so the account cannot be saved.');
+      this.persons.confirmPin(actor.personDid, pin);
+      return;
+    }
+    if (input.password && byPassword && actor?.did) {
+      if (!this.accounts) throw new GlosError('INVALID_STATE', 'The password cannot be checked on this server, so the account cannot be saved.');
+      this.accounts.confirmPassword(actor.did, input.password);
+      return;
+    }
+    throw new GlosError('FIELD_REQUIRED', byPassword ? 'Enter the password you sign in with to save the account' : 'Enter your PIN to save the account', { field: byPassword ? 'password' : 'pin' });
+  }
+
+  /** A changed bank account, told in the bell (opening it in Settings) and by email where there is an address. Never a text. */
+  private tellBankChanged(actor: IntrospectionResult, payee: Payee, masked: string, now: number): void {
+    const until = new Date(now + PAYOUT_NUMBER_HOLD_MS).toISOString();
+    const headline = 'Your payout bank account was changed';
+    const what = `Payouts now go to the account ${masked}. Nothing is paid to it before ${until.slice(0, 16).replace('T', ' ')} UTC.`;
+    const next = actor.personDid ? 'If it was not you, change your PIN straight away, then set your own account again in Settings.' : 'If it was not you, change the password straight away, then set your own account again in Settings.';
+    const owner = actor.role === 'mdp' && actor.did ? actor.did : payee.payeeId;
+    void this.notices?.notify(owner, { kind: 'security', title: headline, body: `${what} ${next}`, link: '/?settings=payout', tag: `payout-bank:${payee.payeeId}:${now}` }).catch(() => undefined);
+    let address: string | undefined;
+    try {
+      const person = actor.personDid ? this.persons?.findByDid(actor.personDid) : undefined;
+      address = person ? this.persons?.emailOf(person) : actor.did && !actor.personDid ? this.accounts?.emailForDid(actor.did) : undefined;
+    } catch {
+      address = undefined;
+    }
+    if (address) void this.mail?.send('account-safety', { address }, { headline, what, next, when: new Date(now).toISOString() }).catch(() => false);
   }
 
   /** The whole account, its holder and BIC — for the payout, at the moment it sends, and only for the account it was raised to. */

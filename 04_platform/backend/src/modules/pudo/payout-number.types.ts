@@ -114,4 +114,18 @@ export class PayoutBankDto {
   @IsString()
   @MaxLength(14)
   bic?: string;
+
+  /** 2026-11-26 — the PIN of the person signed in (the Driver and Fleet apps), asked again before the account is kept. */
+  @ApiPropertyOptional({ description: 'The PIN of the person signed in (the Driver and Fleet apps): asked again before the account is kept.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(12)
+  pin?: string;
+
+  /** …or the password of the shop or hub signed in (the Shop and Hub apps), in its place. */
+  @ApiPropertyOptional({ description: 'The password of the shop or hub signed in (the Shop and Hub apps), in place of a PIN.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  password?: string;
 }

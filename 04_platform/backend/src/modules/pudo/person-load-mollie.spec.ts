@@ -17,7 +17,7 @@ const T0 = Date.parse('2026-11-25T10:00:00Z');
 type Line = { code: string; counterparty?: string; amount: number };
 type Post = { entityId: string; kind: string; ref: string; currency: string; lines: Line[] };
 
-function aWorld(opts: { routing?: boolean; currency?: string; connection?: Record<string, unknown> | null; payee?: { payeeDid: string; entityId?: string } } = {}) {
+function aWorld(opts: { routing?: boolean; currency?: string; connection?: Record<string, unknown> | null; payee?: { payeeDid: string; entityId?: string }; provider?: string } = {}) {
   const posts: Post[] = [];
   const told: Array<{ to: string; title: string }> = [];
   let prepaid: PrepaidShipper | undefined;
@@ -35,6 +35,7 @@ function aWorld(opts: { routing?: boolean; currency?: string; connection?: Recor
   const fundings = new Map<string, Record<string, unknown>>();
   const funding = {
     needsPhone: () => false,
+    providerFor: (c: string) => opts.provider ?? (c === 'EUR' ? 'mollie' : 'mpesa'),
     open: async () => {
       fundings.set('fnd_1', { fundingId: 'fnd_1', entityId: 'sbg-nl', currency: opts.currency ?? 'EUR', provider: 'mollie', railRef: 'tr_abc123' });
       return { fundingId: 'fnd_1', reference: 'REF2345', provider: 'mollie', link: 'https://www.mollie.com/checkout/x', instructions: 'Pay on the iDEAL page that opens.' };
@@ -210,5 +211,33 @@ describe('routing switched on by the owner, once Mollie has enabled it', () => {
     expect(mollieConfigFromEnv({ GLOS_MOLLIE_ROUTING: ' TRUE ' }).routing).toBe(true);
     expect(mollieConfigFromEnv({}).routing).toBeUndefined();
     expect(mollieConfigFromEnv({ GLOS_MOLLIE_ROUTING: 'off' }).routing).toBeUndefined();
+  });
+});
+
+/*
+ * 2026-11-26 — BEFORE A PRICE IS NAMED (the weakness after part 9b, fixed as recommended): Mollie routes only to an account connected
+ * before the sender pays, so a courier who connects afterwards is paid that load the country's way. The Driver app's board asks first:
+ * `connect` for a courier that has not connected its own account, `office` for a fleet driver whose fleet has not; nothing where the
+ * pay would be routed, or never could be.
+ */
+describe('the board says to connect Mollie before naming a price on a load paid upfront in euros', () => {
+  const open = { freightId: 'frt_9', code: 'FRT-9', escrow: true, sellerEntityId: 'sbg-nl', postedCurrency: 'EUR', status: 'available' } as never;
+  const ask = (w: ReturnType<typeof aWorld>, f = open) => w.prepaid().mollieFirst?.(f, 'did:drv:piet');
+
+  it('connect for a courier, office for a fleet driver — and nothing once the account can be paid into', () => {
+    expect(ask(aWorld({ connection: null }))).toBe('connect');
+    expect(ask(aWorld({ connection: { via: 'test_key' } }))).toBe('connect');
+    expect(ask(aWorld({ connection: { lostAt: '2026-11-20T00:00:00Z' } }))).toBe('connect');
+    expect(ask(aWorld({ connection: { canReceivePayments: false } }))).toBe('connect');
+    expect(ask(aWorld({ connection: null, payee: { payeeDid: 'did:fleet:noord', entityId: 'sbg-nl' } }))).toBe('office');
+    expect(ask(aWorld())).toBeUndefined();
+  });
+
+  it('nothing where it never could be routed: routing off, not euros, not through Mollie, another company, or not paid first', () => {
+    expect(ask(aWorld({ connection: null, routing: false }))).toBeUndefined();
+    expect(ask(aWorld({ connection: null, currency: 'KES' }))).toBeUndefined();
+    expect(ask(aWorld({ connection: null, provider: 'standin' }))).toBeUndefined();
+    expect(ask(aWorld({ connection: null, payee: { payeeDid: 'did:drv:piet', entityId: 'sbg-other' } }))).toBeUndefined();
+    expect(ask(aWorld({ connection: null }), { ...(open as object), escrow: false } as never)).toBeUndefined();
   });
 });

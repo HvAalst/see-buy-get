@@ -458,6 +458,8 @@ export class DispatchService {
       refundCarriage: (f, charged, why) => ownerOf(f)?.refundCarriage?.(f, charged, why),
       payerOf: (f) => ownerOf(f)?.payerOf?.(f),
       roadPaid: (f, payee, amount) => ownerOf(f)?.roadPaid?.(f, payee, amount),
+      // 2026-11-26 — asked of an open load nobody has paid for yet: whichever answers.
+      mollieFirst: (f, driverDid) => this.prepaids.map((p) => p.mollieFirst?.(f, driverDid)).find(Boolean),
     };
   }
   /**
@@ -1764,9 +1766,12 @@ export class DispatchService {
           ),
         },
       );
+      // 2026-11-26 — a load paid upfront in euros: connect Mollie before naming a price, or be paid the country's way.
+      const mollieFirst = input.driverDid && f.escrow ? this.prepaid?.mollieFirst?.(f, input.driverDid) : undefined;
       rows.push({
         freightId: f.freightId,
         ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}),
+        ...(mollieFirst ? { mollieFirst } : {}),
         ...this.shipperUnpaidOf(f, now),
         code: f.code,
         description: f.description,

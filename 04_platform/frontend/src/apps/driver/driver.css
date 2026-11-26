@@ -537,6 +537,14 @@
   gap: 12px;
 }
 
+/* 2026-11-26 — paid upfront in euros: the line, then the one button that opens Settings on Mollie. */
+.board__mollie {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 /* From a tablet upward the board becomes two columns — the same layout language the large-screen manager
    console will use, so the two are one screen at different widths rather than two screens to maintain.
    Carried on its own class rather than a :has() on the list, because the phones this runs on include

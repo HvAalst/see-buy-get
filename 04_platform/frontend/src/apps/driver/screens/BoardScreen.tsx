@@ -8,6 +8,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { blockerTone, boardDistanceLine, boardSummary, cash, originReady, unlocks } from '../logic';
 import type { BoardRow } from '../types';
 import { LoadWorkSummary } from '../../../shared/load-work/LoadWorkSummary';
+import { followLink } from '../../../shared/launch';
 import { BOARD_REACHES, type BoardReach, type DriverActions, type DriverState } from '../useDriverApp';
 
 export interface BoardScreenProps {
@@ -340,6 +341,8 @@ export function BoardCard({ row, currency, onPropose, onAsk, onTakeCounter, taki
             <span>{t('driver.paidByShipper')}</span>
           </p>
         ) : null}
+        {/* 2026-11-26 — paid upfront in euros: connect Mollie before naming a price, and the pay goes straight into it. */}
+        <MollieFirst row={row} />
         {/* What drivers say of this shipper (2026-10-27): loads not paid, still unpaid a week after they said so. */}
         {row.shipperUnpaid ? (
           <p class="meta meta--warn">
@@ -415,6 +418,35 @@ export function BoardCard({ row, currency, onPropose, onAsk, onTakeCounter, taki
   );
 }
 
+/**
+ * 2026-11-26 — A LOAD PAID UPFRONT IN EUROS whose pay would go straight into the carrier's own Mollie account — not connected yet
+ * (the weakness after route plan part 9b, fixed as recommended). Mollie routes only to an account connected before the sender pays,
+ * so it is said before a price is named: a courier opens Settings on Mollie in one tap; a fleet driver is told its office connects.
+ */
+export function MollieFirst({ row, onGo }: { row: BoardRow; onGo?: () => void }) {
+  const t = useT();
+  if (row.mollieFirst === 'office') {
+    return (
+      <p class="meta">
+        <Icon name="wallet" size={21} class="meta__ic" />
+        <span>{t('driver.board.mollieOffice')}</span>
+      </p>
+    );
+  }
+  if (row.mollieFirst !== 'connect') return null;
+  return (
+    <div class="board__mollie">
+      <p class="meta">
+        <Icon name="wallet" size={21} class="meta__ic" />
+        <span>{t('driver.board.mollieConnect')}</span>
+      </p>
+      <Button variant="outline" full={false} chevron={false} onClick={() => { onGo?.(); followLink('/?settings=mollie'); }}>
+        {t('driver.board.mollieConnectGo')}
+      </Button>
+    </div>
+  );
+}
+
 function ProposeSheet({ row, state, actions, onClose }: { row: BoardRow | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
   const t = useT();
   const [price, setPrice] = useState('');
@@ -432,6 +464,8 @@ function ProposeSheet({ row, state, actions, onClose }: { row: BoardRow | null; 
           </p>
           {/* The work to price: one price for the whole job (unusual loads, U4). */}
           <LoadWorkSummary work={row.work} />
+          {/* 2026-11-26 — said again where the price is named: connected afterwards is too late for this load. */}
+          <MollieFirst row={row} onGo={onClose} />
           <div class="field">
             <label class="field__label" for="propose-price">
               {state.session.currency ? t('driver.board.proposePriceIn', { currency: state.session.currency }) : t('driver.board.proposePrice')}

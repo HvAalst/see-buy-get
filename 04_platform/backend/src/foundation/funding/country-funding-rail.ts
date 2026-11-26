@@ -44,6 +44,10 @@ export class CountryFundingRail implements FundingRail {
     return this.railFor(currency).needsPhone?.(currency) ?? this.railFor(currency).provider !== 'mollie';
   }
 
+  providerFor(currency: string): string {
+    return this.railFor(currency).provider;
+  }
+
   canAsk(): boolean {
     return this.fallback.canAsk?.() ?? false;
   }

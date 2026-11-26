@@ -124,7 +124,9 @@ describe('wired', () => {
     const sheet = read('shared', 'account', 'SettingsSheet.tsx');
     expect(sheet).toMatch(/showsMollie\(api\.mollie\) \? <Row icon="wallet" label=\{t\('account\.mollie\.title'\)\} sub=\{mollieSub\(api\.mollie, t as never\)\} onClick=\{\(\) => setView\('mollie'\)\} \/>/);
     expect(sheet).toMatch(/hasPayoutNumber\(api\.payout\) \|\| showsMollie\(api\.mollie\)\)/);
-    expect(sheet).toMatch(/setView\(mollieBack \? 'mollie' : 'list'\)/);
+    // 2026-11-26 — through firstView (payout-bank-proof.test.tsx holds what it answers): back from Mollie comes first.
+    expect(sheet).toMatch(/setView\(firstView\(api, mollieBack, startAt\)\)/);
+    expect(sheet).toMatch(/if \(mollieBack\) return 'mollie';/);
     const menu = read('shared', 'account', 'AccountMenu.tsx');
     expect(menu).toMatch(/mollieBackOf\(location\.search\)/);
     expect(menu).toMatch(/history\.replaceState\(history\.state, '', withoutMollieBack\(location\.href\)\)/);

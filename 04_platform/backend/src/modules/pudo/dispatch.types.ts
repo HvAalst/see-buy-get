@@ -251,6 +251,12 @@ export interface PrepaidShipper {
   giveBack(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void;
   /** 2026-11-25 (route plan part 9b, step 2) — the driver's pay was just owed, to this payee: it may be paid from what was paid first. */
   roadPaid?(f: Freight, payee: { payeeDid: string; entityId: string }, amount: number): void;
+  /**
+   * 2026-11-26 — asked of an OPEN load, before anybody paid: would this driver's pay go straight to its own Mollie account? Not
+   * yet — `connect` (the courier connects its own) or `office` (the fleet it drives for does). Nothing where it would, or where
+   * it never could.
+   */
+  mollieFirst?(f: Freight, driverDid: string): 'connect' | 'office' | undefined;
 }
 
 /** One load, by its id and its code: a return and the load its goods were refused on point at each other. */
@@ -1250,6 +1256,12 @@ export class BoardMine {
 /** FB1 — one load as the board shows it: the market's facts, this driver's price, and every reason why not. */
 export class BoardRow {
   freightId: string;
+  /**
+   * 2026-11-26 — A LOAD PAID UPFRONT IN EUROS, whose pay would go straight into the carrier's own Mollie account once connected —
+   * and it is not: `connect`, the courier connects its own before naming a price (Mollie routes only to an account connected
+   * before the sender pays); `office`, its fleet's office does. Absent where it would be routed, or never could be.
+   */
+  @ApiPropertyOptional({ enum: ['connect', 'office'] }) mollieFirst?: 'connect' | 'office';
   /**
    * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.

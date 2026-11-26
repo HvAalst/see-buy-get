@@ -333,6 +333,8 @@ export interface FundingRail {
   forProvider?(provider: string): FundingRail | undefined;
   /** …and whether paying in a currency needs the payer's phone number (M-Pesa rings it; Mollie's page does not). */
   needsPhone?(currency: string): boolean;
+  /** 2026-11-26 — …and which provider takes a payment in that money: said to nobody, read where the provider decides what follows. */
+  providerFor?(currency: string): string;
   /**
    * SANDBOX ONLY: build a signed callback exactly as the provider would send one.
    *

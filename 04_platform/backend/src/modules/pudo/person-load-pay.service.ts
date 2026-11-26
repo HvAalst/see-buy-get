@@ -71,6 +71,7 @@ export class PersonLoadPayService implements OnModuleInit {
       refundCarriage: (f, charged, why) => this.refundCarriage(f, charged, why),
       payerOf: (f) => this.latest(f.freightId)?.personDid,
       roadPaid: (f, payee, amount) => this.roadPaid(f, payee, amount),
+      mollieFirst: (f, driverDid) => this.mollieFirst(f, driverDid),
     });
     this.payouts.registerDestinations({
       of: (payeeId) => this.refundDestination(payeeId),
@@ -350,6 +351,27 @@ export class PersonLoadPayService implements OnModuleInit {
     const c = this.mollie.connection(payee.payeeDid);
     if (!c || c.via !== 'oauth' || c.lostAt || !c.organization?.id || c.canReceivePayments === false) return undefined;
     return { payeeId: payee.payeeDid, organizationId: c.organization.id };
+  }
+
+  /**
+   * 2026-11-26 — BEFORE A PRICE IS NAMED (the weakness after part 9b, fixed as recommended): a load a person pays upfront in euros,
+   * through Mollie, where routing is on and the driver is paid by the same company of ours — would its pay go straight into the
+   * carrier's own Mollie account? Where not yet, the Driver app's board says so with the way to connect: Mollie routes only to an
+   * account connected before the sender pays, so connecting afterwards is too late for that load (it is paid the country's way).
+   */
+  mollieFirst(f: Freight, driverDid: string): 'connect' | 'office' | undefined {
+    if (!this.mollie?.cfg.routing || !f.escrow || !f.sellerEntityId || !this.drivers) return undefined;
+    let currency: string;
+    let payee: { entityId?: string; payeeDid: string };
+    try {
+      currency = (this.entities.get(f.sellerEntityId).currency ?? f.postedCurrency ?? '').toUpperCase();
+      payee = this.drivers.payeeOrNone(driverDid);
+    } catch {
+      return undefined;
+    }
+    if (currency !== 'EUR' || this.funding.providerFor(currency) !== 'mollie' || payee.entityId !== f.sellerEntityId) return undefined;
+    if (this.routeFor(driverDid, currency, f.sellerEntityId, 'mollie')) return undefined;
+    return payee.payeeDid === driverDid ? 'connect' : 'office';
   }
 
   /** The payment on our Mollie account this load's money came in by, where it came in through Mollie. */

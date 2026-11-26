@@ -55,7 +55,16 @@ export interface LaunchIntent {
    * bell's first notice opens it on one tap (the owner: "a tooltip on how to get more out of the app").
    */
   guide?: string;
+  /**
+   * 2026-11-26 — A PAGE OF SETTINGS (`?settings=payout` or `?settings=mollie`): where payouts go, or the carrier's own Mollie
+   * account. A changed bank account's notice opens it on one tap, and so does the Driver app's board on a load paid upfront.
+   */
+  settings?: SettingsPage;
 }
+
+/** 2026-11-26 — the pages of Settings a link may open. Anything else is no page: Settings is not opened. */
+export const SETTINGS_PAGES = ['payout', 'mollie'] as const;
+export type SettingsPage = (typeof SETTINGS_PAGES)[number];
 
 /** The part of a load a notice is about, where plain (backend notification.types.ts, loadLink). None: where the answer waits. */
 export type LoadAbout = 'road' | 'seals' | 'claim';
@@ -122,7 +131,8 @@ export function intentOf(href: string): LaunchIntent | null {
   const imported = id('import');
   const guide = p.get('guide') === '1' ? '1' : undefined;
   const trip = id('trip');
-  if (!go && !shared && !files && !chat && !parcel && !offer && !load && !run && !exported && !imported && !guide && !trip) return null;
+  const settings = SETTINGS_PAGES.find((v) => v === p.get('settings'));
+  if (!go && !shared && !files && !chat && !parcel && !offer && !load && !run && !exported && !imported && !guide && !trip && !settings) return null;
   return {
     ...(go ? { go } : {}),
     ...(shared ? { share: shared } : {}),
@@ -136,6 +146,7 @@ export function intentOf(href: string): LaunchIntent | null {
     ...(imported ? { import: imported } : {}),
     ...(guide ? { guide } : {}),
     ...(trip ? { trip } : {}),
+    ...(settings ? { settings } : {}),
   };
 }
 
@@ -145,7 +156,7 @@ export function withoutIntent(href: string): string {
   // `about` is a load's part only beside a load: the front page's contact form reads an `about` of its own.
   if (u.searchParams.has('load')) u.searchParams.delete('about');
   if (u.searchParams.has('run')) u.searchParams.delete('booking');
-  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files', 'chat', 'parcel', 'offer', 'load', 'run', 'export', 'import', 'guide', 'trip']) u.searchParams.delete(k);
+  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files', 'chat', 'parcel', 'offer', 'load', 'run', 'export', 'import', 'guide', 'trip', 'settings']) u.searchParams.delete(k);
   const q = u.searchParams.toString();
   return `${u.pathname}${q ? `?${q}` : ''}${u.hash}`;
 }
@@ -164,6 +175,7 @@ export interface LaunchKinds {
   import: string;
   guide: string;
   trip: string;
+  settings: SettingsPage;
 }
 type Kind = keyof LaunchKinds;
 type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
@@ -172,8 +184,8 @@ type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
  * Each kind waits for its own listener (the share helper's catch, 2026-11-02): a share made to a closed app arrives
  * before anybody listens, and must reach the share sheet when it mounts — not whichever listener came first.
  */
-const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set(), chat: new Set(), parcel: new Set(), offer: new Set(), load: new Set(), run: new Set(), export: new Set(), import: new Set(), guide: new Set(), trip: new Set() };
-const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [], chat: [], parcel: [], offer: [], load: [], run: [], export: [], import: [], guide: [], trip: [] };
+const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set(), chat: new Set(), parcel: new Set(), offer: new Set(), load: new Set(), run: new Set(), export: new Set(), import: new Set(), guide: new Set(), trip: new Set(), settings: new Set() };
+const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [], chat: [], parcel: [], offer: [], load: [], run: [], export: [], import: [], guide: [], trip: [], settings: [] };
 let started = false;
 
 function deliverKind<K extends Kind>(kind: K, value: LaunchKinds[K] | undefined): void {
@@ -198,6 +210,7 @@ function deliver(intent: LaunchIntent | null): void {
   deliverKind('import', intent.import);
   deliverKind('guide', intent.guide);
   deliverKind('trip', intent.trip);
+  deliverKind('settings', intent.settings);
 }
 
 /** Read the address the app was opened at, and the launch queue, once per page. */
@@ -243,7 +256,7 @@ export function onLaunch<K extends Kind>(kind: K, listener: Listener<K>): () => 
  * an export, an import, a screen — never a share or photos, which only another app hands over. A chat first: a message
  * notice is answered there.
  */
-const LINK_KINDS = ['chat', 'parcel', 'offer', 'load', 'run', 'export', 'import', 'guide', 'trip', 'go'] as const;
+const LINK_KINDS = ['chat', 'parcel', 'offer', 'load', 'run', 'export', 'import', 'guide', 'trip', 'settings', 'go'] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 /**

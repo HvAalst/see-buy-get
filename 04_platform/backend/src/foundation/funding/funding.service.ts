@@ -52,6 +52,11 @@ export class FundingService {
     return this.rail.needsPhone?.(currency) ?? true;
   }
 
+  /** 2026-11-26 — the provider a payment in this money goes through: never said to a user, read where it decides what follows. */
+  providerFor(currency: string): string {
+    return this.rail.providerFor?.(currency) ?? this.rail.provider;
+  }
+
   /** Say how a kind of payer is resolved and credited. One registration at boot — see FundingPayer. */
   register(kind: FundingPayerKind, payer: FundingPayer): void {
     this.payers.set(kind, payer);

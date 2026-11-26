@@ -384,6 +384,11 @@ import type { BoardBlocker } from '../../shared/board';
 /** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
 export interface BoardRow {
   freightId: string;
+  /**
+   * 2026-11-26 — paid upfront in euros, and the pay would go straight into the carrier's own Mollie account once connected — it is
+   * not: `connect` (the courier connects its own, before naming a price) or `office` (its fleet's office does).
+   */
+  mollieFirst?: 'connect' | 'office';
   /** 2026-11-13 — this driver's own open price, and the poster's price back where it gave one (unusual loads, U4). */
   mine?: { proposalId: string; price: number; counter?: { price: number; note?: string }; awaitingPayment?: string; counterTaken?: boolean };
   /** 2026-11-13 — what it takes to move it: each end, what the driver brings, the extra work, the handling marks. */

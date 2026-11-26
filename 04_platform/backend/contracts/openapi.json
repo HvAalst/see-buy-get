@@ -80548,6 +80548,14 @@
       "BoardRow": {
         "type": "object",
         "properties": {
+          "mollieFirst": {
+            "type": "string",
+            "description": "2026-11-26 — A LOAD PAID UPFRONT IN EUROS, whose pay would go straight into the carrier's own Mollie account once connected —\nand it is not: `connect`, the courier connects its own before naming a price (Mollie routes only to an account connected\nbefore the sender pays); `office`, its fleet's office does. Absent where it would be routed, or never could be.",
+            "enum": [
+              "connect",
+              "office"
+            ]
+          },
           "paidByShipper": {
             "type": "boolean",
             "description": "A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no\nmoney for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays."
@@ -93442,6 +93450,16 @@
             "type": "string",
             "maxLength": 14,
             "description": "The bank’s BIC, where the bank gives one. Not needed for a transfer in euros within SEPA."
+          },
+          "pin": {
+            "type": "string",
+            "description": "The PIN of the person signed in (the Driver and Fleet apps): asked again before the account is kept.",
+            "maxLength": 12
+          },
+          "password": {
+            "type": "string",
+            "description": "The password of the shop or hub signed in (the Shop and Hub apps), in place of a PIN.",
+            "maxLength": 200
           }
         },
         "required": [

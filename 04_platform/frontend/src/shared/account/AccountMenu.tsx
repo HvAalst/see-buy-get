@@ -5,7 +5,7 @@ import { addressBody, missingPart, startingCountry, type AddressFormat, type Add
 import { AddressFields, addressPartName } from './AddressFields';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useBackLayer } from '../nav';
-import { onLaunch } from '../launch';
+import { onLaunch, type SettingsPage } from '../launch';
 import { AuthImage } from '../ui/AuthImage';
 import { Button } from '../ui/Button';
 import { ErrorNote, Note, uploadFailureSentence } from '../ui/ErrorNote';
@@ -90,6 +90,10 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
   // 2026-11-02 — the bell's first notice opens the guide here, on one tap (`?guide=1`, shared/launch.ts; the owner: "a
   // tooltip on how to get more out of the app"). Installed already, the guide opens without its install step.
   useEffect(() => (installs ? onLaunch('guide', () => setSheet('install')) : undefined), [installs]);
+  // 2026-11-26 — A PAGE OF SETTINGS ASKED BY A LINK (`?settings=payout|mollie`): a changed bank account's notice, or the Driver
+  // app's board on a load paid upfront — Settings opens on that page, on one tap.
+  const [startAt, setStartAt] = useState<SettingsPage | null>(null);
+  useEffect(() => onLaunch('settings', (page) => { setStartAt(page); setSheet('settings'); }), []);
   // 2026-11-19 — BACK FROM MOLLIE'S SIGN-IN (the payments plan, part 2): Settings opens on Mollie once, saying how it ended,
   // and the address loses those words, so a reload does not say it again.
   const [mollieBack, setMollieBack] = useState<MollieBack | null>(() => (typeof location === 'undefined' ? null : mollieBackOf(location.search)));
@@ -231,7 +235,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
       {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
       {/* 2026-11-02 — messages in the car are the Driver app's alone (shown there only inside the Play app). */}
-      <SettingsSheet open={sheet === 'settings'} onClose={() => { setSheet(null); setMollieBack(null); }} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} car={app === 'driver' ? api.car : undefined} mollieBack={mollieBack} />
+      <SettingsSheet open={sheet === 'settings'} onClose={() => { setSheet(null); setMollieBack(null); setStartAt(null); }} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} car={app === 'driver' ? api.car : undefined} mollieBack={mollieBack} startAt={startAt} />
     </div>
   );
 }

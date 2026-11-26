@@ -27,6 +27,7 @@ import { MollieForm } from './MollieSettings';
 import { mollieSub, showsMollie, type MollieBack } from './mollie';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi, ClosingStanding } from './useAccount';
+import type { SettingsPage } from '../launch';
 
 type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'car' | 'payout' | 'mollie' | 'mute' | 'close' | 'closed';
 
@@ -55,6 +56,16 @@ export interface SettingsSheetProps {
   car?: CarApi;
   /** 2026-11-19 — back from Mollie's sign-in: the sheet opens on Mollie, saying how it ended (AccountMenu reads the address). */
   mollieBack?: MollieBack | null;
+  /** 2026-11-26 — a page a link asked for (`?settings=payout|mollie`): opened there, where this account has that page. */
+  startAt?: SettingsPage | null;
+}
+
+/** 2026-11-26 — the page Settings opens on: back from Mollie, a page a link asked for where this account has it, else the list. */
+export function firstView(api: AccountApi, mollieBack: MollieBack | null | undefined, startAt: SettingsPage | null | undefined): View {
+  if (mollieBack) return 'mollie';
+  if (startAt === 'payout' && hasPayoutNumber(api.payout)) return 'payout';
+  if (startAt === 'mollie' && showsMollie(api.mollie)) return 'mollie';
+  return 'list';
 }
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
@@ -76,7 +87,7 @@ export function hasSettings(api: AccountApi, onChangePassword?: () => void, devi
  * holding a signed-in phone is its owner. Somebody who signs in with a password only has no PIN and is not shown
  * rows that could do nothing for them but refuse.
  */
-export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices, car, mollieBack }: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices, car, mollieBack, startAt }: SettingsSheetProps) {
   const t = useT();
   const [view, setView] = useState<View>('list');
   const [saved, setSaved] = useState(false);
@@ -89,7 +100,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const [payoutSaved, setPayoutSaved] = useState<PayoutNumberSaved | null>(null);
   useEffect(() => {
     if (open) {
-      setView(mollieBack ? 'mollie' : 'list');
+      setView(firstView(api, mollieBack, startAt));
       setSaved(false);
       setStopped(false);
       setStopError(null);
@@ -227,7 +238,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'email' ? <EmailForm api={api} onDone={() => { setSaved(true); setView('list'); }} /> : null}
       {view === 'phone' ? <PhoneForm api={api} onDone={() => setView('phone-done')} /> : null}
       {view === 'contract' ? <ContractCompany api={api} /> : null}
-      {view === 'payout' && api.payout?.paysTo === 'bank' ? <PayoutBankForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
+      {view === 'payout' && api.payout?.paysTo === 'bank' ? <PayoutBankForm api={api} party={devices ? t(PARTY_WORD[devices.party ?? 'shop']) : null} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'payout' && api.payout?.paysTo !== 'bank' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'mollie' ? <MollieForm api={api} back={mollieBack ?? null} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
@@ -711,18 +722,23 @@ function CloseForm({ api, onClosed }: { api: AccountApi; onClosed: () => void })
  * 2026-11-25 (route plan part 4) — THE BANK ACCOUNT PAYOUTS GO TO, where the partner pays to one (the European Union): its IBAN,
  * the name on it as the bank has it, and a BIC where the bank gives one. Checked by the server; a change pauses payouts for a
  * day (said before it is made).
+ *
+ * 2026-11-26 — and the sign-in again before it is kept: the PIN in the Driver and Fleet apps, the shop's or hub's password in theirs
+ * (`party`, from the account's own phones). An open app is not proof of who holds the phone.
  */
-function PayoutBankForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNumberSaved) => void }) {
+export function PayoutBankForm({ api, party, onDone }: { api: AccountApi; party: string | null; onDone: (saved: PayoutNumberSaved) => void }) {
   const t = useT();
   const [account, setAccount] = useState('');
   const [holder, setHolder] = useState('');
   const [bic, setBic] = useState('');
+  const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
-  const ready = account.replace(/\s/g, '').length >= 15 && holder.trim().length >= 2;
+  const proven = party ? secret.length > 0 : secret.length === PIN_LENGTH;
+  const ready = account.replace(/\s/g, '').length >= 15 && holder.trim().length >= 2 && proven;
   const save = async () => {
     setBusy(true);
-    const r = await api.savePayoutBank({ account, holder, bic });
+    const r = await api.savePayoutBank({ account, holder, bic, ...(party ? { password: secret } : { pin: secret }) });
     setBusy(false);
     if (r.error || !r.data) return setError(r.error ?? null);
     onDone(r.data);
@@ -745,6 +761,17 @@ function PayoutBankForm({ api, onDone }: { api: AccountApi; onDone: (saved: Payo
         <input id="acct-payout-bic" class="input" type="text" autocomplete="off" autocapitalize="characters" spellcheck={false} value={bic} disabled={busy} onInput={(e) => { setBic((e.target as HTMLInputElement).value); setError(null); }} />
         <p class="hint"><Abbreviated text={t('account.payout.bicHint')} /></p>
       </div>
+      {party ? (
+        <div class="field">
+          <label class="field__label" for="acct-payout-password">{t('account.shopDevices.passwordToConfirm', { party })}</label>
+          <input id="acct-payout-password" class="input" type="password" autocomplete="current-password" value={secret} disabled={busy} onInput={(e) => { setSecret((e.target as HTMLInputElement).value); setError(null); }} />
+        </div>
+      ) : (
+        <div class="field">
+          <span class="field__label">{t('account.settings.pinToConfirm')}</span>
+          <CodeBoxes id="acct-payout-pin" label={t('account.settings.pinToConfirm')} length={PIN_LENGTH} value={secret} onInput={(v) => { setSecret(v); setError(null); }} disabled={busy} mask />
+        </div>
+      )}
       <Refused error={error} />
       <Button chevron={false} busy={busy} disabled={!ready} onClick={() => void save()}>
         {t('account.payout.saveBank')}

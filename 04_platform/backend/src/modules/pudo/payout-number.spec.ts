@@ -7,11 +7,26 @@ import type { FleetManagerService } from './fleet-manager.service';
 import type { MdpService } from './mdp.service';
 import { PayoutNumberService } from './payout-number.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
+import { GlosError } from '../../foundation/http/glos-error';
 
 /**
  * WHO SETS A PAYOUT NUMBER, and what the payout run is told. A courier is paid itself; a fleet driver is not — its fleet
  * is, and the fleet's office sets the number; a hub sets its own; a shop is paid into its float; staff set none.
  */
+/** 2026-11-26 — a person's PIN as the server checks it (PersonService.confirmPin): a wrong one refused, each try counted. */
+function pinOf(pin: string) {
+  const tries: string[] = [];
+  return {
+    tries,
+    confirmPin: (personDid: string, given: string) => {
+      tries.push(personDid);
+      if (given !== pin) throw new GlosError('PIN_WRONG', 'That is not your PIN');
+    },
+    findByDid: (personDid: string) => ({ personDid }),
+    emailOf: () => 'ivan@example.test',
+  };
+}
+
 describe('a payee’s own payout number', () => {
   const H = 3_600_000;
   const T0 = Date.parse('2026-10-18T08:00:00Z');
@@ -148,14 +163,15 @@ describe('a payee’s own payout number', () => {
     const sms = { sends: () => false, mayGoTo: () => true } as unknown as SmsService;
     const agents = { get: (did: string) => ({ did, shopName: 'Magazin Vitosha' }), countryOf: () => 'BG' };
     const partners = { partnerAt: (c: string) => (c === 'BG' ? { entityId: 'partner-bg', name: 'Sofia Partner OOD' } : undefined) };
-    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption());
-    const ivan = { role: 'driver', did: 'did:courier-ivan', actorName: 'Ivan' } as IntrospectionResult;
+    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption(), pinOf('2468') as never);
+    const ivan = { role: 'driver', did: 'did:courier-ivan', personDid: 'did:person-ivan', actorName: 'Ivan' } as IntrospectionResult;
+    const ok = { pin: '2468' };
     expect(svc.view(ivan)).toEqual({ way: 'partner', paidBy: 'Sofia Partner OOD', paysTo: 'bank', country: 'BG' });
     await expect(svc.requestCode(ivan, '+359 888 123 456', T0)).rejects.toThrow('In Bulgaria you are paid to your bank account: set that instead of a number.');
-    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 79', holder: 'Ivan Petrov' }, T0)).toThrow(/does not add up/);
-    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'I' }, T0)).toThrow(/holder’s name/);
-    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'Ivan Petrov', bic: 'BNBG12' }, T0)).toThrow(/Not a BIC/);
-    const saved = svc.setBank(ivan, { account: 'bg80 bnbg 9661 1020 3456 78', holder: ' Ivan  Petrov ', bic: 'bnbgbgsf' }, T0);
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 79', holder: 'Ivan Petrov', ...ok }, T0)).toThrow(/does not add up/);
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'I', ...ok }, T0)).toThrow(/holder’s name/);
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 78', holder: 'Ivan Petrov', bic: 'BNBG12', ...ok }, T0)).toThrow(/Not a BIC/);
+    const saved = svc.setBank(ivan, { account: 'bg80 bnbg 9661 1020 3456 78', holder: ' Ivan  Petrov ', bic: 'bnbgbgsf', ...ok }, T0);
     expect(saved).toEqual({ way: 'partner', paidBy: 'Sofia Partner OOD', paysTo: 'bank', country: 'BG', masked: 'BG•• •••• 5678', confirmedAt: new Date(T0).toISOString() });
     const to = svc.partnerDestination('did:courier-ivan', T0, 'bank');
     expect(to).toEqual({ numberId: expect.stringMatching(/^pb_/), masked: 'BG•• •••• 5678' });
@@ -163,9 +179,9 @@ describe('a payee’s own payout number', () => {
     expect(svc.fullBank('did:courier-ivan', 'pb_other')).toBeUndefined();
     // Sealed where it is kept: the account is in no record as typed.
     expect(JSON.stringify((svc as unknown as { banks: Map<string, unknown> }).banks.get('did:courier-ivan'))).not.toContain('96611020345678');
-    expect(() => svc.setBank(ivan, { account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov' }, T0 + 1000)).toThrow('That is already your payout account.');
+    expect(() => svc.setBank(ivan, { account: 'BG80BNBG96611020345678', holder: 'Ivan Petrov', ...ok }, T0 + 1000)).toThrow('That is already your payout account.');
     // Changed: nothing paid to the new account for a day, and the money checks see the change.
-    svc.setBank(ivan, { account: 'LT12 1000 0111 0100 1000', holder: 'Ivan Petrov' }, T0 + 60_000);
+    svc.setBank(ivan, { account: 'LT12 1000 0111 0100 1000', holder: 'Ivan Petrov', ...ok }, T0 + 60_000);
     expect(svc.partnerDestination('did:courier-ivan', T0 + 2 * 60_000, 'bank')).toEqual({ reason: 'bank_new' });
     expect(svc.partnerDestination('did:courier-ivan', T0 + 60_000 + 24 * H + 1, 'bank')).toMatchObject({ masked: 'LT•• •••• 1000' });
     expect(svc.changesOf('did:courier-ivan')).toEqual([new Date(T0 + 60_000).toISOString()]);
@@ -179,5 +195,82 @@ describe('a payee’s own payout number', () => {
   it('a bank account is refused where the payee is paid by M-Pesa', () => {
     const svc = make();
     expect(() => svc.setBank({ role: 'driver', did: 'did:courier', actorName: 'Amos' } as IntrospectionResult, { account: 'BG80BNBG96611020345678', holder: 'Amos K' }, T0)).toThrow('In Kenya payouts do not go to a bank account.');
+  });
+});
+
+/**
+ * 2026-11-26 — THE SIGN-IN ASKED AGAIN BEFORE A BANK ACCOUNT IS KEPT (the weakness after part 4b, fixed as recommended): an open app is
+ * not proof of who holds the phone. The PIN where a person signed in, the shop's or hub's password where it did; checked after the
+ * account (a mistyped IBAN costs no try), before anything is kept; a change told in the bell and by email.
+ */
+describe('a bank account kept only with the sign-in asked again', () => {
+  const T0 = Date.parse('2026-11-26T08:00:00Z');
+  const build = () => {
+    const payouts = { registerDestinations: () => undefined } as unknown as PayoutService;
+    const drivers = { get: (did: string) => ({ did, jurisdiction: 'BG' }) } as unknown as DriverService;
+    const managers = { get: (did: string) => ({ did, jurisdiction: 'BG' }) } as unknown as FleetManagerService;
+    const mdps = { list: () => [{ did: 'did:hub-sofia', mdpId: 'mdp_sofia' }], countryOf: () => 'BG' } as unknown as MdpService;
+    const sms = { sends: () => false, mayGoTo: () => true } as unknown as SmsService;
+    const agents = { get: (did: string) => ({ did }), countryOf: () => 'BG' };
+    const partners = { partnerAt: () => ({ entityId: 'partner-bg', name: 'Sofia Partner OOD' }) };
+    const persons = pinOf('2468');
+    const passwords: string[] = [];
+    const accounts = {
+      confirmPassword: (did: string, password: string) => {
+        passwords.push(did);
+        if (password !== 'hub-secret-1') throw new GlosError('PASSWORD_WRONG', 'That is not the password');
+      },
+      emailForDid: (did: string) => (did === 'did:hub-sofia' ? 'hub@example.test' : undefined),
+    };
+    const bells: Array<{ owner: string; kind: string; title: string; link?: string }> = [];
+    const notices = { notify: async (owner: string, p: { kind: string; title: string; link?: string }) => void bells.push({ owner, kind: p.kind, title: p.title, link: p.link }) };
+    const mails: Array<{ address: string; headline: string }> = [];
+    const mail = { send: async (_k: string, to: { address: string }, p: { headline: string }) => (mails.push({ address: to.address, headline: p.headline }), true) };
+    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption(), persons as never, accounts as never, notices as never, mail as never);
+    return { svc, persons, passwords, bells, mails };
+  };
+  const ivan = { role: 'driver', did: 'did:courier-ivan', personDid: 'did:person-ivan', actorName: 'Ivan' } as IntrospectionResult;
+  const hub = { role: 'mdp', did: 'did:hub-sofia', actorName: 'Hub Sofia' } as IntrospectionResult;
+  const IBAN = 'BG80 BNBG 9661 1020 3456 78';
+
+  it('a courier gives its PIN: none or a wrong one keeps nothing; a mistyped IBAN is refused before the PIN is tried', () => {
+    const { svc, persons } = build();
+    expect(() => svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov' }, T0)).toThrow('Enter your PIN to save the account');
+    expect(() => svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov', pin: '1111' }, T0)).toThrow('That is not your PIN');
+    expect(svc.partnerDestination('did:courier-ivan', T0, 'bank')).toEqual({ reason: 'no_bank' });
+    expect(() => svc.setBank(ivan, { account: 'BG80 BNBG 9661 1020 3456 79', holder: 'Ivan Petrov', pin: '1111' }, T0)).toThrow(/does not add up/);
+    expect(persons.tries).toEqual(['did:person-ivan']);
+    // A password is no stand-in for a courier's PIN.
+    expect(() => svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov', password: 'hub-secret-1' }, T0)).toThrow('Enter your PIN to save the account');
+    expect(svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov', pin: '2468' }, T0).masked).toBe('BG•• •••• 5678');
+  });
+
+  it('a hub gives its password: a wrong one keeps nothing', () => {
+    const { svc, passwords } = build();
+    expect(() => svc.setBank(hub, { account: IBAN, holder: 'Hub Sofia EOOD' }, T0)).toThrow('Enter the password you sign in with to save the account');
+    expect(() => svc.setBank(hub, { account: IBAN, holder: 'Hub Sofia EOOD', password: 'guess' }, T0)).toThrow('That is not the password');
+    expect(svc.partnerDestination('mdp_sofia', T0, 'bank')).toEqual({ reason: 'no_bank' });
+    expect(svc.setBank(hub, { account: IBAN, holder: 'Hub Sofia EOOD', password: 'hub-secret-1' }, T0).masked).toBe('BG•• •••• 5678');
+    expect(passwords).toEqual(['did:hub-sofia', 'did:hub-sofia']);
+  });
+
+  it('a first account is not told; a change is, in the bell (opening Settings on it) and by email', async () => {
+    const { svc, bells, mails } = build();
+    svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov', pin: '2468' }, T0);
+    svc.setBank(hub, { account: IBAN, holder: 'Hub Sofia EOOD', password: 'hub-secret-1' }, T0);
+    await Promise.resolve();
+    expect(bells).toEqual([]);
+    expect(mails).toEqual([]);
+    svc.setBank(ivan, { account: 'LT12 1000 0111 0100 1000', holder: 'Ivan Petrov', pin: '2468' }, T0 + 60_000);
+    svc.setBank(hub, { account: 'LT12 1000 0111 0100 1000', holder: 'Hub Sofia EOOD', password: 'hub-secret-1' }, T0 + 60_000);
+    await Promise.resolve();
+    expect(bells).toEqual([
+      { owner: 'did:courier-ivan', kind: 'security', title: 'Your payout bank account was changed', link: '/?settings=payout' },
+      { owner: 'did:hub-sofia', kind: 'security', title: 'Your payout bank account was changed', link: '/?settings=payout' },
+    ]);
+    expect(mails).toEqual([
+      { address: 'ivan@example.test', headline: 'Your payout bank account was changed' },
+      { address: 'hub@example.test', headline: 'Your payout bank account was changed' },
+    ]);
   });
 });
