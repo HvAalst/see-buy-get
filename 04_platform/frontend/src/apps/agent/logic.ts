@@ -89,7 +89,7 @@ export function phonePayBlock(terms: TakeInTerms | null, pay: PhonePay | null, p
   const mine = pay && pay.parcelId === parcelId.trim().toUpperCase() ? pay : null;
   if (mine?.state === 'paid') return null;
   if (!online) return t('agent.accept.pay.needsSignal');
-  if (mine?.state === 'asked') return t('agent.accept.pay.waiting', { ends: mine.phoneEnds });
+  if (mine?.state === 'asked') return mine.byQr ? t('agent.accept.pay.waitingQr') : t('agent.accept.pay.waiting', { ends: mine.phoneEnds });
   return t('agent.accept.pay.first');
 }
 

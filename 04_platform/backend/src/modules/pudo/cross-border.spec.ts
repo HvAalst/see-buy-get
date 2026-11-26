@@ -343,6 +343,32 @@ describe('crossing a border', () => {
         await expect(parcels.askPhonePayment(ke.did, 'PUD-KE-P1', '+254700111000')).rejects.toThrow(/does not pay by phone/);
       });
 
+      /*
+       * 2026-11-26 — where the partner's own account takes payments by a page (its Mollie account, the European Union): the counter
+       * is told so, no phone is asked, and the take-in waits for the page to be paid. The hub's side is payment-hub.mollie.spec.ts.
+       */
+      it('by a QR code where the partner’s account takes payments by a page: no phone asked; the take-in waits for the page', async () => {
+        const { ug, walkUp, partner } = await partnerCounter('Q');
+        const page = { paymentId: 'hp_q1', kind: 'in', ownerEntityId: partner.entityId, provider: 'mollie', reference: 'PUD-UG-Q1', amount: 9000, currency: 'UGX', phoneEnds: '', byQr: true, state: 'asked', test: true, askedAt: new Date().toISOString(), siteId: ug.did, providerRef: 'tr_q1', link: 'https://mollie.stand-in/checkout/tr_q1' };
+        const by = jest.spyOn(hub, 'collectsBy').mockReturnValue('qr');
+        const collect = jest.spyOn(hub, 'collect').mockResolvedValue(page as never);
+        const get = jest.spyOn(hub, 'get').mockReturnValue(page as never);
+        try {
+          expect(parcels.takeInTerms(ug.did).payByPhone).toEqual({ to: partner.name, price: 9000, currency: 'UGX', qr: true });
+          const asked = await parcels.askPhonePayment(ug.did, 'PUD-UG-Q1', undefined);
+          expect(collect.mock.calls[0][1]).not.toHaveProperty('payerPhone');
+          expect(asked).toMatchObject({ byQr: true, link: 'https://mollie.stand-in/checkout/tr_q1', qrSvg: expect.stringMatching(/^<svg /) });
+          expect(() => parcels.accept(walkUp('PUD-UG-Q1', { paymentId: 'hp_q1' }))).toThrow('The payment is still open: the sender pays on the page the code opens');
+        } finally {
+          by.mockRestore();
+          collect.mockRestore();
+          get.mockRestore();
+        }
+        // By a prompt, the phone it rings is needed.
+        expect(parcels.takeInTerms(ug.did).payByPhone).not.toHaveProperty('qr');
+        await expect(parcels.askPhonePayment(ug.did, 'PUD-UG-Q2', undefined)).rejects.toThrow('Give the phone the payment is asked of');
+      });
+
       it('refused before anything is kept: no payment, one asked elsewhere or for another parcel, one still waiting, one declined, one for less than the price', async () => {
         const { ug, walkUp, partner } = await partnerCounter('R');
         const other = shop('Kampala Duka R2', 'Kampala', { lat: 0.36, lng: 32.59 }, 'UG');

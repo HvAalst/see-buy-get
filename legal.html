@@ -1293,6 +1293,21 @@
       "case": "A Sofia shop is owed €30 for a week of hand-outs; at 15:00 UTC our server asks Revolut to pay it from the partner’s account to the shop’s IBAN.",
       "meanwhile": "Payouts run on test money until a second member of staff switches the live key on. Each hand sets its own bank account; it is kept encrypted, shown by its last four characters, and deleted with the account.",
       "source": "The owner’s choice of 24 November 2026 (“Provider we connect”); Revolut Business API (revolut-engineering/revolut-openapi, 2025); Directive (EU) 2015/2366 art. 3(j) and 4(15); Regulation (EU) 2016/679 art. 28."
+    },
+    {
+      "id": "L76",
+      "area": "money",
+      "when": "before-country",
+      "status": "open",
+      "q": "At the Bulgarian partner’s counters a sender pays on a Mollie page opened from a QR code on the shop’s screen; the money goes into the partner’s own Mollie account, connected by the partner’s own people through our Mollie Connect app (OAuth: we create the payment and, after a void, its refund, on the partner’s account; we never hold the money or a key, only its sealed access tokens). Is that, like L75, a technical service the payment services rules leave out (PSD2 art. 3(j)), with Mollie the licensed payment institution and the partner the merchant? Does the shop showing the code for the partner make it a commercial agent we must name (art. 3(b))? Does keeping the partner’s Mollie access tokens make us its processor (GDPR art. 28) for the payers’ card or account details Mollie shows us? And our fee on each payment stays owed by the partner (L62): is not taking it as a Mollie application fee the right choice there?",
+      "moment": "Before the partner connects a live Mollie account.",
+      "nations": [
+        "BG",
+        "EU"
+      ],
+      "case": "A walk-up at a Sofia shop pays €9.50 for a parcel by card on the Mollie page; it lands in Sofia Partner OOD’s Mollie balance, and the label prints.",
+      "meanwhile": "Until the partner connects its own Mollie account, and while Mollie still checks it, its counters take test money by the stand-in. Nothing of the payer is kept here but the parcel number and the amount.",
+      "source": "The owner, 26 November 2026: “fix weaknesses as recommended”; Mollie in Bulgaria since 3 June 2026 (mollie.com/news/mollie-launches-bulgaria); Mollie Connect (docs.mollie.com, OAuth); Directive (EU) 2015/2366 art. 3(b), 3(j); Regulation (EU) 2016/679 art. 28."
     }
   ]
 }

@@ -4,18 +4,9 @@ import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
 import { PersistentMap } from '../store/persistent-map';
+import { customsUnionOf } from '../countries/customs-union';
 import { MollieClient, MollieError, type FetchLike } from './mollie-client';
-import {
-  directPayWayOf,
-  type MollieConfig,
-  type MollieConnectedView,
-  type MollieConnection,
-  type MollieConnectionView,
-  type MollieConnectStarted,
-  type MolliePayee,
-  type MollieReturn,
-  type MollieVia,
-} from './mollie.types';
+import { directPayWayOf, type MollieConfig, type MollieConnectedView, type MollieConnection, type MollieConnectionView, type MollieConnectStarted, type MolliePayee, type MollieReturn, type MollieVia, MOLLIE_PARTNER_SCOPES, MolliePartnerView, type MollieBackTo } from './mollie.types';
 
 export const MOLLIE_CONFIG = 'MOLLIE_CONFIG';
 export const MOLLIE_FETCH = 'MOLLIE_FETCH';
@@ -66,7 +57,7 @@ export class MollieConnectService {
   readonly cfg: MollieConfig;
   private readonly client: MollieClient;
   private readonly connections = new PersistentMap<string, MollieConnection>('mollie-connections');
-  private readonly states = new PersistentMap<string, { payeeId: string; by: string; back: 'driver' | 'fleet'; at: string }>('mollie-oauth-states');
+  private readonly states = new PersistentMap<string, { payeeId: string; by: string; back: MollieBackTo; at: string }>('mollie-oauth-states');
 
   constructor(
     @Optional() private readonly crypt?: FieldEncryption,
@@ -127,6 +118,48 @@ export class MollieConnectService {
     const state = randomBytes(24).toString('base64url');
     this.states.set(state, { payeeId: p.payeeId, by: p.by, back: p.back, at: new Date(now).toISOString() });
     return { url: this.client.authorizeUrl(state) };
+  }
+
+  /* ------------------------------------------------------------ a partner's own account -- */
+
+  /**
+   * 2026-11-26 — A PARTNER'S OWN MOLLIE ACCOUNT, FOR THE MONEY ITS COUNTERS TAKE (the weakness after route plan part 4b, fixed as
+   * recommended): in a country of the European Union, a sender pays at a partner's shop by a Mollie page opened from a QR code, into
+   * the partner's own account. Connected by the partner's own people, in the Partner app, through the same Connect app — asked for
+   * refunds too, so a parcel voided after it was paid goes back to the card it was paid from. Kept under the partner company's id.
+   */
+  partnerView(entityId: string, country: string | undefined, now: number = Date.now()): MolliePartnerView {
+    if (customsUnionOf(country) !== 'EU') return { available: false, why: 'country' };
+    const via = this.via();
+    if (!via) return { available: false, why: 'off' };
+    const c = this.connections.get(entityId);
+    if (c?.via === 'oauth' && !c.lostAt && (!c.checkedAt || now - Date.parse(c.checkedAt) > CHECK_EVERY_MS)) void this.check(entityId, now);
+    return { available: true, via, ...(c ? { connected: viewOf(c) } : {}) };
+  }
+
+  /** Mollie's sign-in for the partner, back to the Partner app; with our test key, connected at once (test money). */
+  connectPartner(entityId: string, country: string | undefined, by: string, now: number = Date.now()): MollieConnectStarted {
+    if (customsUnionOf(country) !== 'EU') throw new GlosError('FORBIDDEN', 'Counter payments go into a Mollie account in the European Union only');
+    if (!by?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who connects it: it is kept by name');
+    const via = this.via();
+    if (!via) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
+    if (via === 'test_key') {
+      const c: MollieConnection = { payeeId: entityId, via, testmode: true, connectedAt: new Date(now).toISOString(), connectedBy: by.trim() };
+      this.connections.set(entityId, c);
+      return { connected: viewOf(c) };
+    }
+    this.prune(now);
+    const state = randomBytes(24).toString('base64url');
+    this.states.set(state, { payeeId: entityId, by: by.trim(), back: 'partner', at: new Date(now).toISOString() });
+    return { url: this.client.authorizeUrl(state, MOLLIE_PARTNER_SCOPES) };
+  }
+
+  /** Disconnected by the partner: the leave given back to Mollie, the connection forgotten. Its counters take test money again. */
+  async disconnectPartner(entityId: string, country: string | undefined): Promise<MolliePartnerView> {
+    const c = this.connections.get(entityId);
+    if (c?.via === 'oauth' && c.refreshToken) await this.client.revoke(this.open(c.refreshToken), 'refresh_token').catch(() => undefined);
+    this.connections.delete(entityId);
+    return this.partnerView(entityId, country);
   }
 
   /**

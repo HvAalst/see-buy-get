@@ -4,6 +4,7 @@ import { rememberWay, type CodeWay } from '../../shared/account/CodeWays';
 import { carriedEntry, takeCarryFromAddress, type Carried } from '../../shared/account/carry';
 import { isNewDevice } from '../../shared/account/pin';
 import { isPinReset } from '../../shared/account/recovery';
+import { mollieBackOf, withoutMollieBack, type MollieBack } from '../../shared/account/mollie';
 import type { Agreement } from '../../shared/documents/documents';
 import { LIVE_READ_GAP_MS, openLive, throttleReads, type LiveState } from '../../shared/live';
 import type { SbgError } from '../../lib/sbg';
@@ -29,6 +30,7 @@ import {
   type PartnerOwed,
   type PartnerMoney,
   type PartnerStatements,
+  type PartnerMollie,
   type PartnerPayouts,
   type PersonAuth,
   type PersonClient,
@@ -69,6 +71,11 @@ export interface PartnerState {
   money: PartnerMoney | null;
   /** 2026-11-24 — what SeeBuyGet's companies owe it, week by week (route plan part 4). */
   statements: PartnerStatements | null;
+  /** 2026-11-26 — its own Mollie account, for the money its counters take; and how a return from Mollie's sign-in ended. */
+  mollie: PartnerMollie | null;
+  mollieBack: MollieBack | null;
+  mollieBusy: boolean;
+  mollieError: SbgError | null;
   /** The last read failed: the figures on screen are the ones before it, and it says so. */
   owedFailed: boolean;
   /** Whether the live view is open: the figures follow each step as it is done. */
@@ -96,6 +103,10 @@ const INITIAL: PartnerState = {
   payouts: null,
   money: null,
   statements: null,
+  mollie: null,
+  mollieBack: null,
+  mollieBusy: false,
+  mollieError: null,
   owedFailed: false,
   live: 'off',
   section: 'home',
@@ -121,6 +132,9 @@ export interface PartnerActions {
   signOut: () => void;
   /** The session reading for the partner, for the account's own screens. Null before one is open. */
   partnerClient: () => PartnerClient | null;
+  /** 2026-11-26 — connect its own Mollie account (Mollie's sign-in opens), or disconnect it. */
+  connectMollie: () => Promise<void>;
+  disconnectMollie: () => Promise<void>;
 }
 
 export function usePartnerApp(): { state: PartnerState; actions: PartnerActions } {
@@ -148,21 +162,48 @@ export function usePartnerApp(): { state: PartnerState; actions: PartnerActions 
 
   /** Read what the partner owes. A failed read keeps the figures already on screen, and says so. */
   const refresh = useCallback(async () => {
-    const [r, paid, money, weeks] = await Promise.all([partner.current.owed(), partner.current.payouts(), partner.current.money(), partner.current.statements()]);
+    const [r, paid, money, weeks, mollie] = await Promise.all([partner.current.owed(), partner.current.payouts(), partner.current.money(), partner.current.statements(), partner.current.mollie()]);
     if (r.error?.status === 401 || r.error?.status === 403) return void (await backToListRef.current());
     if (r.error || !r.data) return patch({ owedFailed: true });
-    patch({ owed: r.data, owedFailed: false, ...(paid.data ? { payouts: paid.data } : {}), ...(money.data ? { money: money.data } : {}), ...(weeks.data ? { statements: weeks.data } : {}) });
+    patch({ owed: r.data, owedFailed: false, ...(paid.data ? { payouts: paid.data } : {}), ...(money.data ? { money: money.data } : {}), ...(weeks.data ? { statements: weeks.data } : {}), ...(mollie.data ? { mollie: mollie.data } : {}) });
   }, []);
 
+  // 2026-11-26 — BACK FROM MOLLIE'S SIGN-IN: the partner opens on Money, saying how it ended, once; the address loses those words.
+  const mollieBackRef = useRef<MollieBack | null>(typeof location === 'undefined' ? null : mollieBackOf(location.search));
   const enterPartner = useCallback(
     (me: PartnerMe) => {
       rememberLast(me.entityId);
       setPartnerOpen(true);
-      setState((s) => ({ ...s, phase: 'ready', partner: me, busy: false, error: null, section: s.partner?.entityId === me.entityId ? s.section : 'home' }));
+      const back = mollieBackRef.current;
+      mollieBackRef.current = null;
+      if (back) {
+        try {
+          history.replaceState(history.state, '', withoutMollieBack(location.href));
+        } catch {
+          /* an address that cannot be changed is only said twice */
+        }
+      }
+      setState((s) => ({ ...s, phase: 'ready', partner: me, busy: false, error: null, section: back ? 'money' : s.partner?.entityId === me.entityId ? s.section : 'home', ...(back ? { mollieBack: back } : {}) }));
       void refresh();
     },
     [refresh],
   );
+
+  /** 2026-11-26 — its own Mollie account: Mollie's sign-in opens (or, on test money, it is connected at once). */
+  const connectMollie = useCallback(async () => {
+    patch({ mollieBusy: true, mollieError: null, mollieBack: null });
+    const r = await partner.current.connectMollie();
+    if (r.error || !r.data) return patch({ mollieBusy: false, mollieError: r.error ?? null });
+    if (r.data.url) return void location.assign(r.data.url);
+    patch({ mollieBusy: false });
+    await refresh();
+  }, [refresh]);
+
+  const disconnectMollie = useCallback(async () => {
+    patch({ mollieBusy: true, mollieError: null, mollieBack: null });
+    const r = await partner.current.disconnectMollie();
+    patch({ mollieBusy: false, ...(r.data ? { mollie: r.data } : {}), mollieError: r.error ?? null });
+  }, []);
 
   const open = useCallback(
     async (entityId: string) => {
@@ -192,7 +233,7 @@ export function usePartnerApp(): { state: PartnerState; actions: PartnerActions 
     rememberLast(null);
     partner.current = createPartnerClient();
     setPartnerOpen(false);
-    patch({ partner: null, owed: null, payouts: null, money: null, statements: null, owedFailed: false, phase: 'boot', section: 'home' });
+    patch({ partner: null, owed: null, payouts: null, money: null, statements: null, mollie: null, mollieBack: null, owedFailed: false, phase: 'boot', section: 'home' });
     await loadMine();
   }, [loadMine]);
   const backToListRef = useRef(backToList);
@@ -337,6 +378,8 @@ export function usePartnerApp(): { state: PartnerState; actions: PartnerActions 
     },
 
     partnerClient: () => (partnerOpen ? partner.current : null),
+    connectMollie,
+    disconnectMollie,
   };
 
   return { state, actions };

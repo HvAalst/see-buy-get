@@ -1,8 +1,10 @@
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import type { LiveState } from '../../../shared/live';
 import { cash } from '../../../shared/money';
-import type { PartnerMoney, PartnerStatements } from '../api';
-import type { PartnerState } from '../usePartnerApp';
+import type { PartnerMollie, PartnerMoney, PartnerStatements } from '../api';
+import type { PartnerActions, PartnerState } from '../usePartnerApp';
+import { mollieBackSays, type MollieBack } from '../../../shared/account/mollie';
+import type { SbgError } from '../../../lib/sbg';
 import { KIND, LiveTag, when } from './HomeScreen';
 
 /**
@@ -152,11 +154,61 @@ export function StatementsSection({ view, t }: { view: PartnerStatements | null;
   );
 }
 
-export function MoneyScreen({ state }: { state: PartnerState }) {
+/**
+ * 2026-11-26 — PAYMENTS AT YOUR COUNTERS (the weakness after route plan part 4b, fixed as recommended): in a country of the European
+ * Union, senders pay at the partner's shops from a QR code, into the partner's own Mollie account. Connected here, by the partner's
+ * own people — they sign in to Mollie themselves, and nobody types a key. Until it is connected, and while Mollie still checks it,
+ * the counters take test money. Not shown where the counters' payments go another way.
+ */
+export function CounterPaymentsSection({ view, back, busy, error, onConnect, onDisconnect, t }: { view: PartnerMollie | null; back: MollieBack | null; busy: boolean; error: SbgError | null; onConnect: () => void; onDisconnect: () => void; t: Translate }) {
+  if (!view || (!view.available && view.why === 'country')) return null;
+  const c = view.connected;
+  const said = back ? mollieBackSays(back, t as never) : null;
+  return (
+    <section class="cons__panel">
+      <p class="cfield__label">{t('partner.app.mollie.title')}</p>
+      {said ? <p class={said.tone === 'ok' ? 'chint' : 'cerr'}>{said.title}</p> : null}
+      <p class="chint">{t('partner.app.mollie.body')}</p>
+      {!view.available ? (
+        <p class="chint">{t('partner.app.mollie.off')}</p>
+      ) : c ? (
+        <>
+          <div class="crow">
+            <span class="crow__body">
+              <span class="crow__top">
+                <span class="crow__name">{c.organizationName ? t('partner.app.mollie.connected', { name: c.organizationName }) : t('partner.app.mollie.connectedPlain')}</span>
+                {c.testmode ? <span class="ctag ctag--warn">{t('partner.app.mollie.test')}</span> : null}
+              </span>
+              <span class="crow__sub">{when(c.connectedAt)}</span>
+            </span>
+          </div>
+          {c.lostAt ? <p class="cerr">{t('partner.app.mollie.lost')}</p> : c.canReceivePayments === false ? <p class="chint">{t('partner.app.mollie.checking')}</p> : null}
+          {c.lostAt ? (
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={onConnect}>
+              {t('partner.app.mollie.connect')}
+            </button>
+          ) : (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={onDisconnect}>
+              {t('partner.app.mollie.disconnect')}
+            </button>
+          )}
+        </>
+      ) : (
+        <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={onConnect}>
+          {t('partner.app.mollie.connect')}
+        </button>
+      )}
+      {error ? <p class="cerr">{error.detail ?? error.title}</p> : null}
+    </section>
+  );
+}
+
+export function MoneyScreen({ state, actions }: { state: PartnerState; actions: PartnerActions }) {
   const t = useT();
   return (
     <>
       <MoneyBody money={state.money} failed={state.owedFailed} live={state.live} t={t} />
+      <CounterPaymentsSection view={state.mollie} back={state.mollieBack} busy={state.mollieBusy} error={state.mollieError} onConnect={() => void actions.connectMollie()} onDisconnect={() => void actions.disconnectMollie()} t={t} />
       <StatementsSection view={state.statements} t={t} />
     </>
   );

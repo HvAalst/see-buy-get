@@ -334,7 +334,7 @@ export function createAgentApi(sbg: SbgClient) {
     takeInTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/take-in-terms', { params: { path: { did } } })),
 
     /** 2026-11-20 — a walk-up paid by phone (a partner's country, 4b): the prompt asked of the payer's phone, and where it stands. */
-    askPhonePayment: (agentDid: string, parcelId: string, phone: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/phone-payment', { body: { agentDid, parcelId, phone } })),
+    askPhonePayment: (agentDid: string, parcelId: string, phone?: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/phone-payment', { body: { agentDid, parcelId, ...(phone ? { phone } : {}) } })),
     phonePayment: (paymentId: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/phone-payment/{paymentId}', { params: { path: { paymentId } } })),
 
     /** Round 27 — a parcel this shop took in, its label for the counter's thermal printer (ZPL). */

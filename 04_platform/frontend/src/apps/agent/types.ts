@@ -373,7 +373,8 @@ export interface TakeInTerms {
   /** P4 — false where the promise is ours but this country cannot be paid out in: owed, not paid. */
   paidOut: boolean;
   /** 2026-11-20 — where the sender pays by phone first, before the label (a partner's country, 4b): to whom, how much. */
-  payByPhone?: { to: string; price: number; currency: string };
+  /** …`qr` (2026-11-26): from a QR code on this screen, on a page that opens on the sender’s phone (the partner’s Mollie account). */
+  payByPhone?: { to: string; price: number; currency: string; qr?: boolean };
   /** 2026-11-20 — where nobody holds money (P4-g): the carrier pays every hand itself, and SeeBuyGet shares out no pay. */
   carrierPays?: boolean;
 }
@@ -389,6 +390,11 @@ export interface PhonePay {
   currency: string;
   test: boolean;
   askedAt: string;
+  /** 2026-11-26 — asked by a page the sender opens from a QR code: no phone was asked, and `phoneEnds` is empty. */
+  byQr?: boolean;
+  /** …the page, and its QR code, while it can still be paid. */
+  link?: string;
+  qrSvg?: string;
 }
 
 export interface HandoverView {

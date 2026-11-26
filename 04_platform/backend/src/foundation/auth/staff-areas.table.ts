@@ -518,6 +518,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/entities/:entityId/partner-statements': 'money',
   'POST sbg/entities/:entityId/partner-statements/:statementId/paid': 'money',
   'GET sbg/partner/me/statements': 'none',
+  // 2026-11-26 — the partner's own Mollie account, connected by its own people in the Partner app: never by staff.
+  'GET sbg/partner/me/mollie': 'none',
+  'POST sbg/partner/me/mollie/connect': 'none',
+  'DELETE sbg/partner/me/mollie': 'none',
   'GET sbg/partner-owed/mine': 'none',
   // 2026-11-20 — the checks on a partner's figures (the payments plan, 3b): read and closed by staff who keep the money.
   'GET sbg/entities/:entityId/partner-checks': 'money',

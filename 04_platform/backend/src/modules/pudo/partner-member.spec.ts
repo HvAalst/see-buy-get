@@ -206,7 +206,9 @@ describe('wired', () => {
     expect(doors.match(/@Roles\('consumer'\)\s*@(Get|Post)\('partner\//g)).toHaveLength(4);
     // 4c — and its own payouts.
     // 4e — and its money. 2026-11-24 — and what our companies owe it, week by week (route plan part 4).
-    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(5);
+    // 2026-11-26 — and its own Mollie account, for the money its counters take (payment-hub.mollie.spec.ts).
+    expect(doors.match(/@Roles\('partner'\)\s*@Get\('partner\/me/g)).toHaveLength(6);
+    expect(STAFF_AREAS['GET sbg/partner/me/mollie']).toBe('none');
     expect(STAFF_AREAS['GET sbg/partner/me/statements']).toBe('none');
     expect(STAFF_AREAS['GET sbg/partner/me/payouts']).toBe('none');
     expect(STAFF_AREAS['GET sbg/partner/me/money']).toBe('none');

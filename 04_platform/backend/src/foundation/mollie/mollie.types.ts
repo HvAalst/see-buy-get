@@ -12,6 +12,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * named on each payment), whether it can take payments yet, and the company's own details, for the fee invoices.
  */
 export const MOLLIE_SCOPES = ['payments.read', 'payments.write', 'profiles.read', 'onboarding.read', 'organizations.read'] as const;
+/**
+ * 2026-11-26 — what a partner's own account is asked for: the carrier's, and its refunds too — a parcel voided after it was paid
+ * at the counter is given back to the card it was paid from. Asked of a partner only: a carrier's account is never refunded from here.
+ */
+export const MOLLIE_PARTNER_SCOPES = [...MOLLIE_SCOPES, 'refunds.read', 'refunds.write'] as const;
+/** Where a return from Mollie's sign-in goes back to: the Driver app, the Fleet app, or (2026-11-26) the Partner app. */
+export type MollieBackTo = 'driver' | 'fleet' | 'partner';
 
 /** How a payment straight to the carrier is watched, one way per country: Mollie in the Netherlands (the owner's D2). */
 export type DirectPayWay = 'mollie';
@@ -133,6 +140,18 @@ export class MollieConnectionView {
   @ApiPropertyOptional() paysLoads?: boolean;
 }
 
+/**
+ * 2026-11-26 — WHAT A PARTNER'S OWN PEOPLE SEE of its Mollie account, in the Partner app: whether the counters' payments go into it
+ * in its country (the European Union), and if so whether it is connected. `country`: payments in go another way there; `off`: Mollie
+ * is not set up on this server yet.
+ */
+export class MolliePartnerView {
+  @ApiProperty() available: boolean;
+  @ApiPropertyOptional({ enum: ['country', 'off'] }) why?: 'country' | 'off';
+  @ApiPropertyOptional({ enum: ['oauth', 'test_key'] }) via?: MollieVia;
+  @ApiPropertyOptional({ type: MollieConnectedView }) connected?: MollieConnectedView;
+}
+
 /** Connecting: through the Connect app, the address of Mollie's own sign-in; with our test key, connected at once. */
 export class MollieConnectStarted {
   @ApiPropertyOptional() url?: string;
@@ -140,4 +159,4 @@ export class MollieConnectStarted {
 }
 
 /** How a return from Mollie's sign-in ended, as the app says it: connected, or why not. */
-export type MollieReturn = { back: 'driver' | 'fleet'; outcome: 'connected' } | { back: 'driver' | 'fleet'; outcome: 'failed'; why: 'expired' | 'denied' | 'no_profile' | 'failed' };
+export type MollieReturn = { back: MollieBackTo; outcome: 'connected' } | { back: MollieBackTo; outcome: 'failed'; why: 'expired' | 'denied' | 'no_profile' | 'failed' };

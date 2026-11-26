@@ -210,7 +210,8 @@ describe('wired', () => {
   it('4e — a Money section, read with what it owes, from its own door', () => {
     const app = read('apps', 'partner', 'app.tsx');
     expect(app).toContain("const ORDER: Section[] = ['home', 'hands', 'money'];");
-    expect(app).toContain("state.section === 'money' ? <MoneyScreen state={state} />");
+    // 2026-11-26 — with the actions, for connecting its own Mollie account (counter-mollie.test.tsx).
+    expect(app).toContain("state.section === 'money' ? <MoneyScreen state={state} actions={actions} />");
     expect(read('apps', 'partner', 'api.ts')).toMatch(/money: \(\) => call\(\(c\) => c\.GET\('\/v1\/sbg\/partner\/me\/money'/);
     expect(read('apps', 'partner', 'usePartnerApp.ts')).toContain('partner.current.money()');
     for (const locale of ['sw', 'nl', 'am']) expect(read('shared', 'i18n', 'words', locale, 'partner.ts')).toContain('"partner.app.money.fee"');

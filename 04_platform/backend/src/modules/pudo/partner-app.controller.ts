@@ -1,4 +1,9 @@
-import { Body, Controller, Delete, Get, Optional, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Optional, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { Public } from '../../foundation/auth/public.decorator';
+import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
+import { MollieConnectService } from '../../foundation/mollie/mollie-connect.service';
+import { MollieConnectStarted, MolliePartnerView } from '../../foundation/mollie/mollie.types';
 import { auditActor } from '../../foundation/auth/acting';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -63,7 +68,55 @@ export class PartnerAppController {
     @Optional() private readonly hub?: PaymentHubService,
     // 2026-11-24 — what companies of ours owe the partner, week by week (route plan part 4).
     @Optional() private readonly statements?: PartnerStatementService,
+    // 2026-11-26 — the partner's own Mollie account, for the money its counters take (the European Union).
+    @Optional() private readonly mollie?: MollieConnectService,
   ) {}
+
+  /* ------------------------------------------- the partner's own Mollie account (2026-11-26) -- */
+
+  /**
+   * Whether the counters' payments go into the partner's own Mollie account in its country, and if so whether it is connected.
+   * Connected by the partner's own people, who sign in to Mollie themselves: nobody types a key, and we never hold one.
+   */
+  @Roles('partner')
+  @Get('partner/me/mollie')
+  myMollie(@Actor() actor: IntrospectionResult): MolliePartnerView {
+    const { entity } = this.members.requireMember(actor);
+    return this.mollie?.partnerView(entity.entityId, entity.jurisdiction) ?? { available: false, why: 'off' };
+  }
+
+  /** Mollie's own sign-in, back to the Partner app; kept by the name of the member who connected it. */
+  @Roles('partner')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(20, 15 * 60)
+  @Post('partner/me/mollie/connect')
+  connectMollie(@Actor() actor: IntrospectionResult): MollieConnectStarted {
+    const { entity, member } = this.members.requireMember(actor);
+    if (!this.mollie) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
+    return this.mollie.connectPartner(entity.entityId, entity.jurisdiction, member.name);
+  }
+
+  /** Disconnected: its counters take test money again until it is connected once more. */
+  @Roles('partner')
+  @Delete('partner/me/mollie')
+  disconnectMollie(@Actor() actor: IntrospectionResult): Promise<MolliePartnerView> {
+    const { entity } = this.members.requireMember(actor);
+    if (!this.mollie) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
+    return this.mollie.disconnectPartner(entity.entityId, entity.jurisdiction);
+  }
+
+  /**
+   * The page a sender comes back to after paying on Mollie's page, opened from a counter's QR code: how the payment went, and nothing
+   * else. Public — the sender is nobody here — and named by our own payment's id, which nobody can guess.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(120, 15 * 60)
+  @Get('payment-hub/paid/:paymentId')
+  async paidPage(@Param('paymentId') paymentId: string, @Res() res: Response): Promise<void> {
+    const html = this.hub ? await this.hub.paidPage(paymentId) : '<!doctype html><title>SeeBuyGet</title><p>This link is not known.</p>';
+    res.status(200).type('html').send(html);
+  }
 
   /** 2026-11-24 — what SeeBuyGet's companies owe this partner for its hands' work on parcels they sold, week by week. */
   @Roles('partner')

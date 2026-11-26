@@ -9,11 +9,25 @@ import { customsUnionOf } from '../countries/customs-union';
  * behind it. The stand-in first, so the whole loop is tried with no partner and no real money; a real provider's adapter
  * (telebirr, M-PESA Ethiopia, Chapa…) comes when a chosen partner uses it, with its keys and the two-person switch to live.
  */
-export const HUB_PROVIDERS = ['stand-in', 'telebirr', 'mpesa-et', 'chapa', 'revolut'] as const;
+export const HUB_PROVIDERS = ['stand-in', 'telebirr', 'mpesa-et', 'chapa', 'revolut', 'mollie'] as const;
 export type HubProviderId = (typeof HUB_PROVIDERS)[number];
 
 /** 2026-11-25 (route plan part 4) — what a provider pays money out to: a phone, or a bank account. */
-export const PROVIDER_PAYS_TO: Record<HubProviderId, 'phone' | 'bank'> = { 'stand-in': 'phone', telebirr: 'phone', 'mpesa-et': 'phone', chapa: 'phone', revolut: 'bank' };
+export const PROVIDER_PAYS_TO: Record<HubProviderId, 'phone' | 'bank'> = { 'stand-in': 'phone', telebirr: 'phone', 'mpesa-et': 'phone', chapa: 'phone', revolut: 'bank', mollie: 'bank' };
+
+/**
+ * 2026-11-26 — HOW A PROVIDER ASKS A PAYER FOR MONEY: a prompt rung on the payer's phone (mobile money, and the stand-in), or a page
+ * the payer opens from a QR code on the counter's screen (Mollie) — where no phone number is asked at all.
+ */
+export const PROVIDER_ASKS_BY: Record<HubProviderId, 'phone' | 'qr'> = { 'stand-in': 'phone', telebirr: 'phone', 'mpesa-et': 'phone', chapa: 'phone', revolut: 'phone', mollie: 'qr' };
+
+/**
+ * 2026-11-26 — the provider the money a partner's counters take goes through, by the partner's country: its own Mollie account in the
+ * European Union (Mollie takes businesses in every EEA country), once the partner has connected it. None elsewhere yet: the stand-in.
+ */
+export function collectProviderFor(country: string | undefined): HubProviderId | undefined {
+  return customsUnionOf(country) === 'EU' ? 'mollie' : undefined;
+}
 
 /**
  * Where a partner pays a hand in this country: to its bank account in the European Union (a SEPA transfer, in euros: mobile money
@@ -51,6 +65,8 @@ export interface ProviderAnswer {
   providerRef?: string;
   /** Why it failed, in the provider's terms, for staff and the log — never shown to a payer as it came. */
   why?: string;
+  /** 2026-11-26 — a payment page the payer opens (Mollie's checkout), while it can still be paid: shown as a QR code. */
+  link?: string;
 }
 
 /** An account the hub drives, its keys opened for this one call and never kept open. */
@@ -67,8 +83,8 @@ export interface CollectRequest {
   ourRef: string;
   amount: number;
   currency: string;
-  /** The number the payment prompt goes to. */
-  payerPhone: string;
+  /** The number the payment prompt goes to — none where the provider asks by a page (a QR code) instead. */
+  payerPhone?: string;
   description: string;
 }
 
@@ -96,8 +112,11 @@ export interface HubProvider {
   readonly id: HubProviderId;
   /** Ask the payer's phone for the money: a payment prompt. */
   collect(account: OpenedAccount, req: CollectRequest, now?: number): Promise<ProviderAnswer>;
-  /** Where a request stands now, asked of the provider — by its handle, or by ours where its answer never came. */
-  status(account: OpenedAccount, ref: { providerRef?: string; ourRef: string }, now?: number): Promise<ProviderAnswer>;
+  /**
+   * Where a request stands now, asked of the provider — by its handle, or by ours where its answer never came. A refund also names the
+   * payment it gives back (`paidRef`): some providers find a refund only under it.
+   */
+  status(account: OpenedAccount, ref: { providerRef?: string; ourRef: string; paidRef?: string }, now?: number): Promise<ProviderAnswer>;
   /** Send money from the account to a phone. */
   payout(account: OpenedAccount, req: PayoutRequest, now?: number): Promise<ProviderAnswer>;
   /** Give a payment back to the phone it came from — named by the provider's own handle for it, never by a number. */
@@ -140,6 +159,10 @@ export interface HubPayment {
   fee?: { pct: number; amount: number };
   /** A refund: the payment it gives back. */
   refundOf?: string;
+  /** 2026-11-26 — asked by a page the payer opens from a QR code (Mollie): no phone was asked, and `phoneEnds` is empty. */
+  byQr?: boolean;
+  /** …and that page, while it can still be paid. */
+  link?: string;
 }
 
 /** A company's settings in the hub: our fee on its payments (P4-c), set by our staff by name. */
@@ -187,6 +210,20 @@ export class HubPaymentView {
   @ApiPropertyOptional({ description: 'The parcel it paid for, once taken in.' }) usedFor?: string;
   @ApiPropertyOptional({ description: 'Our fee on it: the partner’s percentage, counted when it was paid.' }) fee?: number;
   @ApiPropertyOptional({ description: 'A refund: the payment it gives back.' }) refundOf?: string;
+  @ApiPropertyOptional({ description: '2026-11-26 — asked by a page the payer opens from a QR code: no phone was asked.' }) byQr?: boolean;
+  @ApiPropertyOptional({ description: '…that page, while it can still be paid.' }) link?: string;
+  @ApiPropertyOptional({ description: '…and the same page as a QR code, an SVG image for the counter’s screen.' }) qrSvg?: string;
+}
+
+/** 2026-11-26 — the partner's own Mollie account, where its counters' payments go in its country: whether connected, and to what. */
+export class CollectConnectionView {
+  @ApiProperty() connected: boolean;
+  @ApiPropertyOptional({ description: 'The Mollie organization it is connected to, by its name.' }) organizationName?: string;
+  @ApiPropertyOptional() testmode?: boolean;
+  @ApiPropertyOptional({ description: 'Mollie still checks the account: payments wait until it can take them.' }) canReceivePayments?: boolean;
+  @ApiPropertyOptional({ description: 'Mollie took the access back: connected again in the Partner app.' }) lostAt?: string;
+  @ApiPropertyOptional() connectedBy?: string;
+  @ApiPropertyOptional() connectedAt?: string;
 }
 
 export class PaymentAccountView {
@@ -209,6 +246,8 @@ export class PaymentAccountView {
   @ApiPropertyOptional() keyAt?: string;
   @ApiPropertyOptional({ description: 'Who switched the live key on — never the person who entered it — and when.' }) liveBy?: string;
   @ApiPropertyOptional() liveAt?: string;
+  @ApiPropertyOptional({ enum: HUB_PROVIDERS, description: '2026-11-26 — the provider the counters’ payments go through in the partner’s country, once connected (Mollie in the European Union). Absent where its country has none yet.' }) collectProvider?: HubProviderId;
+  @ApiPropertyOptional({ type: CollectConnectionView }) collect?: CollectConnectionView;
 }
 
 /** Route plan part 4 — the partner's key at its payout provider, entered by our staff by name. */
@@ -272,8 +311,9 @@ export class PhonePaymentDto {
   @Matches(/^[A-Za-z0-9-]{3,40}$/)
   parcelId: string;
 
-  @ApiProperty({ description: 'The phone the prompt goes to, with its country code.' })
+  @ApiPropertyOptional({ description: 'The phone the prompt goes to, with its country code. None where the sender pays from a QR code on the counter’s screen (2026-11-26).' })
+  @IsOptional()
   @IsString()
   @Matches(/^\+\d{9,15}$/, { message: 'Give the whole phone number with its country code, starting with +' })
-  phone: string;
+  phone?: string;
 }

@@ -146,8 +146,23 @@ export interface PartnerStatements {
   unpaid: Record<string, number>;
 }
 
+/**
+ * 2026-11-26 — THE PARTNER'S OWN MOLLIE ACCOUNT, where its counters' payments go in its country (backend MolliePartnerView): whether it
+ * is for this partner, and if so whether connected, to what, test money or not, and whether Mollie can take payments on it yet.
+ */
+export interface PartnerMollie {
+  available: boolean;
+  why?: 'country' | 'off';
+  via?: 'oauth' | 'test_key';
+  connected?: { via: 'oauth' | 'test_key'; organizationName?: string; testmode: boolean; connectedAt: string; lostAt?: string; canReceivePayments?: boolean };
+}
+
 export interface PartnerClient {
   client: SeededAppClient;
+  /** 2026-11-26 — its own Mollie account: read, connected (Mollie's sign-in, or at once on test money), disconnected. */
+  mollie(): Promise<Result<PartnerMollie>>;
+  connectMollie(): Promise<Result<{ url?: string; connected?: PartnerMollie['connected'] }>>;
+  disconnectMollie(): Promise<Result<PartnerMollie>>;
   me(): Promise<Result<PartnerMe>>;
   owed(): Promise<Result<PartnerOwed>>;
   payouts(): Promise<Result<PartnerPayouts>>;
@@ -165,6 +180,9 @@ export function createPartnerClient(): PartnerClient {
     payouts: () => call((c) => c.GET('/v1/sbg/partner/me/payouts', {}) as never),
     money: () => call((c) => c.GET('/v1/sbg/partner/me/money', {}) as never),
     statements: () => call((c) => c.GET('/v1/sbg/partner/me/statements', {}) as never),
+    mollie: () => call((c) => c.GET('/v1/sbg/partner/me/mollie', {}) as never),
+    connectMollie: () => call((c) => c.POST('/v1/sbg/partner/me/mollie/connect', {}) as never),
+    disconnectMollie: () => call((c) => c.DELETE('/v1/sbg/partner/me/mollie', {}) as never),
   };
 }
 

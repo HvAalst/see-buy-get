@@ -122,7 +122,7 @@ export function App() {
         <main class="cons__main">
           {/* Right after a sign-in that took a code: the fingerprint, offered once. */}
           <PasskeyOffer api={account.passkey} look="console" />
-          {state.section === 'hands' ? <HandsScreen state={state} /> : state.section === 'money' ? <MoneyScreen state={state} /> : <HomeScreen state={state} />}
+          {state.section === 'hands' ? <HandsScreen state={state} /> : state.section === 'money' ? <MoneyScreen state={state} actions={actions} /> : <HomeScreen state={state} />}
         </main>
       </div>
 

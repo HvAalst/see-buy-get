@@ -39530,6 +39530,84 @@
         }
       }
     },
+    "/v1/sbg/partner/me/mollie": {
+      "get": {
+        "operationId": "PartnerApp.myMollie",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MolliePartnerView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "PartnerApp.disconnectMollie",
+        "summary": "",
+        "description": "Disconnected: its counters take test money again until it is connected once more.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MolliePartnerView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/partner/me/mollie/connect": {
+      "post": {
+        "operationId": "PartnerApp.connectMollie",
+        "summary": "",
+        "description": "Mollie's own sign-in, back to the Partner app; kept by the name of the member who connected it.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MollieConnectStarted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/payment-hub/paid/{paymentId}": {
+      "get": {
+        "operationId": "PartnerApp.paidPage",
+        "summary": "",
+        "description": "The page a sender comes back to after paying on Mollie's page, opened from a counter's QR code: how the payment went, and nothing\nelse. Public — the sender is nobody here — and named by our own payment's id, which nobody can guess.",
+        "parameters": [
+          {
+            "name": "paymentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/partner/me/statements": {
       "get": {
         "operationId": "PartnerApp.myStatements",
@@ -71221,12 +71299,11 @@
           "phone": {
             "type": "string",
             "pattern": "/^\\+\\d{9,15}$/",
-            "description": "The phone the prompt goes to, with its country code."
+            "description": "The phone the prompt goes to, with its country code. None where the sender pays from a QR code on the counter’s screen (2026-11-26)."
           }
         },
         "required": [
-          "parcelId",
-          "phone"
+          "parcelId"
         ]
       },
       "HubPaymentView": {
@@ -71302,6 +71379,18 @@
           "refundOf": {
             "type": "string",
             "description": "A refund: the payment it gives back."
+          },
+          "byQr": {
+            "type": "boolean",
+            "description": "2026-11-26 — asked by a page the payer opens from a QR code: no phone was asked."
+          },
+          "link": {
+            "type": "string",
+            "description": "…that page, while it can still be paid."
+          },
+          "qrSvg": {
+            "type": "string",
+            "description": "…and the same page as a QR code, an SVG image for the counter’s screen."
           }
         },
         "required": [
@@ -94198,6 +94287,38 @@
           }
         }
       },
+      "CollectConnectionView": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "organizationName": {
+            "type": "string",
+            "description": "The Mollie organization it is connected to, by its name."
+          },
+          "testmode": {
+            "type": "boolean"
+          },
+          "canReceivePayments": {
+            "type": "boolean",
+            "description": "Mollie still checks the account: payments wait until it can take them."
+          },
+          "lostAt": {
+            "type": "string",
+            "description": "Mollie took the access back: connected again in the Partner app."
+          },
+          "connectedBy": {
+            "type": "string"
+          },
+          "connectedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "connected"
+        ]
+      },
       "PaymentAccountView": {
         "type": "object",
         "properties": {
@@ -94208,7 +94329,8 @@
               "telebirr",
               "mpesa-et",
               "chapa",
-              "revolut"
+              "revolut",
+              "mollie"
             ]
           },
           "test": {
@@ -94228,7 +94350,8 @@
                 "telebirr",
                 "mpesa-et",
                 "chapa",
-                "revolut"
+                "revolut",
+                "mollie"
               ]
             }
           },
@@ -94258,7 +94381,8 @@
               "telebirr",
               "mpesa-et",
               "chapa",
-              "revolut"
+              "revolut",
+              "mollie"
             ],
             "description": "Route plan part 4 — the provider the partner’s hands are paid through, chosen by its country. Absent where its country has none yet: the stand-in pays them, on test money."
           },
@@ -94299,6 +94423,21 @@
           },
           "liveAt": {
             "type": "string"
+          },
+          "collectProvider": {
+            "type": "string",
+            "enum": [
+              "stand-in",
+              "telebirr",
+              "mpesa-et",
+              "chapa",
+              "revolut",
+              "mollie"
+            ],
+            "description": "2026-11-26 — the provider the counters’ payments go through in the partner’s country, once connected (Mollie in the European Union). Absent where its country has none yet."
+          },
+          "collect": {
+            "$ref": "#/components/schemas/CollectConnectionView"
           }
         },
         "required": [
@@ -94556,6 +94695,34 @@
         },
         "required": [
           "lines"
+        ]
+      },
+      "MolliePartnerView": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "enum": [
+              "country",
+              "off"
+            ]
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "oauth",
+              "test_key"
+            ]
+          },
+          "connected": {
+            "$ref": "#/components/schemas/MollieConnectedView"
+          }
+        },
+        "required": [
+          "available"
         ]
       },
       "PartnerMemberView": {

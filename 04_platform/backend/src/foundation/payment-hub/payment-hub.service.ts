@@ -10,7 +10,11 @@ import { PersistentMap } from '../store/persistent-map';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { RevolutProvider } from './revolut.provider';
 import { StandInProvider } from './stand-in.provider';
-import { HUB_PROVIDERS, HUB_WHY, PROVIDER_PAYS_TO, payeeKindIn, payoutProviderFor, type HubAccountRecord, type HubPayment, type HubPaymentView, type HubProvider, type HubProviderId, type HubWhy, type OpenedAccount, type PayeeAccount, type PaymentAccountView, type ProviderAnswer } from './hub.types';
+import { MollieHubProvider } from './mollie.provider';
+import { MollieConnectService } from '../mollie/mollie-connect.service';
+import { qrSvgGroup } from '../label/qr';
+import { escapeHtml } from '../mail/mail.blocks';
+import { HUB_PROVIDERS, HUB_WHY, PROVIDER_ASKS_BY, PROVIDER_PAYS_TO, collectProviderFor, payeeKindIn, payoutProviderFor, type HubAccountRecord, type HubPayment, type HubPaymentView, type HubProvider, type HubProviderId, type HubWhy, type OpenedAccount, type PayeeAccount, type PaymentAccountView, type ProviderAnswer } from './hub.types';
 
 /** Further providers, each an adapter (a test's own, or a real one once it is built for a chosen partner). */
 export const PAYMENT_HUB_PROVIDERS = 'PAYMENT_HUB_PROVIDERS';
@@ -69,8 +73,10 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     @Optional() private readonly events?: EventBus,
     @Optional() @Inject(PAYMENT_HUB_PROVIDERS) extra?: HubProvider[],
     @Optional() private readonly crypt?: FieldEncryption,
+    // 2026-11-26 — the partner's own Mollie account, for the money its counters take (the European Union).
+    @Optional() private readonly mollie?: MollieConnectService,
   ) {
-    for (const p of [new StandInProvider(), new RevolutProvider(), ...(extra ?? [])]) this.providers.set(p.id, p);
+    for (const p of [new StandInProvider(), new RevolutProvider(), ...(mollie ? [new MollieHubProvider(mollie)] : []), ...(extra ?? [])]) this.providers.set(p.id, p);
   }
 
   onApplicationBootstrap(): void {
@@ -95,7 +101,13 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     const entity = this.entities.get(ownerEntityId);
     const currency = this.entities.amountsFor(ownerEntityId).currency ?? entity.currency ?? currencyForJurisdiction(entity.jurisdiction);
     const standIn = { accountId: ownerEntityId, currency, keys: {}, live: false, provider: 'stand-in' as HubProviderId };
-    if (use !== 'out') return standIn;
+    if (use !== 'out') {
+      // 2026-11-26 — money in: the partner's own Mollie account, where its country takes it so, once the partner connected it, Mollie
+      // can take payments on it, and the access was not taken back. Its token is the adapter's to fetch: no key is opened here.
+      const c = collectProviderFor(entity.jurisdiction) === 'mollie' && this.providers.has('mollie') ? this.mollie?.connection(ownerEntityId) : undefined;
+      if (!c || c.lostAt || c.canReceivePayments === false) return standIn;
+      return { accountId: ownerEntityId, currency, keys: {}, live: !c.testmode, provider: 'mollie' };
+    }
     const chosen = payoutProviderFor(entity.jurisdiction);
     const rec = this.accounts.get(ownerEntityId);
     if (!chosen || rec?.provider !== chosen || !rec.keySealed || !this.providers.has(chosen)) return standIn;
@@ -177,6 +189,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       payoutTest: !out.live,
       ...(outHeld ? { payoutBalance: outHeld.amount } : {}),
       ...(key ? { keyEnds: key.keyEnds, keyTest: Boolean(key.keyTest), keyBy: key.keyBy, keyAt: key.keyAt, ...(key.liveBy ? { liveBy: key.liveBy, liveAt: key.liveAt } : {}) } : {}),
+      ...this.collectOf(ownerEntityId, country),
       provider: a.provider,
       test: !a.live,
       currency: a.currency,
@@ -193,19 +206,23 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    * already paid is refused; one whose prompt is still waiting gives that same prompt for the same phone and amount — a second
    * press at a counter asks nobody twice — and is refused for another, so one thing is never paid twice from two phones.
    */
-  async collect(ownerEntityId: string, req: { reference: string; amount: number; payerPhone: string; description: string; askedBy?: string; siteId?: string }, now: number = Date.now()): Promise<HubPayment> {
+  async collect(ownerEntityId: string, req: { reference: string; amount: number; payerPhone?: string; description: string; askedBy?: string; siteId?: string }, now: number = Date.now()): Promise<HubPayment> {
     const amount = round2(req.amount);
     if (!(amount > 0)) throw new GlosError('VALIDATION_FAILED', 'A payment is for more than nothing');
-    const digits = (req.payerPhone ?? '').replace(/\D/g, '');
-    if (digits.length < 9) throw new GlosError('VALIDATION_FAILED', 'Give the whole phone number the payment is asked of');
-    const phoneHash = hashPhone(req.payerPhone);
+    const a = this.account(ownerEntityId);
+    // 2026-11-26 — a provider that asks by a page (a QR code) asks no phone at all; one that rings a phone needs the whole number.
+    const byQr = PROVIDER_ASKS_BY[a.provider] === 'qr';
+    const digits = byQr ? '' : (req.payerPhone ?? '').replace(/\D/g, '');
+    if (!byQr && digits.length < 9) throw new GlosError('VALIDATION_FAILED', 'Give the whole phone number the payment is asked of');
+    const phoneHash = byQr ? undefined : hashPhone(req.payerPhone as string);
     const earlier = this.latest(ownerEntityId, req.reference, 'in');
     if (earlier?.state === 'paid') throw new GlosError('INVALID_STATE', `${req.reference} is paid already`);
     if (earlier?.state === 'asked') {
-      if (earlier.phoneHash === phoneHash && earlier.amount === amount) return earlier;
-      throw new GlosError('INVALID_STATE', `A payment prompt for ${req.reference} is still waiting on the phone ending ${earlier.phoneEnds}: let it be answered or lapse first`);
+      // The same page again for the same amount: a second press at a counter shows the code it already shows.
+      if (earlier.byQr && byQr && earlier.amount === amount) return earlier;
+      if (!earlier.byQr && earlier.phoneHash === phoneHash && earlier.amount === amount) return earlier;
+      throw new GlosError('INVALID_STATE', earlier.byQr ? `A payment for ${req.reference} is still open on its page: let it be paid or lapse first` : `A payment prompt for ${req.reference} is still waiting on the phone ending ${earlier.phoneEnds}: let it be answered or lapse first`);
     }
-    const a = this.account(ownerEntityId);
     const payment: HubPayment = {
       paymentId: `hp_${randomBytes(9).toString('base64url')}`,
       kind: 'in',
@@ -215,7 +232,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       amount,
       currency: a.currency,
       phoneEnds: digits.slice(-3),
-      phoneHash,
+      ...(phoneHash ? { phoneHash } : {}),
+      ...(byQr ? { byQr: true } : {}),
       state: 'asked',
       test: !a.live,
       askedAt: new Date(now).toISOString(),
@@ -227,7 +245,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     this.told(payment);
     let answer: ProviderAnswer | undefined;
     try {
-      answer = await this.provider(a.provider).collect(a, { ourRef: payment.paymentId, amount, currency: a.currency, payerPhone: req.payerPhone, description: req.description }, now);
+      answer = await this.provider(a.provider).collect(a, { ourRef: payment.paymentId, amount, currency: a.currency, ...(byQr ? {} : { payerPhone: req.payerPhone }), description: req.description }, now);
     } catch (err) {
       // Its answer was lost on the way, not necessarily its prompt: kept as asked, and asked again by our own reference.
       this.logger.warn(`a payment prompt went unanswered by ${a.provider}: ${(err as Error).message}`);
@@ -236,7 +254,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   }
 
   /** A try of the account by our staff: a payment prompt to a phone, on test money — the loop seen working end to end. */
-  async tryPayment(ownerEntityId: string, input: { phone: string; amount: number }, by: string, now: number = Date.now()): Promise<HubPaymentView> {
+  async tryPayment(ownerEntityId: string, input: { phone?: string; amount: number }, by: string, now: number = Date.now()): Promise<HubPaymentView> {
     const a = this.account(ownerEntityId);
     if (a.live) throw new GlosError('FORBIDDEN', 'A try is for test money: this account moves real money');
     const p = await this.collect(ownerEntityId, { reference: `try_${randomBytes(6).toString('base64url')}`, amount: input.amount, payerPhone: input.phone, description: 'A try of the payment account', askedBy: by }, now);
@@ -250,10 +268,14 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     if (p.state !== 'asked') return p;
     // A prompt nobody answers lapses; money sent out, or given back, never does by itself — taken for failed, it would be
     // sent again while it may have gone. Its provider is asked until it answers.
-    if (p.kind === 'in' && now - Date.parse(p.askedAt) > PROMPT_LAPSES_AFTER_MS) return this.apply(paymentId, { state: 'failed', why: 'expired' }, now);
+    // 2026-11-26 — a page the payer opens (a QR code) lapses by its provider's word, never by our clock: it may be paid until the
+    // provider says it expired. Only one that never reached the provider at all (no handle) lapses by the clock.
+    const byClock = !p.byQr || !p.providerRef;
+    if (p.kind === 'in' && byClock && now - Date.parse(p.askedAt) > PROMPT_LAPSES_AFTER_MS) return this.apply(paymentId, { state: 'failed', why: 'expired' }, now);
     const provider = this.providers.get(p.provider);
     if (!provider) return p;
-    const answer = await provider.status(this.openedFor(p), { ...(p.providerRef ? { providerRef: p.providerRef } : {}), ourRef: p.paymentId }, now).catch(() => undefined);
+    const paidRef = p.kind === 'refund' && p.refundOf ? this.payments.get(p.refundOf)?.providerRef : undefined;
+    const answer = await provider.status(this.openedFor(p), { ...(p.providerRef ? { providerRef: p.providerRef } : {}), ourRef: p.paymentId, ...(paidRef ? { paidRef } : {}) }, now).catch(() => undefined);
     return answer ? this.apply(paymentId, answer, now) : p;
   }
 
@@ -460,11 +482,13 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
     const next: HubPayment = {
       ...p,
       ...(answer.providerRef ? { providerRef: answer.providerRef } : {}),
+      ...(answer.state === 'asked' && answer.link ? { link: answer.link } : {}),
       state: answer.state,
       ...(answer.state === 'failed' ? { why: answer.why ?? 'failed' } : {}),
       ...(answer.state !== 'asked' ? { settledAt: new Date(now).toISOString() } : {}),
       ...(answer.state === 'paid' ? this.feeOn(p) : {}),
     };
+    if (next.state !== 'asked') delete next.link;
     this.payments.set(paymentId, next);
     if (next.state !== 'asked') {
       this.waitingSet().delete(paymentId);
@@ -472,6 +496,51 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
       this.told(next);
     }
     return next;
+  }
+
+  /**
+   * 2026-11-26 — THE PAGE THE PAYER COMES BACK TO after paying on Mollie's page (opened from the counter's QR code): how the payment
+   * went, asked of Mollie first, in the partner country's language and in English. Nothing else: no name, no amount, no phone.
+   */
+  async paidPage(paymentId: string, now: number = Date.now()): Promise<string> {
+    const kept = this.payments.get(paymentId);
+    const p = kept?.kind === 'in' && kept.byQr ? await this.settle(paymentId, now).catch(() => kept) : undefined;
+    const said = !p ? PAID_PAGE.unknown : p.state === 'paid' ? PAID_PAGE.paid : p.state === 'failed' ? PAID_PAGE.failed : PAID_PAGE.waiting;
+    let lang: 'bg' | 'nl' | undefined;
+    try {
+      const country = p ? this.entities.get(p.ownerEntityId).jurisdiction : undefined;
+      lang = country === 'BG' ? 'bg' : country === 'NL' ? 'nl' : undefined;
+    } catch {
+      lang = undefined;
+    }
+    const ref = p ? `<p class="ref">${escapeHtml(p.reference)}</p>` : '';
+    const own = lang ? `<p lang="${lang}">${escapeHtml(said[lang])}</p>` : '';
+    return `<!doctype html><html lang="${lang ?? 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SeeBuyGet</title><style>body{font-family:system-ui,sans-serif;margin:0;padding:48px 20px;background:#f7f7f8;color:#1a1a1a;text-align:center}main{max-width:420px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 20px}p{font-size:18px;line-height:1.45;margin:0 0 12px}.en{color:#555;font-size:16px}.ref{color:#777;font-size:14px}</style></head><body><main>${ref}${own}<p class="${lang ? 'en' : ''}" lang="en">${escapeHtml(said.en)}</p></main></body></html>`;
+  }
+
+  /** 2026-11-26 — how the money a partner's counters take is asked: by a phone, or by a QR code (a page the payer opens). */
+  collectsBy(ownerEntityId: string): 'phone' | 'qr' {
+    return PROVIDER_ASKS_BY[this.account(ownerEntityId).provider];
+  }
+
+  /** 2026-11-26 — the provider its country's counters take money through, and whether the partner has connected its account there. */
+  private collectOf(ownerEntityId: string, country: string | undefined): Pick<PaymentAccountView, 'collectProvider' | 'collect'> {
+    const provider = collectProviderFor(country);
+    if (!provider || !this.providers.has(provider)) return {};
+    const c = this.mollie?.connection(ownerEntityId);
+    if (!c) return { collectProvider: provider, collect: { connected: false } };
+    return {
+      collectProvider: provider,
+      collect: {
+        connected: true,
+        ...(c.organization?.name ? { organizationName: c.organization.name } : {}),
+        testmode: c.testmode,
+        ...(c.canReceivePayments !== undefined ? { canReceivePayments: c.canReceivePayments } : {}),
+        ...(c.lostAt ? { lostAt: c.lostAt } : {}),
+        connectedBy: c.connectedBy,
+        connectedAt: c.connectedAt,
+      },
+    };
   }
 
   /** Our fee on a payment as it is paid: a parcel's payment into an account whose fee is set — never a try by our staff. */
@@ -539,5 +608,20 @@ export function viewOf(p: HubPayment): HubPaymentView {
     ...(p.usedFor ? { usedFor: p.usedFor } : {}),
     ...(p.fee ? { fee: p.fee.amount } : {}),
     ...(p.refundOf ? { refundOf: p.refundOf } : {}),
+    ...(p.byQr ? { byQr: true } : {}),
+    ...(p.byQr && p.state === 'asked' && p.link ? { link: p.link, qrSvg: qrSvgOf(p.link) } : {}),
   };
+}
+
+/** 2026-11-26 — what the page after Mollie's checkout says, in the partner country's language and in English. */
+const PAID_PAGE: Record<'paid' | 'waiting' | 'failed' | 'unknown', { en: string; bg: string; nl: string }> = {
+  paid: { en: 'Paid. The counter sees it in a moment.', bg: 'Платено. Гишето ще го види след малко.', nl: 'Betaald. De balie ziet het zo.' },
+  waiting: { en: 'Not confirmed yet. If you paid, the counter sees it within a minute.', bg: 'Още не е потвърдено. Ако сте платили, гишето ще го види до минута.', nl: 'Nog niet bevestigd. Heb je betaald, dan ziet de balie het binnen een minuut.' },
+  failed: { en: 'Not paid. Ask at the counter for a new code.', bg: 'Не е платено. Поискайте нов код на гишето.', nl: 'Niet betaald. Vraag aan de balie om een nieuwe code.' },
+  unknown: { en: 'This link is not known.', bg: 'Тази връзка не е позната.', nl: 'Deze link is onbekend.' },
+};
+
+/** A payment page as a QR code, for the counter's screen. */
+function qrSvgOf(url: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img">${qrSvgGroup(url, 0, 0, 240, 'M')}</svg>`;
 }

@@ -52,9 +52,9 @@ export class MollieClient {
   }
 
   /** Mollie's sign-in for the carrier, carrying a state only this server knows. */
-  authorizeUrl(state: string): string {
+  authorizeUrl(state: string, scopes: readonly string[] = MOLLIE_SCOPES): string {
     const base = this.cfg.host ? `${this.cfg.host}/oauth2/authorize` : MOLLIE_AUTHORIZE;
-    const q = new URLSearchParams({ client_id: this.cfg.clientId ?? '', state, scope: MOLLIE_SCOPES.join(' '), response_type: 'code', approval_prompt: 'auto' });
+    const q = new URLSearchParams({ client_id: this.cfg.clientId ?? '', state, scope: scopes.join(' '), response_type: 'code', approval_prompt: 'auto' });
     if (this.redirectUri) q.set('redirect_uri', this.redirectUri);
     return `${base}?${q.toString()}`;
   }
@@ -109,8 +109,8 @@ export class MollieClient {
   }
 
   /** 2026-11-25 — the refunds already made on a payment: what a retry asks first, so one refund is never made twice. */
-  async listRefunds(bearer: string, paymentId: string): Promise<Array<Record<string, unknown>>> {
-    const got = await this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}/refunds?limit=250`, { bearer });
+  async listRefunds(bearer: string, paymentId: string, testmode = false): Promise<Array<Record<string, unknown>>> {
+    const got = await this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}/refunds?limit=250${testmode ? '&testmode=true' : ''}`, { bearer });
     const list = (got._embedded as { refunds?: unknown } | undefined)?.refunds;
     return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
   }
@@ -128,6 +128,17 @@ export class MollieClient {
   async listRoutes(bearer: string, paymentId: string): Promise<Array<Record<string, unknown>>> {
     const got = await this.call('GET', `/v2/payments/${encodeURIComponent(paymentId)}/routes`, { bearer });
     const list = (got._embedded as { routes?: unknown } | undefined)?.routes;
+    return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
+  }
+
+  /**
+   * 2026-11-26 — the account's latest payments, newest first: where the answer to a payment we asked for never came, it is found
+   * among them by our own reference. A profile and test mode are named where the bearer is a connected account's.
+   */
+  async listPayments(bearer: string, q: { profileId?: string; testmode?: boolean } = {}): Promise<Array<Record<string, unknown>>> {
+    const query = new URLSearchParams({ limit: '250', ...(q.profileId ? { profileId: q.profileId } : {}), ...(q.testmode ? { testmode: 'true' } : {}) });
+    const got = await this.call('GET', `/v2/payments?${query.toString()}`, { bearer });
+    const list = (got._embedded as { payments?: unknown } | undefined)?.payments;
     return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
   }
 

@@ -42,7 +42,7 @@ export class StandInProvider implements HubProvider {
   private readonly requests = new PersistentMap<string, StandInRequest>('payment-hub-stand-in');
 
   async collect(account: OpenedAccount, req: CollectRequest, now: number = Date.now()): Promise<ProviderAnswer> {
-    const r: StandInRequest = { ref: `si_${randomBytes(9).toString('base64url')}`, accountId: account.accountId, kind: 'in', amount: round2(req.amount), currency: req.currency, ends: lastFour(req.payerPhone), at: now };
+    const r: StandInRequest = { ref: `si_${randomBytes(9).toString('base64url')}`, accountId: account.accountId, kind: 'in', amount: round2(req.amount), currency: req.currency, ends: lastFour(req.payerPhone ?? ''), at: now };
     this.requests.set(r.ref, r);
     return this.answer(r, now);
   }

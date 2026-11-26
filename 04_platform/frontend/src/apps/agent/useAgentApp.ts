@@ -2716,9 +2716,11 @@ export function useAgentApp() {
     async (phone: string) => {
       if (!client || !did) return;
       const parcelId = stateRef.current.accept.parcelId.trim().toUpperCase();
-      if (!parcelId || !phone.trim()) return;
+      // 2026-11-26 — from a QR code (the partner's Mollie account), no phone is asked.
+      const byQr = Boolean(stateRef.current.takeInTerms?.payByPhone?.qr);
+      if (!parcelId || (!byQr && !phone.trim())) return;
       await run('phonePay', async () => {
-        const r = await client.api.askPhonePayment(did, parcelId, phone.trim());
+        const r = await client.api.askPhonePayment(did, parcelId, byQr ? undefined : phone.trim());
         if (r.error) return fail(r.error);
         const p = narrow<Omit<PhonePay, 'parcelId'>>(r.data);
         if (p) setState((s) => ({ ...s, phonePay: { ...p, parcelId } }));
@@ -2730,7 +2732,8 @@ export function useAgentApp() {
   // While the prompt waits on the phone, read it again every few seconds — never past the time a prompt can wait.
   useEffect(() => {
     const pay = state.phonePay;
-    if (!client || !pay || pay.state !== 'asked' || Date.now() - Date.parse(pay.askedAt) > 3 * 60_000) return;
+    // A page opened from a QR code may be paid for as long as Mollie keeps it open: read for a quarter of an hour, not three minutes.
+    if (!client || !pay || pay.state !== 'asked' || Date.now() - Date.parse(pay.askedAt) > (pay.byQr ? 16 : 3) * 60_000) return;
     const timer = setTimeout(() => {
       void client.api.phonePayment(pay.paymentId).then((r) => {
         const next = r.error ? null : narrow<Omit<PhonePay, 'parcelId'>>(r.data);

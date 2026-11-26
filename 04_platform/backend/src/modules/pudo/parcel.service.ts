@@ -835,7 +835,7 @@ export interface TakeInTerms {
    * 2026-11-20 — where the sender pays by phone, before the label (the payments plan, 4b; P3-c "payment by phone only"): to whom,
    * and how much — the partner's own price for a parcel. Absent where the counter takes cash, or where nobody can be paid yet.
    */
-  payByPhone?: { to: string; price: number; currency: string };
+  payByPhone?: { to: string; price: number; currency: string; qr?: boolean };
   /**
    * 2026-11-20 — where nobody holds money (Matched; P4-g, the owner: "we mention for parcels that no one of sbg facilitates the
    * distribution of the pay among the beneficiaries"): the carrier pays the hubs, the drivers and the shop at the far end itself.
@@ -2170,13 +2170,15 @@ export class ParcelService implements OnApplicationBootstrap {
    * switched on), through the payment hub, at the partner's own price for a parcel. Nowhere else yet: where nobody holds money
    * (Matched) the carrier collects its own, as before (P4-g, asked); our own counters take cash.
    */
-  private phonePriceAt(country: string): { to: string; price: number; currency: string } | undefined {
+  private phonePriceAt(country: string): { to: string; price: number; currency: string; qr?: boolean } | undefined {
     const partner = this.hub ? this.partners?.partnerAt(country) : undefined;
     if (!partner) return undefined;
     // The partner's OWN figure for a parcel — never the figure every company starts from, which is in nobody's money.
     const price = partner.amounts?.wholesale;
     if (typeof price !== 'number' || !(price > 0)) return undefined;
-    return { to: partner.name, price, currency: this.entities.amountsFor(partner.entityId).currency ?? partner.currency ?? NETWORK_CURRENCY };
+    // 2026-11-26 — asked by a QR code where the partner's own account takes payments by a page (Mollie, the European Union).
+    const qr = this.hub?.collectsBy(partner.entityId) === 'qr';
+    return { to: partner.name, price, currency: this.entities.amountsFor(partner.entityId).currency ?? partner.currency ?? NETWORK_CURRENCY, ...(qr ? { qr: true } : {}) };
   }
 
   /**
@@ -2200,7 +2202,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!p || p.kind !== 'in' || p.ownerEntityId !== partner.entityId || p.reference !== input.parcelId || p.siteId !== input.agentDid) {
       throw new GlosError('SHIPMENT_NOT_PAID', `No payment for ${input.parcelId} was asked at this counter: ask for it again`);
     }
-    if (p.state === 'asked') throw new GlosError('SHIPMENT_NOT_PAID', `The payment is still waiting on the phone ending ${p.phoneEnds}`);
+    if (p.state === 'asked') throw new GlosError('SHIPMENT_NOT_PAID', p.byQr ? 'The payment is still open: the sender pays on the page the code opens' : `The payment is still waiting on the phone ending ${p.phoneEnds}`);
     if (p.state !== 'paid') throw new GlosError('SHIPMENT_NOT_PAID', 'The payment did not go through: ask for it again');
     if (p.usedFor && p.usedFor !== input.parcelId) throw new GlosError('SHIPMENT_NOT_PAID', `That payment was for ${p.usedFor}`);
     if (p.amount + 0.005 < due.price) throw new GlosError('PRICE_CHANGED', `The payment was ${p.amount}, and a parcel costs ${due.price} now: ask for the payment again`, { expected: p.amount, now: due.price });
@@ -2211,7 +2213,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * 4b — THE PAYMENT BY PHONE, ASKED BY THE COUNTER taking a walk-up in: a prompt on the payer's phone, into the partner's account,
    * for the partner's price. Refused for a parcel number already taken in, and where the counter does not take payment by phone.
    */
-  async askPhonePayment(agentDid: string, parcelId: string, phone: string, now: number = Date.now()): Promise<HubPaymentView> {
+  async askPhonePayment(agentDid: string, parcelId: string, phone: string | undefined, now: number = Date.now()): Promise<HubPaymentView> {
     const id = parcelId.trim().toUpperCase();
     if (this.parcels.has(id)) throw new GlosError('PARCEL_EXISTS', `Parcel ${id} already exists`);
     const agent = this.agents.get(agentDid);
@@ -2219,7 +2221,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const due = this.presence.takeInPromise(country) === 'theirs' ? this.phonePriceAt(country) : undefined;
     const partner = due ? this.partners?.partnerAt(country) : undefined;
     if (!due || !partner || !this.hub) throw new GlosError('FORBIDDEN', `At ${agent.shopName} the sender does not pay by phone`);
-    const p = await this.hub.collect(partner.entityId, { reference: id, amount: due.price, payerPhone: phone, description: `Parcel ${id}, taken in at ${agent.shopName}`, siteId: agentDid }, now);
+    // 2026-11-26 — by a QR code, no phone is asked; by a prompt, the phone is the one the prompt rings.
+    if (!due.qr && !phone?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give the phone the payment is asked of', { field: 'phone' });
+    const p = await this.hub.collect(partner.entityId, { reference: id, amount: due.price, ...(due.qr ? {} : { payerPhone: phone }), description: `Parcel ${id}, taken in at ${agent.shopName}`, siteId: agentDid }, now);
     return hubViewOf(p);
   }
 

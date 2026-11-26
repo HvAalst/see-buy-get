@@ -19,7 +19,7 @@ const WHY: Record<NonNullable<PhonePay['why']>, MessageKey> = {
 /** Where the payment for this parcel stands, in words — or nothing, before it is asked. */
 export function phonePayWords(pay: PhonePay | null, t: Translate): { tone: 'info' | 'ok' | 'warn'; text: string } | null {
   if (!pay) return null;
-  if (pay.state === 'asked') return { tone: 'info', text: t('agent.accept.pay.waiting', { ends: pay.phoneEnds }) };
+  if (pay.state === 'asked') return { tone: 'info', text: pay.byQr ? t('agent.accept.pay.waitingQr') : t('agent.accept.pay.waiting', { ends: pay.phoneEnds }) };
   if (pay.state === 'paid') return { tone: 'ok', text: t('agent.accept.pay.paid', { amount: money(pay.amount, pay.currency) }) };
   return { tone: 'warn', text: t('agent.accept.pay.failed', { why: t(WHY[pay.why ?? 'unreachable']) }) };
 }
@@ -31,11 +31,19 @@ export function PhonePayCard({ pay, terms, parcelId, senderPhone, online, busy, 
   // Only the payment asked for the parcel on the sticker counts: a new sticker starts again.
   const mine = pay && pay.parcelId === parcelId.trim().toUpperCase() ? pay : null;
   const said = phonePayWords(mine, t);
-  const canAsk = online && Boolean(parcelId.trim()) && payer.replace(/\D/g, '').length >= 9 && mine?.state !== 'asked' && mine?.state !== 'paid';
+  // 2026-11-26 — from a QR code (the partner's Mollie account): no phone is asked; the code is shown while the page can be paid.
+  const byQr = Boolean(terms.payByPhone.qr);
+  const canAsk = online && Boolean(parcelId.trim()) && (byQr || payer.replace(/\D/g, '').length >= 9) && mine?.state !== 'asked' && mine?.state !== 'paid';
   return (
     <Card label={t('agent.accept.pay.title')}>
-      <GlanceNumber label={t('agent.accept.pay.amount')} value={money(terms.payByPhone.price, terms.payByPhone.currency)} sub={t('agent.accept.pay.to', { to: terms.payByPhone.to })} />
-      {mine?.state === 'paid' ? null : (
+      <GlanceNumber label={t('agent.accept.pay.amount')} value={money(terms.payByPhone.price, terms.payByPhone.currency)} sub={t(byQr ? 'agent.accept.pay.toQr' : 'agent.accept.pay.to', { to: terms.payByPhone.to })} />
+      {mine?.state === 'asked' && mine.qrSvg ? (
+        <div style="margin-top:12px;text-align:center">
+          <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(mine.qrSvg)}`} width={240} height={240} alt={t('agent.accept.pay.qrLabel', { amount: money(mine.amount, mine.currency) })} style="display:block;margin:0 auto;max-width:100%;height:auto;background:#fff" />
+          <p class="card__note">{t('agent.accept.pay.scan')}</p>
+        </div>
+      ) : null}
+      {mine?.state === 'paid' || byQr ? null : (
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="pay-phone">
             {t('agent.accept.pay.phone')}
@@ -55,7 +63,7 @@ export function PhonePayCard({ pay, terms, parcelId, senderPhone, online, busy, 
       {mine?.state === 'paid' ? null : (
         <div style="margin-top:12px">
           <Button variant="outline" chevron={false} onClick={() => onAsk(payer)} disabled={!canAsk} busy={busy}>
-            {t(mine?.state === 'failed' ? 'agent.accept.pay.askAgain' : 'agent.accept.pay.ask')}
+            {t(mine?.state === 'failed' ? 'agent.accept.pay.askAgain' : byQr ? 'agent.accept.pay.askQr' : 'agent.accept.pay.ask')}
           </Button>
         </div>
       )}

@@ -11,7 +11,7 @@ import { ConsoleFold } from '../ConsoleFold';
  * stand-in, test money, until its own provider is added and two of our staff switch it live — what the account holds, its
  * payments, and a try: a payment prompt to a phone, seen waiting, then paid or not.
  */
-export type HubProviderId = 'stand-in' | 'telebirr' | 'mpesa-et' | 'chapa' | 'revolut';
+export type HubProviderId = 'stand-in' | 'telebirr' | 'mpesa-et' | 'chapa' | 'revolut' | 'mollie';
 export type HubWhy = 'declined' | 'expired' | 'unreachable' | 'insufficient';
 
 export interface HubPaymentRow {
@@ -115,6 +115,9 @@ export interface PaymentAccountRead {
     keyAt?: string;
     liveBy?: string;
     liveAt?: string;
+    /** 2026-11-26 — the counters' payments: the partner's own Mollie account in its country, connected by the partner or not yet. */
+    collectProvider?: HubProviderId;
+    collect?: { connected: boolean; organizationName?: string; testmode?: boolean; canReceivePayments?: boolean; lostAt?: string; connectedBy?: string; connectedAt?: string };
   };
   /** 2026-11-21 — what came in, went back and went out, paid (4e). */
   totals?: { paidIn: number; givenBack: number; paidOut: number };
@@ -127,6 +130,7 @@ const PROVIDER: Record<HubProviderId, MessageKey> = {
   'mpesa-et': 'tower.partner.pay.provider.mpesaEt',
   chapa: 'tower.partner.pay.provider.chapa',
   revolut: 'tower.partner.pay.provider.revolut',
+  mollie: 'tower.partner.pay.provider.mollie',
 };
 const KIND: Record<HubPaymentRow['kind'], MessageKey> = { in: 'tower.partner.pay.kind.in', out: 'tower.partner.pay.kind.out', refund: 'tower.partner.pay.kind.refund' };
 const WHY: Record<HubWhy, MessageKey> = {
@@ -214,6 +218,33 @@ export function HandsBody({ a, t, busy, onKey, onLive }: { a: PaymentAccountRead
   );
 }
 
+/**
+ * 2026-11-26 — THE COUNTERS' PAYMENTS: in a country of the European Union, senders pay at the partner's shops from a QR code into the
+ * partner's own Mollie account — connected by the partner's own people in the Partner app, never here. Said: not yet, connected to
+ * which organization by whom, still checked by Mollie, or the access taken back. Nothing where the country takes them another way.
+ */
+export function CollectLine({ read, t }: { read: PaymentAccountRead; t: Translate }) {
+  const a = read.account;
+  if (!a.collectProvider) return null;
+  const c = a.collect;
+  const line = !c?.connected
+    ? t('tower.partner.pay.collectNone')
+    : c.lostAt
+      ? t('tower.partner.pay.collectLost')
+      : c.canReceivePayments === false
+        ? t('tower.partner.pay.collectChecking')
+        : t('tower.partner.pay.collectOn', { name: c.organizationName ?? t(PROVIDER[a.collectProvider]), by: c.connectedBy ?? '', at: c.connectedAt ? when(c.connectedAt) : '' });
+  return (
+    <>
+      <p class="cfield__label">{t('tower.partner.pay.collectTitle')}</p>
+      <p class="chint">
+        {line}
+        {c?.connected && c.testmode ? <span class="ctag ctag--warn"> {t('tower.partner.pay.test')}</span> : null}
+      </p>
+    </>
+  );
+}
+
 /** The fold's inside, from what the server said — pure, for the test. */
 export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive }: { read: PaymentAccountRead; t: Translate; busy?: boolean; onTry?: (phone: string, amount: number) => void; onFee?: (pct: number) => void; onKey?: (key: string, test: boolean) => void; onLive?: () => void }) {
   const [phone, setPhone] = useState('');
@@ -238,6 +269,7 @@ export function PaymentAccountBody({ read, t, busy, onTry, onFee, onKey, onLive 
           </span>
         </div>
       </div>
+      <CollectLine read={read} t={t} />
       {read.totals ? <p class="chint">{t('tower.partner.pay.totals', { paidIn: cash(read.totals.paidIn, a.currency), givenBack: cash(read.totals.givenBack, a.currency), paidOut: cash(read.totals.paidOut, a.currency) })}</p> : null}
       {a.test ? <p class="chint">{t('tower.partner.pay.ownLater')}</p> : null}
       <p class="cfield__label">{t('tower.partner.pay.feeTitle')}</p>
