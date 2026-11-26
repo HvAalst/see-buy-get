@@ -38,6 +38,7 @@ import {
   IdRegister,
 } from './id-dispute.types';
 import { MediaService } from './media.service';
+import { day as dayFigure, noticeOf, said, type Said, type Shown } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
@@ -292,9 +293,9 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       if (!dispute.answerBy) {
         dispute.answerBy = iso(now + DISPUTE_ANSWER_DAYS * DAY_MS);
         this.tell(dispute.holder.personDid, {
-          headline: 'Somebody says the national ID on your registration is theirs',
-          what: `Somebody tried to register as a ${WORD[dispute.register]} with the national ID number that is on your ${WORD[dispute.register]} registration, and has sent SeeBuyGet staff photographs of themselves holding their ID card. Two members of staff decide whose it is.`,
-          next: `Open Settings in your SeeBuyGet app before ${dayOf(dispute.answerBy)}: show your own card the same way, or — if the number on your record was mistyped — put the right one there, which ends this at once. If you do nothing, the ID goes to the other person and your ${WORD[dispute.register]} registration is held until an ID of your own is on record.`,
+          headline: said('idDispute.claimed.title'),
+          what: said('idDispute.claimed.what', { register: registerSaid(dispute.register) }),
+          next: said('idDispute.claimed.next', { by: dayShown(dispute.answerBy), register: registerSaid(dispute.register) }),
         });
       }
       dispute.state = dispute.holder.sentAt || now >= Date.parse(dispute.answerBy) ? 'ready' : 'answering';
@@ -315,9 +316,9 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     this.end(dispute, now);
     if (told) {
       this.tell(dispute.holder.personDid, {
-        headline: 'The dispute over your national ID was withdrawn',
-        what: 'The person who said the national ID on your registration was theirs has withdrawn that. Nothing about your registration has changed.',
-        next: 'There is nothing for you to do.',
+        headline: said('idDispute.withdrawn.title'),
+        what: said('idDispute.withdrawn.what'),
+        next: said('idDispute.nothingToDo'),
       });
     }
     return this.statusOf(dispute, side, now);
@@ -374,18 +375,16 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     this.anchorPhotos(dispute, day);
     this.disputes.set(dispute.disputeId, dispute);
     const hour = dispute.appointment!.at;
-    const when = hour ? `${dayOf(date)} at ${hour}` : dayOf(date);
+    const when = hour ? said('idDispute.whenAt', { day: dayShown(date), hour }) : dayShown(date);
     const window = visitWindowOn(place, date);
-    const visitors = !hour && window ? `, between ${window.from} and ${window.to}` : '';
-    const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}${visitors}` : 'the SeeBuyGet office for your country';
+    const visitors = !hour && window ? said('idDispute.visitors', { from: window.from, to: window.to }) : '';
+    const where = place ? said('idDispute.where.place', { place: `${place.company}${place.address ? `, ${place.address}` : ''}`, visitors }) : said('idDispute.where.office');
     for (const s of ['claimant', 'holder'] as const) {
       const mine = dispute.appointment!.by === s;
       this.tell(dispute[s].personDid, {
-        headline: mine ? 'Your appointment about the national ID' : 'The decision about the national ID is being looked at again, in person',
-        what: mine
-          ? `You are expected on ${when} at ${where}. Two members of staff decide again on what they see, and that decision is final.`
-          : `The other person does not accept the decision and comes in on ${when} to ${where}. You may come too, with your card, so that yours is looked at as well: staff decide on what they see.`,
-        next: `Bring: your ID card itself — not a copy or a photograph; the phone you use with SeeBuyGet; your reference, ${dispute[s].reference}; and a second document in your name if you have one. Your ticket is in the app, under the same reference.`,
+        headline: said(mine ? 'idDispute.appointed.mine.title' : 'idDispute.appointed.other.title'),
+        what: mine ? said('idDispute.appointed.mine.what', { when, where }) : said('idDispute.appointed.other.what', { when, where }),
+        next: said('idDispute.appointed.next', { reference: dispute[s].reference }),
       });
     }
     return this.statusOf(dispute, side, now);
@@ -427,22 +426,25 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     const place = this.placeFor(d.country);
     const fits = !offDay(place, a.date, a.at);
     const hour = a.at ? `${a.at} to ${slotEnd(place, a.date, a.at)}` : undefined;
-    const when = hour ? `${dayOf(a.date)}, ${hour}` : dayOf(a.date);
     const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : 'the SeeBuyGet office for your country';
     for (const side of ['claimant', 'holder'] as const) {
       const person = d[side].personDid ? this.persons.findByDid(d[side].personDid as string) : undefined;
       if (!person) continue;
       const yours = a.by === side;
       const bring = bringWords(d.register, d[side].reference);
-      const title = !fits ? 'Your appointment tomorrow no longer fits' : yours ? 'Your appointment about the national ID is tomorrow' : 'The appointment about the national ID is tomorrow';
-      const body = !fits
-        ? `The office has changed when it receives visitors, and ${when} is no longer one of its times. ${yours ? 'Open the app with your reference and choose another day, today.' : 'The other person has been asked to choose another day: look at your ticket before you travel.'}`
-        : `Tomorrow, ${when}, at ${where}. ${yours ? '' : 'The other person is coming in; you may come too, with your card. '}Bring: ${bring.join('; ')}.`;
+      const whenSaid = hour ? said('idDispute.whenComma', { day: dayShown(a.date), hour }) : dayShown(a.date);
+      const whereSaid = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : said('idDispute.where.office');
+      const words = noticeOf(
+        said(!fits ? 'idDispute.remind.nofit.title' : yours ? 'idDispute.remind.mine.title' : 'idDispute.remind.other.title'),
+        !fits
+          ? said('idDispute.remind.nofit.body', { when: whenSaid, advice: said(yours ? 'idDispute.remind.nofit.mine' : 'idDispute.remind.nofit.other') })
+          : said('idDispute.remind.body', { when: whenSaid, where: whereSaid, other: yours ? '' : said('idDispute.remind.comingIn'), bring: bringSaid(d.register, d[side].reference) }),
+      );
       // The person's own bell, and the bell of the app they drive in: wherever they look first.
       const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
       for (const to of [person.personDid, ...drivers]) {
         void this.notifications
-          ?.notify(to, { kind: 'security', title, body, link: '/', tag: `id-dispute:${d.disputeId}:reminder:${a.date}${a.at ?? ''}` })
+          ?.notify(to, { kind: 'security', ...words, link: '/', tag: `id-dispute:${d.disputeId}:reminder:${a.date}${a.at ?? ''}` })
           .catch((err) => this.logger.warn(`appointment reminder failed: ${(err as Error).message}`));
       }
       const address = this.persons.emailOf(person);
@@ -535,9 +537,9 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       open.state = 'conceded';
       this.end(open, now);
       this.tell(open.claimant.personDid, {
-        headline: 'The national ID is free for you to register with',
-        what: 'The person who held your national ID number said it was not theirs, and has put their own on record.',
-        next: 'Register again with the same phone number and your ID number: it will go through now.',
+        headline: said('idDispute.conceded.title'),
+        what: said('idDispute.conceded.what'),
+        next: said('idDispute.registerAgain'),
       });
       return { saved: true };
     }
@@ -614,9 +616,9 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     }
     this.disputes.set(dispute.disputeId, dispute);
     this.tell(party.personDid, {
-      headline: 'Your photographs need taking again',
-      what: `SeeBuyGet staff could not use the photographs you sent about the national ID: ${party.retake.reason}`,
-      next: `Take the three photographs again before ${dayOf(by)}, with your reference ${party.reference} written on paper in the first one.`,
+      headline: said('idDispute.retake.title'),
+      what: said('idDispute.retake.what', { reason: party.retake.reason }),
+      next: said('idDispute.retake.next', { by: dayShown(by), reference: party.reference }),
     });
     return this.row(dispute, staff, true);
   }
@@ -685,7 +687,6 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       throw new GlosError('INVALID_STATE', dispute.state === 'ready' || dispute.state === 'appointment' ? 'Nobody has said whose it is yet. One member of staff does; a second approves.' : 'This dispute is not waiting for an approval.');
     }
     if (proposal.byKey === staff.key) throw new GlosError('CONFLICT', 'A second member of staff has to approve — not the one who proposed it');
-    const word = WORD[dispute.register];
 
     if (dispute.state === 'checked') {
       const holderEffect = this.give(dispute, proposal.to, now);
@@ -695,20 +696,17 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       delete dispute.proposal;
       this.anchorPhotos(dispute, now);
       this.disputes.set(dispute.disputeId, dispute);
-      const contest = `If you do not accept this, you can make an appointment to come in with your card, until ${dayOf(dispute.contestBy)}: open the app with your reference.`;
+      const contest = said('idDispute.contest', { by: dayShown(dispute.contestBy) });
       if (proposal.to === 'claimant') {
-        this.tell(dispute.claimant.personDid, { headline: 'The national ID is yours', what: 'Two members of SeeBuyGet staff looked at the photographs and decided the national ID you disputed is yours.', next: 'Register again with the same phone number and your ID number: it will go through now.' });
+        this.tell(dispute.claimant.personDid, { headline: said('idDispute.decided.yours.title'), what: said('idDispute.decided.yours.what'), next: said('idDispute.registerAgain') });
         this.tell(dispute.holder.personDid, {
-          headline: 'The national ID on your registration went to somebody else',
-          what: `Two members of SeeBuyGet staff looked at the photographs and decided the national ID on your ${word} registration is the other person’s. Their reason: ${proposal.reason}`,
-          next:
-            (holderEffect === 'corrected'
-              ? `The number staff read on your own card is on your registration now, and nothing else has changed. `
-              : `Your ${word} registration is held: you finish what you have in hand and start nothing new until the number of your own ID card is on record — put it there in Settings. `) + contest,
+          headline: said('idDispute.decided.lost.title'),
+          what: said('idDispute.decided.lost.what', { register: registerSaid(dispute.register), reason: proposal.reason }),
+          next: said(holderEffect === 'corrected' ? 'idDispute.decided.lost.next.corrected' : 'idDispute.decided.lost.next.held', { register: registerSaid(dispute.register), contest }),
         });
       } else {
-        this.tell(dispute.holder.personDid, { headline: 'The national ID stays yours', what: 'Two members of SeeBuyGet staff looked at the photographs and decided the national ID on your registration is yours.', next: 'There is nothing for you to do.' });
-        this.tell(dispute.claimant.personDid, { headline: 'The national ID stays with the person who holds it', what: `Two members of SeeBuyGet staff looked at the photographs and decided the national ID you disputed is not yours to register with. Their reason: ${proposal.reason}`, next: contest });
+        this.tell(dispute.holder.personDid, { headline: said('idDispute.decided.stays.title'), what: said('idDispute.decided.stays.what'), next: said('idDispute.nothingToDo') });
+        this.tell(dispute.claimant.personDid, { headline: said('idDispute.decided.notYours.title'), what: said('idDispute.decided.notYours.what', { reason: proposal.reason }), next: contest });
       }
       return this.row(dispute, staff, true);
     }
@@ -722,9 +720,12 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     for (const s of ['claimant', 'holder'] as const) {
       const yours = proposal.to === s;
       this.tell(dispute[s].personDid, {
-        headline: yours ? 'Decided in person: the national ID is yours' : 'Decided in person: the national ID is the other person’s',
-        what: `Two members of SeeBuyGet staff decided again after the appointment${proposal.to === before ? ', and the decision stands' : ', and the decision has changed'}. ${yours ? '' : `Their reason: ${proposal.reason}`}`.trim(),
-        next: yours ? 'If your registration was held, it is not any more. If you have not registered yet, do so with the same phone number and your ID number.' : this.heldOf(dispute, s) ? `Your ${word} registration is held until the number of your own ID card is on record — put it there in Settings. This decision is final.` : 'This decision is final.',
+        headline: said(yours ? 'idDispute.final.yours.title' : 'idDispute.final.other.title'),
+        // The sentence is trimmed where nobody gave a reason: its English ends at the full stop, and so does each translation.
+        what: yours
+          ? said(proposal.to === before ? 'idDispute.final.yours.what.stands' : 'idDispute.final.yours.what.changed')
+          : said(proposal.to === before ? 'idDispute.final.other.what.stands' : 'idDispute.final.other.what.changed', { reason: proposal.reason }),
+        next: yours ? said('idDispute.final.yours.next') : this.heldOf(dispute, s) ? said('idDispute.final.other.next.held', { register: registerSaid(dispute.register) }) : said('idDispute.final.other.next.plain'),
       });
     }
     return this.row(dispute, staff, true);
@@ -953,8 +954,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       void this.notifications
         ?.notify(driver.managerDid, {
           kind: 'security',
-          title: `${driver.displayName} cannot start a shift for now`,
-          body: 'The national ID on their registration went to somebody else, after a check by two members of SeeBuyGet staff. They finish what they carry and start nothing new until the number of their own ID card is on record — they put it there themselves, in Settings in their app.',
+          ...noticeOf(said('idDispute.fleetHold.title', { name: driver.displayName }), said('idDispute.fleetHold.body')),
           link: '/',
           tag: `driver:${did}:id-hold`,
         })
@@ -964,7 +964,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private tell(personDid: string | undefined, s: { headline: string; what: string; next: string }): void {
+  private tell(personDid: string | undefined, s: { headline: Said; what: Said; next: Said }): void {
     const person = personDid ? this.persons.findByDid(personDid) : undefined;
     if (person) this.recovery.tellHolder(person, s);
   }
@@ -1017,9 +1017,9 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
         // A holder who had been told is told it is over: otherwise it sits on their account as a question.
         if (d.answerBy) {
           this.tell(d.holder.personDid, {
-            headline: 'The dispute over your national ID has ended',
-            what: 'The person who said the national ID on your registration was theirs did not send what staff asked for in time. Nothing about your registration has changed.',
-            next: 'There is nothing for you to do.',
+            headline: said('idDispute.ended.title'),
+            what: said('idDispute.ended.what'),
+            next: said('idDispute.nothingToDo'),
           });
         }
       } else if (d.state === 'answering' && d.answerBy && now >= Date.parse(d.answerBy)) {
@@ -1140,4 +1140,21 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function dayOf(at: string): string {
   const d = new Date(at.length === 10 ? `${at}T00:00:00.000Z` : at);
   return Number.isNaN(d.getTime()) ? at : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+/** The same day as a figure each language writes its own way (its English is dayOf's). */
+function dayShown(at: string): Shown {
+  return dayFigure(dayOf(at), at.slice(0, 10));
+}
+/** "driver" or "shop", as a phrase: said in the reader's language. */
+function registerSaid(register: IdRegister): Said {
+  return said(register === 'driver' ? 'idDispute.register.driver' : 'idDispute.register.shop');
+}
+/** What to bring, as phrases — the same four things as bringWords, in the same order, joined as the reminder joins them. */
+function bringSaid(register: IdRegister, reference: string): Said {
+  return [
+    said('idDispute.bring.card'),
+    said('idDispute.bring.phone'),
+    said('idDispute.bring.reference', { reference }),
+    said('idDispute.bring.second', { licence: said(register === 'driver' ? 'idDispute.bring.licence.driver' : 'idDispute.bring.licence.shop') }),
+  ].reduce((a, b) => said('idDispute.join', { a, b }));
 }

@@ -6,13 +6,14 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
-import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
+import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLabel, paperLapsesAt, PaperStatus, vehiclePapers } from './papers';
+import { day as shownOn, noticeOf, said, type Said } from './notice-words/say';
 import { VehicleService } from './vehicle.service';
 import { AgentService } from './agent.service';
-import { LICENCE_GRACE_DAYS, licenceDay, shopLicenceStanding, type ShopLicenceStanding } from './shop-licence';
+import { LICENCE_GRACE_DAYS, shopLicenceStanding, type ShopLicenceStanding } from './shop-licence';
 import type { Agent } from './pudo.types';
 import { MdpService } from './mdp.service';
-import { scaleStanding, stampNotice, type SiteTools } from './site-tools';
+import { scaleStanding, type ScaleStanding, type SiteTools } from './site-tools';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
 
@@ -210,17 +211,46 @@ function approvedShop(a: Agent): boolean {
  * Round 40 — what a shop is told about its licence, short because a notification is read on a lock screen. Running out:
  * the day, and the day new parcels stop. Lapsed: the grace, and how long. Stopped: what has stopped, and what goes on.
  */
-export function shopLicenceNotice(l: ShopLicenceStanding): { title: string; body: string } {
-  const runs = l.expiresAt ? licenceDay(l.expiresAt) : '';
-  const stops = l.stopsOn ? licenceDay(l.stopsOn) : '';
-  const send = l.renewalSent ? 'The licence you sent has not been read yet' : 'Send a photo of the renewed one from the home screen';
-  if (l.state === 'stopped') return { title: 'New parcels have stopped at your shop', body: `Your trading licence ran to ${runs}. No new parcel can start at your shop until the renewed one is recorded; booked parcels and your shelf go on. ${send}.` };
+export function shopLicenceNotice(l: ShopLicenceStanding): ReturnType<typeof noticeOf> {
+  const runs = l.expiresAt ? shownDay(l.expiresAt) : '';
+  const stops = l.stopsOn ? shownDay(l.stopsOn) : '';
+  const send = l.renewalSent ? said('papersWatch.shop.sendSent') : said('papersWatch.shop.sendNew');
+  if (l.state === 'stopped') return noticeOf(said('papersWatch.shop.stoppedTitle'), said('papersWatch.shop.stoppedBody', { runs, send }));
   if (l.state === 'grace') {
     const left = l.graceDaysLeft ?? LICENCE_GRACE_DAYS;
-    return { title: 'Your trading licence has lapsed', body: `It ran to ${runs}. In ${left} day${left === 1 ? '' : 's'}, from ${stops}, no new parcel can start at your shop until the renewed one is recorded. ${send}.` };
+    return noticeOf(said('papersWatch.shop.graceTitle'), said('papersWatch.shop.graceBody', { runs, left, stops, send }));
   }
   const left = l.daysLeft ?? 1;
-  return { title: `Your trading licence runs out in ${left} day${left === 1 ? '' : 's'}`, body: `It runs to ${runs}. ${send}: ${LICENCE_GRACE_DAYS} days after it lapses no new parcel can start at your shop.` };
+  return noticeOf(said('papersWatch.shop.dueTitle', { left }), said('papersWatch.shop.dueBody', { runs, send, grace: LICENCE_GRACE_DAYS }));
+}
+
+/** A paper's last day, as paperDay says it in English, with the day itself so each language writes it its own way. */
+function shownDay(expiresAt: string) {
+  const t = paperLapsesAt(expiresAt) - 86_400_000;
+  return Number.isNaN(t) ? paperDay(expiresAt) : shownOn(paperDay(expiresAt), new Date(t).toISOString().slice(0, 10));
+}
+
+/** A paper's name, capitalised as paperLabel says it, said in the reader's language. */
+function paperSaid(kind: PaperStatus['kind']) {
+  return said(`papersWatch.paper.${kind}` as const);
+}
+
+/** The same, in lower case, for the middle of a sentence. */
+function paperLowerSaid(kind: PaperStatus['kind']) {
+  return said(`papersWatch.paperLower.${kind}` as const);
+}
+
+/** offRoadLine said in the reader's language: "Insurance lapsed 3 Sep 2026". */
+function offRoadSaid(p: PaperStatus) {
+  return p.expiresAt ? said('papersWatch.offRoad', { paper: paperSaid(p.kind), day: shownDay(p.expiresAt) }) : said('papersWatch.offRoadNoDay', { paper: paperSaid(p.kind) });
+}
+
+/** What a site is told about its scale's stamp (the same words as site-tools' stampNotice), as phrases. */
+function stampNoticeOf(s: ScaleStanding): ReturnType<typeof noticeOf> {
+  const shown = s.stampedUntil ? shownDay(s.stampedUntil) : '';
+  if (s.state === 'lapsed') return noticeOf(said('papersWatch.stamp.lapsedTitle'), said('papersWatch.stamp.lapsedBody', { day: shown }));
+  const left = s.daysLeft ?? 1;
+  return noticeOf(said('papersWatch.stamp.dueTitle', { left }), said('papersWatch.stamp.dueBody', { day: shown }));
 }
 const worst = (papers: PaperStatus[]): number => Math.min(...papers.map((p) => RANK[p.state]), RANK.ok);
 
@@ -480,23 +510,23 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       const sent = Boolean(d.licenceRenewal);
       // SHORT, BECAUSE A NOTIFICATION IS READ ON A LOCK SCREEN. The long version of this ran to five lines
       // in the app's own inbox — one notification per phone screen, the next one cut in half.
-      const next = sent ? 'The card you sent has not been read yet' : own ? 'Send a photo of the new card from the app' : 'Send your fleet office a photo of the new card';
+      const next = sent ? said('papersWatch.next.sent') : own ? said('papersWatch.next.own') : said('papersWatch.next.fleet');
       for (const p of driverPapers(d, now)) {
         if (p.state !== 'due' && p.state !== 'lapsed') continue;
         if (sent && p.state === 'due') continue;
         if (p.state === 'lapsed' && this.fleet.activeForDriver(d.did)) {
-          this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. ${next} — no shift can start until it is recorded.`);
+          this.endShift(d.did, said('papersWatch.shiftEnded.driver', { off: offRoadSaid(p), next }));
           out.shiftsEnded++;
         }
         const body =
           p.state === 'lapsed'
-            ? `${offRoadLine(p)}. ${next} — no shift can start until it is recorded.`
-            : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}. ${next}, or shifts stop that day.`;
+            ? said('papersWatch.driver.lapsedBody', { off: offRoadSaid(p), next })
+            : said('papersWatch.driver.dueBody', { paper: paperSaid(p.kind), day: shownDay(p.expiresAt ?? ''), next });
         // "in 1 day", never "in 1 day(s)". A paper that has not lapsed always has at least one day left
         // (paperStatus rounds up to the day it lapses), so the last day reads "in 1 day" and never "0".
         const left = p.daysLeft ?? 1;
-        const title = p.state === 'lapsed' ? 'Your licence has lapsed' : `Your licence runs out in ${left} day${left === 1 ? '' : 's'}`;
-        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, title, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now, undefined, '/?go=home')) out.notified++;
+        const title = p.state === 'lapsed' ? said('papersWatch.driver.lapsedTitle') : said('papersWatch.driver.dueTitle', { left });
+        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, noticeOf(title, body), p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now, undefined, '/?go=home')) out.notified++;
       }
     }
     // Every fleet: a lapsed vehicle paper ends the shift on it and tells the driver; the fleet is mailed the report once per change.
@@ -507,7 +537,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
         if (row.subject !== 'vehicle' || !row.onShift) continue;
         const active = this.fleet.activeForVehicle(row.id);
         if (!active) continue;
-        this.endShift(active.driverDid, `Your shift on ${row.label} was ended: ${paperLabel(row.kind)} lapsed ${row.expiresAt ? paperDay(row.expiresAt) : ''}. The fleet office has been told.`.replace(/\s+\./g, '.'));
+        this.endShift(active.driverDid, row.expiresAt ? said('papersWatch.shiftEnded.vehicleDay', { vehicle: row.label, paper: paperSaid(row.kind), day: shownDay(row.expiresAt) }) : said('papersWatch.shiftEnded.vehicle', { vehicle: row.label, paper: paperSaid(row.kind) }));
         out.shiftsEnded++;
       }
       const fresh = [...report.lapsed, ...report.due].filter((r) => !this.told.has(this.mailKey(m.did, r)));
@@ -540,17 +570,18 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       for (const p of fleetPapers(m, now)) {
         if (p.state !== 'due' && p.state !== 'lapsed') continue;
         if (m.papers?.sent?.[p.kind as 'operator_licence' | 'carrier_insurance']) continue;
-        const what = paperLabel(p.kind).toLowerCase();
+        const what = paperLowerSaid(p.kind);
         const costs = enforced.has(p.kind);
         const left = p.daysLeft ?? 1;
-        const title = p.state === 'lapsed' ? `Your ${what} has lapsed` : `Your ${what} runs out in ${left} day${left === 1 ? '' : 's'}`;
+        const title = p.state === 'lapsed' ? said('papersWatch.fleetOwn.lapsedTitle', { what }) : said('papersWatch.fleetOwn.dueTitle', { what, left });
         const consequence =
           p.state === 'lapsed'
-            ? costs ? 'Your runs are off the board until it is renewed' : 'It is shown to SeeBuyGet as lapsed'
-            : costs ? 'Your runs come off the board that day unless it is renewed' : 'Renew it before then';
-        const body = `${p.state === 'lapsed' ? offRoadLine(p) : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}`}. ${consequence} — send the new document from the dashboard.`;
+            ? costs ? said('papersWatch.fleetOwn.lapsedCosts') : said('papersWatch.fleetOwn.lapsedShown')
+            : costs ? said('papersWatch.fleetOwn.dueCosts') : said('papersWatch.fleetOwn.dueRenew');
+        const head = p.state === 'lapsed' ? offRoadSaid(p) : said('papersWatch.paperTo', { paper: paperSaid(p.kind), day: shownDay(p.expiresAt ?? '') });
+        const body = said('papersWatch.fleetOwn.body', { head, consequence });
         const kind = p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due';
-        if (await this.tellOnce(`fleetown:${m.did}:${p.kind}:${p.expiresAt}:${p.state}`, m.did, title, body, kind, now, `papers:${m.did}:${p.kind}`)) out.notified++;
+        if (await this.tellOnce(`fleetown:${m.did}:${p.kind}:${p.expiresAt}:${p.state}`, m.did, noticeOf(title, body), kind, now, `papers:${m.did}:${p.kind}`)) out.notified++;
       }
     }
     /*
@@ -566,7 +597,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       if (l.state !== 'due' && l.state !== 'grace' && l.state !== 'stopped') continue;
       if (l.renewalSent && l.state !== 'stopped') continue;
       const words = shopLicenceNotice(l);
-      if (await this.tellOnce(`shop:${a.did}:trading_licence:${l.expiresAt}:${l.state}`, a.did, words.title, words.body, l.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${a.did}:trading_licence`)) out.notified++;
+      if (await this.tellOnce(`shop:${a.did}:trading_licence:${l.expiresAt}:${l.state}`, a.did, words, l.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${a.did}:trading_licence`)) out.notified++;
     }
     /*
      * 2026-11-13 — A SCALE'S STAMP (the owner: "shop and hub tools", T5): where the law stamps a scale used for trade (Kenya),
@@ -581,8 +612,8 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       if (!site.approved || !site.tools?.scale?.stampedUntil) continue;
       const stamp = scaleStanding(site.tools, site.country, now);
       if (stamp.state !== 'due' && stamp.state !== 'lapsed') continue;
-      const words = stampNotice(stamp);
-      if (await this.tellOnce(`site:${site.did}:scale_stamp:${stamp.stampedUntil}:${stamp.state}`, site.did, words.title, words.body, stamp.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${site.did}:scale_stamp`)) out.notified++;
+      const words = stampNoticeOf(stamp);
+      if (await this.tellOnce(`site:${site.did}:scale_stamp:${stamp.stampedUntil}:${stamp.state}`, site.did, words, stamp.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${site.did}:scale_stamp`)) out.notified++;
     }
     this.lastRun = { at: new Date(now).toISOString(), ...out };
     return out;
@@ -604,12 +635,17 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
   private async tellFleet(did: string, rows: PaperRow[], now: number): Promise<boolean> {
     if (!this.notifications) return false;
     const lapsed = rows.filter((r) => r.state === 'lapsed').length;
-    const count = (n: number) => (n === 1 ? 'A paper' : `${n} papers`);
-    const title = lapsed ? `${count(lapsed)} lapsed in your fleet` : `${count(rows.length)} running out in your fleet`;
-    const named = rows.slice(0, 3).map((r) => `${r.label} — ${paperLabel(r.kind)} ${r.state === 'lapsed' ? 'lapsed' : 'runs out'}${r.expiresAt ? ` ${paperDay(r.expiresAt)}` : ''}`);
-    const body = `${named.join('; ')}${rows.length > 3 ? `; and ${rows.length - 3} more` : ''}. Record the new dates on the dashboard.`;
+    const title = lapsed ? said('papersWatch.fleet.lapsedTitle', { n: lapsed }) : said('papersWatch.fleet.dueTitle', { n: rows.length });
+    const named = rows.slice(0, 3).map((r) => {
+      const gone = r.state === 'lapsed';
+      const paper = paperSaid(r.kind);
+      if (r.expiresAt) return said(gone ? 'papersWatch.fleet.entryLapsedDay' : 'papersWatch.fleet.entryDueDay', { label: r.label, paper, day: shownDay(r.expiresAt) });
+      return said(gone ? 'papersWatch.fleet.entryLapsed' : 'papersWatch.fleet.entryDue', { label: r.label, paper });
+    });
+    const list = named.slice(1).reduce((all, one) => said('papersWatch.fleet.join', { all, one }), named[0]);
+    const body = said('papersWatch.fleet.body', { list, more: rows.length > 3 ? said('papersWatch.fleet.more', { n: rows.length - 3 }) : '' });
     try {
-      await this.notifications.notify(did, { kind: lapsed ? 'papers_lapsed' : 'papers_due', title, body, link: '/', tag: `papers:${did}:fleet`, data: {} });
+      await this.notifications.notify(did, { kind: lapsed ? 'papers_lapsed' : 'papers_due', ...noticeOf(title, body), link: '/', tag: `papers:${did}:fleet`, data: {} });
       for (const r of rows) this.told.set(this.inboxKey(did, r), new Date(now).toISOString());
       return true;
     } catch (err) {
@@ -618,23 +654,23 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     }
   }
 
-  private endShift(driverDid: string, body: string): void {
+  private endShift(driverDid: string, body: Said): void {
     try {
       this.fleet.endSession(driverDid);
     } catch (err) {
       this.logger.warn(`could not end the shift of ${driverDid}: ${(err as Error).message}`);
       return;
     }
-    void this.notifications?.notify(driverDid, { kind: 'papers_lapsed', title: 'Your shift was ended', body, link: '/?go=home', tag: `papers:${driverDid}:shift`, data: {} }).catch(() => undefined);
+    void this.notifications?.notify(driverDid, { kind: 'papers_lapsed', ...noticeOf(said('papersWatch.shiftEnded.title'), body), link: '/?go=home', tag: `papers:${driverDid}:shift`, data: {} }).catch(() => undefined);
   }
 
   /** `link`: where the paper is renewed — 2026-11-02, a driver's licence card on the Driver app's home (one tap). */
-  private async tellOnce(key: string, did: string, title: string, body: string, kind: 'papers_lapsed' | 'papers_due', now: number, tag = `papers:${did}:${kind}`, link = '/'): Promise<boolean> {
+  private async tellOnce(key: string, did: string, n: ReturnType<typeof noticeOf>, kind: 'papers_lapsed' | 'papers_due', now: number, tag = `papers:${did}:${kind}`, link = '/'): Promise<boolean> {
     if (!this.notifications || this.told.has(key)) return false;
     try {
       // The tag only collapses PUSH notifications on a lock screen; two different papers need two tags, or
       // the second warning silently replaces the first.
-      await this.notifications.notify(did, { kind, title, body, link, tag, data: {} });
+      await this.notifications.notify(did, { kind, ...n, link, tag, data: {} });
       this.told.set(key, new Date(now).toISOString());
       return true;
     } catch (err) {

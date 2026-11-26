@@ -7,6 +7,10 @@ import { offlineFetch, startOutbox } from '../../shared/outbox';
 import { PICKED_COUNTRY_HEADER, pickedCountry } from './pickedCountry';
 import { CACHED_AT_HEADER, cachedFetch } from '../../shared/readcache';
 import { isBrowserOffline } from '../../shared/connectivity';
+import { getLocale } from '../../shared/i18n';
+
+/** 2026-11-26 — the language the app speaks, on every call (read by the server's notifications: notifications.controller.ts). */
+export const LANG_HEADER = 'x-sbg-lang';
 
 /**
  * Result envelope — a business failure is DATA, never an exception. Every call resolves to exactly one
@@ -96,6 +100,8 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
       // The console's picked country, narrowing a member of staff's lists to one of their countries (pickedCountry.ts).
       const country = pickedCountry();
       if (country) request.headers.set(PICKED_COUNTRY_HEADER, country);
+      // 2026-11-26 — the app's language, so the server says notices in it (the bell, and a phone's pushes once it subscribes).
+      request.headers.set(LANG_HEADER, getLocale());
       return request;
     },
   };

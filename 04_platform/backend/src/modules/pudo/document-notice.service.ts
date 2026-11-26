@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { noticeOf, said } from './notice-words/say';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { DocumentsService, type PublishOccasion } from '../../foundation/documents/documents.service';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -77,14 +78,19 @@ export class DocumentNoticeService {
   async tellPublished(version: DocumentVersion, occasion?: PublishOccasion): Promise<number> {
     if (version.status !== 'published' || !version.number) return 0;
     const where = version.country ? catalogueEntry(version.country)?.name ?? version.country : undefined;
-    const named = where && !version.title.includes(where) ? `${version.title} for ${where}` : version.title;
+    const named = where && !version.title.includes(where) ? said('documentNotice.named', { title: version.title, where }) : version.title;
     const established = version.country ? occasion?.established?.company : undefined;
     // A country's first text is new to everybody there: not "a new version" of anything they read.
-    const title = established ? `${established} runs SeeBuyGet in ${where} from today` : version.number === 1 ? `New: ${named}` : `${named}: a new version`;
-    const asked = version.askAgain ? 'You are asked to agree to it the next time you open the app.' : 'Nothing to do: it is there to read.';
-    const body = established
-      ? `${established} is the company you work with in ${where} from today. Its terms are in your app: ${version.askAgain ? 'you are asked to agree to them the next time you open it.' : 'they are there to read.'}`
-      : `${version.changeNote.replace(/\s*$/, '')}${/[.!?]$/.test(version.changeNote.trim()) ? '' : '.'} ${asked}`;
+    const titleSaid = established
+      ? said('documentNotice.established.title', { company: established, where: where ?? '' })
+      : version.number === 1
+        ? said('documentNotice.first.title', { named })
+        : said('documentNotice.newVersion.title', { named });
+    const asked = said(version.askAgain ? 'documentNotice.asked.agree' : 'documentNotice.asked.read');
+    const bodySaid = established
+      ? said('documentNotice.established.body', { company: established, where: where ?? '', ask: said(version.askAgain ? 'documentNotice.established.askAgree' : 'documentNotice.established.askRead') })
+      : said('documentNotice.changed.body', { note: version.changeNote.replace(/\s*$/, ''), dot: /[.!?]$/.test(version.changeNote.trim()) ? '' : '.', asked });
+    const notice = noticeOf(titleSaid, bodySaid);
     const key = documentKey(version.kind, version.country);
     let told = 0;
     for (const did of this.recipients(version.country)) {
@@ -92,8 +98,7 @@ export class DocumentNoticeService {
         // One per line on a phone: a newer version replaces an older one's notice there; the inbox keeps them all.
         await this.notifications.notify(did, {
           kind: 'terms_updated',
-          title,
-          body,
+          ...notice,
           link: documentPath(version.kind, version.country),
           tag: `document:${key}`,
           data: { key, number: version.number, askAgain: version.askAgain, ...(established ? { established } : {}) },

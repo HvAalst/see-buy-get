@@ -1,5 +1,6 @@
 import { Injectable, Optional, OnModuleInit } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { money, noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { FundingService } from '../../foundation/funding/funding.service';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -110,11 +111,12 @@ export class FundingPayerRegistrar implements OnModuleInit {
    * never undo a payment that did arrive.
    */
   private tellShop(did: string, amount: number, currency: string | undefined, direction: 'in' | 'back'): void {
-    const money = `${currency ?? ''} ${amount.toFixed(2)}`.trim();
+    const text = `${currency ?? ''} ${amount.toFixed(2)}`.trim();
+    const sum = currency ? money(text, amount, currency) : text;
     const payload =
       direction === 'in'
-        ? { title: 'Your payment came through', body: `${money} is in your wallet. You can scan again.` }
-        : { title: 'A payment was taken back', body: `${money} was returned by the payment provider.` };
+        ? noticeOf(said('fundingPayers.shopIn.title'), said('fundingPayers.shopIn.body', { amount: sum }))
+        : noticeOf(said('fundingPayers.shopBack.title'), said('fundingPayers.shopBack.body', { amount: sum }));
     void this.notifications
       ?.notify(did, { kind: 'money_in', ...payload, link: '/', tag: `money_in:${did}`, data: {} })
       .catch(() => undefined);
@@ -142,11 +144,11 @@ export class FundingPayerRegistrar implements OnModuleInit {
     // Keyed to the store's DID, which is what its own token acts as — the same inbox its app reads.
     const did = this.vendors.get(vendorId).did;
     if (!did) return;
-    const money = c.gross.toFixed(2);
+    const sum = c.gross.toFixed(2);
     const payload =
       event === 'balance_topped_up'
-        ? { title: 'Your payment came through', body: `${money} is on your balance. Labels are unblocked.` }
-        : { title: 'A payment was taken back', body: `${money} was returned by the payment provider.` };
+        ? noticeOf(said('fundingPayers.storeIn.title'), said('fundingPayers.storeIn.body', { amount: sum }))
+        : noticeOf(said('fundingPayers.storeBack.title'), said('fundingPayers.storeBack.body', { amount: sum }));
     void this.notifications
       ?.notify(did, { kind: 'money_in', ...payload, link: '/', tag: `money_in:${did}`, data: {} })
       .catch(() => undefined);

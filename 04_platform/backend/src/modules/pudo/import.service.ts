@@ -6,6 +6,7 @@ import { holdRailNote, railNoteView } from './rail-note';
 import { journeyModes, railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
 import { NotificationService } from './notification.service';
 import { importLink } from './notification.types';
+import { at as momentAt, day as dayShown, noticeOf, said, type SaidNotice } from './notice-words/say';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
@@ -48,7 +49,7 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { modeOf } from './import.types';
-import { airAgenciesOf, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
+import { airAgenciesOf, airArrivalSaid, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
 import { animalWords, CHICK_WINDOW_H, liveAnimalsOf, type LiveAnimalsDto } from './live-animals.types';
 import { ContactCardService } from './contact-card.service';
 import { airlineOfPrefix, airportCountry, airRegimeOf, awbDigits, awbProblem, checkAirWaybill, damageNoticeDays, formatAwb } from '../../foundation/carriage-law/air';
@@ -688,11 +689,11 @@ export class ImportService {
       if ((c.byRail.warned ?? []).includes(key)) continue;
       c.byRail = { ...c.byRail, warned: [...(c.byRail.warned ?? []), key] };
       this.imports.set(c.importId, c);
-      const day = clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC';
-      const [title, body] =
+      const day = momentAt(clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC', clock.freeUntil!);
+      const words =
         clock.state === 'over'
-          ? [`${c.code}: the free days at ${c.byRail.terminal.label} ended`, `The ${c.byRail.freeDays} free days at ${c.byRail.terminal.label} ended on ${day}, and the box is still there. Each day over is the terminal’s to charge, under your agreement with it — send the truck for it.`]
-          : [`${c.code}: the last free day at ${c.byRail.terminal.label}`, `The box’s ${c.byRail.freeDays} free days at ${c.byRail.terminal.label} end on ${day}. Collect it before then: after that the terminal may charge for each day, under your agreement with it.`];
+          ? noticeOf(said('importer.railOver.title', { code: c.code, terminal: c.byRail.terminal.label }), said('importer.railOver.body', { days: c.byRail.freeDays!, terminal: c.byRail.terminal.label, day }))
+          : noticeOf(said('importer.railLast.title', { code: c.code, terminal: c.byRail.terminal.label }), said('importer.railLast.body', { days: c.byRail.freeDays!, terminal: c.byRail.terminal.label, day }));
       for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
         let did: string | undefined;
         try {
@@ -700,7 +701,7 @@ export class ImportService {
         } catch {
           did = undefined;
         }
-        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', ...words, link: importLink(c.importId), tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
       }
       told.push(`${c.code}:rail:${clock.state}`);
     }
@@ -932,9 +933,11 @@ export class ImportService {
     this.imports.set(c.importId, c);
     if (!reservations) return;
     const did = this.entities.find(c.importerEntityId)?.did;
-    const title = `${c.code}: something was noted when it was collected at ${c.air.handler}`;
-    const body = `${reservations} Complain to ${c.air.airline} in writing${complainBy ? ` by ${complainBy} — the law gives ${days} days from receipt for damage` : ' at once — no convention sets the days here, the airline’s conditions do'}, quoting air waybill ${c.air.awb}.`;
-    if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:collected`, data: { importId: c.importId } }).catch(() => undefined);
+    const words = noticeOf(
+      said('importer.airCollected.title', { code: c.code, handler: c.air.handler }),
+      said('importer.airCollected.body', { reservations, airline: c.air.airline, when: complainBy ? said('importer.airCollected.by', { complainBy: dayShown(complainBy, complainBy), days: days! }) : said('importer.airCollected.atOnce'), awb: c.air.awb }),
+    );
+    if (did) void this.notifications?.notify(did, { kind: 'freight_problem', ...words, link: importLink(c.importId), tag: `import:${c.importId}:air:collected`, data: { importId: c.importId } }).catch(() => undefined);
   }
 
   private airViewOf(c: ImportConsignment, now: number): ImportAirView {
@@ -1007,7 +1010,9 @@ export class ImportService {
    * THE LANDING DAY, read against the offices its release waits on (2026-10-30): the last flight's day, its local time, and
    * the country's own calendar of closed days — the company that answers for the country keeps it.
    */
-  private arrivalOf(c: ImportConsignment): ReturnType<typeof airArrivalWarning> {
+  private arrivalOf(c: ImportConsignment): ReturnType<typeof airArrivalWarning>;
+  private arrivalOf(c: ImportConsignment, asSaid: true): ReturnType<typeof airArrivalSaid>;
+  private arrivalOf(c: ImportConsignment, asSaid?: true): ReturnType<typeof airArrivalWarning> | ReturnType<typeof airArrivalSaid> {
     const a = c.air;
     if (!a) return undefined;
     const last = a.flights[a.flights.length - 1];
@@ -1015,7 +1020,9 @@ export class ImportService {
     const country = a.landedIn ?? c.destCountry;
     const sister = this.entities.forJurisdiction(country);
     const closed = sister ? this.contacts?.of(sister.entityId)?.closedDates?.find((d) => d.date === last?.date) : undefined;
-    return airArrivalWarning({ country, ...(last ? { landsOn: last.date } : {}), ...(last?.arrivesLocal ? { landsAt: last.arrivesLocal } : {}), agencies: a.landedIn ? [] : a.agencies, ...(closed && sister ? { closed: { company: sister.name, ...(closed.note ? { note: closed.note } : {}) } } : {}) });
+    const input = { country, ...(last ? { landsOn: last.date } : {}), ...(last?.arrivesLocal ? { landsAt: last.arrivesLocal } : {}), agencies: a.landedIn ? [] : a.agencies, ...(closed && sister ? { closed: { company: sister.name, ...(closed.note ? { note: closed.note } : {}) } } : {}) };
+    // 2026-11-26 — as phrases for the bell; as English words for the screens that show it beside the import.
+    return asSaid ? airArrivalSaid(input) : airArrivalWarning(input);
   }
 
   /** Where live animals on an import must go: the place the veterinary officer named. */
@@ -1025,7 +1032,7 @@ export class ImportService {
   }
 
   /** A bell to the importer and its agent, once per key. */
-  private tellImport(c: ImportConsignment, title: string, body: string, key: string): void {
+  private tellImport(c: ImportConsignment, words: { title: string; body: string; say: SaidNotice }, key: string): void {
     for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
       let did: string | undefined;
       try {
@@ -1033,7 +1040,7 @@ export class ImportService {
       } catch {
         did = undefined;
       }
-      if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+      if (did) void this.notifications?.notify(did, { kind: 'freight_problem', ...words, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
     }
   }
 
@@ -1053,7 +1060,8 @@ export class ImportService {
         if (lands >= now && lands - now <= 72 * 3_600_000 && !(c.air!.warned ?? []).includes(key)) {
           c.air = { ...c.air!, warned: [...(c.air!.warned ?? []), key] };
           this.imports.set(c.importId, c);
-          this.tellImport(c, `${c.code}: the release may wait for the next working day`, arrival.text, key);
+          // 2026-11-26 — in phrases, so the importer and its agent each read it in their own language.
+          this.tellImport(c, noticeOf(said('importer.airArrival.title', { code: c.code }), this.arrivalOf(c, true)!), key);
           told.push(`${c.code}:air:arrival`);
         }
       }
@@ -1064,11 +1072,14 @@ export class ImportService {
       if ((c.air.warned ?? []).includes(key)) continue;
       c.air = { ...c.air, warned: [...(c.air.warned ?? []), key] };
       this.imports.set(c.importId, c);
-      const end = clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC';
-      const [title, body] =
+      const end = momentAt(clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC', clock.freeUntil!);
+      const words =
         clock.state === 'over'
-          ? [`${c.code}: the free storage at ${c.air.handler} ended`, `The ${c.air.freeHours} free hours at ${c.air.handler} ended on ${end}, and the cargo is still there. Each hour or day over is the handler’s to charge, under its tariff — collect it.`]
-          : [`${c.code}: the free storage at ${c.air.handler} ends soon`, `The cargo’s ${c.air.freeHours} free hours at ${c.air.handler} end on ${end}. Collect it before then: after that the handler may charge for storage, under its tariff.${airReleaseGaps(c.air).length ? ` Still missing before it may leave: ${airReleaseGaps(c.air).join(', ')}.` : ''}`];
+          ? noticeOf(said('importer.airOver.title', { code: c.code, handler: c.air.handler }), said('importer.airOver.body', { hours: c.air.freeHours!, handler: c.air.handler, end }))
+          : noticeOf(
+              said('importer.airSoon.title', { code: c.code, handler: c.air.handler }),
+              said('importer.airSoon.body', { hours: c.air.freeHours!, handler: c.air.handler, end, missing: airReleaseGaps(c.air).length ? said('importer.airSoon.missing', { gaps: airReleaseGaps(c.air).join(', ') }) : '' }),
+            );
       for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
         let did: string | undefined;
         try {
@@ -1076,7 +1087,7 @@ export class ImportService {
         } catch {
           did = undefined;
         }
-        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', ...words, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
       }
       told.push(`${c.code}:air:${clock.state}`);
     }

@@ -1,4 +1,5 @@
 import { slotOf, slotWords } from './air-terminal.types';
+import { at, noticeOf, said, type Said, type Shown } from './notice-words/say';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -96,6 +97,33 @@ export function paperLabel(p: Pick<ExportPaper, 'key' | 'title'>): string {
 
 function paperNoun(p: Pick<ExportPaper, 'key' | 'title'>): string {
   return p.title ? `“${p.title}”` : (EXPORT_PAPER_NOUN[p.key as KnownExportPaperKey] ?? p.key);
+}
+
+/** A paper mid-sentence for a notice: its own name in quotes, else the catalogue's phrase for it. */
+const EXPORT_PAPER_SAID: Record<KnownExportPaperKey, Said> = {
+  commercial_invoice: said('exporter.paper.commercialInvoice'),
+  packing_list: said('exporter.paper.packingList'),
+  export_entry: said('exporter.paper.exportEntry'),
+  booking_confirmation: said('exporter.paper.bookingConfirmation'),
+  shipping_instructions: said('exporter.paper.shippingInstructions'),
+  weighbridge_ticket: said('exporter.paper.weighbridgeTicket'),
+  bill_of_lading: said('exporter.paper.billOfLading'),
+  certificate_of_origin: said('exporter.paper.certificateOfOrigin'),
+  phytosanitary_certificate: said('exporter.paper.phytosanitaryCertificate'),
+  fumigation_certificate: said('exporter.paper.fumigationCertificate'),
+  export_permit: said('exporter.paper.exportPermit'),
+  inspection_certificate: said('exporter.paper.inspectionCertificate'),
+  certificate_of_analysis: said('exporter.paper.certificateOfAnalysis'),
+  health_certificate: said('exporter.paper.healthCertificate'),
+  insurance_certificate: said('exporter.paper.insuranceCertificate'),
+  dangerous_goods_declaration: said('exporter.paper.dangerousGoodsDeclaration'),
+  letter_of_credit: said('exporter.paper.letterOfCredit'),
+  air_waybill: said('exporter.paper.airWaybill'),
+  consignment_security_declaration: said('exporter.paper.consignmentSecurityDeclaration'),
+};
+
+function paperSaid(p: Pick<ExportPaper, 'key' | 'title'>): string | Said {
+  return p.title ? `“${p.title}”` : (EXPORT_PAPER_SAID[p.key as KnownExportPaperKey] ?? p.key);
 }
 
 /** Which group a line is in: kept (never missing), asked for these goods, or needed on every export. */
@@ -983,12 +1011,14 @@ export class ExportService {
     c.papers = c.papers.map((p) => (p.key === line.key ? next : p));
     this.exports.set(c.exportId, c);
     if (side === 'agent') {
-      this.tell(c, `${c.code}: your clearing agent gave the export entry`, `${this.nameOf(actorEntityId)} gave the export entry ${next.reference} on ${c.code}. It is on the export, and in the file for your forwarder.`);
+      this.tell(c, noticeOf(said('exporter.entryGiven.title', { code: c.code }), said('exporter.entryGiven.body', { name: this.nameOf(actorEntityId), ref: next.reference ?? '', code: c.code })));
     } else if (c.agent && line.refusedAt) {
       this.tell(
         c,
-        `${c.code}: ${paperNoun(line)} was supplied again`,
-        `${this.nameOf(c.exporterEntityId)} supplied ${paperNoun(line)} again on ${c.code}, after you sent it back. Read it, and accept it or send it back.`,
+        noticeOf(
+          said('exporter.suppliedAgain.title', { code: c.code, paper: paperSaid(line) }),
+          said('exporter.suppliedAgain.body', { name: this.nameOf(c.exporterEntityId), paper: paperSaid(line), code: c.code }),
+        ),
         c.agent.entityId,
       );
     }
@@ -1029,7 +1059,13 @@ export class ExportService {
     delete line.acceptedAt;
     delete line.acceptedBy;
     this.exports.set(c.exportId, c);
-    this.tell(c, `${c.code}: your clearing agent sent back ${paperNoun(line)}`, `${this.nameOf(actorEntityId)} sent back ${paperNoun(line)} on ${c.code}: “${line.refusedReason}”. Supply it again on the export.`);
+    this.tell(
+      c,
+      noticeOf(
+        said('exporter.sentBack.title', { code: c.code, paper: paperSaid(line) }),
+        said('exporter.sentBack.body', { name: this.nameOf(actorEntityId), paper: paperSaid(line), code: c.code, reason: line.refusedReason ?? '' }),
+      ),
+    );
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1097,9 +1133,22 @@ export class ExportService {
     c.papers = c.papers.some((p) => p.key === line.key) ? c.papers.map((p) => (p.key === line.key ? line : p)) : [...c.papers, line];
     this.exports.set(c.exportId, c);
     if (side === 'agent') {
-      this.tell(c, `${c.code}: your clearing agent asks for ${paperNoun(line)}`, `${this.nameOf(actorEntityId)} asks for ${paperNoun(line)} on ${c.code}: it is on the export's list now, counted as missing until you give it.`);
+      this.tell(
+        c,
+        noticeOf(
+          said('exporter.asks.title', { code: c.code, paper: paperSaid(line) }),
+          said('exporter.asks.body', { name: this.nameOf(actorEntityId), paper: paperSaid(line), code: c.code }),
+        ),
+      );
     } else if (c.agent) {
-      this.tell(c, `${c.code}: ${paperNoun(line)} is on the list`, `${this.nameOf(c.exporterEntityId)} put ${paperNoun(line)} on the list for ${c.code}.`, c.agent.entityId);
+      this.tell(
+        c,
+        noticeOf(
+          said('exporter.onList.title', { code: c.code, paper: paperSaid(line) }),
+          said('exporter.onList.body', { name: this.nameOf(c.exporterEntityId), paper: paperSaid(line), code: c.code }),
+        ),
+        c.agent.entityId,
+      );
     }
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
@@ -1155,7 +1204,7 @@ export class ExportService {
         : p,
     );
     this.exports.set(c.exportId, c);
-    if (c.agent) this.tell(c, `${c.code}: shipping instructions signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its letter of instruction for ${c.code}, version ${version}. Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    if (c.agent) this.tell(c, noticeOf(said('exporter.instructionsSigned.title', { code: c.code, version }), said('exporter.instructionsSigned.body', { name: this.nameOf(c.exporterEntityId), code: c.code, version })), c.agent.entityId);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1277,7 +1326,7 @@ export class ExportService {
       fromExport: c.code,
     });
     this.exports.set(c.exportId, c);
-    if (c.agent) this.tell(c, `${c.code}: commercial invoice signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its commercial invoice ${draft!.number} for ${c.code}, version ${version}. Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    if (c.agent) this.tell(c, noticeOf(said('exporter.invoiceSigned.title', { code: c.code, version }), said('exporter.invoiceSigned.body', { name: this.nameOf(c.exporterEntityId), number: draft!.number, code: c.code, version })), c.agent.entityId);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1412,7 +1461,7 @@ export class ExportService {
         : line,
     );
     this.exports.set(c.exportId, c);
-    if (c.agent) this.tell(c, `${c.code}: packing list signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its packing list for ${c.code}, version ${version} (${t.lines.toLocaleString('en')} lines). Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    if (c.agent) this.tell(c, noticeOf(said('exporter.packingSigned.title', { code: c.code, version }), said('exporter.packingSigned.body', { name: this.nameOf(c.exporterEntityId), code: c.code, version, lines: t.lines.toLocaleString('en') })), c.agent.entityId);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1500,8 +1549,10 @@ export class ExportService {
     this.exports.set(c.exportId, c);
     this.tell(
       c,
-      `${c.code}: you are appointed to clear an export`,
-      `${this.nameOf(c.exporterEntityId)} appointed you as its clearing agent on ${c.code} — ${c.goodsDescription}, leaving through ${c.loadingPort}, booking ${c.booking.reference}. Its papers are on the export in your Exports: give the export entry, and accept each paper or send it back with a reason.`,
+      noticeOf(
+        said('exporter.appointed.title', { code: c.code }),
+        said('exporter.appointed.body', { name: this.nameOf(c.exporterEntityId), code: c.code, goods: c.goodsDescription, port: c.loadingPort, booking: c.booking.reference }),
+      ),
       agent.entityId,
     );
     return this.detail(c.exportId, actorEntityId, {}, now);
@@ -1519,7 +1570,14 @@ export class ExportService {
     // Its quotation stays between the two of them, kept on the former appointment; the next agent quotes its own.
     delete c.fee;
     this.exports.set(c.exportId, c);
-    this.tell(c, `${c.code}: your appointment ended`, `${this.nameOf(c.exporterEntityId)} ended your appointment as clearing agent on ${c.code}${why ? `: “${former.reason}”` : ''}. Its papers are no longer shared with you.`, former.entityId);
+    this.tell(
+      c,
+      noticeOf(
+        said('exporter.ended.title', { code: c.code }),
+        said('exporter.ended.body', { name: this.nameOf(c.exporterEntityId), code: c.code, why: why ? said('exporter.ended.why', { reason: former.reason ?? '' }) : '' }),
+      ),
+      former.entityId,
+    );
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1551,11 +1609,13 @@ export class ExportService {
     const first = c.fee?.quoteId === quote.quoteId ? c.fee.quotedAt : new Date(now).toISOString();
     c.fee = { quoteId: quote.quoteId, quotedAt: first, agentEntityId: agent.entityId };
     this.exports.set(c.exportId, c);
-    const ref = quote.reference ? ` (its reference ${quote.reference})` : '';
+    const ref = quote.reference ? said('exporter.feeRef', { ref: quote.reference }) : '';
     this.tell(
       c,
-      `${c.code}: your clearing agent quoted its fee`,
-      `${this.nameOf(agent.entityId)} quotes ${quote.amount.toLocaleString('en')} ${quote.currency} for clearing ${c.code}${ref}. Agree to it on the export if it is what you agreed — agreeing is not paying, and SeeBuyGet moves no money between you.`,
+      noticeOf(
+        said('exporter.feeQuoted.title', { code: c.code }),
+        said('exporter.feeQuoted.body', { name: this.nameOf(agent.entityId), amount: `${quote.amount.toLocaleString('en')} ${quote.currency}`, code: c.code, ref }),
+      ),
     );
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
@@ -1566,7 +1626,14 @@ export class ExportService {
     const fee = this.feeOf(c);
     if (!fee) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${c.code} yet`);
     this.quotes.agree(fee.quoteId, { name: by, entityId: actorEntityId }, now);
-    this.tell(c, `${c.code}: the exporter agreed to your fee`, `${this.nameOf(c.exporterEntityId)} agreed to your fee of ${fee.amount.toLocaleString('en')} ${fee.currency} for clearing ${c.code}. Whether it is paid is for the two of you to say on the quotation.`, c.agent!.entityId);
+    this.tell(
+      c,
+      noticeOf(
+        said('exporter.feeAgreed.title', { code: c.code }),
+        said('exporter.feeAgreed.body', { name: this.nameOf(c.exporterEntityId), amount: `${fee.amount.toLocaleString('en')} ${fee.currency}`, code: c.code }),
+      ),
+      c.agent!.entityId,
+    );
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -1793,8 +1860,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
         const key = `${box.kind}@${box.dueAt}:${box.overdue ? 'over' : 'soon'}`;
         if (!(warned.box ?? []).includes(key)) {
           warned.box = [...(warned.box ?? []), key];
-          const [title, body] = boxWarning(c, box);
-          this.tell(c, title, body);
+          this.tell(c, boxWarning(c, box));
           told.push(`${c.code}:box:${box.kind}:${box.overdue ? 'over' : 'soon'}`);
         }
       }
@@ -1802,20 +1868,32 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
       const cutoff = Date.parse(h.cutoffAt);
       if (!t.gatedInAt && !warned.pickup && !t.collectedAt && now < cutoff && now >= Date.parse(t.leaveByAt) - PICKUP_WARN_H * H) {
         warned.pickup = new Date(now).toISOString();
-        const to = c.mode === 'air' ? `To be at ${c.terminal.label} before the airline’s latest acceptance time at ${utc(h.cutoffAt)}` : h.byRail ? `To be at ${h.place.label} before the train’s cut-off at ${utc(h.cutoffAt)}` : `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}`;
-        this.tell(c, `${c.code}: the ${c.mode === 'air' ? 'cargo' : 'box'} must leave by ${utc(t.leaveByAt)}`, `${to}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : `Post the load to the ${c.mode === 'air' ? 'cargo terminal' : 'terminal'} now.`}`);
+        const to =
+          c.mode === 'air'
+            ? said('exporter.pickup.toAir', { terminal: c.terminal.label, time: utcShown(h.cutoffAt) })
+            : h.byRail
+              ? said('exporter.pickup.toRail', { place: h.place.label, time: utcShown(h.cutoffAt) })
+              : said('exporter.pickup.toGate', { terminal: c.terminal.label, time: utcShown(c.booking.gateCutoffAt) });
+        const next = c.ladenFreightId ? said('exporter.pickup.noDriver', { load: c.ladenFreightCode ?? '' }) : said(c.mode === 'air' ? 'exporter.pickup.postAir' : 'exporter.pickup.postBox');
+        this.tell(
+          c,
+          noticeOf(
+            said(c.mode === 'air' ? 'exporter.pickup.titleAir' : 'exporter.pickup.titleBox', { code: c.code, by: utcShown(t.leaveByAt) }),
+            said('exporter.pickup.body', { to, place: c.loadingPlace.label, by: utcShown(t.leaveByAt), next }),
+          ),
+        );
         told.push(`${c.code}:pickup`);
       }
       if (!t.gatedInAt && !warned.gate && now >= cutoff) {
         warned.gate = new Date(now).toISOString();
-        if (c.mode === 'air') this.tell(c, `${c.code}: the latest acceptance time passed without the cargo`, `The latest acceptance time at ${c.terminal.label} was ${utc(h.cutoffAt)} and the cargo has not been delivered there. Tell ${c.booking.partyName} at once: it may go on a later flight, under a new time.`);
-        else if (h.byRail) this.tell(c, `${c.code}: the train’s cut-off passed without the box`, `The train’s cut-off at ${h.place.label} was ${utc(h.cutoffAt)} and the box is not there. Ask the railway or ${c.booking.partyName} for the next train — it must still reach the port before the gate closes at ${utc(c.booking.gateCutoffAt)}.`);
-        else this.tell(c, `${c.code}: the gate closed without the box`, `The gate-in cut-off at ${c.terminal.label} was ${utc(c.booking.gateCutoffAt)} and the box is not inside. Tell ${c.booking.partyName} at once: it may go on the next vessel, under a new cut-off.`);
+        if (c.mode === 'air') this.tell(c, noticeOf(said('exporter.gateAir.title', { code: c.code }), said('exporter.gateAir.body', { terminal: c.terminal.label, time: utcShown(h.cutoffAt), party: c.booking.partyName })));
+        else if (h.byRail) this.tell(c, noticeOf(said('exporter.gateRail.title', { code: c.code }), said('exporter.gateRail.body', { place: h.place.label, time: utcShown(h.cutoffAt), party: c.booking.partyName, gate: utcShown(c.booking.gateCutoffAt) })));
+        else this.tell(c, noticeOf(said('exporter.gateSea.title', { code: c.code }), said('exporter.gateSea.body', { terminal: c.terminal.label, time: utcShown(c.booking.gateCutoffAt), party: c.booking.partyName })));
         told.push(`${c.code}:gate`);
       }
       if (!t.gatedInAt && c.booking.vgmCutoffAt && !c.vgm && !warned.vgm && now >= Date.parse(c.booking.vgmCutoffAt) - VGM_WARN_H * H) {
         warned.vgm = new Date(now).toISOString();
-        this.tell(c, `${c.code}: declare the verified gross mass`, `${c.booking.partyName} needs the box’s verified gross mass before ${utc(c.booking.vgmCutoffAt)}: without it the box is not loaded. Weigh it and declare it on the export.`);
+        this.tell(c, noticeOf(said('exporter.vgm.title', { code: c.code }), said('exporter.vgm.body', { party: c.booking.partyName, time: utcShown(c.booking.vgmCutoffAt) })));
         told.push(`${c.code}:vgm`);
       }
       if (JSON.stringify(warned) !== JSON.stringify(c.warned ?? {})) {
@@ -1829,7 +1907,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
   /* ----------------------------------------------------------------- inside -- */
 
   /** Into the bell — the exporter's, or (named) its agent's — as a load's trouble is. */
-  private tell(c: ExportConsignment, title: string, body: string, toEntityId: string = c.exporterEntityId): void {
+  private tell(c: ExportConsignment, told: ReturnType<typeof noticeOf>, toEntityId: string = c.exporterEntityId): void {
     let did: string | undefined;
     try {
       did = this.entities.get(toEntityId).did;
@@ -1837,7 +1915,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
       return;
     }
     if (!did) return;
-    void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: exportLink(c.exportId), tag: `export:${c.exportId}:${title}`, data: { exportId: c.exportId } }).catch(() => undefined);
+    void this.notifications?.notify(did, { kind: 'freight_problem', ...told, link: exportLink(c.exportId), tag: `export:${c.exportId}:${told.title}`, data: { exportId: c.exportId } }).catch(() => undefined);
   }
 
   private legOf(freightId: string): ExportLegView {
@@ -1940,28 +2018,35 @@ function freeDaysWords(c: ExportConsignment, kind: FreeDayKind): string {
 }
 
 /** The bell's words for a box near or past its free days: what is counted, by when, and who to talk to. Never a sum. */
-function boxWarning(c: ExportConsignment, box: ExportBoxClockView): [string, string] {
-  const due = utc(box.dueAt!);
+function boxWarning(c: ExportConsignment, box: ExportBoxClockView): ReturnType<typeof noticeOf> {
+  const due = utcShown(box.dueAt!);
+  const days = box.freeDays ?? '';
+  const by = box.freeDaysBy ?? '';
   if (box.kind === 'detention') {
     return box.overdue
-      ? [
-          `${c.code}: the box’s free days outside the terminal ran out`,
-          `The ${box.freeDays} free days outside the terminal (detention) ended on ${due} and the box is not inside the gate at ${c.terminal.label}. Each day over is the line’s to charge, under your agreement with it — talk to ${c.booking.partyName}.`,
-        ]
-      : [
-          `${c.code}: the box’s free days outside the terminal end ${due}`,
-          `The line gives ${box.freeDays} free days for the box outside the terminal (detention, ${box.freeDaysBy}’s figure); they end on ${due}. Get it inside the gate at ${c.terminal.label} before then: after that the line may charge for each day, under your agreement with it.`,
-        ];
+      ? noticeOf(
+          said('exporter.box.detentionOver.title', { code: c.code }),
+          said('exporter.box.detentionOver.body', { days, due, terminal: c.terminal.label, party: c.booking.partyName }),
+        )
+      : noticeOf(
+          said('exporter.box.detentionSoon.title', { code: c.code, due }),
+          said('exporter.box.detentionSoon.body', { days, by, due, terminal: c.terminal.label }),
+        );
   }
   return box.overdue
-    ? [
-        `${c.code}: the box’s free days inside the terminal ran out`,
-        `The ${box.freeDays} free days inside ${c.terminal.label} (demurrage) ended on ${due}, and nobody has recorded the box loaded on board. Ask ${c.booking.partyName} — and record it loaded once it is.`,
-      ]
-    : [
-        `${c.code}: the box’s free days inside the terminal end ${due}`,
-        `The box waits inside ${c.terminal.label}; its ${box.freeDays} free days there (demurrage, ${box.freeDaysBy}’s figure) end on ${due}. Ask ${c.booking.partyName} which vessel takes it: after that the terminal or the line may charge for each day.`,
-      ];
+    ? noticeOf(
+        said('exporter.box.demurrageOver.title', { code: c.code }),
+        said('exporter.box.demurrageOver.body', { days, terminal: c.terminal.label, due, party: c.booking.partyName }),
+      )
+    : noticeOf(
+        said('exporter.box.demurrageSoon.title', { code: c.code, due }),
+        said('exporter.box.demurrageSoon.body', { terminal: c.terminal.label, days, by, due, party: c.booking.partyName }),
+      );
+}
+
+/** A cut-off as the bell says it: the same English as `utc`, and each language's own way of writing the moment, in UTC. */
+function utcShown(iso: string): Shown {
+  return at(utc(iso), iso, 'UTC');
 }
 
 /** "28 Oct 2026 18:00 UTC" — a cut-off said in one clock, the same for everybody who reads it. */

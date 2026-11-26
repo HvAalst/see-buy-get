@@ -9,6 +9,7 @@ import { CompanyKeyService } from './company-key.service';
 import type { CompanyKind } from './company-key.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { NotificationService } from './notification.service';
+import { day, noticeOf, said } from './notice-words/say';
 
 /** How often it looks: a notice a day late is still a year's notice. */
 const SWEEP_MS = 6 * 3_600_000;
@@ -96,8 +97,7 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.notifications?.notify(company.did, {
         kind: 'api_rule',
-        title: stage === 'soon' ? `A rule of the API starts on ${from}` : `A rule of the API changes on ${from}`,
-        body: `${r.summary} Until ${from} your system's calls are answered as before, and each one it would refuse says so in the header Sbg-Rule-Change.`,
+        ...noticeOf(said(stage === 'soon' ? 'apiVersionNotice.rule.soon.title' : 'apiVersionNotice.rule.announced.title', { from: day(from, from) }), said('apiVersionNotice.rule.body', { summary: r.summary, from: day(from, from) })),
         link: '/',
         data: { rule: r.id, version: r.version, enforcedFrom: r.enforcedFrom, stage },
       });
@@ -115,8 +115,7 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.notifications?.notify(company.did, {
         kind: 'api_version',
-        title: stage === 'month' ? `Version ${v.version} of the API stops in a month` : `Version ${v.version} of the API will stop`,
-        body: `Your system's key calls version ${v.version}. It keeps working until ${v.retiresAt!.slice(0, 10)}; the developer guide says what changed.`,
+        ...noticeOf(said(stage === 'month' ? 'apiVersionNotice.version.month.title' : 'apiVersionNotice.version.announced.title', { version: v.version }), said('apiVersionNotice.version.body', { version: v.version, until: day(v.retiresAt!.slice(0, 10), v.retiresAt!.slice(0, 10)) })),
         link: '/',
         data: { version: v.version, retiresAt: v.retiresAt, stage },
       });

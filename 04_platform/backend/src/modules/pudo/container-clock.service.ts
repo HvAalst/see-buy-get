@@ -3,6 +3,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { NotificationService } from './notification.service';
 import { importLink } from './notification.types';
+import { day, noticeOf, said } from './notice-words/say';
 import { ContainerBoxService } from './container-box.service';
 import { BOX_WARN_DAYS, boxClock, boxDueSoon } from './container-box';
 
@@ -65,13 +66,31 @@ export class ContainerClockService implements OnApplicationBootstrap, OnModuleDe
         const key = `${term.termId}:${clock.dueBackAt}:${clock.overdue ? 'over' : 'soon'}`;
         if (this.told.has(key)) continue;
 
-        const owed = term.owedByName ?? 'whoever booked it';
-        const title = clock.overdue
-          ? `${box.containerNo} is past its free days`
-          : `${box.containerNo} is due back ${clock.dueBackAt.slice(0, 10)}`;
-        const body = clock.overdue
-          ? `${clock.kind === 'detention' ? 'Detention' : 'Demurrage'} ran out on ${clock.dueBackAt.slice(0, 10)} — day ${clock.daysElapsed} of the ${clock.freeDays} free days ${clock.freeDaysBy} recorded. ${owed} booked the box and owes the return${term.importCode ? ` (${term.importCode})` : ''}. What it costs is between you and the line; we only count the days.`
-          : `${clock.daysLeft} day${clock.daysLeft === 1 ? '' : 's'} of the ${clock.freeDays} free days ${clock.freeDaysBy} recorded are left${term.importCode ? ` on ${term.importCode}` : ''}. ${owed} booked the box and owes the return, so a truck arranged now is cheaper than one arranged after the date.`;
+        const owed = term.owedByName ?? said('containerClock.owedDefault');
+        const dueDay = day(clock.dueBackAt.slice(0, 10), clock.dueBackAt.slice(0, 10));
+        const notice = clock.overdue
+          ? noticeOf(
+              said('containerClock.over.title', { box: box.containerNo }),
+              said('containerClock.over.body', {
+                kind: said(clock.kind === 'detention' ? 'containerClock.kind.detention' : 'containerClock.kind.demurrage'),
+                day: dueDay,
+                elapsed: clock.daysElapsed ?? '',
+                free: clock.freeDays ?? '',
+                by: clock.freeDaysBy ?? '',
+                owed,
+                code: term.importCode ? said('containerClock.over.code', { code: term.importCode }) : '',
+              }),
+            )
+          : noticeOf(
+              said('containerClock.soon.title', { box: box.containerNo, day: dueDay }),
+              said('containerClock.soon.body', {
+                left: clock.daysLeft ?? '',
+                free: clock.freeDays ?? '',
+                by: clock.freeDaysBy ?? '',
+                code: term.importCode ? said('containerClock.soon.code', { code: term.importCode }) : '',
+                owed,
+              }),
+            );
 
         for (const entityId of new Set([term.owedByEntityId, term.importerEntityId].filter(Boolean) as string[])) {
           const did = this.entities.find(entityId)?.did;
@@ -79,8 +98,7 @@ export class ContainerClockService implements OnApplicationBootstrap, OnModuleDe
           try {
             await this.notifications.notify(did, {
               kind: 'box_due',
-              title,
-              body,
+              ...notice,
               // 2026-11-02 — the import its box came in on, opened under Imports (a tapped notice goes there).
               link: term.importId ? importLink(term.importId) : '/',
               tag: `box:${term.termId}:${clock.overdue ? 'over' : 'soon'}`,

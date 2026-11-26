@@ -9,6 +9,7 @@
  * device, and (b) a VAPID-signed, payload-encrypted POST to the push service. This file models the
  * former; `push-sender.ts` is the seam for the latter.
  */
+import type { NoticeLang, SaidNotice } from './notice-words/say';
 
 /** The raw browser PushSubscription, exactly as `pushManager.subscribe(...).toJSON()` yields it. */
 export interface WebPushSubscription {
@@ -29,6 +30,8 @@ export interface PushSubscriptionRecord {
   keys: { p256dh: string; auth: string };
   createdAt: string;
   lastSeenAt?: string;
+  /** 2026-11-26 — the language its app had when it turned notifications on, or last opened: what it is pushed in. */
+  lang?: NoticeLang;
 }
 
 /** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest;
@@ -351,6 +354,8 @@ export interface NotificationRecord {
   readAt?: string;
   /** Who read it, where the inbox is one several people share (a business's). Absent in a person's own. */
   readBy?: string;
+  /** 2026-11-26 — its title and body as phrases (notice-words/say.ts): each reader is told it in their own language. */
+  say?: SaidNotice;
 }
 
 /** What part of a load a notice to its poster is about, where that is plain: its road, its seals, or a claim on it. */
@@ -405,6 +410,11 @@ export interface NotificationPayload {
    */
   actions?: Array<{ action: string; title: string }>;
   data?: Record<string, unknown>;
+  /**
+   * 2026-11-26 — the title and body as phrases (notice-words/say.ts, `noticeOf`), so each reader is told it in their own
+   * language; `title` and `body` are its English. Never handed to a phone: a device is given the words in its language.
+   */
+  say?: SaidNotice;
 }
 
 /**

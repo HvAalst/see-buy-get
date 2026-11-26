@@ -18,6 +18,7 @@ import { FleetPlanService } from './fleet-plan.service';
 import { FleetService } from './fleet.service';
 import { PASSAGE_HOOK_EVENTS, type LoadPassageView } from './load-passage.types';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { VehicleService } from './vehicle.service';
 import { LiveService } from './live.service';
@@ -425,8 +426,7 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.notifications?.notify(fleetDid, {
           kind: 'system_down',
-          title: 'Your system is not taking our messages',
-          body: `${count === 1 ? 'A message' : `${count} messages`} about your work ${count === 1 ? 'was' : 'were'} given up after two days of tries. Put your system right, then send ${count === 1 ? 'it' : 'them'} again under Your system.`,
+          ...noticeOf(said('fleetHooks.down.title'), count === 1 ? said('fleetHooks.down.one') : said('fleetHooks.down.many', { count })),
           link: '/',
           data: { count, since },
         });

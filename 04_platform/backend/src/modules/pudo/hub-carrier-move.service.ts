@@ -11,13 +11,14 @@ import { HubCarrierService } from './hub-carrier.service';
 import { CARRIER_MOVE_MAX, CARRIER_WAYS_BACK, type CarrierMove, type CarrierMoveState, type CarrierMovesView, type CarrierMoveView, type CarrierWayBack } from './hub-carrier.types';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said, type Said } from './notice-words/say';
 import type { Mdp } from './pudo.types';
 
 /** What happens at the other hub, as the notices say it. */
-const WAY_BACK_WORDS: Record<CarrierWayBack, string> = {
-  with_driver: 'they go back with the driver who brings them',
-  left: 'they are left with you, yours to keep or use',
-  return_job: 'they are kept aside for a return job the owning hub posts',
+const WAY_BACK_WORDS: Record<CarrierWayBack, Said> = {
+  with_driver: said('hubCarrierMove.wayBack.withDriver'),
+  left: said('hubCarrierMove.wayBack.left'),
+  return_job: said('hubCarrierMove.wayBack.returnJob'),
 };
 
 /**
@@ -92,7 +93,14 @@ export class HubCarrierMoveService implements OnModuleInit {
     };
     this.moves.set(move.moveId, move);
     // The other hub, told what comes and what it is to do with it.
-    this.tell(to.did, 'Carriers coming to you', `${owner.name} sends ${this.many(move)} with ${driverName ?? 'a driver'}: ${WAY_BACK_WORDS[move.wayBack]}.`, move.moveId);
+    this.tell(
+      to.did,
+      noticeOf(
+        said('hubCarrierMove.coming.title'),
+        said('hubCarrierMove.coming.body', { owner: owner.name, many: this.many(move), driver: driverName ?? said('hubCarrierMove.aDriver'), wayBack: WAY_BACK_WORDS[move.wayBack] }),
+      ),
+      move.moveId,
+    );
     return this.view(move);
   }
 
@@ -110,8 +118,8 @@ export class HubCarrierMoveService implements OnModuleInit {
     this.moves.set(m.moveId, m);
     const owner = this.mdps.require(m.ownerMdpId);
     const here = this.mdps.require(mdpId);
-    if (m.wayBack === 'return_job') this.tell(owner.did, 'Your carriers wait for their return job', `${here.name} keeps ${this.many(m)} aside for you: post their return job when you are ready.`, m.moveId);
-    else if (m.wayBack === 'with_driver' && n < m.count) this.tell(owner.did, 'Fewer carriers came back', `${here.name} counted ${n} of ${this.many(m)} back out to ${m.driverName ?? 'the driver'}.`, m.moveId);
+    if (m.wayBack === 'return_job') this.tell(owner.did, noticeOf(said('hubCarrierMove.waiting.title'), said('hubCarrierMove.waiting.body', { here: here.name, many: this.many(m) })), m.moveId);
+    else if (m.wayBack === 'with_driver' && n < m.count) this.tell(owner.did, noticeOf(said('hubCarrierMove.fewer.title'), said('hubCarrierMove.fewer.body', { here: here.name, n, many: this.many(m), driver: m.driverName ?? said('hubCarrierMove.theDriver') })), m.moveId);
     return this.view(m);
   }
 
@@ -158,7 +166,7 @@ export class HubCarrierMoveService implements OnModuleInit {
       m.home = { at: new Date().toISOString() };
       this.moves.set(m.moveId, m);
       try {
-        this.tell(this.mdps.require(m.ownerMdpId).did, 'Your carriers are home', `${this.many(m)} came back on ${m.job.code}.`, m.moveId);
+        this.tell(this.mdps.require(m.ownerMdpId).did, noticeOf(said('hubCarrierMove.home.title'), said('hubCarrierMove.home.body', { many: this.many(m), code: m.job.code })), m.moveId);
       } catch (err) {
         this.logger.warn(`carriers home, not told: ${(err as Error).message}`);
       }
@@ -215,7 +223,7 @@ export class HubCarrierMoveService implements OnModuleInit {
     }
   }
 
-  private tell(did: string, title: string, body: string, moveId: string): void {
-    void this.notifications?.notify(did, { kind: 'hub_arrival', title, body, link: '/', tag: `carriers:${moveId}:${title}`, data: { moveId } }).catch((err: Error) => this.logger.warn(`carriers notice not sent: ${err.message}`));
+  private tell(did: string, told: ReturnType<typeof noticeOf>, moveId: string): void {
+    void this.notifications?.notify(did, { kind: 'hub_arrival', ...told, link: '/', tag: `carriers:${moveId}:${told.title}`, data: { moveId } }).catch((err: Error) => this.logger.warn(`carriers notice not sent: ${err.message}`));
   }
 }

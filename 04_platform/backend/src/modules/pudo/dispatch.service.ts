@@ -63,6 +63,7 @@ import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { HOLD_DECIDE_HOURS, HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, HOLD_REMIND_HOURS, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
+import { money as moneyShown, noticeOf, said, type Said } from './notice-words/say';
 import type { NowWithView } from './now-with.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
 import { VehicleService } from './vehicle.service';
@@ -3128,9 +3129,9 @@ export class DispatchService {
     const note = input.note?.trim().slice(0, 280);
     p.counter = { price, ...(note ? { note } : {}), at: new Date(now).toISOString(), ...(input.by ? { by: input.by } : {}) };
     this.proposals.set(p.proposalId, p);
-    const money = f.postedCurrency ? `${f.postedCurrency} ${price.toLocaleString('en')}` : price.toLocaleString('en');
+    const money = f.postedCurrency ? moneyShown(`${f.postedCurrency} ${price.toLocaleString('en')}`, price, f.postedCurrency) : price.toLocaleString('en');
     void this.notifications
-      ?.notify(p.driverDid, { kind: 'freight_counter', title: `A price back for ${f.code}`, body: `The poster would pay ${money} for ${f.description}. Take it on the board, or name another price.`, link: '/?board', tag: `counter:${p.proposalId}`, data: { freightId: f.freightId, proposalId: p.proposalId } })
+      ?.notify(p.driverDid, { kind: 'freight_counter', ...noticeOf(said('dispatchService.counter.title', { code: f.code }), said('dispatchService.counter.body', { money, description: f.description })), link: '/?board', tag: `counter:${p.proposalId}`, data: { freightId: f.freightId, proposalId: p.proposalId } })
       .catch(() => undefined);
     return p;
   }
@@ -3147,7 +3148,7 @@ export class DispatchService {
       p.counterTaken = new Date(now).toISOString();
       this.proposals.set(p.proposalId, p);
       void this.notifications
-        ?.notify(f.postedByDid ?? '', { kind: 'load_payment', title: `The driver took your price for ${f.code}`, body: 'Pay it in My parcels to confirm: the load is theirs once it is paid.', link: '/?screen=parcels', tag: `take:${p.proposalId}`, data: { freightId: f.freightId } })
+        ?.notify(f.postedByDid ?? '', { kind: 'load_payment', ...noticeOf(said('dispatchService.taken.title', { code: f.code }), said('dispatchService.taken.body')), link: '/?screen=parcels', tag: `take:${p.proposalId}`, data: { freightId: f.freightId } })
         .catch(() => undefined);
       return { proposal: p, freight: f };
     }
@@ -4185,7 +4186,7 @@ export class DispatchService {
     if (this.claimCoverLimit(f) <= 0) this.closeFreightClaimWithReport(f, now);
     // 2026-11-15 — reported while the driver's pay is held: it stays held for the protocol, and the driver answers once (H5).
     if (this.holdOpen(f) && f.claimedBy) {
-      this.tellHold(f.claimedBy, `A problem was reported on ${f.code}`, `The sender says: ${f.claim.description}. Your pay stays held until SeeBuyGet applies the protocol. Answer once, with words and photos, in the Driver app.`, f.freightId);
+      this.tellHold(f.claimedBy, said('dispatchService.problem.title', { code: f.code }), said('dispatchService.problem.body', { description: f.claim.description }), f.freightId);
     }
     return f;
   }
@@ -4722,7 +4723,7 @@ export class DispatchService {
   private payOrHold(f: Freight, now: number): void {
     if (this.prepaid?.owns(f) && f.settlement !== 'between_parties') {
       f.heldPay = { until: new Date(now + HOLD_HOURS * 3_600_000).toISOString() };
-      if (f.claimedBy) this.tellHold(f.claimedBy, `Delivered: ${f.code}`, `Your pay for it is released in ${HOLD_HOURS} hours, unless the sender reports a problem before then.`, f.freightId);
+      if (f.claimedBy) this.tellHold(f.claimedBy, said('dispatchService.delivered.title', { code: f.code }), said('dispatchService.delivered.body', { hours: HOLD_HOURS }), f.freightId);
       return;
     }
     this.payTheRoad(f);
@@ -4746,7 +4747,7 @@ export class DispatchService {
       this.payTheRoad(f);
       f.heldPay.releasedAt = new Date(now).toISOString();
       this.freights.set(f.freightId, f);
-      if (f.claimedBy) this.tellHold(f.claimedBy, `Paid: ${f.code}`, 'Nothing was reported in the 24 hours: your pay is released.', f.freightId);
+      if (f.claimedBy) this.tellHold(f.claimedBy, said('dispatchService.paid.title', { code: f.code }), said('dispatchService.paid.body'), f.freightId);
       released += 1;
     }
     return released;
@@ -4888,21 +4889,23 @@ export class DispatchService {
     else if (f.billed) this.prepaid?.refundCarriage?.(f, { gross: f.billed.gross, tax: f.billed.tax, provision: f.billed.provision }, STEP_WORDS[decision.step]);
     f.heldPay!.decision = decision;
     this.freights.set(f.freightId, f);
+    const stepSaid = said(`dispatchService.step.${decision.step}`);
     const words = decision.overridden
-      ? `SeeBuyGet went against the record here, two members of staff agreeing: ${decision.reason}`
+      ? said('dispatchService.decided.overridden', { reason: decision.reason })
       : decision.automatic
-        ? `Nobody of SeeBuyGet decided within three days, so the protocol's answer applies. ${STEP_WORDS[decision.step]}`
-        : STEP_WORDS[decision.step];
-    const outcome = decision.outcome === 'release' ? 'the driver is paid' : 'the carriage price goes back to the person who paid';
+        ? said('dispatchService.decided.automatic', { step: stepSaid })
+        : stepSaid;
+    const outcome = decision.outcome === 'release' ? said('dispatchService.decided.release') : said('dispatchService.decided.refund');
     // Both sides told the same words, with the page that explains the protocol to everybody (H6).
     for (const did of new Set([payer, f.claimedBy].filter((x): x is string => Boolean(x)))) {
-      void this.notifications?.notify(did, { kind: 'pay_decided', title: `${f.code}: decided — ${outcome}`, body: words, link: HOLD_HELP_PATH, tag: `hold:${f.freightId}:decided`, data: { freightId: f.freightId } }).catch(() => undefined);
+      void this.notifications?.notify(did, { kind: 'pay_decided', ...noticeOf(said('dispatchService.decided.title', { code: f.code, outcome }), words), link: HOLD_HELP_PATH, tag: `hold:${f.freightId}:decided`, data: { freightId: f.freightId } }).catch(() => undefined);
     }
   }
 
   /** The driver, in their own app: held, a problem reported, released. */
-  private tellHold(did: string, title: string, body: string, freightId: string): void {
-    void this.notifications?.notify(did, { kind: 'pay_hold', title, body, link: '/', tag: `hold:${freightId}:${title}`, data: { freightId } }).catch(() => undefined);
+  private tellHold(did: string, title: Said, body: Said, freightId: string): void {
+    const words = noticeOf(title, body);
+    void this.notifications?.notify(did, { kind: 'pay_hold', ...words, link: '/', tag: `hold:${freightId}:${words.title}`, data: { freightId } }).catch(() => undefined);
   }
 
   /** A load withdrawn, its checks done: what was billed given back, open proposals and offers closed, everyone told. */

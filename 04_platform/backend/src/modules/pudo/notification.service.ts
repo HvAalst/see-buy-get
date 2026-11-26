@@ -17,7 +17,8 @@ import {
   PUSH_SENDER,
   WebPushSubscription,
 } from './notification.types';
-import { GUIDE_LINK, WELCOME, type WelcomeApp } from './welcome';
+import { GUIDE_LINK, welcomeNotice, type WelcomeApp } from './welcome';
+import { noticeIn, type NoticeLang } from './notice-words/say';
 
 // The key this server is known to a push service by — where it comes from, and why it is one value: vapid.ts.
 
@@ -93,7 +94,7 @@ export class NotificationService {
   }
 
   /** Enrol (or refresh) a device for an owner. Idempotent per endpoint — a re-subscribe updates in place. */
-  subscribe(ownerDid: string, role: string, sub: WebPushSubscription): PushSubscriptionRecord {
+  subscribe(ownerDid: string, role: string, sub: WebPushSubscription, lang?: NoticeLang): PushSubscriptionRecord {
     if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
       throw new GlosError('INVALID_INPUT', 'A push subscription needs an endpoint and both keys (p256dh, auth).');
     }
@@ -111,6 +112,8 @@ export class NotificationService {
       keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
+      // 2026-11-26 — what this device is pushed in: its app's language, given again whenever the app's language changes.
+      ...(lang ? { lang } : {}),
     };
     this.subs.set(this.key(ownerDid, sub.endpoint), record);
     return record;
@@ -136,7 +139,8 @@ export class NotificationService {
     const targets = this.subscriptionsFor(ownerDid);
     await Promise.all(
       targets.map((sub) =>
-        this.sender.send(sub, payload).then(
+        // 2026-11-26 — each device in its own language, where the notice is written in it; never the phrases themselves.
+        this.sender.send(sub, noticeIn(sub.lang, payload)).then(
           () => this.pushed(true),
           (err) => {
             this.pushed(false);
@@ -197,6 +201,7 @@ export class NotificationService {
       link: payload.link,
       data: payload.data,
       createdAt: new Date().toISOString(),
+      ...(payload.say ? { say: payload.say } : {}),
     };
     this.inbox.set(record.id, record);
     // A fleet office with its screens open sees the bell's count move now, not when it is next opened.
@@ -223,18 +228,22 @@ export class NotificationService {
     if (!ownerDid || this.welcomed.has(key)) return false;
     this.welcomed.set(key, new Date(now).toISOString());
     // Recorded before the first await inside notify: an inbox read right after this already holds it.
-    void this.notify(ownerDid, { kind: 'welcome', ...WELCOME[app], link: GUIDE_LINK, tag: `welcome:${app}`, data: { app } }, { push: false }).catch((err: Error) =>
+    void this.notify(ownerDid, { kind: 'welcome', ...welcomeNotice(app), link: GUIDE_LINK, tag: `welcome:${app}`, data: { app } }, { push: false }).catch((err: Error) =>
       this.logger.warn(`welcome not recorded for ${ownerDid}: ${err.message}`),
     );
     return true;
   }
 
-  /** An owner's notifications, newest first, capped (the centre paginates later if it ever needs to). */
-  inboxFor(ownerDid: string, limit = 50): NotificationRecord[] {
+  /**
+   * An owner's notifications, newest first, capped (the centre paginates later if it ever needs to) — each in the reader's
+   * language where all of it is written in it, else in the English it was sent in (2026-11-26). Its phrases stay here.
+   */
+  inboxFor(ownerDid: string, limit = 50, lang?: NoticeLang): NotificationRecord[] {
     return [...this.inbox.values()]
       .filter((n) => n.ownerDid === ownerDid)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((n) => noticeIn(lang, n));
   }
 
   /** How many of an owner's notifications are unread — the bell badge count. */

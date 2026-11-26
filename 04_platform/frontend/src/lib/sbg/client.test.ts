@@ -3,6 +3,7 @@ import { createSbgClient } from './client';
 import { createDriverApi } from './personas/driver';
 import { Session } from './session';
 import { makeConfig } from './config';
+import { setLocale } from '../../shared/i18n';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -83,6 +84,15 @@ describe('SbgClient envelope + resilience', () => {
     expect(captured?.headers.get('x-sbg-client')).toBe('driver/1.0.0');
     expect(captured?.headers.get('x-sbg-trace-id')).toBe('trc_fixed');
     expect(captured?.url).toBe('http://api.test/v1/sbg/fleet/drivers/did%3Ax');
+    // 2026-11-26 — and the app's language, which the server says notices in.
+    expect(captured?.headers.get('x-sbg-lang')).toBe('en');
+    setLocale('bg');
+    try {
+      await driver.me('did:x');
+      expect(captured?.headers.get('x-sbg-lang')).toBe('bg');
+    } finally {
+      setLocale('en');
+    }
   });
 });
 

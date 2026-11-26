@@ -20,6 +20,7 @@ import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { haversineKm } from './geo';
 import { MdpService } from './mdp.service';
+import { money, noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
@@ -179,8 +180,8 @@ export class PersonDoorService implements OnModuleInit {
     // Held at the hub meanwhile — out of a bag still being filled, which would otherwise take it to the shop.
     if (bag?.parcels.includes(p.parcelId)) this.totes.takeOut(bag.code, p.parcelId, p.size);
     this.parcels.holdForDoor(p.parcelId, until, hub.name, now);
-    const outOfBag = bag ? ` Take it out of bag ${bag.code}.` : '';
-    this.tellHub(hub.mdpId, `${p.parcelId}: set it aside`, `Its sender is paying for a load to their door, until ${req.until.slice(11, 16)} UTC.${outOfBag} If they have not paid by then, sort it as its label says.`, p.parcelId);
+    const outOfBag = bag ? said('personDoor.setAside.outOfBag', { bag: bag.code }) : '';
+    this.tellHub(hub.mdpId, noticeOf(said('personDoor.setAside.title', { parcel: p.parcelId }), said('personDoor.setAside.body', { until: req.until.slice(11, 16), outOfBag })), p.parcelId);
     return this.viewOf(req);
   }
 
@@ -287,7 +288,7 @@ export class PersonDoorService implements OnModuleInit {
     }
     // Arrived after the time ran out, a second time, or with no load to pay for: all of it goes back.
     this.owe(personDid, funding.entityId, funding.currency, gross, `paid for no load (${c.reference})`, req, now);
-    this.tell(personDid, 'Your payment goes back to you', `${this.money(gross, funding.currency)} came in with nothing waiting for it — it goes back to your number with the next payout.`, req?.parcelId);
+    this.tell(personDid, noticeOf(said('personDoor.loose.title'), said('personDoor.loose.body', { amount: money(this.money(gross, funding.currency), gross, funding.currency) })), req?.parcelId);
     return { entryId: entry.entryId };
   }
 
@@ -347,7 +348,7 @@ export class PersonDoorService implements OnModuleInit {
     this.requests.set(req.requestId, req);
     // Taken while a raise was still to be paid: no longer needed — paid after all, it goes back (raisePaid).
     if (req.raise?.state === 'awaiting') this.closeRaise(req, 'a driver took the load', Date.now());
-    this.tell(req.personDid, 'A driver is bringing it to your door', `Load ${req.loadCode} was taken for ${this.money(req.billed, req.currency)}. What is left of what you paid goes back to your number once it is delivered.`, req.parcelId);
+    this.tell(req.personDid, noticeOf(said('personDoor.taken.title'), said('personDoor.taken.body', { code: req.loadCode, amount: money(this.money(req.billed, req.currency), req.billed, req.currency) })), req.parcelId);
     return true;
   }
 
@@ -403,8 +404,8 @@ export class PersonDoorService implements OnModuleInit {
     req.closedAt = new Date(now).toISOString();
     this.requests.set(req.requestId, req);
     if (rest > 0) this.owe(req.personDid, req.entityId, req.currency, rest, `unused, load ${req.loadCode}`, req, now);
-    const back = req.owedBack ? ` ${this.money(req.owedBack, req.currency)} goes back to your number ending ${req.phoneMasked.slice(-3)} with the next payout.` : '';
-    this.tell(req.personDid, 'Delivered at your door', `Load ${req.loadCode} brought parcel ${req.parcelId} to ${req.label}.${back}`, req.parcelId);
+    const back = req.owedBack ? said('personDoor.delivered.back', { amount: money(this.money(req.owedBack, req.currency), req.owedBack, req.currency), last: req.phoneMasked.slice(-3) }) : '';
+    this.tell(req.personDid, noticeOf(said('personDoor.delivered.title'), said('personDoor.delivered.body', { code: req.loadCode, parcel: req.parcelId, label: req.label, back })), req.parcelId);
   }
 
   /* ------------------------------------------------------------- the sweep -- */
@@ -424,14 +425,14 @@ export class PersonDoorService implements OnModuleInit {
       }
       if (req.raise?.state === 'awaiting' && Date.parse(req.raise.until) <= now) {
         this.closeRaise(req, 'the time to pay ran out', now);
-        this.tell(req.personDid, 'The most stays as it was', `No payment came to raise load ${req.loadCode} (the time to pay ran out). It still allows up to ${this.money(req.paid ?? 0, req.currency)}.`, req.parcelId);
+        this.tell(req.personDid, noticeOf(said('personDoor.raiseLapsed.title'), said('personDoor.raiseLapsed.body', { code: req.loadCode, amount: money(this.money(req.paid ?? 0, req.currency), req.paid ?? 0, req.currency) })), req.parcelId);
       }
       if (req.state === 'posted' && !req.remindedAt && req.paidAt && now - Date.parse(req.paidAt) >= DOOR_LOAD_REMIND_H * 3_600_000) {
         req.remindedAt = new Date(now).toISOString();
         this.requests.set(req.requestId, req);
         if (req.freightId) this.dispatch.markBringsBackReminded(req.freightId, now);
         reminded.push(req.requestId);
-        this.tell(req.personDid, `No driver has taken load ${req.loadCode} yet`, `You can send it to ${req.shopName ?? 'the shop'} instead — all you paid comes back — or keep waiting.`, req.parcelId);
+        this.tell(req.personDid, noticeOf(said('personDoor.reminder.title', { code: req.loadCode }), said('personDoor.reminder.body', { shop: this.shopWords(req.shopName) })), req.parcelId);
       }
       if (req.phone && ['delivered', 'lapsed', 'to_shop', 'reversed'].includes(req.state) && this.owedTo(req) <= 0) {
         req.phone = '';
@@ -494,8 +495,8 @@ export class PersonDoorService implements OnModuleInit {
     req.loadCode = load.code;
     this.requests.set(req.requestId, req);
     this.parcels.closeAsGoingHome(p.parcelId, { freightId: load.freightId, code: load.code }, req.hubName, 'its sender', `paid by mobile money`, now);
-    this.tellHub(req.mdpId, `${p.parcelId}: to its sender's door`, `Its sender paid: it goes to their door as load ${load.code}. Keep it aside, and hand it only to the driver who comes for ${load.code}: scan their pass at the counter.`, p.parcelId);
-    this.tell(req.personDid, 'Paid: a driver brings it to your door', `${this.money(paid, req.currency)} came in. Load ${load.code} brings parcel ${p.parcelId} from ${req.hubName} to ${req.label}. What the driver charges less than this goes back to your number.`, p.parcelId);
+    this.tellHub(req.mdpId, noticeOf(said('personDoor.paidHub.title', { parcel: p.parcelId }), said('personDoor.paidHub.body', { code: load.code })), p.parcelId);
+    this.tell(req.personDid, noticeOf(said('personDoor.paid.title'), said('personDoor.paid.body', { amount: money(this.money(paid, req.currency), paid, req.currency), code: load.code, parcel: p.parcelId, hub: req.hubName, label: req.label })), p.parcelId);
   }
 
   /** The time ran out, or they gave up before paying: the box goes on to the shop, as it would have. */
@@ -511,8 +512,8 @@ export class PersonDoorService implements OnModuleInit {
       }
     }
     this.parcels.releaseDoorHold(req.parcelId, `its sender's payment for a load to their door: ${why}`, now);
-    this.tellHub(req.mdpId, `${req.parcelId}: sort it`, `No payment came for a load to its sender's door (${why}). Sort it as its label says.`, req.parcelId);
-    if (tellPerson) this.tell(req.personDid, 'It comes to the shop', `No payment came for a load to your door (${why}). Parcel ${req.parcelId} comes to ${req.shopName ?? 'the shop'} as before: collect it there with its code.`, req.parcelId);
+    this.tellHub(req.mdpId, noticeOf(said('personDoor.lapseHub.title', { parcel: req.parcelId }), said('personDoor.lapseHub.body', { why: this.whyWords(why) })), req.parcelId);
+    if (tellPerson) this.tell(req.personDid, noticeOf(said('personDoor.lapse.title'), said('personDoor.lapse.body', { why: this.whyWords(why), parcel: req.parcelId, shop: this.shopWords(req.shopName) })), req.parcelId);
   }
 
   /** No driver has taken the load: the box goes to the shop instead — the parcel first, then the load — and all of it is owed back. */
@@ -532,8 +533,8 @@ export class PersonDoorService implements OnModuleInit {
     req.shopParcelId = back.parcelId;
     this.requests.set(req.requestId, req);
     this.owe(req.personDid, req.entityId, req.currency, round2((req.paid ?? 0) - (req.billed ?? 0)), `load ${req.loadCode} withdrawn, sent to the shop`, req, now);
-    this.tellHub(req.mdpId, `${p.parcelId}: a new label`, `Its load to its sender's door (${req.loadCode}) is withdrawn: it goes to ${way.shop.shopName} as ${back.parcelId}. Print its new label, put it over the old one, then sort ${back.parcelId}.`, p.parcelId);
-    if (told) this.tell(req.personDid, `It goes to ${way.shop.shopName} instead`, `As parcel ${back.parcelId}: you pay ${this.money(way.price, way.quote.currency)} in cash there as you collect it. ${this.money(req.owedBack ?? 0, req.currency)} goes back to your number with the next payout.`, back.parcelId);
+    this.tellHub(req.mdpId, noticeOf(said('personDoor.toShopHub.title', { parcel: p.parcelId }), said('personDoor.toShopHub.body', { code: req.loadCode, shop: way.shop.shopName, back: back.parcelId })), p.parcelId);
+    if (told) this.tell(req.personDid, noticeOf(said('personDoor.toShop.title', { shop: way.shop.shopName }), said('personDoor.toShop.body', { back: back.parcelId, price: money(this.money(way.price, way.quote.currency), way.price, way.quote.currency), owed: money(this.money(req.owedBack ?? 0, req.currency), req.owedBack ?? 0, req.currency) })), back.parcelId);
     return this.viewOf(req);
   }
 
@@ -551,7 +552,7 @@ export class PersonDoorService implements OnModuleInit {
         req.maxSpend = to;
         req.raise = { ...raise, to, state: 'paid', paidAt: new Date(now).toISOString() };
         this.requests.set(req.requestId, req);
-        this.tell(req.personDid, 'Raised: drivers are told again', `${this.money(gross, req.currency)} came in. Load ${req.loadCode} now allows up to ${this.money(to, req.currency)}. What the driver charges less than this goes back to your number.`, req.parcelId);
+        this.tell(req.personDid, noticeOf(said('personDoor.raised.title'), said('personDoor.raised.body', { amount: money(this.money(gross, req.currency), gross, req.currency), code: req.loadCode, to: money(this.money(to, req.currency), to, req.currency) })), req.parcelId);
         return;
       } catch (err) {
         this.logger.warn(`door load ${req.loadCode} not raised: ${(err as Error).message}`);
@@ -559,7 +560,7 @@ export class PersonDoorService implements OnModuleInit {
     }
     if (req.raise?.state === 'awaiting') this.closeRaise(req, 'it could no longer be raised', now);
     this.owe(req.personDid, req.entityId, req.currency, gross, `a raise not used (${reference})`, req, now);
-    this.tell(req.personDid, 'Your payment goes back to you', `${this.money(gross, req.currency)} came in to raise load ${req.loadCode ?? ''}, but it could no longer be raised — it goes back to your number with the next payout.`, req.parcelId);
+    this.tell(req.personDid, noticeOf(said('personDoor.raiseBack.title'), said('personDoor.raiseBack.body', { amount: money(this.money(gross, req.currency), gross, req.currency), code: req.loadCode ?? '' })), req.parcelId);
   }
 
   /** A raise no longer asked for: its payment request closed (paid later, it goes back), and why said. */
@@ -745,15 +746,28 @@ export class PersonDoorService implements OnModuleInit {
     return `${currency} ${amount.toFixed(2)}`;
   }
 
+  /** The shop's name, or "the shop" said in the reader's language. */
+  private shopWords(shopName: string | undefined) {
+    return shopName ?? said('personDoor.theShop');
+  }
+
+  /** Why a payment for a door load lapsed: the reasons given here are known; any other is said as it is. */
+  private whyWords(why: string) {
+    if (why === 'given up') return said('personDoor.why.givenUp');
+    if (why === 'the time to pay ran out') return said('personDoor.why.timeRanOut');
+    if (why === 'it could not be posted') return said('personDoor.why.notPosted');
+    return why;
+  }
+
   /** The person, in their own app — never a text (rule-a-receiver-is-not-texted). */
-  private tell(personDid: string, title: string, body: string, parcelId?: string): void {
+  private tell(personDid: string, n: ReturnType<typeof noticeOf>, parcelId?: string): void {
     void this.notifications
-      ?.notify(personDid, { kind: 'door_delivery', title, body, link: parcelId ? `/?parcel=${parcelId}` : '/', tag: `door:${parcelId ?? personDid}:${title}`, data: parcelId ? { parcelId } : {} })
+      ?.notify(personDid, { kind: 'door_delivery', ...n, link: parcelId ? `/?parcel=${parcelId}` : '/', tag: `door:${parcelId ?? personDid}:${n.title}`, data: parcelId ? { parcelId } : {} })
       .catch((err: Error) => this.logger.warn(`door notice not sent: ${err.message}`));
   }
 
   /** The hub's floor, where it reads what to do with a box. */
-  private tellHub(mdpId: string, title: string, body: string, parcelId: string): void {
+  private tellHub(mdpId: string, n: ReturnType<typeof noticeOf>, parcelId: string): void {
     let did: string | undefined;
     try {
       did = this.mdps.require(mdpId).did;
@@ -762,7 +776,7 @@ export class PersonDoorService implements OnModuleInit {
     }
     if (!did) return;
     void this.notifications
-      ?.notify(did, { kind: 'hub_arrival', title, body, link: '/', tag: `door:${parcelId}:${title}`, data: { parcelId } })
+      ?.notify(did, { kind: 'hub_arrival', ...n, link: '/', tag: `door:${parcelId}:${n.title}`, data: { parcelId } })
       .catch((err: Error) => this.logger.warn(`door notice to the hub not sent: ${err.message}`));
   }
 }

@@ -18,6 +18,7 @@ import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import type { Person, PhoneChange } from './person.types';
+import { noticeOf, said, sayEnglish, type Said } from './notice-words/say';
 
 /** Wrong tries at undoing a number change with the old number, or at the ID on a recovery, before that way is shut. */
 export const MAX_RECOVERY_MISSES = 5;
@@ -30,6 +31,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const OLD_NUMBER_REMINDER_HOUR_UTC = 6;
 
 type Safety = MailParams['account-safety'];
+/** What a safety notice says: plain English, or phrases each reader reads in their own language. */
+type SafetyWords = Omit<Safety, 'when' | 'headline' | 'what' | 'next'> & { headline: string | Said; what: string | Said; next: string | Said };
+const wordsEnglish = (w: string | Said): string => (typeof w === 'string' ? w : sayEnglish(w));
 
 /**
  * GETTING BACK INTO AN ACCOUNT — AND KEEPING SOMEBODY ELSE OUT OF IT.
@@ -218,7 +222,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Tell an account's holder something about its safety — in their app, on each driver record, and by email. */
-  tellHolder(person: Person, s: Omit<Safety, 'when'>): void {
+  tellHolder(person: Person, s: SafetyWords): void {
     this.tell(person, s);
   }
 
@@ -295,14 +299,14 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
       this.tell(
         person,
         {
-          headline: days <= 0 ? 'Your old number stops being yours today' : days === 1 ? 'Your old number stops being yours tomorrow' : `Your old number: ${days} days left`,
+          headline: days <= 0 ? said('accountRecovery.remind.title.today') : days === 1 ? said('accountRecovery.remind.title.tomorrow') : said('accountRecovery.remind.title.days', { days }),
           what:
             days <= 0
-              ? 'After today, a parcel sent to the phone number your account used to have will no longer reach you.'
+              ? said('accountRecovery.remind.what.today')
               : days === 1
-                ? 'A parcel sent to the phone number your account used to have still reaches you until tomorrow.'
-                : `For ${days} more days, a parcel sent to the phone number your account used to have still reaches you.`,
-          next: 'Give your new number to the people and the stores that send to you. When they have it, open Settings and block the old number: it is yours to let go.',
+                ? said('accountRecovery.remind.what.tomorrow')
+                : said('accountRecovery.remind.what.days', { days }),
+          next: said('accountRecovery.remind.next'),
           until: old.until,
         },
         // The inbox hears it once, the day before: an email a day for a week is how an address gets ignored.
@@ -340,22 +344,17 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     this.auth.revokeAll(personDid);
 
     const until = person.phoneChange!.undoUntil;
-    const moved =
-      how === 'email'
-        ? 'Your SeeBuyGet account was recovered with this email address and moved to a new phone number, with a new PIN.'
-        : how === 'staff'
-          ? 'Two members of SeeBuyGet staff moved your account to a new phone number. Somebody told them they had lost the number and the PIN, and staff checked who was asking.'
-          : 'Your SeeBuyGet account now signs in with a different phone number.';
+    const moved = said(how === 'email' ? 'accountRecovery.moved.email' : how === 'staff' ? 'accountRecovery.moved.staff' : 'accountRecovery.moved.self');
     // What is at stake, said in the notice itself: a holder who did NOT do this has a day, and should know why to hurry.
-    const parcels = waiting === 0 ? '' : waiting === 1 ? ' One parcel of yours is waiting to be collected.' : ` ${waiting} parcels of yours are waiting to be collected.`;
-    const codes = how === 'self' ? '' : ' Because it was moved without your PIN, the collection codes of your parcels were changed, and they are not shown for 24 hours.';
+    const parcels = waiting === 0 ? '' : waiting === 1 ? said('accountRecovery.waiting.one') : said('accountRecovery.waiting.many', { n: waiting });
+    const codes = how === 'self' ? '' : said('accountRecovery.codesChanged');
     this.tell(person, {
-      headline: 'Your phone number was changed',
-      what: `${moved}${parcels}${codes} For seven days, a parcel sent to your old number still reaches the account.`,
-      next: 'If it was you, there is nothing to do. If it was NOT you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change” — with your old number and PIN, or with a code to this address. The account goes back to your number and the PIN is locked until you choose a new one.',
+      headline: said('accountRecovery.changed.title'),
+      what: said('accountRecovery.changed.what', { moved, parcels, codes }),
+      next: said('accountRecovery.changed.next'),
       until,
     });
-    this.tellFleets(person, 'changed the phone number they sign in with');
+    this.tellFleets(person, said('accountRecovery.fleet.changed'));
     return person;
   }
 
@@ -368,11 +367,11 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     // Whoever had the account for those hours could read the codes of its parcels. They open nothing now.
     const rotated = this.parcels?.rotateCodesOf(back.personDid) ?? 0;
     this.tell(back, {
-      headline: 'The number change was undone',
-      what: `Your SeeBuyGet account is back on the phone number it had before. Every phone was signed out and the PIN is locked.${rotated ? ' The collection codes of your parcels were changed: open a parcel for its new one.' : ''}`,
-      next: 'To sign in, choose “First time here, or forgot your PIN?”: a code goes to your number and you choose a new PIN. Pick one nobody around you could guess or has seen you type.',
+      headline: said('accountRecovery.undone.title'),
+      what: said('accountRecovery.undone.what', { rotated: rotated ? said('accountRecovery.undone.rotated') : '' }),
+      next: said('accountRecovery.undone.next'),
     });
-    this.tellFleets(back, 'had a change of phone number undone');
+    this.tellFleets(back, said('accountRecovery.fleet.undone'));
     return back;
   }
 
@@ -398,21 +397,21 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
 
   private tellOldNumberGone(person: Person, why: 'blocked' | 'time'): void {
     this.tell(person, {
-      headline: 'Your old number is no longer part of your account',
-      what: why === 'blocked' ? 'You blocked the phone number your account used to have.' : 'Seven days have passed since your account moved to its new phone number, so the old one was let go.',
-      next:
-        why === 'blocked'
-          ? 'A parcel sent to the old number will not reach you any more: it belongs to whoever has that number. If you did not block it yourself, somebody has your phone and knows your PIN: change your PIN now.'
-          : 'A parcel sent to the old number will not reach you any more: it belongs to whoever has that number. Anybody who still sends to it needs your new one.',
+      headline: said('accountRecovery.oldGone.title'),
+      what: said(why === 'blocked' ? 'accountRecovery.oldGone.what.blocked' : 'accountRecovery.oldGone.what.time'),
+      next: said(why === 'blocked' ? 'accountRecovery.oldGone.next.blocked' : 'accountRecovery.oldGone.next.time'),
     });
   }
 
   /** The person hears it everywhere they read: their own inbox in the app, each driver record's, and — unless told not to — the email. */
-  private tell(person: Person, s: Omit<Safety, 'when'>, byMail = true): void {
+  private tell(person: Person, w: SafetyWords, byMail = true): void {
+    // 2026-11-26 — in phrases where the sender gave phrases, so each reads it in their language; the email is the English.
+    const s: Omit<Safety, 'when'> = { ...w, headline: wordsEnglish(w.headline), what: wordsEnglish(w.what), next: wordsEnglish(w.next) };
     const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
+    const body = typeof w.headline !== 'string' && typeof w.what !== 'string' && typeof w.next !== 'string' ? noticeOf(w.headline, said('accountRecovery.twoParts', { what: w.what, next: w.next })) : { title: s.headline, body: `${s.what} ${s.next}` };
     for (const to of [person.personDid, ...drivers]) {
       void this.notifications
-        ?.notify(to, { kind: 'security', title: s.headline, body: `${s.what} ${s.next}`, link: '/', tag: `account:${person.personDid}:${s.headline}` })
+        ?.notify(to, { kind: 'security', ...body, link: '/', tag: `account:${person.personDid}:${s.headline}` })
         .catch((err) => this.logger.warn(`security notice failed: ${(err as Error).message}`));
     }
     if (byMail) this.tellByMail(person, s);
@@ -424,7 +423,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** A fleet's office is told when one of its drivers' sign-in number changes — it is the fleet's name on their loads. */
-  private tellFleets(person: Person, did: string): void {
+  private tellFleets(person: Person, did: Said): void {
     for (const link of person.roles.filter((r) => r.role === 'driver' && r.status === 'active' && r.tenant)) {
       let name = 'One of your drivers';
       try {
@@ -434,7 +433,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       void this.notifications
-        ?.notify(link.tenant as string, { kind: 'security', title: `${name} ${did}`, body: 'If that is expected, there is nothing to do. If it is not, speak to them: a number change can be undone for 24 hours.', link: '/', tag: `driver:${link.entityDid}:number` })
+        ?.notify(link.tenant as string, { kind: 'security', ...noticeOf(said('accountRecovery.fleet.title', { name, what: did }), said('accountRecovery.fleet.body')), link: '/', tag: `driver:${link.entityDid}:number` })
         .catch(() => undefined);
     }
   }

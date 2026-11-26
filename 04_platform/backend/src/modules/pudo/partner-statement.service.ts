@@ -9,6 +9,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { FxService } from '../../foundation/money/fx.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { PartnerLedgerService } from './partner-ledger.service';
+import { day, money, noticeOf, said } from './notice-words/say';
 
 const DAY = 86_400_000;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -172,7 +173,14 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
         });
         this.records.set(s.statementId, { ...this.records.get(s.statementId), accrued: { at: new Date(now).toISOString(), entryId: entry.entryId, amount, currency } });
         booked += 1;
-        this.tell(partner.did, `${s.sellerName} owes you ${moneyOf(amount, currency)} for the week of ${s.weekStart} to ${s.weekEnd}`, `For ${s.steps} steps your people did on parcels it sold. It is paid by bank transfer, and you are told here when.`, `statement:${s.statementId}:owed`);
+        this.tell(
+          partner.did,
+          noticeOf(
+            said('partner.weekOwed.title', { seller: s.sellerName, amount: money(moneyOf(amount, currency), amount, currency), from: day(s.weekStart, s.weekStart), to: day(s.weekEnd, s.weekEnd) }),
+            said('partner.weekOwed.body', { steps: s.steps }),
+          ),
+          `statement:${s.statementId}:owed`,
+        );
       }
     }
     return booked;
@@ -204,13 +212,21 @@ export class PartnerStatementService implements OnModuleInit, OnModuleDestroy {
       ],
     });
     this.records.set(statementId, { ...r, paid: { at: new Date(now).toISOString(), by: input.by, reference, entryId: entry.entryId } });
-    this.tell(this.entities.get(partnerEntityId).did, `${s.sellerName} paid you ${moneyOf(r.accrued.amount, r.accrued.currency)} for the week of ${s.weekStart} to ${s.weekEnd}`, `By bank transfer, reference ${reference}.`, `statement:${statementId}:paid`);
+    const paid = r.accrued;
+    this.tell(
+      this.entities.get(partnerEntityId).did,
+      noticeOf(
+        said('partner.weekPaid.title', { seller: s.sellerName, amount: money(moneyOf(paid.amount, paid.currency), paid.amount, paid.currency), from: day(s.weekStart, s.weekStart), to: day(s.weekEnd, s.weekEnd) }),
+        said('partner.weekPaid.body', { reference }),
+      ),
+      `statement:${statementId}:paid`,
+    );
     return this.statementsOf(partnerEntityId, now).statements.find((x) => x.statementId === statementId)!;
   }
 
   /** 2026-11-26 — a notice in the partner's own bell, opening its Money section. */
-  private tell(partnerDid: string, title: string, body: string, tag: string): void {
-    void this.notices?.notify(partnerDid, { kind: 'partner_money', title, body, link: '/?go=money', tag }).catch(() => undefined);
+  private tell(partnerDid: string, words: ReturnType<typeof noticeOf>, tag: string): void {
+    void this.notices?.notify(partnerDid, { kind: 'partner_money', ...words, link: '/?go=money', tag }).catch(() => undefined);
   }
 
   private currencyOf(entityId: string): string | undefined {

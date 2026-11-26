@@ -8,6 +8,7 @@ import { DispatchService } from './dispatch.service';
 import { FlagCaseService } from './flag-case.service';
 import { MonitorService } from './monitor.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { CHAIN_RETRY_EVERY_MIN, CHAIN_TELL_BUYERS_AFTER_CHECKS, OFFER_CHAIN_SWEEP_MS, STAFF_OFFER_WAIT_MIN } from './pudo.config';
 import type { Offer } from './dispatch.types';
 import type { Tote } from './pudo.types';
@@ -399,14 +400,17 @@ export class BagOfferService implements OnModuleInit, OnModuleDestroy {
     void this.notifications
       ?.notify(d.driverDid, {
         kind: 'load_nearby',
-        title: 'Operations offers you a bag',
-        body: `A bag at ${chain.place}${tote?.destinationLabel ? `, heading to ${tote.destinationLabel},` : ''} is waiting for a driver, and operations asks whether you can take it. It is ${d.km} km from you: open it to see what it pays. Not now? Say so, and it goes to the next driver.`,
+        ...noticeOf(
+          said('bagOffer.title'),
+          said('bagOffer.body', { place: chain.place, heading: tote?.destinationLabel ? said('bagOffer.heading', { dest: tote.destinationLabel }) : '', km: d.km }),
+          // 2026-11-26 — its two buttons in the phone's language too.
+          [
+            { action: 'take', title: said('bell.button.take') },
+            { action: 'no', title: said('bell.button.notNow') },
+          ],
+        ),
         link: `/?offer=${offer.offerId}`,
         tag: `load:${chain.code}:staff:${d.driverDid}`,
-        actions: [
-          { action: 'take', title: 'Take it' },
-          { action: 'no', title: 'Not now' },
-        ],
         data: { code: chain.code, offerId: offer.offerId, declineToken: this.dispatch.mintDeclineToken(offer.offerId, now) },
       })
       .catch(() => undefined);

@@ -9,45 +9,19 @@
  * bell, and that a tap opens where it is acted on. Its link opens the app's guide to getting the most out of it (home
  * screen, notifications, battery) — `/?guide=1`, read in the apps by shared/launch.ts.
  */
+import { noticeOf, said } from './notice-words/say';
+
 export type WelcomeApp = 'business' | 'driver' | 'shop' | 'hub' | 'store' | 'fleet' | 'send' | 'partner';
 
-const TAP = 'Tap one and it opens where you act on it.';
+const APPS: readonly WelcomeApp[] = ['business', 'driver', 'shop', 'hub', 'store', 'fleet', 'partner', 'send'];
 
-export const WELCOME: Record<WelcomeApp, { title: string; body: string }> = {
-  business: {
-    title: 'Your business’s notices arrive here',
-    body: `A carrier taking a load, a problem on the road, a delivery, a claim answered, papers checked: each is told here. ${TAP}`,
-  },
-  driver: {
-    title: 'Your notices arrive here',
-    body: `Loads put on you, offers near you, messages, your shift and your vehicle: each is told here. ${TAP}`,
-  },
-  shop: {
-    title: 'Your shop’s notices arrive here',
-    body: `Parcels to take in or hand out, bags to close, money in: each is told here. ${TAP}`,
-  },
-  hub: {
-    title: 'Your hub’s notices arrive here',
-    body: `Bags coming in and arrivals at your door: each is told here. ${TAP}`,
-  },
-  store: {
-    title: 'Your store’s notices arrive here',
-    body: `Your shipments, and what reaches your dock: each is told here. ${TAP}`,
-  },
-  fleet: {
-    title: 'Your fleet’s notices arrive here',
-    body: `Your drivers, runs, orders and vehicles: each is told here. ${TAP}`,
-  },
-  // 2026-11-26 — the Partner app's bell.
-  partner: {
-    title: 'Your company’s notices arrive here',
-    body: `What SeeBuyGet owes you each week and when it is paid, payouts waiting for your account, and changes to your counters’ Mollie account: each is told here. ${TAP}`,
-  },
-  send: {
-    title: 'Your notices arrive here',
-    body: `Your parcels — on their way, ready to collect, or needing you: each is told here. ${TAP}`,
-  },
-};
+/** 2026-11-26 — an app's welcome as phrases, said to each reader in their language (notice-words/en/bell.ts). */
+export function welcomeNotice(app: WelcomeApp): ReturnType<typeof noticeOf> {
+  return noticeOf(said(`welcome.${app}.title` as const), said(`welcome.${app}.body` as const, { tap: said('welcome.tap') }));
+}
+
+/** Each app's welcome in English, as it is sent. */
+export const WELCOME = Object.fromEntries(APPS.map((app) => [app, { title: welcomeNotice(app).title, body: welcomeNotice(app).body }])) as Record<WelcomeApp, { title: string; body: string }>;
 
 /** The app's guide to getting the most out of it, opened on one tap. */
 export const GUIDE_LINK = '/?guide=1';

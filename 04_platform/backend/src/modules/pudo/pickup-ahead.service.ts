@@ -19,6 +19,7 @@ import { GeoPoint, Parcel, Tote } from './pudo.types';
 import { haversineKm } from './geo';
 import { Router, ROUTER } from './router';
 import { ToteService } from './tote.service';
+import { noticeOf, said, type Said } from './notice-words/say';
 
 /**
  * 2026-11-05 — PRE-DROP-OFF, THE DRIVER'S SIDE (compendium gap #6; the owner: "Seen ahead, taken on ahead"). Drivers on a
@@ -352,12 +353,18 @@ export class PickupAheadService {
 
   /** The shop is told who takes its parcels for a stop, or that they let them go — in the bell. */
   private tellShop(p: PickupPromise, what: 'taken' | 'let_go'): void {
-    const name = this.nameOf(p.driverDid);
+    let name: string | Said;
+    try {
+      name = this.drivers.get(p.driverDid).displayName;
+    } catch {
+      name = said('pickupAhead.aDriver');
+    }
     void this.notifications
       ?.notify(p.agentDid, {
         kind: 'pickup_ahead',
-        title: what === 'taken' ? `${name} takes your parcels for ${p.hopLabel}` : `${name} no longer takes your parcels for ${p.hopLabel}`,
-        body: what === 'taken' ? 'Close the bag for that stop when they are in: it is given to them, and they collect it.' : 'They go to any driver again once the bag is closed.',
+        ...(what === 'taken'
+          ? noticeOf(said('pickupAhead.taken.title', { name, stop: p.hopLabel }), said('pickupAhead.taken.body'))
+          : noticeOf(said('pickupAhead.letGo.title', { name, stop: p.hopLabel }), said('pickupAhead.letGo.body'))),
         link: '/?go=bag',
         tag: `pickup-ahead:${p.promiseId}:${what}`,
         data: { promiseId: p.promiseId, hopKey: p.hopKey },
@@ -367,12 +374,13 @@ export class PickupAheadService {
 
   /** The driver is told the bag is theirs to collect — or why it could not be given to them after all. */
   private tellDriver(p: PickupPromise, tote: Tote, refused?: string): void {
-    const shop = this.agents.find(p.agentDid)?.shopName ?? 'the shop';
+    const shop = this.agents.find(p.agentDid)?.shopName ?? said('pickupAhead.theShop');
     void this.notifications
       ?.notify(p.driverDid, {
         kind: 'pickup_ahead',
-        title: refused ? `Bag ${tote.code} at ${shop} went to other drivers` : `Bag ${tote.code} at ${shop} is yours to collect`,
-        body: refused ? `${refused}. It is offered to every driver now.` : `The parcels for ${p.hopLabel} you took on: ${tote.parcels.length} in the bag. Collect it at the counter.`,
+        ...(refused
+          ? noticeOf(said('pickupAhead.refused.title', { code: tote.code, shop }), said('pickupAhead.refused.body', { reason: refused }))
+          : noticeOf(said('pickupAhead.yours.title', { code: tote.code, shop }), said('pickupAhead.yours.body', { stop: p.hopLabel, n: tote.parcels.length }))),
         link: '/?go=home',
         tag: `pickup-ahead:${p.promiseId}:bag`,
         data: { promiseId: p.promiseId, code: tote.code },

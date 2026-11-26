@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { MailBounces } from '../../foundation/mail/mail-bounces.service';
 import { DispatchService } from './dispatch.service';
+import { noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { loadLink } from './notification.types';
 import { ParcelService } from './parcel.service';
@@ -51,8 +52,7 @@ export class ReceiverMailBounces implements OnModuleInit {
       void this.notifications
         .notify(to, {
           kind: 'mail_bounced',
-          title: `The code email for ${f.code} did not arrive`,
-          body: `The email with the delivery code to ${f.receiverEmail} came back. The code is on the load: give it to the person receiving it yourself, or send it to another address there.`,
+          ...noticeOf(said('receiverMailBounce.load.title', { code: f.code }), said('receiverMailBounce.load.body', { email: f.receiverEmail ?? '' })),
           link: loadLink(f.freightId),
           tag: `mail-bounced:${f.freightId}`,
           data: { freightId: f.freightId },
@@ -69,13 +69,15 @@ export class ReceiverMailBounces implements OnModuleInit {
       }
       if (!storeDid) continue;
       told += 1;
-      const order = p.externalOrderId ? `order ${p.externalOrderId}` : `parcel ${p.parcelId}`;
+      const order = p.externalOrderId ? said('receiverMailBounce.order', { id: p.externalOrderId }) : said('receiverMailBounce.parcel', { id: p.parcelId });
       const waiting = p.status === 'Ready_For_Pickup' || p.status === 'Unclaimed';
       void this.notifications
         .notify(storeDid, {
           kind: 'mail_bounced',
-          title: `An email to your buyer came back: ${order}`,
-          body: `We could not reach ${p.buyerEmail} about their parcel. ${waiting ? 'It is waiting to be collected: tell them yourself where.' : 'It is on its way: tell them yourself, so they know where to collect it.'}`,
+          ...noticeOf(
+            said('receiverMailBounce.buyer.title', { order }),
+            said('receiverMailBounce.buyer.body', { email: p.buyerEmail ?? '', state: waiting ? said('receiverMailBounce.buyer.waiting') : said('receiverMailBounce.buyer.onItsWay') }),
+          ),
           link: '/?go=orders',
           tag: `mail-bounced:${p.parcelId}`,
           data: { parcelId: p.parcelId },

@@ -26,9 +26,11 @@ import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import { loadLink, runLink, type NotificationKind } from './notification.types';
+import { at, day, money, noticeOf, said } from './notice-words/say';
+import type { Said, SayValue } from './notice-words/say';
 /** 2026-11-24 — a UIT or UTN running out, as FiscalCodeSweeper publishes it (DispatchService.fiscalCodesToTell). */
 type FiscalCodeExpiring = ReturnType<DispatchService['fiscalCodesToTell']>[number];
-import { FINDING_WORDS, type TamperFinding } from './tamper.types';
+import type { TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
@@ -62,6 +64,30 @@ function utcWords(iso: string): string {
 /** "by 29 Oct at 07:56 UTC" — the end of a time to answer, said the same way. */
 function byWords(iso: string): string {
   return `by ${offerDay(iso)} at ${iso.slice(11, 16)} UTC`;
+}
+
+/** 2026-11-26 — the same moment as a figure each language writes its own way ("20 Oct at 07:56 UTC" in English). */
+function utcWhen(iso: string) {
+  return at(`${offerDay(iso)} at ${iso.slice(11, 16)} UTC`, iso);
+}
+/** utcWords, as a phrase. */
+function saidOn(iso: string): Said {
+  return said('dispatch.on', { when: utcWhen(iso) });
+}
+/** byWords, as a phrase. */
+function saidBy(iso: string): Said {
+  return said('dispatch.by', { when: utcWhen(iso) });
+}
+
+/** Who says a load was (not) paid: the driver by name, the driver’s fleet, or "The driver". */
+function directWho(p: Pick<FreightPaidDirectEvent, 'by' | 'driverName'>): SayValue {
+  if (p.by === 'office') return p.driverName ? said('dispatch.paidDirect.fleetOf', { name: p.driverName }) : said('dispatch.paidDirect.fleetOfDriver');
+  return p.driverName ?? said('dispatch.theDriver');
+}
+
+/** A licence or paper day (paperDay): the English as before, and the day itself where it is a plain date. */
+function paperDayShown(expiresAt: string): SayValue {
+  return /^\d{4}-\d{2}-\d{2}$/.test(expiresAt) ? day(paperDay(expiresAt), expiresAt) : paperDay(expiresAt);
 }
 
 /** Refused at the door: the sender told before the 48 hours end (DispatchService.sweepRefusals). */
@@ -124,6 +150,30 @@ export function runCalledOffBody(p: RunCalledOff): string {
   return `${head} Your goods were not collected — you will need another truck.${others}`;
 }
 
+/** Each coded reason a run was called off, as a phrase (first letter lower-case, as runCalledOffBody puts it after the colon). */
+const RUN_REASON_SAID: Record<RunCancelReason, Said | undefined> = {
+  vehicle_unavailable: said('dispatch.runOff.reason.vehicle_unavailable'),
+  no_driver: said('dispatch.runOff.reason.no_driver'),
+  road_closed: said('dispatch.runOff.reason.road_closed'),
+  border_closed: said('dispatch.runOff.reason.border_closed'),
+  not_enough_loads: said('dispatch.runOff.reason.not_enough_loads'),
+  other: undefined,
+};
+
+/** runCalledOffBody as phrases: its English is the same word for word, and a shipper reads it in their own language. */
+function runCalledOffSaid(p: RunCalledOff): Said {
+  let words: SayValue = '';
+  if (p.cancelReason) {
+    const parts: SayValue[] = [RUN_REASON_SAID[p.cancelReason] ?? '', p.note ? said('dispatch.runOff.note', { note: p.note }) : ''].filter(Boolean);
+    words = parts.length === 2 ? said('dispatch.runOff.joined', { a: parts[0], b: parts[1] }) : (parts[0] ?? '');
+  } else {
+    words = p.reason;
+  }
+  const head = said('dispatch.runOff.head', { words: words ? said('dispatch.runOff.colon', { words }) : '' });
+  if (p.cancelReason && ROUTE_REASONS.includes(p.cancelReason)) return said('dispatch.runOff.route', { head });
+  return p.alternatives ? said('dispatch.runOff.others', { head, n: p.alternatives }) : said('dispatch.runOff.none', { head });
+}
+
 /** A carrier's accepted plan has an order outside the window its shipper asked for — or, with neither figure, inside it again. */
 interface OrderWindowPlanned { freightId: string; code: string; shipperDid: string; fleetName: string; day: string; arrive: string; window?: string; lateMin?: number; earlyMin?: number }
 
@@ -136,16 +186,25 @@ export function spanWords(minutes: number): string {
   return m % 60 === 0 ? hours : `${hours} ${String(m % 60).padStart(2, '0')} minutes`;
 }
 
+/** spanWords, as a phrase. */
+function saidSpan(minutes: number): Said {
+  const m = Math.max(1, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  if (h === 0) return said('dispatch.unit.minutes', { n: m });
+  const hours = said('dispatch.unit.hours', { n: h });
+  return m % 60 === 0 ? hours : said('dispatch.span.hoursMin', { hours, mm: String(m % 60).padStart(2, '0') });
+}
+
 /** A carrier's accepted plan leaves an order on no vehicle (`left`) — or, after that was said, has it on one. */
 interface OrderLeftOut { freightId: string; code: string; shipperDid: string; fleetName: string; day: string; left: boolean; why?: PlanLeftWhy; arrive?: string; window?: string }
 
 /** Why a plan left an order out, as a sentence to its shipper. The carrier's reason, without the carrier's own business. */
-const LEFT_OUT_BECAUSE: Record<PlanLeftWhy, (day: string) => string> = {
-  room: (day) => `Its plan for ${day} has no room for it: the vehicles going out are full, or the day is too short.`,
-  fit: (day) => `None of the vehicles in its plan for ${day} can carry it as it was ordered.`,
-  heavy: () => 'It is heavier than its largest vehicle carries. It may bring it in several loads, and you are told if it does.',
-  place: () => 'The place it goes to has no point on the map, so it could not be planned. A fuller address will help.',
-  closed: (day) => `The place it is collected from is closed on ${day} by the loading hours you keep for it. Change those hours under your places, or the day.`,
+const LEFT_OUT_BECAUSE: Record<PlanLeftWhy, (d: string) => Said> = {
+  room: (d) => said('dispatch.leftOut.because.room', { day: day(d, d) }),
+  fit: (d) => said('dispatch.leftOut.because.fit', { day: day(d, d) }),
+  heavy: () => said('dispatch.leftOut.because.heavy'),
+  place: () => said('dispatch.leftOut.because.place'),
+  closed: (d) => said('dispatch.leftOut.because.closed', { day: day(d, d) }),
 };
 
 /**
@@ -189,8 +248,7 @@ import { VendorService } from './vendor.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { ReceiverMailBounces } from './receiver-mail-bounce.service';
 import { BAGS_WAITING_H, MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS, WIDE_OFFER_CAP, WIDE_OFFER_KM, WIDE_OFFER_SWEEP_MS } from './pudo.config';
-import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
-import { licenceDay } from './shop-licence';
+import type { HeldByAuthority } from './load-detention.types';
 
 /** A load held by an authority, or let go, as the event says it. */
 interface HeldOnTheRoad {
@@ -207,11 +265,27 @@ const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
 /** How often the loads that should have arrived are looked at. A shipper learns of a late load within this long. */
 const LATE_SWEEP_MS = 10 * 60 * 1000;
 
+/** What each tamper finding is, as a phrase (FINDING_WORDS, in the reader's language). */
+const FINDING_SAID: Record<TamperFinding, Said> = {
+  seal_not_as_written: said('dispatch.finding.seal_not_as_written'),
+  seal_not_as_on_the_note: said('dispatch.finding.seal_not_as_on_the_note'),
+  seal_broken: said('dispatch.finding.seal_broken'),
+  wrap_cut: said('dispatch.finding.wrap_cut'),
+  inspection_failed: said('dispatch.finding.inspection_failed'),
+};
+
+/** Who holds a load on the road, as a phrase (HELD_BY_WORDS). */
+const HELD_BY_SAID: Record<string, Said> = {
+  police: said('dispatch.heldBy.police'),
+  customs: said('dispatch.heldBy.customs'),
+  other: said('dispatch.heldBy.other'),
+};
+
 /** Where a parcel running late is, in the words of its notice. */
-const PARCEL_WHERE: Record<'shop' | 'road' | 'hub', string> = {
-  shop: 'It is still at the shop it was handed in at.',
-  road: 'It is on its way.',
-  hub: 'It is at a sorting hub.',
+const PARCEL_WHERE: Record<'shop' | 'road' | 'hub', Said> = {
+  shop: said('dispatch.where.shop'),
+  road: said('dispatch.where.road'),
+  hub: said('dispatch.where.hub'),
 };
 
 /** How late, as a person says it: hours up to a day, then days. */
@@ -222,6 +296,11 @@ function lateWords(hours: number): string {
   }
   const d = Math.round(hours / 24);
   return d === 1 ? '1 day' : `${d} days`;
+}
+/** lateWords, as a phrase. */
+function lateSaid(hours: number): Said {
+  if (hours < 24) return said('dispatch.unit.hours', { n: Math.max(1, Math.round(hours)) });
+  return said('dispatch.unit.days', { n: Math.round(hours / 24) });
 }
 /** How often the shift clocks are looked at. A driver hears of the limit within this of passing it. */
 const HOURS_SWEEP_MS = 5 * 60 * 1000;
@@ -359,17 +438,19 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         const limit = MAX_ON_DUTY_HOURS;
         const say =
           n.kind === 'near'
-            ? { title: 'Less than an hour until the shift limit', body: `You have been on shift ${n.onDuty} hours; the limit is ${limit}. After that no new load is offered or can be taken. What is already aboard you still deliver.` }
+            ? noticeOf(said('dispatch.shiftHours.near.title'), said('dispatch.shiftHours.near.body', { onDuty: n.onDuty, limit }))
             : n.kind === 'over'
-              ? { title: 'You have reached the shift limit', body: `You have been on shift ${n.onDuty} hours; the limit is ${limit}. Deliver what is aboard: no new load is offered or can be taken. Then end your shift and rest. You can start again ${rest} hours after you end it.` }
-              : { title: 'Your rest is over', body: `It is ${rest} hours since your last shift ended. You can start a shift again.` };
+              ? noticeOf(said('dispatch.shiftHours.over.title'), said('dispatch.shiftHours.over.body', { onDuty: n.onDuty, limit, rest }))
+              : noticeOf(said('dispatch.shiftHours.rested.title'), said('dispatch.shiftHours.rested.body', { rest }));
         await this.notifications.notify(n.driverDid, { kind: 'shift_hours', ...say, link: '/?go=home', tag: `hours:${n.kind}:${n.driverDid}` });
         told += 1;
         if (n.kind === 'over' && n.managerDid) {
           await this.notifications.notify(n.managerDid, {
             kind: 'shift_hours',
-            title: `${n.driverName} has reached the shift limit`,
-            body: `On shift ${n.onDuty} hours${n.plate ? ` with ${n.plate}` : ''}; the limit is ${limit}. They deliver what is aboard and take nothing new, then rest ${rest} hours. Plan no new load for them until they have.`,
+            ...noticeOf(
+              said('dispatch.shiftHours.office.title', { name: n.driverName }),
+              said('dispatch.shiftHours.office.body', { onDuty: n.onDuty, withPlate: n.plate ? said('dispatch.shiftHours.office.plate', { plate: n.plate }) : '', limit, rest }),
+            ),
             // The office's shifts, where the driver on it is.
             link: '/?go=sessions',
             tag: `hours:over:${n.driverDid}`,
@@ -506,12 +587,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // Five wrong PINs for one number: whoever typed them may know it. The owner is the only one who can act.
     this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonPinLocked, (e) => this.onPinLocked(e.payload));
     // A PIN replaced by a code, or working on a device it never had: said in the app as well as to the inbox.
-    this.events.subscribe<{ personDid: string; driverDids: string[]; newDevice?: boolean }>(GlosEvent.Pudo.PersonPinReplaced, (e) =>
-      this.onSignInChanged(e.payload, 'pin-replaced', 'Your PIN was replaced', 'Your PIN was replaced with a code sent to your phone number. It now works only on the phone or browser it was replaced on. If it was not you, replace it again straight away: “forgot your PIN” on the sign-in screen.'),
-    );
-    this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonDeviceConfirmed, (e) =>
-      this.onSignInChanged(e.payload, 'device-confirmed', 'A new phone or browser can use your PIN', 'A code sent to your number was typed on a phone or browser that had not signed in to your account before. Your PIN now works there too. If it was not you, replace your PIN straight away: “forgot your PIN” on the sign-in screen.'),
-    );
+    this.events.subscribe<{ personDid: string; driverDids: string[]; newDevice?: boolean }>(GlosEvent.Pudo.PersonPinReplaced, (e) => {
+      const n = noticeOf(said('dispatch.pinReplaced.title'), said('dispatch.pinReplaced.body'));
+      return this.onSignInChanged(e.payload, 'pin-replaced', n.title, n.body, n.say);
+    });
+    this.events.subscribe<{ personDid: string; driverDids: string[] }>(GlosEvent.Pudo.PersonDeviceConfirmed, (e) => {
+      const n = noticeOf(said('dispatch.deviceConfirmed.title'), said('dispatch.deviceConfirmed.body'));
+      return this.onSignInChanged(e.payload, 'device-confirmed', n.title, n.body, n.say);
+    });
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -544,10 +627,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (p.by === 'light registry') return;
       void this.tell(p.did, {
         kind: 'papers_checked',
-        title: 'Your papers are checked: you can drive',
+        ...noticeOf(said('dispatch.driverActivated.title'), said('dispatch.driverActivated.body')),
         // A shift starts on the home screen.
         link: '/?go=home',
-        body: 'SeeBuyGet has checked your ID and your driving licence. The photos you sent have been deleted; your licence number and its date are kept.',
         tag: `driver-papers:${p.did}`,
         data: { approved: true },
       });
@@ -557,8 +639,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const p = e.payload;
       void this.tell(p.did, {
         kind: 'papers_checked',
-        title: p.approved ? `${p.name} is approved` : `${p.name}: your papers were not accepted`,
-        body: p.approved ? 'SeeBuyGet has seen your papers. The hub can take bags in and sort from now on.' : `${p.reason ?? 'Something was wrong with them.'} Send them again from the Hub app.`,
+        ...(p.approved
+          ? noticeOf(said('dispatch.hubPapers.approved.title', { name: p.name }), said('dispatch.hubPapers.approved.body'))
+          : noticeOf(said('dispatch.hubPapers.refused.title', { name: p.name }), said('dispatch.hubPapers.refused.body', { reason: p.reason ?? said('dispatch.wrongWithThem') }))),
         tag: `hub-papers:${p.mdpId}`,
         data: { mdpId: p.mdpId, approved: p.approved },
       });
@@ -571,10 +654,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const p = e.payload;
       void this.tell(p.personDid, {
         kind: 'booking_refunded',
-        title: p.state === 'waiting' ? `Your money for ${p.parcelId} goes back soon` : `Your money for ${p.parcelId} is on its way back`,
-        body: p.state === 'waiting'
-          ? `${p.currency} ${p.amount.toFixed(2)} goes back to the account that paid as soon as the payment service answers. Nothing for you to do.`
-          : `${p.currency} ${p.amount.toFixed(2)} goes back to the account that paid. It can take a few working days to show.`,
+        ...(p.state === 'waiting'
+          ? noticeOf(said('dispatch.bookingRefunded.waiting.title', { parcelId: p.parcelId }), said('dispatch.bookingRefunded.waiting.body', { amount: money(`${p.currency} ${p.amount.toFixed(2)}`, p.amount, p.currency) }))
+          : noticeOf(said('dispatch.bookingRefunded.asked.title', { parcelId: p.parcelId }), said('dispatch.bookingRefunded.asked.body', { amount: money(`${p.currency} ${p.amount.toFixed(2)}`, p.amount, p.currency) }))),
         link: `/?parcel=${p.parcelId}`,
         tag: `booking-refund:${p.parcelId}:${p.state ?? 'asked'}`,
         data: { parcelId: p.parcelId },
@@ -585,8 +667,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const p = e.payload;
       void this.tell(p.personDid, {
         kind: 'booking_paid',
-        title: `Paid: the label for ${p.parcelId} is ready`,
-        body: 'Print it at home and stick it on the parcel, or show it on your phone at the shop. Nothing more to pay there.',
+        ...noticeOf(said('dispatch.bookingPaid.title', { parcelId: p.parcelId }), said('dispatch.bookingPaid.body')),
         link: `/?parcel=${p.parcelId}`,
         tag: `booking-paid:${p.parcelId}`,
         data: { parcelId: p.parcelId },
@@ -598,15 +679,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ subject: 'corridor' | 'hub'; id: string; threat: string; level: string; from?: string; tell?: { did: string; name: string } }>(GlosEvent.Pudo.RiskRated, (e) => {
       const p = e.payload;
       if (!p.tell) return;
-      const threat = p.threat === 'extortion' ? 'roadblock extortion' : p.threat;
-      const high = p.subject === 'hub'
-        ? 'From now a bag leaves it only on a coded seal, and none is loaded there between 19:00 and 06:00.'
-        : 'From now parcels travel on it only in a bag closed on a coded seal, and nothing goes onto it between 19:00 and 06:00.';
-      const lowered = p.subject === 'hub' ? 'A bag may leave it on a photograph again, and loading at night is allowed again.' : 'Loose parcels may go onto it again, and at night.';
+      const threats: Record<string, Said> = { pilferage: said('dispatch.riskRated.threat.pilferage'), hijacking: said('dispatch.riskRated.threat.hijacking'), unrest: said('dispatch.riskRated.threat.unrest'), extortion: said('dispatch.riskRated.threat.extortion') };
+      const levels: Record<string, Said> = { low: said('dispatch.riskRated.level.low'), medium: said('dispatch.riskRated.level.medium'), high: said('dispatch.riskRated.level.high') };
+      const threat = threats[p.threat] ?? p.threat;
+      const high = p.subject === 'hub' ? said('dispatch.riskRated.high.hub') : said('dispatch.riskRated.high.corridor');
+      const lowered = p.subject === 'hub' ? said('dispatch.riskRated.lowered.hub') : said('dispatch.riskRated.lowered.corridor');
       void this.tell(p.tell.did, {
         kind: 'risk_rated',
-        title: `${p.tell.name} is rated ${p.level} for ${threat}`,
-        body: p.level === 'high' ? high : p.from === 'high' ? lowered : 'SeeBuyGet rates the risks where you work, and looks at them again every quarter.',
+        ...noticeOf(said('dispatch.riskRated.title', { name: p.tell.name, level: levels[p.level] ?? p.level, threat }), p.level === 'high' ? high : p.from === 'high' ? lowered : said('dispatch.riskRated.other')),
         tag: `risk:${p.subject}:${p.id}:${p.threat}`,
         data: { subject: p.subject, id: p.id, threat: p.threat, level: p.level },
       });
@@ -616,10 +696,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const p = e.payload;
       void this.tell(p.did, {
         kind: 'papers_checked',
-        title: p.seen ? 'SeeBuyGet has seen your ID' : 'Your ID photo was not accepted',
-        body: p.seen
-          ? 'From now, how many parcels you may carry at once grows with each one you hand on. The photo you sent has been deleted.'
-          : `${p.reason ?? 'Something was wrong with it.'} The photo has been deleted. Send another from the Driver app’s home screen.`,
+        ...(p.seen
+          ? noticeOf(said('dispatch.idPhoto.seen.title'), said('dispatch.idPhoto.seen.body'))
+          : noticeOf(said('dispatch.idPhoto.refused.title'), said('dispatch.idPhoto.refused.body', { reason: p.reason ?? said('dispatch.wrongWithIt') }))),
         link: '/?go=home',
         tag: `id-photo:${p.did}`,
         data: { seen: p.seen },
@@ -630,8 +709,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const p = e.payload;
       void this.tell(p.did, {
         kind: 'papers_checked',
-        title: p.accepted ? 'Your trading licence is recorded' : 'Your licence photo was not accepted',
-        body: p.accepted ? `SeeBuyGet has your trading licence to ${p.expiresAt ? licenceDay(p.expiresAt) : 'its new date'}.` : `${p.reason ?? 'Something was wrong with it.'} Send another from the Shop app’s home screen.`,
+        ...(p.accepted
+          ? noticeOf(said('dispatch.shopLicence.recorded.title'), said('dispatch.shopLicence.recorded.body', { date: p.expiresAt ? paperDayShown(p.expiresAt) : said('dispatch.newDate') }))
+          : noticeOf(said('dispatch.licencePhotoRefused.title'), said('dispatch.licencePhotoRefused.shopBody', { reason: p.reason ?? said('dispatch.wrongWithIt') }))),
         tag: `shop-licence:${p.did}`,
         data: { accepted: p.accepted },
       });
@@ -647,8 +727,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!e.payload?.fleetDid || !c) return;
       void this.tell(e.payload.fleetDid, {
         kind: 'vehicle_standstill',
-        title: `${c.plate} has stood still for ${c.minutes} minutes${c.driverName ? ` — ${c.driverName}` : ''}`,
-        body: `Away from any of its stops, your sites or the network’s hubs, at ${c.location.lat.toFixed(5)}, ${c.location.lng.toFixed(5)}. Call the driver, and say how it was on the dashboard.`,
+        ...noticeOf(
+          said('dispatch.standstill.title', { plate: c.plate, minutes: c.minutes, driver: c.driverName ? said('dispatch.dashName', { name: c.driverName }) : '' }),
+          said('dispatch.standstill.body', { lat: c.location.lat.toFixed(5), lng: c.location.lng.toFixed(5) }),
+        ),
         tag: `standstill:${c.caseId}`,
         data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
       });
@@ -659,8 +741,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!e.payload?.fleetDid || !c) return;
       void this.tell(e.payload.fleetDid, {
         kind: 'vehicle_silent',
-        title: `${c.plate}: its phone has said nothing for ${c.minutes} minutes${c.driverName ? ` — ${c.driverName}` : ''}`,
-        body: `Last heard at ${c.location.lat.toFixed(5)}, ${c.location.lng.toFixed(5)}, away from any of its stops, your sites or the network’s hubs. The app may be closed, or the phone off or out of signal. Call the driver, and say how it was on the dashboard.`,
+        ...noticeOf(
+          said('dispatch.silent.title', { plate: c.plate, minutes: c.minutes, driver: c.driverName ? said('dispatch.dashName', { name: c.driverName }) : '' }),
+          said('dispatch.silent.body', { lat: c.location.lat.toFixed(5), lng: c.location.lng.toFixed(5) }),
+        ),
         tag: `silent:${c.caseId}`,
         data: { caseId: c.caseId, lat: c.location.lat, lng: c.location.lng },
       });
@@ -704,8 +788,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         (payload.parties ?? []).map((did) =>
           this.notifications.notify(did, {
             kind: 'note_expiring',
-            title: `Keep your copy of ${payload.number}`,
-            body: `We delete this consignment note on ${goes}. Download it now — afterwards we can confirm a copy you hold is genuine, but we cannot give you another one.`,
+            ...noticeOf(said('dispatch.noteExpiring.title', { number: payload.number }), said('dispatch.noteExpiring.body', { date: day(goes, goes) })),
             link: '/',
             // One per document, however many times a sweep runs.
             tag: `note-expiring:${payload.docId}`,
@@ -722,10 +805,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.did, {
         kind: 'papers_checked',
-        title: payload.accepted ? 'Your licence is recorded' : 'Your licence photo was not accepted',
-        body: payload.accepted
-          ? `Recorded to ${payload.expiresAt ? paperDay(payload.expiresAt) : "its new date"}. You can start a shift.`
-          : `${payload.reason} Send a new photo from the app.`,
+        ...(payload.accepted
+          ? noticeOf(said('dispatch.licenceChecked.recorded.title'), said('dispatch.licenceChecked.recorded.body', { date: payload.expiresAt ? paperDayShown(payload.expiresAt) : said('dispatch.newDate') }))
+          : noticeOf(said('dispatch.licencePhotoRefused.title'), said('dispatch.licencePhotoRefused.driverBody', { reason: `${payload.reason}` }))),
         // Its card is on the Driver app's home: a shift starts there, and a photo is sent again from there.
         link: '/?go=home',
         tag: `papers:${payload.did}:checked`,
@@ -756,23 +838,23 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       return;
     }
     if (p.decision === 'report_only') return this.onDamageReportMade(p, parcel);
-    const outcome = p.decision === 'upheld' ? 'upheld' : p.decision === 'partly_upheld' ? 'upheld in part' : 'not upheld';
+    const outcome = p.decision === 'upheld' ? said('dispatch.dispute.outcome.upheld') : p.decision === 'partly_upheld' ? said('dispatch.dispute.outcome.part') : said('dispatch.dispute.outcome.not');
     const tag = `dispute:${p.parcelId}:decided`;
     // 2026-11-02 — to a person, the parcel in the Send app, where how it ended is read (Open under the notice).
     const link = `/?parcel=${p.parcelId}`;
     const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
     const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
     if (receiver) {
-      await this.tell(receiver.personDid, { kind: 'claim_decided', title: `${p.origin === 'buyer' ? 'Your report' : 'The report'} on parcel ${p.parcelId} was ${outcome}`, body: p.note, tag, data: { parcelId: p.parcelId }, link });
+      await this.tell(receiver.personDid, { kind: 'claim_decided', ...noticeOf(said(p.origin === 'buyer' ? 'dispatch.dispute.receiver.buyer.title' : 'dispatch.dispute.report.title', { parcelId: p.parcelId, outcome }), said('dispatch.note.only', { note: p.note })), tag, data: { parcelId: p.parcelId }, link });
     }
     if (sender && sender.personDid !== receiver?.personDid) {
       // Owed to the sender only where no store sold the shipment: a store's award goes to the store's float.
-      const owed = p.award > 0 && p.currency && !parcel.vendorId ? ` ${p.award.toFixed(2)} ${p.currency} is owed to you for it.` : '';
-      await this.tell(sender.personDid, { kind: 'claim_decided', title: `The report on parcel ${p.parcelId} was ${outcome}`, body: `${p.note}${owed}`, tag, data: { parcelId: p.parcelId }, link });
+      const owed = p.award > 0 && p.currency && !parcel.vendorId ? said('dispatch.dispute.owed', { amount: money(`${p.award.toFixed(2)} ${p.currency}`, p.award, p.currency) }) : '';
+      await this.tell(sender.personDid, { kind: 'claim_decided', ...noticeOf(said('dispatch.dispute.report.title', { parcelId: p.parcelId, outcome }), said('dispatch.dispute.sender.body', { note: p.note, owed })), tag, data: { parcelId: p.parcelId }, link });
     }
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
-      const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, to be handed over as any parcel.` : '';
-      await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The dispute on parcel ${p.parcelId} was decided`, body: `It was ${outcome}. ${p.note}${slot}`, tag, data: { parcelId: p.parcelId } });
+      const slot = parcel.binSlot ? said('dispatch.dispute.slot', { slot: parcel.binSlot }) : '';
+      await this.tell(p.raisedBy, { kind: 'claim_decided', ...noticeOf(said('dispatch.dispute.counter.title', { parcelId: p.parcelId }), said('dispatch.dispute.counter.body', { outcome, note: p.note, slot })), tag, data: { parcelId: p.parcelId } });
     }
   }
 
@@ -794,12 +876,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const person = accountFor(who, this.persons);
       if (!person || seen.has(person.personDid)) continue;
       seen.add(person.personDid);
-      const yours = side === 'receiver' ? 'Your parcel' : 'A parcel you sent';
-      const said = /[.!?]$/.test(words) ? words : `${words}.`;
+      const yours = side === 'receiver' ? said('dispatch.yourParcel') : said('dispatch.aParcelYouSent');
+      const sentence = /[.!?]$/.test(words) ? words : `${words}.`;
       const say =
         what === 'lost'
-          ? { kind: 'parcel_lost' as const, title: `${yours} ${parcelId} could not be found`, body: `SeeBuyGet looked for it and declared it lost: ${said} Its damage claim report is yours, to pass to whoever covers it. If it turns up, you are told.` }
-          : { kind: 'parcel_found' as const, title: `${yours} ${parcelId} was found`, body: `It had been declared lost, and turned up: ${said} It carries on from where it was.` };
+          ? { kind: 'parcel_lost' as const, ...noticeOf(said('dispatch.parcelLost.lost.title', { yours, parcelId }), said('dispatch.parcelLost.lost.body', { words: sentence })) }
+          : { kind: 'parcel_found' as const, ...noticeOf(said('dispatch.parcelLost.found.title', { yours, parcelId }), said('dispatch.parcelLost.found.body', { words: sentence })) };
       try {
         await this.notifications.notify(person.personDid, { ...say, link: `/?parcel=${parcelId}`, tag: `parcel-lost:${parcelId}`, data: { parcelId } });
       } catch (err) {
@@ -822,23 +904,25 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
     const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
     const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
-    const cash = `${p.amount.toFixed(2)} ${p.currency}`;
-    const say = async (to: string, n: { title: string; body: string; parcelId: string }) => {
+    const cash = money(`${p.amount.toFixed(2)} ${p.currency}`, p.amount, p.currency);
+    const say = async (to: string, n: ReturnType<typeof noticeOf> & { parcelId: string }) => {
       try {
-        await this.notifications.notify(to, { kind: 'parcel_withdrawn', title: n.title, body: n.body, link: `/?parcel=${n.parcelId}`, tag: `withdrawn:${p.parcelId}`, data: { parcelId: n.parcelId } });
+        await this.notifications.notify(to, { kind: 'parcel_withdrawn', title: n.title, body: n.body, say: n.say, link: `/?parcel=${n.parcelId}`, tag: `withdrawn:${p.parcelId}`, data: { parcelId: n.parcelId } });
       } catch (err) {
         this.logger.warn(`parcel-withdrawn notice failed for ${p.parcelId}: ${(err as Error).message}`);
       }
     };
     if (sender) {
       await say(sender.personDid, {
-        title: `Your parcel ${p.parcelId} comes back to you`,
-        body: `It was withdrawn at ${p.hubName}. It comes back to ${p.shopName}, where you handed it in, as ${p.returnParcelId}: collect it there with its code, under Received. You pay ${cash} in cash there for the way back.`,
+        ...noticeOf(
+          said('dispatch.withdrawn.sender.title', { parcelId: p.parcelId }),
+          said('dispatch.withdrawn.sender.body', { hubName: p.hubName, shopName: p.shopName, returnParcelId: p.returnParcelId, cash }),
+        ),
         parcelId: p.returnParcelId,
       });
     }
     if (receiver && receiver.personDid !== sender?.personDid) {
-      await say(receiver.personDid, { title: `Parcel ${p.parcelId} will not come`, body: `It was withdrawn at ${p.hubName} and goes back to its sender.`, parcelId: p.parcelId });
+      await say(receiver.personDid, { ...noticeOf(said('dispatch.withdrawn.receiver.title', { parcelId: p.parcelId }), said('dispatch.withdrawn.receiver.body', { hubName: p.hubName })), parcelId: p.parcelId });
     }
   }
 
@@ -858,8 +942,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (!sender || sender.personDid === receiver?.personDid) return;
     await this.tell(sender.personDid, {
       kind: 'claim_decided',
-      title: `The receiver added a note to the report on parcel ${p.parcelId}`,
-      body: 'What they found after it was handed over is on the damage claim report, beside it and dated. Open the parcel in your app to read it.',
+      ...noticeOf(said('dispatch.reportNoted.title', { parcelId: p.parcelId }), said('dispatch.reportNoted.body')),
       tag: `report-note:${p.parcelId}:${p.at}`,
       data: { parcelId: p.parcelId },
       link: `/?parcel=${p.parcelId}`,
@@ -885,17 +968,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       await this.tell(
         receiver.personDid,
         p.origin === 'buyer'
-          ? { kind: 'claim_decided', title: `A damage claim report was made for parcel ${p.parcelId}`, body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.', tag, data, link }
-          : { kind: 'claim_decided', title: `The shop reported a problem with parcel ${p.parcelId}`, body: 'A damage claim report was made, and it is on the parcel in your app. The parcel can still be collected.', tag, data, link },
+          ? { kind: 'claim_decided', ...noticeOf(said('dispatch.reportMade.buyer.title', { parcelId: p.parcelId }), said('dispatch.reportMade.buyer.body')), tag, data, link }
+          : { kind: 'claim_decided', ...noticeOf(said('dispatch.reportMade.shop.title', { parcelId: p.parcelId }), said('dispatch.reportMade.shop.body')), tag, data, link },
       );
     }
     if (sender && sender.personDid !== receiver?.personDid) {
       // A copy is theirs too (the user, 2026-10-15): on the parcel in their own app, to read, keep and pass on.
-      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made. A copy is yours: open the parcel in your app to read it, keep the file, or pass it to an insurer.', tag, data, link });
+      await this.tell(sender.personDid, { kind: 'claim_decided', ...noticeOf(said('dispatch.reportMade.sender.title', { parcelId: p.parcelId }), said('dispatch.reportMade.sender.body')), tag, data, link });
     }
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
-      const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, and can be handed over as any parcel.` : '';
-      await this.tell(p.raisedBy, { kind: 'claim_decided', title: `The damage claim report for parcel ${p.parcelId} is made`, body: `The receiver has it in their app.${slot}`, tag, data });
+      const slot = parcel.binSlot ? said('dispatch.reportMade.slot', { slot: parcel.binSlot }) : '';
+      await this.tell(p.raisedBy, { kind: 'claim_decided', ...noticeOf(said('dispatch.reportMade.counter.title', { parcelId: p.parcelId }), said('dispatch.reportMade.counter.body', { slot })), tag, data });
     }
   }
 
@@ -912,9 +995,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (!p.managerDid) return;
     await this.tell(p.managerDid, {
       kind: 'papers_sent',
-      title: `${p.displayName} sent their renewed licence`,
       // Two lines in the bell, and the second is where to go: the long version lost its ending to an ellipsis.
-      body: `They read the new expiry as ${paperDay(p.expiresAt)}. Read the card under Drivers.`,
+      ...noticeOf(said('dispatch.licenceSent.title', { name: p.displayName }), said('dispatch.licenceSent.body', { date: paperDayShown(p.expiresAt) })),
       tag: `papers:${p.did}:card`,
       data: { did: p.did },
       link: '/?go=drivers',
@@ -923,7 +1005,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number; decideBy?: string; pickupLabel?: string }): Promise<void> {
     if (!payload.posterDid) return;
-    const why = payload.outcome === 'absent' ? 'nobody was there to receive it' : payload.outcome === 'refused' ? 'the receiver refused it' : payload.outcome === 'no_code' ? 'the receiver did not have the delivery code' : 'the driver could not reach the place';
+    const why = payload.outcome === 'absent' ? said('dispatch.failed.why.absent') : payload.outcome === 'refused' ? said('dispatch.failed.why.refused') : payload.outcome === 'no_code' ? said('dispatch.failed.why.noCode') : said('dispatch.failed.why.other');
+    const dest = payload.destLabel ?? said('dispatch.theDestination');
+    const noted = payload.note ? said('dispatch.dashQuoted', { note: payload.note }) : '';
     // 2026-11-15 — no code: it went to the receiver again; if it arrived, the sender says so and the driver may deliver without it.
     const noCode = payload.outcome === 'no_code';
     // Refused: the sender decides where the goods go, and pays the way (the user, 2026-10-27) — said with the time to answer.
@@ -931,12 +1015,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
-        title: refused ? `Load ${payload.code} was refused at the door` : `Load ${payload.code} could not be delivered`,
-        body: refused
-          ? `The driver was at ${payload.destLabel ?? 'the destination'} and the receiver refused it${payload.note ? ` — "${payload.note}"` : ''}. The driver keeps the goods until you say where they go: back to ${payload.pickupLabel}, to another place, or given up — you pay the way. With no answer ${byWords(payload.decideBy!)}, they go back to ${payload.pickupLabel}, at your cost.`
-          : noCode
-            ? `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The code was sent to the receiver again. If it has arrived, open the load and tap It arrived: the driver can then deliver without the code.`
-            : `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
+        ...noticeOf(
+          said(refused ? 'dispatch.failed.refused.title' : 'dispatch.failed.title', { code: payload.code }),
+          refused
+            ? said('dispatch.failed.refused.body', { dest, note: noted, pickup: payload.pickupLabel!, by: saidBy(payload.decideBy!) })
+            : noCode
+              ? said('dispatch.failed.noCode.body', { dest, why, note: noted })
+              : said('dispatch.failed.other.body', { dest, why, note: noted }),
+        ),
         // 2026-11-02 — the load itself (the owner: "wire it in"): refused, its answer comes first; otherwise its door.
         link: refused ? loadLink(payload.freightId) : loadLink(payload.freightId, 'road'),
         tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
@@ -956,8 +1042,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
-        title: `Load ${payload.ref} is held`,
-        body: `Found ${payload.where}: ${FINDING_WORDS[payload.finding]}. It was photographed and SeeBuyGet operations has been told; the load does not change hands until operations releases it. What was found is on the consignment note.`,
+        ...noticeOf(
+          said('dispatch.loadHeld.title', { ref: payload.ref }),
+          said('dispatch.loadHeld.body', { where: payload.where, finding: FINDING_SAID[payload.finding] }),
+        ),
         link: loadLink(payload.unitId, 'road'),
         tag: `freight:${payload.unitId}:held`,
         data: { freightId: payload.unitId },
@@ -972,8 +1060,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
-        title: `Load ${payload.code ?? payload.ref} is released`,
-        body: `SeeBuyGet operations released it: "${payload.reason}". It may change hands again; what was found stays on its consignment note.`,
+        ...noticeOf(said('dispatch.loadReleased.title', { code: payload.code ?? payload.ref }), said('dispatch.loadReleased.body', { reason: payload.reason })),
         link: loadLink(payload.unitId, 'road'),
         tag: `freight:${payload.unitId}:held`,
         data: { freightId: payload.unitId },
@@ -990,29 +1077,31 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onFreightHeld(p: HeldOnTheRoad, letGo: boolean): Promise<void> {
     const h = p.held;
     if (!h) return;
-    const by = HELD_BY_WORDS[h.by] ?? 'an authority';
-    const who = h.who ? ` (${h.who})` : '';
-    const title = letGo ? `Load ${p.code} was let go` : `Load ${p.code} is held by ${by}`;
-    const late = h.receivedAt && !letGo ? ` The driver said it with no signal; it reached us ${utcWords(h.receivedAt)}.` : '';
+    const by = HELD_BY_SAID[h.by] ?? said('dispatch.heldBy.other');
+    const who = h.who ? said('dispatch.paren', { who: h.who }) : '';
+    const title = letGo ? said('dispatch.heldRoad.letGo.title', { code: p.code }) : said('dispatch.heldRoad.held.title', { code: p.code, by });
+    const late = h.receivedAt && !letGo ? said('dispatch.heldRoad.late', { when: saidOn(h.receivedAt) }) : '';
     const body = letGo
-      ? `It was held by ${by}${who} from ${utcWords(h.since)} until ${utcWords(h.letGoAt ?? h.since)}, as the driver said${h.letGoNote ? ` — "${h.letGoNote}"` : ''}. It is on its way again.`
-      : `The driver said ${utcWords(h.since)} that ${by}${who} holds it${h.note ? ` — "${h.note}"` : ''}.${late} SeeBuyGet operations has been told. You are told again when it is let go.`;
+      ? said('dispatch.heldRoad.letGo.body', { by, who, since: saidOn(h.since), until: saidOn(h.letGoAt ?? h.since), note: h.letGoNote ? said('dispatch.dashQuoted', { note: h.letGoNote }) : '' })
+      : said('dispatch.heldRoad.held.body', { since: saidOn(h.since), by, who, note: h.note ? said('dispatch.dashQuoted', { note: h.note }) : '', late });
     const tag = `freight:${p.freightId}:held`;
-    if (p.posterDid) await this.tell(p.posterDid, { kind: 'freight_problem', title, body, tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
+    if (p.posterDid) await this.tell(p.posterDid, { kind: 'freight_problem', ...noticeOf(title, body), tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
     if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
-      await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: letGo ? body : `${body} Call the driver.`, tag, data: { freightId: p.freightId } });
+      await this.tell(p.carrierDid, { kind: 'freight_problem', ...noticeOf(title, letGo ? body : said('dispatch.heldRoad.callDriver', { body })), tag, data: { freightId: p.freightId } });
     }
   }
 
   private async onFreightSealBroken(payload: { freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }): Promise<void> {
     if (!payload.posterDid) return;
     const cause = payload.seal?.broken?.cause;
-    const how = cause === 'police' ? 'by the police' : cause === 'customs' ? 'by customs' : cause === 'repair' ? 'for a repair on the road' : cause === 'found_broken' ? 'found so by the driver' : 'on the road';
+    const how = cause === 'police' ? said('dispatch.sealBroken.how.police') : cause === 'customs' ? said('dispatch.sealBroken.how.customs') : cause === 'repair' ? said('dispatch.sealBroken.how.repair') : cause === 'found_broken' ? said('dispatch.sealBroken.how.found') : said('dispatch.sealBroken.how.road');
     try {
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
-        title: `A seal on load ${payload.code} was broken`,
-        body: `Seal ${payload.seal?.number ?? ''} was broken ${how}${payload.seal?.broken?.note ? ` — "${payload.seal.broken.note}"` : ''}. The driver photographed it, and any official paper. A copy of the consignment note is kept with it: if anything is missing at delivery, that is what a damage claim report is made from.`,
+        ...noticeOf(
+          said('dispatch.sealBroken.title', { code: payload.code }),
+          said('dispatch.sealBroken.body', { number: payload.seal?.number ?? '', how, note: payload.seal?.broken?.note ? said('dispatch.dashQuoted', { note: payload.seal.broken.note }) : '' }),
+        ),
         link: loadLink(payload.freightId, 'seals'),
         tag: `freight:${payload.freightId}:seal:${payload.seal?.number ?? ''}`,
         data: { freightId: payload.freightId },
@@ -1032,15 +1121,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onColdChainBroken(p: ColdChainBroken): Promise<void> {
     const r = p.reading;
     if (!r) return;
-    const read = `${r.celsius} °C was read ${utcWords(r.at)}, outside the ${r.band.minC}–${r.band.maxC} °C it must be kept in.`;
-    const late = r.receivedAt ? ` The driver read it with no signal, and it reached us ${utcWords(r.receivedAt)}: it may be different now.` : '';
-    const title = `The cold chain on load ${p.code} was broken`;
+    const read = said('dispatch.coldChain.read', { celsius: r.celsius, when: saidOn(r.at), minC: r.band.minC, maxC: r.band.maxC });
+    const late = r.receivedAt ? said('dispatch.coldChain.late', { when: saidOn(r.receivedAt) }) : '';
+    const title = said('dispatch.coldChain.title', { code: p.code });
     const tag = `freight:${p.freightId}:cold_chain`;
     if (p.posterDid) {
-      await this.tell(p.posterDid, { kind: 'freight_problem', title, body: `${read}${late} The consignment note says so, and a copy of it is kept as it stands now: if the goods cannot be taken at delivery, that is what a damage claim report is made from.`, tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
+      await this.tell(p.posterDid, { kind: 'freight_problem', ...noticeOf(title, said('dispatch.coldChain.poster', { read, late })), tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
     }
     if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
-      await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: `${read}${late} The shipper has been told. Call the driver to check the cooling unit.`, tag, data: { freightId: p.freightId } });
+      await this.tell(p.carrierDid, { kind: 'freight_problem', ...noticeOf(title, said('dispatch.coldChain.carrier', { read, late })), tag, data: { freightId: p.freightId } });
     }
   }
 
@@ -1049,14 +1138,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (!to) return;
     // Nobody of ours decided anything: the claimant is told where the report is, and nothing about an outcome.
     const reportOnly = payload.decision === 'report_only';
-    const outcome = payload.decision === 'upheld' ? 'upheld' : payload.decision === 'partly_upheld' ? 'upheld in part' : 'rejected';
+    const outcome = payload.decision === 'upheld' ? said('dispatch.dispute.outcome.upheld') : payload.decision === 'partly_upheld' ? said('dispatch.dispute.outcome.part') : said('dispatch.claim.outcome.rejected');
     try {
       await this.notifications.notify(to, {
         kind: 'claim_decided',
-        title: reportOnly ? `A damage claim report was made for ${payload.code}` : `Your claim on ${payload.code} was ${outcome}`,
-        body: reportOnly
-          ? 'Nobody of the network decides it or pays. The consignment note, frozen with your claim on it, is the report: open the load to read it, and to pass it on by a link to the carrier or an insurer.'
-          : `${payload.award > 0 ? `${payload.award.toFixed(2)} is credited to your balance. ` : ''}${payload.note}`,
+        ...(reportOnly
+          ? noticeOf(said('dispatch.claim.report.title', { code: payload.code }), said('dispatch.claim.report.body'))
+          : noticeOf(
+              said('dispatch.claim.decided.title', { code: payload.code, outcome }),
+              payload.award > 0 ? said('dispatch.claim.credited.body', { amount: payload.award.toFixed(2), note: payload.note }) : said('dispatch.note.only', { note: payload.note }),
+            )),
         // The poster's own claim: the load, on its claim. A receiver who claimed reads it where it receives: home.
         link: to === payload.posterDid ? loadLink(payload.freightId, 'claim') : '/',
         tag: `freight:${payload.freightId}:claim`,
@@ -1071,8 +1162,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.driverDid, {
         kind: 'load_assigned',
-        title: `Load ${payload.code} was put on you`,
-        body: `${payload.byName ?? 'Your fleet office'} assigned you ${payload.code}: ${payload.weightKg} kg from ${payload.pickupLabel} to ${payload.destLabel}${payload.earning != null ? ` — you earn ${payload.earning.toFixed(2)}` : ''}. It is under My loads; collect it at the pickup.`,
+        ...noticeOf(
+          said('dispatch.assigned.title', { code: payload.code }),
+          said('dispatch.assigned.body', { by: payload.byName ?? said('dispatch.yourFleetOffice'), code: payload.code, kg: payload.weightKg, pickup: payload.pickupLabel, dest: payload.destLabel, earn: payload.earning != null ? said('dispatch.assigned.earn', { amount: payload.earning.toFixed(2) }) : '' }),
+        ),
         // 2026-11-02 — a driver's notice opens where the driver acts on it, in one tap (the owner: "drivers' safety").
         link: '/?go=loads',
         tag: `freight:${payload.freightId}`,
@@ -1089,12 +1182,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // The shipper is told, and the driver too, who may have walked away from the screen with the QR code on it.
     if (p.by === 'mollie') return this.onFreightPaidByMollie(p);
     if (!p.posterDid) return;
-    const who = p.by === 'office' ? `${p.driverName ? `${p.driverName}’s` : 'The driver’s'} fleet` : (p.driverName ?? 'The driver');
+    const who = directWho(p);
     try {
       await this.notifications.notify(p.posterDid, {
         kind: 'freight_paid_direct',
-        title: `Load ${p.code}: the driver says they were paid`,
-        body: `${who} says you paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, the price agreed. It is on the load for you both. SeeBuyGet carries no money for this load.`,
+        ...noticeOf(
+          said('dispatch.paidDirect.title', { code: p.code }),
+          said('dispatch.paidDirect.body', { who, amount: money(`${p.currency} ${p.amount.toLocaleString('en')}`, p.amount, p.currency), code: p.code, to: p.destLabel ? said('dispatch.toDest', { dest: p.destLabel }) : '' }),
+        ),
         link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:paid-direct`,
         data: { freightId: p.freightId },
@@ -1105,28 +1200,30 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   private async onFreightPaidByMollie(p: FreightPaidDirectEvent): Promise<void> {
-    const amount = `${p.currency} ${p.amount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const to = p.destLabel ? ` to ${p.destLabel}` : '';
-    const tell = async (did: string, title: string, body: string) => {
+    const amount = money(`${p.currency} ${p.amount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, p.amount, p.currency);
+    const to = p.destLabel ? said('dispatch.toDest', { dest: p.destLabel }) : '';
+    const tell = async (did: string, n: ReturnType<typeof noticeOf>) => {
       try {
-        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: loadLink(p.freightId), tag: `freight:${p.freightId}:paid-direct`, data: { freightId: p.freightId } });
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', ...n, link: loadLink(p.freightId), tag: `freight:${p.freightId}:paid-direct`, data: { freightId: p.freightId } });
       } catch (err) {
         this.logger.warn(`freight-paid-by-mollie notify failed for ${p.freightId}: ${(err as Error).message}`);
       }
     };
-    if (p.posterDid) await tell(p.posterDid, `Load ${p.code}: paid, confirmed by Mollie`, `Mollie confirmed your payment of ${amount} for ${p.code}${to}, the price agreed. The money went into the carrier’s own Mollie account: SeeBuyGet carries no money for this load.`);
-    if (p.driverDid) await tell(p.driverDid, `Load ${p.code}: paid ${amount}, confirmed by Mollie`, `The shipper paid ${amount} for ${p.code}${to} by Mollie. The money is in the Mollie account it went to, and the load says it is paid.`);
+    if (p.posterDid) await tell(p.posterDid, noticeOf(said('dispatch.paidMollie.poster.title', { code: p.code }), said('dispatch.paidMollie.poster.body', { amount, code: p.code, to })));
+    if (p.driverDid) await tell(p.driverDid, noticeOf(said('dispatch.paidMollie.driver.title', { code: p.code, amount }), said('dispatch.paidMollie.driver.body', { amount, code: p.code, to })));
   }
 
   /** To the poster: the carrier says the price agreed has not been paid. The poster pays them directly; we carry no money. */
   private async onFreightNotPaidDirect(p: FreightPaidDirectEvent): Promise<void> {
     if (!p.posterDid) return;
-    const who = p.by === 'office' ? `${p.driverName ? `${p.driverName}’s` : 'The driver’s'} fleet` : (p.driverName ?? 'The driver');
+    const who = directWho(p);
     try {
       await this.notifications.notify(p.posterDid, {
         kind: 'freight_paid_direct',
-        title: `Load ${p.code}: the driver says they were not paid`,
-        body: `${who} says the price agreed for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, ${p.currency} ${p.amount.toLocaleString('en')}, has not been paid. You pay them directly; once you have, they say so and you see it on the load. SeeBuyGet carries no money for this load.`,
+        ...noticeOf(
+          said('dispatch.notPaid.title', { code: p.code }),
+          said('dispatch.notPaid.body', { who, code: p.code, to: p.destLabel ? said('dispatch.toDest', { dest: p.destLabel }) : '', amount: money(`${p.currency} ${p.amount.toLocaleString('en')}`, p.amount, p.currency) }),
+        ),
         // Answered on the load: that it paid, with a reference.
         link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:not-paid`,
@@ -1139,11 +1236,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /** To the driver, and the office of the fleet that carried it: the shipper answers that it paid, with a reference to check. */
   private async onFreightNotPaidAnswered(p: FreightNotPaidAnswered): Promise<void> {
-    const body = `The shipper answers that it paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''} — its reference: ${p.reference}. If the money reached you, say it was paid, under Earnings. Until then drivers who look at its loads see both what was said and its answer.`;
+    const answered = noticeOf(
+      said('dispatch.notPaidAnswered.title', { code: p.code }),
+      said('dispatch.notPaidAnswered.body', { amount: money(`${p.currency} ${p.amount.toLocaleString('en')}`, p.amount, p.currency), code: p.code, to: p.destLabel ? said('dispatch.toDest', { dest: p.destLabel }) : '', reference: p.reference }),
+    );
     for (const did of [p.driverDid, p.officeDid].filter((x): x is string => Boolean(x))) {
       try {
         // Answered under Earnings, in the Driver app and the fleet's alike (2026-11-02: a tapped notice goes there).
-        await this.notifications.notify(did, { kind: 'freight_paid_direct', title: `Load ${p.code}: the shipper says it paid`, body, link: '/?go=earnings', tag: `freight:${p.freightId}:answered`, data: { freightId: p.freightId } });
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', ...answered, link: '/?go=earnings', tag: `freight:${p.freightId}:answered`, data: { freightId: p.freightId } });
       } catch (err) {
         this.logger.warn(`not-paid-answered notify failed for ${p.freightId}: ${(err as Error).message}`);
       }
@@ -1152,15 +1252,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /** To the driver, and the office of the fleet that carried it: delivered three days ago, were you paid? */
   private async onFreightPaidDirectAsked(p: FreightPaidDirectAsked): Promise<void> {
-    const money = `${p.currency} ${p.amount.toLocaleString('en')}`;
-    const to = p.destLabel ? ` to ${p.destLabel}` : '';
-    const asks: Array<[string, string, string]> = [
-      [p.driverDid, `Were you paid for load ${p.code}?`, `It was delivered${to} three days ago; the shipper pays you directly, ${money}, the price agreed. Say whether you were paid, under Earnings: the shipper sees what you say.`],
-      ...(p.officeDid ? [[p.officeDid, `Was your fleet paid for load ${p.code}?`, `It was delivered${to} three days ago; the shipper pays your fleet directly, ${money}, the price agreed. Say whether you were paid, under Earnings: the shipper sees what you say.`] as [string, string, string]] : []),
+    const sum = money(`${p.currency} ${p.amount.toLocaleString('en')}`, p.amount, p.currency);
+    const to = p.destLabel ? said('dispatch.toDest', { dest: p.destLabel }) : '';
+    const asks: Array<[string, ReturnType<typeof noticeOf>]> = [
+      [p.driverDid, noticeOf(said('dispatch.paidAsked.driver.title', { code: p.code }), said('dispatch.paidAsked.driver.body', { to, amount: sum }))],
+      ...(p.officeDid ? [[p.officeDid, noticeOf(said('dispatch.paidAsked.office.title', { code: p.code }), said('dispatch.paidAsked.office.body', { to, amount: sum }))] as [string, ReturnType<typeof noticeOf>]] : []),
     ];
-    for (const [did, title, body] of asks) {
+    for (const [did, n] of asks) {
       try {
-        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: '/?go=earnings', tag: `freight:${p.freightId}:paid-asked`, data: { freightId: p.freightId } });
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', ...n, link: '/?go=earnings', tag: `freight:${p.freightId}:paid-asked`, data: { freightId: p.freightId } });
       } catch (err) {
         this.logger.warn(`were-you-paid notify failed for ${p.freightId}: ${(err as Error).message}`);
       }
@@ -1168,10 +1268,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   private async onFreightHandedBack(payload: { freightId: string; code: string; driverName?: string; reason: string; posterDid?: string; managerDid?: string; destLabel?: string }): Promise<void> {
-    const body = `${payload.driverName ?? 'The driver'} could not take ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''}: ${payload.reason}. It is back on the market for another driver; any charge has come back.`;
+    const handedBack = noticeOf(
+      said('dispatch.handedBack.title', { code: payload.code }),
+      said('dispatch.handedBack.body', { driver: payload.driverName ?? said('dispatch.theDriver'), code: payload.code, to: payload.destLabel ? said('dispatch.toDest', { dest: payload.destLabel }) : '', reason: payload.reason }),
+    );
     for (const to of [payload.posterDid, payload.managerDid].filter((x): x is string => Boolean(x))) {
       try {
-        await this.notifications.notify(to, { kind: 'freight_problem', title: `Load ${payload.code} was handed back`, body, link: to === payload.posterDid ? loadLink(payload.freightId) : '/', tag: `freight:${payload.freightId}:handback`, data: { freightId: payload.freightId } });
+        await this.notifications.notify(to, { kind: 'freight_problem', ...handedBack, link: to === payload.posterDid ? loadLink(payload.freightId) : '/', tag: `freight:${payload.freightId}:handback`, data: { freightId: payload.freightId } });
       } catch (err) {
         this.logger.warn(`freight-handed-back notify failed for ${payload.freightId}: ${(err as Error).message}`);
       }
@@ -1184,8 +1287,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(p.posterDid, {
         kind: 'freight_problem',
-        title: `Load ${p.code}: the refused goods go back ${byWords(p.decideBy)}`,
-        body: `The goods refused at ${p.destLabel ?? 'the door'} go back to ${p.pickupLabel} ${byWords(p.decideBy)}, at your cost — unless you say they go to another place, or that you give them up.`,
+        ...noticeOf(
+          said('dispatch.refusalReminder.title', { code: p.code, by: saidBy(p.decideBy) }),
+          said('dispatch.refusalReminder.body', { dest: p.destLabel ?? said('dispatch.theDoor'), pickup: p.pickupLabel, by: saidBy(p.decideBy) }),
+        ),
         link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:refusal-reminder`,
         data: { freightId: p.freightId },
@@ -1204,11 +1309,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (p.driverDid) {
         await this.notifications.notify(p.driverDid, {
           kind: 'load_instructions',
-          title: p.choice === 'give_up' ? `Load ${p.code}: the goods are given up` : `Load ${p.code}: take the goods to ${p.destLabel}`,
-          body:
-            p.choice === 'give_up'
-              ? 'The sender gave the refused goods up. The receiver may keep them if it will; otherwise your company disposes of them, and any cost of that is the sender’s.'
-              : `${p.byDeadline ? 'No answer in 48 hours: they go back to where they were picked up. ' : 'The sender decided. '}Carry the refused goods to ${p.destLabel} as load ${p.returnCode} — it is in your loads, at your vehicle’s price. Deliver it as any other.`,
+          ...(p.choice === 'give_up'
+            ? noticeOf(said('dispatch.refusalDecided.giveUp.title', { code: p.code }), said('dispatch.refusalDecided.giveUp.body'))
+            : noticeOf(
+                said('dispatch.refusalDecided.carry.title', { code: p.code, dest: String(p.destLabel) }),
+                said(p.byDeadline ? 'dispatch.refusalDecided.carry.deadlineBody' : 'dispatch.refusalDecided.carry.senderBody', { dest: String(p.destLabel), returnCode: String(p.returnCode) }),
+              )),
           link: '/?go=loads',
           tag: `freight:${p.freightId}:refusal`,
           data: { freightId: p.returnFreightId ?? p.freightId },
@@ -1217,8 +1323,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (p.byDeadline && p.posterDid && p.returnCode) {
         await this.notifications.notify(p.posterDid, {
           kind: 'freight_problem',
-          title: `Load ${p.code}: the refused goods are going back`,
-          body: `With no answer in 48 hours, the goods refused at the door go back to ${p.destLabel} as load ${p.returnCode}, at your cost.`,
+          ...noticeOf(said('dispatch.refusalDecided.back.title', { code: p.code }), said('dispatch.refusalDecided.back.body', { dest: String(p.destLabel), returnCode: p.returnCode })),
           // The load they were refused on, which says what became of them.
           link: loadLink(p.freightId),
           tag: `freight:${p.freightId}:refusal`,
@@ -1231,15 +1336,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   private async onFreightInstructed(payload: { freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }): Promise<void> {
-    const lines = payload.amended
+    const lines: Array<SayValue | undefined> = payload.amended
       ? [payload.text]
-      : [payload.deliveryWindow ? `Deliver: ${payload.deliveryWindow}` : undefined, payload.contactName || payload.contactPhone ? `Contact: ${[payload.contactName, payload.contactPhone].filter(Boolean).join(', ')}` : undefined, payload.text];
-    const body = lines.filter(Boolean).join(' · ') || 'The sender cleared their instructions.';
+      : [payload.deliveryWindow ? said('dispatch.instructed.deliver', { window: payload.deliveryWindow }) : undefined, payload.contactName || payload.contactPhone ? said('dispatch.instructed.contact', { who: [payload.contactName, payload.contactPhone].filter(Boolean).join(', ') }) : undefined, payload.text];
+    const parts = lines.filter((x): x is SayValue => Boolean(x));
+    // Said as phrases: the pieces joined by " · ", two at a time.
+    const body: Said = parts.length === 0 ? said('dispatch.instructed.cleared') : parts.length === 1 ? said('dispatch.note.only', { note: parts[0] }) : parts.slice(1).reduce<SayValue>((a, b) => said('dispatch.instructed.join', { first: a, second: b }), parts[0]) as Said;
     try {
       await this.notifications.notify(payload.driverDid, {
         kind: 'load_instructions',
-        title: payload.amended ? `New instruction for ${payload.code}` : `Instructions for ${payload.code} changed`,
-        body,
+        ...noticeOf(said(payload.amended ? 'dispatch.instructed.amended.title' : 'dispatch.instructed.changed.title', { code: payload.code }), body),
         link: '/?go=loads',
         tag: `freight:${payload.freightId}:instructions`,
         data: { freightId: payload.freightId },
@@ -1254,8 +1360,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.driverDid, {
         kind: 'load_cancelled',
-        title: `Load ${payload.code} was cancelled`,
-        body: `The sender withdrew ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''} before pickup: ${payload.reason}. Nothing to collect; your capacity is free again.`,
+        ...noticeOf(
+          said('dispatch.cancelled.title', { code: payload.code }),
+          said('dispatch.cancelled.body', { code: payload.code, to: payload.destLabel ? said('dispatch.toDest', { dest: payload.destLabel }) : '', reason: payload.reason }),
+        ),
         // Its capacity is free: the board, where the next load is.
         link: '/?go=board',
         tag: `freight:${payload.freightId}`,
@@ -1278,13 +1386,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * people never hear.
    */
   private async onDepartureCancelled(payload: RunCalledOff): Promise<void> {
-    const body = runCalledOffBody(payload);
+    const called = noticeOf(said('dispatch.runOff.title', { company: payload.company, originZone: payload.originZone, destZone: payload.destZone }), runCalledOffSaid(payload));
     for (const shipperDid of payload.shippers) {
       try {
         await this.notifications.notify(shipperDid, {
           kind: 'load_cancelled',
-          title: `${payload.company} called off the ${payload.originZone} → ${payload.destZone} run`,
-          body,
+          ...called,
           // 2026-11-02 — the run, where each shipper finds its own booking (the owner: "that's why it should open").
           link: runLink(payload.departureId),
           tag: `departure:${payload.departureId}:cancelled`,
@@ -1304,10 +1411,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onOrderSplit(p: { code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }): Promise<void> {
     if (!p.shipperDid) return;
     const size = p.orderKg >= 1000 ? `${Math.round(p.orderKg / 100) / 10} t` : `${p.orderKg} kg`;
-    const when = p.deliverOn ? ` for ${p.deliverOn}` : '';
-    const title = p.rejoined ? `${p.fleetName} will bring ${p.code} in one load after all` : `${p.fleetName} will bring ${p.code} in ${p.loads} loads`;
-    const body = p.rejoined ? `${size}${when}, in one delivery as you ordered it.` : `${size}${when}. It is more than one vehicle carries, so it comes in ${p.loads} deliveries; each is signed for on its own, and your tracking link shows them all.`;
-    await this.tell(p.shipperDid, { kind: 'order_split', title, body, tag: `split:${p.code}:${p.loads}`, data: { loads: p.loads } });
+    const when = p.deliverOn ? said('dispatch.orderSplit.for', { day: day(p.deliverOn, p.deliverOn) }) : '';
+    const title = p.rejoined ? said('dispatch.orderSplit.one.title', { fleet: p.fleetName, code: p.code }) : said('dispatch.orderSplit.many.title', { fleet: p.fleetName, code: p.code, loads: p.loads });
+    const body = p.rejoined ? said('dispatch.orderSplit.one.body', { size, when }) : said('dispatch.orderSplit.many.body', { size, when, loads: p.loads });
+    await this.tell(p.shipperDid, { kind: 'order_split', ...noticeOf(title, body), tag: `split:${p.code}:${p.loads}`, data: { loads: p.loads } });
   }
 
   /**
@@ -1315,17 +1422,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * and that the day can be planned again — and say the one thing the shipper can do with it, while there is time.
    */
   private async onOrderWindowPlanned(p: OrderWindowPlanned): Promise<void> {
-    const asked = p.window ? `You asked for ${p.window} on ${p.day}.` : `You asked for a delivery window on ${p.day}.`;
-    const estimate = 'A plan’s time is an estimate, and the day can still be planned again.';
+    const ordered = day(p.day, p.day);
+    const asked = p.window ? said('dispatch.window.asked', { window: p.window, day: ordered }) : said('dispatch.window.askedAny', { day: ordered });
+    const estimate = said('dispatch.window.estimate');
     const data = { freightId: p.freightId };
     if (p.lateMin) {
-      const by = spanWords(p.lateMin);
-      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} plans ${p.code} for about ${p.arrive} — ${by} after your window`, body: `${asked} Its plan for that day has ${p.code} at the door about ${p.arrive}, ${by} after that. ${estimate} If this cannot work, speak to ${p.fleetName} now.`, tag: `window:${p.code}:late:${p.lateMin}`, data });
+      const by = saidSpan(p.lateMin);
+      await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.window.late.title', { fleet: p.fleetName, code: p.code, arrive: p.arrive, by }), said('dispatch.window.late.body', { asked, code: p.code, arrive: p.arrive, by, estimate, fleet: p.fleetName })), tag: `window:${p.code}:late:${p.lateMin}`, data });
     } else if (p.earlyMin) {
-      const by = spanWords(p.earlyMin);
-      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} plans ${p.code} for about ${p.arrive} — ${by} before your window`, body: `${asked} Its plan for that day has ${p.code} at the door about ${p.arrive}, ${by} before that: the day does not leave its vehicle room to wait. ${estimate} If this cannot work, speak to ${p.fleetName} now.`, tag: `window:${p.code}:early:${p.earlyMin}`, data });
+      const by = saidSpan(p.earlyMin);
+      await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.window.early.title', { fleet: p.fleetName, code: p.code, arrive: p.arrive, by }), said('dispatch.window.early.body', { asked, code: p.code, arrive: p.arrive, by, estimate, fleet: p.fleetName })), tag: `window:${p.code}:early:${p.earlyMin}`, data });
     } else {
-      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now plans ${p.code} inside your window`, body: `${asked} Its plan for that day now has ${p.code} at the door about ${p.arrive}. ${estimate}`, tag: `window:${p.code}:inside`, data });
+      await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.window.inside.title', { fleet: p.fleetName, code: p.code }), said('dispatch.window.inside.body', { asked, code: p.code, arrive: p.arrive, estimate })), tag: `window:${p.code}:inside`, data });
     }
   }
 
@@ -1338,13 +1446,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const data = { freightId: p.freightId };
     if (p.left) {
       const because = LEFT_OUT_BECAUSE[p.why ?? 'room'](p.day);
-      await this.tell(p.shipperDid, { kind: 'order_left_out', title: `${p.fleetName} has not put ${p.code} on a vehicle for ${p.day}`, body: `${because} As its plan stands, ${p.code} is on no vehicle. The day can still be planned again: speak to ${p.fleetName} now.`, tag: `left:${p.code}:${p.day}:${p.why}`, data });
+      await this.tell(p.shipperDid, { kind: 'order_left_out', ...noticeOf(said('dispatch.leftOut.title', { fleet: p.fleetName, code: p.code, day: day(p.day, p.day) }), said('dispatch.leftOut.body', { because, code: p.code, fleet: p.fleetName })), tag: `left:${p.code}:${p.day}:${p.why}`, data });
     } else if (!p.arrive) {
       // On a vehicle by the office's own hand, or on a trip it had missed: no plan gave it an hour, and none is made up.
-      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now has ${p.code} on a vehicle`, body: `${p.fleetName} has put ${p.code} on a vehicle. There is no planned hour for it; you are told when it is delivered.`, tag: `left:${p.code}:${p.day}:on`, data });
+      await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.onVehicle.title', { fleet: p.fleetName, code: p.code }), said('dispatch.onVehicle.body', { fleet: p.fleetName, code: p.code })), tag: `left:${p.code}:${p.day}:on`, data });
     } else {
-      const inside = p.window ? `, inside the window you asked for (${p.window})` : '';
-      await this.tell(p.shipperDid, { kind: 'order_window', title: `${p.fleetName} now has ${p.code} on a vehicle for ${p.day}`, body: `Its plan has ${p.code} at the door about ${p.arrive}${inside}. A plan’s time is an estimate, and the day can still be planned again.`, tag: `left:${p.code}:${p.day}:planned`, data });
+      const inside = p.window ? said('dispatch.planned.inside', { window: p.window }) : '';
+      await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.planned.title', { fleet: p.fleetName, code: p.code, day: day(p.day, p.day) }), said('dispatch.planned.body', { code: p.code, arrive: p.arrive, inside })), tag: `left:${p.code}:${p.day}:planned`, data });
     }
   }
 
@@ -1357,15 +1465,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   async sweepLate(now: number = Date.now()): Promise<number> {
     const due = this.dispatch.takeLateToTell(now);
     for (const l of due) {
-      const where = l.status === 'in_transit' ? 'It is on the road.' : l.status === 'claimed' ? 'It is with its driver and has not been collected yet.' : 'It has not gone out yet.';
+      const where = l.status === 'in_transit' ? said('dispatch.late.where.road') : l.status === 'claimed' ? said('dispatch.late.where.driver') : said('dispatch.late.where.notOut');
       const data = { freightId: l.freightId };
       if (l.what === 'unplanned') {
         // The same fact as an order a plan left out, found by the clock instead of by a plan: its day is here.
-        await this.tell(l.shipperDid, { kind: 'order_left_out', title: `${l.fleetName} has not put ${l.code} on a vehicle, and it is for today`, body: `${l.code} was ordered for ${l.day}. The day’s work has begun, and ${l.fleetName} has it on no vehicle. Speak to ${l.fleetName} now.`, tag: `left:${l.code}:${l.day}:today`, data });
+        await this.tell(l.shipperDid, { kind: 'order_left_out', ...noticeOf(said('dispatch.late.unplanned.title', { fleet: l.fleetName, code: l.code }), said('dispatch.late.unplanned.body', { code: l.code, day: day(l.day, l.day), fleet: l.fleetName })), tag: `left:${l.code}:${l.day}:today`, data });
       } else if (l.what === 'hour') {
-        await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} is running late`, body: `${l.fleetName} planned to be at the door about ${l.arrive} and has not delivered it. ${where} A plan’s time is an estimate; speak to ${l.fleetName} if you need to know more.`, tag: `late:${l.code}:hour`, data });
+        await this.tell(l.shipperDid, { kind: 'order_late', ...noticeOf(said('dispatch.late.hour.title', { code: l.code }), said('dispatch.late.hour.body', { fleet: l.fleetName, arrive: String(l.arrive), where })), tag: `late:${l.code}:hour`, data });
       } else {
-        await this.tell(l.shipperDid, { kind: 'order_late', title: `${l.code} did not arrive on ${l.day}`, body: `It was ordered for that day, and ${l.fleetName} has not delivered it. ${where} Speak to ${l.fleetName} now.`, tag: `late:${l.code}:day`, data });
+        await this.tell(l.shipperDid, { kind: 'order_late', ...noticeOf(said('dispatch.late.day.title', { code: l.code, day: day(l.day, l.day) }), said('dispatch.late.day.body', { fleet: l.fleetName, where })), tag: `late:${l.code}:day`, data });
       }
     }
     return due.length;
@@ -1392,8 +1500,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           if (parcel.vendorId) this.vendors.notify(parcel.vendorId, 'parcel.late', { parcelId: parcel.parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, promisedAt: late.promisedAt, lateHours: late.lateHours });
           continue;
         }
-        const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
-        const ago = lateWords(late.lateHours);
+        const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch.thePickupPoint');
+        const ago = lateSaid(late.lateHours);
         const where = PARCEL_WHERE[late.where];
         const seen = new Set<string>();
         // A store's order: the buyer is told, and the store hears on its systems. A person's send: both people.
@@ -1405,8 +1513,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           try {
             await this.notifications.notify(person.personDid, {
               kind: 'parcel_late',
-              title: side === 'receiver' ? 'Your parcel is running late' : 'A parcel you sent is running late',
-              body: side === 'receiver' ? `It should have been ready at ${shop} about ${ago} ago. ${where} You are told when it is ready to collect.` : `It should have been ready at ${shop} about ${ago} ago. ${where} Its tracking page shows where it is.`,
+              ...noticeOf(
+                side === 'receiver' ? said('dispatch.parcelLate.receiver.title') : said('dispatch.parcelLate.sender.title'),
+                side === 'receiver' ? said('dispatch.parcelLate.receiver.body', { shop, ago, where }) : said('dispatch.parcelLate.sender.body', { shop, ago, where }),
+              ),
               link: `/?parcel=${parcel.parcelId}`,
               tag: `parcel-late:${parcel.parcelId}`,
               data: { parcelId: parcel.parcelId },
@@ -1433,11 +1543,11 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const parcel = this.parcels.get(p.parcelId);
       if (!['At_PUDO', 'On_Bus', 'At_MDP'].includes(parcel.status)) return; // ready, or no longer on its way: nothing to warn of
       const hoursLater = Math.round(((Date.parse(p.expectedAt) - Date.parse(p.promisedAt)) / 3_600_000) * 10) / 10;
-      const later = lateWords(hoursLater);
+      const later = lateSaid(hoursLater);
       // 2026-11-06 — a store's own system hears it too, before the time comes (the owner: "go ahead"); a business's hears it
       // on its own (BusinessHooksService, parcel.delayed). parcel.late still follows when the time has passed.
       if (parcel.vendorId) this.vendors.notify(parcel.vendorId, 'parcel.delayed', { parcelId: parcel.parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, promisedAt: p.promisedAt, expectedAt: p.expectedAt, hoursLater });
-      const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the pickup point';
+      const shop = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch.thePickupPoint');
       const seen = new Set<string>();
       const sides = parcel.vendorId ? [['receiver', this.parcels.receiverOf(parcel)] as const] : ([['receiver', this.parcels.receiverOf(parcel)], ['sender', this.parcels.senderOf(parcel)]] as const);
       for (const [side, who] of sides) {
@@ -1446,8 +1556,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         seen.add(person.personDid);
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_late',
-          title: side === 'receiver' ? 'Your parcel is running late' : 'A parcel you sent is running late',
-          body: side === 'receiver' ? `It is now expected at ${shop} about ${later} later than we said. You are told when it is ready to collect.` : `It is now expected at ${shop} about ${later} later than we said. Its tracking page shows where it is.`,
+          ...noticeOf(
+            side === 'receiver' ? said('dispatch.parcelLate.receiver.title') : said('dispatch.parcelLate.sender.title'),
+            side === 'receiver' ? said('dispatch.expectedLate.receiver.body', { shop, later }) : said('dispatch.expectedLate.sender.body', { shop, later }),
+          ),
           link: `/?parcel=${parcel.parcelId}`,
           tag: `parcel-late:${parcel.parcelId}:expected`,
           data: { parcelId: parcel.parcelId },
@@ -1475,16 +1587,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           const person = accountFor(who, this.persons);
           if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
           seen.add(person.personDid);
-          const yours = side === 'receiver' ? 'Your parcel' : 'A parcel you sent';
+          const yours = side === 'receiver' ? said('dispatch.yourParcel') : said('dispatch.aParcelYouSent');
           await this.notifications.notify(person.personDid, {
             kind: what === 'held' ? 'parcel_late' : 'parcel_moving',
-            title: what === 'held' ? `${yours} is held up` : `${yours} is on the road again`,
-            body:
+            ...noticeOf(
+              what === 'held' ? said('dispatch.bagHeld.held.title', { yours }) : said('dispatch.bagHeld.moving.title', { yours }),
               what === 'held'
-                ? `It is waiting at ${p.place} for a driver, and none has been able to take it on yet. You are told as soon as it is on the road again.`
+                ? said('dispatch.bagHeld.held.body', { place: p.place })
                 : side === 'receiver'
-                  ? `A driver has taken it on from ${p.place}. You are told when it is ready to collect.`
-                  : `A driver has taken it on from ${p.place}. Its tracking page shows where it is.`,
+                  ? said('dispatch.bagHeld.moving.receiverBody', { place: p.place })
+                  : said('dispatch.bagHeld.moving.senderBody', { place: p.place }),
+            ),
             link: `/?parcel=${parcelId}`,
             tag: `parcel-${what}:${parcelId}`,
             data: { parcelId },
@@ -1499,18 +1612,24 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** A load reached the other end. Whoever sent it hears it once, with who signed for it — and (D9) what they found not as the note says. */
   private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }>; timing?: DeliveryTiming; orderedFor?: string; refusedPart?: { packages: number; of: number; decideBy: string; pickupLabel?: string } }): Promise<void> {
     if (!p.posterDid) return;
-    const when = p.timing ? ` at ${p.timing.at}` : '';
-    const goods = p.description ? `: ${p.description.replace(/\.+$/, '')}` : '';
     // What the receiver found — and, said apart, a part it refused (2026-10-27): the sender decides where those go.
     const found = (p.exceptions ?? []).filter((e) => e.kind !== 'refused');
     const r = p.refusedPart;
-    const refused = r
-      ? ` ${r.packages} of the ${r.of} packages were refused: the driver keeps them until you say where they go — back to ${r.pickupLabel ?? 'where they were picked up'}, to another place, or given up — you pay the way. With no answer ${byWords(r.decideBy)}, they go back to ${r.pickupLabel ?? 'where they were picked up'}, at your cost.`
-      : '';
+    const pickup = r?.pickupLabel ?? said('dispatch2.freightDelivered.pickedUpWhere');
     await this.tell(p.posterDid, {
       kind: r ? 'freight_problem' : 'freight_delivered',
-      title: r ? `${p.code} was delivered — ${r.packages} of ${r.of} packages refused` : `${p.code} was delivered`,
-      body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}${found.length ? ` The receiver found ${exceptionsInWords(found)}: it is on the consignment note.` : ''}${refused}`,
+      ...noticeOf(
+        r ? said('dispatch2.freightDelivered.titleRefused', { code: p.code, packages: r.packages, total: r.of }) : said('dispatch2.freightDelivered.title', { code: p.code }),
+        said('dispatch2.freightDelivered.body', {
+          when: p.timing ? said('dispatch2.freightDelivered.when', { time: p.timing.at }) : '',
+          receiver: p.receivedBy ? said('dispatch2.freightDelivered.to', { name: p.receivedBy }) : '',
+          place: p.destLabel ? said('dispatch2.freightDelivered.at', { place: p.destLabel }) : '',
+          goods: p.description ? said('dispatch2.freightDelivered.goods', { goods: p.description.replace(/\.+$/, '') }) : '',
+          timing: againstSaid(p.timing, p.orderedFor),
+          found: found.length ? said('dispatch2.freightDelivered.found', { found: foundSaid(found) }) : '',
+          refused: r ? said('dispatch2.freightDelivered.refused', { packages: r.packages, total: r.of, pickup, deadline: said('dispatch2.byWhen', { when: at(byWords(r.decideBy).slice(3), r.decideBy) }) }) : '',
+        }),
+      ),
       tag: `freight:${p.freightId}:delivered`,
       data: { freightId: p.freightId },
       link: loadLink(p.freightId),
@@ -1519,33 +1638,36 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {
     const many = p.count !== 1;
-    const what = many ? `${p.count} orders` : (p.code ?? '1 order');
-    const size = p.weightKg >= 1000 ? `${Math.round(p.weightKg / 100) / 10} t` : `${p.weightKg} kg`;
-    const when = p.days.length === 1 ? `for ${p.days[0]}` : p.days.length ? `for ${p.days[0]} to ${p.days[p.days.length - 1]}` : '';
+    const orders = many ? said('dispatch2.orderHandedOn.manyOrders', { count: p.count }) : (p.code ?? said('dispatch2.orderHandedOn.oneOrder'));
+    const size = p.weightKg >= 1000 ? said('dispatch2.orderHandedOn.tonnes', { n: Math.round(p.weightKg / 100) / 10 }) : said('dispatch2.orderHandedOn.kg', { n: p.weightKg });
+    const when = p.days.length === 1 ? said('dispatch2.orderHandedOn.daysOne', { day: day(p.days[0], p.days[0]) }) : p.days.length ? said('dispatch2.orderHandedOn.daysRange', { from: day(p.days[0], p.days[0]), to: day(p.days[p.days.length - 1], p.days[p.days.length - 1]) }) : '';
+    const sizeWhen = said('dispatch2.orderHandedOn.sizeWhen', { size, when });
     const tag = `handon:${p.fromFleetDid}:${p.what}:${p.code ?? p.days.join(',')}`;
     const data = { what: p.what, count: p.count };
     // Every side of it is a fleet's, and every side is planned under Orders.
     const link = '/?go=orders';
     if (p.what === 'offered') {
       for (const to of p.toFleetDids ?? []) {
-        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} offers you ${many ? what : 'an order'}`, body: `${size} ${when}. Take ${many ? 'them' : 'it'} or leave ${many ? 'them' : 'it'} under Orders — the first fleet to take an order carries it.`, tag, data, link });
+        await this.tell(to, { kind: 'order_handed_on', ...(many ? noticeOf(said('dispatch2.orderHandedOn.offeredMany.title', { fleet: p.fromFleetName, orders }), said('dispatch2.orderHandedOn.offeredMany.body', { sizeWhen })) : noticeOf(said('dispatch2.orderHandedOn.offeredOne.title', { fleet: p.fromFleetName }), said('dispatch2.orderHandedOn.offeredOne.body', { sizeWhen }))), tag, data, link });
       }
     } else if (p.what === 'withdrawn') {
       for (const to of p.toFleetDids ?? []) {
-        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} took back an offer`, body: `${what}, ${size} ${when}, is no longer on offer to you.`, tag, data, link });
+        await this.tell(to, { kind: 'order_handed_on', ...noticeOf(said('dispatch2.orderHandedOn.withdrawn.title', { fleet: p.fromFleetName }), said('dispatch2.orderHandedOn.withdrawn.body', { orders, sizeWhen })), tag, data, link });
       }
     } else if (p.what === 'taken') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} took ${what}`, body: `${size} ${when}. It is theirs to plan and carry now; you still see it under Orders.`, tag, data, link });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', ...noticeOf(said('dispatch2.orderHandedOn.taken.title', { partner: p.partnerName ?? 'undefined', orders }), said('dispatch2.orderHandedOn.taken.body', { sizeWhen })), tag, data, link });
     } else if (p.what === 'ran_out') {
       // A partner that was passing an order on cannot put it on the open board: that is the fleet's it was ordered from.
-      const next = p.onward ? 'It is still yours to carry — or to give back to the fleet you took it from.' : 'It is back with you without a truck — the open board is the next step.';
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. ${next}`, tag, data, link });
+      const next = p.onward ? said('dispatch2.orderHandedOn.ranOut.onward') : said('dispatch2.orderHandedOn.ranOut.noTruck');
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', ...noticeOf(said('dispatch2.orderHandedOn.ranOut.title', { orders }), said('dispatch2.orderHandedOn.ranOut.body', { sizeWhen, next })), tag, data, link });
     } else if (p.what === 'passed_on') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.viaName} passed ${what} on to ${p.partnerName}`, body: `${size} ${when}. ${p.partnerName} carries ${many ? 'them' : 'it'} now, as you allowed; you still see ${many ? 'them' : 'it'} under Orders.`, tag, data, link });
+      const via = p.viaName ?? 'undefined';
+      const partner = p.partnerName ?? 'undefined';
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', ...(many ? noticeOf(said('dispatch2.orderHandedOn.passedMany.title', { via, orders, partner }), said('dispatch2.orderHandedOn.passedMany.body', { sizeWhen, partner })) : noticeOf(said('dispatch2.orderHandedOn.passedOne.title', { via, orders, partner }), said('dispatch2.orderHandedOn.passedOne.body', { sizeWhen, partner }))), tag, data, link });
     } else if (p.what === 'lapsed') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} no longer lets you pass its orders on`, body: `${what}, ${size} ${when}: your offer to your own partners was taken back. ${many ? 'They are' : 'It is'} still yours to carry, or to give back.`, tag, data, link });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', ...noticeOf(said('dispatch2.orderHandedOn.lapsed.title', { partner: p.partnerName ?? 'undefined' }), said(many ? 'dispatch2.orderHandedOn.lapsedMany.body' : 'dispatch2.orderHandedOn.lapsedOne.body', { orders, sizeWhen })), tag, data, link });
     } else {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} gave ${what} back`, body: `${size} ${when}. They said: ${p.reason ?? 'no reason given'}. It is back with you without a truck.`, tag, data, link });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', ...noticeOf(said('dispatch2.orderHandedOn.gaveBack.title', { partner: p.partnerName ?? 'undefined', orders }), said('dispatch2.orderHandedOn.gaveBack.body', { sizeWhen, reason: p.reason ?? said('dispatch2.orderHandedOn.noReason') })), tag, data, link });
     }
   }
 
@@ -1553,8 +1675,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onSpaceSold(p: SpaceSold): Promise<void> {
     await this.tell(p.managerDid, {
       kind: 'space_sold',
-      title: `Space sold on ${p.lineName}`,
-      body: `${p.weightKg} kg — ${p.description}, for ${p.price} ${p.currency}. It is on the run under Runs.`,
+      ...noticeOf(said('dispatch2.spaceSold.title', { line: p.lineName }), said('dispatch2.spaceSold.body', { weight: p.weightKg, description: p.description, price: money(`${p.price} ${p.currency}`, p.price, p.currency) })),
       tag: `departure:${p.departureId}:booking:${p.bookingId}`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
       link: '/?go=runs',
@@ -1572,8 +1693,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (p.by === p.shipperDid) {
       await this.tell(p.managerDid, {
         kind: 'load_cancelled',
-        title: `Space given back on ${p.lineName}`,
-        body: `The shipper cancelled ${p.description}. That space is for sale again.`,
+        ...noticeOf(said('dispatch2.givenBack.shipper.title', { line: p.lineName }), said('dispatch2.givenBack.shipper.body', { description: p.description })),
         // The fleet's runs, where the space is for sale again.
         link: '/?go=runs',
         tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
@@ -1583,13 +1703,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // The side that used to reach nobody: the carrier took the space back, and the shipper's goods are not
       // going. WITH the carrier's reason — and the next step depends on it: goods that are not what was booked
       // can be booked again as what they are; every other reason means finding another truck.
-      const why = GIVE_BACK_WORDS[p.reason ?? ''] ?? '';
-      const said = [why, p.note ? `“${p.note}”` : ''].filter(Boolean).join(' — ');
-      const next = p.reason === 'goods_not_as_booked' ? 'Book again with what you are actually sending.' : 'Your goods will not travel on that run — you will need another truck.';
+      const why = givenBackSaid(p.reason);
+      const note = p.note ? `“${p.note}”` : '';
+      const reasonWords = why && note ? said('dispatch2.givenBack.joined', { words: why, note }) : why || note;
+      const next = p.reason === 'goods_not_as_booked' ? said('dispatch2.givenBack.nextAgain') : said('dispatch2.givenBack.nextTruck');
       await this.tell(p.shipperDid, {
         kind: 'load_cancelled',
-        title: `${p.company} cancelled your booking`,
-        body: `${p.company} gave back the space for ${p.description} on ${p.lineName}${said ? `: ${said}` : ''}. ${next}`,
+        ...noticeOf(
+          said('dispatch2.givenBack.carrier.title', { company: p.company }),
+          said('dispatch2.givenBack.carrier.body', { company: p.company, description: p.description, line: p.lineName, why: reasonWords ? said('dispatch2.givenBack.why', { reason: reasonWords }) : '', next }),
+        ),
         link: runLink(p.departureId, p.bookingId),
         tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
         data: { departureId: p.departureId, bookingId: p.bookingId },
@@ -1600,11 +1723,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** A claim was opened on a load the fleet carried. The carrier is the one who has to answer it. */
   private async onRunClaimOpened(p: RunClaimOpened): Promise<void> {
     if (p.shipperDid === p.managerDid) return; // the fleet's own load: nobody here to tell
-    const what = p.kind === 'damaged' ? 'Damaged' : p.kind === 'short' ? 'Short — less arrived than was loaded' : 'Not received';
+    const what = p.kind === 'damaged' ? said('dispatch2.claimOpened.damaged') : p.kind === 'short' ? said('dispatch2.claimOpened.short') : said('dispatch2.claimOpened.notReceived');
     await this.tell(p.managerDid, {
       kind: 'claim_opened',
-      title: `A claim on ${p.load}`,
-      body: `${what}: ${p.description}${p.amount != null ? ` — they put it at ${p.amount} ${p.currency}` : ''}. Answer it under Runs: accept it, or refuse it with your reason.`,
+      ...noticeOf(
+        said('dispatch2.claimOpened.title', { load: p.load }),
+        said('dispatch2.claimOpened.body', { what, description: p.description, amount: p.amount != null ? said('dispatch2.claimOpened.amount', { amount: money(`${p.amount} ${p.currency}`, p.amount, p.currency) }) : '' }),
+      ),
       tag: `departure:${p.departureId}:claim:${p.bookingId}`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
       // Where it is answered: the fleet app's Runs.
@@ -1620,8 +1745,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (p.shipperDid === p.managerDid) return;
     await this.tell(p.shipperDid, {
       kind: 'claim_answered',
-      title: `${p.company} ${p.answer === 'accepted' ? 'accepted' : 'refused'} your claim`,
-      body: `On ${p.load}${p.note ? `: “${p.note}”` : '.'} This is the carrier’s answer, kept with the consignment note — SeeBuyGet does not decide claims.`,
+      ...noticeOf(
+        said(p.answer === 'accepted' ? 'dispatch2.claimAnswered.accepted.title' : 'dispatch2.claimAnswered.refused.title', { company: p.company }),
+        p.note ? said('dispatch2.claimAnswered.withNote.body', { load: p.load, note: p.note }) : said('dispatch2.claimAnswered.body', { load: p.load }),
+      ),
       link: runLink(p.departureId, p.bookingId),
       tag: `departure:${p.departureId}:claim:${p.bookingId}:answered`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
@@ -1638,8 +1765,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const shipperDid of p.shippers) {
       await this.tell(shipperDid, {
         kind: 'load_assigned',
-        title: `A different vehicle on ${p.lineName}`,
-        body: `${p.company} put another vehicle on the run your goods are booked on: it now goes on a ${p.toClass} instead of a ${p.fromClass}. Your booking stands.`,
+        ...noticeOf(said('dispatch2.vehicleChanged.title', { line: p.lineName }), said('dispatch2.vehicleChanged.body', { company: p.company, to: p.toClass, from: p.fromClass })),
         link: runLink(p.departureId),
         tag: `departure:${p.departureId}:vehicle`,
         data: { departureId: p.departureId },
@@ -1649,11 +1775,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /** A document the fleet sent for its own licence or cover was read. Accepted, or not — with the reason. */
   private async onFleetPaperChecked(p: FleetPaperChecked): Promise<void> {
-    const paper = p.kind === 'operator_licence' ? 'operator licence' : 'carrier insurance';
+    const paper = p.kind === 'operator_licence' ? said('dispatch2.paperChecked.operatorLicence') : said('dispatch2.paperChecked.carrierInsurance');
+    const reason = (p.reason ?? '').trimStart();
     await this.tell(p.did, {
       kind: 'papers_checked',
-      title: p.accepted ? `Your ${paper} is recorded` : `Your ${paper} was not accepted`,
-      body: p.accepted ? `Recorded to ${p.expiresAt ? paperDay(p.expiresAt) : 'its new date'}.` : `${p.reason ?? ''} Send it again from the dashboard.`.trim(),
+      ...(p.accepted
+        ? noticeOf(said('dispatch2.paperChecked.recorded.title', { paper }), said('dispatch2.paperChecked.recorded.body', { date: p.expiresAt ? paperDay(p.expiresAt) : said('dispatch2.paperChecked.itsNewDate') }))
+        : noticeOf(said('dispatch2.paperChecked.refused.title', { paper }), reason.trim() ? said('dispatch2.paperChecked.refused.body', { reason }) : said('dispatch2.paperChecked.refusedNoReason.body'))),
       tag: `papers:${p.did}:${p.kind}:checked`,
       data: { kind: p.kind },
     });
@@ -1667,16 +1795,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onDriverChangedFleet(p: FleetChange): Promise<void> {
     await this.tell(p.toManagerDid, {
       kind: 'roster_changed',
-      title: `${p.driverName} joined your fleet`,
-      body: `${p.driverName} said yes to your offer and now drives for ${p.toCompany}. Their licence and their past trips came with them — check their papers under Drivers.`,
+      ...noticeOf(said('dispatch2.fleetChange.joined.title', { driver: p.driverName }), said('dispatch2.fleetChange.joined.body', { driver: p.driverName, company: p.toCompany })),
       tag: `driver:${p.driverDid}:joined`,
       data: { driverDid: p.driverDid },
     });
     if (!p.fromManagerDid) return;
     await this.tell(p.fromManagerDid, {
       kind: 'roster_changed',
-      title: `${p.driverName} left your fleet`,
-      body: `${p.driverName} now drives for another fleet. Every trip they did for you stays in your records and on your earnings statement.`,
+      ...noticeOf(said('dispatch2.fleetChange.left.title', { driver: p.driverName }), said('dispatch2.fleetChange.left.body', { driver: p.driverName })),
       tag: `driver:${p.driverDid}:left`,
       data: { driverDid: p.driverDid },
     });
@@ -1686,8 +1812,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onFleetOfferMade(p: FleetOfferMade): Promise<void> {
     await this.tell(p.driverDid, {
       kind: 'fleet_offer',
-      title: `${p.companyName} offers you a place in their fleet`,
-      body: `Open “Your fleet” in the app to say yes or no. The offer is open until ${offerDay(p.expiresAt)}, and nothing changes unless you say yes.`,
+      ...noticeOf(said('dispatch2.fleetOffer.made.title', { company: p.companyName }), said('dispatch2.fleetOffer.made.body', { until: day(offerDay(p.expiresAt), ymdOf(p.expiresAt)) })),
       tag: `fleet-offer:${p.offerId}`,
       data: { offerId: p.offerId, fleetDid: p.fleetDid },
     });
@@ -1699,8 +1824,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // By the number the office typed, and no more: until somebody says yes, a number names nobody to a fleet.
       await this.tell(p.fleetDid, {
         kind: 'roster_changed',
-        title: `The driver on •••${p.phoneEnding} said no`,
-        body: 'They turned down your offer of a place. Nothing changed on your roster.',
+        ...noticeOf(said('dispatch2.fleetOffer.declined.title', { ending: p.phoneEnding }), said('dispatch2.fleetOffer.declined.body')),
         tag: `fleet-offer:${p.offerId}`,
         data: { offerId: p.offerId },
       });
@@ -1708,8 +1832,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
     await this.tell(p.driverDid, {
       kind: 'fleet_offer',
-      title: `${p.companyName} took back its offer`,
-      body: 'The place they offered you is no longer open. Nothing changed for you.',
+      ...noticeOf(said('dispatch2.fleetOffer.withdrawn.title', { company: p.companyName }), said('dispatch2.fleetOffer.withdrawn.body')),
       tag: `fleet-offer:${p.offerId}`,
       data: { offerId: p.offerId },
     });
@@ -1725,18 +1848,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // THE DRIVER LEFT. Nobody took them off, and neither notice says somebody did. The office is told what it now
       // has to do — the runs with nobody on them — because it was not asked and may not be looking.
       const runs = p.runs ?? [];
-      const crew = runs.length === 1 ? ` They were on the ${runs[0]} run: it has no driver now.` : runs.length > 1 ? ` They were on ${runs.length} of your runs (${runs.join(', ')}): those have no driver now.` : '';
+      const crew = runs.length === 1 ? said('dispatch2.driverLeft.crewOne', { run: runs[0] }) : runs.length > 1 ? said('dispatch2.driverLeft.crewMany', { count: runs.length, runs: runs.join(', ') }) : '';
       await this.tell(p.driverDid, {
         kind: 'roster_changed',
-        title: `You left ${p.companyName}`,
-        body: 'Your trips, papers and ratings stay yours. To drive again, a fleet has to offer you a place — give its office the phone number you sign in with.',
+        ...noticeOf(said('dispatch2.driverLeft.own.title', { company: p.companyName }), said('dispatch2.driverLeft.stayYours')),
         tag: `driver:${p.driverDid}:removed`,
         data: { fleetDid: p.fleetDid },
       });
       await this.tell(p.fleetDid, {
         kind: 'roster_changed',
-        title: `${p.driverName} left your fleet`,
-        body: `${p.driverName} left ${p.companyName} by their own choice.${crew} Every trip they did for you stays in your records and on your earnings statement.`,
+        ...noticeOf(said('dispatch2.fleetChange.left.title', { driver: p.driverName }), said('dispatch2.driverLeft.own.fleetBody', { driver: p.driverName, company: p.companyName, crew })),
         tag: `driver:${p.driverDid}:removed`,
         data: { driverDid: p.driverDid },
       });
@@ -1744,15 +1865,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
     await this.tell(p.driverDid, {
       kind: 'roster_changed',
-      title: `${p.companyName} took you off their fleet`,
-      body: `${removalSentence(p)} Your trips, papers and ratings stay yours. To drive again, a fleet has to offer you a place — give its office the phone number you sign in with.`.trim(),
+      ...noticeOf(
+        said('dispatch2.driverLeft.removed.title', { company: p.companyName }),
+        removalSaid(p) ? said('dispatch2.driverLeft.removed.body', { reason: removalSaid(p) }) : said('dispatch2.driverLeft.stayYours'),
+      ),
       tag: `driver:${p.driverDid}:removed`,
       data: { fleetDid: p.fleetDid },
     });
     await this.tell(p.fleetDid, {
       kind: 'roster_changed',
-      title: `${p.driverName} is off your fleet`,
-      body: `${p.driverName} no longer drives for ${p.companyName}. Every trip they did for you stays in your records and on your earnings statement.`,
+      ...noticeOf(said('dispatch2.driverLeft.fleetOff.title', { driver: p.driverName }), said('dispatch2.driverLeft.fleetOff.body', { driver: p.driverName, company: p.companyName })),
       tag: `driver:${p.driverDid}:removed`,
       data: { driverDid: p.driverDid },
     });
@@ -1762,8 +1884,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onVehicleSuggested(p: { driverDid: string; plate: string; vehicleClass: string }): Promise<void> {
     await this.tell(p.driverDid, {
       kind: 'vehicle_today',
-      title: `Your vehicle today: ${p.plate}`,
-      body: `Your fleet office put ${p.plate} (${p.vehicleClass}) at the top of your list. Your shift starts when you start it, with your PIN.`,
+      ...noticeOf(said('dispatch2.vehicleToday.title', { plate: p.plate }), said('dispatch2.vehicleToday.body', { plate: p.plate, vehicleClass: p.vehicleClass })),
       tag: `vehicle-today:${p.driverDid}`,
       data: { plate: p.plate },
       // Its shift starts on the home screen, with that vehicle.
@@ -1776,9 +1897,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * one who can do anything about it, so they hear it in every inbox they read: their own and each driver record they
    * sign in as. Never a fleet's: a fleet's inbox is shared by its managers, and one person's PIN is nobody else's.
    */
-  private async onSignInChanged(p: { personDid: string; driverDids: string[] }, what: string, title: string, body: string): Promise<void> {
+  private async onSignInChanged(p: { personDid: string; driverDids: string[] }, what: string, title: string, body: string, say?: ReturnType<typeof noticeOf>['say']): Promise<void> {
     for (const to of [p.personDid, ...p.driverDids]) {
-      await this.tell(to, { kind: 'security', title, body, tag: `${what}:${p.personDid}`, data: {} });
+      await this.tell(to, { kind: 'security', title, body, ...(say ? { say } : {}), tag: `${what}:${p.personDid}`, data: {} });
     }
   }
 
@@ -1786,8 +1907,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const to of [p.personDid, ...p.driverDids]) {
       await this.tell(to, {
         kind: 'security',
-        title: 'Your PIN was locked',
-        body: 'Someone typed a wrong PIN five times for your number, so nobody can sign in with it now. To sign in again, verify your phone by code and choose a new PIN. If it was not you, somebody knows your number: choose a PIN they cannot guess.',
+        ...noticeOf(said('dispatch2.pinLocked.title'), said('dispatch2.pinLocked.body')),
         tag: `pin-locked:${p.personDid}`,
         data: {},
       });
@@ -1804,29 +1924,29 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const s = p?.session;
     if (!s) return;
     const minutes = p.minutes ?? 15;
-    const where = p.lastPoint ? ` Last heard at ${p.lastPoint.lat.toFixed(5)}, ${p.lastPoint.lng.toFixed(5)}.` : '';
+    const where = p.lastPoint ? said('dispatch2.signalLost.where', { lat: p.lastPoint.lat.toFixed(5), lng: p.lastPoint.lng.toFixed(5) }) : '';
     const tag = `telematics:${s.sessionId}:lost`;
     const data = { sessionId: s.sessionId, plate: s.plate, minutes };
-    await this.tell(s.driverDid, { kind: 'telematics_signal_lost', title: `Your position has not reached us for ${minutes} minutes`, body: `You are in Romania, where RO e-Transport follows a load by its position. Check that the phone has signal and its location is on, and keep the Driver app open.${where}`, link: '/?go=home', tag, data });
-    if (s.fleetDid) await this.tell(s.fleetDid, { kind: 'telematics_signal_lost', title: `${s.plate}: no position for ${minutes} minutes in Romania`, body: `RO e-Transport follows its load by its position. Call the driver, and check your GPS system is sending.${where}`, tag, data });
+    await this.tell(s.driverDid, { kind: 'telematics_signal_lost', ...noticeOf(said('dispatch2.signalLost.driver.title', { minutes }), said('dispatch2.signalLost.driver.body', { where })), link: '/?go=home', tag, data });
+    if (s.fleetDid) await this.tell(s.fleetDid, { kind: 'telematics_signal_lost', ...noticeOf(said('dispatch2.signalLost.fleet.title', { plate: s.plate, minutes }), said('dispatch2.signalLost.fleet.body', { where })), tag, data });
   }
 
   /** 2026-11-24 — the bell for a code running out (FiscalCodeSweeper): one tag per code, so each is told once on each phone. */
   private async onFiscalCodeExpiring(p: FiscalCodeExpiring): Promise<void> {
     if (!p?.freightId) return;
-    const country = p.country === 'RO' ? 'Romania' : 'Bulgaria';
+    const country = p.country === 'RO' ? said('dispatch2.fiscal.country.RO') : said('dispatch2.fiscal.country.BG');
     const zone = p.country === 'RO' ? 'Europe/Bucharest' : 'Europe/Sofia';
-    const when = `${new Date(p.expiresAt).toLocaleString('en-GB', { timeZone: zone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} (${country}’s time)`;
-    const title = p.expired ? `Load ${p.code}: its ${p.kind} code for ${country} has run out` : `Load ${p.code}: its ${p.kind} code for ${country} runs out within a day`;
-    const ends = `${p.kind} ${p.fiscalCode} ${p.expired ? 'ran out' : 'runs out'} at ${when}.`;
+    const when = said('dispatch2.fiscal.when', { time: at(new Date(p.expiresAt).toLocaleString('en-GB', { timeZone: zone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), p.expiresAt, zone), country });
+    const title = p.expired ? said('dispatch2.fiscal.expired.title', { code: p.code, kind: p.kind, country }) : said('dispatch2.fiscal.expiring.title', { code: p.code, kind: p.kind, country });
+    const ends = said(p.expired ? 'dispatch2.fiscal.ranOut' : 'dispatch2.fiscal.runsOut', { kind: p.kind, fiscalCode: p.fiscalCode, when });
     const tag = `fiscal:${p.freightId}:${p.country}:${p.fiscalCode}`;
     const data = { freightId: p.freightId, country: p.country, code: p.fiscalCode, expiresAt: p.expiresAt };
-    if (p.senderDid) await this.tell(p.senderDid, { kind: 'fiscal_code_expiring', title, body: `${ends} Give a new one on the load: without it the goods are not taken over${p.country === 'RO' ? ', and a driver in Romania may be fined' : ''}.`, link: loadLink(p.freightId), tag, data });
-    if (p.driverDid) await this.tell(p.driverDid, { kind: 'fiscal_code_expiring', title, body: `${ends} The sender is asked for a new one; it shows on the load once given.`, link: '/?go=loads', tag, data });
-    if (p.fleetDid) await this.tell(p.fleetDid, { kind: 'fiscal_code_expiring', title, body: `${ends} The sender is asked for a new one.`, tag, data });
+    if (p.senderDid) await this.tell(p.senderDid, { kind: 'fiscal_code_expiring', ...noticeOf(title, said('dispatch2.fiscal.sender.body', { ends, fine: p.country === 'RO' ? said('dispatch2.fiscal.fine') : '' })), link: loadLink(p.freightId), tag, data });
+    if (p.driverDid) await this.tell(p.driverDid, { kind: 'fiscal_code_expiring', ...noticeOf(title, said('dispatch2.fiscal.driver.body', { ends })), link: '/?go=loads', tag, data });
+    if (p.fleetDid) await this.tell(p.fleetDid, { kind: 'fiscal_code_expiring', ...noticeOf(title, said('dispatch2.fiscal.fleet.body', { ends })), tag, data });
   }
 
-  private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown>; link?: string }): Promise<void> {
+  private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; say?: ReturnType<typeof noticeOf>['say']; tag: string; data: Record<string, unknown>; link?: string }): Promise<void> {
     try {
       await this.notifications.notify(to, { ...n, link: n.link ?? '/' });
     } catch (err) {
@@ -1840,8 +1960,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.shipperDid, {
         kind: 'freight_delivered',
-        title: `Delivered in ${payload.destZone}`,
-        body: `${payload.company} handed over ${payload.description}${payload.receivedBy ? ` to ${payload.receivedBy}` : ''}.`,
+        ...noticeOf(
+          said('dispatch2.departureDelivered.title', { zone: payload.destZone }),
+          payload.receivedBy ? said('dispatch2.departureDelivered.bodyTo', { company: payload.company, description: payload.description, receiver: payload.receivedBy }) : said('dispatch2.departureDelivered.body', { company: payload.company, description: payload.description }),
+        ),
         link: runLink(payload.departureId),
         tag: `departure:${payload.departureId}:delivered`,
         data: { departureId: payload.departureId },
@@ -1906,11 +2028,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // Asked once. The tag below folds a repeat on the phone; the bell keeps every notice, so it is looked for there.
       const asked = this.notifications.inboxFor(person.personDid).some((n) => n.kind === 'store_rate' && (n.data as { parcelId?: string } | undefined)?.parcelId === parcel.parcelId);
       if (asked) return;
-      const store = this.merchants.storeOf(parcel)?.name ?? 'the store';
+      const store = this.merchants.storeOf(parcel)?.name ?? said('dispatch2.storeRate.theStore');
       await this.notifications.notify(person.personDid, {
         kind: 'store_rate',
-        title: `How was your order from ${store}?`,
-        body: 'Two taps: what was right, and what was not. It goes on the store’s public record, beside what we measured.',
+        ...noticeOf(said('dispatch2.storeRate.title', { store }), said('dispatch2.storeRate.body')),
         // The parcel, where the rating is — one tap from the notice to the stars.
         link: `/?parcel=${parcel.parcelId}`,
         tag: `store-rate:${parcel.parcelId}`,
@@ -1940,8 +2061,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (person) {
         await this.notifications.notify(person.personDid, {
           kind: 'load_code',
-          title: `A load is coming to you: ${f.code}`,
-          body: `${f.description}. Your delivery code is on it in My parcels: give it to the driver when they hand it over.`,
+          ...noticeOf(said('dispatch2.loadCode.title', { code: f.code }), said('dispatch2.loadCode.body', { description: f.description })),
           link: '/?screen=parcels',
           tag: `load-code:${freightId}`,
           data: { freightId },
@@ -1988,11 +2108,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!person) return;
       const told = this.notifications.inboxFor(person.personDid, 500).some((n) => n.kind === 'parcel_on_way' && (n.data as { parcelId?: string } | undefined)?.parcelId === parcelId);
       if (told) return;
-      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch2.yourPickupPoint');
       await this.notifications.notify(person.personDid, {
         kind: 'parcel_on_way',
-        title: 'Your parcel is on its way',
-        body: `On the road to ${where}. Open it to see who has it now.`,
+        ...noticeOf(said('dispatch2.parcelOnWay.title'), said('dispatch2.parcelOnWay.body', { where })),
         link: `/?parcel=${parcelId}`,
         tag: `on-way:${parcelId}`,
         data: { parcelId },
@@ -2014,35 +2133,44 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const b = p.border;
       const c = b?.clearance;
       if (!b || !c) return;
-      const shop = this.shopName(p.destAgentDid) ?? 'their shop';
-      const ours = b.due ? `${b.due.total.toFixed(2)} ${b.due.currency}` : undefined;
-      const owe = c.amount != null ? `${c.amount.toFixed(2)} ${c.currency ?? ''}`.trim() : '';
-      const payBy = c.payBy ? c.payBy.slice(0, 10) : '';
+      const shop = this.shopName(p.destAgentDid) ?? said('dispatch2.customs.theirShop');
+      const ours = b.due ? money(`${b.due.total.toFixed(2)} ${b.due.currency}`, b.due.total, b.due.currency) : undefined;
+      const owe = c.amount != null ? (c.currency ? money(`${c.amount.toFixed(2)} ${c.currency}`, c.amount, c.currency) : `${c.amount.toFixed(2)} ${c.currency ?? ''}`.trim()) : '';
+      const payBy = day(c.payBy ? c.payBy.slice(0, 10) : '', c.payBy ? c.payBy.slice(0, 10) : '');
+      const payee = c.payee ? said('dispatch2.customs.toPayee', { payee: c.payee }) : said('dispatch2.customs.toAgent');
       const receiver = accountFor(this.parcels.receiverOf(p), this.persons);
       const sender = accountFor(this.parcels.senderOf(p), this.persons);
-      const tell = async (to: typeof receiver, title: string, body: string) => {
+      const tell = async (to: typeof receiver, words: ReturnType<typeof noticeOf>) => {
         if (!to) return;
-        await this.notifications.notify(to.personDid, { kind: 'parcel_customs', title, body, link: `/?parcel=${parcelId}`, tag: `customs:${step}:${parcelId}`, data: { parcelId, step } });
+        await this.notifications.notify(to.personDid, { kind: 'parcel_customs', ...words, link: `/?parcel=${parcelId}`, tag: `customs:${step}:${parcelId}`, data: { parcelId, step } });
       };
       if (step === 'held') {
         await tell(
           receiver,
-          'Your parcel from abroad is held by customs',
-          `Customs at ${b.arrival.name} asks ${owe} for it (reference ${c.reference}). Pay it ${c.payee ? `to ${c.payee}` : 'to the clearing agent'} by ${payBy}.${ours ? ` Then it comes to ${shop}, where you pay ${ours}: our clearance fee and the last leg.` : ''} Not paid by then, it goes back to the sender.`,
+          noticeOf(
+            said('dispatch2.customs.held.receiver.title'),
+            said('dispatch2.customs.held.receiver.body', { place: b.arrival.name, owe, reference: c.reference, payee, payBy, ours: ours ? said('dispatch2.customs.held.ours', { shop, ours }) : '' }),
+          ),
         );
-        await tell(sender, 'Your parcel abroad is held by customs', `The receiver is asked to pay ${owe} to customs by ${payBy}. If they do not, you are asked what to do with it: coming back to you is at your cost.`);
+        await tell(sender, noticeOf(said('dispatch2.customs.held.sender.title'), said('dispatch2.customs.held.sender.body', { owe, payBy })));
       } else if (step === 'released' || step === 'paid') {
-        await tell(receiver, step === 'paid' ? 'Customs released your parcel' : 'Your parcel from abroad passed customs', `It comes to ${shop}.${ours ? ` You pay ${ours} when you collect it: our clearance fee and the last leg.` : ''}`);
+        await tell(receiver, noticeOf(said(step === 'paid' ? 'dispatch2.customs.paid.title' : 'dispatch2.customs.released.title'), said('dispatch2.customs.released.body', { shop, ours: ours ? said('dispatch2.customs.released.ours', { ours }) : '' })));
       } else if (step === 'lapsed') {
         // 2026-11-19 — D19: the sender chooses, in the Send app — someone else there takes it, or it is given up.
-        await tell(sender, 'Your parcel abroad was not paid for in time', `The receiver did not pay customs by ${payBy}. Open it to choose: someone else in that country takes it, or you give it up.`);
-        await tell(receiver, 'The parcel held by customs was not paid in time', `It was not paid by ${payBy}. Its sender now decides what happens to it.`);
+        await tell(sender, noticeOf(said('dispatch2.customs.lapsed.sender.title'), said('dispatch2.customs.lapsed.sender.body', { payBy })));
+        await tell(receiver, noticeOf(said('dispatch2.customs.lapsed.receiver.title'), said('dispatch2.customs.lapsed.receiver.body', { payBy })));
       } else if (step === 'someone_else') {
         // The new receiver: what customs asks, by when, and what they then pay at the shop (D20). The new code is in the app.
-        await tell(receiver, 'A parcel from abroad is held by customs for you', `Customs at ${b.arrival.name} asks ${owe} for it (reference ${c.reference}). Pay it ${c.payee ? `to ${c.payee}` : 'to the clearing agent'} by ${payBy}.${ours ? ` Then it comes to ${shop}, where you pay ${ours}: our clearance fee, the warehouse days, the extra handling and the last leg.` : ''}`);
-        await tell(sender, 'Someone else will take your parcel', `They have until ${payBy} to pay customs. Give them the new release code from your Send app: the old one no longer opens it.`);
+        await tell(
+          receiver,
+          noticeOf(
+            said('dispatch2.customs.someoneElse.receiver.title'),
+            said('dispatch2.customs.someoneElse.receiver.body', { place: b.arrival.name, owe, reference: c.reference, payee, payBy, ours: ours ? said('dispatch2.customs.someoneElse.ours', { shop, ours }) : '' }),
+          ),
+        );
+        await tell(sender, noticeOf(said('dispatch2.customs.someoneElse.sender.title'), said('dispatch2.customs.someoneElse.sender.body', { payBy })));
       } else if (step === 'given_up') {
-        await tell(sender, 'You gave up your parcel abroad', 'The warehouse hands it to customs to dispose of.');
+        await tell(sender, noticeOf(said('dispatch2.customs.givenUp.title'), said('dispatch2.customs.givenUp.body')));
       }
     } catch (err) {
       this.logger.warn(`customs notify failed for ${parcelId}: ${(err as Error).message}`);
@@ -2080,11 +2208,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       if (!person) return; // no receiver we can name, or one with no account — nothing to push to (they'll see it in-app later)
 
-      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch2.yourPickupPoint');
       await this.notifications.notify(person.personDid, {
         kind: 'parcel_ready',
-        title: 'Your parcel has arrived',
-        body: `Ready to collect at ${where}.`,
+        ...noticeOf(said('dispatch2.parcelReady.title'), said('dispatch2.parcelReady.body', { where })),
         // 2026-11-02 — the parcel itself, with its collection code: a tapped notification, or Open under it in the bell
         // (the owner: "I need a 'mark as read' or 'respond' button"). The email's link says the same.
         link: `/?parcel=${parcelId}`,
@@ -2129,11 +2256,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       parcel.uncollectedRemindedAt = new Date(now).toISOString();
       if (!person) continue;
       try {
-        const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+        const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch2.yourPickupPoint');
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',
-          title: 'Your parcel is still waiting',
-          body: `It is at ${where}. Bring your collection code.`,
+          ...noticeOf(said('dispatch2.parcelWaiting.title'), said('dispatch2.parcelWaiting.body', { where })),
           link: `/?parcel=${parcel.parcelId}`,
           tag: `parcel-waiting:${parcel.parcelId}`,
           data: { parcelId: parcel.parcelId },
@@ -2180,10 +2306,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
     const rejected = gap.startsWith('rejected:');
     const message = rejected
-      ? { kind: 'signup_rejected' as const, title: 'Your application needs another look', body: `${agent.kycRejection?.reason ?? 'Something was wrong with the documents.'} Send the documents again when you have them.` }
+      ? { kind: 'signup_rejected' as const, ...noticeOf(said('dispatch2.signup.rejected.title'), said('dispatch2.signup.rejected.body', { reason: agent.kycRejection?.reason ?? said('dispatch2.signup.rejected.wrongDocuments') })) }
       : gap === 'unfunded'
-        ? { kind: 'signup_incomplete' as const, title: 'One step left to open', body: 'Your shop is approved. Put the first money into your float and you can start taking parcels.' }
-        : { kind: 'signup_incomplete' as const, title: 'Your shop application is not finished', body: `We still need ${wordsFor(gap.slice('missing:'.length).split(','))}. Nobody is reviewing it until then.` };
+        ? { kind: 'signup_incomplete' as const, ...noticeOf(said('dispatch2.signup.unfunded.title'), said('dispatch2.signup.unfunded.body')) }
+        : { kind: 'signup_incomplete' as const, ...noticeOf(said('dispatch2.signup.missing.title'), said('dispatch2.signup.missing.body', { missing: missingSaid(gap.slice('missing:'.length).split(',')) })) };
 
     try {
       await this.notifications.notify(did, {
@@ -2210,8 +2336,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.did, {
         kind: 'signup_rejected',
-        title: 'Your papers need another look',
-        body: `${payload.reason} The photos you sent have been deleted. Send your ID and licence again when you have them.`,
+        ...noticeOf(said('dispatch2.driverRefused.title'), said('dispatch2.driverRefused.body', { reason: payload.reason })),
         link: '/',
         tag: `driver-papers:${payload.did}:${Date.now()}`,
         data: { did: payload.did },
@@ -2228,8 +2353,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(p.fleetDid, {
         kind: 'vehicle_defect',
-        title: d.safety ? `${p.plate} is off the road: ${ITEM_WORDS[d.item].toLowerCase()} reported unsafe` : `${p.plate}: ${ITEM_WORDS[d.item].toLowerCase()} reported`,
-        body: `${d.reportedBy}${d.note ? `: “${d.note}”` : ''}${d.hasPhoto ? ' (with a photo)' : ''}. ${d.safety ? 'No shift starts in it until you mark it fixed, or safe to drive as it is, under Vehicles → Upkeep.' : 'It can still go out; mark it fixed when it is, under Vehicles → Upkeep.'}`,
+        ...noticeOf(
+          d.safety ? said('dispatch2.defectReported.unsafe.title', { plate: p.plate, item: itemSaid(d.item) }) : said('dispatch2.defectReported.title', { plate: p.plate, item: itemSaid(d.item) }),
+          said('dispatch2.defectReported.body', {
+            by: d.reportedBy,
+            note: d.note ? said('dispatch2.defectReported.note', { note: d.note }) : '',
+            photo: d.hasPhoto ? said('dispatch2.defectReported.photo') : '',
+            next: d.safety ? said('dispatch2.defectReported.nextUnsafe') : said('dispatch2.defectReported.nextSafe'),
+          }),
+        ),
         // 2026-11-02 — where it is decided: the fleet app's Vehicles (a tapped notification, or Open in the bell).
         link: '/?go=vehicles',
         tag: `defect:${d.defectId}`,
@@ -2245,8 +2377,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(p.fleetDid, {
         kind: 'vehicle_service',
-        title: p.state === 'overdue' ? `${p.plate}: service overdue${p.offRoad ? ' — off the road' : ''}` : `${p.plate}: service due soon`,
-        body: `${p.line}. ${p.offRoad ? 'No shift starts in it until a service is recorded under Vehicles → Upkeep.' : 'Record it under Vehicles → Upkeep once it is done.'}`,
+        ...noticeOf(
+          p.state === 'overdue' ? said(p.offRoad ? 'dispatch2.serviceDue.overdueOff.title' : 'dispatch2.serviceDue.overdue.title', { plate: p.plate }) : said('dispatch2.serviceDue.soon.title', { plate: p.plate }),
+          said('dispatch2.serviceDue.body', { line: p.line, next: p.offRoad ? said('dispatch2.serviceDue.nextOff') : said('dispatch2.serviceDue.nextOn') }),
+        ),
         link: '/',
         tag: `service:${p.vehicleId}`,
         data: { vehicleId: p.vehicleId },
@@ -2263,13 +2397,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onVehicleBrokeDown(p: VehicleBrokeDown): Promise<void> {
     const b = p.breakdown;
     if (p.fleetDid) {
-      const where = b.location ? `${b.locationFrom === 'phone' ? 'Where the phone was' : 'Last known position'}: ${b.location.lat.toFixed(5)}, ${b.location.lng.toFixed(5)}` : 'No position known';
-      const aboard = b.aboard.length ? `${b.aboard.length === 1 ? 'One load' : `${b.aboard.length} loads`} aboard or to collect${b.aboard.some((l) => l.shipperTold) ? ': their shippers have been told' : ''}.` : 'Nothing aboard.';
-      const held = b.held.length ? ` ${b.held.length === 1 ? 'One planned order' : `${b.held.length} planned orders`} for today held: plan the day again.` : '';
+      const where = b.location ? said(b.locationFrom === 'phone' ? 'dispatch2.breakdown.where.phone' : 'dispatch2.breakdown.where.last', { lat: b.location.lat.toFixed(5), lng: b.location.lng.toFixed(5) }) : said('dispatch2.breakdown.where.none');
+      const aboard = b.aboard.length
+        ? said('dispatch2.breakdown.aboard', { loads: b.aboard.length === 1 ? said('dispatch2.breakdown.oneLoad') : said('dispatch2.breakdown.loads', { n: b.aboard.length }), told: b.aboard.some((l) => l.shipperTold) ? said('dispatch2.breakdown.shippersTold') : '' })
+        : said('dispatch2.breakdown.nothingAboard');
+      const held = b.held.length ? said('dispatch2.breakdown.held', { orders: b.held.length === 1 ? said('dispatch2.breakdown.oneOrder') : said('dispatch2.breakdown.orders', { n: b.held.length }) }) : '';
       await this.tell(p.fleetDid, {
         kind: 'vehicle_breakdown',
-        title: `${p.plate} has broken down${b.driverName ? ` — ${b.driverName}` : ''}`,
-        body: `${CAUSE_WORDS[b.cause]}: “${b.note}”. ${where}. ${aboard}${held} Say how it ends under Vehicles → Upkeep.`,
+        ...noticeOf(
+          b.driverName ? said('dispatch2.breakdown.fleetDriver.title', { plate: p.plate, driver: b.driverName }) : said('dispatch2.breakdown.fleet.title', { plate: p.plate }),
+          said('dispatch2.breakdown.fleet.body', { cause: causeSaid(b.cause), note: b.note, where, aboard, held }),
+        ),
         tag: `breakdown:${b.breakdownId}`,
         data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId, ...(b.location ? { lat: b.location.lat, lng: b.location.lng } : {}) },
       });
@@ -2277,12 +2415,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // A COURIER broke down with bags or parcels aboard: the couriers on a shift near it hear it, so one can go and take
     // them on (the user, 2026-10-25: "Split by the road"). Said by what there is and how far — never who the parcels are for.
     if (p.toTakeOver && b.location) {
-      const what = [p.toTakeOver.bags ? (p.toTakeOver.bags === 1 ? 'one bag' : `${p.toTakeOver.bags} bags`) : '', p.toTakeOver.parcels ? (p.toTakeOver.parcels === 1 ? 'one parcel' : `${p.toTakeOver.parcels} parcels`) : ''].filter(Boolean).join(' and ');
+      const bagsSaid = p.toTakeOver.bags ? (p.toTakeOver.bags === 1 ? said('dispatch2.breakdown.oneBag') : said('dispatch2.breakdown.bags', { n: p.toTakeOver.bags })) : '';
+      const parcelsSaid = p.toTakeOver.parcels ? (p.toTakeOver.parcels === 1 ? said('dispatch2.breakdown.oneParcel') : said('dispatch2.breakdown.parcels', { n: p.toTakeOver.parcels })) : '';
+      const what = bagsSaid && parcelsSaid ? said('dispatch2.breakdown.bagsAndParcels', { bags: bagsSaid, parcels: parcelsSaid }) : bagsSaid || parcelsSaid;
       for (const n of p.nearby ?? []) {
         await this.tell(n.driverDid, {
           kind: 'takeover_nearby',
-          title: `A courier broke down ${n.km} km from you`,
-          body: `${b.driverName ?? 'They'} ${b.driverName ? 'has' : 'have'} ${what} to take on. Go to them, and take them over with the six digits on their phone: the road that is left is yours, paid when you hand each bag in.`,
+          ...noticeOf(said('dispatch2.breakdown.nearby.title', { km: n.km }), b.driverName ? said('dispatch2.breakdown.nearbyNamed.body', { driver: b.driverName, what }) : said('dispatch2.breakdown.nearbyUnnamed.body', { what })),
           tag: `takeover:${b.breakdownId}`,
           data: { breakdownId: b.breakdownId, lat: b.location.lat, lng: b.location.lng },
           // Taken over from the home screen on shift, with the six digits.
@@ -2293,13 +2432,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const s of p.tell) {
       await this.tell(s.shipperDid, {
         kind: 'freight_problem',
-        title: s.kind === 'booking' ? `${s.lineName}: the vehicle carrying your goods broke down` : s.state === 'aboard' ? `Load ${s.label}: the vehicle carrying it broke down` : `Load ${s.label}: the vehicle coming to collect it broke down`,
-        body:
+        ...noticeOf(
+          s.kind === 'booking' ? said('dispatch2.breakdown.shipperBooking.title', { line: String(s.lineName) }) : s.state === 'aboard' ? said('dispatch2.breakdown.shipperAboard.title', { label: s.label }) : said('dispatch2.breakdown.shipperCollect.title', { label: s.label }),
           s.kind === 'booking'
-            ? `${p.carrier} reported it on the road, ${p.when}, with your goods aboard (${s.label}). Your booking stands; you will be told how they go on.`
+            ? said('dispatch2.breakdown.shipperBooking.body', { carrier: p.carrier, when: p.when, label: s.label })
             : s.state === 'aboard'
-              ? `${p.carrier} reported it on the road, ${p.when}. Your goods are still with the driver; you will be told how they go on.`
-              : `${p.carrier} reported it on the road, ${p.when}, before it collected your goods. You will be told when they are collected.`,
+              ? said('dispatch2.breakdown.shipperAboard.body', { carrier: p.carrier, when: p.when })
+              : said('dispatch2.breakdown.shipperCollect.body', { carrier: p.carrier, when: p.when }),
+        ),
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
         ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
@@ -2315,25 +2455,26 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (driver) {
       await this.tell(driver, {
         kind: 'vehicle_breakdown',
-        title: back ? `${p.plate} is back on the road` : `${p.plate} is going to the workshop`,
-        body: `${b.resolvedBy}: “${b.resolutionNote ?? ''}”.`,
+        ...noticeOf(said(back ? 'dispatch2.breakdownEnd.driverBack.title' : 'dispatch2.breakdownEnd.driverWorkshop.title', { plate: p.plate }), said('dispatch2.breakdownEnd.driver.body', { by: String(b.resolvedBy), note: b.resolutionNote ?? '' })),
         link: '/?go=home',
         tag: `breakdown:${b.breakdownId}`,
         data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId },
       });
     }
     for (const s of p.tell) {
-      const what = s.kind === 'booking' ? `${s.lineName}:` : `Load ${s.label}:`;
+      const what = s.kind === 'booking' ? said('dispatch2.breakdownEnd.whatBooking', { line: String(s.lineName) }) : said('dispatch2.breakdownEnd.whatLoad', { label: s.label });
       await this.tell(s.shipperDid, {
         kind: 'freight_problem',
-        title: back ? `${what} the vehicle is back on the road` : `${what} the vehicle went to the workshop`,
-        body: back
-          ? s.state === 'aboard'
-            ? 'The vehicle carrying your goods is moving again.'
-            : 'The vehicle coming to collect your goods is moving again.'
-          : s.state === 'aboard'
-            ? `${p.carrier} will move your goods to another vehicle; you will be told when they go on.`
-            : `${p.carrier} will send another vehicle to collect your goods.`,
+        ...noticeOf(
+          said(back ? 'dispatch2.breakdownEnd.back.title' : 'dispatch2.breakdownEnd.workshop.title', { what }),
+          back
+            ? s.state === 'aboard'
+              ? said('dispatch2.breakdownEnd.backAboard.body')
+              : said('dispatch2.breakdownEnd.backCollect.body')
+            : s.state === 'aboard'
+              ? said('dispatch2.breakdownEnd.workshopAboard.body', { carrier: p.carrier })
+              : said('dispatch2.breakdownEnd.workshopCollect.body', { carrier: p.carrier }),
+        ),
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
         ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
@@ -2354,8 +2495,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // a line of it in their bell — what went, with whom, and that the road they drove is theirs.
       await this.tell(p.fromDriverDid, {
         kind: 'vehicle_breakdown',
-        title: `Your bags and parcels went on with ${h.toDriverName}`,
-        body: `${what}, taken over at ${p.fromPlate}${h.location ? ` (${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)})` : ''}. The road you drove with each bag is paid to you now; ${h.toDriverName} is paid the rest when they hand it in.`,
+        ...noticeOf(
+          said('dispatch2.handover.courier.title', { to: h.toDriverName }),
+          said('dispatch2.handover.courier.body', { what, plate: p.fromPlate, place: h.location ? said('dispatch2.handover.place', { lat: h.location.lat.toFixed(5), lng: h.location.lng.toFixed(5) }) : '', to: h.toDriverName }),
+        ),
         // What the road was worth is under Earnings.
         link: '/?go=earnings',
         tag: `breakdown:${p.breakdownId}:handover`,
@@ -2364,24 +2507,30 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     } else if (h.proof === 'pass') {
       await this.tell(p.fleetDid, {
         kind: 'vehicle_breakdown',
-        title: `${p.fromPlate}'s loads are on ${h.toPlate} now`,
-        body: `${h.toDriverName} took them over from ${p.fromDriverName ?? 'the driver'}, with their code: ${what}.`,
+        ...noticeOf(
+          said('dispatch2.handover.pass.title', { from: p.fromPlate, to: h.toPlate }),
+          said('dispatch2.handover.pass.body', { driver: h.toDriverName, fromDriver: p.fromDriverName ?? said('dispatch2.handover.theDriver'), what }),
+        ),
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId, vehicleId: p.toVehicleId },
       });
     } else {
       await this.tell(p.toDriverDid, {
         kind: 'vehicle_breakdown',
-        title: `The loads of ${p.fromPlate} are yours now`,
-        body: `${h.by} put them on ${h.toPlate}: ${what}.${h.location ? ` ${p.fromPlate} broke down at ${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)}.` : ''}`,
+        ...noticeOf(
+          said('dispatch2.handover.office.toDriver.title', { from: p.fromPlate }),
+          said('dispatch2.handover.office.toDriver.body', { by: h.by, to: h.toPlate, what, broke: h.location ? said('dispatch2.handover.office.broke', { plate: p.fromPlate, lat: h.location.lat.toFixed(5), lng: h.location.lng.toFixed(5) }) : '' }),
+        ),
         link: '/?go=loads',
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId, ...(h.location ? { lat: h.location.lat, lng: h.location.lng } : {}) },
       });
       await this.tell(p.fromDriverDid, {
         kind: 'vehicle_breakdown',
-        title: `Your loads went to ${h.toDriverName}`,
-        body: `${h.by} moved them from ${p.fromPlate} to ${h.toPlate}: ${what}. Hand them over when ${h.toDriverName} arrives.`,
+        ...noticeOf(
+          said('dispatch2.handover.office.fromDriver.title', { driver: h.toDriverName }),
+          said('dispatch2.handover.office.fromDriver.body', { by: h.by, from: p.fromPlate, to: h.toPlate, what, driver: h.toDriverName }),
+        ),
         link: '/?go=loads',
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId },
@@ -2390,8 +2539,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const s of p.tell) {
       await this.tell(s.shipperDid, {
         kind: 'load_assigned',
-        title: s.kind === 'booking' ? `${s.lineName}: your goods are moving again` : `Load ${s.label} is moving again`,
-        body: `${p.carrier} moved your goods to another of its vehicles after the breakdown${s.state === 'to_collect' ? ': that one will collect them' : ''}.`,
+        ...noticeOf(
+          s.kind === 'booking' ? said('dispatch2.handover.shipperBooking.title', { line: String(s.lineName) }) : said('dispatch2.handover.shipperLoad.title', { label: s.label }),
+          said('dispatch2.handover.shipper.body', { carrier: p.carrier, collect: s.state === 'to_collect' ? said('dispatch2.handover.collect') : '' }),
+        ),
         tag: `breakdown:${p.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:moved`,
         data: { breakdownId: p.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
         ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
@@ -2406,8 +2557,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(d.reportedByDid, {
         kind: 'vehicle_defect',
-        title: `${p.plate}: ${ITEM_WORDS[d.item].toLowerCase()} — ${d.status === 'fixed' ? 'fixed' : 'safe to drive as it is'}`,
-        body: `${d.decidedBy}: “${d.decisionNote ?? ''}”. You reported it${d.note ? ` (“${d.note}”)` : ''}.`,
+        ...noticeOf(
+          said(d.status === 'fixed' ? 'dispatch2.defectDecided.fixed.title' : 'dispatch2.defectDecided.safe.title', { plate: p.plate, item: itemSaid(d.item) }),
+          said('dispatch2.defectDecided.body', { by: String(d.decidedBy), note: d.decisionNote ?? '', yours: d.note ? said('dispatch2.defectDecided.yours', { note: d.note }) : '' }),
+        ),
         link: '/',
         tag: `defect:${d.defectId}`,
         data: { vehicleId: d.vehicleId, defectId: d.defectId },
@@ -2423,11 +2576,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    */
   private async onDriverRostered(p: DriverRostered): Promise<void> {
     try {
-      const day = new Date(`${p.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const dayName = new Date(`${p.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const rosterDay = day(dayName, p.day);
       await this.notifications.notify(p.driverDid, {
         kind: 'driver_roster',
-        title: p.on ? `${p.fleetName} has you down to drive on ${day}` : `${p.fleetName} no longer has you down to drive on ${day}`,
-        body: p.on ? 'Start your shift that day as you always do. Your days are under “Your fleet”.' : 'If you were going to drive that day, speak to your fleet’s office. Your days are under “Your fleet”.',
+        ...(p.on
+          ? noticeOf(said('dispatch2.roster.on.title', { fleet: p.fleetName, day: rosterDay }), said('dispatch2.roster.on.body'))
+          : noticeOf(said('dispatch2.roster.off.title', { fleet: p.fleetName, day: rosterDay }), said('dispatch2.roster.off.body'))),
         link: '/',
         // On the phone a later change to the same day replaces this one; the inbox keeps both, newest first.
         tag: `roster:${p.day}:${p.driverDid}`,
@@ -2452,8 +2607,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (step === 'asked' && c.holder) {
       await this.tell(c.holder.did, {
         kind: 'plate_claim',
-        title: `Did you sell ${c.plate}?`,
-        body: `${c.claimant.name} says they bought it. If you sold it, take it off your vehicles with one tap; if it is still yours, say so. Not answered in 14 days, SeeBuyGet staff look at it.`,
+        ...noticeOf(said('dispatch2.plate.asked.title', { plate: c.plate }), said('dispatch2.plate.asked.body', { claimant: c.claimant.name })),
         link: where(c.holder),
         tag: `plate-claim:${c.claimId}`,
         data,
@@ -2463,8 +2617,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (step === 'lapsed') {
       await this.tell(c.claimant.did, {
         kind: 'plate_claim',
-        title: `No answer about ${c.plate} yet`,
-        body: c.holder ? 'Its owner has not answered in 14 days. SeeBuyGet staff look at it now; you hear here when they decide.' : 'Nobody can be asked about it. SeeBuyGet staff look at it now; you hear here when they decide.',
+        ...noticeOf(said('dispatch2.plate.lapsed.title', { plate: c.plate }), c.holder ? said('dispatch2.plate.lapsedHolder.body') : said('dispatch2.plate.lapsedNobody.body')),
         link: where(c.claimant),
         tag: `plate-claim:${c.claimId}:lapsed`,
         data,
@@ -2472,14 +2625,19 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       return;
     }
     const free = c.state === 'sold' || c.state === 'released' || c.state === 'freed';
+    const staffReason = c.reason ?? '';
     await this.tell(c.claimant.did, {
       kind: 'plate_claim',
-      title: free ? `${c.plate} is free: add it` : c.state === 'kept' ? `${c.plate} is still its owner’s` : `${c.plate} stays where it is`,
-      body: free
-        ? `${c.state === 'released' ? `SeeBuyGet staff took it off the vehicles of the owner who did not answer: ${c.reason ?? ''}`.trim() : 'It is off its owner’s vehicles.'} Add it now: it is on nobody’s list.`
-        : c.state === 'kept'
-          ? 'Its owner says they did not sell it. If it is yours, ask the help centre, with the registration papers in your name.'
-          : `SeeBuyGet staff looked at it: ${c.reason ?? ''}`.trim(),
+      ...noticeOf(
+        free ? said('dispatch2.plate.free.title', { plate: c.plate }) : c.state === 'kept' ? said('dispatch2.plate.kept.title', { plate: c.plate }) : said('dispatch2.plate.stays.title', { plate: c.plate }),
+        free
+          ? said('dispatch2.plate.free.body', { first: c.state === 'released' ? (staffReason.trim() ? said('dispatch2.plate.freeReleased', { reason: staffReason.trimEnd() }) : said('dispatch2.plate.freeReleasedNoReason')) : said('dispatch2.plate.freeOff') })
+          : c.state === 'kept'
+            ? said('dispatch2.plate.kept.body')
+            : staffReason.trim()
+              ? said('dispatch2.plate.staffLooked', { reason: staffReason.trimEnd() })
+              : said('dispatch2.plate.staffLookedNoReason'),
+      ),
       link: where(c.claimant),
       tag: `plate-claim:${c.claimId}:closed`,
       data,
@@ -2487,8 +2645,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (c.state === 'released' && c.holder) {
       await this.tell(c.holder.did, {
         kind: 'plate_claim',
-        title: `${c.plate} was taken off your vehicles`,
-        body: `Somebody said they bought it, and you did not answer in 14 days. SeeBuyGet staff looked at it: ${c.reason ?? ''} If it is still yours, ask the help centre.`,
+        ...noticeOf(said('dispatch2.plate.released.title', { plate: c.plate }), said('dispatch2.plate.released.body', { reason: c.reason ?? '' })),
         link: where(c.holder),
         tag: `plate-claim:${c.claimId}:released`,
         data,
@@ -2500,10 +2657,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     try {
       await this.notifications.notify(payload.did, {
         kind: 'papers_checked',
-        title: payload.approved ? 'You ride for yourself now' : 'Your ask to ride for yourself was not approved',
-        body: payload.approved
-          ? `The network read your ID and licence${payload.companyName ? ` and ${payload.companyName} contracts you directly` : ''}. Your vehicle is on your list: start a shift when you are ready.`
-          : `${payload.reason ?? ''} You are still in no fleet: ask again from “Your fleet”, or take a fleet's place when one is offered.`.trim(),
+        ...(payload.approved
+          ? noticeOf(said('dispatch2.rideAlone.approved.title'), said('dispatch2.rideAlone.approved.body', { company: payload.companyName ? said('dispatch2.rideAlone.company', { company: payload.companyName }) : '' }))
+          : noticeOf(said('dispatch2.rideAlone.refused.title'), (payload.reason ?? '').trim() ? said('dispatch2.rideAlone.refused.body', { reason: (payload.reason ?? '').trimStart() }) : said('dispatch2.rideAlone.refusedNoReason.body'))),
         // 2026-11-02 — yes: a shift starts on the home screen. No: asked again in "Your fleet", a sheet the Driver app
         // opens itself on a tap (it is named in `data`, as a sheet has no address).
         link: payload.approved ? '/?go=home' : '/',
@@ -2559,15 +2715,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async finalNotice(parcelId: string): Promise<void> {
     try {
       const parcel = this.parcels.get(parcelId);
-      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch2.yourPickupPoint');
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);
       // The rate fixed when the free time ended, in the money of the company whose shop holds it.
       const holding = this.parcels.holdingTermsOf(parcel);
       if (person) {
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',
-          title: 'Time to collect your parcel',
-          body: `It is still at ${where} and still yours. Holding now costs ${holding.currency} ${holding.perDay.toFixed(2)} a day — tell us what you want to do.`,
+          ...noticeOf(said('dispatch2.parcelUnclaimed.title'), said('dispatch2.parcelUnclaimed.body', { where, rate: money(`${holding.currency} ${holding.perDay.toFixed(2)}`, holding.perDay, holding.currency) })),
           // A QUERY, not a path. Each app is a single index.html, so '/parcel/PUD-1' resolves against
           // the SW scope to /send/parcel/PUD-1 — which does not exist, and the one notification that
           // asks somebody to make a decision would open a 404. Same shape as the driver's offer link.
@@ -2601,7 +2756,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onReleaseCodeReissued(parcelId: string, quietFor?: string): Promise<void> {
     try {
       const parcel = this.parcels.get(parcelId);
-      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? said('dispatch2.yourPickupPoint');
       // 2026-11-15 — its code was emailed: the new one is emailed too, with the same name check (the owner: "as recommended").
       // Never when the code changed because the account moved: that account is shown no code for a day, and nor is its email.
       if (this.mail && !quietFor && parcel.codeEmailedAt && parcel.buyerEmail && parcel.receiverName && parcel.collectionCode && (parcel.status === 'Ready_For_Pickup' || parcel.status === 'Unclaimed')) {
@@ -2632,8 +2787,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         seen.add(person.personDid);
         await this.notifications.notify(person.personDid, {
           kind: 'parcel_ready',
-          title: 'The pickup code has changed',
-          body: `Open the app for the new code — the parcel is at ${where}.`,
+          ...noticeOf(said('dispatch2.codeReissued.title'), said('dispatch2.codeReissued.body', { where })),
           link: `/?parcel=${parcelId}`,
           tag: `parcel-code-reissued:${parcelId}`,
           data: { parcelId },
@@ -2681,8 +2835,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         nearby.map((d) =>
           this.notifications.notify(d.driverDid, {
             kind: 'load_nearby',
-            title: 'A load is near you',
-            body: where ? `A bag heading to ${where} is ready for pickup nearby.` : 'A bag is ready for pickup nearby.',
+            ...noticeOf(said('dispatch2.loadNearYou.title'), where ? said('dispatch2.toteNearby.body', { where }) : said('dispatch2.toteNearby.bodyNoPlace')),
             link: road ? '/?go=home' : '/?go=route',
             // One notification per tote per driver — a re-publish collapses onto the same one.
             tag: `load:${tote.code}`,
@@ -2739,30 +2892,30 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // In the money of the company that settles this driver; and where the offer carries no figure at all, the
       // one thing certain: what scanning a bag aboard pays there.
       const terms = this.dispatch.driverPayTerms(driverDid);
-      const earn = `${terms.currency} ${(offer.earn ?? offer.price?.total ?? terms.bagLoadPay).toFixed(2)}`;
-      const what = offer.kind === 'tote' ? 'Bag' : 'Load';
+      const earned = offer.earn ?? offer.price?.total ?? terms.bagLoadPay;
+      const earn = money(`${terms.currency} ${earned.toFixed(2)}`, earned, terms.currency);
+      const what = offer.kind === 'tote' ? said('dispatch2.offer.bag') : said('dispatch2.offer.load');
       // What it costs, in the unit a driver spends. Kilometres are an abstraction at the wheel — and a
       // driver carrying passengers cannot justify eight kilometres to a bus, while "six minutes" is a
       // sentence everybody aboard understands. Two figures because they are two different commitments: the
       // detour to go and get it, and the time that carrying it then costs on top.
       const cost =
         offer.collectMin == null
-          ? `${offer.minutesAway} min away` // an offer minted before the time figures existed
+          ? said('dispatch2.offer.minAway', { minutes: offer.minutesAway }) // an offer minted before the time figures existed
           : offer.deliverMin != null
-            ? `+${offer.collectMin} min to collect · +${offer.deliverMin} min to drop`
-            : `+${offer.collectMin} min to collect`; // a destination we could not place — say less, not more
+            ? said('dispatch2.offer.collectDrop', { collect: offer.collectMin, drop: offer.deliverMin })
+            : said('dispatch2.offer.collect', { collect: offer.collectMin }); // a destination we could not place — say less, not more
       await this.notifications.notify(driverDid, {
         kind: 'load_nearby',
-        title: `${what} to ${offer.destLabel} · you earn ${earn}`,
-        body: `${cost}\n${offer.weightKg} kg · waiting at ${offer.pickupLabel}`,
-        link: `/?offer=${offer.offerId}`, // one tap → that one card, with the claim button on it
-        tag: `load:${offer.ref}`,
         // Two buttons is what a phone gives us, and two is what the decision has. "Not now" carries a
         // one-shot capability so the service worker can free the load without holding the driver's session.
-        actions: [
-          { action: 'take', title: 'Take it' },
-          { action: 'no', title: 'Not now' },
-        ],
+        // 2026-11-26 — the buttons in the phone's language too.
+        ...noticeOf(said('dispatch2.offer.title', { what, destination: offer.destLabel, earn }), said('dispatch2.offer.body', { cost, weight: offer.weightKg, pickup: offer.pickupLabel }), [
+          { action: 'take', title: said('bell.button.take') },
+          { action: 'no', title: said('bell.button.notNow') },
+        ]),
+        link: `/?offer=${offer.offerId}`, // one tap → that one card, with the claim button on it
+        tag: `load:${offer.ref}`,
         data: { offerId: offer.offerId, ref: offer.ref, declineToken: this.dispatch.mintDeclineToken(offer.offerId, now) },
       });
     } catch (err) {
@@ -2785,14 +2938,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       return;
     }
     try {
-      const where = payload.destination ? ` for ${payload.destination}` : '';
+      const where = payload.destination ? said('dispatch2.bag.where', { destination: payload.destination }) : '';
       const full = payload.reason !== 'max_wait';
       await this.notifications.notify(agentDid, {
         kind: 'bag_ready_to_close',
-        title: full ? 'A bag is full' : 'A bag has been waiting',
-        body: full
-          ? `Bag ${payload.code}${where} is full. Close it so a driver can take it.`
-          : `Bag ${payload.code}${where} has been open since yesterday. Close it, or the parcels inside will keep waiting.`,
+        ...(full
+          ? noticeOf(said('dispatch2.bagFull.title'), said('dispatch2.bagFull.body', { code: payload.code, where }))
+          : noticeOf(said('dispatch2.bagOpen.title'), said('dispatch2.bagOpen.body', { code: payload.code, where }))),
         link: '/',
         tag: `bag-seal:${payload.code}:${payload.reason ?? 'full'}`,
         data: { code: payload.code },
@@ -2839,8 +2991,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         await this.notifications
           .notify(d.driverDid, {
             kind: 'load_nearby',
-            title: 'A bag is waiting for a driver',
-            body: `A bag at ${place.label}${tote.destinationLabel ? `, heading to ${tote.destinationLabel},` : ''} has waited ${hours} hours for a driver. It is ${Math.round(d.km)} km from you: open it to see what it pays.`,
+            ...noticeOf(
+              said('dispatch2.bagWaiting.title'),
+              said('dispatch2.bagWaiting.body', { place: place.label, heading: tote.destinationLabel ? said('dispatch2.bagWaiting.heading', { destination: tote.destinationLabel }) : '', hours, km: Math.round(d.km) }),
+            ),
             link: `/?offer=${offer.offerId}`,
             tag: `load:${tote.code}:waiting`,
             data: { code: tote.code, offerId: offer.offerId },
@@ -2900,10 +3054,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const cap = payload.reason === 'cap';
       await this.notifications.notify(payload.agentDid, {
         kind: 'shelf_full',
-        title: cap ? 'Bookings are going to other shops: you are at your parcel limit' : 'Bookings are going to other shops: your shelf is full',
-        body: cap
-          ? 'A new shop holds a few parcels at a time to start with, and more as it hands them on. Hand on the parcels that are waiting, and new bookings come to you again.'
-          : 'Every place on your shelf is taken or held for a parcel booked to come in. Add a row or a column under Set up shelves, or hand on the parcels that are waiting.',
+        ...(cap
+          ? noticeOf(said('dispatch2.shelfFull.cap.title'), said('dispatch2.shelfFull.cap.body'))
+          : noticeOf(said('dispatch2.shelfFull.shelf.title'), said('dispatch2.shelfFull.shelf.body'))),
         link: '/?go=shelf',
         tag: `shelf-full:${payload.agentDid}`,
         data: { agentDid: payload.agentDid, reason: payload.reason },
@@ -2931,10 +3084,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const isPeerSend = parcel.senderMobile === 'app';
       await this.notifications.notify(originDid, {
         kind: 'intake_expected',
-        title: 'A parcel is coming in',
-        body: isPeerSend
-          ? 'A booked parcel is on its way to your counter — take it in when the sender drops it off.'
-          : 'A store shipment is on its way to your counter — scan it in when it arrives.',
+        ...noticeOf(said('dispatch2.minted.title'), isPeerSend ? said('dispatch2.minted.peer.body') : said('dispatch2.minted.store.body')),
         link: '/',
         // One notification per minted parcel — a re-published mint/settle collapses onto the same one.
         tag: `intake:${payload.parcelId}`,
@@ -2960,17 +3110,20 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (nearby.length === 0) return;
       // Its most raised (2026-10-27): news, said as such — its own notice, so a phone that showed the first alerts again
       // rather than quietly replacing it, and with the new most a driver weighs their price against.
-      const raised = payload.raisedTo != null ? `${payload.currency ? `${payload.currency} ` : ''}${payload.raisedTo.toLocaleString('en')}` : undefined;
+      const raisedEn = payload.raisedTo != null ? `${payload.currency ? `${payload.currency} ` : ''}${payload.raisedTo.toLocaleString('en')}` : undefined;
+      const raised = raisedEn !== undefined && payload.raisedTo != null ? (payload.currency ? money(raisedEn, payload.raisedTo, payload.currency) : raisedEn) : undefined;
       await Promise.all(
         nearby.map((d) =>
           this.notifications.notify(d.driverDid, {
             kind: 'load_nearby',
-            title: raised ? 'A load near you pays more now' : 'A load is near you',
-            body: raised
-              ? `${payload.destLabel ? `The load to ${payload.destLabel}` : 'A freight load'} now allows up to ${raised}. Ready to claim nearby.`
-              : payload.destLabel
-                ? `A freight load to ${payload.destLabel} is ready to claim nearby.`
-                : 'A freight load is ready to claim nearby.',
+            ...noticeOf(
+              raised ? said('dispatch2.freightNear.raised.title') : said('dispatch2.loadNearYou.title'),
+              raised
+                ? said('dispatch2.freightNear.raised.body', { load: payload.destLabel ? said('dispatch2.freightNear.theLoadTo', { destination: payload.destLabel }) : said('dispatch2.freightNear.aFreightLoad'), raised })
+                : payload.destLabel
+                  ? said('dispatch2.freightNear.body', { destination: payload.destLabel })
+                  : said('dispatch2.freightNear.bodyNoPlace'),
+            ),
             // 2026-11-02 — claimed on the Driver app's board: a tapped notification, or Open in the bell, goes there.
             link: '/?go=board',
             tag: raised ? `freight:${payload.freightId}:raised:${payload.raisedTo}` : `freight:${payload.freightId}`,
@@ -3000,8 +3153,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       const n = payload.parcels ?? 0;
       await this.notifications.notify(dest, {
         kind: 'bus_inbound',
-        title: 'A bus is inbound',
-        body: n > 0 ? `A bus with ${n} parcel${n === 1 ? '' : 's'} is on its way to you.` : 'A bus is on its way to your shop.',
+        ...noticeOf(said('dispatch2.busInbound.title'), n > 0 ? said('dispatch2.busInbound.body', { n }) : said('dispatch2.busInbound.bodyNone')),
         link: '/',
         tag: payload.code ? `bus:${payload.code}` : undefined,
         data: { code: payload.code },
@@ -3022,4 +3174,114 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       return undefined;
     }
   }
+}
+
+/* 2026-11-26 — the pieces of the notices above that are said in words of their own (notice-words/en/dispatcher-b.ts). */
+
+/** The calendar day (UTC) of a moment, as YYYY-MM-DD; empty where it is not a moment. */
+function ymdOf(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+
+/** A span of minutes as somebody says it (see spanWords): "40 minutes", "1 hour", "2 hours 05 minutes". */
+function spanSaid(minutes: number): Said {
+  const m = Math.max(1, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  if (h === 0) return said('dispatch2.span.minutes', { n: m });
+  const hours = said('dispatch2.span.hours', { n: h });
+  return m % 60 === 0 ? hours : said('dispatch2.span.hoursMinutes', { hours, minutes: String(m % 60).padStart(2, '0') });
+}
+
+/** Where a handover fell against what was asked (see againstWhatWasAsked), or nothing. */
+function againstSaid(t: DeliveryTiming | undefined, orderedFor: string | undefined): Said | '' {
+  if (!t) return '';
+  if (t.otherDay === 'late') return said('dispatch2.against.lateDay', { ordered: orderedFor ?? said('dispatch2.against.anEarlierDay'), arrived: t.day });
+  if (t.otherDay === 'early') return said('dispatch2.against.earlyDay', { ordered: orderedFor ?? said('dispatch2.against.aLaterDay'), arrived: t.day });
+  if (!t.window) return '';
+  if (t.lateMin) return said('dispatch2.against.after', { span: spanSaid(t.lateMin), window: t.window });
+  if (t.earlyMin) return said('dispatch2.against.before', { span: spanSaid(t.earlyMin), window: t.window });
+  return said('dispatch2.against.inside', { window: t.window });
+}
+
+const FOUND_KEYS = {
+  short: 'dispatch2.found.short',
+  over: 'dispatch2.found.over',
+  damaged: 'dispatch2.found.damaged',
+  wrong: 'dispatch2.found.wrong',
+  refused: 'dispatch2.found.refused',
+} as const satisfies Record<ReceivingExceptionKind, string>;
+
+/** What the receiver found (see exceptionsInWords): "3 packages short, 2 packages damaged", in the note's order. */
+function foundSaid(list: ReadonlyArray<{ kind: ReceivingExceptionKind; count: number }>): Said | '' {
+  let out: Said | '' = '';
+  for (const e of list) {
+    const one = said(FOUND_KEYS[e.kind], { n: e.count });
+    out = out === '' ? one : said('dispatch2.list', { first: out, next: one });
+  }
+  return out;
+}
+
+/** The carrier's reason for giving a booking back (see GIVE_BACK_WORDS); nothing for `other`. */
+function givenBackSaid(reason: string | undefined): Said | '' {
+  switch (reason) {
+    case 'vehicle_unavailable':
+      return said('dispatch2.givenBack.reason.vehicle_unavailable');
+    case 'no_driver':
+      return said('dispatch2.givenBack.reason.no_driver');
+    case 'goods_not_as_booked':
+      return said('dispatch2.givenBack.reason.goods_not_as_booked');
+    case 'overbooked':
+      return said('dispatch2.givenBack.reason.overbooked');
+    default:
+      return '';
+  }
+}
+
+/** Why a fleet took a driver off (see removalSentence), or nothing. */
+function removalSaid(p: Pick<DriverLeftFleet, 'reason' | 'note'>): Said | '' {
+  if (p.reason === 'left') return said('dispatch2.driverLeft.reasonLeft');
+  if (p.reason === 'ended') return said('dispatch2.driverLeft.reasonEnded');
+  return p.note ? said('dispatch2.driverLeft.reasonNote', { note: p.note }) : '';
+}
+
+/** What a shop's application still lacks (see wordsFor): "a copy of your ID, your trading licence and photos of the shop". */
+function missingSaid(missing: string[]): Said | string {
+  const items: Array<Said | string> = missing.map((m) => (m === 'id' ? said('dispatch2.signup.missing.id') : m === 'licence' ? said('dispatch2.signup.missing.licence') : m === 'photos' ? said('dispatch2.signup.missing.photos') : m));
+  if (items.length <= 1) return items[0] ?? said('dispatch2.signup.missing.documents');
+  let lead = items[0];
+  for (let i = 1; i < items.length - 1; i += 1) lead = said('dispatch2.list', { first: lead, next: items[i] });
+  return said('dispatch2.and', { list: lead, last: items[items.length - 1] });
+}
+
+/** A part of a vehicle, in lower case, as a defect notice names it (see ITEM_WORDS). */
+function itemSaid(item: keyof typeof ITEM_WORDS): Said {
+  const keys = {
+    tyres: 'dispatch2.item.tyres',
+    brakes: 'dispatch2.item.brakes',
+    lights: 'dispatch2.item.lights',
+    mirrors: 'dispatch2.item.mirrors',
+    horn: 'dispatch2.item.horn',
+    wipers: 'dispatch2.item.wipers',
+    leaks: 'dispatch2.item.leaks',
+    chain: 'dispatch2.item.chain',
+    load_gear: 'dispatch2.item.load_gear',
+    body: 'dispatch2.item.body',
+    other: 'dispatch2.item.other',
+  } as const satisfies Record<keyof typeof ITEM_WORDS, string>;
+  return said(keys[item]);
+}
+
+/** What broke, as a breakdown notice starts with it (see CAUSE_WORDS). */
+function causeSaid(cause: keyof typeof CAUSE_WORDS): Said {
+  const keys = {
+    engine: 'dispatch2.cause.engine',
+    tyre: 'dispatch2.cause.tyre',
+    electrical: 'dispatch2.cause.electrical',
+    brakes: 'dispatch2.cause.brakes',
+    fuel: 'dispatch2.cause.fuel',
+    accident: 'dispatch2.cause.accident',
+    other: 'dispatch2.cause.other',
+  } as const satisfies Record<keyof typeof CAUSE_WORDS, string>;
+  return said(keys[cause]);
 }

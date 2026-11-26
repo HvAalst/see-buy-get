@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Optional, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Optional, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiHeader } from '@nestjs/swagger';
+import { noticeLangOf, noticeOf, said } from './notice-words/say';
 import { PartnerMemberService } from './partner-member.service';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
@@ -11,6 +13,18 @@ import { NotificationService } from './notification.service';
 import { welcomeAppOf } from './welcome';
 import { SubscribeDto, UnsubscribeDto } from './notification.dto';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
+
+/** 2026-11-26 — the language an app speaks, on every call it makes (frontend/src/lib/sbg/client.ts). */
+export const LANG_HEADER = 'x-sbg-lang';
+const LANG_DOC = { name: LANG_HEADER, required: false, description: 'The language the app speaks (en, sw, nl, am, bg): notices are said in it, where they are written in it; anything else is English.' };
+
+/** What a call says of itself: its headers. */
+type AskedIn = { headers?: Record<string, string | string[] | undefined> };
+
+/** The language a call asks in, where notices are written in it. */
+function langOf(req: AskedIn | undefined) {
+  return noticeLangOf(req?.headers?.[LANG_HEADER]);
+}
 
 /**
  * The push spine (N1). Three authenticated routes let any signed-in human enrol / drop / test the
@@ -49,12 +63,19 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Post('subscribe')
   @AtTheCounter()
-  subscribe(@Body() dto: SubscribeDto, @Actor() actor: IntrospectionResult) {
+  @ApiHeader(LANG_DOC)
+  subscribe(@Body() dto: SubscribeDto, @Actor() actor: IntrospectionResult, @Req() req?: AskedIn) {
     this.noDeviceFor(actor);
-    const record = this.notifications.subscribe(actingDid(actor), actor.role ?? 'anon', {
-      endpoint: dto.endpoint,
-      keys: dto.keys,
-    });
+    // 2026-11-26 — the app's language, which this device is pushed in; the app gives it again when its language changes.
+    const record = this.notifications.subscribe(
+      actingDid(actor),
+      actor.role ?? 'anon',
+      {
+        endpoint: dto.endpoint,
+        keys: dto.keys,
+      },
+      langOf(req),
+    );
     return { subscribed: true, createdAt: record.createdAt };
   }
 
@@ -75,10 +96,10 @@ export class NotificationsController {
     this.noDeviceFor(actor);
     const devices = await this.notifications.pushToOwner(actingDid(actor), {
       kind: 'test',
-      title: 'Notifications are on',
       // Every app shares this route — a courier hears about loads and a fleet office about its runs, so the
       // test names no particular thing it will be about. It used to promise "your parcels" to all of them.
-      body: 'This is a test from SeeBuyGet — this is where we will tell you when something needs you.',
+      // 2026-11-26 — each device in its own language.
+      ...noticeOf(said('bell.test.title'), said('bell.test.body')),
       link: '/',
       tag: 'sbg-test',
     });
@@ -89,14 +110,16 @@ export class NotificationsController {
   @Scopes('notification:manage:self')
   @Get('inbox')
   @AtTheCounter()
-  inbox(@Actor() actor: IntrospectionResult) {
+  @ApiHeader(LANG_DOC)
+  inbox(@Actor() actor: IntrospectionResult, @Req() req?: AskedIn) {
     this.stillIn(actor);
     const did = actingDid(actor);
     // 2026-11-02 — the first read of a bell in an app — right after the first sign-in there, or a business's people's
     // next — finds its welcome: what arrives here, and the way to the app's guide. Once per inbox (welcome.ts).
     const app = welcomeAppOf(actor?.role);
     if (app) this.notifications.welcomeOnce(did, app);
-    return { items: this.notifications.inboxFor(did), unread: this.notifications.unreadCount(did) };
+    // 2026-11-26 — said in the reader's language, the app's own (x-sbg-lang): a shared inbox to each of its people in theirs.
+    return { items: this.notifications.inboxFor(did, 50, langOf(req)), unread: this.notifications.unreadCount(did) };
   }
 
   /** Mark one of the caller's notifications read. Ownership-guarded in the service. */

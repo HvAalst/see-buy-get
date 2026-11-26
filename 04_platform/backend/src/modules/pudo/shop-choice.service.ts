@@ -5,6 +5,7 @@ import { accountFor } from './addressed-to';
 import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
 import { MdpService } from './mdp.service';
+import { noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
@@ -86,11 +87,11 @@ const keyOf = (c: Pick<ShopChoice, 'code' | 'parcelId'>): string => c.code ?? `p
 const ON_THE_SHELF: ReadonlyArray<ParcelStatus> = ['Ready_For_Pickup', 'Unclaimed'];
 
 /** How long, said in words: "3 hours", "2 days". */
-function durationOf(ms: number): string {
+function durationOf(ms: number) {
   const h = Math.max(1, Math.round(ms / 3_600_000));
-  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`;
+  if (h < 48) return said('shopChoice.hours', { n: h });
   const d = Math.round(h / 24);
-  return `${d} days`;
+  return said('shopChoice.days', { n: d });
 }
 
 /**
@@ -192,8 +193,7 @@ export class ShopChoiceService {
     for (const p of shelf) {
       this.tellBuyers(p.parcelId, {
         kind: 'parcel_shop_closed',
-        title: `${name} is closed for now`,
-        body: `${name}, where your parcel is waiting, has closed for now. The days you have to collect it stop counting until it opens again, and you are told when it does.`,
+        ...noticeOf(said('shopChoice.closed.title', { name }), said('shopChoice.closed.body', { name })),
         tag: `shop-closed:${p.parcelId}`,
       });
     }
@@ -216,8 +216,7 @@ export class ShopChoiceService {
         if (given <= 0) continue;
         this.tellBuyers(p.parcelId, {
           kind: 'parcel_shop_open',
-          title: `${shop.shopName} is open again`,
-          body: `${shop.shopName} is open again, and your parcel is waiting there. The ${durationOf(given)} it was closed are added back: you have as long to collect it as you had when it closed.`,
+          ...noticeOf(said('shopChoice.opened.title', { name: shop.shopName }), said('shopChoice.opened.body', { name: shop.shopName, time: durationOf(given) })),
           tag: `shop-open:${p.parcelId}`,
         });
         told += 1;
@@ -233,8 +232,7 @@ export class ShopChoiceService {
         if (p.destAgentDid !== did || !ON_THE_WAY.includes(p.status)) continue;
         this.tellBuyers(parcelId, {
           kind: 'parcel_shop_open',
-          title: `${shop.shopName} is open again`,
-          body: `${shop.shopName} is open again, so your parcel goes there as planned: there is no shop to choose. You are told when it is ready to collect.`,
+          ...noticeOf(said('shopChoice.openedPlanned.title', { name: shop.shopName }), said('shopChoice.openedPlanned.body', { name: shop.shopName })),
           tag: `choose-shop:${parcelId}`,
         });
         told += 1;
@@ -260,8 +258,7 @@ export class ShopChoiceService {
     this.choices.set(keyOf(own), own);
     this.tellBuyers(parcelId, {
       kind: 'parcel_shop_changed',
-      title: `Your parcel goes to ${pick.name}`,
-      body: `${own.closed.name} was still closed when your parcel was sorted for it, and no shop had been chosen, so it goes to ${pick.name}, the nearest of the shops offered. You are told when it is ready to collect.`,
+      ...noticeOf(said('shopChoice.beforeBag.title', { pick: pick.name }), said('shopChoice.beforeBag.body', { closed: own.closed.name, pick: pick.name })),
       tag: `shop-changed:${parcelId}`,
     });
     return true;
@@ -371,8 +368,7 @@ export class ShopChoiceService {
       if (did === pick.did) continue;
       this.tellBuyers(parcelId, {
         kind: 'parcel_shop_changed',
-        title: `Your parcel went to ${pick.name}`,
-        body: `Most of the buyers of the parcels in its bag chose ${pick.name}, so the whole bag went there. You are told when it is ready to collect.`,
+        ...noticeOf(said('shopChoice.settled.title', { pick: pick.name }), said('shopChoice.settled.body', { pick: pick.name })),
         tag: `shop-changed:${parcelId}`,
       });
     }
@@ -516,21 +512,20 @@ export class ShopChoiceService {
 
   private askBuyers(choice: ShopChoice): void {
     const names = choice.picks.map((p) => p.name);
-    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
-    const who = choice.driverDid ? `The driver with your parcel can take it to ${list}` : `It can go to ${list} instead`;
-    const then = choice.code ? 'The bag it is in goes to the shop most of its buyers choose.' : 'It goes to the one you choose.';
+    const list = names.length === 1 ? names[0] : said('shopChoice.ask.list', { head: names.slice(0, -1).join(', '), last: names[names.length - 1] });
+    const who = choice.driverDid ? said('shopChoice.ask.whoDriver', { list }) : said('shopChoice.ask.whoInstead', { list });
+    const then = choice.code ? said('shopChoice.ask.thenBag') : said('shopChoice.ask.thenOwn');
     for (const parcelId of choice.parcelIds) {
       this.tellBuyers(parcelId, {
         kind: 'parcel_choose_shop',
-        title: 'Choose where to collect your parcel',
-        body: `${choice.closed.name} is closed. ${who}: choose one. ${then}`,
+        ...noticeOf(said('shopChoice.ask.title'), said('shopChoice.ask.body', { closed: choice.closed.name, who, then })),
         tag: `choose-shop:${parcelId}`,
       });
     }
   }
 
   /** Its receiver told, in the app (never a text). */
-  private tellBuyers(parcelId: string, n: { kind: 'parcel_choose_shop' | 'parcel_shop_changed' | 'parcel_shop_closed' | 'parcel_shop_open'; title: string; body: string; tag: string }): void {
+  private tellBuyers(parcelId: string, n: { kind: 'parcel_choose_shop' | 'parcel_shop_changed' | 'parcel_shop_closed' | 'parcel_shop_open'; tag: string } & ReturnType<typeof noticeOf>): void {
     if (!this.notifications) return;
     let person: { personDid: string } | undefined;
     try {
@@ -547,8 +542,14 @@ export class ShopChoiceService {
     void this.notifications
       ?.notify(choice.closed.did, {
         kind: 'shop_found_shut',
-        title: 'A driver found your shop shut',
-        body: `A driver came with ${choice.code ? `a bag of ${n} parcel${n === 1 ? '' : 's'}` : 'a parcel'} for you and found the door shut. ${n === 1 ? 'It goes' : 'They go'} to a shop near you instead, ${n === 1 ? 'its buyer' : 'their buyers'} choosing which. Say “Close for now” in the app when you close, and drivers know before they come.`,
+        ...noticeOf(
+          said('shopChoice.shut.title'),
+          said('shopChoice.shut.body', {
+            what: choice.code ? said('shopChoice.shut.bag', { n }) : said('shopChoice.shut.parcel'),
+            goes: n === 1 ? said('shopChoice.shut.itGoes') : said('shopChoice.shut.theyGo'),
+            buyers: n === 1 ? said('shopChoice.shut.itsBuyer') : said('shopChoice.shut.theirBuyers'),
+          }),
+        ),
         link: '/',
         tag: `shut:${choice.closed.did}:${choice.askedAt.slice(0, 13)}`,
         data: { ref: choice.code ?? choice.parcelId },

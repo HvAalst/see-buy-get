@@ -4,6 +4,7 @@ import { DropOffHold, DropOffHoldService } from './drop-off-hold.service';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
+import { noticeOf, said } from './notice-words/say';
 
 const SWEEP_MS = 10 * 60 * 1000;
 
@@ -62,20 +63,20 @@ export class DropOffHoldSweeper implements OnApplicationBootstrap, OnModuleDestr
       return false;
     }
     if (!this.notifications) return false;
-    const shop = this.agents.find(hold.agentDid)?.shopName ?? 'the shop';
+    const shop = this.agents.find(hold.agentDid)?.shopName ?? said('dropOffHold.theShop');
     const to = this.recipientOf(hold);
     if (!to) return false;
-    const what = 'vendorId' in hold.bookedBy ? (parcel.externalOrderId ? `Order ${parcel.externalOrderId}` : `Parcel ${parcel.parcelId}`) : 'Your parcel';
+    const what = 'vendorId' in hold.bookedBy ? (parcel.externalOrderId ? said('dropOffHold.what.order', { id: parcel.externalOrderId }) : said('dropOffHold.what.parcel', { id: parcel.parcelId })) : said('dropOffHold.what.yours');
     // The clock never cancels a booking (the owner: "package has to go anyway"); calling it off stays the booker's choice.
-    const refund = 'vendorId' in hold.bookedBy ? ' You can also cancel it for a full refund.' : ' You can also cancel it.';
+    const refund = said('vendorId' in hold.bookedBy ? 'dropOffHold.refund.full' : 'dropOffHold.refund.plain');
     const ended = hoursLeft === 0;
     try {
       await this.notifications.notify(to.did, {
         kind: 'drop_off_hold',
-        title: ended ? `${what}: the place held at ${shop} has ended` : `${what}: hand it in at ${shop} within ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
-        body: ended
-          ? `It is still booked, and it still goes: hand it in there, and it is taken in as soon as the shop has room.${refund}`
-          : `A place on the shelf at ${shop} is held for it until then. After that it still goes: it is taken in as soon as the shop has room.${refund}`,
+        ...noticeOf(
+          ended ? said('dropOffHold.ended.title', { what, shop }) : said('dropOffHold.warn.title', { what, shop, hours: hoursLeft }),
+          ended ? said('dropOffHold.ended.body', { refund }) : said('dropOffHold.warn.body', { shop, refund }),
+        ),
         link: to.link,
         // One a mark: the 12-, 6- and 3-hour notices and the end are each their own, never stacked twice.
         tag: `drop-off-hold:${hold.parcelId}:${ended ? 'ended' : hoursLeft}`,

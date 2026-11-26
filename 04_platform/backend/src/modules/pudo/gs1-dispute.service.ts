@@ -7,6 +7,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { BusinessClientService } from './business-client.service';
 import { MediaService } from './media.service';
 import { NotificationService } from './notification.service';
+import { day, noticeOf, said, type Said } from './notice-words/say';
 import { ShipperCodesService, clientCoder, clientOfCoder, vendorOfCoder, whereGs1IsSet } from './shipper-codes.service';
 import { VendorService } from './vendor.service';
 import { GS1_ANSWER_DAYS, type Gs1Dispute, type Gs1DisputeRow, type Gs1DisputeSide, type Gs1DisputeView, type Gs1Party, type Gs1PartyRow } from './gs1-dispute.types';
@@ -91,8 +92,16 @@ export class Gs1DisputeService {
     this.disputes.set(disputeId, dispute);
     const by = dayOf(iso(now + GS1_ANSWER_DAYS * DAY_MS));
     for (const h of holders) {
-      const whose = h.actsFor ? ` — the one you entered for your client ${h.name}` : '';
-      this.tell(h.did, disputeId, `${dispute.claimant.store ? 'A store' : 'Another business'} says the GS1 prefix ${companyPrefix} is its own`, `${dispute.claimant.name} has sent SeeBuyGet staff a GS1 licence for prefix ${companyPrefix}${whose}. Send yours in ${whereGs1IsSet(h.entityId)} by ${by}: two members of staff decide whose it is. Until then nothing changes, and your labels carry on.`);
+      const whose = h.actsFor ? said('gs1Dispute.opened.whose', { client: h.name }) : '';
+      const whereSet = vendorOfCoder(h.entityId) ? said('gs1Dispute.where.store') : said('gs1Dispute.where.business');
+      this.tell(
+        h.did,
+        disputeId,
+        noticeOf(
+          said('gs1Dispute.opened.title', { who: said(dispute.claimant.store ? 'gs1Dispute.who.store' : 'gs1Dispute.who.other'), prefix: companyPrefix }),
+          said('gs1Dispute.opened.body', { claimant: dispute.claimant.name, prefix: companyPrefix, whose, where: whereSet, by: day(by, iso(now + GS1_ANSWER_DAYS * DAY_MS).slice(0, 10)) }),
+        ),
+      );
     }
     return this.viewFor(dispute, business.entityId);
   }
@@ -127,7 +136,7 @@ export class Gs1DisputeService {
     delete dispute.proposal;
     this.disputes.set(disputeId, dispute);
     this.media?.anchorGs1Dispute(disputeId, new Date(now));
-    for (const h of dispute.holders) this.tell(h.did, disputeId, `The dispute about GS1 prefix ${dispute.companyPrefix} was withdrawn`, `${dispute.claimant.name} took it back. Nothing has changed.`);
+    for (const h of dispute.holders) this.tell(h.did, disputeId, noticeOf(said('gs1Dispute.withdrawn.title', { prefix: dispute.companyPrefix }), said('gs1Dispute.withdrawn.body', { name: dispute.claimant.name })));
     return this.viewFor(dispute, business.entityId);
   }
 
@@ -192,11 +201,11 @@ export class Gs1DisputeService {
     const p = dispute.companyPrefix;
     if (proposal.to === 'claimant') {
       const c = dispute.claimant;
-      this.tell(c.did, disputeId, `The GS1 prefix ${p} is ${yours(c)}`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is ${yours(c)}. ${labelsOf(c)} carry it from now on, under extension digit ${dispute.extensionDigit}. Their reason: ${proposal.reason}`);
-      for (const h of dispute.holders) this.tell(h.did, disputeId, `The GS1 prefix ${p} is ${c.store ? 'a store' : 'another business'}'s`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is ${c.name}'s. ${labelsOf(h)} no longer carry it; ${h.store ? 'the parcels you sent' : 'the loads you posted'} keep the codes they were given. Their reason: ${proposal.reason}`);
+      this.tell(c.did, disputeId, noticeOf(said('gs1Dispute.won.title', { prefix: p, yours: yours(c) }), said('gs1Dispute.won.body', { prefix: p, yours: yours(c), labels: labelsOf(c), digit: dispute.extensionDigit, reason: proposal.reason })));
+      for (const h of dispute.holders) this.tell(h.did, disputeId, noticeOf(said('gs1Dispute.lost.title', { prefix: p, whose: said(c.store ? 'gs1Dispute.whose.store' : 'gs1Dispute.whose.other') }), said('gs1Dispute.lost.body', { prefix: p, name: c.name, labels: labelsOf(h), kept: said(h.store ? 'gs1Dispute.kept.parcels' : 'gs1Dispute.kept.loads'), reason: proposal.reason })));
     } else {
-      this.tell(dispute.claimant.did, disputeId, `The GS1 prefix ${p} stays with the business using it`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} is not ${yours(dispute.claimant)} to print under. Their reason: ${proposal.reason}`);
-      for (const h of dispute.holders) this.tell(h.did, disputeId, `The GS1 prefix ${p} stays ${yours(h)}`, `Two members of SeeBuyGet staff looked at the licences and decided prefix ${p} stays ${yours(h)}. Nothing changes. Their reason: ${proposal.reason}`);
+      this.tell(dispute.claimant.did, disputeId, noticeOf(said('gs1Dispute.notWon.title', { prefix: p }), said('gs1Dispute.notWon.body', { prefix: p, yours: yours(dispute.claimant), reason: proposal.reason })));
+      for (const h of dispute.holders) this.tell(h.did, disputeId, noticeOf(said('gs1Dispute.stays.title', { prefix: p, yours: yours(h) }), said('gs1Dispute.stays.body', { prefix: p, yours: yours(h), reason: proposal.reason })));
     }
     return this.row(dispute, now);
   }
@@ -297,19 +306,19 @@ export class Gs1DisputeService {
     };
   }
 
-  private tell(did: string, disputeId: string, title: string, body: string): void {
+  private tell(did: string, disputeId: string, told: ReturnType<typeof noticeOf>): void {
     if (!did || !this.notifications) return;
-    void this.notifications.notify(did, { kind: 'gs1_dispute', title, body, tag: `gs1:${disputeId}`, data: { disputeId } }).catch(() => undefined);
+    void this.notifications.notify(did, { kind: 'gs1_dispute', ...told, tag: `gs1:${disputeId}`, data: { disputeId } }).catch(() => undefined);
   }
 }
 
 /** Round 20 — said to a forwarder about its client: the client's, never the forwarder's. */
-function yours(p: Gs1Party): string {
-  return p.actsFor ? `your client ${p.name}'s` : 'yours';
+function yours(p: Gs1Party): Said {
+  return p.actsFor ? said('gs1Dispute.yours.client', { name: p.name }) : said('gs1Dispute.yours.own');
 }
 
-function labelsOf(p: Gs1Party): string {
-  return p.actsFor ? `${p.name}'s labels` : 'Your labels';
+function labelsOf(p: Gs1Party): Said {
+  return p.actsFor ? said('gs1Dispute.labels.client', { name: p.name }) : said('gs1Dispute.labels.own');
 }
 
 /** The business that answers for a party: itself, or the forwarder that keeps a client's record. */

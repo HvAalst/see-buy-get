@@ -3,6 +3,7 @@ import { AgentService } from './agent.service';
 import { haversineKm } from './geo';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { ToteService } from './tote.service';
 import { GLN_MOVED_KM, OurGlnBook, type OurGln, type OurPlaceKind } from './our-gln.book';
 import type { Agent, GeoPoint } from './pudo.types';
@@ -93,12 +94,18 @@ export class OurGlnSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   private tell(did: string, g: OurGln, moved: boolean): void {
-    const where = g.kind === 'shop' ? 'collection point' : 'hub';
     void this.notifications
       ?.notify(did, {
         kind: 'place_gln',
-        title: `Your ${where} has its GS1 location number`,
-        body: `${moved ? `${g.name} moved, so it is a new place with a new number` : `SeeBuyGet gave ${g.name} its number`}: GLN ${g.gln} (Global Location Number). ${g.kind === 'shop' ? 'It is printed on the labels of parcels coming to you, and' : 'It is shown on your hub’s page, and'} businesses can use it to address goods to this place.${moved ? ' The old number is never given to another place.' : ' It names this place only: if you move, you get a new one.'}`,
+        ...noticeOf(
+          said(g.kind === 'shop' ? 'ourGln.title.shop' : 'ourGln.title.hub'),
+          said('ourGln.body', {
+            first: said(moved ? 'ourGln.first.moved' : 'ourGln.first.given', { name: g.name }),
+            gln: g.gln,
+            shown: said(g.kind === 'shop' ? 'ourGln.shown.shop' : 'ourGln.shown.hub'),
+            last: said(moved ? 'ourGln.last.moved' : 'ourGln.last.given'),
+          }),
+        ),
         link: '/',
         tag: `gln:${g.gln}`,
         data: { ref: g.gln },

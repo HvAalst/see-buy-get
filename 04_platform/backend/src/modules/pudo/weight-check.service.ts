@@ -6,6 +6,7 @@ import { ParcelService } from './parcel.service';
 import type { ParcelWeightFound } from './pudo.types';
 import { scaleCounts } from './site-tools';
 import { VendorService } from './vendor.service';
+import { noticeOf, said } from './notice-words/say';
 
 /** The difference that is a difference: more than 200 g, and more than a twentieth of what was said. */
 export function weightDiffers(saidKg: number, foundKg: number): boolean {
@@ -72,11 +73,13 @@ export class WeightCheckService {
     if (!this.notifications) return;
     const parcel = this.parcels.get(parcelId);
     const heavier = found.kg > found.saidKg;
-    const title = heavier ? 'A parcel you sent weighs more than you said' : 'A parcel you sent weighs less than you said';
-    const body = `${found.siteName} weighed ${parcelId} at ${found.kg} kg on an approved scale; you said ${found.saidKg} kg. It is kept with the parcel, and you can answer beside it.`;
+    const words = noticeOf(
+      said(heavier ? 'weightCheck.more.title' : 'weightCheck.less.title'),
+      said('weightCheck.body', { site: found.siteName, parcel: parcelId, found: found.kg, said: found.saidKg }),
+    );
     const store = parcel.vendorId ? this.storeOf(parcel.vendorId) : undefined;
     const to = store ? store.did : this.parcels.senderOf(parcel).owner;
     if (!to) return; // a person not yet certain of an account: the parcel shows it when they open it
-    void this.notifications.notify(to, { kind: 'parcel_weight', title, body, link: store ? '/' : `/?parcel=${parcelId}`, tag: `weight:${parcelId}`, data: { parcelId } }).catch(() => undefined);
+    void this.notifications.notify(to, { kind: 'parcel_weight', ...words, link: store ? '/' : `/?parcel=${parcelId}`, tag: `weight:${parcelId}`, data: { parcelId } }).catch(() => undefined);
   }
 }

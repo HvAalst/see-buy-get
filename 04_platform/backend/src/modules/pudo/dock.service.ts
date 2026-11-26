@@ -13,6 +13,7 @@ import { ToteService } from './tote.service';
 import { VendorService } from './vendor.service';
 import { BagClosureService } from './bag-closure.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { CollectionPoint, Parcel, Tote, Vendor } from './pudo.types';
 
 /**
@@ -285,8 +286,7 @@ export class DockService {
     void this.notifications
       .notify(vendor.did, {
         kind: 'bag_room',
-        title: 'Your corner for closed bags is full',
-        body: `${room.closed} closed bags are waiting at ${dock.label} for drivers, as many as you said your corner holds. The next one you close stands where you work, and you can open ${room.free} more now. Each one a driver takes makes room again.`,
+        ...noticeOf(said('dock.cornerFull.title'), said('dock.cornerFull.body', { closed: room.closed, label: dock.label, free: room.free })),
         link: '/?go=dock',
         tag: `bag-room:${vendor.did}:${new Date().toISOString().slice(0, 13)}`,
         data: { closed: room.closed, corner: room.corner },

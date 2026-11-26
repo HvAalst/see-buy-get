@@ -28,6 +28,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
+import { at, noticeOf, said, sayEnglish } from './notice-words/say';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -267,11 +268,17 @@ export class PayoutNumberService implements OnModuleInit {
   /** A changed bank account, told in the bell (opening it in Settings) and by email where there is an address. Never a text. */
   private tellBankChanged(actor: IntrospectionResult, payee: Payee, masked: string, now: number): void {
     const until = new Date(now + PAYOUT_NUMBER_HOLD_MS).toISOString();
-    const headline = 'Your payout bank account was changed';
-    const what = `Payouts now go to the account ${masked}. Nothing is paid to it before ${until.slice(0, 16).replace('T', ' ')} UTC.`;
-    const next = actor.personDid ? 'If it was not you, change your PIN straight away, then set your own account again in Settings.' : 'If it was not you, change the password straight away, then set your own account again in Settings.';
+    // 2026-11-26 — in phrases, so the bell and the phone say it in the reader's language; the email beside it is the English.
+    const headlineSaid = said('payout.bankChanged.title');
+    const whatSaid = said('payout.bankChanged.what', { account: masked, until: at(`${until.slice(0, 16).replace('T', ' ')} UTC`, until) });
+    const nextSaid = said(actor.personDid ? 'payout.bankChanged.nextPin' : 'payout.bankChanged.nextPassword');
+    const headline = sayEnglish(headlineSaid);
+    const what = sayEnglish(whatSaid);
+    const next = sayEnglish(nextSaid);
     const owner = actor.role === 'mdp' && actor.did ? actor.did : payee.payeeId;
-    void this.notices?.notify(owner, { kind: 'security', title: headline, body: `${what} ${next}`, link: '/?settings=payout', tag: `payout-bank:${payee.payeeId}:${now}` }).catch(() => undefined);
+    void this.notices
+      ?.notify(owner, { kind: 'security', ...noticeOf(headlineSaid, said('bell.twoParts', { what: whatSaid, next: nextSaid })), link: '/?settings=payout', tag: `payout-bank:${payee.payeeId}:${now}` })
+      .catch(() => undefined);
     let address: string | undefined;
     try {
       const person = actor.personDid ? this.persons?.findByDid(actor.personDid) : undefined;

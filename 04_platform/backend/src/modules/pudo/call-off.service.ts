@@ -7,6 +7,7 @@ import { CallOffView, CalledOffView, HubHandoverView, MaxSpendView, WithdrawnVie
 import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
+import { noticeOf, said, type Said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { loadLink } from './notification.types';
 import { ParcelService, parcelCurrency } from './parcel.service';
@@ -137,7 +138,7 @@ export class CallOffService implements OnModuleInit {
       now,
     );
     if (bag?.parcels.includes(parcelId)) this.totes.takeOut(bag.code, parcelId, p.size);
-    this.tellHub(hub, p, `it goes back to ${shop.shopName} as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Called off: a new label', bag?.code, { returnParcelId: back.parcelId });
+    this.tellHub(hub, p, said('callOff.where.backToShop', { shop: shop.shopName, back: back.parcelId }), said('callOff.todo.relabel', { back: back.parcelId }), said('callOff.hub.titleNewLabel'), bag?.code, { returnParcelId: back.parcelId });
     return { parcelId, status: 'Returned', outcome: 'bring_back', amount: back.shipmentCost ?? price, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: shop.shopName, atHub: hub.name };
   }
 
@@ -179,7 +180,7 @@ export class CallOffService implements OnModuleInit {
     );
     this.parcels.closeAsGoingHome(p.parcelId, { freightId: load.freightId, code: load.code }, way.hub.name, by, reason, now);
     if (bag?.parcels.includes(p.parcelId)) this.totes.takeOut(bag.code, p.parcelId, p.size);
-    this.tellHub(way.hub, p, `it goes to the store's own door as load ${load.code}`, `Keep it aside, and hand it only to the driver who comes for ${load.code}: scan their pass at the counter.`, 'Called off: set it aside', bag?.code, { loadCode: load.code });
+    this.tellHub(way.hub, p, said('callOff.where.toDoor', { code: load.code }), said('callOff.todo.keepAside', { code: load.code }), said('callOff.hub.titleSetAside'), bag?.code, { loadCode: load.code });
     return { parcelId: p.parcelId, status: 'Returned', outcome: 'to_door', amount: most, currency: way.currency, returnLoadId: load.freightId, returnLoadCode: load.code, backTo: way.door.label, atHub: way.hub.name };
   }
 
@@ -259,7 +260,7 @@ export class CallOffService implements OnModuleInit {
       now,
     );
     this.dispatch!.withdrawBringsBack(freightId, vendorId, now);
-    this.tellHub(hub, parcel, `its load to the store's door (${load.code}) is withdrawn: it goes back to ${way.shop.shopName} as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Called off: a new label', undefined, { returnParcelId: back.parcelId });
+    this.tellHub(hub, parcel, said('callOff.where.loadWithdrawn', { code: load.code, shop: way.shop.shopName, back: back.parcelId }), said('callOff.todo.relabel', { back: back.parcelId }), said('callOff.hub.titleNewLabel'), undefined, { returnParcelId: back.parcelId });
     return { parcelId: parcel.parcelId, status: 'Returned', outcome: 'bring_back', amount: back.shipmentCost ?? way.price, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: way.shop.shopName, atHub: hub.name };
   }
 
@@ -282,8 +283,7 @@ export class CallOffService implements OnModuleInit {
       void this.notifications
         ?.notify(storeDid, {
           kind: 'freight_problem',
-          title: `No driver has taken load ${f.code} yet`,
-          body: `It brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}. Raise the most you pay, or send it to a shop instead — under Sent as freight.`,
+          ...noticeOf(said('callOff.untaken.title', { code: f.code }), said('callOff.untaken.body', { parcel: f.bringsBack.parcelId, hub: f.bringsBack.hubName })),
           // 2026-11-02 — the store's own load, where both are done (the owner: "wire it in").
           link: loadLink(f.freightId),
           tag: `door-load:${f.freightId}:remind`,
@@ -349,7 +349,7 @@ export class CallOffService implements OnModuleInit {
     const { hub, shop, quote, price } = way;
     const { back } = this.parcels.turnRoundForSender(parcelId, { quote, hub: { mdpId: hub.mdpId, name: hub.name, zone: this.routing.hubEnd(hub.mdpId).zone }, toAgentDid: shop.did, by, reason }, now);
     if (bag?.parcels.includes(parcelId)) this.totes.takeOut(bag.code, parcelId, p.size);
-    this.tellHub(hub, p, `it goes back to ${shop.shopName}, where its sender handed it in, as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Withdrawn: a new label', bag?.code, { returnParcelId: back.parcelId }, 'was withdrawn');
+    this.tellHub(hub, p, said('callOff.where.backToShopHandedIn', { shop: shop.shopName, back: back.parcelId }), said('callOff.todo.relabel', { back: back.parcelId }), said('callOff.hub.titleWithdrawnLabel'), bag?.code, { returnParcelId: back.parcelId }, said('callOff.hub.withdrawn'));
     const amount = back.shipmentCost ?? price;
     // (Its journey starts at the hub, now — said where it is made, ParcelService.startsAtHub, as for every parcel made at a hub.)
     // Its sender is told where to collect it and what they pay there; its receiver, that it will not come — in the app.
@@ -514,11 +514,11 @@ export class CallOffService implements OnModuleInit {
   }
 
   /** The hub has a box that is no longer going where its label says: what to do, said where the floor reads it. */
-  private tellHub(hub: Mdp, old: Parcel, where: string, todo: string, title: string, bagCode: string | undefined, data: Record<string, string>, what = 'was called off by its store'): void {
-    const outOfBag = bagCode ? ` Take it out of bag ${bagCode}.` : '';
-    const body = `${old.parcelId} ${what}: ${where}.${outOfBag} ${todo}`;
+  private tellHub(hub: Mdp, old: Parcel, where: Said, todo: Said, title: Said, bagCode: string | undefined, data: Record<string, string>, what: Said = said('callOff.hub.calledOff')): void {
+    const outOfBag = bagCode ? said('callOff.hub.outOfBag', { bag: bagCode }) : '';
+    const body = said('callOff.hub.body', { parcel: old.parcelId, what, where, outOfBag, todo });
     void this.notifications
-      ?.notify(hub.did, { kind: 'hub_arrival', title, body, link: '/', tag: `called-off:${old.parcelId}`, data: { parcelId: old.parcelId, ...data } })
+      ?.notify(hub.did, { kind: 'hub_arrival', ...noticeOf(title, body), link: '/', tag: `called-off:${old.parcelId}`, data: { parcelId: old.parcelId, ...data } })
       .catch((err: Error) => this.logger.warn(`called-off notice not sent: ${err.message}`));
   }
 

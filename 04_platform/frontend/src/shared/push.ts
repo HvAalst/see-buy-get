@@ -1,4 +1,5 @@
 import { narrow, type NotificationsApi, type SbgError } from '../lib/sbg';
+import { t } from './i18n';
 
 /**
  * Web Push — the browser glue that turns the notifications API (network) into a real subscription on
@@ -35,7 +36,31 @@ export interface InboxItem {
  */
 export function whenLine(item: Pick<InboxItem, 'createdAt' | 'readAt' | 'readBy'>, nowMs: number = Date.now()): string {
   const when = relativeTime(item.createdAt, nowMs);
-  return item.readAt && item.readBy ? `${when} · read by ${item.readBy}` : when;
+  return item.readAt && item.readBy ? t('notify.readBy', { when, name: item.readBy }) : when;
+}
+
+/*
+ * 2026-11-26 — THIS DEVICE'S LANGUAGE, GIVEN AGAIN (the owner: "translate the notices as well"). A phone is pushed in the
+ * language its app had when it turned notifications on: every call says the app's language (x-sbg-lang, lib/sbg/client.ts),
+ * so giving the subscription again is all it takes. Once for each language in a session — on the first open after this, so a
+ * phone that turned notifications on before is pushed in its language too, and again whenever the language changes. Nothing
+ * where this device has no subscription.
+ */
+let languageGiven: string | null = null;
+export async function giveLanguageAgain(api: NotificationsApi, lang: string): Promise<boolean> {
+  if (languageGiven === lang || !isPushSupported()) return false;
+  try {
+    const reg = await ownRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    const body = sub ? toSubscribeBody(sub) : null;
+    if (!body) return false;
+    const res = await api.subscribe(body);
+    if (res.error) return false;
+    languageGiven = lang;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Load the caller's notification inbox. Returns null on failure (the centre shows a retry, not a crash). */
@@ -54,15 +79,16 @@ export function relativeTime(iso: string, nowMs: number = Date.now()): string {
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return '';
   const s = Math.max(0, Math.floor((nowMs - then) / 1000));
-  if (s < 60) return 'just now'; // whole first minute → "just now" (never "0m ago" for the 45–59s window)
+  // 2026-11-26 — in the app's language.
+  if (s < 60) return t('notify.time.now'); // whole first minute → "just now" (never "0m ago" for the 45–59s window)
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t('notify.time.minutes', { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t('notify.time.hours', { n: h });
   const d = Math.floor(h / 24);
-  if (d === 1) return 'yesterday';
-  if (d < 7) return `${d}d ago`;
-  return `${Math.floor(d / 7)}w ago`;
+  if (d === 1) return t('notify.time.yesterday');
+  if (d < 7) return t('notify.time.days', { n: d });
+  return t('notify.time.weeks', { n: Math.floor(d / 7) });
 }
 
 export type PushFailure = 'unsupported' | 'denied' | 'dismissed' | 'no-serviceworker' | 'no-key' | 'subscribe-failed' | 'save-failed';

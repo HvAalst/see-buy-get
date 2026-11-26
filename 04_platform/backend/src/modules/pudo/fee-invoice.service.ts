@@ -9,6 +9,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DirectPayService } from './direct-pay.service';
 import type { DirectPayment } from './direct-pay.types';
 import { NotificationService } from './notification.service';
+import { money, month as monthShown, noticeOf, said } from './notice-words/say';
 
 /** The tax on our fee, per country of the company that invoices it: the Netherlands' standard rate (the owner: "with BTW"). */
 export const FEE_TAX_RATE: Readonly<Record<string, number>> = { NL: 0.21 };
@@ -213,8 +214,10 @@ export class FeeInvoiceService implements OnApplicationBootstrap, OnModuleDestro
     try {
       await this.notifications.notify(inv.payeeId, {
         kind: 'fee_invoice',
-        title: `${inv.test ? 'Test invoice' : 'Invoice'} ${inv.number}: our fee for ${monthWords(inv.month)}`,
-        body: `${inv.currency} ${inv.gross.toFixed(2)} for ${inv.lines.length} payment${inv.lines.length === 1 ? '' : 's'} by Mollie, tax included. Already paid: Mollie took it from the payments. It is in Settings, under Mollie.`,
+        ...noticeOf(
+          said('feeInvoice.told.title', { kind: said(inv.test ? 'feeInvoice.kind.test' : 'feeInvoice.kind.invoice'), number: inv.number, month: monthShown(monthWords(inv.month), inv.month) }),
+          said('feeInvoice.told.body', { sum: money(`${inv.currency} ${inv.gross.toFixed(2)}`, inv.gross, inv.currency), n: inv.lines.length }),
+        ),
         tag: `fee-invoice:${inv.invoiceId}`,
         data: { invoiceId: inv.invoiceId },
       });

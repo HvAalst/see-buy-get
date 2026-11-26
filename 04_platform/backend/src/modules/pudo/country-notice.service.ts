@@ -10,6 +10,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
+import { noticeOf, said, type Said } from './notice-words/say';
 
 /**
  * WHAT STOPS, said to the people it stops for. One clause each, about what they do — never about our levels or our
@@ -25,6 +26,19 @@ export const LOSS_WORDS: Record<PresenceCapability, string> = {
   payouts: 'we cannot pay out here for now, so what is owed waits',
   signUp: 'nobody new can sign up here for now',
   fieldEvidence: 'photographs of official documents are no longer kept',
+};
+
+/** The same clauses as phrases, for the bell: each reader reads them in their own language (the email keeps LOSS_WORDS). */
+const LOSS_SAID: Record<PresenceCapability, Said> = {
+  takeIn: said('countryNotice.loss.takeIn'),
+  merchantOfRecord: said('countryNotice.loss.merchantOfRecord'),
+  holdFloat: said('countryNotice.loss.holdFloat'),
+  cashOnDelivery: said('countryNotice.loss.cashOnDelivery'),
+  claims: said('countryNotice.loss.claims'),
+  tax: said('countryNotice.loss.tax'),
+  payouts: said('countryNotice.loss.payouts'),
+  signUp: said('countryNotice.loss.signUp'),
+  fieldEvidence: said('countryNotice.loss.fieldEvidence'),
 };
 
 /** What does NOT stop — the two questions anybody asks first, answered before they have to ask them. */
@@ -95,14 +109,14 @@ export class CountryNoticeService {
     const code = input.jurisdiction.trim().toUpperCase();
     const country = catalogueEntry(code)?.name ?? code;
     const lost = input.lost.map((c) => LOSS_WORDS[c]);
-    const title = `What changes for you in ${country} from today`;
-    const body = `From today ${lost.join('; ')}. ${KEPT_WORDS.join(', and ').toLowerCase().replace(/^./, (c) => c.toUpperCase())}.`;
+    const lostSaid = input.lost.map((c) => LOSS_SAID[c]).reduce((a: Said, b: Said) => said('countryNotice.join', { a, b }));
+    const noticeWords = noticeOf(said('countryNotice.lowered.title', { country }), said('countryNotice.lowered.body', { lost: lostSaid, kept: said('countryNotice.kept') }));
     let told = 0;
     let emailed = 0;
     for (const r of this.recipientsIn(code)) {
       try {
         // One notice per country and level: told again after a further change, the newer replaces the older on a phone.
-        await this.notifications.notify(r.did, { kind: 'country_changed', title, body, link: '/', tag: `country:${code}:${input.level}`, data: { country: code, level: input.level } });
+        await this.notifications.notify(r.did, { kind: 'country_changed', ...noticeWords, link: '/', tag: `country:${code}:${input.level}`, data: { country: code, level: input.level } });
         told += 1;
       } catch (err) {
         this.logger.warn(`country notice failed for ${r.did}: ${(err as Error).message}`);
@@ -128,14 +142,16 @@ export class CountryNoticeService {
   async tellOpened(input: { jurisdiction: string; level: PresenceLevel; company?: string }): Promise<{ told: number; emailed: number }> {
     const code = input.jurisdiction.trim().toUpperCase();
     const country = catalogueEntry(code)?.name ?? code;
-    const title = `SeeBuyGet is open in ${country} from today`;
-    const whom = input.company ? `${input.company} is the company you work with there.` : 'No company of ours handles money there yet: what you earn is settled with whoever you work for.';
+    const whom = input.company ? said('countryNotice.opened.company', { company: input.company }) : said('countryNotice.opened.noCompany');
     let told = 0;
     let emailed = 0;
     for (const r of this.recipientsIn(code)) {
-      const body = `${r.ready ? 'You signed up before it opened, and your papers are checked: you can start today.' : 'You signed up before it opened, and your sign-up is not finished yet: you start the day it is.'} ${whom}`;
+      const noticeWords = noticeOf(
+        said('countryNotice.opened.title', { country }),
+        said('countryNotice.opened.body', { ready: said(r.ready ? 'countryNotice.opened.ready' : 'countryNotice.opened.notReady'), whom }),
+      );
       try {
-        await this.notifications.notify(r.did, { kind: 'country_changed', title, body, link: '/', tag: `country:${code}:${input.level}`, data: { country: code, level: input.level } });
+        await this.notifications.notify(r.did, { kind: 'country_changed', ...noticeWords, link: '/', tag: `country:${code}:${input.level}`, data: { country: code, level: input.level } });
         told += 1;
       } catch (err) {
         this.logger.warn(`country opening notice failed for ${r.did}: ${(err as Error).message}`);

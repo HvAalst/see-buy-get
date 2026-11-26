@@ -238,7 +238,7 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
   return (
     <>
       <span class="nbell">
-        <button type="button" class="topbar__lead" onClick={openSheet} aria-label={`Notifications${push.unread ? `, ${push.unread} unread` : ''}`} title="Notifications">
+        <button type="button" class="topbar__lead" onClick={openSheet} aria-label={push.unread ? t('notify.unread', { n: push.unread }) : t('notify.title')} title={t('notify.title')}>
           <Icon name="bell" size={24} />
         </button>
         {push.unread > 0 ? (
@@ -248,16 +248,14 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
         ) : null}
       </span>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Notifications">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('notify.title')}>
         {push.flash ? <Note tone={push.flash.tone} title={push.flash.text} /> : null}
 
         {shared?.whose === 'partner' ? (
           <p class="hint nlist__shared">{t('notify.sharedPartner')}</p>
         ) : shared ? (
           <p class="hint nlist__shared">
-            {canMark
-              ? 'This is the business’s inbox: everybody in it reads the same one. A notice one of you has read is read.'
-              : 'This is the business’s inbox. You can read it; a notice stays unread until somebody who can act on it has read it.'}
+            {canMark ? t('notify.sharedBusiness') : t('notify.sharedBusinessViewer')}
           </p>
         ) : (
           <PushControls push={push} />
@@ -265,10 +263,10 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
 
         <div class="nlist">
           <div class="nlist__head">
-            <span class="nlist__title">Recent</span>
+            <span class="nlist__title">{t('notify.recent')}</span>
             {push.unread > 0 && canMark ? (
               <button type="button" class="nlist__all" onClick={() => void push.markAllRead()}>
-                Mark all read
+                {t('notify.markAllRead')}
               </button>
             ) : null}
           </div>
@@ -291,11 +289,11 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
               ))}
             </ul>
           ) : push.inboxState === 'loading' ? (
-            <p class="hint">Loading…</p>
+            <p class="hint">{t('notify.loading')}</p>
           ) : push.inboxState === 'error' ? (
-            <Note tone="warn" icon="warning" title="Couldn’t load your notifications" detail="Try again in a moment." />
+            <Note tone="warn" icon="warning" title={t('notify.loadFailed')} detail={t('notify.loadFailedDetail')} />
           ) : (
-            <p class="hint">No notifications yet.</p>
+            <p class="hint">{t('notify.empty')}</p>
           )}
         </div>
       </Sheet>
@@ -305,25 +303,26 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
 
 /** The compact push-opt-in section at the top of the sheet — state-dependent, at most one blue CTA. */
 function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
+  const t = useT();
   if (push.state === 'loading') return null;
   if (push.state === 'unsupported') {
-    return <Note tone="info" icon="warning" title="Push not available on this device" detail="This device can’t show push notifications." />;
+    return <Note tone="info" icon="warning" title={t('notify.push.unsupported.title')} detail={t('notify.push.unsupported')} />;
   }
   if (push.state === 'denied') {
-    return <Note tone="warn" icon="lock" title="Notifications are blocked" detail="Turn them on for this app in your browser settings, then come back." />;
+    return <Note tone="warn" icon="lock" title={t('notify.push.blocked.title')} detail={t('notify.push.blocked.detail')} />;
   }
   if (push.state === 'on') {
     return (
       <div class="npush">
         <span class="npush__on">
-          <Icon name="bell" size={18} /> On for this device
+          <Icon name="bell" size={18} /> {t('notify.push.on')}
         </span>
         <span class="npush__acts">
           <button type="button" class="npush__link" disabled={push.busy !== null} onClick={() => void push.test()}>
-            Send a test
+            {t('notify.push.test')}
           </button>
           <button type="button" class="npush__link" disabled={push.busy !== null} onClick={() => void push.disable()}>
-            Turn off
+            {t('notify.push.off')}
           </button>
         </span>
       </div>
@@ -334,9 +333,9 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
     <div class="npush npush--off">
       {/* One line: the sheet was opened to READ what is waiting, and three lines of why pushed it under
           the fold on a phone. */}
-      <p class="npush__lede">Get told when something needs you, even when the app is closed.</p>
+      <p class="npush__lede">{t('notify.push.lede')}</p>
       <Button chevron={false} busy={push.busy === 'enable'} disabled={push.busy !== null} onClick={() => void push.enable()}>
-        Turn on notifications
+        {t('notify.push.turnOn')}
       </Button>
     </div>
   );
@@ -393,7 +392,7 @@ export function NotificationRow({ item, open, onToggle, onRead, act, onActed }: 
           </span>
         ) : null}
       </span>
-      {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
+      {unread ? <span class="nitem__dot" aria-label={t('notify.unreadDot')} /> : null}
     </>
   );
   return (

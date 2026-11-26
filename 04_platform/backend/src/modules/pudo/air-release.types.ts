@@ -4,6 +4,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { LiveAnimals, LiveAnimalsDto } from './live-animals.types';
+import { day as dayShown, said, sayEnglish, type Said } from './notice-words/say';
 
 /**
  * AN IMPORT BY AIR: FROM "LANDED" TO "A TRUCK MAY COLLECT" (research 2026-10-29, 05_engineering/research/air_ops_2026-10-29.md
@@ -92,7 +93,19 @@ export class AirArrivalWarning {
  * a Friday afternoon, where an office its release waits on keeps weekday hours. Never that it WILL wait: that it may,
  * and that the agent may ask for officers out of hours (EAC Customs Management Regulations 2010, regs 4–6).
  */
-export function airArrivalWarning(input: { country: string; landsOn?: string; landsAt?: string; agencies: Array<{ key: string; name: string }>; closed?: { note?: string; company: string } }): AirArrivalWarning | undefined {
+export function airArrivalWarning(input: AirArrivalInput): AirArrivalWarning | undefined {
+  const a = airArrival(input);
+  return a ? { kind: a.kind, landsOn: a.landsOn, offices: a.offices, text: sayEnglish(a.said) } : undefined;
+}
+
+/** 2026-11-26 — the same warning as phrases, for the bell: each reader told it in their own language. */
+export function airArrivalSaid(input: AirArrivalInput): Said | undefined {
+  return airArrival(input)?.said;
+}
+
+type AirArrivalInput = { country: string; landsOn?: string; landsAt?: string; agencies: Array<{ key: string; name: string }>; closed?: { note?: string; company: string } };
+
+function airArrival(input: AirArrivalInput): { kind: AirArrivalWarning['kind']; landsOn: string; offices: string[]; said: Said } | undefined {
   if (!input.landsOn || !/^\d{4}-\d{2}-\d{2}$/.test(input.landsOn)) return undefined;
   const country = input.country.toUpperCase();
   const listed = airAgenciesOf(country);
@@ -105,20 +118,17 @@ export function airArrivalWarning(input: { country: string; landsOn?: string; la
   const kind = input.closed ? 'holiday' : day === 6 ? 'saturday' : day === 0 ? 'sunday' : day === 5 && (input.landsAt ?? '') >= '12:00' ? 'friday_late' : undefined;
   if (!kind) return undefined;
   const d = new Date(`${input.landsOn}T00:00:00.000Z`);
-  const when = `${WEEKDAY_WORD[day]} ${d.getUTCDate()} ${MONTH_WORD[d.getUTCMonth()]}`;
+  const when = dayShown(`${WEEKDAY_WORD[day]} ${d.getUTCDate()} ${MONTH_WORD[d.getUTCMonth()]}`, input.landsOn, { weekday: true });
+  // 2026-11-26 — in phrases (notice-words/en/services-a.ts); its English word for word what it was.
   const why =
     kind === 'holiday'
-      ? `It lands on ${when}, which ${input.closed!.company}’s calendar marks closed${input.closed!.note ? ` (${input.closed!.note})` : ''}.`
+      ? said('importer.airArrival.why.holiday', { when, company: input.closed!.company, note: input.closed!.note ? said('importer.airArrival.why.note', { note: input.closed!.note }) : '' })
       : kind === 'friday_late'
-        ? `It lands on ${when} in the afternoon.`
-        : `It lands on ${when}.`;
-  const join = offices.length > 1 ? `${offices.slice(0, -1).join(', ')} and ${offices[offices.length - 1]}` : offices[0];
-  return {
-    kind,
-    landsOn: input.landsOn,
-    offices,
-    text: `${why} ${join.charAt(0).toUpperCase()}${join.slice(1)} ${offices.length > 1 ? 'work' : 'works'} Monday to Friday at the airport, so the release may wait for the next working day. Your agent may ask for officers to attend out of hours on Form C.1, at least 24 hours before — on a Sunday or a public holiday at a minimum charge of three hours (EAC Customs Management Regulations 2010, regs 4–6).`,
-  };
+        ? said('importer.airArrival.why.fridayLate', { when })
+        : said('importer.airArrival.why.day', { when });
+  const first = `${offices[0].charAt(0).toUpperCase()}${offices[0].slice(1)}`;
+  const named = offices.length > 1 ? said('importer.airArrival.offices', { list: [first, ...offices.slice(1, -1)].join(', '), last: offices[offices.length - 1] }) : first;
+  return { kind, landsOn: input.landsOn, offices, said: said('importer.airArrival.body', { why, offices: named, count: offices.length }) };
 }
 
 /** A step of the release, as recorded: its reference, when it happened, who said so. */

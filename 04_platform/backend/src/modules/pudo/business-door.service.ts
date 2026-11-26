@@ -8,6 +8,7 @@ import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import type { Freight } from './dispatch.types';
+import { money, noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import type { GeoPoint } from './pudo.types';
@@ -340,8 +341,10 @@ export class BusinessDoorService implements OnModuleInit {
       void this.notifications
         ?.notify(entity.did, {
           kind: 'parcel_door_short',
-          title: `No driver has taken ${d.parcelId} to your door yet`,
-          body: `It waits at ${d.shopName}; its last leg, load ${f.code}, has had no driver for a day at up to ${(f.maxSpend ?? d.maxSpend).toFixed(2)} ${d.currency}. Raise the most you pay under Parcels — or collect it at the shop with its code.`,
+          ...noticeOf(
+            said('businessDoor.untaken.title', { parcel: d.parcelId }),
+            said('businessDoor.untaken.body', { shop: d.shopName, code: f.code, amount: money(`${(f.maxSpend ?? d.maxSpend).toFixed(2)} ${d.currency}`, f.maxSpend ?? d.maxSpend, d.currency) }),
+          ),
           // 2026-11-02 — answered under Parcels, in the Business app: a tapped notice, or Open under it in the bell, goes there.
           link: '/?go=parcels',
           data: { parcelId: d.parcelId, freightId: f.freightId },
@@ -369,8 +372,13 @@ export class BusinessDoorService implements OnModuleInit {
     void this.notifications
       ?.notify(entity.did, {
         kind: 'parcel_door_short',
-        title: `Top up so ${d.shopName} can hand over ${d.parcelId}`,
-        body: `Its driver is at the shop. The shop is owed ${holding.amount.toFixed(2)} ${holding.currency} for keeping it past its free days (${holding.billed.toFixed(2)} ${d.currency} from your balance), and your balance does not hold it yet.`,
+        ...noticeOf(
+          said('businessDoor.holding.title', { shop: d.shopName, parcel: d.parcelId }),
+          said('businessDoor.holding.body', {
+            owed: money(`${holding.amount.toFixed(2)} ${holding.currency}`, holding.amount, holding.currency),
+            billed: money(`${holding.billed.toFixed(2)} ${d.currency}`, holding.billed, d.currency),
+          }),
+        ),
         link: '/?go=parcels',
         data: { parcelId: d.parcelId },
       })
@@ -407,8 +415,10 @@ export class BusinessDoorService implements OnModuleInit {
     void this.notifications
       ?.notify(entity.did, {
         kind: 'parcel_door_short',
-        title: `Top up so ${d.parcelId} can come to your door`,
-        body: `It is ready at ${d.shopName}. Its last leg to ${d.label} needs up to ${d.maxSpend.toFixed(2)} ${d.currency} in your parcel balance before a driver is asked. Top up, then post it under Parcels — or collect it at the shop with its code.`,
+        ...noticeOf(
+          said('businessDoor.short.title', { parcel: d.parcelId }),
+          said('businessDoor.short.body', { shop: d.shopName, label: d.label, amount: money(`${d.maxSpend.toFixed(2)} ${d.currency}`, d.maxSpend, d.currency) }),
+        ),
         link: '/?go=parcels',
         data: { parcelId: d.parcelId },
       })

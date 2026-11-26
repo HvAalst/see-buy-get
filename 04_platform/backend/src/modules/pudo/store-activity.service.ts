@@ -7,6 +7,7 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { VendorService } from './vendor.service';
 import type { StoreActivityEntry } from './store-activity.types';
 
@@ -40,25 +41,16 @@ export function ownerEmailed(developer: string | undefined, e: NewEntry): boolea
   return Boolean(developer) && e.act === 'key_made' && e.mode === 'live' && e.kind === 'secret';
 }
 
-export function ownerNotice(developer: string, e: NewEntry): { title: string; body: string } | null {
+export function ownerNotice(developer: string, e: NewEntry): ReturnType<typeof noticeOf> | null {
   if (e.act === 'key_made' && e.mode === 'live') {
-    const which = keyWords(e);
-    return {
-      title: `${developer} made a live key`,
-      body: `A live ${which} was made on Connect your shop system. With it, your shop system books real shipments. If you did not expect this, revoke it there and take out the developer.`,
-    };
+    const which = said('storeActivity.keyWords', { kind: said(e.kind === 'secret' ? 'storeActivity.kind.secret' : 'storeActivity.kind.publishable'), hint: e.hint ? ` …${e.hint}` : '', label: e.label ? ` “${e.label}”` : '' });
+    return noticeOf(said('storeActivity.keyMade.title', { developer }), said('storeActivity.keyMade.body', { which }));
   }
   if (e.act === 'address_set') {
-    return {
-      title: `${developer} changed where order updates go`,
-      body: `Order updates now go to ${e.url}. If you did not expect this, change it back on Connect your shop system and take out the developer.`,
-    };
+    return noticeOf(said('storeActivity.addressSet.title', { developer }), said('storeActivity.addressSet.body', { url: e.url ?? '' }));
   }
   if (e.act === 'address_cleared') {
-    return {
-      title: `${developer} stopped your order updates`,
-      body: 'Order updates no longer go to your shop system. If you did not expect this, set the address again on Connect your shop system and take out the developer.',
-    };
+    return noticeOf(said('storeActivity.addressCleared.title', { developer }), said('storeActivity.addressCleared.body'));
   }
   return null;
 }

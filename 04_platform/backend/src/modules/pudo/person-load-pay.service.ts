@@ -18,6 +18,7 @@ import { DriverService } from './driver.service';
 import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { NotificationService } from './notification.service';
+import { money, noticeOf, said } from './notice-words/say';
 import type { LoadPayment, LoadPaymentView, LoadRefund, LoadRoute } from './person-load-pay.types';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -161,7 +162,7 @@ export class PersonLoadPayService implements OnModuleInit {
     if (funding.link) payment.link = funding.link;
     this.payments.set(payment.payId, payment);
     this.dispatch.holdForPayment(freightId, proposal.proposalId, until);
-    this.tellDriver(proposal.driverDid, `Your price for ${f.code} is accepted`, `The sender is paying ${this.money(price, currency)} now. The load is yours once it is paid — by ${until.slice(11, 16)} UTC.`, freightId);
+    this.tellDriver(proposal.driverDid, noticeOf(said('personLoadPay.priceAccepted.title', { code: f.code }), said('personLoadPay.priceAccepted.body', { price: money(this.money(price, currency), price, currency), until: until.slice(11, 16) })), freightId);
     return this.viewFor(personDid, freightId)!;
   }
 
@@ -207,7 +208,7 @@ export class PersonLoadPayService implements OnModuleInit {
         this.dispatch.releasePayHold(p.freightId);
         this.dispatch.acceptProposal(p.proposalId, now, p.price);
         this.dispatch.issueDeliveryCode(p.freightId);
-        this.tell(personDid, `Paid: ${p.loadCode} is on its way`, 'The driver collects it. SeeBuyGet holds your money until it is delivered. Give whoever receives it the delivery code from My parcels.', p.freightId);
+        this.tell(personDid, noticeOf(said('personLoadPay.paidOnItsWay.title', { code: p.loadCode }), said('personLoadPay.paidOnItsWay.body')), p.freightId);
         return { entryId: entry.entryId };
       } catch (err) {
         this.logger.warn(`load ${p.loadCode} not committed after payment: ${(err as Error).message}`);
@@ -215,14 +216,14 @@ export class PersonLoadPayService implements OnModuleInit {
         p.why = 'the driver could no longer take it';
         this.payments.set(p.payId, p);
         this.owe(p, gross);
-        this.tell(personDid, `Your payment for ${p.loadCode} goes back to you`, `The driver could no longer take it. ${this.money(gross, p.currency)} ${this.backWords(p)}; choose another price.`, p.freightId);
+        this.tell(personDid, noticeOf(said('personLoadPay.refusedByDriver.title', { code: p.loadCode }), said('personLoadPay.refusedByDriver.body', { amount: money(this.money(gross, p.currency), gross, p.currency), where: this.backWords(p) })), p.freightId);
         return { entryId: entry.entryId };
       }
     }
     // Arrived after the time ran out, a second time, or for no load: all of it goes back.
     const req = p ?? undefined;
     this.oweLoose(personDid, funding.entityId, funding.currency, gross, req);
-    this.tell(personDid, 'Your payment goes back to you', `${this.money(gross, funding.currency)} came in with nothing waiting for it — it goes back to your number with the next payout.`, p?.freightId);
+    this.tell(personDid, noticeOf(said('personLoadPay.loose.title'), said('personLoadPay.loose.body', { amount: money(this.money(gross, funding.currency), gross, funding.currency) })), p?.freightId);
     return { entryId: entry.entryId };
   }
 
@@ -295,7 +296,7 @@ export class PersonLoadPayService implements OnModuleInit {
     p.why = why;
     this.payments.set(p.payId, p);
     this.owe(p, p.paid ?? 0);
-    this.tell(p.personDid, `${p.loadCode}: your money goes back to you`, `The driver did not carry it (${why}). ${this.money(p.paid ?? 0, p.currency)} ${this.backWords(p)}, and the load is open for prices again.`, p.freightId);
+    this.tell(p.personDid, noticeOf(said('personLoadPay.giveBack.title', { code: p.loadCode }), said('personLoadPay.giveBack.body', { why: this.whyWords(why), amount: money(this.money(p.paid ?? 0, p.currency), p.paid ?? 0, p.currency), where: this.backWords(p) })), p.freightId);
   }
 
   /** 2026-11-15 — the protocol gave the carriage price back after delivery: the bill reversed, and it goes back to the person. */
@@ -386,8 +387,16 @@ export class PersonLoadPayService implements OnModuleInit {
   }
 
   /** Where money owed back goes, said to the person. */
-  private backWords(p: LoadPayment): string {
-    return this.mollieOf(p) ? 'goes back to the account you paid from' : 'goes back to your number with the next payout';
+  private backWords(p: LoadPayment) {
+    return this.mollieOf(p) ? said('personLoadPay.back.account') : said('personLoadPay.back.number');
+  }
+
+  /** Why a load went back, said to the person: the reasons dispatch gives are known; any other is said as it is. */
+  private whyWords(why: string) {
+    if (why === 'freight no-show release') return said('personLoadPay.why.noShow');
+    if (why === 'load handed back by the driver before pickup') return said('personLoadPay.why.handedBack');
+    if (why === 'freight cancelled by the sender') return said('personLoadPay.why.cancelled');
+    return why;
   }
 
   /**
@@ -446,7 +455,7 @@ export class PersonLoadPayService implements OnModuleInit {
         ));
       p.route = { ...route, state: 'routed', routedAt: new Date(now).toISOString(), ...(typeof made.id === 'string' ? { routeId: made.id } : {}) };
       this.payments.set(p.payId, p);
-      this.tellCarrier(to.payeeId, `Paid to your Mollie account: ${p.loadCode}`, `${this.money(route.amount, p.currency)} for ${p.loadCode} is in your Mollie account.`, p.freightId);
+      this.tellCarrier(to.payeeId, noticeOf(said('personLoadPay.routed.title', { code: p.loadCode }), said('personLoadPay.routed.body', { amount: money(this.money(route.amount, p.currency), route.amount, p.currency), code: p.loadCode })), p.freightId);
       return p;
     } catch (err) {
       if (err instanceof MollieError && err.status < 500) return this.routeUndone(p, err.detail || err.title);
@@ -577,9 +586,9 @@ export class PersonLoadPayService implements OnModuleInit {
         }
       }
       this.dispatch.releasePayHold(p.freightId);
-      this.tell(p.personDid, `${p.loadCode}: not paid in time`, 'The price you accepted was not paid within the time, so the driver is free again. Accept a price again when you are ready.', p.freightId);
+      this.tell(p.personDid, noticeOf(said('personLoadPay.lapsed.title', { code: p.loadCode }), said('personLoadPay.lapsed.body')), p.freightId);
       try {
-        this.tellDriver(this.dispatch.requireProposalPublic(p.proposalId).driverDid, `${p.loadCode} was not paid`, 'The sender did not pay in time: the load is open again, and your price stands.', p.freightId);
+        this.tellDriver(this.dispatch.requireProposalPublic(p.proposalId).driverDid, noticeOf(said('personLoadPay.lapsedDriver.title', { code: p.loadCode }), said('personLoadPay.lapsedDriver.body')), p.freightId);
       } catch {
         // the price is gone
       }
@@ -648,22 +657,22 @@ export class PersonLoadPayService implements OnModuleInit {
   }
 
   /** The person, in their own app — never a text. */
-  private tell(personDid: string, title: string, body: string, freightId?: string): void {
+  private tell(personDid: string, n: ReturnType<typeof noticeOf>, freightId?: string): void {
     void this.notifications
-      ?.notify(personDid, { kind: 'load_payment', title, body, link: '/?screen=parcels', tag: `load:${freightId ?? personDid}:${title}`, data: freightId ? { freightId } : {} })
+      ?.notify(personDid, { kind: 'load_payment', ...n, link: '/?screen=parcels', tag: `load:${freightId ?? personDid}:${n.title}`, data: freightId ? { freightId } : {} })
       .catch((err: Error) => this.logger.warn(`load notice not sent: ${err.message}`));
   }
 
   /** The carrier paid for the load: the courier, or its fleet's office — in its own app. */
-  private tellCarrier(payeeDid: string, title: string, body: string, freightId: string): void {
+  private tellCarrier(payeeDid: string, n: ReturnType<typeof noticeOf>, freightId: string): void {
     void this.notifications
-      ?.notify(payeeDid, { kind: 'load_payment', title, body, link: '/?board', tag: `load:${freightId}:routed`, data: { freightId } })
+      ?.notify(payeeDid, { kind: 'load_payment', ...n, link: '/?board', tag: `load:${freightId}:routed`, data: { freightId } })
       .catch((err: Error) => this.logger.warn(`load notice not sent: ${err.message}`));
   }
 
-  private tellDriver(driverDid: string, title: string, body: string, freightId: string): void {
+  private tellDriver(driverDid: string, n: ReturnType<typeof noticeOf>, freightId: string): void {
     void this.notifications
-      ?.notify(driverDid, { kind: 'load_payment', title, body, link: '/?board', tag: `load:${freightId}:${title}`, data: { freightId } })
+      ?.notify(driverDid, { kind: 'load_payment', ...n, link: '/?board', tag: `load:${freightId}:${n.title}`, data: { freightId } })
       .catch((err: Error) => this.logger.warn(`load notice not sent: ${err.message}`));
   }
 }

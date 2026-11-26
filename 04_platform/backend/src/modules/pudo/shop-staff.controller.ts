@@ -1,6 +1,7 @@
 import { Body, CallHandler, Controller, ExecutionContext, Get, Injectable, NestInterceptor, Optional, Param, Post } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
+import { day as dayShown, noticeOf, said } from './notice-words/say';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
 import type { Request } from 'express';
@@ -157,8 +158,14 @@ export class ShopStaffController {
       void this.notifications
         ?.notify(placeDid, {
           kind: 'security',
-          title: 'Fingerprint unlock turned off on one of your phones',
-          body: `Fingerprint unlock was turned off on the phone or browser confirmed on ${day} because a colleague signed in ${hub ? 'on the hub’s floor' : 'at the counter'} on it: whoever can unlock that phone could otherwise sign in as the ${hub ? 'hub' : 'shop'}. The password works there as before.`,
+          ...noticeOf(
+            said('shopStaff.fingerprintOff.title'),
+            said('shopStaff.fingerprintOff.body', {
+              day: dayShown(day, new Date(addedAt).toISOString().slice(0, 10)),
+              where: said(hub ? 'shopStaff.where.hub' : 'shopStaff.where.shop'),
+              as: said(hub ? 'shopStaff.as.hub' : 'shopStaff.as.shop'),
+            }),
+          ),
           link: '/',
           tag: `passkey:${placeDid}:counter:${addedAt}`,
         })

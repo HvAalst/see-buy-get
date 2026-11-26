@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomInt } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CarriageContract, CarriageContractView, ContractInviteIssued, ContractRef } from './carriage-contract.types';
+import { day, noticeOf, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 
 /** How long a link code stays good. Long enough for an email to be read on Monday; short enough not to linger. */
@@ -127,8 +128,7 @@ export class CarriageContractService {
     this.contracts.set(c.contractId, c);
     await this.notifications?.notify(c.fleetDid, {
       kind: 'contract_answered',
-      title: `${entity.name} accepted your contract`,
-      body: `${entity.name} accepted the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. Its orders under it now come straight to you.`,
+      ...noticeOf(said('carriageContract.accepted.title', { name: entity.name }), said('carriageContract.accepted.body', { name: entity.name, ref: c.reference ? said('carriageContract.ref', { reference: c.reference }) : '' })),
       // 2026-11-02 — the fleet's contracts are under Orders: a tapped notification, or Open in the bell, goes there.
       link: '/?go=orders',
       data: { contractId: c.contractId, entityId: entity.entityId },
@@ -144,8 +144,7 @@ export class CarriageContractService {
     this.contracts.set(c.contractId, c);
     await this.notifications?.notify(c.fleetDid, {
       kind: 'contract_answered',
-      title: `${entity.name} declined your contract`,
-      body: `${entity.name} declined the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. It stays on your list, not linked: you can still send it a link code, or end it.`,
+      ...noticeOf(said('carriageContract.declined.title', { name: entity.name }), said('carriageContract.declined.body', { name: entity.name, ref: c.reference ? said('carriageContract.ref', { reference: c.reference }) : '' })),
       link: '/?go=orders',
       data: { contractId: c.contractId, entityId: entity.entityId },
     });
@@ -154,11 +153,15 @@ export class CarriageContractService {
 
   /** The business that asked is told the contract is offered to it — in its bell, where it answers. */
   async tellOffered(business: { did: string; name: string }, c: CarriageContract): Promise<void> {
-    const period = c.startsOn || c.endsOn ? `, ${c.startsOn ? `from ${c.startsOn}` : ''}${c.startsOn && c.endsOn ? ' ' : ''}${c.endsOn ? `until ${c.endsOn}` : ''}` : '';
+    const start = c.startsOn ? day(c.startsOn, c.startsOn) : '';
+    const end = c.endsOn ? day(c.endsOn, c.endsOn) : '';
+    const period = c.startsOn && c.endsOn ? said('carriageContract.period.both', { start, end }) : c.startsOn ? said('carriageContract.period.from', { start }) : c.endsOn ? said('carriageContract.period.until', { end }) : '';
     await this.notifications?.notify(business.did, {
       kind: 'contract_offered',
-      title: `${c.fleetName} offers you a carriage contract`,
-      body: `You asked ${c.fleetName} for a contract through the logistics directory, and it recorded one with you${c.reference ? `, reference ${c.reference}` : ''}${period}. Accept it under Carriers to send it loads straight away, or decline it. Nothing is linked until an owner accepts.`,
+      ...noticeOf(
+        said('carriageContract.offered.title', { fleet: c.fleetName }),
+        said('carriageContract.offered.body', { fleet: c.fleetName, ref: c.reference ? said('carriageContract.offeredRef', { reference: c.reference }) : '', period }),
+      ),
       // 2026-11-02 — where it is accepted: the Business app's Carriers (its `contracts` section). A tapped notice, or
       // Open under it in the bell, goes there (the owner: "I need a 'mark as read' or 'respond' button").
       link: '/?go=contracts',

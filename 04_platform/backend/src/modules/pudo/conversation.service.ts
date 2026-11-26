@@ -15,6 +15,7 @@ import { VendorService } from './vendor.service';
 import { FiledPhotoService } from './filed-photo.service';
 import type { FiledPhotoView, FileInput } from './filed-photo.types';
 import { CarWakeService } from './car-wake';
+import { noticeOf, said, type Said } from './notice-words/say';
 import { ConversationSubject,
   QUICK_REPLIES,
   REPORT_REASONS,
@@ -216,7 +217,7 @@ export class ConversationService {
     const thread = this.requireParty(conversationId, fromDid);
     this.requireOpen(thread, fromDid);
     const written = writtenEarlier(input.writtenAt, now);
-    return this.append(thread, fromDid, { ...composed(input), ...(written ? { writtenAt: written } : {}), ...(via === 'car' ? { via } : {}) }, now, 'New message about');
+    return this.append(thread, fromDid, { ...composed(input), ...(written ? { writtenAt: written } : {}), ...(via === 'car' ? { via } : {}) }, now, said('conversation.newMessage'));
   }
 
   /**
@@ -247,7 +248,7 @@ export class ConversationService {
     const freightId = requireLoad(thread, 'A price is named on a load — a parcel waiting at a shop has nothing to price');
     const note = boundedNote(input.note);
     const proposal = this.dispatch.propose({ freightId, driverDid: did, from: input.from, price: Number(input.price), ...(note ? { note } : {}) }, now);
-    return this.append(thread, did, { kind: 'proposal', proposalId: proposal.proposalId, price: proposal.price, ...(note ? { body: note } : {}) }, now, 'New price offered on');
+    return this.append(thread, did, { kind: 'proposal', proposalId: proposal.proposalId, price: proposal.price, ...(note ? { body: note } : {}) }, now, said('conversation.newPrice'));
   }
 
   /**
@@ -267,7 +268,7 @@ export class ConversationService {
       did,
       { kind: 'decision', proposalId, decision: decision === 'accept' ? 'accepted' : 'declined', price: decided.price },
       now,
-      decision === 'accept' ? 'Price accepted on' : 'Price declined on',
+      said(decision === 'accept' ? 'conversation.accepted' : 'conversation.declined'),
     );
   }
 
@@ -294,7 +295,7 @@ export class ConversationService {
       did,
       { kind: 'settlement', settlement: { amount, method: input.method as SettleMethod, when: input.when as SettleWhen }, ...(note ? { body: note } : {}) },
       now,
-      'A settlement was written down on',
+      said('conversation.settlementWritten'),
     );
   }
 
@@ -307,7 +308,7 @@ export class ConversationService {
     if (!target) throw new GlosError('NOT_FOUND', 'No such settlement in this conversation');
     if (target.fromDid === did) throw new GlosError('INVALID_INPUT', 'The other side agrees to a settlement — not the one who wrote it down');
     if (agreedSeqs(all).has(target.seq)) throw new GlosError('INVALID_STATE', 'This settlement is already agreed');
-    return this.append(thread, did, { kind: 'settlement_agreed', refSeq: target.seq }, now, 'A settlement was agreed on');
+    return this.append(thread, did, { kind: 'settlement_agreed', refSeq: target.seq }, now, said('conversation.settlementAgreed'));
   }
 
   /**
@@ -335,7 +336,7 @@ export class ConversationService {
     };
     this.voice.set(note.voiceId, note);
     try {
-      return this.append(thread, did, { kind: 'voice', voiceId: note.voiceId, durationSec }, now, 'New voice message about');
+      return this.append(thread, did, { kind: 'voice', voiceId: note.voiceId, durationSec }, now, said('conversation.newVoice'));
     } catch (err) {
       // Refused by the hourly cap: a recording nobody can reach must not stay behind.
       this.voice.delete(note.voiceId);
@@ -384,7 +385,7 @@ export class ConversationService {
       now,
     );
     const { conversationId: _c, byDid: _b, ...photo } = filing;
-    const view = this.append(thread, did, { kind: 'photo', photo, ...(written ? { writtenAt: written } : {}) }, now, 'A photo was filed on');
+    const view = this.append(thread, did, { kind: 'photo', photo, ...(written ? { writtenAt: written } : {}) }, now, said('conversation.photo'));
     // Kept only once the card is in the thread: a filing the hourly cap refused leaves nothing behind.
     this.filed.keep(filing, now);
     return view;
@@ -498,7 +499,7 @@ export class ConversationService {
     };
     this.disputeReports.set(report.reportId, report);
     // Told in the thread, never done behind the other side's back.
-    this.append(thread, did, { kind: 'report_shared', reportRef: report.reportId, seqCount: chosen.length }, now, 'A report was shared about');
+    this.append(thread, did, { kind: 'report_shared', reportRef: report.reportId, seqCount: chosen.length }, now, said('conversation.report'));
     return { reportId: report.reportId, fingerprint: report.fingerprint, seqCount: chosen.length };
   }
 
@@ -570,7 +571,7 @@ export class ConversationService {
    * ONE WAY A MESSAGE ENTERS A THREAD — text, a price, a decision or a settlement alike: the hourly cap, the
    * next sequence number, the sender's own read marker, and a discreet push to the other party.
    */
-  private append(thread: Conversation, fromDid: string, message: Omit<ConversationMessage, 'seq' | 'fromDid' | 'at'>, now: number, pushTitle: string): MessageView {
+  private append(thread: Conversation, fromDid: string, message: Omit<ConversationMessage, 'seq' | 'fromDid' | 'at'>, now: number, pushTitle: Said): MessageView {
     // 2026-11-02 — NO MESSAGE CARRIES A PICTURE (the owner: "just sharing blurs this"): a photo is filed to the record and
     // the thread holds its reference; a recording is kept apart (CV4). A message with a data URL in it, or the size of a
     // picture, is refused here, whatever door it came in by — before the cap counts it, and before anything is kept.
@@ -597,8 +598,7 @@ export class ConversationService {
     void this.notifications
       .notify(other, {
         kind: 'message',
-        title: `${pushTitle} ${this.codeOf(thread)}`,
-        body: 'Open the conversation to read it.',
+        ...noticeOf(said('conversation.title', { what: pushTitle, code: this.codeOf(thread) }), said('conversation.body')),
         // 2026-11-02 — straight into the chat (the owner: "I need a 'mark as read' or 'respond' button"): a tapped
         // notification opens the app at it, and Reply under the notice in the bell goes to the same place. A query on
         // the app's own address, as every deep link here is — never a path the build does not contain.

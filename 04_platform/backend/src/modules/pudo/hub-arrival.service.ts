@@ -29,6 +29,7 @@ import {
 import { MdpService } from './mdp.service';
 import { HubContactService, outsideOf } from './hub-contact.service';
 import { NotificationService } from './notification.service';
+import { day as dayShown, money as moneyShown, noticeOf, said, type Said } from './notice-words/say';
 import { ParcelService } from './parcel.service';
 import type { Mdp, Parcel, ParcelSize } from './pudo.types';
 import { publicQuote, RoutingService, type QuoteCarriers } from './routing.service';
@@ -42,6 +43,9 @@ const STORE_DONE_SHOWN_MS = 14 * 86_400_000;
 const UNIT_WORDS: Record<HubUnitKind, [string, string]> = { pallet: ['pallet', 'pallets'], carton: ['carton', 'cartons'], cage: ['cage', 'cages'], sack: ['sack', 'sacks'] };
 const unitsInWords = (kind: HubUnitKind, n: number) => `${n} ${UNIT_WORDS[kind][n === 1 ? 0 : 1]}`;
 const parcelsInWords = (n: number) => `${n} ${n === 1 ? 'parcel' : 'parcels'}`;
+/** The same words as phrases, for a notice read in the reader's language. */
+const unitsSaid = (kind: HubUnitKind, n: number): Said => said(`hubArrival.unit.${kind}`, { n });
+const parcelsSaid = (n: number): Said => said('hubArrival.parcels', { n });
 const WEEKDAY_NAMES: Record<string, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
 /**
@@ -397,17 +401,22 @@ export class HubArrivalService {
     } catch {
       return;
     }
-    const what = a.reference ?? unitsInWords(a.units.kind, a.units.count);
+    const what = a.reference ?? unitsSaid(a.units.kind, a.units.count);
     const took = a.scanned.length;
-    const title = missing.length ? `${hub.name} took in ${parcelsInWords(took)} of ${a.parcelIds.length}` : took === 1 ? `${hub.name} took in your parcel` : `${hub.name} took in all ${parcelsInWords(took)}`;
+    const title = missing.length
+      ? said('hubArrival.tookSome.title', { hub: hub.name, took: parcelsSaid(took), total: a.parcelIds.length })
+      : took === 1
+        ? said('hubArrival.tookOne.title', { hub: hub.name })
+        : said('hubArrival.tookAll.title', { hub: hub.name, took: parcelsSaid(took) });
+    const list = `${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}`;
     const body = missing.length
-      ? `${what}: ${parcelsInWords(missing.length)} booked on it ${missing.length === 1 ? 'was' : 'were'} not there (${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}). ${missing.length === 1 ? 'It is' : 'They are'} still with you: book ${missing.length === 1 ? 'it' : 'them'} on your next arrival.`
-      : `${what}: every parcel booked on it is at the hub and on its way to its sort.`;
+      ? said(missing.length === 1 ? 'hubArrival.missingOne.body' : 'hubArrival.missingMany.body', { what, missing: parcelsSaid(missing.length), list })
+      : said('hubArrival.allIn.body', { what });
     // What the hub saw at its door goes to the store, as a receiver's findings go to the sender (D9).
-    const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
+    const seen = a.received?.note ? said('hubArrival.atTheDoor', { note: a.received.note }) : '';
     try {
-      const empties = a.emptiesBack ? ` ${unitsInWords(a.units.kind, a.emptiesBack.units)} handed back at its door.` : '';
-      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${empties}${receivingLine(a)}`, link: '/?go=dock', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
+      const empties = a.emptiesBack ? said('hubArrival.emptiesBack', { units: unitsSaid(a.units.kind, a.emptiesBack.units) }) : '';
+      await this.notifications.notify(did, { kind: 'hub_arrival', ...noticeOf(title, said('hubArrival.stored.body', { body, seen, empties, receiving: receivingSaid(a) })), link: '/?go=dock', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
     }
@@ -422,13 +431,15 @@ export class HubArrivalService {
     } catch {
       return;
     }
-    const what = a.reference ?? unitsInWords(a.units.kind, a.units.count);
+    const what = a.reference ?? unitsSaid(a.units.kind, a.units.count);
     const n = a.parcelIds.length;
     try {
       await this.notifications.notify(did, {
         kind: 'hub_arrival',
-        title: `${hub.name}: your arrival did not come`,
-        body: `${what}, booked for ${a.expectedOn}: ${hub.name} says nothing came. ${n === 1 ? 'Its parcel is' : `Its ${parcelsInWords(n)} are`} still with you: book ${n === 1 ? 'it' : 'them'} on a new arrival.${receivingLine(a)}`,
+        ...noticeOf(
+          said('hubArrival.missed.title', { hub: hub.name }),
+          said(n === 1 ? 'hubArrival.missedOne.body' : 'hubArrival.missedMany.body', { what, day: dayShown(a.expectedOn, a.expectedOn), hub: hub.name, parcels: parcelsSaid(n), receiving: receivingSaid(a) }),
+        ),
         link: '/?go=dock',
         tag: `hub-arrival:${a.arrivalId}`,
         data: { arrivalId: a.arrivalId, mdpId: a.mdpId },
@@ -721,12 +732,12 @@ const times = (each: number, n: number) => Math.round(each * n * 100) / 100;
 const money = (amount: number, currency: string) => `${currency} ${amount.toFixed(2)}`;
 
 /** What a store paid for receiving and what came back, as its bell says it (D12). Nothing where the hub charged nothing. */
-function receivingLine(a: HubArrival): string {
+function receivingSaid(a: HubArrival): Said | '' {
   const f = a.fee;
   if (!f) return '';
   const paid = Math.round((f.charged.amount + (f.extra?.amount ?? 0)) * 100) / 100;
-  const back = f.refunded ? ` ${money(f.refunded.amount, f.unit.currency)} of it given back: ${unitsInWords(a.units.kind, f.refunded.units)}.` : '';
-  return ` Receiving: ${money(paid, f.unit.currency)} paid.${back}`;
+  const back = f.refunded ? said('hubArrival.receiving.back', { refunded: moneyShown(money(f.refunded.amount, f.unit.currency), f.refunded.amount, f.unit.currency), units: unitsSaid(a.units.kind, f.refunded.units) }) : '';
+  return said('hubArrival.receiving', { paid: moneyShown(money(paid, f.unit.currency), paid, f.unit.currency), back });
 }
 
 /**

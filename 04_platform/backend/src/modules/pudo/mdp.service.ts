@@ -35,7 +35,7 @@ import { HubTransferService } from './hub-transfer.service';
 import type { HubTransferInput } from './hub-transfer.types';
 import type { HandoverPositionDto } from './handover-position';
 import { haversineKm } from './geo';
-import { confirmedInTime, confirmOpen, hubIsDown, HUB_DOWN_CONFIRM_WINDOW_H, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, HUB_DOWN_WORDS, unconfirmedPast, type HubDownReason } from './hub-down.types';
+import { confirmedInTime, confirmOpen, hubIsDown, HUB_DOWN_CONFIRM_WINDOW_H, HUB_DOWN_MAX_DAYS, HUB_DOWN_REASONS, unconfirmedPast, type HubDownReason } from './hub-down.types';
 import { ROUTER, type Router } from './router';
 import { INVITE_CODE } from './hub-list.types';
 import { ROAD_CIRCUITY_FACTOR } from './pudo.config';
@@ -45,6 +45,12 @@ import { clockAt, clocksOfCountry } from './fleet-clock';
 import { NotificationService } from './notification.service';
 import { HubDrop, HubFloorBook, spaceProblem, THROUGH_DAYS, THROUGH_DAYS_FULL, withDay, type HubDay } from './hub-space';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS } from './pudo.config';
+import { at as momentAt, noticeOf, said, type Said } from './notice-words/say';
+
+/** The words for why a hub is down, as phrases (the same English as HUB_DOWN_WORDS). */
+function downWhySaid(reason: HubDownReason): Said {
+  return said(`mdp.downWhy.${reason}`);
+}
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -479,12 +485,20 @@ export class MdpService {
     delete mdp.feeAsked;
     this.mdps.set(mdpId, mdp);
     if (this.notifications) {
-      const what = [asked.pricePerParcel !== undefined ? `a sort fee of ${asked.pricePerParcel}` : '', asked.passOnFee !== undefined ? `a pass-on fee of ${asked.passOnFee}` : ''].filter(Boolean).join(' and ');
+      const what =
+        asked.pricePerParcel !== undefined && asked.passOnFee !== undefined
+          ? said('mdp.fees.both', { sort: asked.pricePerParcel, passOn: asked.passOnFee })
+          : asked.pricePerParcel !== undefined
+            ? said('mdp.fees.sort', { sort: asked.pricePerParcel })
+            : asked.passOnFee !== undefined
+              ? said('mdp.fees.passOn', { passOn: asked.passOnFee })
+              : '';
       void this.notifications
         .notify(mdp.did, {
           kind: 'hub_fees',
-          title: approve ? 'Your fees are approved' : 'Your fees were not approved',
-          body: approve ? `SeeBuyGet approved ${what}: it is what you are paid from now.` : `SeeBuyGet did not approve ${what}: ${reason!.trim()}. Your fees stay as they were.`,
+          ...(approve
+            ? noticeOf(said('mdp.feesApproved.title'), said('mdp.feesApproved.body', { what }))
+            : noticeOf(said('mdp.feesRefused.title'), said('mdp.feesRefused.body', { what, reason: reason!.trim() }))),
           link: '/',
           tag: `hub-fees:${mdpId}:${asked.at}`,
           data: { mdpId },
@@ -746,8 +760,7 @@ export class MdpService {
     void this.notifications
       ?.notify(mdp.did, {
         kind: 'hub_space',
-        title: 'Today’s sorting is full',
-        body: `${mdp.name} has sorted ${count} parcels today, as many as you said it sorts in a day. Bags are still taken from every driver. New bags go to another hub for your areas where one has room today; what is not sorted today is sorted tomorrow.`,
+        ...noticeOf(said('mdp.sortingFull.title'), said('mdp.sortingFull.body', { hub: mdp.name, count })),
         link: '/',
         tag: `hub-space:${mdp.mdpId}:day:${day}`,
         data: { mdpId: mdp.mdpId, day },
@@ -955,14 +968,11 @@ export class MdpService {
     const atHub = this.mdps.get(tote.locationId);
     const did = atHub ? atHub.did : tote.locationId;
     const link = atHub ? '/?go=load' : this.agents.find(tote.locationId) ? '/?go=bag' : '/?go=dock';
-    const where = areas.length ? areas.join(', ') : (tote.destinationLabel ?? 'its area');
+    const where = areas.length ? areas.join(', ') : (tote.destinationLabel ?? said('mdp.itsArea'));
     const words =
       what === 'waits'
-        ? {
-            title: `Bag ${tote.code} waits for room at ${hub.name}`,
-            body: `${hub.name} has no room on its floor for another bag, and no other hub for ${where} has room either. Keep bag ${tote.code} where it is: it is offered to drivers again by itself when there is room, and you are told then.`,
-          }
-        : { title: `Bag ${tote.code} can go on`, body: `There is room for it now: bag ${tote.code} goes to ${hub.name}, and is offered to drivers again.` };
+        ? noticeOf(said('mdp.bagWaits.title', { code: tote.code, hub: hub.name }), said('mdp.bagWaits.body', { code: tote.code, hub: hub.name, where }))
+        : noticeOf(said('mdp.bagGoesOn.title', { code: tote.code }), said('mdp.bagGoesOn.body', { code: tote.code, hub: hub.name }));
     void this.notifications
       .notify(did, { kind: 'hub_space', ...words, link, tag: `hub-space:${tote.code}:${what}:${since}`, data: { code: tote.code, mdpId: hub.mdpId } })
       .catch(() => undefined);
@@ -1105,8 +1115,7 @@ export class MdpService {
     void this.notifications
       .notify(shop.did, {
         kind: 'bag_room',
-        title: 'Your corner for closed bags is full',
-        body: `${room.closed} closed bags are waiting for drivers, as many as you said your corner holds. The next one you close stands where you work, and you can open ${room.free} more now. Each one a driver takes makes room again.`,
+        ...noticeOf(said('mdp.cornerFull.title'), said('mdp.cornerFull.body', { closed: room.closed, free: room.free })),
         link: '/?go=bag',
         tag: `bag-room:${agentDid}:${new Date().toISOString().slice(0, 13)}`,
         data: { closed: room.closed, corner: room.corner },
@@ -1784,7 +1793,7 @@ export class MdpService {
     // Said by staff: the hub is told, so it knows why nothing comes to it.
     if (by.role === 'staff' && this.notifications) {
       void this.notifications
-        .notify(hub.did, { kind: 'hub_space', title: `${hub.name} is marked down`, body: `SeeBuyGet staff marked your hub down: ${HUB_DOWN_WORDS[input.reason]}${note ? ` — ${note}` : ''}. Nothing is sent to it until it is open again: say so in the Hub app when it is.`, link: '/', tag: `hub-down:${hub.mdpId}:${hub.down.since}`, data: { mdpId: hub.mdpId } })
+        .notify(hub.did, { kind: 'hub_space', ...noticeOf(said('mdp.markedDown.title', { hub: hub.name }), said('mdp.markedDown.body', { why: downWhySaid(input.reason), note: note ? said('mdp.markedDown.note', { note }) : '' })), link: '/', tag: `hub-down:${hub.mdpId}:${hub.down.since}`, data: { mdpId: hub.mdpId } })
         .catch(() => undefined);
     }
     void this.events.publish(GlosEvent.Pudo.HubDown, { mdpId: hub.mdpId, name: hub.name, reason: input.reason, until: hub.down.until, byRole: by.role, redirected: redirected.length }, { source: 'pudo' }).catch(() => undefined);
@@ -1900,7 +1909,7 @@ export class MdpService {
     const standing = this.totes.list().filter((t) => t.locationId === mdpId && t.status === 'available').length;
     if (collectable && by.role === 'staff' && this.notifications) {
       void this.notifications
-        .notify(hub.did, { kind: 'hub_space', title: `Drivers may come for ${hub.name}’s bags`, body: `SeeBuyGet staff opened your bags to drivers while the hub is down: ${standing} bag${standing === 1 ? '' : 's'} standing there. Hand each over as on any day.`, link: '/', tag: `hub-collect:${hub.mdpId}:${hub.down.collectable!.since}`, data: { mdpId: hub.mdpId } })
+        .notify(hub.did, { kind: 'hub_space', ...noticeOf(said('mdp.collectable.title', { hub: hub.name }), said('mdp.collectable.body', { standing })), link: '/', tag: `hub-collect:${hub.mdpId}:${hub.down.collectable!.since}`, data: { mdpId: hub.mdpId } })
         .catch(() => undefined);
     }
     return hub;
@@ -1921,7 +1930,7 @@ export class MdpService {
       if (Date.parse(down.until) <= now && confirmedInTime(down)) {
         this.markUp(hub.mdpId, 'system: it confirmed it opens', now);
         out.opened.push(hub.mdpId);
-        this.tellHub(hub, `${hub.name} is open again`, `As you confirmed, ${hub.name} is open again: bags are sent to it as before.`, `hub-open:${hub.mdpId}:${down.until}`);
+        this.tellHub(hub, noticeOf(said('mdp.openAgain.title', { hub: hub.name }), said('mdp.openAgain.body', { hub: hub.name })), `hub-open:${hub.mdpId}:${down.until}`);
         continue;
       }
       if (unconfirmedPast(down, now)) {
@@ -1929,7 +1938,7 @@ export class MdpService {
           hub.down = { ...down, unconfirmedToldAt: new Date(now).toISOString() };
           this.mdps.set(hub.mdpId, hub);
           out.unconfirmed.push(hub.mdpId);
-          this.tellHub(hub, `${hub.name} stays closed`, `You did not confirm ${hub.name} opens at ${down.until.slice(0, 16).replace('T', ' ')} UTC, so nothing is sent to it. Say it is open in the Hub app when it is — or give a new time.`, `hub-unconfirmed:${hub.mdpId}:${down.until}`);
+          this.tellHub(hub, noticeOf(said('mdp.staysClosed.title', { hub: hub.name }), said('mdp.staysClosed.body', { hub: hub.name, at: momentAt(`${down.until.slice(0, 16).replace('T', ' ')} UTC`, down.until) })), `hub-unconfirmed:${hub.mdpId}:${down.until}`);
         }
         continue;
       }
@@ -1937,19 +1946,19 @@ export class MdpService {
       hub.down = { ...down, askedAt: new Date(now).toISOString() };
       this.mdps.set(hub.mdpId, hub);
       out.asked.push(hub.mdpId);
-      const at = `${down.until.slice(0, 16).replace('T', ' ')} UTC`;
+      const at = momentAt(`${down.until.slice(0, 16).replace('T', ' ')} UTC`, down.until);
       if (confirmOpen(down, now) && !confirmedInTime(down)) {
-        this.tellHub(hub, `Does ${hub.name} open at ${at}?`, `Confirm in the Hub app that ${hub.name} opens at ${at} — or give a new time. Not confirmed, it stays closed and nothing is sent to it.`, `hub-confirm:${hub.mdpId}:${today}`);
+        this.tellHub(hub, noticeOf(said('mdp.confirmOpen.title', { hub: hub.name, at }), said('mdp.confirmOpen.body', { hub: hub.name, at })), `hub-confirm:${hub.mdpId}:${today}`);
       } else if (!confirmedInTime(down)) {
-        this.tellHub(hub, `${hub.name} is down until ${at}`, `Is ${at} still right? Give a new time in the Hub app if it is not. You are asked to confirm it in the last day before.`, `hub-still:${hub.mdpId}:${today}`);
+        this.tellHub(hub, noticeOf(said('mdp.downUntil.title', { hub: hub.name, at }), said('mdp.downUntil.body', { at })), `hub-still:${hub.mdpId}:${today}`);
       }
     }
     return out;
   }
 
-  private tellHub(hub: Mdp, title: string, body: string, tag: string): void {
+  private tellHub(hub: Mdp, words: ReturnType<typeof noticeOf>, tag: string): void {
     if (!this.notifications) return;
-    void this.notifications.notify(hub.did, { kind: 'hub_space', title, body, link: '/', tag, data: { mdpId: hub.mdpId } }).catch(() => undefined);
+    void this.notifications.notify(hub.did, { kind: 'hub_space', ...words, link: '/', tag, data: { mdpId: hub.mdpId } }).catch(() => undefined);
   }
 
   /** The driver carrying a bag, or the shop or hub holding it, told where it goes now that its hub is down. */
@@ -1957,12 +1966,14 @@ export class MdpService {
     if (!this.notifications) return;
     const holder = tote.status === 'available' ? (this.mdps.get(tote.locationId)?.did ?? tote.locationId) : (tote.carriedBy ?? tote.claimedBy);
     if (!holder) return;
-    const why = from.down ? HUB_DOWN_WORDS[from.down.reason] : 'closed';
+    const why = from.down ? downWhySaid(from.down.reason) : downWhySaid('other');
     void this.notifications
       .notify(holder, {
         kind: 'hub_space',
-        title: `Bag ${tote.code} goes to ${to.name} now`,
-        body: `${from.name} is down (${why}): take bag ${tote.code} to ${to.name} instead.${paid ? (extraKm ? ` The extra ${extraKm} km are paid, as the network’s cost.` : ' The extra leg is paid, as the network’s cost.') : ''}`,
+        ...noticeOf(
+          said('mdp.redirect.title', { code: tote.code, to: to.name }),
+          said('mdp.redirect.body', { from: from.name, why, code: tote.code, to: to.name, paid: paid ? (extraKm ? said('mdp.redirect.paidKm', { km: extraKm }) : said('mdp.redirect.paidLeg')) : '' }),
+        ),
         link: tote.status === 'available' ? '/' : '/?go=loads',
         tag: `hub-down:${tote.code}:${to.mdpId}`,
         data: { code: tote.code, from: from.mdpId, to: to.mdpId },

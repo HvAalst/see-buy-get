@@ -1,0 +1,48 @@
+import type { EN_BELL } from '../en/bell';
+
+export const AM_BELL: Record<keyof typeof EN_BELL, string> = {
+  'bell.twoParts': '{what} {next}',
+  'bell.test.title': 'ማሳወቂያዎች በርተዋል',
+  'bell.test.body': 'ይህ ከSeeBuyGet የተላከ ሙከራ ነው — አንድ ነገር እርስዎን ሲፈልግ የምንነግርዎ እዚህ ነው።',
+  'bell.button.take': 'ይውሰዱት',
+  'bell.button.notNow': 'አሁን አይደለም',
+
+  'welcome.tap': 'አንዱን ይንኩ፤ እርምጃ በሚወስዱበት ቦታ ይከፈታል።',
+  'welcome.business.title': 'የንግድዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.business.body': 'ጭነት የሚወስድ አጓጓዥ፣ በመንገድ ላይ ያለ ችግር፣ ማድረስ፣ የተመለሰ የይገባኛል ጥያቄ፣ የተፈተሹ ሰነዶች፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.driver.title': 'ማሳወቂያዎችዎ እዚህ ይደርሳሉ',
+  'welcome.driver.body': 'በእርስዎ ላይ የተመደቡ ጭነቶች፣ በአቅራቢያዎ ያሉ ቅናሾች፣ መልእክቶች፣ ፈረቃዎ እና ተሽከርካሪዎ፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.shop.title': 'የሱቅዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.shop.body': 'የሚቀበሏቸው ወይም የሚያስረክቧቸው ጥቅሎች፣ የሚዘጉ ቦርሳዎች፣ የገባ ገንዘብ፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.hub.title': 'የማዕከልዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.hub.body': 'የሚገቡ ቦርሳዎች እና በበርዎ የሚደርሱ፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.store.title': 'የመደብርዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.store.body': 'ጭነቶችዎ እና ወደ መጫኛ ቦታዎ የሚደርሰው፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.fleet.title': 'የተሽከርካሪ ቡድንዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.fleet.body': 'ሾፌሮችዎ፣ ጉዞዎች፣ ትዕዛዞች እና ተሽከርካሪዎች፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.partner.title': 'የድርጅትዎ ማሳወቂያዎች እዚህ ይደርሳሉ',
+  'welcome.partner.body': 'SeeBuyGet በየሳምንቱ ያለብዎትን እና መቼ እንደተከፈለ፣ ሂሳብዎን የሚጠብቁ ክፍያዎች፣ እና የቆጣሪዎችዎ የMollie ሂሳብ ለውጦች፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+  'welcome.send.title': 'ማሳወቂያዎችዎ እዚህ ይደርሳሉ',
+  'welcome.send.body': 'ጥቅሎችዎ — በመንገድ ላይ ሲሆኑ፣ ለመውሰድ ሲዘጋጁ፣ ወይም እርስዎን ሲፈልጉ፦ እያንዳንዱ እዚህ ይነገራል። {tap}',
+
+  'partner.weekOwed.title': '{seller} ከ{from} እስከ {to} ላለው ሳምንት {amount} አለብዎት',
+  'partner.weekOwed.body': 'ሰዎችዎ በሸጣቸው ጥቅሎች ላይ ላደረጓቸው {steps, plural, one {# እርምጃ} other {# እርምጃዎች}}። በባንክ ዝውውር ይከፈላል፤ መቼ እንደሆነም እዚህ ይነገርዎታል።',
+  'partner.weekPaid.title': '{seller} ከ{from} እስከ {to} ላለው ሳምንት {amount} ከፍሎዎታል',
+  'partner.weekPaid.body': 'በባንክ ዝውውር፣ ማጣቀሻ {reference}።',
+  'partner.payoutsShort.title': 'ክፍያዎች ይጠብቃሉ፦ የክፍያ ሂሳብዎ በቂ ገንዘብ የለውም',
+  'partner.payoutsShort.body':
+    '{count, plural, one {ለሰዎችዎ የሚደረግ # ክፍያ፣ {amount}፣ የክፍያ ሂሳብዎ በቂ ገንዘብ እስኪይዝ ይጠብቃል። በየሰዓቱ እንደገና ይሞከራል።} other {ለሰዎችዎ የሚደረጉ # ክፍያዎች፣ በጠቅላላ {amount}፣ የክፍያ ሂሳብዎ በቂ ገንዘብ እስኪይዝ ይጠብቃሉ። በየሰዓቱ እንደገና ይሞከራሉ።}}',
+  'partner.mollie.connected.title': '{partner}፦ የቆጣሪዎቹ የMollie ሂሳብ ተገናኝቷል',
+  'partner.mollie.disconnected.title': '{partner}፦ የቆጣሪዎቹ የMollie ሂሳብ ተቋርጧል',
+  'partner.mollie.connected.what': '{by} {account}ን አገናኝተዋል። ከአሁን ጀምሮ ቆጣሪዎችዎ የሚቀበሉት ገንዘብ ወደዚያ ይገባል።',
+  'partner.mollie.disconnected.what': '{by} {account}ን አቋርጠዋል። ሂሳብ እንደገና እስኪገናኝ ድረስ ቆጣሪዎችዎ የሙከራ ገንዘብ ይቀበላሉ።',
+  'partner.mollie.connected.next': 'ያ የድርጅትዎ የራሱ ሂሳብ ካልሆነ፣ በአጋር መተግበሪያው ውስጥ በገንዘብ ስር ያቋርጡት፤ ለSeeBuyGetም ወዲያውኑ ይንገሩ።',
+  'partner.mollie.disconnected.next': 'ያ ታስቦ ካልነበረ፣ የድርጅትዎን የራሱን ሂሳብ በአጋር መተግበሪያው ውስጥ በገንዘብ ስር እንደገና ያገናኙ።',
+  'partner.mollie.account.registered': '{name}፣ የምዝገባ ቁጥር {registration}',
+  'partner.mollie.account.unnamed': 'የMollie ሂሳብ',
+
+  'payout.bankChanged.title': 'የክፍያ የባንክ ሂሳብዎ ተቀይሯል',
+  'payout.bankChanged.what': 'ክፍያዎች አሁን ወደ ሂሳብ {account} ይሄዳሉ። ከ{until} በፊት ምንም አይከፈልበትም።',
+  'payout.bankChanged.nextPin': 'እርስዎ ካልሆኑ፣ ወዲያውኑ ፒንዎን ይቀይሩ፣ ከዚያም የራስዎን ሂሳብ በቅንብሮች ውስጥ እንደገና ያስገቡ።',
+  'payout.bankChanged.nextPassword': 'እርስዎ ካልሆኑ፣ ወዲያውኑ የይለፍ ቃሉን ይቀይሩ፣ ከዚያም የራስዎን ሂሳብ በቅንብሮች ውስጥ እንደገና ያስገቡ።',
+};

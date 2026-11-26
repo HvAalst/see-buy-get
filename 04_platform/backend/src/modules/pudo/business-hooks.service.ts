@@ -15,6 +15,7 @@ import { InboundService } from './inbound.service';
 import { DispatchService } from './dispatch.service';
 import { PASSAGE_HOOK_EVENTS, type PassageKind } from './load-passage.types';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 
 /** How often waiting messages are sent. A system waiting on "picked up" wants seconds, not minutes. */
 const DRAIN_MS = Number(process.env.GLOS_CALLBACK_DRAIN_MS ?? 15_000);
@@ -271,8 +272,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.notifications?.notify(entity.did, {
           kind: 'system_down',
-          title: 'Your system is not taking our messages',
-          body: `${count === 1 ? 'A message' : `${count} messages`} about your loads ${count === 1 ? 'was' : 'were'} given up after two days of tries. Put your system right, then send ${count === 1 ? 'it' : 'them'} again under Your system.`,
+          ...noticeOf(said('businessHooks.down.title'), count === 1 ? said('businessHooks.down.one') : said('businessHooks.down.many', { count })),
           link: '/',
           data: { count, since },
         });

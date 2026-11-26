@@ -1,0 +1,48 @@
+import type { EN_BELL } from '../en/bell';
+
+export const NL_BELL: Record<keyof typeof EN_BELL, string> = {
+  'bell.twoParts': '{what} {next}',
+  'bell.test.title': 'Meldingen staan aan',
+  'bell.test.body': 'Dit is een test van SeeBuyGet — hier laten we je weten wanneer iets jou nodig heeft.',
+  'bell.button.take': 'Neem het',
+  'bell.button.notNow': 'Niet nu',
+
+  'welcome.tap': 'Tik erop en het opent waar je het afhandelt.',
+  'welcome.business.title': 'De meldingen van je bedrijf komen hier binnen',
+  'welcome.business.body': 'Een vervoerder die een lading neemt, een probleem onderweg, een levering, een beantwoorde claim, gecontroleerde papieren: alles wordt hier gemeld. {tap}',
+  'welcome.driver.title': 'Je meldingen komen hier binnen',
+  'welcome.driver.body': 'Ladingen die aan jou zijn gegeven, aanbiedingen bij jou in de buurt, berichten, je dienst en je voertuig: alles wordt hier gemeld. {tap}',
+  'welcome.shop.title': 'De meldingen van je winkel komen hier binnen',
+  'welcome.shop.body': 'Pakketten om aan te nemen of af te geven, zakken om te sluiten, binnengekomen geld: alles wordt hier gemeld. {tap}',
+  'welcome.hub.title': 'De meldingen van je hub komen hier binnen',
+  'welcome.hub.body': 'Binnenkomende zakken en aankomsten aan je deur: alles wordt hier gemeld. {tap}',
+  'welcome.store.title': 'De meldingen van je webwinkel komen hier binnen',
+  'welcome.store.body': 'Je zendingen, en wat je laaddock bereikt: alles wordt hier gemeld. {tap}',
+  'welcome.fleet.title': 'De meldingen van je vloot komen hier binnen',
+  'welcome.fleet.body': 'Je chauffeurs, ritten, orders en voertuigen: alles wordt hier gemeld. {tap}',
+  'welcome.partner.title': 'De meldingen van je bedrijf komen hier binnen',
+  'welcome.partner.body': 'Wat SeeBuyGet je elke week verschuldigd is en wanneer het betaald is, uitbetalingen die op je rekening wachten, en wijzigingen aan het Mollie-account van je balies: alles wordt hier gemeld. {tap}',
+  'welcome.send.title': 'Je meldingen komen hier binnen',
+  'welcome.send.body': 'Je pakketten — onderweg, klaar om op te halen, of als ze jou nodig hebben: alles wordt hier gemeld. {tap}',
+
+  'partner.weekOwed.title': '{seller} is je {amount} verschuldigd voor de week van {from} tot {to}',
+  'partner.weekOwed.body': 'Voor {steps, plural, one {# stap} other {# stappen}} die je mensen deden aan pakketten die het verkocht. Het wordt per bankoverschrijving betaald, en je hoort hier wanneer.',
+  'partner.weekPaid.title': '{seller} heeft je {amount} betaald voor de week van {from} tot {to}',
+  'partner.weekPaid.body': 'Per bankoverschrijving, kenmerk {reference}.',
+  'partner.payoutsShort.title': 'Uitbetalingen wachten: je uitbetalingsrekening heeft te weinig saldo',
+  'partner.payoutsShort.body':
+    '{count, plural, one {# uitbetaling aan je mensen, {amount}, wacht tot je uitbetalingsrekening genoeg saldo heeft. Ze wordt elk uur opnieuw geprobeerd.} other {# uitbetalingen aan je mensen, {amount} in totaal, wachten tot je uitbetalingsrekening genoeg saldo heeft. Ze worden elk uur opnieuw geprobeerd.}}',
+  'partner.mollie.connected.title': '{partner}: het Mollie-account van de balies is gekoppeld',
+  'partner.mollie.disconnected.title': '{partner}: het Mollie-account van de balies is ontkoppeld',
+  'partner.mollie.connected.what': '{by} heeft {account} gekoppeld. Vanaf nu gaat het geld dat je balies ontvangen daarnaartoe.',
+  'partner.mollie.disconnected.what': '{by} heeft {account} ontkoppeld. Je balies ontvangen testgeld tot er weer een account is gekoppeld.',
+  'partner.mollie.connected.next': 'Is dat niet het eigen account van je bedrijf, ontkoppel het dan in de Partner-app, onder Geld, en laat het SeeBuyGet meteen weten.',
+  'partner.mollie.disconnected.next': 'Was dat niet de bedoeling, koppel dan opnieuw het eigen account van je bedrijf in de Partner-app, onder Geld.',
+  'partner.mollie.account.registered': '{name}, registratienummer {registration}',
+  'partner.mollie.account.unnamed': 'een Mollie-account',
+
+  'payout.bankChanged.title': 'Je bankrekening voor uitbetalingen is gewijzigd',
+  'payout.bankChanged.what': 'Uitbetalingen gaan nu naar de rekening {account}. Er wordt niets naar betaald vóór {until}.',
+  'payout.bankChanged.nextPin': 'Was jij het niet, verander dan meteen je pincode en stel daarna je eigen rekening opnieuw in bij Instellingen.',
+  'payout.bankChanged.nextPassword': 'Was jij het niet, verander dan meteen het wachtwoord en stel daarna je eigen rekening opnieuw in bij Instellingen.',
+};

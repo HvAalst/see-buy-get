@@ -16,6 +16,7 @@ import { AccountMoveService } from './account-move.service';
 import { PayoutNumberService } from './payout-number.service';
 import { BusinessService } from './business.service';
 import { PartnerMemberService } from './partner-member.service';
+import { noticeOf, said } from './notice-words/say';
 
 /** Four years without a sign-in, and the owner is told the account can be closed (the user, 2026-10-22). */
 export const INACTIVE_MONTHS = 48;
@@ -130,8 +131,7 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     const payload = {
       // About the account itself: it reaches the owner even with the account muted.
       kind: 'security' as const,
-      title: 'Your account can be closed',
-      body: 'Your SeeBuyGet account has not been signed in to for four years. If you no longer need it, you can close it under Settings › Close my account. Nothing happens unless you do it.',
+      ...noticeOf(said('accountClosing.closable.title'), said('accountClosing.closable.body')),
       link: '/',
     };
     // Wherever they sign in: as themselves, and as each shop, driver, fleet or store of theirs.

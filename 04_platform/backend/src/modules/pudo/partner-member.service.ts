@@ -16,6 +16,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isFor, waitsAt, type Addressed } from './addressed-to';
 import { PartnerLedgerView } from './partner-ledger.service';
 import { PersonService } from './person.service';
+import { noticeOf, said, sayEnglish } from './notice-words/say';
 
 /**
  * 2026-11-20 — A PARTNER'S OWN PEOPLE (the payments plan, 3c; the owner: "console for staff and partner app with live view";
@@ -137,11 +138,22 @@ export class PartnerMemberService {
    */
   private tellMollieChange(c: MolliePartnerChange): void {
     const entity = this.entities.get(c.entityId);
-    const org = c.organization?.name ? `${c.organization.name}${c.organization.registrationNumber ? `, registration ${c.organization.registrationNumber}` : ''}` : 'a Mollie account';
-    const headline = c.change === 'connected' ? `${entity.name}: the counters' Mollie account was connected` : `${entity.name}: the counters' Mollie account was disconnected`;
-    const what = c.change === 'connected' ? `${c.by} connected ${org}. From now on the money your counters take goes into it.` : `${c.by} disconnected ${org}. Your counters take test money until an account is connected again.`;
-    const next = c.change === 'connected' ? 'If that is not your company’s own account, disconnect it in the Partner app, under Money, and tell SeeBuyGet straight away.' : 'If that was not meant, connect your company’s own account again in the Partner app, under Money.';
-    void this.notices?.notify(entity.did, { kind: 'security', title: headline, body: `${what} ${next}`, link: '/?go=money', tag: `mollie:${c.entityId}:${c.at}`, data: { change: c.change } }).catch(() => undefined);
+    // 2026-11-26 — in phrases, so each member reads it in their own language; the email beside it is the English.
+    const org = c.organization?.name
+      ? c.organization.registrationNumber
+        ? said('partner.mollie.account.registered', { name: c.organization.name, registration: c.organization.registrationNumber })
+        : c.organization.name
+      : said('partner.mollie.account.unnamed');
+    const on = c.change === 'connected';
+    const headlineSaid = said(on ? 'partner.mollie.connected.title' : 'partner.mollie.disconnected.title', { partner: entity.name });
+    const whatSaid = said(on ? 'partner.mollie.connected.what' : 'partner.mollie.disconnected.what', { by: c.by, account: org });
+    const nextSaid = said(on ? 'partner.mollie.connected.next' : 'partner.mollie.disconnected.next');
+    const headline = sayEnglish(headlineSaid);
+    const what = sayEnglish(whatSaid);
+    const next = sayEnglish(nextSaid);
+    void this.notices
+      ?.notify(entity.did, { kind: 'security', ...noticeOf(headlineSaid, said('bell.twoParts', { what: whatSaid, next: nextSaid })), link: '/?go=money', tag: `mollie:${c.entityId}:${c.at}`, data: { change: c.change } })
+      .catch(() => undefined);
     for (const m of this.members.values()) {
       if (m.entityId !== c.entityId || !m.personDid || m.removedAt || !m.joinedAt) continue;
       let address: string | undefined;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { NotificationsApi } from '../lib/sbg';
-import { disablePush, enablePush, getPushState, loadInbox, sendTestPush, type InboxItem, type PushFailure, type PushState } from './push';
+import { disablePush, enablePush, getPushState, giveLanguageAgain, loadInbox, sendTestPush, type InboxItem, type PushFailure, type PushState } from './push';
+import { t, useLocale } from './i18n';
 
 export interface PushFlash {
   tone: 'ok' | 'warn' | 'danger';
@@ -32,19 +33,19 @@ export interface PushControls {
 function failText(reason: PushFailure | undefined): string {
   switch (reason) {
     case 'denied':
-      return 'Notifications are blocked. Turn them on for this app in your browser settings.';
+      return t('notify.flash.denied');
     case 'dismissed':
-      return 'Not turned on yet — tap Turn on notifications to try again.';
+      return t('notify.flash.dismissed');
     case 'unsupported':
-      return 'This device can’t show push notifications.';
+      return t('notify.push.unsupported');
     case 'no-key':
     case 'save-failed':
-      return 'We couldn’t finish turning them on. Please try again.';
+      return t('notify.flash.unfinished');
     case 'no-serviceworker':
     case 'subscribe-failed':
-      return 'This device wouldn’t let us set up notifications. Please try again.';
+      return t('notify.flash.refused');
     default:
-      return 'We couldn’t turn notifications on.';
+      return t('notify.flash.failed');
   }
 }
 
@@ -88,10 +89,17 @@ export function usePush(api: NotificationsApi | null): PushControls {
     }
   }, [api]);
 
-  // Load once when a signed-in client arrives, so the bell badge is right before the sheet is opened.
+  // Load once when a signed-in client arrives, so the bell badge is right before the sheet is opened — and again when the
+  // app's language changes (2026-11-26): the server says each notice in the language the app asks in.
+  const locale = useLocale();
   useEffect(() => {
     void loadInboxCb();
-  }, [loadInboxCb]);
+  }, [loadInboxCb, locale]);
+
+  // 2026-11-26 — a device with notifications on gives its language again, so its phone is pushed in it (push.ts).
+  useEffect(() => {
+    if (api && state === 'on') void giveLanguageAgain(api, locale);
+  }, [api, state, locale]);
 
   const markRead = useCallback(
     async (id: string) => {
@@ -116,7 +124,7 @@ export function usePush(api: NotificationsApi | null): PushControls {
     setState(r.state);
     // A block or a dismiss is a soft 'warn' (the user chose this, and it's retryable); a real failure is 'danger'.
     const soft = r.reason === 'denied' || r.reason === 'dismissed';
-    setFlash(r.ok ? { tone: 'ok', text: 'Notifications are on for this device.' } : { tone: soft ? 'warn' : 'danger', text: failText(r.reason) });
+    setFlash(r.ok ? { tone: 'ok', text: t('notify.flash.on') } : { tone: soft ? 'warn' : 'danger', text: failText(r.reason) });
     setBusy(null);
   }, [api]);
 
@@ -126,7 +134,7 @@ export function usePush(api: NotificationsApi | null): PushControls {
     setFlash(null);
     await disablePush(api);
     setState(await getPushState());
-    setFlash({ tone: 'ok', text: 'Notifications are off for this device.' });
+    setFlash({ tone: 'ok', text: t('notify.flash.off') });
     setBusy(null);
   }, [api]);
 
@@ -138,9 +146,9 @@ export function usePush(api: NotificationsApi | null): PushControls {
     setFlash(
       r.ok
         ? r.sent > 0
-          ? { tone: 'ok', text: 'Sent — watch for it on your screen.' }
-          : { tone: 'warn', text: 'No devices are turned on yet.' }
-        : { tone: 'danger', text: 'Couldn’t send the test. Please try again.' },
+          ? { tone: 'ok', text: t('notify.flash.sent') }
+          : { tone: 'warn', text: t('notify.flash.noDevices') }
+        : { tone: 'danger', text: t('notify.flash.testFailed') },
     );
     setBusy(null);
   }, [api]);

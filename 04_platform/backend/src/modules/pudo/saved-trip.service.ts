@@ -7,6 +7,7 @@ import { DispatchService } from './dispatch.service';
 import { VehicleService } from './vehicle.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said as phrase } from './notice-words/say';
 import { DepartureService } from './departure.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { clockAt, clocksOfCountry, isTimeZone, minutesOf, momentAt } from './fleet-clock';
@@ -302,7 +303,7 @@ export class SavedTripService {
         const minutesTo = (run.at - now) / 60_000;
         if (!said.before && minutesTo <= TRIP_NOTICE_MIN) {
           const n = this.loadsAlong(trip);
-          this.bell(trip, run.day, 'before', `Your ${run.clock} trip: ${trip.from.label} → ${trip.to.label}`, n > 0 ? `${n} load${n === 1 ? '' : 's'} on your way. Tap to see them.` : 'No loads on your way yet. Tap to look when you set off.');
+          this.bell(trip, run.day, 'before', noticeOf(phrase('savedTrip.before.title', { clock: run.clock, from: trip.from.label, to: trip.to.label }), n > 0 ? phrase('savedTrip.before.loads', { n }) : phrase('savedTrip.before.none')));
           trip.noticed = { ...(trip.noticed ?? {}), [run.day]: { ...said, before: new Date(now).toISOString() } };
           changed = true;
           sent++;
@@ -313,7 +314,7 @@ export class SavedTripService {
           if (local.day === dayAfter(run.day, -1) && local.minutes >= EVENING_FROM_MIN) {
             const n = this.loadsAlong(trip);
             if (n > 0) {
-              this.bell(trip, run.day, 'evening', `Tomorrow ${run.clock}: ${trip.from.label} → ${trip.to.label}`, `${n} load${n === 1 ? '' : 's'} on your way already — take them on ahead tonight.`);
+              this.bell(trip, run.day, 'evening', noticeOf(phrase('savedTrip.evening.title', { clock: run.clock, from: trip.from.label, to: trip.to.label }), phrase('savedTrip.evening.body', { n })));
               sent++;
             }
             trip.noticed = { ...(trip.noticed ?? {}), [run.day]: { ...said, evening: new Date(now).toISOString() } };
@@ -389,7 +390,7 @@ export class SavedTripService {
     return this.fleet.vehicleForDriver(driverDid) ?? this.vehicles.list().find((v) => v.ownerDriverDid === driverDid && v.status === 'ACTIVE');
   }
 
-  private bell(trip: StoredTrip, day: string, which: 'before' | 'evening', title: string, body: string): void {
-    void this.notifications?.notify(trip.driverDid, { kind: 'trip', title, body, link: `/?trip=${trip.tripId}`, tag: `trip:${trip.tripId}:${day}:${which}`, data: { tripId: trip.tripId, day } }).catch(() => undefined);
+  private bell(trip: StoredTrip, day: string, which: 'before' | 'evening', words: ReturnType<typeof noticeOf>): void {
+    void this.notifications?.notify(trip.driverDid, { kind: 'trip', ...words, link: `/?trip=${trip.tripId}`, tag: `trip:${trip.tripId}:${day}:${which}`, data: { tripId: trip.tripId, day } }).catch(() => undefined);
   }
 }

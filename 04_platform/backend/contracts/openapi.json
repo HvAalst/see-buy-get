@@ -33360,7 +33360,17 @@
         "operationId": "Notifications.subscribe",
         "summary": "",
         "description": "Enrol this device (the browser's PushSubscription) for the authenticated owner.",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-sbg-lang",
+            "in": "header",
+            "description": "The language the app speaks (en, sw, nl, am, bg): notices are said in it, where they are written in it; anything else is English.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -33417,7 +33427,17 @@
         "operationId": "Notifications.inbox",
         "summary": "",
         "description": "The caller's notification inbox (newest first) + the unread count — the in-app notification centre (N2).",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-sbg-lang",
+            "in": "header",
+            "description": "The language the app speaks (en, sw, nl, am, bg): notices are said in it, where they are written in it; anything else is English.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""

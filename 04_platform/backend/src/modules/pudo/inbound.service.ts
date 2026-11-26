@@ -14,7 +14,8 @@ import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { NoteArchiveService } from './note-archive.service';
 import { consigneeDocId } from './note-archive.types';
 import { NotificationService } from './notification.service';
-import { exceptionViewsOf, exceptionsInWords, stillExpectedOf } from './receiving';
+import { exceptionViewsOf, stillExpectedOf } from './receiving';
+import { noticeOf, said, type Said } from './notice-words/say';
 import { Site, SiteService } from './site.service';
 
 /** How long a load that has arrived, or was withdrawn, stays on the list after its day: a fortnight. */
@@ -248,21 +249,35 @@ export class InboundService implements OnModuleInit {
     }
     const receiver = f.receiver ? this.entities.find(f.receiver.entityId) : undefined;
     if (!f.receiver || !receiver) return;
-    const what = f.receiverRef ? `Order ${f.receiverRef}` : `Load ${f.code}`;
+    const what = f.receiverRef ? said('inbound.what.order', { ref: f.receiverRef }) : said('inbound.what.load', { code: f.code });
     const from = this.fromOf(f);
-    const packages = f.packages ? `${f.packages} ${f.packages === 1 ? 'package' : 'packages'}, ` : '';
+    const packages = f.packages ? said('inbound.packages', { n: f.packages }) : '';
     // D9 — what was found at the handover, and what stays expected of it.
     const found = f.proofOfDelivery?.exceptions?.length ? f.proofOfDelivery.exceptions : undefined;
     const still = stillExpectedOf(found);
     const foundLine = found
-      ? ` ${f.proofOfDelivery?.receiverName ?? 'They'} found ${exceptionsInWords(found)}: it is on the consignment note.${still ? ` ${still} ${still === 1 ? 'package stays' : 'packages stay'} expected until you close ${still === 1 ? 'it' : 'them'} under Coming in.` : ''}`
+      ? said('inbound.foundLine', {
+          name: f.proofOfDelivery?.receiverName ?? said('inbound.they'),
+          list: foundSaid(found),
+          still: still ? said('inbound.still', { n: still }) : '',
+        })
       : '';
-    const lines: Record<typeof step, { title: string; body: string }> = {
-      addressed: { title: `Coming in: ${what} from ${from}`, body: `${packages}${f.weightKg.toLocaleString('en-GB')} kg, to ${f.receiver.siteName}. You are told when it is on its way.` },
-      picked_up: { title: `${what} is on its way`, body: `From ${from} to ${f.receiver.siteName}: the carrier has it.` },
-      delivered: { title: found ? `${what} was delivered, not all as the note says` : `${what} was delivered`, body: `At ${f.receiver.siteName}${f.proofOfDelivery?.receiverName ? `, received by ${f.proofOfDelivery.receiverName}` : ''}.${foundLine}` },
-      not_delivered: { title: `${what} could not be delivered`, body: `The carrier was at ${f.receiver.siteName} and could not hand it over. ${from} is told too.` },
-      withdrawn: { title: `${what} was withdrawn`, body: `${from} withdrew it: it is not coming to ${f.receiver.siteName}.` },
+    const lines: Record<typeof step, ReturnType<typeof noticeOf>> = {
+      addressed: noticeOf(
+        said('inbound.addressed.title', { what, from }),
+        said('inbound.addressed.body', { packages, kg: f.weightKg.toLocaleString('en-GB'), site: f.receiver.siteName }),
+      ),
+      picked_up: noticeOf(said('inbound.pickedUp.title', { what }), said('inbound.pickedUp.body', { from, site: f.receiver.siteName })),
+      delivered: noticeOf(
+        said(found ? 'inbound.delivered.titleFound' : 'inbound.delivered.title', { what }),
+        said('inbound.delivered.body', {
+          site: f.receiver.siteName,
+          by: f.proofOfDelivery?.receiverName ? said('inbound.delivered.by', { name: f.proofOfDelivery.receiverName }) : '',
+          found: foundLine,
+        }),
+      ),
+      not_delivered: noticeOf(said('inbound.notDelivered.title', { what }), said('inbound.notDelivered.body', { site: f.receiver.siteName, from })),
+      withdrawn: noticeOf(said('inbound.withdrawn.title', { what }), said('inbound.withdrawn.body', { from, site: f.receiver.siteName })),
     };
     try {
       await this.notifications.notify(receiver.did, { kind: 'inbound', ...lines[step], link: '/?go=inbound', tag: `inbound:${f.freightId}`, data: { freightId: f.freightId, step } });
@@ -270,6 +285,12 @@ export class InboundService implements OnModuleInit {
       this.logger.warn(`inbound notice failed for ${f.freightId}: ${(err as Error).message}`);
     }
   }
+}
+
+/** What the receiver found, as phrases: the same words as `exceptionsInWords` (receiving.ts), joined by ", ". */
+function foundSaid(list: ReadonlyArray<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number }>): Said {
+  const each = list.map((e) => said(`inbound.found.${e.kind}` as const, { n: e.count }));
+  return each.slice(1).reduce((head, next) => said('inbound.found.join', { head, next }), each[0]);
 }
 
 function pointOf(site: Site): ReceivingPointView {

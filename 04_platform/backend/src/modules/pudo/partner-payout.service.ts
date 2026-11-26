@@ -11,6 +11,7 @@ import type { PayeeAccount } from '../../foundation/payment-hub/hub.types';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { PartnerLedgerService, type PartnerOwedLine, type PartnerPayeeKind } from './partner-ledger.service';
 import { PayoutNumberService } from './payout-number.service';
+import { money, noticeOf, said } from './notice-words/say';
 
 /** The hour of the day (UTC) a partner's hands are paid: 15:00 UTC is 18:00 in East Africa, the end of a working day. */
 export const PAYOUT_HOUR_UTC = 15;
@@ -253,7 +254,12 @@ export class PartnerPayoutService implements OnApplicationBootstrap, OnModuleDes
     const v = this.viewOf(partnerEntityId);
     const short = [...this.payouts.values()].filter((x) => x.partnerEntityId === partnerEntityId && x.state === 'waiting' && x.why === 'balance');
     void this.notices
-      .notify(did, { kind: 'partner_money', title: 'Payouts wait: your payout account is short', body: `${short.length} payouts to your people, ${v.currency} ${v.shortAmount.toFixed(2)} in all, wait until your payout account holds enough. They are tried again every hour.`, link: '/?go=money', tag: `short:${key}` })
+      .notify(did, {
+        kind: 'partner_money',
+        ...noticeOf(said('partner.payoutsShort.title'), said('partner.payoutsShort.body', { count: short.length, amount: money(`${v.currency} ${v.shortAmount.toFixed(2)}`, v.shortAmount, v.currency) })),
+        link: '/?go=money',
+        tag: `short:${key}`,
+      })
       .catch(() => undefined);
   }
 

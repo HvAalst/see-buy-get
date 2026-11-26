@@ -1,0 +1,48 @@
+import type { EN_BELL } from '../en/bell';
+
+export const SW_BELL: Record<keyof typeof EN_BELL, string> = {
+  'bell.twoParts': '{what} {next}',
+  'bell.test.title': 'Taarifa zimewashwa',
+  'bell.test.body': 'Huu ni ujumbe wa majaribio kutoka SeeBuyGet — hapa ndipo tutakuambia jambo linapokuhitaji.',
+  'bell.button.take': 'Ichukue',
+  'bell.button.notNow': 'Si sasa',
+
+  'welcome.tap': 'Gusa mojawapo nayo itafunguka pale unaposhughulikia jambo hilo.',
+  'welcome.business.title': 'Taarifa za biashara yako zinafika hapa',
+  'welcome.business.body': 'Msafirishaji anayechukua mzigo, tatizo njiani, uwasilishaji, dai lililojibiwa, hati zilizokaguliwa: kila moja inaelezwa hapa. {tap}',
+  'welcome.driver.title': 'Taarifa zako zinafika hapa',
+  'welcome.driver.body': 'Mizigo uliyopewa, ofa karibu nawe, ujumbe, zamu yako na gari lako: kila moja inaelezwa hapa. {tap}',
+  'welcome.shop.title': 'Taarifa za duka lako zinafika hapa',
+  'welcome.shop.body': 'Vifurushi vya kupokea au kukabidhi, mifuko ya kufunga, pesa zilizoingia: kila moja inaelezwa hapa. {tap}',
+  'welcome.hub.title': 'Taarifa za kituo chako zinafika hapa',
+  'welcome.hub.body': 'Mifuko inayoingia na wanaofika mlangoni kwako: kila moja inaelezwa hapa. {tap}',
+  'welcome.store.title': 'Taarifa za duka lako la mtandaoni zinafika hapa',
+  'welcome.store.body': 'Usafirishaji wako, na kinachofika kwenye gati lako: kila moja inaelezwa hapa. {tap}',
+  'welcome.fleet.title': 'Taarifa za kundi lako la magari zinafika hapa',
+  'welcome.fleet.body': 'Madereva wako, safari, oda na magari: kila moja inaelezwa hapa. {tap}',
+  'welcome.partner.title': 'Taarifa za kampuni yako zinafika hapa',
+  'welcome.partner.body': 'Kiasi ambacho SeeBuyGet inakudai kila wiki na kinapolipwa, malipo yanayosubiri akaunti yako, na mabadiliko ya akaunti ya Mollie ya kaunta zako: kila moja inaelezwa hapa. {tap}',
+  'welcome.send.title': 'Taarifa zako zinafika hapa',
+  'welcome.send.body': 'Vifurushi vyako — vikiwa njiani, tayari kuchukuliwa, au vikikuhitaji: kila moja inaelezwa hapa. {tap}',
+
+  'partner.weekOwed.title': '{seller} inakudai {amount} kwa wiki ya {from} hadi {to}',
+  'partner.weekOwed.body': 'Kwa {steps, plural, one {hatua #} other {hatua #}} ambazo watu wako walifanya kwenye vifurushi ilivyouza. Hulipwa kwa uhamisho wa benki, na utaambiwa hapa lini.',
+  'partner.weekPaid.title': '{seller} imekulipa {amount} kwa wiki ya {from} hadi {to}',
+  'partner.weekPaid.body': 'Kwa uhamisho wa benki, kumbukumbu {reference}.',
+  'partner.payoutsShort.title': 'Malipo yanasubiri: akaunti yako ya malipo haina pesa za kutosha',
+  'partner.payoutsShort.body':
+    '{count, plural, one {Malipo # kwa watu wako, {amount}, yanasubiri hadi akaunti yako ya malipo iwe na pesa za kutosha. Yanajaribiwa tena kila saa.} other {Malipo # kwa watu wako, {amount} kwa jumla, yanasubiri hadi akaunti yako ya malipo iwe na pesa za kutosha. Yanajaribiwa tena kila saa.}}',
+  'partner.mollie.connected.title': '{partner}: akaunti ya Mollie ya kaunta imeunganishwa',
+  'partner.mollie.disconnected.title': '{partner}: akaunti ya Mollie ya kaunta imetenganishwa',
+  'partner.mollie.connected.what': '{by} ameunganisha {account}. Kuanzia sasa pesa ambazo kaunta zako zinapokea zinaingia humo.',
+  'partner.mollie.disconnected.what': '{by} ametenganisha {account}. Kaunta zako zinapokea pesa za majaribio hadi akaunti iunganishwe tena.',
+  'partner.mollie.connected.next': 'Ikiwa hiyo si akaunti ya kampuni yako mwenyewe, itenganishe kwenye programu ya Mshirika, chini ya Pesa, na uiambie SeeBuyGet mara moja.',
+  'partner.mollie.disconnected.next': 'Ikiwa hilo halikukusudiwa, unganisha tena akaunti ya kampuni yako mwenyewe kwenye programu ya Mshirika, chini ya Pesa.',
+  'partner.mollie.account.registered': '{name}, usajili {registration}',
+  'partner.mollie.account.unnamed': 'akaunti ya Mollie',
+
+  'payout.bankChanged.title': 'Akaunti yako ya benki ya malipo imebadilishwa',
+  'payout.bankChanged.what': 'Malipo sasa yanaenda kwenye akaunti {account}. Hakuna kinacholipwa humo kabla ya {until}.',
+  'payout.bankChanged.nextPin': 'Ikiwa si wewe, badilisha PIN yako mara moja, kisha weka tena akaunti yako mwenyewe kwenye Mipangilio.',
+  'payout.bankChanged.nextPassword': 'Ikiwa si wewe, badilisha nenosiri mara moja, kisha weka tena akaunti yako mwenyewe kwenye Mipangilio.',
+};

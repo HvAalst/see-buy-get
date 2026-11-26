@@ -142,7 +142,7 @@ describe('what a partner owes, paid once a day', () => {
     await w.payouts.tick(at('15:30'));
     expect(w.payouts.viewOf(PARTNER.entityId).rows[0]).toMatchObject({ state: 'waiting', why: 'balance' });
     // 2026-11-26 — told in the partner's own bell, once that day however often it is tried, opening its Money.
-    expect(w.rang).toEqual([{ owner: `did:glos:${PARTNER.entityId}`, kind: 'partner_money', title: 'Payouts wait: your payout account is short', body: '1 payouts to your people, ETB 300.00 in all, wait until your payout account holds enough. They are tried again every hour.', link: '/?go=money' }]);
+    expect(w.rang).toEqual([{ owner: `did:glos:${PARTNER.entityId}`, kind: 'partner_money', title: 'Payouts wait: your payout account is short', body: '1 payout to your people, ETB 300.00, waits until your payout account holds enough. It is tried again every hour.', link: '/?go=money' }]);
     await w.payouts.tick(at('15:00') + PAYOUT_AGAIN_AFTER_MS);
     expect(w.payouts.viewOf(PARTNER.entityId)).toMatchObject({ waiting: 0, shortAmount: 0, paidAmount: 300 });
     expect((await w.hub.accountView(PARTNER.entityId, at('16:10'))).balance).toBe(300);

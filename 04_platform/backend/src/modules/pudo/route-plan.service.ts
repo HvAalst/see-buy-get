@@ -3,6 +3,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
 import { NotificationService } from './notification.service';
+import { noticeOf, said } from './notice-words/say';
 import { EXPECTED_LATE_RETELL_H, EXPECTED_LATE_TELL_H, NEAR_LOCATED_H, STUCK_SWEEP_MS, VEHICLE_SPEED_KMH } from './pudo.config';
 import { FleetService } from './fleet.service';
 import { nextOpenAt } from './hours';
@@ -195,13 +196,18 @@ export class RoutePlanService implements RouteKeeper, OnModuleInit, OnModuleDest
       if (!hub) continue;
       const since = (p: Parcel) => Date.parse([...(p.scans ?? [])].reverse().find((s) => s.status === 'At_MDP')?.at ?? new Date(now).toISOString());
       const named = [...late].sort((a, b) => since(a) - since(b));
-      const list = named.slice(0, 10).map((p) => `${p.parcelId} (here ${Math.max(0, Math.floor((now - since(p)) / 3_600_000))} h)`).join(', ');
-      const more = named.length > 10 ? `, and ${named.length - 10} more` : '';
+      const list = named
+        .slice(0, 10)
+        .map((p) => said('routePlan.item', { id: p.parcelId, hours: Math.max(0, Math.floor((now - since(p)) / 3_600_000)) }))
+        .reduce((a, b) => said('routePlan.join', { a, b }));
+      const more = named.length > 10 ? said('routePlan.more', { n: named.length - 10 }) : '';
       void this.notifications
         .notify(hub.did, {
           kind: 'sort_first',
-          title: named.length === 1 ? 'A parcel here can no longer be ready in time' : `${named.length} parcels here can no longer be ready in time`,
-          body: `Sort ${named.length === 1 ? 'it' : 'them'} first, first in first out: ${list}${more}. ${named.length === 1 ? 'Its receiver has' : 'Their receivers have'} been told ${named.length === 1 ? 'it is' : 'they are'} running late.`,
+          ...noticeOf(
+            named.length === 1 ? said('routePlan.sort.one.title') : said('routePlan.sort.many.title', { n: named.length }),
+            said(named.length === 1 ? 'routePlan.sort.one.body' : 'routePlan.sort.many.body', { list, more }),
+          ),
           link: '/?go=sort',
           tag: `sort-first:${mdpId}:${new Date(now).toISOString().slice(0, 13)}`,
           data: { parcelIds: named.map((p) => p.parcelId) },
