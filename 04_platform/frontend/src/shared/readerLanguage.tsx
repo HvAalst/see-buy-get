@@ -21,6 +21,11 @@ export function defaultReaderLanguage(): Locale {
   return (readerLanguages() as string[]).includes(l) ? l : ('en' as Locale);
 }
 
+/** The same choices as a list, for an app that picks with its own control (the Business app's ConsolePick). */
+export function readerLanguageChoices(): Array<{ value: string; label: string }> {
+  return readerLanguages().map((l) => ({ value: l, label: LOCALE_ENDONYMS[l] }));
+}
+
 /** The choices, each language named in itself. */
 export function ReaderLanguageOptions() {
   return (

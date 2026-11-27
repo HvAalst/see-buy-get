@@ -35,7 +35,8 @@ describe('the language a receiver reads', () => {
       ['apps/business/screens/PostLoad.tsx', 'apps/business/postLoad.ts'],
       ['apps/business/screens/ParcelsScreen.tsx', 'apps/business/parcels.ts'],
     ]) {
-      expect(`${screen}: ${readFileSync(`src/${screen}`, 'utf8').includes('<ReaderLanguageOptions />')}`).toBe(`${screen}: true`);
+      const src = readFileSync(`src/${screen}`, 'utf8');
+      expect(`${screen}: ${src.includes('<ReaderLanguageOptions />') || src.includes('options={readerLanguageChoices()}')}`).toBe(`${screen}: true`);
       expect(`${body}: ${/receiverLanguage: (f|form)\.receiverLanguage \|\| defaultReaderLanguage\(\)/.test(readFileSync(`src/${body}`, 'utf8'))}`).toBe(`${body}: true`);
     }
   });

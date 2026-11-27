@@ -45,7 +45,7 @@ import {
   type ParcelForm,
 } from '../parcels';
 import { AnotherWaySheet } from '../../../shared/AnotherWaySheet';
-import { ReaderLanguageOptions, defaultReaderLanguage } from '../../../shared/readerLanguage';
+import { defaultReaderLanguage, readerLanguageChoices } from '../../../shared/readerLanguage';
 
 type Err = { detail?: string; title: string } | null | undefined;
 const words = (e: Err) => (e ? e.detail || e.title : null);
@@ -720,13 +720,7 @@ function SendForm({ api, shops, toShops, country, places, collection, balance, o
           <input class="cinput" type="email" inputMode="email" maxLength={120} value={form.receiverEmail} onInput={(e) => set({ receiverEmail: (e.target as HTMLInputElement).value })} />
         </label>
         {form.receiverEmail.trim() ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('common.receiverLanguage')}</span>
-            <select class="cinput" value={form.receiverLanguage || defaultReaderLanguage()} onChange={(e) => set({ receiverLanguage: (e.target as HTMLSelectElement).value })}>
-              <ReaderLanguageOptions />
-            </select>
-            <span class="chint">{t('common.receiverLanguageHint')}</span>
-          </label>
+          <ConsolePick label={t('common.receiverLanguage')} value={form.receiverLanguage || defaultReaderLanguage()} options={readerLanguageChoices()} hint={t('common.receiverLanguageHint')} onChange={(receiverLanguage) => set({ receiverLanguage })} />
         ) : null}
         <label class="cfield">
           <span class="cfield__label">{t('business.parcels.f.receiverName')}</span>
