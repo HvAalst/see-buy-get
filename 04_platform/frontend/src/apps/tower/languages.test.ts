@@ -42,4 +42,24 @@ describe('the review sheet', () => {
     expect(screen).toMatch(/client\.api\.reviewWord\(locale, country, row\.key, body\)/);
     expect(screen).toMatch(/reviewProblem\(row\.english, body\.text\)/);
   });
+
+  /*
+   * 2026-11-27 — THE NOTICES ARE REVIEWED TOO (the owner: "fix as recommended"). Their English and version 1 come from the
+   * server, under keys of their own (notice. and the phrase's key); a review of one is a row of the notices only, never of
+   * the apps' words, and the other way round.
+   */
+  it('reviews the notices beside the apps’ words: their rows from the server, each kind’s reviews on its own rows', () => {
+    const notices = { english: { 'notice.payout.bankChanged.title': 'Your payout bank account was changed' }, words: { 'notice.payout.bankChanged.title': 'Je bankrekening is gewijzigd' } };
+    const reviews = [
+      { key: 'notice.payout.bankChanged.title', text: 'Je uitbetaalrekening is gewijzigd', by: 'NL', at: '2026-11-27T10:00:00Z', history: [] },
+      { key: 'a.save', text: 'Bewaar', by: 'NL', at: '2026-11-27T10:00:00Z', history: [] },
+    ];
+    const noticeRows = languageRows(notices.english, notices.words, reviews);
+    expect(noticeRows.map((r) => [r.key, r.v1, r.review?.text])).toEqual([['notice.payout.bankChanged.title', 'Je bankrekening is gewijzigd', 'Je uitbetaalrekening is gewijzigd']]);
+    expect(languageRows({ 'a.save': 'Save' }, {}, reviews).map((r) => r.key)).toEqual(['a.save']);
+    const screen = readFileSync('src/apps/tower/screens/LanguagesScreen.tsx', 'utf8');
+    expect(screen).toMatch(/client\.api\.noticeWords\(locale\)/);
+    expect(screen).toMatch(/languageRows\(notices\.english, notices\.words, reviews\)/);
+    expect(screen).toMatch(/t\('tower\.langs\.book\.notices'\)/);
+  });
 });

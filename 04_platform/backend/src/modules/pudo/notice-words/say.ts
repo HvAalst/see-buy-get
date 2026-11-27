@@ -42,6 +42,10 @@ export interface Shown {
   at?: string;
   clock?: string;
   zone?: string;
+  /** 2026-11-27 — a plain number, grouped the language's way ("135,000" / "135.000"). */
+  number?: number;
+  /** 2026-11-27 — a country, by its two letters: said by its name in the language. */
+  country?: string;
 }
 
 /**
@@ -50,6 +54,14 @@ export interface Shown {
  * saw changes; it is never translated.
  */
 export type SayValue = string | number | Said | Shown | undefined;
+
+/**
+ * 2026-11-27 — A COUNTRY'S OWN WORDS FOR THE PHRASES (the owner: "fix as recommended": the country review of version 2 covers
+ * the notices too). Version 1 is what is written here (notice-words/<lang>/*.ts); a country's SeeBuyGet company may say a
+ * phrase in its own words on the console's Languages screen, and its readers are told the notice in those. Keyed by the
+ * phrase's key; only phrases whose places are the English's are ever in it (word-review.service.ts).
+ */
+export type NoticeWords = Readonly<Partial<Record<NoticeKey, string>>>;
 
 /** A notice's title and body, as phrases — and the buttons a phone shows on it, where it has any. */
 export interface SaidNotice {
@@ -89,6 +101,16 @@ export function at(en: string, iso: string, zone?: string): Shown {
 }
 
 /** A time of day. */
+/** 2026-11-27 — a number as the sender wrote it in English, grouped each language's way elsewhere. */
+export function number(en: string, n: number): Shown {
+  return { en, number: n };
+}
+
+/** 2026-11-27 — a country as the sender named it in English, and by its two letters: each language says its own name for it. */
+export function countryName(en: string, iso: string): Shown {
+  return { en, country: iso };
+}
+
 export function clock(en: string, iso: string, zone?: string): Shown {
   return zone ? { en, clock: iso, zone } : { en, clock: iso };
 }
@@ -112,9 +134,12 @@ export function sayEnglish(s: Said): string {
   return sayIn('en', s) ?? s.key;
 }
 
-/** A phrase in a language; undefined where it, or any phrase inside it, is not written in that language. */
-export function sayIn(lang: NoticeLang, s: Said): string | undefined {
-  const template = lang === 'en' ? NOTICE_EN[s.key] : NOTICE_TRANSLATIONS[lang]?.[s.key];
+/**
+ * A phrase in a language; undefined where it, or any phrase inside it, is not written in that language. `words`: the reader's
+ * country's own words for phrases of that language, laid over version 1 (never over the English).
+ */
+export function sayIn(lang: NoticeLang, s: Said, words?: NoticeWords): string | undefined {
+  const template = lang === 'en' ? NOTICE_EN[s.key] : (words?.[s.key] ?? NOTICE_TRANSLATIONS[lang]?.[s.key]);
   if (typeof template !== 'string') return undefined;
   const params: Record<string, string | number> = {};
   for (const [name, value] of Object.entries(s.vars ?? {})) {
@@ -122,7 +147,7 @@ export function sayIn(lang: NoticeLang, s: Said): string | undefined {
       params[name] = String(value);
       continue;
     }
-    const v = valueIn(lang, value);
+    const v = valueIn(lang, value, words);
     if (v === undefined) return undefined;
     params[name] = v;
   }
@@ -133,16 +158,30 @@ export function sayIn(lang: NoticeLang, s: Said): string | undefined {
  * A notice as this reader reads it: in their language where all of it is written there, else in the English it was sent in.
  * `say` is never handed on: a phone and a screen are given the words.
  */
-export function noticeIn<T extends { title: string; body: string; say?: SaidNotice; actions?: Array<{ action: string; title: string }> }>(lang: NoticeLang | undefined, n: T): Omit<T, 'say'> {
+export function noticeIn<T extends { title: string; body: string; say?: SaidNotice; actions?: Array<{ action: string; title: string }> }>(lang: NoticeLang | undefined, n: T, words?: NoticeWords): Omit<T, 'say'> {
   const { say, ...rest } = n;
   if (!say || !lang || lang === 'en') return rest;
-  const title = sayIn(lang, say.title);
-  const body = sayIn(lang, say.body);
+  const title = sayIn(lang, say.title, words);
+  const body = sayIn(lang, say.body, words);
   if (title === undefined || body === undefined) return rest;
   if (!say.actions?.length) return { ...rest, title, body };
   // Its buttons too — or the whole of it in English, buttons and all.
-  const actions = say.actions.map((b) => ({ action: b.action, title: sayIn(lang, b.title) }));
+  const actions = say.actions.map((b) => ({ action: b.action, title: sayIn(lang, b.title, words) }));
   return actions.every((a) => a.title !== undefined) ? { ...rest, title, body, actions: actions as Array<{ action: string; title: string }> } : rest;
+}
+
+/**
+ * 2026-11-27 — SEVERAL PHRASES SAID TOGETHER (an email beside a notice): all of them in the language, or undefined — and the
+ * whole of it is then said in English, never half and half.
+ */
+export function sayAllIn<K extends string>(lang: NoticeLang, parts: Record<K, Said>, words?: NoticeWords): Record<K, string> | undefined {
+  const out = {} as Record<K, string>;
+  for (const k of Object.keys(parts) as K[]) {
+    const text = sayIn(lang, parts[k], words);
+    if (text === undefined) return undefined;
+    out[k] = text;
+  }
+  return out;
 }
 
 /** The language an app asks in (its x-sbg-lang header), where notices are written in it; anything else is English. */
@@ -157,9 +196,14 @@ function isSaid(v: NonNullable<SayValue>): v is Said {
   return typeof v === 'object' && v !== null && 'key' in v;
 }
 
-function valueIn(lang: NoticeLang, v: NonNullable<SayValue>): string | number | undefined {
+function valueIn(lang: NoticeLang, v: NonNullable<SayValue>, words?: NoticeWords): string | number | undefined {
   if (typeof v === 'string' || typeof v === 'number') return v;
-  if (isSaid(v)) return sayIn(lang, v);
+  if (isSaid(v)) return sayIn(lang, v, words);
+  return lang === 'en' ? v.en : (shownIn(lang, v) ?? v.en);
+}
+
+/** 2026-11-27 — a figure alone, the way a language writes it (an email's date): the sender's English where it cannot be. */
+export function showIn(lang: NoticeLang, v: Shown): string {
   return lang === 'en' ? v.en : (shownIn(lang, v) ?? v.en);
 }
 
@@ -167,6 +211,11 @@ function valueIn(lang: NoticeLang, v: NonNullable<SayValue>): string | number | 
 function shownIn(lang: NoticeLang, v: Shown): string | undefined {
   try {
     if (v.money) return new Intl.NumberFormat(lang, { style: 'currency', currency: v.money.currency }).format(v.money.amount);
+    if (v.number !== undefined) return Number.isFinite(v.number) ? new Intl.NumberFormat(lang).format(v.number) : undefined;
+    if (v.country) {
+      const name = /^[A-Z]{2}$/.test(v.country) ? new Intl.DisplayNames([lang], { type: 'region' }).of(v.country) : undefined;
+      return name && name !== v.country ? name : undefined;
+    }
     if (v.month) {
       const m = /^(\d{4})-(\d{2})$/.exec(v.month);
       return m ? new Intl.DateTimeFormat(lang, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : undefined;

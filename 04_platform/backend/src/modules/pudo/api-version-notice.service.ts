@@ -9,7 +9,8 @@ import { CompanyKeyService } from './company-key.service';
 import type { CompanyKind } from './company-key.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { NotificationService } from './notification.service';
-import { day, noticeOf, said } from './notice-words/say';
+import { day, noticeOf, said, type SayValue } from './notice-words/say';
+import { NOTICE_EN, type NoticeKey } from './notice-words/catalog';
 
 /** How often it looks: a notice a day late is still a year's notice. */
 const SWEEP_MS = 6 * 3_600_000;
@@ -97,7 +98,7 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.notifications?.notify(company.did, {
         kind: 'api_rule',
-        ...noticeOf(said(stage === 'soon' ? 'apiVersionNotice.rule.soon.title' : 'apiVersionNotice.rule.announced.title', { from: day(from, from) }), said('apiVersionNotice.rule.body', { summary: r.summary, from: day(from, from) })),
+        ...noticeOf(said(stage === 'soon' ? 'apiVersionNotice.rule.soon.title' : 'apiVersionNotice.rule.announced.title', { from: day(from, from) }), said('apiVersionNotice.rule.body', { summary: ruleSummary(r), from: day(from, from) })),
         link: '/',
         data: { rule: r.id, version: r.version, enforcedFrom: r.enforcedFrom, stage },
       });
@@ -140,4 +141,13 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
       return undefined;
     }
   }
+}
+
+/**
+ * 2026-11-27 — a rule's summary as a phrase, so a company reads it in its language (details.ts) — only while the phrase says
+ * word for word what the rule does: a summary changed without its phrase is said as written, in English.
+ */
+export function ruleSummary(r: Pick<ApiRuleChange, 'id' | 'summary'>): SayValue {
+  const key = `apiVersionNotice.rule.summary.${r.id}`;
+  return (NOTICE_EN as Record<string, string>)[key] === r.summary ? said(key as NoticeKey) : r.summary;
 }

@@ -35,6 +35,9 @@ export function LanguagesScreen({ state, actions }: { state: TowerState; actions
   const [filter, setFilter] = useState<LanguageFilter>('all');
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(PAGE);
+  // 2026-11-27 — the apps' words, or the notices (said by the server, so read from it): reviewed the same way.
+  const [book, setBook] = useState<'apps' | 'notices'>('apps');
+  const [notices, setNotices] = useState<{ english: Record<string, string>; words: Record<string, string> } | null>(null);
 
   // Version 1 of the language: every file of it, fetched when the language is picked.
   useEffect(() => {
@@ -49,6 +52,22 @@ export function LanguagesScreen({ state, actions }: { state: TowerState; actions
     };
   }, [locale]);
 
+  // The notices' English and version 1 in the language, from the server, when they are the ones being read.
+  useEffect(() => {
+    let live = true;
+    setNotices(null);
+    if (book !== 'notices' || !client) return;
+    void client.api.noticeWords(locale).then((r) => {
+      if (!live) return;
+      if (r.error) return setError(r.error as SbgError);
+      const data = r.data as { english?: Record<string, string>; words?: Record<string, string> } | null;
+      setNotices({ english: data?.english ?? {}, words: data?.words ?? {} });
+    });
+    return () => {
+      live = false;
+    };
+  }, [book, locale, client]);
+
   // The country's version 2.
   const loadReviews = async () => {
     if (!client || !country) return;
@@ -62,7 +81,11 @@ export function LanguagesScreen({ state, actions }: { state: TowerState; actions
     void loadReviews();
   }, [locale, country, client]);
 
-  const rows = useMemo(() => (v1 && reviews ? languageRows(ENGLISH, v1, reviews) : null), [v1, reviews]);
+  const rows = useMemo(() => {
+    if (!reviews) return null;
+    if (book === 'notices') return notices ? languageRows(notices.english, notices.words, reviews) : null;
+    return v1 ? languageRows(ENGLISH, v1, reviews) : null;
+  }, [book, notices, v1, reviews]);
   const counts = rows ? rowCounts(rows) : null;
   const visible = rows ? visibleRows(rows, filter, query) : [];
   const countryOptions = everywhere ? atlas : atlas.filter((c) => held.includes(c.code));
@@ -79,7 +102,17 @@ export function LanguagesScreen({ state, actions }: { state: TowerState; actions
         <div class="twr-knobs__row">
           <ConsolePick label={t('tower.langs.language')} value={locale} onChange={(v) => setLocale(v as Locale)} options={languages.map((l) => ({ value: l, label: LOCALE_ENDONYMS[l] }))} />
           <CountrySelect value={country} onChange={setCountry} label={t('tower.langs.country')} options={countryOptions} />
+          <ConsolePick
+            label={t('tower.langs.book')}
+            value={book}
+            onChange={(v) => (setBook(v === 'notices' ? 'notices' : 'apps'), setShown(PAGE))}
+            options={[
+              { value: 'apps', label: t('tower.langs.book.apps') },
+              { value: 'notices', label: t('tower.langs.book.notices') },
+            ]}
+          />
         </div>
+        {book === 'notices' ? <p class="chint">{t('tower.langs.noticesLede')}</p> : null}
         {!country ? <p class="cons__empty">{t('tower.langs.pickCountry')}</p> : null}
         {error ? <ErrorNote error={error} /> : null}
         {country && !rows && !error ? <p class="cons__empty">{t('tower.imports.loading')}</p> : null}

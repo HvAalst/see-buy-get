@@ -1,5 +1,5 @@
 import { slotOf, slotWords } from './air-terminal.types';
-import { at, noticeOf, said, type Said, type Shown } from './notice-words/say';
+import { at, money, noticeOf, said, type Said, type Shown } from './notice-words/say';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -1614,7 +1614,7 @@ export class ExportService {
       c,
       noticeOf(
         said('exporter.feeQuoted.title', { code: c.code }),
-        said('exporter.feeQuoted.body', { name: this.nameOf(agent.entityId), amount: `${quote.amount.toLocaleString('en')} ${quote.currency}`, code: c.code, ref }),
+        said('exporter.feeQuoted.body', { name: this.nameOf(agent.entityId), amount: money(`${quote.amount.toLocaleString('en')} ${quote.currency}`, quote.amount, quote.currency), code: c.code, ref }),
       ),
     );
     return this.detail(c.exportId, actorEntityId, {}, now);
@@ -1630,7 +1630,7 @@ export class ExportService {
       c,
       noticeOf(
         said('exporter.feeAgreed.title', { code: c.code }),
-        said('exporter.feeAgreed.body', { name: this.nameOf(c.exporterEntityId), amount: `${fee.amount.toLocaleString('en')} ${fee.currency}`, code: c.code }),
+        said('exporter.feeAgreed.body', { name: this.nameOf(c.exporterEntityId), amount: money(`${fee.amount.toLocaleString('en')} ${fee.currency}`, fee.amount, fee.currency), code: c.code }),
       ),
       c.agent!.entityId,
     );
@@ -2045,8 +2045,9 @@ function boxWarning(c: ExportConsignment, box: ExportBoxClockView): ReturnType<t
 }
 
 /** A cut-off as the bell says it: the same English as `utc`, and each language's own way of writing the moment, in UTC. */
-function utcShown(iso: string): Shown {
-  return at(utc(iso), iso, 'UTC');
+export function utcShown(iso: string): Shown {
+  // 2026-11-27 — no zone given, so every language says it is UTC, as the English does (with a zone it read as local time).
+  return at(utc(iso), iso);
 }
 
 /** "28 Oct 2026 18:00 UTC" — a cut-off said in one clock, the same for everybody who reads it. */

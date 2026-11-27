@@ -45,7 +45,7 @@ import { clockAt, clocksOfCountry } from './fleet-clock';
 import { NotificationService } from './notification.service';
 import { HubDrop, HubFloorBook, spaceProblem, THROUGH_DAYS, THROUGH_DAYS_FULL, withDay, type HubDay } from './hub-space';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS } from './pudo.config';
-import { at as momentAt, noticeOf, said, type Said } from './notice-words/say';
+import { at as momentAt, money, noticeOf, said, type Said } from './notice-words/say';
 
 /** The words for why a hub is down, as phrases (the same English as HUB_DOWN_WORDS). */
 function downWhySaid(reason: HubDownReason): Said {
@@ -485,13 +485,15 @@ export class MdpService {
     delete mdp.feeAsked;
     this.mdps.set(mdpId, mdp);
     if (this.notifications) {
+      // 2026-11-27 — each fee a sum in the hub's own currency, written the reader's way (the English as before).
+      const fee = (n: number) => money(String(n), n, this.currencyOf(mdp));
       const what =
         asked.pricePerParcel !== undefined && asked.passOnFee !== undefined
-          ? said('mdp.fees.both', { sort: asked.pricePerParcel, passOn: asked.passOnFee })
+          ? said('mdp.fees.both', { sort: fee(asked.pricePerParcel), passOn: fee(asked.passOnFee) })
           : asked.pricePerParcel !== undefined
-            ? said('mdp.fees.sort', { sort: asked.pricePerParcel })
+            ? said('mdp.fees.sort', { sort: fee(asked.pricePerParcel) })
             : asked.passOnFee !== undefined
-              ? said('mdp.fees.passOn', { passOn: asked.passOnFee })
+              ? said('mdp.fees.passOn', { passOn: fee(asked.passOnFee) })
               : '';
       void this.notifications
         .notify(mdp.did, {

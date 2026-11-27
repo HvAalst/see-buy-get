@@ -83,6 +83,26 @@ export function formatDate(iso: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/**
+ * 2026-11-27 — THE SECURITY EMAIL IN THE READER'S LANGUAGE (the owner: "fix as recommended"). The words of the account-safety
+ * email around what it says, as the person reads their app — written by the notice catalogue (notice-words/<lang>/safety.ts),
+ * so a country's review of them on the console's Languages screen reaches the email too. Absent: the English below, as ever.
+ */
+export interface SafetyMailWords {
+  subject: string;
+  when: string;
+  until: string;
+  whatToDo: string;
+  help: string;
+  reason: string;
+  /** When it happened, and until when it can be undone, written that language's way. */
+  whenShown: string;
+  untilShown?: string;
+  noReply: string;
+  helpLead: string;
+  helpLink: string;
+}
+
 export interface MailParams {
   'password-reset': { email: string; code: string; minutes: number; app: MailApp };
   'password-changed': { email: string; when: string; app: MailApp; recovery: 'self-reset' | 'ask-admin' };
@@ -138,7 +158,17 @@ export interface MailParams {
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
-  'account-safety': { headline: string; what: string; next: string; when: string; until?: string };
+  'account-safety': {
+    headline: string;
+    what: string;
+    next: string;
+    when: string;
+    until?: string;
+    /** 2026-11-27 — the language the person reads their app in, where the email is written in it (all of it, or English). */
+    lang?: string;
+    /** Its own words in that language, said by the server's notice catalogue (modules/pudo/reader-language.service.ts). */
+    words?: SafetyMailWords;
+  };
   /** Four years without a sign-in: the account can be closed, if its owner wants (the user, 2026-10-22). */
   'account-may-close': { lastSignInAt: string };
   /**
@@ -582,18 +612,26 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     // An alarm is worth having late: it is how somebody learns their sign-in was changed.
     sendLater: 48,
     sample: { headline: 'Your phone number was changed', what: 'Your SeeBuyGet account now signs in with a different phone number.', next: 'If it was not you: within 24 hours, open any SeeBuyGet app, choose “Trouble signing in?” and then “Undo a number change”.', when: '2026-10-01T17:42:00Z', until: '2026-10-02T17:42:00Z' },
-    build: (p) => ({
-      subject: `SeeBuyGet: ${p.headline.charAt(0).toLowerCase()}${p.headline.slice(1)}`,
-      preheader: p.what,
-      blocks: [
-        { kind: 'heading', text: p.headline },
-        { kind: 'paragraph', text: p.what },
-        { kind: 'facts', rows: [['When', formatWhen(p.when)], ...(p.until ? ([['Can be undone until', formatWhen(p.until)]] as Array<[string, string]>) : [])] },
-        { kind: 'warning', title: 'What to do', text: p.next },
-        { kind: 'button', label: 'Help with signing in', href: helpUrl('account-recovery') },
-      ],
-      reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account. We always tell you — this email cannot be turned off.',
-    }),
+    build: (p) => {
+      // 2026-11-27 — in the person's language where all of it is written there (p.words); else the English, as ever.
+      const w = p.lang && p.words ? p.words : undefined;
+      return {
+        subject: w ? w.subject : `SeeBuyGet: ${p.headline.charAt(0).toLowerCase()}${p.headline.slice(1)}`,
+        preheader: p.what,
+        blocks: [
+          { kind: 'heading', text: p.headline },
+          { kind: 'paragraph', text: p.what },
+          {
+            kind: 'facts',
+            rows: [[w?.when ?? 'When', w?.whenShown ?? formatWhen(p.when)], ...(p.until ? ([[w?.until ?? 'Can be undone until', w?.untilShown ?? formatWhen(p.until)]] as Array<[string, string]>) : [])],
+          },
+          { kind: 'warning', title: w?.whatToDo ?? 'What to do', text: p.next },
+          { kind: 'button', label: w?.help ?? 'Help with signing in', href: helpUrl('account-recovery') },
+        ],
+        reason: w?.reason ?? 'You are getting this email because it is the recovery address on a SeeBuyGet account. We always tell you — this email cannot be turned off.',
+        ...(w && p.lang ? { lang: p.lang, footer: { noReply: w.noReply, helpLead: w.helpLead, helpLink: w.helpLink } } : {}),
+      };
+    },
   },
 
   /*

@@ -9,6 +9,7 @@ import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import type { Freight } from './dispatch.types';
 import { money, noticeOf, said } from './notice-words/say';
+import { COLLECTED_AT_SHOP_REASON } from './notice-words/system-words';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import type { GeoPoint } from './pudo.types';
@@ -286,7 +287,7 @@ export class BusinessDoorService implements OnModuleInit {
     const d = this.doors.get(parcelId);
     if (!d || d.state === 'handed' || d.state === 'delivered' || d.state === 'collected') return;
     try {
-      if (d.freightId) this.dispatch.withdrawDeliversParcel(d.freightId, 'its parcel was collected at the shop');
+      if (d.freightId) this.dispatch.withdrawDeliversParcel(d.freightId, COLLECTED_AT_SHOP_REASON);
     } catch (err) {
       this.logger.warn(`door load of ${parcelId} not withdrawn: ${(err as Error).message}`);
     }

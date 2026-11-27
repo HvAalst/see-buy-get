@@ -37,6 +37,15 @@ export class WordReviewList {
   @ApiProperty({ type: [WordReviewView] }) items!: WordReviewView[];
 }
 
+/** 2026-11-27 — the notice phrases, as the review sheet shows them: each under its review key (notice. and its own key). */
+export class NoticeBookView {
+  @ApiProperty() locale!: string;
+  /** Every notice phrase's English. */
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' } }) english!: Record<string, string>;
+  /** Version 1 in the language, as written into the server. */
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' } }) words!: Record<string, string>;
+}
+
 export class ReviewWordDto {
   /** Version 2's words. */
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(4000) text?: string;
@@ -61,6 +70,18 @@ export class WordReviewController {
   words(@Param('locale') locale: string, @Query('country') country: string): ReviewedWordsView {
     const c = WordReviewService.checked(locale, country);
     return { ...c, words: this.reviews.wordsOf(c.locale, c.country) };
+  }
+
+  /**
+   * 2026-11-27 — THE NOTICES, FOR THE REVIEW SHEET (the owner: "fix as recommended"). A notice is said by this server, so its
+   * English and version 1 are read from here; a country's own words for them are written through the same door as the apps'
+   * (PUT, key notice. and the phrase's key) and laid over version 1 for that country's readers.
+   */
+  @Roles('operator')
+  @Get(':locale/notices')
+  @ApiOkResponse({ type: NoticeBookView })
+  notices(@Param('locale') locale: string): NoticeBookView {
+    return WordReviewService.noticeBook(locale);
   }
 
   @Roles('operator')

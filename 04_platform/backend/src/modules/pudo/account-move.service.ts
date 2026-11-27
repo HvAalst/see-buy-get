@@ -27,6 +27,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import type { Person } from './person.types';
+import { said } from './notice-words/say';
 
 const DAY_MS = 86_400_000;
 /** Letters and digits nobody mistakes for one another when one person reads them to another over a telephone. */
@@ -147,10 +148,11 @@ export class AccountMoveService {
     // THE HOLDER HEARS IT NOW — before any member of staff has looked. If the asker is not them, they are the one
     // person who can say so with certainty, and the cheapest proof is the thing the asker said they cannot do.
     if (person) {
+      // 2026-11-27 — in phrases: the bell, the phone and the email each in the person's language.
       this.recovery.tellHolder(person, {
-        headline: 'Somebody asked for your account to be moved',
-        what: `Somebody told SeeBuyGet that they have lost this account’s phone number and its PIN, and asked for the account to be moved to a number ending ${move.newEnds}. Two members of staff check who is asking before anything changes.`,
-        next: 'If that is you, there is nothing to do here. If it is NOT you: sign in to any SeeBuyGet app with your number and PIN — that alone stops it — then open Settings, where you can stop it yourself, and choose a new PIN.',
+        headline: said('accountSafety.moveAsked.title'),
+        what: said('accountSafety.moveAsked.what', { ends: move.newEnds }),
+        next: said('accountSafety.moveAsked.next'),
       });
     }
     return { reference: move.reference, lapsesAt: move.lapsesAt, ...(support ? { support } : {}) };
@@ -253,9 +255,9 @@ export class AccountMoveService {
     const person = move.personDid ? this.persons.findByDid(move.personDid) : undefined;
     if (person) {
       this.recovery.tellHolder(person, {
-        headline: 'The request to move your account was refused',
-        what: 'SeeBuyGet staff looked at the request to move your account to another phone number, and refused it. Nothing about your account has changed.',
-        next: 'If you did not ask for it, choose a new PIN: somebody knows your phone number and tried to take the account.',
+        headline: said('accountSafety.moveRefused.title'),
+        what: said('accountSafety.moveRefused.what'),
+        next: said('accountSafety.moveRefused.next'),
       });
     }
     return this.row(move, staff, true);

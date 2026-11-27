@@ -63,6 +63,9 @@ import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
 import { MailService } from '../../foundation/mail/mail.service';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MAIL_SENDER } from '../../foundation/mail/mail.types';
+import { ReaderLanguageService } from './reader-language.service';
+import { WordReviewService } from './word-review.service';
+import { NOTICE_TRANSLATIONS } from './notice-words/catalog';
 
 /**
  * GETTING BACK INTO AN ACCOUNT, AND KEEPING SOMEBODY ELSE OUT OF IT — on the real services, the real inbox and
@@ -81,6 +84,8 @@ describe('account recovery', () => {
   let recovery: AccountRecoveryService;
   let auth: AuthService;
   let notifications: NotificationService;
+  let readers: ReaderLanguageService;
+  let reviews: WordReviewService;
   let outbox: OutboxMailSender;
 
   beforeEach(async () => {
@@ -93,6 +98,7 @@ describe('account recovery', () => {
         PersonService, AccountService, OtpService, AuthService, EmailCodeService, AccountRecoveryService,
         NotificationService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender },
         MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender },
+        ReaderLanguageService, WordReviewService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
@@ -113,6 +119,8 @@ describe('account recovery', () => {
     auth = moduleRef.get(AuthService);
     notifications = moduleRef.get(NotificationService);
     outbox = moduleRef.get(OutboxMailSender);
+    readers = moduleRef.get(ReaderLanguageService);
+    reviews = moduleRef.get(WordReviewService);
     recovery.onModuleInit(); // compile() runs no lifecycle hooks: the PIN-lock email is subscribed here
   });
 
@@ -574,6 +582,61 @@ describe('account recovery', () => {
       expect(() => persons.loginWithPin(d.phone, '00000', persons.trustDevice(d.phone))).toThrow(/Too many wrong PINs/);
       await settle();
       expect(mailTo(d.email)[0].subject).toMatch(/your PIN was locked/);
+    });
+
+    /*
+     * 2026-11-27 — THE EMAIL IN THE PERSON'S LANGUAGE (the owner: "fix as recommended"). Written in the language they last read
+     * their app in, its own words too, with their country's review of the phrases laid over version 1 — or all in English.
+     */
+    it('is written in the language the person reads their app in, with their country’s own words, else in English', async () => {
+      const bg = NOTICE_TRANSLATIONS.bg;
+      const lockOut = async (phone: string) => {
+        for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(phone, '00000', persons.trustDevice(phone))).toThrow();
+        await settle();
+      };
+      const d = aDriver();
+      readers.heard(d.personDid, 'bg', 'BG');
+      await lockOut(d.phone);
+      const mail = mailTo(d.email)[0];
+      expect(mail.subject).toBe(`SeeBuyGet: ${bg['accountSafety.pinLocked.title']}`);
+      expect(mail.html).toContain('<html lang="bg">');
+      expect(mail.text).toContain(bg['accountSafety.pinLocked.what']!);
+      expect(mail.text).toContain(bg['mail.safety.whatToDo']!);
+      expect(mail.text).toContain(bg['mail.safety.reason']!);
+      expect(mail.text).not.toContain('You are getting this email');
+      expect(mail.text).toContain(bg['mail.footer.noReply']!);
+      expect(mail.text).not.toContain('Please do not reply');
+
+      // Bulgaria says the headline in its own words: its readers' next email says it so; a reader in Kenya reads version 1.
+      reviews.review('bg', 'BG', 'notice.accountSafety.pinLocked.title', { text: 'Вашият ПИН е заключен' }, 'Proofreader BG');
+      const e = aDriver();
+      readers.heard(e.personDid, 'bg', 'BG');
+      await lockOut(e.phone);
+      expect(mailTo(e.email)[0].subject).toBe('SeeBuyGet: Вашият ПИН е заключен');
+      const k = aDriver();
+      readers.heard(k.personDid, 'bg', 'KE');
+      await lockOut(k.phone);
+      expect(mailTo(k.email)[0].subject).toBe(`SeeBuyGet: ${bg['accountSafety.pinLocked.title']}`);
+
+      // Back to English in the app: the email is the English, word for word as before.
+      const n = aDriver();
+      readers.heard(n.personDid, 'bg', 'BG');
+      readers.heard(n.personDid, 'en');
+      await lockOut(n.phone);
+      expect(mailTo(n.email)[0].subject).toBe('SeeBuyGet: your PIN was locked');
+      expect(mailTo(n.email)[0].html).toContain('<html lang="en">');
+      expect(mailTo(n.email)[0].text).toContain('Please do not reply — this address is not read.');
+    });
+
+    it('a recovery email replaced is told to the old address in the person’s language', async () => {
+      const d = aDriver();
+      readers.heard(d.personDid, 'nl', 'NL');
+      const { code } = recovery.sendConfirmCode('nieuw@example.com');
+      recovery.changeEmail(d.personDid, PIN, 'nieuw@example.com', code);
+      await settle();
+      const mail = mailTo(d.email)[0];
+      expect(mail.subject).toBe(`SeeBuyGet: ${NOTICE_TRANSLATIONS.nl['accountSafety.emailChanged.title']}`);
+      expect(mail.text).toContain('n…@example.com');
     });
   });
 });

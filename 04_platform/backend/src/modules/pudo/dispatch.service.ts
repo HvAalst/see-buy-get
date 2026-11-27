@@ -63,7 +63,8 @@ import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { HOLD_DECIDE_HOURS, HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, HOLD_REMIND_HOURS, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
-import { money as moneyShown, noticeOf, said, type Said } from './notice-words/say';
+import { money as moneyShown, noticeOf, said, type Said, type SayValue } from './notice-words/say';
+import type { NoticeKey } from './notice-words/catalog';
 import type { NowWithView } from './now-with.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
 import { VehicleService } from './vehicle.service';
@@ -3250,7 +3251,7 @@ export class DispatchService {
     if (f.destLocation) this.fleet.deriveLegFromLoad(driverDid, { fromLabel: f.pickupLabel, from: f.pickupLocation, toLabel: f.destLabel, to: f.destLocation });
     void this.events.publish(GlosEvent.Pudo.LoadClaimed, { driverDid, kind: 'freight', ref: f.freightId, weightKg: f.weightKg }, { source: 'pudo' }).catch(() => undefined);
     void this.events
-      .publish(GlosEvent.Pudo.FreightAssigned, { freightId: f.freightId, code: f.code, driverDid, managerDid: by.managerDid, byName: by.name, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, earning: freight.lockedPrice }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightAssigned, { freightId: f.freightId, code: f.code, driverDid, managerDid: by.managerDid, byName: by.name, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, earning: freight.lockedPrice, currency: lockedCurrencyOf(freight) }, { source: 'pudo' })
       .catch(() => undefined);
     return freight;
   }
@@ -3340,17 +3341,18 @@ export class DispatchService {
    * place, what the bag asks of the vehicle, the cold, the border, the declaration. The caller marks the promise given
    * first, so the room it held is not counted beside the bag. Returns why it could not be, or nothing when it was claimed.
    */
-  claimBagFor(code: string, driverDid: string, now: number = Date.now()): string | undefined {
+  claimBagFor(code: string, driverDid: string, now: number = Date.now()): SayValue | undefined {
+    // 2026-11-27 — why not, as phrases where the words are ours, so the driver reads it in their language (details.ts).
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) return 'They are no longer on a vehicle';
+    if (!vehicle) return said('pickupAhead.refused.reason.noVehicle');
     const tote = this.totes.requireByCode(code);
-    if (tote.status !== 'available') return `The bag is ${tote.status}`;
-    if (this.atHubDown(tote.locationId)) return 'Its hub is down';
-    if (tote.weightKg > this.remainingCapacity(driverDid)) return `It weighs ${tote.weightKg} kg, more than their vehicle has left`;
-    if (this.remainingTotes(driverDid) < 1) return 'Their vehicle has no bag place left';
+    if (tote.status !== 'available') return said('pickupAhead.refused.reason.status', { status: said(`bag.status.${tote.status}` as NoticeKey) });
+    if (this.atHubDown(tote.locationId)) return said('pickupAhead.refused.reason.hubDown');
+    if (tote.weightKg > this.remainingCapacity(driverDid)) return said('pickupAhead.refused.reason.tooHeavy', { kg: tote.weightKg });
+    if (this.remainingTotes(driverDid) < 1) return said('pickupAhead.refused.reason.noPlace');
     const need = this.loadRequirements('tote', code);
     if (need.capabilities.some((cap) => !vehicle[cap]) || !DispatchService.hasEquipmentFor(vehicle, need.equipment) || (need.bulk && !vehicle.carriesBulk) || (need.fragile && !vehicle.allowsFragile)) {
-      return 'Their vehicle cannot carry what is in it';
+      return said('pickupAhead.refused.reason.cannotCarry');
     }
     const road = this.roadRefusal(driverDid, { kind: 'tote', ref: code });
     if (road) return road;
@@ -4345,7 +4347,7 @@ export class DispatchService {
     f.claim = { ...c, state: 'resolved', decision: input.decision, award, note: note.slice(0, 1000), ...(input.by ? { decidedBy: input.by } : {}), decidedAt: at, ...(funding ? { funding } : {}), ...(paidTo ? { paidTo } : {}) };
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, note, posterDid: this.senderDidOf(f), claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, ...(award > 0 ? { currency: this.claimCurrencyOf(f) } : {}), note, posterDid: this.senderDidOf(f), claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -5173,6 +5175,15 @@ export class DispatchService {
    * whose shipper is the store's RECORD — the store's own account. Never the record id: a notice addressed to it is filed
    * where no bell reads, and a store was told of none of its loads' troubles (found 2026-10-27).
    */
+  /** 2026-11-27 — the currency a claim on a load is paid in: the float it is paid from (VendorService.payClaim), where known. */
+  private claimCurrencyOf(f: Pick<Freight, 'shipperDid'>): string | undefined {
+    try {
+      return f.shipperDid ? this.vendors.currencyOf(this.vendors.get(f.shipperDid)) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   senderDidOf(f: Pick<Freight, 'postedByDid' | 'shipperDid'>): string | undefined {
     return f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
   }

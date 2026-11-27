@@ -227,7 +227,8 @@ export function shopLicenceNotice(l: ShopLicenceStanding): ReturnType<typeof not
 /** A paper's last day, as paperDay says it in English, with the day itself so each language writes it its own way. */
 function shownDay(expiresAt: string) {
   const t = paperLapsesAt(expiresAt) - 86_400_000;
-  return Number.isNaN(t) ? paperDay(expiresAt) : shownOn(paperDay(expiresAt), new Date(t).toISOString().slice(0, 10));
+  // 2026-11-27 — an unreadable date lapses at infinity, not NaN: written as given, never a thrown RangeError.
+  return Number.isFinite(t) ? shownOn(paperDay(expiresAt), new Date(t).toISOString().slice(0, 10)) : paperDay(expiresAt);
 }
 
 /** A paper's name, capitalised as paperLabel says it, said in the reader's language. */

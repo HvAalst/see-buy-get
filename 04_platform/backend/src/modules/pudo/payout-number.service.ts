@@ -28,7 +28,8 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
-import { at, noticeOf, said, sayEnglish } from './notice-words/say';
+import { at, noticeOf, said } from './notice-words/say';
+import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -74,6 +75,8 @@ export class PayoutNumberService implements OnModuleInit {
     @Optional() private readonly accounts?: AccountService,
     @Optional() private readonly notices?: NotificationService,
     @Optional() private readonly mail?: MailService,
+    // 2026-11-27 — the email beside the notice in the language the person reads their app in.
+    @Optional() private readonly readers?: ReaderLanguageService,
   ) {}
 
   /** Where a partner pays a hand in this country: its bank account in the European Union, its phone elsewhere — by the country alone. */
@@ -268,13 +271,10 @@ export class PayoutNumberService implements OnModuleInit {
   /** A changed bank account, told in the bell (opening it in Settings) and by email where there is an address. Never a text. */
   private tellBankChanged(actor: IntrospectionResult, payee: Payee, masked: string, now: number): void {
     const until = new Date(now + PAYOUT_NUMBER_HOLD_MS).toISOString();
-    // 2026-11-26 — in phrases, so the bell and the phone say it in the reader's language; the email beside it is the English.
+    // 2026-11-26 — in phrases, so the bell and the phone say it in the reader's language; 2026-11-27 — and the email beside it.
     const headlineSaid = said('payout.bankChanged.title');
     const whatSaid = said('payout.bankChanged.what', { account: masked, until: at(`${until.slice(0, 16).replace('T', ' ')} UTC`, until) });
     const nextSaid = said(actor.personDid ? 'payout.bankChanged.nextPin' : 'payout.bankChanged.nextPassword');
-    const headline = sayEnglish(headlineSaid);
-    const what = sayEnglish(whatSaid);
-    const next = sayEnglish(nextSaid);
     const owner = actor.role === 'mdp' && actor.did ? actor.did : payee.payeeId;
     void this.notices
       ?.notify(owner, { kind: 'security', ...noticeOf(headlineSaid, said('bell.twoParts', { what: whatSaid, next: nextSaid })), link: '/?settings=payout', tag: `payout-bank:${payee.payeeId}:${now}` })
@@ -286,7 +286,9 @@ export class PayoutNumberService implements OnModuleInit {
     } catch {
       address = undefined;
     }
-    if (address) void this.mail?.send('account-safety', { address }, { headline, what, next, when: new Date(now).toISOString() }).catch(() => false);
+    // Said to whoever signed in: the person, or the shop's or hub's own account.
+    const reader = actor.personDid ?? actor.did;
+    if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, reader, { headline: headlineSaid, what: whatSaid, next: nextSaid }, new Date(now).toISOString())).catch(() => false);
   }
 
   /** The whole account, its holder and BIC — for the payout, at the moment it sends, and only for the account it was raised to. */

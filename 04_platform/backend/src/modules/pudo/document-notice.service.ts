@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { noticeOf, said } from './notice-words/say';
+import { countryName, noticeOf, said } from './notice-words/say';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { DocumentsService, type PublishOccasion } from '../../foundation/documents/documents.service';
 import { MailService } from '../../foundation/mail/mail.service';
@@ -78,17 +78,19 @@ export class DocumentNoticeService {
   async tellPublished(version: DocumentVersion, occasion?: PublishOccasion): Promise<number> {
     if (version.status !== 'published' || !version.number) return 0;
     const where = version.country ? catalogueEntry(version.country)?.name ?? version.country : undefined;
-    const named = where && !version.title.includes(where) ? said('documentNotice.named', { title: version.title, where }) : version.title;
+    // 2026-11-27 — the country by its own name in each language.
+    const whereSaid = where && version.country ? countryName(where, version.country) : (where ?? '');
+    const named = where && !version.title.includes(where) ? said('documentNotice.named', { title: version.title, where: whereSaid }) : version.title;
     const established = version.country ? occasion?.established?.company : undefined;
     // A country's first text is new to everybody there: not "a new version" of anything they read.
     const titleSaid = established
-      ? said('documentNotice.established.title', { company: established, where: where ?? '' })
+      ? said('documentNotice.established.title', { company: established, where: whereSaid })
       : version.number === 1
         ? said('documentNotice.first.title', { named })
         : said('documentNotice.newVersion.title', { named });
     const asked = said(version.askAgain ? 'documentNotice.asked.agree' : 'documentNotice.asked.read');
     const bodySaid = established
-      ? said('documentNotice.established.body', { company: established, where: where ?? '', ask: said(version.askAgain ? 'documentNotice.established.askAgree' : 'documentNotice.established.askRead') })
+      ? said('documentNotice.established.body', { company: established, where: whereSaid, ask: said(version.askAgain ? 'documentNotice.established.askAgree' : 'documentNotice.established.askRead') })
       : said('documentNotice.changed.body', { note: version.changeNote.replace(/\s*$/, ''), dot: /[.!?]$/.test(version.changeNote.trim()) ? '' : '.', asked });
     const notice = noticeOf(titleSaid, bodySaid);
     const key = documentKey(version.kind, version.country);

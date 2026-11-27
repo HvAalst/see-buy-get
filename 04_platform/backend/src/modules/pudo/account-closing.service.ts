@@ -17,6 +17,7 @@ import { PayoutNumberService } from './payout-number.service';
 import { BusinessService } from './business.service';
 import { PartnerMemberService } from './partner-member.service';
 import { noticeOf, said } from './notice-words/say';
+import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
 
 /** Four years without a sign-in, and the owner is told the account can be closed (the user, 2026-10-22). */
 export const INACTIVE_MONTHS = 48;
@@ -93,6 +94,8 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     private readonly businesses: BusinessService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly partnerMembers?: PartnerMemberService,
+    // 2026-11-27 — the language the person reads their app in: its last email in it, then forgotten with the account.
+    @Optional() private readonly readers?: ReaderLanguageService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -214,7 +217,8 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     const address = this.persons.emailOf(person);
     if (address) {
       await this.mail
-        ?.send('account-safety', { address }, { headline: 'Your account was closed', what: 'Your SeeBuyGet account was closed. Your name, ID number, phone number, email and ID photos have been removed.', next: 'If it was not you, write to us at once from the SeeBuyGet help, under “My data, or closing my account”.', when: new Date(now).toISOString() })
+        // 2026-11-27 — in the language the person read their app in, where all of it is written there.
+        ?.send('account-safety', { address }, safetyMailOf(this.readers, personDid, { headline: said('accountSafety.closed.title'), what: said('accountSafety.closed.what'), next: said('accountSafety.closed.next') }, new Date(now).toISOString()))
         .catch(() => false);
     }
 
@@ -233,6 +237,8 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     // 2026-11-20 — and every place it held in a partner's app (the payments plan, 3c).
     this.partnerMembers?.forgetPerson(personDid, phoneHash, now);
     this.accounts.forgetForPhone(phoneHash);
+    // 2026-11-27 — and the language its emails were written in.
+    this.readers?.forget(personDid);
     const closed = this.persons.close(personDid, now);
     this.logger.log(`an account was closed by its owner (${personDid})`);
     return { closedAt: closed.closedAt as string };

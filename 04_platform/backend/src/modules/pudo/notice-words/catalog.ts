@@ -9,6 +9,8 @@ import { EN_SERVICES_A } from './en/services-a';
 import { EN_SERVICES_B } from './en/services-b';
 import { EN_SERVICES_C } from './en/services-c';
 import { EN_SERVICES_D } from './en/services-d';
+import { EN_SAFETY } from './en/safety';
+import { EN_DETAILS } from './en/details';
 import { SW_BELL } from './sw/bell';
 import { SW_DISPATCHER_A } from './sw/dispatcher-a';
 import { SW_DISPATCHER_B } from './sw/dispatcher-b';
@@ -16,6 +18,8 @@ import { SW_SERVICES_A } from './sw/services-a';
 import { SW_SERVICES_B } from './sw/services-b';
 import { SW_SERVICES_C } from './sw/services-c';
 import { SW_SERVICES_D } from './sw/services-d';
+import { SW_SAFETY } from './sw/safety';
+import { SW_DETAILS } from './sw/details';
 import { NL_BELL } from './nl/bell';
 import { NL_DISPATCHER_A } from './nl/dispatcher-a';
 import { NL_DISPATCHER_B } from './nl/dispatcher-b';
@@ -23,6 +27,8 @@ import { NL_SERVICES_A } from './nl/services-a';
 import { NL_SERVICES_B } from './nl/services-b';
 import { NL_SERVICES_C } from './nl/services-c';
 import { NL_SERVICES_D } from './nl/services-d';
+import { NL_SAFETY } from './nl/safety';
+import { NL_DETAILS } from './nl/details';
 import { AM_BELL } from './am/bell';
 import { AM_DISPATCHER_A } from './am/dispatcher-a';
 import { AM_DISPATCHER_B } from './am/dispatcher-b';
@@ -30,6 +36,8 @@ import { AM_SERVICES_A } from './am/services-a';
 import { AM_SERVICES_B } from './am/services-b';
 import { AM_SERVICES_C } from './am/services-c';
 import { AM_SERVICES_D } from './am/services-d';
+import { AM_SAFETY } from './am/safety';
+import { AM_DETAILS } from './am/details';
 import { BG_BELL } from './bg/bell';
 import { BG_DISPATCHER_A } from './bg/dispatcher-a';
 import { BG_DISPATCHER_B } from './bg/dispatcher-b';
@@ -37,6 +45,8 @@ import { BG_SERVICES_A } from './bg/services-a';
 import { BG_SERVICES_B } from './bg/services-b';
 import { BG_SERVICES_C } from './bg/services-c';
 import { BG_SERVICES_D } from './bg/services-d';
+import { BG_SAFETY } from './bg/safety';
+import { BG_DETAILS } from './bg/details';
 
 /** Each part's English, by its file: a key is in one part only. */
 export const NOTICE_AREAS = {
@@ -47,6 +57,8 @@ export const NOTICE_AREAS = {
   'services-b': EN_SERVICES_B,
   'services-c': EN_SERVICES_C,
   'services-d': EN_SERVICES_D,
+  'safety': EN_SAFETY,
+  'details': EN_DETAILS,
 } as const;
 
 export const NOTICE_EN = {
@@ -57,6 +69,8 @@ export const NOTICE_EN = {
   ...EN_SERVICES_B,
   ...EN_SERVICES_C,
   ...EN_SERVICES_D,
+  ...EN_SAFETY,
+  ...EN_DETAILS,
 } as const;
 
 export type NoticeKey = keyof typeof NOTICE_EN;
@@ -71,6 +85,8 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'services-b': SW_SERVICES_B,
     'services-c': SW_SERVICES_C,
     'services-d': SW_SERVICES_D,
+    'safety': SW_SAFETY,
+    'details': SW_DETAILS,
   },
   nl: {
     'bell': NL_BELL,
@@ -80,6 +96,8 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'services-b': NL_SERVICES_B,
     'services-c': NL_SERVICES_C,
     'services-d': NL_SERVICES_D,
+    'safety': NL_SAFETY,
+    'details': NL_DETAILS,
   },
   am: {
     'bell': AM_BELL,
@@ -89,6 +107,8 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'services-b': AM_SERVICES_B,
     'services-c': AM_SERVICES_C,
     'services-d': AM_SERVICES_D,
+    'safety': AM_SAFETY,
+    'details': AM_DETAILS,
   },
   bg: {
     'bell': BG_BELL,
@@ -98,6 +118,8 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'services-b': BG_SERVICES_B,
     'services-c': BG_SERVICES_C,
     'services-d': BG_SERVICES_D,
+    'safety': BG_SAFETY,
+    'details': BG_DETAILS,
   },
 };
 

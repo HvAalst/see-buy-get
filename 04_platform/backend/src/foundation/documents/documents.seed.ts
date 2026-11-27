@@ -100,6 +100,7 @@ export const DOCUMENT_SEEDS: Record<DocumentKind, { title: string; body: string;
       '- When you write to SeeBuyGet, it keeps your email address and your message, to answer you.',
       '- A conversation between two parties in a SeeBuyGet app is kept as it was written: nothing in it is edited or deleted.',
       '- Where a SeeBuyGet driver turns on “Messages in the car”, SeeBuyGet keeps with that phone a key for the phone’s SeeBuyGet Driver app — only as a one-way hash — the token Google’s Firebase gave that phone, and the app’s language.',
+      '- SeeBuyGet keeps the language you last read your SeeBuyGet app in, and the country whose wording of it the app uses, so that notices on your phone and the emails about your account’s safety reach you in that language. It goes when the account is closed.',
       '',
       '## What SeeBuyGet does not do',
       '',

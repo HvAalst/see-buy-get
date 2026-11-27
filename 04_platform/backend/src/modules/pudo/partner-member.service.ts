@@ -16,7 +16,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isFor, waitsAt, type Addressed } from './addressed-to';
 import { PartnerLedgerView } from './partner-ledger.service';
 import { PersonService } from './person.service';
-import { noticeOf, said, sayEnglish } from './notice-words/say';
+import { noticeOf, said } from './notice-words/say';
+import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
 
 /**
  * 2026-11-20 — A PARTNER'S OWN PEOPLE (the payments plan, 3c; the owner: "console for staff and partner app with live view";
@@ -127,6 +128,8 @@ export class PartnerMemberService {
     @Optional() private readonly mail?: MailService,
     // 2026-11-26 — and in the partner's own bell (the Partner app), where every member reads it.
     @Optional() private readonly notices?: NotificationService,
+    // 2026-11-27 — each member's email in the language they read their app in.
+    @Optional() private readonly readers?: ReaderLanguageService,
   ) {
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
     this.mollie?.onPartnerChange((c) => this.tellMollieChange(c));
@@ -138,7 +141,7 @@ export class PartnerMemberService {
    */
   private tellMollieChange(c: MolliePartnerChange): void {
     const entity = this.entities.get(c.entityId);
-    // 2026-11-26 — in phrases, so each member reads it in their own language; the email beside it is the English.
+    // 2026-11-26 — in phrases, so each member reads it in their own language; 2026-11-27 — and the email beside it.
     const org = c.organization?.name
       ? c.organization.registrationNumber
         ? said('partner.mollie.account.registered', { name: c.organization.name, registration: c.organization.registrationNumber })
@@ -148,9 +151,6 @@ export class PartnerMemberService {
     const headlineSaid = said(on ? 'partner.mollie.connected.title' : 'partner.mollie.disconnected.title', { partner: entity.name });
     const whatSaid = said(on ? 'partner.mollie.connected.what' : 'partner.mollie.disconnected.what', { by: c.by, account: org });
     const nextSaid = said(on ? 'partner.mollie.connected.next' : 'partner.mollie.disconnected.next');
-    const headline = sayEnglish(headlineSaid);
-    const what = sayEnglish(whatSaid);
-    const next = sayEnglish(nextSaid);
     void this.notices
       ?.notify(entity.did, { kind: 'security', ...noticeOf(headlineSaid, said('bell.twoParts', { what: whatSaid, next: nextSaid })), link: '/?go=money', tag: `mollie:${c.entityId}:${c.at}`, data: { change: c.change } })
       .catch(() => undefined);
@@ -163,7 +163,8 @@ export class PartnerMemberService {
       } catch {
         address = undefined;
       }
-      if (address) void this.mail?.send('account-safety', { address }, { headline, what, next, when: c.at }).catch(() => false);
+      // 2026-11-27 — in the language this member reads their app in, where all of it is written there.
+      if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, m.personDid, { headline: headlineSaid, what: whatSaid, next: nextSaid }, c.at)).catch(() => false);
     }
   }
 

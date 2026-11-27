@@ -8,6 +8,8 @@ import type { MdpService } from './mdp.service';
 import { PayoutNumberService } from './payout-number.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { ReaderLanguageService } from './reader-language.service';
+import { NOTICE_TRANSLATIONS } from './notice-words/catalog';
 
 /**
  * WHO SETS A PAYOUT NUMBER, and what the payout run is told. A courier is paid itself; a fleet driver is not — its fleet
@@ -226,8 +228,10 @@ describe('a bank account kept only with the sign-in asked again', () => {
     const notices = { notify: async (owner: string, p: { kind: string; title: string; link?: string }) => void bells.push({ owner, kind: p.kind, title: p.title, link: p.link }) };
     const mails: Array<{ address: string; headline: string }> = [];
     const mail = { send: async (_k: string, to: { address: string }, p: { headline: string }) => (mails.push({ address: to.address, headline: p.headline }), true) };
-    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption(), persons as never, accounts as never, notices as never, mail as never);
-    return { svc, persons, passwords, bells, mails };
+    // 2026-11-27 — the language each reader reads their app in, for the email.
+    const readers = new ReaderLanguageService();
+    const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption(), persons as never, accounts as never, notices as never, mail as never, readers);
+    return { svc, persons, passwords, bells, mails, readers };
   };
   const ivan = { role: 'driver', did: 'did:courier-ivan', personDid: 'did:person-ivan', actorName: 'Ivan' } as IntrospectionResult;
   const hub = { role: 'mdp', did: 'did:hub-sofia', actorName: 'Hub Sofia' } as IntrospectionResult;
@@ -271,6 +275,21 @@ describe('a bank account kept only with the sign-in asked again', () => {
     expect(mails).toEqual([
       { address: 'ivan@example.test', headline: 'Your payout bank account was changed' },
       { address: 'hub@example.test', headline: 'Your payout bank account was changed' },
+    ]);
+  });
+
+  it('the email is written in the language its reader reads their app in: the courier’s person, the hub’s own account', async () => {
+    const { svc, mails, readers } = build();
+    readers.heard('did:person-ivan', 'bg', 'BG');
+    readers.heard('did:hub-sofia', 'nl', 'NL');
+    svc.setBank(ivan, { account: IBAN, holder: 'Ivan Petrov', pin: '2468' }, T0);
+    svc.setBank(hub, { account: IBAN, holder: 'Hub Sofia EOOD', password: 'hub-secret-1' }, T0);
+    svc.setBank(ivan, { account: 'LT12 1000 0111 0100 1000', holder: 'Ivan Petrov', pin: '2468' }, T0 + 60_000);
+    svc.setBank(hub, { account: 'LT12 1000 0111 0100 1000', holder: 'Hub Sofia EOOD', password: 'hub-secret-1' }, T0 + 60_000);
+    await Promise.resolve();
+    expect(mails).toEqual([
+      { address: 'ivan@example.test', headline: NOTICE_TRANSLATIONS.bg['payout.bankChanged.title'] },
+      { address: 'hub@example.test', headline: NOTICE_TRANSLATIONS.nl['payout.bankChanged.title'] },
     ]);
   });
 });

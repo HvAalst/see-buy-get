@@ -149,6 +149,7 @@ import { TAKEOVER_NEAR_KM, VehicleBreakdownService, type VehicleBrokeDown } from
 import type { GeoPoint, Parcel } from './pudo.types';
 import { WeightCheckService } from './weight-check.service';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
+import { sayEnglish, type Said } from './notice-words/say';
 
 describe('PUDO Light', () => {
   let agents: AgentService;
@@ -3094,7 +3095,8 @@ describe('PUDO Light', () => {
       // A driver on a vehicle with room is still not given it.
       const rider = drivers.register({ displayName: `HD Rider ${seq}`, fullName: `HD Rider ${seq}`, nationalId: `HD-${seq}`, mobile: `+25477200${seq}`, licenceClasses: ['bike'] });
       fleet.couple(rider.did, vehicles.register({ plate: `HD-${seq}`, vehicleClass: 'bike', ownerName: 'HD' }).vehicleId);
-      expect(dispatch.claimBagFor(atHub.code, rider.did)).toBe('Its hub is down');
+      // 2026-11-27 — said as a phrase, so the driver reads it in their language; its English as before.
+      expect(sayEnglish(dispatch.claimBagFor(atHub.code, rider.did) as Said)).toBe('Its hub is down');
       const offers = () => ((dispatch as any).availableLoads() as Array<{ kind: string; ref: string }>).filter((l) => l.kind === 'tote').map((l) => l.ref);
       expect(offers()).not.toContain(atHub.code);
       // Open again: it is chosen as before.

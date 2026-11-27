@@ -63,6 +63,7 @@ import { DepartureNoteService } from './departure-note.service';
 import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { evidencePhotos } from '../../../test/content-photo';
+import { sayEnglish } from './notice-words/say';
 
 const DAY = 86_400_000;
 
@@ -448,10 +449,15 @@ describe('a vehicle’s upkeep', () => {
       const due = care.recordService(truck.vehicleId, { day: dayPlus(0), what: 'service' }, { by: 'Amina' }).service.dueDay!;
       const mine = () => care.sweepServiceDue(noonOf(shift(due, 0)) - 10 * DAY).filter((n) => n.plate === 'KVC 960T');
       expect(care.sweepServiceDue().filter((n) => n.plate === 'KVC 960T')).toEqual([]);
-      expect(mine()).toEqual([{ fleetDid: f.did, vehicleId: truck.vehicleId, plate: 'KVC 960T', state: 'soon', line: `Service due soon: by ${words(due)}`, offRoad: false }]);
+      const soon = mine();
+      expect(soon).toMatchObject([{ fleetDid: f.did, vehicleId: truck.vehicleId, plate: 'KVC 960T', state: 'soon', line: `Service due soon: by ${words(due)}`, offRoad: false }]);
+      // 2026-11-27 — the same line as phrases, for the office's own language: word for word the line on the screen.
+      expect(sayEnglish(soon[0].lineSaid!)).toBe(soon[0].line);
       expect(mine()).toEqual([]); // told once
       const late = () => care.sweepServiceDue(noonOf(shift(due, 2))).filter((n) => n.plate === 'KVC 960T');
-      expect(late()).toMatchObject([{ state: 'overdue', line: `Service overdue: it was due by ${words(due)}`, offRoad: false }]);
+      const overdue = late();
+      expect(overdue).toMatchObject([{ state: 'overdue', line: `Service overdue: it was due by ${words(due)}`, offRoad: false }]);
+      expect(sayEnglish(overdue[0].lineSaid!)).toBe(overdue[0].line);
       expect(late()).toEqual([]);
       expect(told.filter((n) => n.plate === 'KVC 960T').map((n) => n.state)).toEqual(['soon', 'overdue']);
       // A service recorded: a new count, told afresh when it comes due.

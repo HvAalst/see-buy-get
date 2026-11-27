@@ -144,7 +144,9 @@ export class FundingPayerRegistrar implements OnModuleInit {
     // Keyed to the store's DID, which is what its own token acts as — the same inbox its app reads.
     const did = this.vendors.get(vendorId).did;
     if (!did) return;
-    const sum = c.gross.toFixed(2);
+    // 2026-11-27 — a sum in the store's own currency, written the reader's way where it is known (the English as before).
+    const cur = this.vendors.currencyOf(this.vendors.get(vendorId));
+    const sum = cur ? money(c.gross.toFixed(2), c.gross, cur) : c.gross.toFixed(2);
     const payload =
       event === 'balance_topped_up'
         ? noticeOf(said('fundingPayers.storeIn.title'), said('fundingPayers.storeIn.body', { amount: sum }))

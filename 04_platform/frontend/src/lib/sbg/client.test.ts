@@ -86,10 +86,13 @@ describe('SbgClient envelope + resilience', () => {
     expect(captured?.url).toBe('http://api.test/v1/sbg/fleet/drivers/did%3Ax');
     // 2026-11-26 — and the app's language, which the server says notices in.
     expect(captured?.headers.get('x-sbg-lang')).toBe('en');
+    // 2026-11-27 — English needs no country's review; another language says whose words it reads.
+    expect(captured?.headers.get('x-sbg-words-country')).toBeNull();
     setLocale('bg');
     try {
       await driver.me('did:x');
       expect(captured?.headers.get('x-sbg-lang')).toBe('bg');
+      expect(captured?.headers.get('x-sbg-words-country')).toMatch(/^[A-Z]{2}$/);
     } finally {
       setLocale('en');
     }

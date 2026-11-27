@@ -49,7 +49,7 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { modeOf } from './import.types';
-import { airAgenciesOf, airArrivalSaid, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
+import { airAgenciesOf, airArrivalSaid, airArrivalWarning, airReleaseGaps, airReleaseGapsSaid, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
 import { animalWords, CHICK_WINDOW_H, liveAnimalsOf, type LiveAnimalsDto } from './live-animals.types';
 import { ContactCardService } from './contact-card.service';
 import { airlineOfPrefix, airportCountry, airRegimeOf, awbDigits, awbProblem, checkAirWaybill, damageNoticeDays, formatAwb } from '../../foundation/carriage-law/air';
@@ -1078,7 +1078,7 @@ export class ImportService {
           ? noticeOf(said('importer.airOver.title', { code: c.code, handler: c.air.handler }), said('importer.airOver.body', { hours: c.air.freeHours!, handler: c.air.handler, end }))
           : noticeOf(
               said('importer.airSoon.title', { code: c.code, handler: c.air.handler }),
-              said('importer.airSoon.body', { hours: c.air.freeHours!, handler: c.air.handler, end, missing: airReleaseGaps(c.air).length ? said('importer.airSoon.missing', { gaps: airReleaseGaps(c.air).join(', ') }) : '' }),
+              said('importer.airSoon.body', { hours: c.air.freeHours!, handler: c.air.handler, end, missing: airReleaseGaps(c.air).length ? said('importer.airSoon.missing', { gaps: airReleaseGapsSaid(c.air) }) : '' }),
             );
       for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
         let did: string | undefined;

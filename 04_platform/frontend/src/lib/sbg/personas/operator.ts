@@ -72,6 +72,8 @@ export function createOperatorApi(sbg: SbgClient) {
     documents: () => sbg.request((c) => c.GET('/v1/sbg/documents', {})),
     /** 2026-11-03 — a country's review of a language (version 2), phrase by phrase, with its history: the Languages screen. */
     wordReviews: (locale: string, country: string) => sbg.request((c) => c.GET('/v1/sbg/words/{locale}/{country}/reviews', { params: { path: { locale, country } } })),
+    /** 2026-11-27 — the notice phrases (said by the server): English and version 1 in a language, each under its review key. */
+    noticeWords: (locale: string) => sbg.request((c) => c.GET('/v1/sbg/words/{locale}/notices', { params: { path: { locale } } })),
     reviewWord: (locale: string, country: string, key: string, body: { text?: string; keep?: boolean }) =>
       sbg.request((c) => c.PUT('/v1/sbg/words/{locale}/{country}/{key}', { params: { path: { locale, country, key } }, body })),
     proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; country?: string; by?: string }) =>

@@ -33362,6 +33362,15 @@
         "description": "Enrol this device (the browser's PushSubscription) for the authenticated owner.",
         "parameters": [
           {
+            "name": "x-sbg-words-country",
+            "in": "header",
+            "description": "The country whose review of the language the app reads its words in (two letters, like KE): its own words for a notice’s phrases are used.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "x-sbg-lang",
             "in": "header",
             "description": "The language the app speaks (en, sw, nl, am, bg): notices are said in it, where they are written in it; anything else is English.",
@@ -33428,6 +33437,15 @@
         "summary": "",
         "description": "The caller's notification inbox (newest first) + the unread count — the in-app notification centre (N2).",
         "parameters": [
+          {
+            "name": "x-sbg-words-country",
+            "in": "header",
+            "description": "The country whose review of the language the app reads its words in (two letters, like KE): its own words for a notice’s phrases are used.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "x-sbg-lang",
             "in": "header",
@@ -37841,6 +37859,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReviewedWordsView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Languages"
+        ]
+      }
+    },
+    "/v1/sbg/words/{locale}/notices": {
+      "get": {
+        "operationId": "WordReview.notices",
+        "summary": "",
+        "description": "2026-11-27 — THE NOTICES, FOR THE REVIEW SHEET (the owner: \"fix as recommended\"). A notice is said by this server, so its\nEnglish and version 1 are read from here; a country's own words for them are written through the same door as the apps'\n(PUT, key notice. and the phrase's key) and laid over version 1 for that country's readers.",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeBookView"
                 }
               }
             }
@@ -92409,6 +92459,31 @@
         "required": [
           "locale",
           "country",
+          "words"
+        ]
+      },
+      "NoticeBookView": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "english": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "words": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "locale",
+          "english",
           "words"
         ]
       },

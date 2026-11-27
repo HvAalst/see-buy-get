@@ -7,7 +7,6 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { hashPhone } from '../../foundation/identity/phone';
 import { MailService } from '../../foundation/mail/mail.service';
 import { reviewCodeOn } from '../../foundation/runtime/review-code';
-import type { MailParams } from '../../foundation/mail/mail.templates';
 import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
@@ -19,6 +18,7 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import type { Person, PhoneChange } from './person.types';
 import { noticeOf, said, sayEnglish, type Said } from './notice-words/say';
+import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
 
 /** Wrong tries at undoing a number change with the old number, or at the ID on a recovery, before that way is shut. */
 export const MAX_RECOVERY_MISSES = 5;
@@ -30,10 +30,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export const OLD_NUMBER_REMINDER_HOUR_UTC = 6;
 
-type Safety = MailParams['account-safety'];
-/** What a safety notice says: plain English, or phrases each reader reads in their own language. */
-type SafetyWords = Omit<Safety, 'when' | 'headline' | 'what' | 'next'> & { headline: string | Said; what: string | Said; next: string | Said };
-const wordsEnglish = (w: string | Said): string => (typeof w === 'string' ? w : sayEnglish(w));
+/**
+ * What a safety notice says, as phrases each reader reads in their own language — in the bell, on the phone and, since
+ * 2026-11-27, in the email beside them (the language the person reads their app in, reader-language.service.ts).
+ */
+type SafetyWords = { headline: Said; what: Said; next: Said; until?: string };
 
 /**
  * GETTING BACK INTO AN ACCOUNT — AND KEEPING SOMEBODY ELSE OUT OF IT.
@@ -86,13 +87,15 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     // The parcels, for the codes an account could read and for how many are waiting. Optional so a hand-built module
     // keeps compiling; without it a move changes no code and its notice counts no parcels.
     @Optional() private readonly parcels?: ParcelService,
+    // 2026-11-27 — the email in the language the person reads their app in.
+    @Optional() private readonly readers?: ReaderLanguageService,
   ) {}
 
   onModuleInit(): void {
     // Five wrong PINs: the owner hears it in the app already; the inbox is the channel a thief of the phone cannot read.
     this.events.subscribe<{ personDid: string }>(GlosEvent.Pudo.PersonPinLocked, (e) => {
       const person = this.persons.findByDid(e.payload.personDid);
-      if (person) this.tellByMail(person, { headline: 'Your PIN was locked', what: 'Somebody typed a wrong PIN five times for your phone number, so nobody can sign in with it now.', next: 'To sign in again, verify your phone by code and choose a new PIN. If it was not you, somebody knows your number: choose a PIN they cannot guess.' });
+      if (person) this.tellByMail(person, { headline: said('accountSafety.pinLocked.title'), what: said('accountSafety.pinLocked.what'), next: said('accountSafety.pinLocked.next') });
     });
     // A PIN replaced by a code, or the PIN now working on a phone or browser it never had: the same channel, for
     // the same reason. If it was the holder, one email they expected; if it was not, the only way they find out.
@@ -100,21 +103,15 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
       const person = this.persons.findByDid(e.payload.personDid);
       if (!person) return;
       this.tellByMail(person, {
-        headline: 'Your PIN was replaced',
-        what: e.payload.newDevice
-          ? 'The PIN on your SeeBuyGet account was replaced on a phone or browser that had not signed in to it before, with a code sent to your phone number and a code sent to this email address. Your PIN now works only there.'
-          : 'The PIN on your SeeBuyGet account was replaced, with a code sent to your phone number, on a phone or browser you had signed in on before. Your PIN now works only there.',
-        next: 'If it was you, there is nothing to do. If it was not: replace your PIN again straight away (“forgot your PIN” on the sign-in screen) — that shuts out every other phone and browser — and ask your mobile network whether your number was moved to another SIM.',
+        headline: said('accountSafety.pinReplaced.title'),
+        what: said(e.payload.newDevice ? 'accountSafety.pinReplaced.what.newDevice' : 'accountSafety.pinReplaced.what.known'),
+        next: said('accountSafety.pinReplaced.next'),
       });
     });
     this.events.subscribe<{ personDid: string }>(GlosEvent.Pudo.PersonDeviceConfirmed, (e) => {
       const person = this.persons.findByDid(e.payload.personDid);
       if (!person) return;
-      this.tellByMail(person, {
-        headline: 'A new phone or browser can use your PIN',
-        what: 'A code sent to your phone number was typed on a phone or browser that had not signed in to your SeeBuyGet account before. Your PIN now works there too.',
-        next: 'If it was you, there is nothing to do. If it was not: replace your PIN straight away (“forgot your PIN” on the sign-in screen). That shuts out every other phone and browser. Nobody is in without your PIN — but somebody can read the messages sent to your number.',
-      });
+      this.tellByMail(person, { headline: said('accountSafety.newDevice.title'), what: said('accountSafety.newDevice.what'), next: said('accountSafety.newDevice.next') });
     });
     this.timer = setInterval(() => {
       this.settle();
@@ -170,7 +167,11 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     const person = this.persons.setEmail(personDid, email);
     this.emailCodes.consume(email);
     if (old && old !== normalizeEmail(email)) {
-      void this.mail?.send('account-safety', { address: old }, { headline: 'Your recovery email was changed', what: `The email address on your SeeBuyGet account is now ${person.emailMasked}. This address no longer receives its notices.`, next: 'If it was not you, sign in and change your PIN straight away, then set the recovery email again.', when: new Date().toISOString() });
+      void this.mail?.send(
+        'account-safety',
+        { address: old },
+        safetyMailOf(this.readers, personDid, { headline: said('accountSafety.emailChanged.title'), what: said('accountSafety.emailChanged.what', { email: person.emailMasked }), next: said('accountSafety.emailChanged.next') }, new Date().toISOString()),
+      );
     }
     return person;
   }
@@ -405,21 +406,21 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
 
   /** The person hears it everywhere they read: their own inbox in the app, each driver record's, and — unless told not to — the email. */
   private tell(person: Person, w: SafetyWords, byMail = true): void {
-    // 2026-11-26 — in phrases where the sender gave phrases, so each reads it in their language; the email is the English.
-    const s: Omit<Safety, 'when'> = { ...w, headline: wordsEnglish(w.headline), what: wordsEnglish(w.what), next: wordsEnglish(w.next) };
+    // 2026-11-26 — in phrases, so each reads it in their language; 2026-11-27 — every sender gives phrases, the email too.
     const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
-    const body = typeof w.headline !== 'string' && typeof w.what !== 'string' && typeof w.next !== 'string' ? noticeOf(w.headline, said('accountRecovery.twoParts', { what: w.what, next: w.next })) : { title: s.headline, body: `${s.what} ${s.next}` };
+    const body = noticeOf(w.headline, said('accountRecovery.twoParts', { what: w.what, next: w.next }));
     for (const to of [person.personDid, ...drivers]) {
       void this.notifications
-        ?.notify(to, { kind: 'security', ...body, link: '/', tag: `account:${person.personDid}:${s.headline}` })
+        ?.notify(to, { kind: 'security', ...body, link: '/', tag: `account:${person.personDid}:${sayEnglish(w.headline)}` })
         .catch((err) => this.logger.warn(`security notice failed: ${(err as Error).message}`));
     }
-    if (byMail) this.tellByMail(person, s);
+    if (byMail) this.tellByMail(person, w);
   }
 
-  private tellByMail(person: Person, s: Omit<Safety, 'when'>): void {
+  /** The email, in the language the person reads their app in where all of it is written there (else English). */
+  private tellByMail(person: Person, w: SafetyWords): void {
     const address = this.persons.emailOf(person);
-    if (address) void this.mail?.send('account-safety', { address }, { ...s, when: new Date().toISOString() });
+    if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, person.personDid, w, new Date().toISOString(), w.until));
   }
 
   /** A fleet's office is told when one of its drivers' sign-in number changes — it is the fleet's name on their loads. */

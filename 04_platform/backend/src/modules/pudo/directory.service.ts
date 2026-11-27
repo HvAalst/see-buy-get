@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { noticeOf, said } from './notice-words/say';
+import { countryName, noticeOf, said } from './notice-words/say';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -195,7 +195,7 @@ export class DirectoryService {
         said('directory.asked.title', { name: e.name }),
         said('directory.asked.body', {
           name: e.name,
-          where: where ? said('directory.asked.where', { where }) : '',
+          where: where ? said('directory.asked.where', { where: e.jurisdiction ? countryName(where, e.jurisdiction) : where }) : '',
           handle: handle ? said('directory.asked.handle', { handle }) : '',
         }),
       ),

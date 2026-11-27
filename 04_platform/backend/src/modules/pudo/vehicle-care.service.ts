@@ -14,6 +14,7 @@ import { Vehicle } from './fleet.types';
 import { VehicleService } from './vehicle.service';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { dayWords, kmWords } from './upkeep-words';
+import { day as dayShown, number as numberShown, said, type Said } from './notice-words/say';
 import { CareSettings, CheckItem, CheckResult, CheckSheet, DefectItem, EndReadingResult, OdometerReading, OffRoadReason, OffRoadSpell, ReadingSource, ServiceDueView, ServiceKind, ServicePlanView, ServiceRecord, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 
 /** The most a vehicle drives in a day, for telling a doubtful reading from a likely one. */
@@ -87,6 +88,8 @@ export interface VehicleServiceDue {
   plate: string;
   state: 'soon' | 'overdue';
   line: string;
+  /** 2026-11-27 — the same line as phrases, so the office reads it in its own language. */
+  lineSaid?: Said;
   /** Overdue, and the fleet keeps a vehicle overdue for a service off the road. */
   offRoad: boolean;
 }
@@ -531,7 +534,8 @@ export class VehicleCareService implements OnApplicationBootstrap, OnModuleDestr
       const mark = was?.cycle === cycle ? was : { cycle };
       if (mark[due.state]) continue;
       this.serviceTold.set(v.vehicleId, { ...mark, [due.state]: new Date(now).toISOString() });
-      const notice: VehicleServiceDue = { fleetDid: v.managerDid, vehicleId: v.vehicleId, plate: v.plate, state: due.state, line: due.line, offRoad: due.state === 'overdue' && this.enforcesService(v) };
+      const lineSaid = serviceLineSaid(due, this.todayOf(v, now));
+      const notice: VehicleServiceDue = { fleetDid: v.managerDid, vehicleId: v.vehicleId, plate: v.plate, state: due.state, line: due.line, ...(lineSaid ? { lineSaid } : {}), offRoad: due.state === 'overdue' && this.enforcesService(v) };
       void this.events.publish(GlosEvent.Pudo.VehicleServiceDue, notice, { source: 'pudo' }).catch(() => undefined);
       told.push(notice);
     }
@@ -752,4 +756,23 @@ function overlaps(s: OffRoadSpell, fromDay: string, untilDay?: string): boolean 
 
 function addDays(day: string, n: number): string {
   return new Date(Date.parse(`${day}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * 2026-11-27 — A SERVICE'S DUE LINE AS PHRASES, for the notice (the owner: "fix as recommended"): the same words as `line`, a day
+ * and kilometres each written the reader's way. Only the states a notice is sent for: due soon, and overdue.
+ */
+export function serviceLineSaid(due: Pick<ServiceDueView, 'state' | 'dueDay' | 'dueKm' | 'currentKm'>, today: string): Said | undefined {
+  const dayOf = (d: string) => dayShown(dayWords(d), d);
+  const km = (n: number) => numberShown(kmWords(n), n);
+  if (due.state === 'overdue') {
+    if (due.dueDay !== undefined && today > due.dueDay) return said('dispatch2.serviceDue.line.overdueDay', { day: dayOf(due.dueDay) });
+    if (due.dueKm === undefined || due.currentKm === undefined) return undefined;
+    return said('dispatch2.serviceDue.line.overdueKm', { due: km(due.dueKm), km: km(due.currentKm) });
+  }
+  if (due.state !== 'soon') return undefined;
+  const by = [due.dueDay ? said('dispatch2.serviceDue.byDay', { day: dayOf(due.dueDay) }) : undefined, due.dueKm !== undefined ? said('dispatch2.serviceDue.atKm', { km: km(due.dueKm) }) : undefined].filter((x): x is Said => Boolean(x));
+  if (!by.length) return undefined;
+  const when = by.length > 1 ? said('dispatch2.serviceDue.either', { a: by[0], b: by[1] }) : by[0];
+  return due.dueKm !== undefined && due.currentKm !== undefined ? said('dispatch2.serviceDue.line.soonReads', { when, km: km(due.currentKm) }) : said('dispatch2.serviceDue.line.soon', { when });
 }

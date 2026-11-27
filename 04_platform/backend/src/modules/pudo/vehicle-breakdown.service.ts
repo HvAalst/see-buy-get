@@ -22,6 +22,7 @@ import { ParcelService } from './parcel.service';
 import { WalletGateService } from './wallet-gate.service';
 import { roadPartAt } from './pricing';
 import { haversineKm } from './geo';
+import { THE_COURIER } from './notice-words/system-words';
 
 /**
  * How near a courier on a shift must be to be told another courier broke down with bags and parcels to take over, and
@@ -65,6 +66,8 @@ export interface VehicleBrokeDown {
   breakdown: VehicleBreakdown;
   /** "16 Oct 2026 at 14:05", on the fleet's clock. */
   when: string;
+  /** 2026-11-27 — that clock (an IANA zone), so each language writes the moment its own way on it. */
+  zone?: string;
   tell: BreakdownTell[];
   /**
    * A courier's vehicle broke down with bags or parcels aboard: the couriers on a shift near it, told so one of them can
@@ -208,6 +211,7 @@ export class VehicleBreakdownService {
       plate: v.plate,
       breakdown: publicBreakdown(breakdown),
       when: this.when(v, breakdown.reportedAt),
+      zone: this.zoneOf(v, breakdown.reportedAt),
       tell: tellsOf(loads),
       ...(nearby.length ? { nearby } : {}),
       ...(!v.managerDid && goods.length ? { toTakeOver: { bags: goods.filter((l) => l.kind === 'bag').length, parcels: goods.filter((l) => l.kind === 'parcel').length } } : {}),
@@ -556,13 +560,18 @@ export class VehicleBreakdownService {
 
   /** "16 Oct 2026 at 14:05" — on the owner's clock. */
   private when(v: Vehicle, iso: string): string {
-    const at = clockAt(Date.parse(iso), this.managers.zoneOf(v.managerDid, Date.parse(iso)) ?? 'UTC');
+    const at = clockAt(Date.parse(iso), this.zoneOf(v, iso));
     return `${dayWords(at.day)} at ${at.clock}`;
+  }
+
+  /** The owner's clock, as a zone: UTC where none is known. */
+  private zoneOf(v: Vehicle, iso: string): string {
+    return this.managers.zoneOf(v.managerDid, Date.parse(iso)) ?? 'UTC';
   }
 
   /** Who carries the goods, as their shippers know them. */
   private carrierOf(v: Vehicle, driverName?: string): string {
-    return v.managerDid ? this.managers.get(v.managerDid).companyName : (driverName ?? 'The courier');
+    return v.managerDid ? this.managers.get(v.managerDid).companyName : (driverName ?? THE_COURIER);
   }
 
   private assertOwnPhoto(photoRef: string, ownerDid: string): void {

@@ -23,7 +23,10 @@ import { ToteService } from './tote.service';
 import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
-import { paperDay } from './papers';
+import { paperDay, paperLapsesAt } from './papers';
+import { VEHICLE_CLASSES } from './fleet.config';
+import type { NoticeKey } from './notice-words/catalog';
+import { COLLECTED_AT_SHOP_REASON, THE_COURIER } from './notice-words/system-words';
 import { GeoPoint } from './pudo.types';
 import { loadLink, runLink, type NotificationKind } from './notification.types';
 import { at, day, money, noticeOf, said } from './notice-words/say';
@@ -85,9 +88,41 @@ function directWho(p: Pick<FreightPaidDirectEvent, 'by' | 'driverName'>): SayVal
   return p.driverName ?? said('dispatch.theDriver');
 }
 
-/** A licence or paper day (paperDay): the English as before, and the day itself where it is a plain date. */
-function paperDayShown(expiresAt: string): SayValue {
-  return /^\d{4}-\d{2}-\d{2}$/.test(expiresAt) ? day(paperDay(expiresAt), expiresAt) : paperDay(expiresAt);
+/**
+ * A licence or paper day (paperDay): the English as before, and the day itself wherever it can be read — a plain date, or a
+ * moment (2026-11-27: a moment was said in English in every language).
+ */
+export function paperDayShown(expiresAt: string): SayValue {
+  const last = paperLapsesAt(expiresAt) - 86_400_000;
+  return Number.isFinite(last) ? day(paperDay(expiresAt), new Date(last).toISOString().slice(0, 10)) : paperDay(expiresAt);
+}
+
+/* 2026-11-27 — the pieces of a notice our own code writes in English, said as phrases (notice-words/en/details.ts). */
+
+/** Where on a load a finding was made, by its stage. */
+const WHERE_SAID: Record<string, NoticeKey> = { pickup: 'dispatch.loadHeld.where.pickup', road: 'dispatch.loadHeld.where.road', delivery: 'dispatch.loadHeld.where.delivery' };
+
+/** A delivery window as the plan says it ("08:00–12:00", "before 14:00", "from 09:30"): the words around the times as phrases. */
+export function windowSaid(w: string): SayValue {
+  const before = /^before (\d{2}:\d{2})$/.exec(w);
+  if (before) return said('dispatch.window.before', { to: before[1] });
+  const from = /^from (\d{2}:\d{2})$/.exec(w);
+  return from ? said('dispatch.window.from', { from: from[1] }) : w;
+}
+
+/** A vehicle's class, said as the language names it. */
+export function classSaid(c: string): SayValue {
+  return (VEHICLE_CLASSES as readonly string[]).includes(c) ? said(`vehicle.class.${c}` as NoticeKey) : c;
+}
+
+/** Who carries goods on a broken-down vehicle: the fleet or courier by name, or "The courier" where no name is known. */
+export function carrierSaid(carrier: string): SayValue {
+  return carrier === THE_COURIER ? said('dispatch2.breakdown.theCourier') : carrier;
+}
+
+/** When a vehicle broke down, on its owner's clock: the English as before, each language writing the moment its own way. */
+function breakdownWhen(p: Pick<VehicleBrokeDown, 'when' | 'zone' | 'breakdown'>): SayValue {
+  return p.breakdown.reportedAt ? at(p.when, p.breakdown.reportedAt, p.zone) : p.when;
 }
 
 /** Refused at the door: the sender told before the 48 hours end (DispatchService.sweepRefusals). */
@@ -238,7 +273,7 @@ const GIVE_BACK_WORDS: Record<string, string> = {
 interface RunClaimOpened { departureId: string; bookingId: string; managerDid: string; shipperDid: string; company: string; lineName: string; load: string; kind: string; description: string; amount?: number; currency: string }
 interface RunClaimAnswered { departureId: string; bookingId: string; shipperDid: string; managerDid: string; company: string; load: string; answer: 'accepted' | 'refused'; note?: string }
 /** Round 35 — held under the tamper protocol, and released (tamper.service.ts). */
-interface UnitHeldPayload { unitType: 'load' | 'parcel'; unitId: string; ref: string; finding: TamperFinding; where: string; posterDid?: string }
+interface UnitHeldPayload { unitType: 'load' | 'parcel'; unitId: string; ref: string; finding: TamperFinding; where: string; stage?: string; posterDid?: string }
 interface UnitReleasedPayload { unitType: 'load' | 'parcel'; unitId: string; ref: string; code?: string; reason: string; posterDid?: string }
 interface FleetPaperChecked { did: string; kind: 'operator_licence' | 'carrier_insurance'; accepted: boolean; expiresAt?: string; reason?: string }
 interface LicenceSent { did: string; displayName: string; expiresAt: string; managerDid?: string }
@@ -1044,7 +1079,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_problem',
         ...noticeOf(
           said('dispatch.loadHeld.title', { ref: payload.ref }),
-          said('dispatch.loadHeld.body', { where: payload.where, finding: FINDING_SAID[payload.finding] }),
+          said('dispatch.loadHeld.body', { where: payload.stage && WHERE_SAID[payload.stage] ? said(WHERE_SAID[payload.stage]) : payload.where, finding: FINDING_SAID[payload.finding] }),
         ),
         link: loadLink(payload.unitId, 'road'),
         tag: `freight:${payload.unitId}:held`,
@@ -1133,7 +1168,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
-  private async onFreightClaimDecided(payload: { freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }): Promise<void> {
+  private async onFreightClaimDecided(payload: { freightId: string; code: string; decision: string; award: number; currency?: string; note: string; posterDid?: string; claimantDid?: string }): Promise<void> {
     const to = payload.claimantDid ?? payload.posterDid;
     if (!to) return;
     // Nobody of ours decided anything: the claimant is told where the report is, and nothing about an outcome.
@@ -1146,7 +1181,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           ? noticeOf(said('dispatch.claim.report.title', { code: payload.code }), said('dispatch.claim.report.body'))
           : noticeOf(
               said('dispatch.claim.decided.title', { code: payload.code, outcome }),
-              payload.award > 0 ? said('dispatch.claim.credited.body', { amount: payload.award.toFixed(2), note: payload.note }) : said('dispatch.note.only', { note: payload.note }),
+              payload.award > 0 ? said('dispatch.claim.credited.body', { amount: payload.currency ? money(payload.award.toFixed(2), payload.award, payload.currency) : payload.award.toFixed(2), note: payload.note }) : said('dispatch.note.only', { note: payload.note }),
             )),
         // The poster's own claim: the load, on its claim. A receiver who claimed reads it where it receives: home.
         link: to === payload.posterDid ? loadLink(payload.freightId, 'claim') : '/',
@@ -1158,13 +1193,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
-  private async onFreightAssigned(payload: { freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }): Promise<void> {
+  private async onFreightAssigned(payload: { freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number; currency?: string }): Promise<void> {
     try {
       await this.notifications.notify(payload.driverDid, {
         kind: 'load_assigned',
         ...noticeOf(
           said('dispatch.assigned.title', { code: payload.code }),
-          said('dispatch.assigned.body', { by: payload.byName ?? said('dispatch.yourFleetOffice'), code: payload.code, kg: payload.weightKg, pickup: payload.pickupLabel, dest: payload.destLabel, earn: payload.earning != null ? said('dispatch.assigned.earn', { amount: payload.earning.toFixed(2) }) : '' }),
+          said('dispatch.assigned.body', { by: payload.byName ?? said('dispatch.yourFleetOffice'), code: payload.code, kg: payload.weightKg, pickup: payload.pickupLabel, dest: payload.destLabel, earn: payload.earning != null ? said('dispatch.assigned.earn', { amount: payload.currency ? money(payload.earning.toFixed(2), payload.earning, payload.currency) : payload.earning.toFixed(2) }) : '' }),
         ),
         // 2026-11-02 — a driver's notice opens where the driver acts on it, in one tap (the owner: "drivers' safety").
         link: '/?go=loads',
@@ -1362,7 +1397,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_cancelled',
         ...noticeOf(
           said('dispatch.cancelled.title', { code: payload.code }),
-          said('dispatch.cancelled.body', { code: payload.code, to: payload.destLabel ? said('dispatch.toDest', { dest: payload.destLabel }) : '', reason: payload.reason }),
+          said('dispatch.cancelled.body', { code: payload.code, to: payload.destLabel ? said('dispatch.toDest', { dest: payload.destLabel }) : '', reason: payload.reason === COLLECTED_AT_SHOP_REASON ? said('dispatch.cancelled.reason.collectedAtShop') : payload.reason }),
         ),
         // Its capacity is free: the board, where the next load is.
         link: '/?go=board',
@@ -1410,7 +1445,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** The shipper of an order its carrier split. An order the carrier's own office typed in has nobody here to tell: its tracking page says it. */
   private async onOrderSplit(p: { code: string; loads: number; rejoined: boolean; orderKg: number; deliverOn?: string; fleetName: string; shipperDid?: string }): Promise<void> {
     if (!p.shipperDid) return;
-    const size = p.orderKg >= 1000 ? `${Math.round(p.orderKg / 100) / 10} t` : `${p.orderKg} kg`;
+    const size = p.orderKg >= 1000 ? said('dispatch2.orderHandedOn.tonnes', { n: Math.round(p.orderKg / 100) / 10 }) : said('dispatch2.orderHandedOn.kg', { n: p.orderKg });
     const when = p.deliverOn ? said('dispatch.orderSplit.for', { day: day(p.deliverOn, p.deliverOn) }) : '';
     const title = p.rejoined ? said('dispatch.orderSplit.one.title', { fleet: p.fleetName, code: p.code }) : said('dispatch.orderSplit.many.title', { fleet: p.fleetName, code: p.code, loads: p.loads });
     const body = p.rejoined ? said('dispatch.orderSplit.one.body', { size, when }) : said('dispatch.orderSplit.many.body', { size, when, loads: p.loads });
@@ -1423,7 +1458,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    */
   private async onOrderWindowPlanned(p: OrderWindowPlanned): Promise<void> {
     const ordered = day(p.day, p.day);
-    const asked = p.window ? said('dispatch.window.asked', { window: p.window, day: ordered }) : said('dispatch.window.askedAny', { day: ordered });
+    const asked = p.window ? said('dispatch.window.asked', { window: windowSaid(p.window), day: ordered }) : said('dispatch.window.askedAny', { day: ordered });
     const estimate = said('dispatch.window.estimate');
     const data = { freightId: p.freightId };
     if (p.lateMin) {
@@ -1451,7 +1486,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // On a vehicle by the office's own hand, or on a trip it had missed: no plan gave it an hour, and none is made up.
       await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.onVehicle.title', { fleet: p.fleetName, code: p.code }), said('dispatch.onVehicle.body', { fleet: p.fleetName, code: p.code })), tag: `left:${p.code}:${p.day}:on`, data });
     } else {
-      const inside = p.window ? said('dispatch.planned.inside', { window: p.window }) : '';
+      const inside = p.window ? said('dispatch.planned.inside', { window: windowSaid(p.window) }) : '';
       await this.tell(p.shipperDid, { kind: 'order_window', ...noticeOf(said('dispatch.planned.title', { fleet: p.fleetName, code: p.code, day: day(p.day, p.day) }), said('dispatch.planned.body', { code: p.code, arrive: p.arrive, inside })), tag: `left:${p.code}:${p.day}:planned`, data });
     }
   }
@@ -1765,7 +1800,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     for (const shipperDid of p.shippers) {
       await this.tell(shipperDid, {
         kind: 'load_assigned',
-        ...noticeOf(said('dispatch2.vehicleChanged.title', { line: p.lineName }), said('dispatch2.vehicleChanged.body', { company: p.company, to: p.toClass, from: p.fromClass })),
+        ...noticeOf(said('dispatch2.vehicleChanged.title', { line: p.lineName }), said('dispatch2.vehicleChanged.body', { company: p.company, to: classSaid(p.toClass), from: classSaid(p.fromClass) })),
         link: runLink(p.departureId),
         tag: `departure:${p.departureId}:vehicle`,
         data: { departureId: p.departureId },
@@ -1780,7 +1815,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     await this.tell(p.did, {
       kind: 'papers_checked',
       ...(p.accepted
-        ? noticeOf(said('dispatch2.paperChecked.recorded.title', { paper }), said('dispatch2.paperChecked.recorded.body', { date: p.expiresAt ? paperDay(p.expiresAt) : said('dispatch2.paperChecked.itsNewDate') }))
+        ? noticeOf(said('dispatch2.paperChecked.recorded.title', { paper }), said('dispatch2.paperChecked.recorded.body', { date: p.expiresAt ? paperDayShown(p.expiresAt) : said('dispatch2.paperChecked.itsNewDate') }))
         : noticeOf(said('dispatch2.paperChecked.refused.title', { paper }), reason.trim() ? said('dispatch2.paperChecked.refused.body', { reason }) : said('dispatch2.paperChecked.refusedNoReason.body'))),
       tag: `papers:${p.did}:${p.kind}:checked`,
       data: { kind: p.kind },
@@ -1884,7 +1919,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onVehicleSuggested(p: { driverDid: string; plate: string; vehicleClass: string }): Promise<void> {
     await this.tell(p.driverDid, {
       kind: 'vehicle_today',
-      ...noticeOf(said('dispatch2.vehicleToday.title', { plate: p.plate }), said('dispatch2.vehicleToday.body', { plate: p.plate, vehicleClass: p.vehicleClass })),
+      ...noticeOf(said('dispatch2.vehicleToday.title', { plate: p.plate }), said('dispatch2.vehicleToday.body', { plate: p.plate, vehicleClass: classSaid(p.vehicleClass) })),
       tag: `vehicle-today:${p.driverDid}`,
       data: { plate: p.plate },
       // Its shift starts on the home screen, with that vehicle.
@@ -1897,9 +1932,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * one who can do anything about it, so they hear it in every inbox they read: their own and each driver record they
    * sign in as. Never a fleet's: a fleet's inbox is shared by its managers, and one person's PIN is nobody else's.
    */
-  private async onSignInChanged(p: { personDid: string; driverDids: string[] }, what: string, title: string, body: string, say?: ReturnType<typeof noticeOf>['say']): Promise<void> {
+  private async onSignInChanged(p: { personDid: string; driverDids: string[] }, what: string, title: string, body: string, say: ReturnType<typeof noticeOf>['say']): Promise<void> {
     for (const to of [p.personDid, ...p.driverDids]) {
-      await this.tell(to, { kind: 'security', title, body, ...(say ? { say } : {}), tag: `${what}:${p.personDid}`, data: {} });
+      await this.tell(to, { kind: 'security', title, body, say, tag: `${what}:${p.personDid}`, data: {} });
     }
   }
 
@@ -2379,7 +2414,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_service',
         ...noticeOf(
           p.state === 'overdue' ? said(p.offRoad ? 'dispatch2.serviceDue.overdueOff.title' : 'dispatch2.serviceDue.overdue.title', { plate: p.plate }) : said('dispatch2.serviceDue.soon.title', { plate: p.plate }),
-          said('dispatch2.serviceDue.body', { line: p.line, next: p.offRoad ? said('dispatch2.serviceDue.nextOff') : said('dispatch2.serviceDue.nextOn') }),
+          said('dispatch2.serviceDue.body', { line: p.lineSaid ?? p.line, next: p.offRoad ? said('dispatch2.serviceDue.nextOff') : said('dispatch2.serviceDue.nextOn') }),
         ),
         link: '/',
         tag: `service:${p.vehicleId}`,
@@ -2435,10 +2470,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         ...noticeOf(
           s.kind === 'booking' ? said('dispatch2.breakdown.shipperBooking.title', { line: String(s.lineName) }) : s.state === 'aboard' ? said('dispatch2.breakdown.shipperAboard.title', { label: s.label }) : said('dispatch2.breakdown.shipperCollect.title', { label: s.label }),
           s.kind === 'booking'
-            ? said('dispatch2.breakdown.shipperBooking.body', { carrier: p.carrier, when: p.when, label: s.label })
+            ? said('dispatch2.breakdown.shipperBooking.body', { carrier: carrierSaid(p.carrier), when: breakdownWhen(p), label: s.label })
             : s.state === 'aboard'
-              ? said('dispatch2.breakdown.shipperAboard.body', { carrier: p.carrier, when: p.when })
-              : said('dispatch2.breakdown.shipperCollect.body', { carrier: p.carrier, when: p.when }),
+              ? said('dispatch2.breakdown.shipperAboard.body', { carrier: carrierSaid(p.carrier), when: breakdownWhen(p) })
+              : said('dispatch2.breakdown.shipperCollect.body', { carrier: carrierSaid(p.carrier), when: breakdownWhen(p) }),
         ),
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
@@ -2472,8 +2507,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
               ? said('dispatch2.breakdownEnd.backAboard.body')
               : said('dispatch2.breakdownEnd.backCollect.body')
             : s.state === 'aboard'
-              ? said('dispatch2.breakdownEnd.workshopAboard.body', { carrier: p.carrier })
-              : said('dispatch2.breakdownEnd.workshopCollect.body', { carrier: p.carrier }),
+              ? said('dispatch2.breakdownEnd.workshopAboard.body', { carrier: carrierSaid(p.carrier) })
+              : said('dispatch2.breakdownEnd.workshopCollect.body', { carrier: carrierSaid(p.carrier) }),
         ),
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
@@ -2541,7 +2576,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_assigned',
         ...noticeOf(
           s.kind === 'booking' ? said('dispatch2.handover.shipperBooking.title', { line: String(s.lineName) }) : said('dispatch2.handover.shipperLoad.title', { label: s.label }),
-          said('dispatch2.handover.shipper.body', { carrier: p.carrier, collect: s.state === 'to_collect' ? said('dispatch2.handover.collect') : '' }),
+          said('dispatch2.handover.shipper.body', { carrier: carrierSaid(p.carrier), collect: s.state === 'to_collect' ? said('dispatch2.handover.collect') : '' }),
         ),
         tag: `breakdown:${p.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:moved`,
         data: { breakdownId: p.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
@@ -3196,12 +3231,12 @@ function spanSaid(minutes: number): Said {
 /** Where a handover fell against what was asked (see againstWhatWasAsked), or nothing. */
 function againstSaid(t: DeliveryTiming | undefined, orderedFor: string | undefined): Said | '' {
   if (!t) return '';
-  if (t.otherDay === 'late') return said('dispatch2.against.lateDay', { ordered: orderedFor ?? said('dispatch2.against.anEarlierDay'), arrived: t.day });
-  if (t.otherDay === 'early') return said('dispatch2.against.earlyDay', { ordered: orderedFor ?? said('dispatch2.against.aLaterDay'), arrived: t.day });
+  if (t.otherDay === 'late') return said('dispatch2.against.lateDay', { ordered: orderedFor ? day(orderedFor, orderedFor) : said('dispatch2.against.anEarlierDay'), arrived: day(t.day, t.day) });
+  if (t.otherDay === 'early') return said('dispatch2.against.earlyDay', { ordered: orderedFor ? day(orderedFor, orderedFor) : said('dispatch2.against.aLaterDay'), arrived: day(t.day, t.day) });
   if (!t.window) return '';
-  if (t.lateMin) return said('dispatch2.against.after', { span: spanSaid(t.lateMin), window: t.window });
-  if (t.earlyMin) return said('dispatch2.against.before', { span: spanSaid(t.earlyMin), window: t.window });
-  return said('dispatch2.against.inside', { window: t.window });
+  if (t.lateMin) return said('dispatch2.against.after', { span: spanSaid(t.lateMin), window: windowSaid(t.window) });
+  if (t.earlyMin) return said('dispatch2.against.before', { span: spanSaid(t.earlyMin), window: windowSaid(t.window) });
+  return said('dispatch2.against.inside', { window: windowSaid(t.window) });
 }
 
 const FOUND_KEYS = {

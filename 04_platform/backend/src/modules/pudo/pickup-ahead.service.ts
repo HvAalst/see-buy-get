@@ -19,7 +19,7 @@ import { GeoPoint, Parcel, Tote } from './pudo.types';
 import { haversineKm } from './geo';
 import { Router, ROUTER } from './router';
 import { ToteService } from './tote.service';
-import { noticeOf, said, type Said } from './notice-words/say';
+import { noticeOf, said, type Said, type SayValue } from './notice-words/say';
 
 /**
  * 2026-11-05 — PRE-DROP-OFF, THE DRIVER'S SIDE (compendium gap #6; the owner: "Seen ahead, taken on ahead"). Drivers on a
@@ -373,7 +373,7 @@ export class PickupAheadService {
   }
 
   /** The driver is told the bag is theirs to collect — or why it could not be given to them after all. */
-  private tellDriver(p: PickupPromise, tote: Tote, refused?: string): void {
+  private tellDriver(p: PickupPromise, tote: Tote, refused?: SayValue): void {
     const shop = this.agents.find(p.agentDid)?.shopName ?? said('pickupAhead.theShop');
     void this.notifications
       ?.notify(p.driverDid, {

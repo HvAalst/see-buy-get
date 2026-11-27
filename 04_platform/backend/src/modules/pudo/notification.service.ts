@@ -19,6 +19,7 @@ import {
 } from './notification.types';
 import { GUIDE_LINK, welcomeNotice, type WelcomeApp } from './welcome';
 import { noticeIn, type NoticeLang } from './notice-words/say';
+import { WordReviewService } from './word-review.service';
 
 // The key this server is known to a push service by — where it comes from, and why it is one value: vapid.ts.
 
@@ -81,6 +82,8 @@ export class NotificationService {
     @Optional() private readonly rest?: RestingAccounts,
     // Optional for the same reason: without it no screen is told its bell changed, and every bell still reads on opening.
     @Optional() private readonly live?: LiveService,
+    // 2026-11-27 — a country's own words for the notice phrases (version 2); without it, version 1 as written.
+    @Optional() private readonly reviews?: WordReviewService,
   ) {}
 
   /** The `applicationServerKey` a browser needs to subscribe. Public by design — not a secret. */
@@ -94,7 +97,7 @@ export class NotificationService {
   }
 
   /** Enrol (or refresh) a device for an owner. Idempotent per endpoint — a re-subscribe updates in place. */
-  subscribe(ownerDid: string, role: string, sub: WebPushSubscription, lang?: NoticeLang): PushSubscriptionRecord {
+  subscribe(ownerDid: string, role: string, sub: WebPushSubscription, lang?: NoticeLang, wordsCountry?: string): PushSubscriptionRecord {
     if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
       throw new GlosError('INVALID_INPUT', 'A push subscription needs an endpoint and both keys (p256dh, auth).');
     }
@@ -114,6 +117,8 @@ export class NotificationService {
       lastSeenAt: new Date().toISOString(),
       // 2026-11-26 — what this device is pushed in: its app's language, given again whenever the app's language changes.
       ...(lang ? { lang } : {}),
+      // 2026-11-27 — and whose review of it: that country's own words for a notice's phrases.
+      ...(lang && wordsCountry ? { wordsCountry } : {}),
     };
     this.subs.set(this.key(ownerDid, sub.endpoint), record);
     return record;
@@ -140,7 +145,7 @@ export class NotificationService {
     await Promise.all(
       targets.map((sub) =>
         // 2026-11-26 — each device in its own language, where the notice is written in it; never the phrases themselves.
-        this.sender.send(sub, noticeIn(sub.lang, payload)).then(
+        this.sender.send(sub, noticeIn(sub.lang, payload, this.reviews?.noticeWordsOf(sub.lang, sub.wordsCountry))).then(
           () => this.pushed(true),
           (err) => {
             this.pushed(false);
@@ -238,12 +243,14 @@ export class NotificationService {
    * An owner's notifications, newest first, capped (the centre paginates later if it ever needs to) — each in the reader's
    * language where all of it is written in it, else in the English it was sent in (2026-11-26). Its phrases stay here.
    */
-  inboxFor(ownerDid: string, limit = 50, lang?: NoticeLang): NotificationRecord[] {
+  inboxFor(ownerDid: string, limit = 50, lang?: NoticeLang, wordsCountry?: string): NotificationRecord[] {
+    // 2026-11-27 — with the reader's country's own words for the phrases, where it has reviewed them.
+    const words = this.reviews?.noticeWordsOf(lang, wordsCountry);
     return [...this.inbox.values()]
       .filter((n) => n.ownerDid === ownerDid)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, limit)
-      .map((n) => noticeIn(lang, n));
+      .map((n) => noticeIn(lang, n, words));
   }
 
   /** How many of an owner's notifications are unread — the bell badge count. */

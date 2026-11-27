@@ -4,7 +4,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { LiveAnimals, LiveAnimalsDto } from './live-animals.types';
-import { day as dayShown, said, sayEnglish, type Said } from './notice-words/say';
+import { countryName, day as dayShown, said, sayEnglish, type Said, type SayValue } from './notice-words/say';
 
 /**
  * AN IMPORT BY AIR: FROM "LANDED" TO "A TRUCK MAY COLLECT" (research 2026-10-29, 05_engineering/research/air_ops_2026-10-29.md
@@ -126,8 +126,9 @@ function airArrival(input: AirArrivalInput): { kind: AirArrivalWarning['kind']; 
       : kind === 'friday_late'
         ? said('importer.airArrival.why.fridayLate', { when })
         : said('importer.airArrival.why.day', { when });
-  const first = `${offices[0].charAt(0).toUpperCase()}${offices[0].slice(1)}`;
-  const named = offices.length > 1 ? said('importer.airArrival.offices', { list: [first, ...offices.slice(1, -1)].join(', '), last: offices[offices.length - 1] }) : first;
+  // 2026-11-27 — customs' own office as a phrase (it comes first); an agency by its name. Listed with the language's comma.
+  const shown: SayValue[] = offices.map((o, i) => (i === 0 && CUSTOMS_WEEKDAYS_ONLY[country] ? said('importer.airArrival.office.customsKE') : i === 0 ? `${o.charAt(0).toUpperCase()}${o.slice(1)}` : o));
+  const named = offices.length > 1 ? said('importer.airArrival.offices', { list: listSaid(shown.slice(0, -1)), last: shown[shown.length - 1] }) : shown[0];
   return { kind, landsOn: input.landsOn, offices, said: said('importer.airArrival.body', { why, offices: named, count: offices.length }) };
 }
 
@@ -144,6 +145,24 @@ export class AirAgencyRelease {
   @ApiProperty() key: string;
   @ApiProperty() name: string;
   @ApiPropertyOptional({ type: AirReleaseStep }) released?: AirReleaseStep;
+}
+
+/** Items said one after another with the language's comma ("a, b, c"). */
+function listSaid(items: SayValue[]): SayValue {
+  return items.reduce((a, b) => said('importer.list', { a, b }));
+}
+
+/**
+ * 2026-11-27 — the same as airReleaseGaps, as phrases for the bell: each reader told it in their own language, a country by
+ * its own name for it. Nothing where nothing keeps it.
+ */
+export function airReleaseGapsSaid(r: Parameters<typeof airReleaseGaps>[0]): SayValue {
+  const out: SayValue[] = [];
+  if (!r.customs) out.push(r.landedIn ? said('importer.airGap.transit', { country: countryName(catalogueEntry(r.landedIn)?.name ?? r.landedIn, r.landedIn) }) : said('importer.airGap.customs'));
+  if (!r.landedIn) for (const a of r.agencies) if (!a.released) out.push(said('importer.airGap.agency', { agency: a.name }));
+  if (!r.deliveryOrder) out.push(said('importer.airGap.deliveryOrder'));
+  if (!r.handlerCharges) out.push(said('importer.airGap.charges'));
+  return out.length ? listSaid(out) : '';
 }
 
 /** What still keeps air cargo in the shed, in words — empty once it may be collected. */

@@ -218,6 +218,7 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'GET sbg/fleet/assignments': list({ row: { of: 'driver', id: 'driverDid' } }),
   // A country's review of a language: that country's company's.
   'GET sbg/words/:locale/:country/reviews': { country: 'param', name: 'country' },
+  'GET sbg/words/:locale/notices': network('the notice phrases as written — the same for every country'),
   'PUT sbg/words/:locale/:country/:key': { country: 'param', name: 'country' },
 };
 

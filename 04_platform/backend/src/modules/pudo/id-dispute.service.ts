@@ -432,7 +432,8 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
       if (!person) continue;
       const yours = a.by === side;
       const bring = bringWords(d.register, d[side].reference);
-      const whenSaid = hour ? said('idDispute.whenComma', { day: dayShown(a.date), hour }) : dayShown(a.date);
+      // 2026-11-27 — "10:00 to 11:00" with the language's own "to".
+      const whenSaid = hour ? said('idDispute.whenComma', { day: dayShown(a.date), hour: said('idDispute.slot', { from: a.at!, to: slotEnd(place, a.date, a.at!) }) }) : dayShown(a.date);
       const whereSaid = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : said('idDispute.where.office');
       const words = noticeOf(
         said(!fits ? 'idDispute.remind.nofit.title' : yours ? 'idDispute.remind.mine.title' : 'idDispute.remind.other.title'),

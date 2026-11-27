@@ -8,9 +8,15 @@ import { PICKED_COUNTRY_HEADER, pickedCountry } from './pickedCountry';
 import { CACHED_AT_HEADER, cachedFetch } from '../../shared/readcache';
 import { isBrowserOffline } from '../../shared/connectivity';
 import { getLocale } from '../../shared/i18n';
+import { firstGuess } from '../../shared/phone/dial';
 
 /** 2026-11-26 — the language the app speaks, on every call (read by the server's notifications: notifications.controller.ts). */
 export const LANG_HEADER = 'x-sbg-lang';
+/**
+ * 2026-11-27 — and, in a language other than English, the country whose review of it the app reads its words in (the same
+ * country shared/i18n asks version 2 for): the server lays that country's own words for a notice's phrases over version 1.
+ */
+export const WORDS_COUNTRY_HEADER = 'x-sbg-words-country';
 
 /**
  * Result envelope — a business failure is DATA, never an exception. Every call resolves to exactly one
@@ -102,6 +108,7 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
       if (country) request.headers.set(PICKED_COUNTRY_HEADER, country);
       // 2026-11-26 — the app's language, so the server says notices in it (the bell, and a phone's pushes once it subscribes).
       request.headers.set(LANG_HEADER, getLocale());
+      if (getLocale() !== 'en') request.headers.set(WORDS_COUNTRY_HEADER, firstGuess());
       return request;
     },
   };

@@ -10,7 +10,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
-import { noticeOf, said, type Said } from './notice-words/say';
+import { countryName, noticeOf, said, type Said } from './notice-words/say';
 
 /**
  * WHAT STOPS, said to the people it stops for. One clause each, about what they do — never about our levels or our
@@ -110,7 +110,7 @@ export class CountryNoticeService {
     const country = catalogueEntry(code)?.name ?? code;
     const lost = input.lost.map((c) => LOSS_WORDS[c]);
     const lostSaid = input.lost.map((c) => LOSS_SAID[c]).reduce((a: Said, b: Said) => said('countryNotice.join', { a, b }));
-    const noticeWords = noticeOf(said('countryNotice.lowered.title', { country }), said('countryNotice.lowered.body', { lost: lostSaid, kept: said('countryNotice.kept') }));
+    const noticeWords = noticeOf(said('countryNotice.lowered.title', { country: countryName(country, code) }), said('countryNotice.lowered.body', { lost: lostSaid, kept: said('countryNotice.kept') }));
     let told = 0;
     let emailed = 0;
     for (const r of this.recipientsIn(code)) {
@@ -147,7 +147,7 @@ export class CountryNoticeService {
     let emailed = 0;
     for (const r of this.recipientsIn(code)) {
       const noticeWords = noticeOf(
-        said('countryNotice.opened.title', { country }),
+        said('countryNotice.opened.title', { country: countryName(country, code) }),
         said('countryNotice.opened.body', { ready: said(r.ready ? 'countryNotice.opened.ready' : 'countryNotice.opened.notReady'), whom }),
       );
       try {

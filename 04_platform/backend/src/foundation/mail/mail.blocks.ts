@@ -32,6 +32,9 @@ export interface MailDocument {
   blocks: MailBlock[];
   /** Why this address received it — every email says so, at the bottom. */
   reason: string;
+  /** 2026-11-27 — the language it is written in, where not English; and the footer's words in it. */
+  lang?: string;
+  footer?: { noReply: string; helpLead: string; helpLink: string };
 }
 
 export interface RenderedMail {
@@ -163,7 +166,7 @@ export function renderDocument(doc: MailDocument, opts: { helpUrl: string; logoU
   const hosted = Boolean(opts.logoUrl && /^https:\/\//i.test(opts.logoUrl));
   const logo = hosted ? undefined : brandLogo();
   const html =
-    `<!doctype html><html lang="en"><head><meta charset="utf-8" />` +
+    `<!doctype html><html lang="${doc.lang && /^[a-z]{2,3}$/.test(doc.lang) ? doc.lang : 'en'}"><head><meta charset="utf-8" />` +
     `<meta name="viewport" content="width=device-width,initial-scale=1" />` +
     `<meta name="color-scheme" content="light" /><meta name="supported-color-schemes" content="light" />` +
     `<title>${e(doc.subject)}</title>` +
@@ -179,9 +182,12 @@ export function renderDocument(doc: MailDocument, opts: { helpUrl: string; logoU
     `<tr><td style="padding:32px 28px 8px;">${doc.blocks.map(blockHtml).join('')}</td></tr>` +
     `<tr><td style="padding:4px 28px 28px;"><div style="border-top:1px solid ${C.line};padding-top:16px;">` +
     `<p style="margin:0 0 8px;font:400 13px/1.5 ${FONT};color:${C.muted};">${e(doc.reason)}</p>` +
-    `<p style="margin:0;font:400 13px/1.5 ${FONT};color:${C.muted};">Please do not reply — this address is not read. Help with signing in and your account: <a href="${safeHref(opts.helpUrl)}" style="color:${C.action};">SeeBuyGet help</a>.</p>` +
+    (doc.footer
+      ? `<p style="margin:0;font:400 13px/1.5 ${FONT};color:${C.muted};">${e(doc.footer.noReply)} ${e(doc.footer.helpLead)} <a href="${safeHref(opts.helpUrl)}" style="color:${C.action};">${e(doc.footer.helpLink)}</a>.</p>`
+      : `<p style="margin:0;font:400 13px/1.5 ${FONT};color:${C.muted};">Please do not reply — this address is not read. Help with signing in and your account: <a href="${safeHref(opts.helpUrl)}" style="color:${C.action};">SeeBuyGet help</a>.</p>`) +
     `</div></td></tr>` +
     `</table></td></tr></table></body></html>`;
-  const text = ['SEEBUYGET', '', ...doc.blocks.flatMap((b) => [blockText(b), '']), '--', doc.reason, `Please do not reply — this address is not read. Help: ${opts.helpUrl}`].join('\n');
+  const footerText = doc.footer ? `${doc.footer.noReply} ${doc.footer.helpLead} ${opts.helpUrl}` : `Please do not reply — this address is not read. Help: ${opts.helpUrl}`;
+  const text = ['SEEBUYGET', '', ...doc.blocks.flatMap((b) => [blockText(b), '']), '--', doc.reason, footerText].join('\n');
   return { subject: doc.subject, preheader: doc.preheader, html, text, images: logo ? [logo] : [] };
 }

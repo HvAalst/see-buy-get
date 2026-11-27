@@ -32,6 +32,11 @@ export interface PushSubscriptionRecord {
   lastSeenAt?: string;
   /** 2026-11-26 — the language its app had when it turned notifications on, or last opened: what it is pushed in. */
   lang?: NoticeLang;
+  /**
+   * 2026-11-27 — the country whose review of that language its app reads its words in (the x-sbg-words-country header): the
+   * country's own words for a notice's phrases are laid over version 1 when it is pushed.
+   */
+  wordsCountry?: string;
 }
 
 /** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest;
