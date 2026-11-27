@@ -426,12 +426,10 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
     const place = this.placeFor(d.country);
     const fits = !offDay(place, a.date, a.at);
     const hour = a.at ? `${a.at} to ${slotEnd(place, a.date, a.at)}` : undefined;
-    const where = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : 'the SeeBuyGet office for your country';
     for (const side of ['claimant', 'holder'] as const) {
       const person = d[side].personDid ? this.persons.findByDid(d[side].personDid as string) : undefined;
       if (!person) continue;
       const yours = a.by === side;
-      const bring = bringWords(d.register, d[side].reference);
       // 2026-11-27 — "10:00 to 11:00" with the language's own "to".
       const whenSaid = hour ? said('idDispute.whenComma', { day: dayShown(a.date), hour: said('idDispute.slot', { from: a.at!, to: slotEnd(place, a.date, a.at!) }) }) : dayShown(a.date);
       const whereSaid = place ? `${place.company}${place.address ? `, ${place.address}` : ''}` : said('idDispute.where.office');
@@ -449,7 +447,7 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
           .catch((err) => this.logger.warn(`appointment reminder failed: ${(err as Error).message}`));
       }
       const address = this.persons.emailOf(person);
-      if (address) void this.mail?.send('appointment-reminder', { address }, { yours, fits, day: dayOf(a.date), ...(hour ? { hour } : {}), where, reference: d[side].reference, bring: fits ? bring : [] });
+      if (address) void this.mail?.send('appointment-reminder', { address }, { yours, fits, day: dayShown(a.date), ...(hour ? { hour: said('idDispute.slot', { from: a.at!, to: slotEnd(place, a.date, a.at!) }) } : {}), where: whereSaid, reference: d[side].reference, bring: fits ? bringList(d.register, d[side].reference) : [] });
     }
   }
 
@@ -1117,13 +1115,13 @@ function offDay(place: DisputePlace | undefined, date: string, at?: string): boo
   return !at || !visitingHours(place, date).includes(at);
 }
 
-/** What to bring, as the reminder says it — the same four things the ticket lists, in the same order. */
-function bringWords(register: IdRegister, reference: string): string[] {
+/** What to bring, one phrase to a line (the email lists them) — the same four things as the bell's, in the same order. */
+function bringList(register: IdRegister, reference: string): Said[] {
   return [
-    'Your ID card itself — not a copy or a photograph',
-    'The phone you use with SeeBuyGet',
-    `Your reference: ${reference}`,
-    `A second document in your name, if you have one: your ${register === 'driver' ? 'driving licence' : 'trading licence'}`,
+    said('idDispute.bring.card'),
+    said('idDispute.bring.phone'),
+    said('idDispute.bring.reference', { reference }),
+    said('idDispute.bring.second', { licence: said(register === 'driver' ? 'idDispute.bring.licence.driver' : 'idDispute.bring.licence.shop') }),
   ];
 }
 

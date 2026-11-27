@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Optional, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiHeader } from '@nestjs/swagger';
-import { noticeLangOf, noticeOf, said } from './notice-words/say';
+import { noticeOf, said } from './notice-words/say';
 import { PartnerMemberService } from './partner-member.service';
-import { ReaderLanguageService } from './reader-language.service';
+import { LANG_HEADER, WORDS_COUNTRY_HEADER, langOf, wordsCountryOf, type AskedIn } from './reader-language.service';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -15,34 +15,14 @@ import { welcomeAppOf } from './welcome';
 import { SubscribeDto, UnsubscribeDto } from './notification.dto';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
-/** 2026-11-26 — the language an app speaks, on every call it makes (frontend/src/lib/sbg/client.ts). */
-export const LANG_HEADER = 'x-sbg-lang';
+/** 2026-11-26 — the language an app speaks, on every call it makes (reader-language.service.ts). */
 const LANG_DOC = { name: LANG_HEADER, required: false, description: 'The language the app speaks (en, sw, nl, am, bg): notices are said in it, where they are written in it; anything else is English.' };
 
-/** What a call says of itself: its headers. */
-type AskedIn = { headers?: Record<string, string | string[] | undefined> };
-
-/** The language a call asks in, where notices are written in it. */
-function langOf(req: AskedIn | undefined) {
-  return noticeLangOf(req?.headers?.[LANG_HEADER]);
-}
-
 /**
- * 2026-11-27 — the country whose review of its language the app reads its words in (frontend lib/sbg/client.ts): that
- * country's own words for a notice's phrases are laid over version 1. Two capital letters, or nothing.
+ * 2026-11-27 — the country whose review of its language the app reads its words in: that country's own words for a notice's
+ * phrases are laid over version 1.
  */
-export const WORDS_COUNTRY_HEADER = 'x-sbg-words-country';
 const WORDS_COUNTRY_DOC = { name: WORDS_COUNTRY_HEADER, required: false, description: 'The country whose review of the language the app reads its words in (two letters, like KE): its own words for a notice’s phrases are used.' };
-function wordsCountryOf(req: AskedIn | undefined): string | undefined {
-  const raw = req?.headers?.[WORDS_COUNTRY_HEADER];
-  const code = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(code) ? code : undefined;
-}
-
-/** The person behind a sign-in — a business's or a partner's member, not the company — whose language an email is written in. */
-function personOf(actor: IntrospectionResult): string | undefined {
-  return actor?.personDid ?? (actor?.role === 'business' || actor?.role === 'partner' || actor?.role === 'operator' ? undefined : actor?.did);
-}
 
 /**
  * The push spine (N1). Three authenticated routes let any signed-in human enrol / drop / test the
@@ -68,8 +48,6 @@ export class NotificationsController {
     private readonly notifications: NotificationService,
     // 2026-11-26 — a partner's people: whether they are still in it is asked on every request, as on its other doors.
     @Optional() private readonly partnerMembers?: PartnerMemberService,
-    // 2026-11-27 — the language a person reads their app in, kept for the emails beside notices.
-    @Optional() private readonly readers?: ReaderLanguageService,
   ) {}
 
   /** The `applicationServerKey` the browser needs to build a PushSubscription. Public, not a secret. */
@@ -98,7 +76,6 @@ export class NotificationsController {
       langOf(req),
       wordsCountryOf(req),
     );
-    this.readers?.heard(personOf(actor), langOf(req), wordsCountryOf(req));
     return { subscribed: true, createdAt: record.createdAt };
   }
 
@@ -143,11 +120,8 @@ export class NotificationsController {
     const app = welcomeAppOf(actor?.role);
     if (app) this.notifications.welcomeOnce(did, app);
     // 2026-11-26 — said in the reader's language, the app's own (x-sbg-lang): a shared inbox to each of its people in theirs.
-    // 2026-11-27 — with their country's own words for the phrases; and the language kept for the emails beside notices.
-    const lang = langOf(req);
-    const country = wordsCountryOf(req);
-    this.readers?.heard(personOf(actor), lang, country);
-    return { items: this.notifications.inboxFor(did, 50, lang, country), unread: this.notifications.unreadCount(did) };
+    // 2026-11-27 — with their country's own words for the phrases (the language is kept for emails by ReaderLanguageInterceptor).
+    return { items: this.notifications.inboxFor(did, 50, langOf(req), wordsCountryOf(req)), unread: this.notifications.unreadCount(did) };
   }
 
   /** Mark one of the caller's notifications read. Ownership-guarded in the service. */

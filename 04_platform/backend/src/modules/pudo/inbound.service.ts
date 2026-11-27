@@ -15,7 +15,7 @@ import { NoteArchiveService } from './note-archive.service';
 import { consigneeDocId } from './note-archive.types';
 import { NotificationService } from './notification.service';
 import { exceptionViewsOf, stillExpectedOf } from './receiving';
-import { noticeOf, said, type Said } from './notice-words/say';
+import { noticeOf, number, said, type Said } from './notice-words/say';
 import { Site, SiteService } from './site.service';
 
 /** How long a load that has arrived, or was withdrawn, stays on the list after its day: a fortnight. */
@@ -265,7 +265,7 @@ export class InboundService implements OnModuleInit {
     const lines: Record<typeof step, ReturnType<typeof noticeOf>> = {
       addressed: noticeOf(
         said('inbound.addressed.title', { what, from }),
-        said('inbound.addressed.body', { packages, kg: f.weightKg.toLocaleString('en-GB'), site: f.receiver.siteName }),
+        said('inbound.addressed.body', { packages, kg: number(f.weightKg.toLocaleString('en-GB'), f.weightKg), site: f.receiver.siteName }),
       ),
       picked_up: noticeOf(said('inbound.pickedUp.title', { what }), said('inbound.pickedUp.body', { from, site: f.receiver.siteName })),
       delivered: noticeOf(

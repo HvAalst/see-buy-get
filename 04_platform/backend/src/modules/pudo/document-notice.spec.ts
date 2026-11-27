@@ -4,6 +4,8 @@ import { CountryNoticeService } from './country-notice.service';
 import { DocumentNoticeService } from './document-notice.service';
 import { NotificationService } from './notification.service';
 import { OutboxPushSender } from './push-sender';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
+import type { SayValue } from './notice-words/say';
 
 /**
  * A NEW VERSION OF WHAT PEOPLE AGREED TO, TOLD IN THE BELL (the user, 2026-10-25: "privacy text needs to stay true, but
@@ -120,7 +122,9 @@ describe('a published version is told in the bell of everybody it concerns', () 
     expect(told(notifications, 'did:person:wanjiru')[0].title).toBe('SeeBuyGet Kenya Limited runs SeeBuyGet in Kenya from today');
     // By email to those registered there who gave one — and nobody elsewhere.
     expect(sent.map((m) => [m.template, m.to])).toEqual([['country-established', 'office@kilima.example']]);
-    expect(sent[0].params).toMatchObject({ country: 'Kenya', company: 'SeeBuyGet Kenya Limited', asked: true, app: 'fleet' });
+    expect(sent[0].params).toMatchObject({ company: 'SeeBuyGet Kenya Limited', asked: true, app: 'fleet' });
+    // 2026-11-27 — the country by its own name in each language; its English as before.
+    expect(ENGLISH_MAIL_WORDS.text((sent[0].params as { country: SayValue }).country)).toBe('Kenya');
   });
 
   it('names the country when the title does not', async () => {

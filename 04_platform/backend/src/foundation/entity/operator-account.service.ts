@@ -11,6 +11,8 @@ import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { newTotpSecret, otpauthUri, verifyTotp } from '../auth/totp';
 import { rolesOf, STAFF_ROLES, type StaffRole } from '../auth/staff-roles';
+import { catalogueEntry } from '../countries/catalogue';
+import { countryName, said, type SayValue } from '../../modules/pudo/notice-words/say';
 import { EVERY_COUNTRY, countriesLine, countriesOf, holdsEvery, mayGrant, onlyNarrows } from '../auth/staff-countries';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { isSandbox } from '../runtime/sandbox';
@@ -158,8 +160,8 @@ export class OperatorAccountService {
     void this.mail?.send('staff-account-added', { address: account.email, name: account.name }, { name: account.name, email: account.email, addedBy: createdBy });
     this.tell(
       staff,
-      `A network staff account was made for ${asked.name} (${asked.email}) with the setup key, without a second person.`,
-      'The setup key can do that only while nobody can sign in. If nobody you know did this, the key is in the wrong hands: tell whoever runs the server at once.',
+      said('mail.staff-account-news.made.what', { name: asked.name, email: asked.email }),
+      said('mail.staff-account-news.made.next'),
       now,
     );
     return { ...viewOf(account, now), temporaryPassword: password };
@@ -192,8 +194,8 @@ export class OperatorAccountService {
     this.proposals.set(proposal.proposalId, proposal);
     this.tell(
       this.signers().filter((a) => a.operatorId !== asker.operatorId),
-      `${asker.name} asked for a network staff account for ${asked.name} (${asked.email}), to hold ${rolesLine(roles)}, in ${countriesLine(countries)}.`,
-      `Nothing was made, and nobody can sign in with it until a second member of staff approves it: Overview, then Network staff. Approve it only if you know this person and this is their address. If ${asker.name} did not ask for it, decline it and take their sign-in away: it may be in somebody else's hands.`,
+      said('mail.staff-account-news.asked.what', { asker: asker.name, name: asked.name, email: asked.email, roles: rolesSaid(roles), countries: countriesSaid(countries) }),
+      said('mail.staff-account-news.asked.next', { asker: asker.name }),
       now,
     );
     return this.proposalView(proposal, asker.operatorId);
@@ -228,8 +230,8 @@ export class OperatorAccountService {
     const welcome = await this.welcome(account, now);
     this.tell(
       this.active().filter((a) => a.operatorId === proposal.askedById),
-      `${approvedBy === SETUP_KEY ? 'The setup key' : approvedBy} approved the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
-      `${proposal.name} is emailed a link, at that address, to choose a password: nobody on staff is shown one. It works for ${STAFF_WELCOME_HOURS} hours. If it does not arrive, anybody on staff can send a new one: Overview, then Network staff.`,
+      approvedBy === SETUP_KEY ? said('mail.staff-account-news.approvedByKey.what', { name: proposal.name, email: proposal.email }) : said('mail.staff-account-news.approved.what', { by: approvedBy, name: proposal.name, email: proposal.email }),
+      said('mail.staff-account-news.approved.next', { name: proposal.name, hours: STAFF_WELCOME_HOURS }),
       now,
     );
     return { ...viewOf(account, now), ...welcome };
@@ -255,9 +257,9 @@ export class OperatorAccountService {
       this.tell(
         this.active().filter((a) => a.operatorId === proposal.askedById),
         roles
-          ? `${who.name} declined the change of ${proposal.name}'s ${proposal.kind === 'countries' ? 'countries' : 'roles'} you asked for.`
-          : `${who.name} declined the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
-        `Their reason: “${(why as string).replace(/[.\s]+$/, '')}”. ${roles ? 'Nothing changed' : 'Nothing was made'}. You can ask again.`,
+          ? said(proposal.kind === 'countries' ? 'mail.staff-account-news.declinedCountries.what' : 'mail.staff-account-news.declinedRoles.what', { who: who.name, name: proposal.name })
+          : said('mail.staff-account-news.declinedAccount.what', { who: who.name, name: proposal.name, email: proposal.email }),
+        said(roles ? 'mail.staff-account-news.declined.nextChanged' : 'mail.staff-account-news.declined.nextMade', { reason: (why as string).replace(/[.\s]+$/, '') }),
         now,
       );
     }
@@ -385,7 +387,7 @@ export class OperatorAccountService {
     void this.mail?.send(
       'staff-two-step',
       { address: account.email, name: account.name },
-      { name: account.name, what: `Your two-step sign-in was reset by ${asked.by} and ${by.name}.`, next: 'You were signed out. The next time you sign in, scan the new QR code with your authenticator app. If you did not ask for this, tell them at once.', when: new Date(now).toISOString() },
+      { name: account.name, what: said('mail.staff-two-step.what', { first: asked.by, second: by.name }), next: said('mail.staff-two-step.next'), when: new Date(now).toISOString() },
     );
     return viewOf(account);
   }
@@ -436,7 +438,7 @@ export class OperatorAccountService {
     for (const p of this.waiting(now)) {
       if (p.askedById === operatorId) this.close(p, by, 'The member of staff who asked no longer has a sign-in.', now);
     }
-    void this.mail?.send('access-removed', { address: account.email, name: account.name }, { email: account.email, what: 'network staff account', removedBy: by, when: account.revokedAt! });
+    void this.mail?.send('access-removed', { address: account.email, name: account.name }, { email: account.email, what: said('mail.access-removed.whatStaff'), removedBy: by, when: account.revokedAt! });
     return viewOf(account);
   }
 
@@ -458,8 +460,8 @@ export class OperatorAccountService {
       this.accounts.set(account.email, account);
       this.tell(
         this.active(),
-        `The setup key asked to take away the staff sign-in of ${account.name} (${account.email}).`,
-        `Nothing happens for ${KEY_REMOVAL_WAIT_HOURS} hours. If nobody on staff asked for this, stop it — Overview, then Network staff, then “Stop it” beside that name — and tell whoever runs the server that the setup key is in the wrong hands. If nobody stops it, whoever holds the setup key can finish it after that.`,
+        said('mail.staff-account-news.removalAsked.what', { name: account.name, email: account.email }),
+        said('mail.staff-account-news.removalAsked.next', { hours: KEY_REMOVAL_WAIT_HOURS }),
         now,
       );
       return viewOf(account, now);
@@ -481,8 +483,8 @@ export class OperatorAccountService {
     this.accounts.set(account.email, account);
     this.tell(
       this.active().filter((a) => a.operatorId !== who.operatorId),
-      `${who.name} stopped the setup key taking away the staff sign-in of ${account.name}.`,
-      'If the setup key is in the wrong hands, whoever runs the server replaces it (GLOS_CLIENT_SECRET). Until then it can ask again, and everybody is told again.',
+      said('mail.staff-account-news.removalStopped.what', { who: who.name, name: account.name }),
+      said('mail.staff-account-news.removalStopped.next'),
       now,
     );
     return viewOf(account, now);
@@ -610,8 +612,8 @@ export class OperatorAccountService {
     this.proposals.set(proposal.proposalId, proposal);
     this.tell(
       this.signers().filter((a) => a.operatorId !== asker.operatorId),
-      `${asker.name} asked that ${target.name} hold ${rolesLine(next)}, in place of ${rolesLine(heldRoles(target))}.`,
-      `Nothing changes until a second member of staff approves it: Overview, then Network staff. If ${asker.name} did not ask for it, decline it.`,
+      said('mail.staff-account-news.rolesAsked.what', { asker: asker.name, name: target.name, roles: rolesSaid(next), before: rolesSaid(heldRoles(target)) }),
+      said('mail.staff-account-news.rolesAsked.next', { asker: asker.name }),
       now,
     );
     return this.proposalView(proposal, asker.operatorId);
@@ -632,8 +634,8 @@ export class OperatorAccountService {
     this.auth.revokeAll(operatorKey(target.operatorId));
     this.tell(
       this.active().filter((a) => a.operatorId === target.operatorId || a.operatorId === proposal.askedById),
-      `${target.name} now holds ${rolesLine(heldRoles(target))}, in place of ${rolesLine(before)} — asked by ${proposal.askedBy}, approved by ${approvedBy}.`,
-      `${target.name} was signed out and signs in again to work with the new roles.`,
+      said('mail.staff-account-news.rolesChanged.what', { name: target.name, roles: rolesSaid(heldRoles(target)), before: rolesSaid(before), askedBy: proposal.askedBy, approvedBy }),
+      said('mail.staff-account-news.rolesChanged.next', { name: target.name }),
       now,
     );
     return { ...viewOf(target, now), sent: true };
@@ -669,8 +671,8 @@ export class OperatorAccountService {
     this.proposals.set(proposal.proposalId, proposal);
     this.tell(
       this.signers().filter((a) => a.operatorId !== asker.operatorId),
-      `${asker.name} asked that ${target.name} work in ${countriesLine(next)}, in place of ${countriesLine(heldCountries(target))}.`,
-      `Nothing changes until a second member of staff approves it: Overview, then Network staff. If ${asker.name} did not ask for it, decline it.`,
+      said('mail.staff-account-news.countriesAsked.what', { asker: asker.name, name: target.name, countries: countriesSaid(next), before: countriesSaid(heldCountries(target)) }),
+      said('mail.staff-account-news.countriesAsked.next', { asker: asker.name }),
       now,
     );
     return this.proposalView(proposal, asker.operatorId);
@@ -697,8 +699,8 @@ export class OperatorAccountService {
     this.auth.revokeAll(operatorKey(target.operatorId));
     this.tell(
       this.active().filter((a) => a.operatorId === target.operatorId || a.operatorId === proposal.askedById),
-      `${target.name} now works in ${countriesLine(next)}, in place of ${countriesLine(before)} — asked by ${proposal.askedBy}, approved by ${approvedBy}.`,
-      `${target.name} was signed out and signs in again to work in the new countries.`,
+      said('mail.staff-account-news.countriesChanged.what', { name: target.name, countries: countriesSaid(next), before: countriesSaid(before), askedBy: proposal.askedBy, approvedBy }),
+      said('mail.staff-account-news.countriesChanged.next', { name: target.name }),
       now,
     );
     return { ...viewOf(target, now), sent: true };
@@ -810,8 +812,17 @@ export class OperatorAccountService {
   }
 
   /** Said to members of staff by email, each in their own: who is on staff decides who can approve what. */
-  private tell(to: OperatorAccount[], what: string, next: string, now: number): void {
+  private tell(to: OperatorAccount[], what: SayValue, next: SayValue, now: number): void {
     for (const a of to) void this.mail?.send('staff-account-news', { address: a.email, name: a.name }, { what, next, when: new Date(now).toISOString() });
+  }
+
+  /**
+   * 2026-11-27 — the sign-in key of the member of staff an address belongs to (operatorKey): whose language an email to it is
+   * written in (reader-language.service.ts). Nothing for an address that is nobody's on staff, or whose account was taken away.
+   */
+  staffKeyOfEmail(email: string): string | undefined {
+    const a = this.accounts.get(email.trim().toLowerCase()) ?? [...this.accounts.values()].find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+    return a && !a.revokedAt ? operatorKey(a.operatorId) : undefined;
   }
 
   private byId(operatorId: string): OperatorAccount {
@@ -918,6 +929,27 @@ export function heldCountries(a: Pick<OperatorAccount, 'countries'>): string[] {
 /** Round 38 — the roles a person holds: theirs, or all four on an account from before roles (a sandbox's; production starts empty). */
 export function heldRoles(a: Pick<OperatorAccount, 'roles'>): StaffRole[] {
   return a.roles ? rolesOf(a.roles) : [...STAFF_ROLES];
+}
+
+/** 2026-11-27 — a list said as phrases: "a", "a and b", "a, b and c" (the English of rolesLine and countriesLine). */
+function listSaid(items: SayValue[]): SayValue {
+  if (items.length === 1) return items[0];
+  let head = items[0];
+  for (const item of items.slice(1, -1)) head = said('mail.staff-account-news.list.comma', { a: head, b: item });
+  return said('mail.staff-account-news.list.and', { a: head, b: items[items.length - 1] });
+}
+
+/** Roles as the reader's language says them: the same words as rolesLine. */
+function rolesSaid(roles: readonly StaffRole[]): SayValue {
+  if (!roles.length) return said('mail.staff-account-news.role.none');
+  return listSaid(roles.map((r) => said(`mail.staff-account-news.role.${r}` as 'mail.staff-account-news.role.admin')));
+}
+
+/** Countries as the reader's language says them: the same words as countriesLine. */
+function countriesSaid(countries: readonly string[] | undefined): SayValue {
+  if (holdsEvery(countries)) return said('mail.staff-account-news.country.every');
+  if (!countries!.length) return said('mail.staff-account-news.country.none');
+  return listSaid(countries!.map((c) => countryName(catalogueEntry(c)?.name ?? c, c)));
 }
 
 /** Roles as a sentence says them. */

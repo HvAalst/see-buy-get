@@ -55,4 +55,16 @@ export const EN_DETAILS = {
   'apiVersionNotice.rule.summary.declaration-each-line': 'A security declaration is signed with each of its lines ticked (confirmed: the number of every line, from 0).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-codes': 'A load taken over or delivered in Romania carries the UIT code of RO e-Transport, and in Bulgaria the UTN of goods with high fiscal risk, or the sender\'s word that none is needed and why (fiscalCodes).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-indemnity': 'A load with a UIT or UTN code, or a reason for none, carries the sender\'s certification that they are accurate (fiscalCodes.indemnity: true).',
+
+  'dispatch.roadRefusal.none': 'This bag goes to another country, and no road route there is on: nobody carries it yet',
+  'dispatch.roadRefusal.otherFleet': 'This bag goes on the route from {from} to {to}: only {fleet}’s drivers carry it',
+  'dispatch.coldClash': 'This truck already carries a load kept at {otherMin} to {otherMax} °C; this one must be kept at {min} to {max} °C. One body keeps one temperature: deliver that load first, or this one goes on another truck.',
+  'declaration.refused.you.missing': 'You have not signed your security declaration: nothing new is taken on until you have. It is signed in {where}, on the home screen',
+  'declaration.refused.you.lapsed': 'You have not signed your security declaration again this year: nothing new is taken on until you have. It is signed in {where}, on the home screen',
+  'declaration.refused.you.outdated': 'You have not signed the new wording of your security declaration: nothing new is taken on until you have. It is signed in {where}, on the home screen',
+  'declaration.refused.fleet.missing': 'Your fleet has not signed its security declaration: nothing new is taken on until it has. It is signed in {where}, on the home screen',
+  'declaration.refused.fleet.lapsed': 'Your fleet has not signed its security declaration again this year: nothing new is taken on until it has. It is signed in {where}, on the home screen',
+  'declaration.refused.fleet.outdated': 'Your fleet has not signed the new wording of its security declaration: nothing new is taken on until it has. It is signed in {where}, on the home screen',
+  'declaration.where.driver': 'the Driver app',
+  'declaration.where.fleet': 'the Fleet app',
 } as const;

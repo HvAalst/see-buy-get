@@ -121,7 +121,7 @@ export class DocumentNoticeService {
     for (const r of this.countries?.recipientsIn(country) ?? []) {
       if (!r.email) continue;
       try {
-        await this.mail.send('country-established', { address: r.email, name: r.name }, { country: name, company, asked, app: r.app });
+        await this.mail.send('country-established', { address: r.email, name: r.name }, { country: countryName(name, country), company, asked, app: r.app });
       } catch (err) {
         this.logger.warn(`the switch-on of ${company} not emailed to ${r.did}: ${(err as Error).message}`);
       }

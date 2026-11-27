@@ -64,6 +64,7 @@ import { BorderRouteService } from './border-route.service';
 import { JourneyPlanService } from './journey-plan.service';
 import { ROAD_ROUTES } from './road-routes.token';
 import { GlosError } from '../../foundation/http/glos-error';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
 
 /** 2026-11-23 — the road route from the Netherlands to Bulgaria, switched on or off by a test (step 3b): the routing asks it. */
 const ROAD = { from: 'NL', to: 'BG', hubMdpId: 'mdp-sof', hubName: 'Sofia Central Hub', fleetDid: 'did:fleet:balkan', fleetName: 'Balkan Line', prices: { S: 18, M: 27.5, L: 39, currency: 'EUR' } };
@@ -1048,7 +1049,8 @@ describe('crossing a border', () => {
       expect(dispatch.suggestNearby(theirs.did, AMSTERDAM, 10).some((o) => o.ref === bag.code)).toBe(false);
       expect(dispatch.suggestNearby(ours.did, AMSTERDAM, 10).some((o) => o.ref === bag.code)).toBe(true);
       expect(dispatch.offerNear(theirs.did, AMSTERDAM)?.ref).not.toBe(bag.code);
-      expect(dispatch.claimBagFor(bag.code, theirs.did)).toMatch(/only Balkan Line’s drivers carry it/);
+      // 2026-11-27 — said as a phrase, so the driver reads it in their language; its English as before.
+      expect(ENGLISH_MAIL_WORDS.text(dispatch.claimBagFor(bag.code, theirs.did))).toMatch(/only Balkan Line’s drivers carry it/);
       expect(dispatch.roadBagFor(theirs.did, bag.code)).toEqual({ may: false, to: 'BG' });
       expect(dispatch.roadBagFor(ours.did, bag.code)).toEqual({ may: true, to: 'BG' });
       // …and the drivers staff may choose for a bag waiting long, and a bag offered to one of them.

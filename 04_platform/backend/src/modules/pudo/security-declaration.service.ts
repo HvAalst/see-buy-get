@@ -2,6 +2,8 @@ import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DriverService } from './driver.service';
+import { said, type Said } from './notice-words/say';
+import type { NoticeKey } from './notice-words/catalog';
 
 /**
  * Round 39 — A SECURITY DECLARATION FOR EACH KIND OF PARTNER (the user: "At joining and yearly (Recommended)"). A shop, a
@@ -204,6 +206,19 @@ export class SecurityDeclarationService {
     if (s.state === 'signed' || s.state === 'due') return;
     throw new GlosError('DECLARATION_REQUIRED', refusalWords(kind, who, s.state), { kind, state: s.state, version: s.version });
   }
+}
+
+/**
+ * 2026-11-27 — A REFUSAL FOR AN UNSIGNED DECLARATION, AS A PHRASE: what a driver is told in a notice when work could not be
+ * given to them (a bag taken on ahead), in their own language — to them, or of their fleet. Undefined for any other refusal.
+ */
+export function declarationRefusalSaid(err: GlosError): Said | undefined {
+  if (err.code !== 'DECLARATION_REQUIRED') return undefined;
+  const p = (err.params ?? {}) as { kind?: string; state?: string };
+  const who = p.kind === 'fleet' ? 'fleet' : p.kind === 'driver' ? 'you' : undefined;
+  const state = p.state === 'lapsed' || p.state === 'outdated' ? p.state : 'missing';
+  if (!who) return undefined;
+  return said(`declaration.refused.${who}.${state}` as NoticeKey, { where: said(who === 'fleet' ? 'declaration.where.fleet' : 'declaration.where.driver') });
 }
 
 /** Whose declaration a refusal speaks of, and how: to them ("you"), of a business ("it"), or of a rider at the counter ("they"). */

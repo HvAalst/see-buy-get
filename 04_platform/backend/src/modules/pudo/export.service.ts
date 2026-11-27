@@ -1,5 +1,5 @@
 import { slotOf, slotWords } from './air-terminal.types';
-import { at, money, noticeOf, said, type Said, type Shown } from './notice-words/say';
+import { at, money, noticeOf, number, said, type Said, type Shown } from './notice-words/say';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -1461,7 +1461,7 @@ export class ExportService {
         : line,
     );
     this.exports.set(c.exportId, c);
-    if (c.agent) this.tell(c, noticeOf(said('exporter.packingSigned.title', { code: c.code, version }), said('exporter.packingSigned.body', { name: this.nameOf(c.exporterEntityId), code: c.code, version, lines: t.lines.toLocaleString('en') })), c.agent.entityId);
+    if (c.agent) this.tell(c, noticeOf(said('exporter.packingSigned.title', { code: c.code, version }), said('exporter.packingSigned.body', { name: this.nameOf(c.exporterEntityId), code: c.code, version, lines: number(t.lines.toLocaleString('en'), t.lines) })), c.agent.entityId);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 

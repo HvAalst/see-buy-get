@@ -8,6 +8,9 @@ import { VEHICLE_CLASSES } from '../fleet.config';
 import { API_RULE_CHANGES } from '../../../foundation/http/api-rules';
 import { THE_COURIER } from './system-words';
 import { utcShown } from '../export.service';
+import { coldClash, coldClashSaid } from '../heavy-cargo';
+import { declarationRefusalSaid } from '../security-declaration.service';
+import { GlosError } from '../../../foundation/http/glos-error';
 
 /*
  * 2026-11-27 — THE PIECES INSIDE NOTICES OUR OWN CODE WROTE IN ENGLISH (the owner: "fix as recommended"): a delivery window's
@@ -17,6 +20,32 @@ import { utcShown } from '../export.service';
  */
 const en = (v: ReturnType<typeof windowSaid>) => (typeof v === 'object' && v && 'key' in v ? sayEnglish(v) : String(v));
 const inLang = (lang: 'nl' | 'bg' | 'sw' | 'am', v: ReturnType<typeof windowSaid>) => (typeof v === 'object' && v && 'key' in v ? sayIn(lang, v) : String(v));
+
+describe('why a bag could not be given to a driver, said as phrases', () => {
+  it('two cold loads: the same English as the refusal everywhere else, said in the driver’s language', () => {
+    const aboard = [{ minC: -20, maxC: -18 }];
+    const band = { minC: 2, maxC: 8 };
+    expect(sayEnglish(coldClashSaid(aboard, band)!)).toBe(coldClash(aboard, band));
+    expect(coldClash(aboard, band)).toBe('This truck already carries a load kept at -20 to -18 °C; this one must be kept at 2 to 8 °C. One body keeps one temperature: deliver that load first, or this one goes on another truck.');
+    expect(sayIn('nl', coldClashSaid(aboard, band)!)).toContain('-18');
+    expect(coldClashSaid([{ minC: 2, maxC: 8 }], band)).toBeUndefined();
+  });
+
+  it('an unsigned security declaration: to the driver, or of their fleet, by its state — anything else in its own words', () => {
+    const refused = (kind: string, state: string) => declarationRefusalSaid(new GlosError('DECLARATION_REQUIRED', 'x', { kind, state, version: 2 }));
+    expect(sayEnglish(refused('driver', 'missing')!)).toBe('You have not signed your security declaration: nothing new is taken on until you have. It is signed in the Driver app, on the home screen');
+    expect(sayEnglish(refused('fleet', 'lapsed')!)).toBe('Your fleet has not signed its security declaration again this year: nothing new is taken on until it has. It is signed in the Fleet app, on the home screen');
+    expect(sayEnglish(refused('fleet', 'outdated')!)).toContain('the new wording of its security declaration');
+    expect(sayIn('bg', refused('driver', 'lapsed')!)).toBeDefined();
+    expect(refused('shop', 'missing')).toBeUndefined();
+    expect(declarationRefusalSaid(new GlosError('FORBIDDEN', 'x'))).toBeUndefined();
+  });
+
+  it('a sum with no currency keeps its two decimals in every language', () => {
+    expect(sayIn('nl', said('dispatch2.serviceDue.atKm', { km: number('12.50', 12.5, 2) }))).toContain(new Intl.NumberFormat('nl', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(12.5));
+    expect(sayEnglish(said('dispatch2.serviceDue.atKm', { km: number('12.50', 12.5, 2) }))).toBe('at 12.50 km');
+  });
+});
 
 describe('the pieces a notice says', () => {
   it('a delivery window: the English as the plan says it, the words around the times in the reader’s language', () => {

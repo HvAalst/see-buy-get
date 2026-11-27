@@ -242,6 +242,8 @@ import { HubListView, HubRowDto, HubRowNewDto } from './hub-list.types';
 import { RoadMapLinkDto, RoadMapMinKmDto, RoadMapRoleDto, RoadMapView } from './road-map.types';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
+import { countryName as countryShown } from './notice-words/say';
+import { screenOf, type AskedIn } from './reader-language.service';
 
 interface ModuleInfo {
   module: string;
@@ -835,8 +837,9 @@ export class SbgController {
   @UseGuards(RateLimitGuard)
   @RateLimit(20, 15 * 60)
   @Post('auth/forgot')
-  authForgot(@Body() dto: ForgotDto) {
-    const issued = this.accounts.forgot(dto.email, dto.role);
+  authForgot(@Body() dto: ForgotDto, @Req() req?: AskedIn) {
+    // 2026-11-27 — the code in the language of the screen that asked for it.
+    const issued = this.accounts.forgot(dto.email, dto.role, screenOf(req));
     return isSandbox() ? issued : { sent: true };
   }
 
@@ -1054,7 +1057,7 @@ export class SbgController {
     const open = this.presence.resolve(asked).capabilities.takeIn && !this.presence.testing(asked);
     const note = this.interest.add({ country: code, kind: dto.kind, email: dto.email, message: dto.message }, open);
     const country = catalogueEntry(note.country)?.name ?? note.country;
-    void this.mail?.send('interest-received', { address: note.email }, { country, kind: note.kind }).catch(() => undefined);
+    void this.mail?.send('interest-received', { address: note.email }, { country: countryShown(country, note.country), kind: note.kind }).catch(() => undefined);
     return { noteId: note.noteId, country: note.country, name: country };
   }
 
@@ -1313,7 +1316,7 @@ export class SbgController {
         const promised = this.interest.toldWithoutCompany(proposal.jurisdiction);
         const country = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
         for (const note of promised.filter((n) => !registered.has(n.email))) {
-          void this.mail?.send('country-settles', { address: note.email }, { country, company: companyName, joinUrl: appUrl('home') }).catch(() => undefined);
+          void this.mail?.send('country-settles', { address: note.email }, { country: countryShown(country, proposal.jurisdiction), company: companyName, joinUrl: appUrl('home') }).catch(() => undefined);
         }
         this.interest.told(promised.map((n) => n.noteId), 'established');
       }
@@ -1330,7 +1333,7 @@ export class SbgController {
       const registered = new Set(opened ? (this.countryNotice?.recipientsIn(proposal.jurisdiction) ?? []).map((r) => r.email?.trim().toLowerCase()).filter(Boolean) : []);
       for (const note of waiting.filter((n) => !registered.has(n.email))) {
         void this.mail
-          ?.send('country-open', { address: note.email }, { country: name, settles: Boolean(sister), ...(sister ? { company: sister.name } : {}), joinUrl: appUrl('home') })
+          ?.send('country-open', { address: note.email }, { country: countryShown(name, proposal.jurisdiction), settles: Boolean(sister), ...(sister ? { company: sister.name } : {}), joinUrl: appUrl('home') })
           .catch(() => undefined);
       }
       // Marked told so a later raise — matched to established — does not repeat the same sentence. The
@@ -1340,7 +1343,7 @@ export class SbgController {
       // COMING (the user, 2026-10-25): the people who asked can sign up now, and start the day it opens. Told once —
       // the ones told before are left alone — and still waiting for the opening, which tells them again.
       const fresh = waiting.filter((n) => !n.toldAt);
-      for (const note of fresh) void this.mail?.send('country-coming', { address: note.email }, { country: name, joinUrl: appUrl('home') }).catch(() => undefined);
+      for (const note of fresh) void this.mail?.send('country-coming', { address: note.email }, { country: countryShown(name, proposal.jurisdiction), joinUrl: appUrl('home') }).catch(() => undefined);
       this.interest.told(fresh.map((n) => n.noteId), 'coming');
     }
     // OPENED: everybody who signed up while it was coming is told it is open, and whether they can start today.

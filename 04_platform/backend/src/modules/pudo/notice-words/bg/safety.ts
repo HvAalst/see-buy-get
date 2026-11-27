@@ -39,4 +39,14 @@ export const BG_SAFETY: Record<keyof typeof EN_SAFETY, string> = {
   'mail.footer.noReply': 'Моля, не отговаряйте — този адрес не се чете.',
   'mail.footer.helpLead': 'Помощ при вход и за профила Ви:',
   'mail.footer.helpLink': 'Помощ на SeeBuyGet',
+
+  'mail.app.agent': 'приложението Shop',
+  'mail.app.mdp': 'приложението Hub',
+  'mail.app.fleet': 'приложението Fleet',
+  'mail.app.driver': 'приложението Driver',
+  'mail.app.vendor': 'приложението Store',
+  'mail.app.send': 'приложението Send',
+  'mail.app.console': 'операторската конзола',
+  'mail.app.home': 'SeeBuyGet',
+  'mail.app.business': 'приложението Business',
 };

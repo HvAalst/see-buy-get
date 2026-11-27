@@ -44,6 +44,9 @@ const LOSS_SAID: Record<PresenceCapability, Said> = {
 /** What does NOT stop — the two questions anybody asks first, answered before they have to ask them. */
 export const KEPT_WORDS = ['Parcels already on a shelf stay there to be collected', 'What is owed to you stays owed'];
 
+/** The same two answers as phrases, for the email (the bell says them as one: countryNotice.kept). */
+const KEPT_SAID: Said[] = [said('mail.country-changed.keptShelf'), said('mail.country-changed.keptOwed')];
+
 /** One participant registered in the country, as they are reached: the inbox of the app they use, and an address where they gave one. */
 interface Recipient {
   did: string;
@@ -108,7 +111,6 @@ export class CountryNoticeService {
     if (!input.lost.length) return { told: 0, emailed: 0 };
     const code = input.jurisdiction.trim().toUpperCase();
     const country = catalogueEntry(code)?.name ?? code;
-    const lost = input.lost.map((c) => LOSS_WORDS[c]);
     const lostSaid = input.lost.map((c) => LOSS_SAID[c]).reduce((a: Said, b: Said) => said('countryNotice.join', { a, b }));
     const noticeWords = noticeOf(said('countryNotice.lowered.title', { country: countryName(country, code) }), said('countryNotice.lowered.body', { lost: lostSaid, kept: said('countryNotice.kept') }));
     let told = 0;
@@ -123,7 +125,7 @@ export class CountryNoticeService {
       }
       if (r.email && this.mail) {
         try {
-          if (await this.mail.send('country-changed', { address: r.email, name: r.name }, { country, lost, kept: [...KEPT_WORDS], app: r.app })) emailed += 1;
+          if (await this.mail.send('country-changed', { address: r.email, name: r.name }, { country: countryName(country, code), lost: input.lost.map((c) => LOSS_SAID[c]), kept: KEPT_SAID, app: r.app })) emailed += 1;
         } catch (err) {
           this.logger.warn(`country email failed for ${r.did}: ${(err as Error).message}`);
         }
@@ -158,7 +160,7 @@ export class CountryNoticeService {
       }
       if (r.email && this.mail) {
         try {
-          if (await this.mail.send('country-opened', { address: r.email, name: r.name }, { country, ready: r.ready, ...(input.company ? { company: input.company } : {}), app: r.app })) emailed += 1;
+          if (await this.mail.send('country-opened', { address: r.email, name: r.name }, { country: countryName(country, code), ready: r.ready, ...(input.company ? { company: input.company } : {}), app: r.app })) emailed += 1;
         } catch (err) {
           this.logger.warn(`country opening email failed for ${r.did}: ${(err as Error).message}`);
         }

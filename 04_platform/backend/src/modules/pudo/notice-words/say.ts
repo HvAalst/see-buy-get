@@ -42,8 +42,9 @@ export interface Shown {
   at?: string;
   clock?: string;
   zone?: string;
-  /** 2026-11-27 — a plain number, grouped the language's way ("135,000" / "135.000"). */
+  /** 2026-11-27 — a plain number, grouped the language's way ("135,000" / "135.000"); `decimals` fixed where the English fixes them. */
   number?: number;
+  decimals?: number;
   /** 2026-11-27 — a country, by its two letters: said by its name in the language. */
   country?: string;
 }
@@ -102,8 +103,8 @@ export function at(en: string, iso: string, zone?: string): Shown {
 
 /** A time of day. */
 /** 2026-11-27 — a number as the sender wrote it in English, grouped each language's way elsewhere. */
-export function number(en: string, n: number): Shown {
-  return { en, number: n };
+export function number(en: string, n: number, decimals?: number): Shown {
+  return decimals === undefined ? { en, number: n } : { en, number: n, decimals };
 }
 
 /** 2026-11-27 — a country as the sender named it in English, and by its two letters: each language says its own name for it. */
@@ -170,20 +171,6 @@ export function noticeIn<T extends { title: string; body: string; say?: SaidNoti
   return actions.every((a) => a.title !== undefined) ? { ...rest, title, body, actions: actions as Array<{ action: string; title: string }> } : rest;
 }
 
-/**
- * 2026-11-27 — SEVERAL PHRASES SAID TOGETHER (an email beside a notice): all of them in the language, or undefined — and the
- * whole of it is then said in English, never half and half.
- */
-export function sayAllIn<K extends string>(lang: NoticeLang, parts: Record<K, Said>, words?: NoticeWords): Record<K, string> | undefined {
-  const out = {} as Record<K, string>;
-  for (const k of Object.keys(parts) as K[]) {
-    const text = sayIn(lang, parts[k], words);
-    if (text === undefined) return undefined;
-    out[k] = text;
-  }
-  return out;
-}
-
 /** The language an app asks in (its x-sbg-lang header), where notices are written in it; anything else is English. */
 export function noticeLangOf(asked: unknown): NoticeLang | undefined {
   const tag = (Array.isArray(asked) ? asked[0] : asked) as unknown;
@@ -211,7 +198,10 @@ export function showIn(lang: NoticeLang, v: Shown): string {
 function shownIn(lang: NoticeLang, v: Shown): string | undefined {
   try {
     if (v.money) return new Intl.NumberFormat(lang, { style: 'currency', currency: v.money.currency }).format(v.money.amount);
-    if (v.number !== undefined) return Number.isFinite(v.number) ? new Intl.NumberFormat(lang).format(v.number) : undefined;
+    if (v.number !== undefined) {
+      const fixed = v.decimals !== undefined ? { minimumFractionDigits: v.decimals, maximumFractionDigits: v.decimals } : undefined;
+      return Number.isFinite(v.number) ? new Intl.NumberFormat(lang, fixed).format(v.number) : undefined;
+    }
     if (v.country) {
       const name = /^[A-Z]{2}$/.test(v.country) ? new Intl.DisplayNames([lang], { type: 'region' }).of(v.country) : undefined;
       return name && name !== v.country ? name : undefined;

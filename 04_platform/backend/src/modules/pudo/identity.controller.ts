@@ -1,6 +1,7 @@
 import { BookingPayService } from './booking-pay.service';
 import { BookingPayView } from './booking-pay.types';
-import { Body, Controller, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { screenOf, type AskedIn } from './reader-language.service';
 import { ApiQuery } from '@nestjs/swagger';
 import { PersonDoorService } from './person-door.service';
 import { DoorPreview, DoorRaiseDto, DoorRequestDto, DoorView } from './person-door.types';
@@ -164,8 +165,8 @@ export class IdentityController {
   @UseGuards(RateLimitGuard)
   @RateLimit(20, 15 * 60)
   @Post('email/request')
-  emailRequest(@Body() dto: EmailCodeDto) {
-    const { code, review } = this.recovery.sendConfirmCode(dto.email);
+  emailRequest(@Body() dto: EmailCodeDto, @Req() req?: AskedIn) {
+    const { code, review } = this.recovery.sendConfirmCode(dto.email, screenOf(req));
     // The review code is shown: everybody knows it, and nothing was mailed (foundation/runtime/review-code.ts).
     if (review) return { sent: false, review, code };
     return isSandbox() ? { sent: true, code } : { sent: true };
@@ -179,8 +180,8 @@ export class IdentityController {
   @UseGuards(RateLimitGuard)
   @RateLimit(10, 15 * 60)
   @Post('account-code')
-  accountCode(@Body() dto: AccountCodeDto) {
-    const { code } = this.recovery.sendAccountCode(dto.email, dto.why);
+  accountCode(@Body() dto: AccountCodeDto, @Req() req?: AskedIn) {
+    const { code } = this.recovery.sendAccountCode(dto.email, dto.why, screenOf(req));
     return isSandbox() && code ? { sent: true, code } : { sent: true };
   }
 

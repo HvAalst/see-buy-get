@@ -1,4 +1,5 @@
 import { MailService } from '../mail/mail.service';
+import { said } from '../../modules/pudo/notice-words/say';
 import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
@@ -167,7 +168,7 @@ export class EntityAdminService {
     // Revoking a login used to leave its open sessions working for the rest of their ten hours.
     this.auth.revokeAll(adminKey(admin.adminId));
     const company = this.entities.get(admin.entityId).name;
-    void this.mail?.send('access-removed', { address: admin.email, name: admin.name }, { email: admin.email, what: `administrator login for ${company}`, removedBy: by, when: admin.revokedAt! });
+    void this.mail?.send('access-removed', { address: admin.email, name: admin.name }, { email: admin.email, what: said('mail.access-removed.whatAdmin', { company }), removedBy: by, when: admin.revokedAt! });
     return viewOf(admin);
   }
 

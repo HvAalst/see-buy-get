@@ -49,7 +49,7 @@ import { nearestPlace } from './geo-gazetteer';
 import { isPackaging, selfLoading, type Packaging } from './packaging';
 import { buildSeries, carriersOn } from './market-series';
 import { TruckSubtype } from './fleet.config';
-import { COLD_CHAIN_BAND, coldClash, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems, type TempBand } from './heavy-cargo';
+import { COLD_CHAIN_BAND, coldClash, coldClashSaid, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems, type TempBand } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
@@ -63,7 +63,8 @@ import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { HOLD_DECIDE_HOURS, HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, HOLD_REMIND_HOURS, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
-import { money as moneyShown, noticeOf, said, type Said, type SayValue } from './notice-words/say';
+import { countryName, money as moneyShown, noticeOf, number as numberShown, said, sayEnglish, type Said, type SayValue } from './notice-words/say';
+import { declarationRefusalSaid } from './security-declaration.service';
 import type { NoticeKey } from './notice-words/catalog';
 import type { NowWithView } from './now-with.types';
 import { BorderManifestService, type ManifestCarrier, type ManifestFacts } from './border-manifest.service';
@@ -3130,7 +3131,7 @@ export class DispatchService {
     const note = input.note?.trim().slice(0, 280);
     p.counter = { price, ...(note ? { note } : {}), at: new Date(now).toISOString(), ...(input.by ? { by: input.by } : {}) };
     this.proposals.set(p.proposalId, p);
-    const money = f.postedCurrency ? moneyShown(`${f.postedCurrency} ${price.toLocaleString('en')}`, price, f.postedCurrency) : price.toLocaleString('en');
+    const money = f.postedCurrency ? moneyShown(`${f.postedCurrency} ${price.toLocaleString('en')}`, price, f.postedCurrency) : numberShown(price.toLocaleString('en'), price);
     void this.notifications
       ?.notify(p.driverDid, { kind: 'freight_counter', ...noticeOf(said('dispatchService.counter.title', { code: f.code }), said('dispatchService.counter.body', { money, description: f.description })), link: '/?board', tag: `counter:${p.proposalId}`, data: { freightId: f.freightId, proposalId: p.proposalId } })
       .catch(() => undefined);
@@ -3354,15 +3355,16 @@ export class DispatchService {
     if (need.capabilities.some((cap) => !vehicle[cap]) || !DispatchService.hasEquipmentFor(vehicle, need.equipment) || (need.bulk && !vehicle.carriesBulk) || (need.fragile && !vehicle.allowsFragile)) {
       return said('pickupAhead.refused.reason.cannotCarry');
     }
-    const road = this.roadRefusal(driverDid, { kind: 'tote', ref: code });
+    const road = this.roadRefusalSaid(driverDid, { kind: 'tote', ref: code });
     if (road) return road;
-    const cold = this.coldRefusal(driverDid, 'tote', code);
+    const cold = this.coldRefusalSaid(driverDid, 'tote', code);
     if (cold) return cold;
     try {
       this.requireBorderAllows(vehicle, driverDid, 'tote', code);
       this.declarations?.assertMayCarry(driverDid, now);
     } catch (err) {
-      return (err as Error).message;
+      // An unsigned security declaration, said as a phrase; anything else in the words it was refused with.
+      return (err instanceof GlosError ? declarationRefusalSaid(err) : undefined) ?? (err as Error).message;
     }
     this.totes.markClaimed(code, driverDid);
     this.lockToteHaul(code, vehicle);
@@ -5584,12 +5586,18 @@ export class DispatchService {
 
   /** Why this driver may not carry this bag across a road route, in words; nothing where they may, or where it crosses none. */
   private roadRefusal(driverDid: string, load: Pick<Claimable, 'kind' | 'ref'>): string | undefined {
+    const s = this.roadRefusalSaid(driverDid, load);
+    return s ? sayEnglish(s) : undefined;
+  }
+
+  /** 2026-11-27 — the same, as a phrase, for a notice the driver reads in their own language; a country by its own name. */
+  private roadRefusalSaid(driverDid: string, load: Pick<Claimable, 'kind' | 'ref'>): Said | undefined {
     if (load.kind !== 'tote') return undefined;
     const road = this.roadRouteOfBag(load.ref);
     if (!road) return undefined;
-    if (road === 'none') return 'This bag goes to another country, and no road route there is on: nobody carries it yet';
+    if (road === 'none') return said('dispatch.roadRefusal.none');
     const fleet = this.fleetOfDriver(driverDid);
-    if (fleet !== road.fleetDid) return `This bag goes on the route from ${road.from} to ${road.to}: only ${road.fleetName}’s drivers carry it`;
+    if (fleet !== road.fleetDid) return said('dispatch.roadRefusal.otherFleet', { from: countryName(road.from, road.from), to: countryName(road.to, road.to), fleet: road.fleetName });
     return undefined;
   }
 
@@ -5836,6 +5844,12 @@ export class DispatchService {
   coldRefusal(driverDid: string, kind: ClaimableKind, ref: string): string | undefined {
     const band = this.bandOfLoad(kind, ref);
     return band ? coldClash(this.coldAboard(driverDid, ref), band) : undefined;
+  }
+
+  /** 2026-11-27 — the same, as a phrase, for a notice the driver reads in their own language. */
+  private coldRefusalSaid(driverDid: string, kind: ClaimableKind, ref: string): Said | undefined {
+    const band = this.bandOfLoad(kind, ref);
+    return band ? coldClashSaid(this.coldAboard(driverDid, ref), band) : undefined;
   }
 
   /** What a load is kept at: a freight its own range (or its cargo's 2–8 °C); a bag of chilled parcels 2–8 °C, a bag having no range of its own. */

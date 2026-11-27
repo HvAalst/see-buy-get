@@ -39,4 +39,14 @@ export const NL_SAFETY: Record<keyof typeof EN_SAFETY, string> = {
   'mail.footer.noReply': 'Reageer hier niet op — dit adres wordt niet gelezen.',
   'mail.footer.helpLead': 'Hulp bij inloggen en je account:',
   'mail.footer.helpLink': 'SeeBuyGet-hulp',
+
+  'mail.app.agent': 'Shop-app',
+  'mail.app.mdp': 'Hub-app',
+  'mail.app.fleet': 'Fleet-app',
+  'mail.app.driver': 'Driver-app',
+  'mail.app.vendor': 'Store-app',
+  'mail.app.send': 'Send-app',
+  'mail.app.console': 'beheerconsole',
+  'mail.app.home': 'SeeBuyGet',
+  'mail.app.business': 'Business-app',
 };

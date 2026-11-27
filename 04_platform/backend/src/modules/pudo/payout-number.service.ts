@@ -29,7 +29,7 @@ import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
 import { at, noticeOf, said } from './notice-words/say';
-import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
+import { ReaderLanguageService, addresseeOf } from './reader-language.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -288,7 +288,7 @@ export class PayoutNumberService implements OnModuleInit {
     }
     // Said to whoever signed in: the person, or the shop's or hub's own account.
     const reader = actor.personDid ?? actor.did;
-    if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, reader, { headline: headlineSaid, what: whatSaid, next: nextSaid }, new Date(now).toISOString())).catch(() => false);
+    if (address) void this.mail?.send('account-safety', addresseeOf(this.readers, reader, address), { headline: headlineSaid, what: whatSaid, next: nextSaid, when: new Date(now).toISOString() }).catch(() => false);
   }
 
   /** The whole account, its holder and BIC — for the payout, at the moment it sends, and only for the account it was raised to. */

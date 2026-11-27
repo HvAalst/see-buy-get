@@ -39,4 +39,14 @@ export const SW_SAFETY: Record<keyof typeof EN_SAFETY, string> = {
   'mail.footer.noReply': 'Tafadhali usijibu — anwani hii haisomwi.',
   'mail.footer.helpLead': 'Msaada wa kuingia na wa akaunti yako:',
   'mail.footer.helpLink': 'Msaada wa SeeBuyGet',
+
+  'mail.app.agent': 'Programu ya Shop',
+  'mail.app.mdp': 'Programu ya Hub',
+  'mail.app.fleet': 'Programu ya Fleet',
+  'mail.app.driver': 'Programu ya Driver',
+  'mail.app.vendor': 'Programu ya Store',
+  'mail.app.send': 'Programu ya Send',
+  'mail.app.console': 'konsoli ya waendeshaji',
+  'mail.app.home': 'SeeBuyGet',
+  'mail.app.business': 'Programu ya Business',
 };

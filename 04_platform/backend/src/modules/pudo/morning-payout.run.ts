@@ -6,6 +6,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import type { Signer } from '../../foundation/entity/same-person';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { money as moneyOf } from './notice-words/say';
 import { clockAt, clocksOfCountry } from './fleet-clock';
 
 /** When the morning run is raised: 06:00 on the clock of the country the company is in. */
@@ -79,7 +80,7 @@ export class MorningPayoutRun implements OnApplicationBootstrap, OnModuleDestroy
     for (const member of this.staff?.list(now) ?? []) {
       if (!member.roles?.includes('money')) continue;
       void this.mail
-        ?.send('payout-run-waiting', { address: member.email, name: member.name }, { company: entity.name, day, count: run.raised.length, total: money, skipped: run.skipped.length }, now)
+        ?.send('payout-run-waiting', { address: member.email, name: member.name }, { company: entity.name, day, count: run.raised.length, total: moneyOf(money, total, entity.currency ?? ''), skipped: run.skipped.length }, now)
         .catch((err: Error) => this.logger.warn(`the morning run's email to ${member.email} was not sent: ${err.message}`));
     }
   }

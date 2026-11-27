@@ -6,7 +6,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
-import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLabel, paperLapsesAt, PaperStatus, vehiclePapers } from './papers';
+import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLapsesAt, PaperStatus, vehiclePapers } from './papers';
 import { day as shownOn, noticeOf, said, type Said } from './notice-words/say';
 import { VehicleService } from './vehicle.service';
 import { AgentService } from './agent.service';
@@ -543,7 +543,21 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       }
       const fresh = [...report.lapsed, ...report.due].filter((r) => !this.told.has(this.mailKey(m.did, r)));
       if (fresh.length && this.mail && m.contactEmail) {
-        const line = (r: PaperRow) => `${r.subject === 'vehicle' ? 'Vehicle' : 'Driver'} ${r.label} — ${paperLabel(r.kind)}${r.expiresAt ? ` ${r.state === 'lapsed' ? 'lapsed' : 'runs out'} ${paperDay(r.expiresAt)}` : ''}${r.state === 'due' && r.daysLeft != null ? ` (${r.daysLeft} day${r.daysLeft === 1 ? '' : 's'})` : ''}`;
+        // 2026-11-27 — each line a phrase (what, the paper, its day, the days left), so the email says it in the fleet's language.
+        const line = (r: PaperRow): Said => {
+          const paper = paperSaid(r.kind);
+          const days = r.state === 'due' && r.daysLeft != null ? r.daysLeft : undefined;
+          const what = r.expiresAt
+            ? r.state === 'lapsed'
+              ? said('mail.papers-due.what.lapsedDay', { paper, day: shownDay(r.expiresAt) })
+              : days !== undefined
+                ? said('mail.papers-due.what.dueDayDays', { paper, day: shownDay(r.expiresAt), n: days })
+                : said('mail.papers-due.what.dueDay', { paper, day: shownDay(r.expiresAt) })
+            : days !== undefined
+              ? said('mail.papers-due.what.paperDays', { paper, n: days })
+              : paper;
+          return said(r.subject === 'vehicle' ? 'mail.papers-due.item.vehicle' : 'mail.papers-due.item.driver', { label: r.label, what });
+        };
         const sent = await this.mail.send('papers-due', { address: m.contactEmail, name: m.companyName }, { company: m.companyName, lapsed: report.lapsed.map(line), due: report.due.map(line) });
         if (sent) {
           for (const r of fresh) this.told.set(this.mailKey(m.did, r), new Date(now).toISOString());

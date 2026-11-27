@@ -7,7 +7,7 @@ import { appUrl } from '../../foundation/mail/mail.templates';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
-import { noticeOf, said } from './notice-words/say';
+import { noticeOf, said, type Said } from './notice-words/say';
 import { VendorService } from './vendor.service';
 import type { StoreActivityEntry } from './store-activity.types';
 
@@ -27,8 +27,12 @@ type NewEntry = Omit<StoreActivityEntry, 'at' | 'developer'>;
  * do not, and the owner reads them in the history. What the owner does themselves they are not told about.
  */
 /** A key in words — its kind, last characters and label; never its value. */
-function keyWords(e: NewEntry): string {
-  return [e.kind === 'secret' ? 'secret' : 'publishable', 'key', e.hint ? `…${e.hint}` : '', e.label ? `“${e.label}”` : ''].filter(Boolean).join(' ');
+function keyWords(e: NewEntry): Said {
+  // 2026-11-27 — a phrase, so the email says it in the owner's language: its kind, then the last characters and the label as they are.
+  let key = said(e.kind === 'secret' ? 'mail.key.secret' : 'mail.key.publishable');
+  if (e.hint) key = said('mail.key.hint', { key, hint: e.hint });
+  if (e.label) key = said('mail.key.label', { key, label: e.label });
+  return key;
 }
 
 /**

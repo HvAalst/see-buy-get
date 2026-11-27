@@ -43,4 +43,14 @@ export const EN_SAFETY = {
   'mail.footer.noReply': 'Please do not reply — this address is not read.',
   'mail.footer.helpLead': 'Help with signing in and your account:',
   'mail.footer.helpLink': 'SeeBuyGet help',
+
+  'mail.app.agent': 'Shop app',
+  'mail.app.mdp': 'Hub app',
+  'mail.app.fleet': 'Fleet app',
+  'mail.app.driver': 'Driver app',
+  'mail.app.vendor': 'Store app',
+  'mail.app.send': 'Send app',
+  'mail.app.console': 'operator console',
+  'mail.app.home': 'SeeBuyGet',
+  'mail.app.business': 'Business app',
 } as const;

@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/c
 import { randomBytes } from 'crypto';
 import { MailBounces } from './mail-bounces.service';
 import { RestingAccounts } from '../auth/resting-accounts';
-import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailSendError, MailSender, OutgoingMail } from './mail.types';
+import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailReaders, MailSendError, MailSender, OutgoingMail } from './mail.types';
 import { MAIL_TEMPLATES, MailParams, MailTemplateId, renderMail } from './mail.templates';
 import { OutboxMailSender } from './outbox-mail.sender';
 import { mailFrom, zeptoMailConfig } from './zeptomail';
@@ -69,6 +69,21 @@ export class MailService implements OnModuleDestroy {
     // Optional for the same reason: without it no address is ever at rest.
     @Optional() private readonly rest?: RestingAccounts,
   ) {}
+
+  /** 2026-11-27 — who reads an address: the language an email to it is written in (said by reader-language.service.ts). */
+  private readers?: MailReaders;
+
+  /** The part of the system that knows people says who reads an address. Without it, every email is English. */
+  useReaders(readers: MailReaders): void {
+    this.readers = readers;
+  }
+
+  /** The language an email to this address is written in, and the country's own words for it: the caller's, else looked up. */
+  private readerOf(to: MailAddress): { lang?: string; words?: ReturnType<MailReaders['wordsOf']> } | undefined {
+    const known = to.lang ? { lang: to.lang, wordsCountry: to.wordsCountry } : this.readers?.languageOf(to.address);
+    if (!known?.lang || known.lang === 'en') return undefined;
+    return { lang: known.lang, words: this.readers?.wordsOf(known.lang, known.wordsCountry) };
+  }
 
   onModuleDestroy(): void {
     this.stopLooking();
@@ -189,7 +204,7 @@ export class MailService implements OnModuleDestroy {
   /** Render it and give it to the sender. Nothing on success; what went wrong otherwise — said, logged, never thrown. */
   private async handOver(template: MailTemplateId, to: MailAddress, params: unknown, reference: string, now: number): Promise<Error | undefined> {
     try {
-      const mail: OutgoingMail = { ...renderMail(template, params as never), template, to, reference, tracking: false };
+      const mail: OutgoingMail = { ...renderMail(template, params as never, undefined, this.readerOf(to)), template, to, reference, tracking: false };
       await this.sender.send(mail);
       this.last = { at: new Date(now).toISOString(), ok: true, what: MAIL_TEMPLATES[template].title };
       return undefined;

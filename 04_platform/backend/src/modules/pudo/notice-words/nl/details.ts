@@ -51,4 +51,16 @@ export const NL_DETAILS: Record<keyof typeof EN_DETAILS, string> = {
   'apiVersionNotice.rule.summary.declaration-each-line': 'Een beveiligingsverklaring wordt ondertekend met elke regel afgevinkt (confirmed: het nummer van elke regel, vanaf 0).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-codes': 'Een lading die in Roemenië wordt overgenomen of afgeleverd, draagt de UIT-code van RO e-Transport, en in Bulgarije de UTN van goederen met een hoog fiscaal risico, of het woord van de afzender dat er geen nodig is en waarom (fiscalCodes).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-indemnity': 'Een lading met een UIT- of UTN-code, of een reden waarom die er niet is, draagt de verklaring van de afzender dat ze juist zijn (fiscalCodes.indemnity: true).',
+
+  'dispatch.roadRefusal.none': 'Deze zak gaat naar een ander land, en er is daar geen wegroute open: niemand vervoert hem nog',
+  'dispatch.roadRefusal.otherFleet': 'Deze zak gaat op de route van {from} naar {to}: alleen de bestuurders van {fleet} vervoeren hem',
+  'dispatch.coldClash': 'Deze vrachtwagen heeft al een lading die op {otherMin} tot {otherMax} °C wordt gehouden; deze moet op {min} tot {max} °C worden gehouden. Eén laadruimte houdt één temperatuur aan: lever die lading eerst af, of deze gaat op een andere vrachtwagen.',
+  'declaration.refused.you.missing': 'Je hebt je beveiligingsverklaring niet ondertekend: er wordt niets nieuws aangenomen totdat je dat hebt gedaan. Je ondertekent hem in {where}, op het startscherm',
+  'declaration.refused.you.lapsed': 'Je hebt je beveiligingsverklaring dit jaar niet opnieuw ondertekend: er wordt niets nieuws aangenomen totdat je dat hebt gedaan. Je ondertekent hem in {where}, op het startscherm',
+  'declaration.refused.you.outdated': 'Je hebt de nieuwe tekst van je beveiligingsverklaring niet ondertekend: er wordt niets nieuws aangenomen totdat je dat hebt gedaan. Je ondertekent hem in {where}, op het startscherm',
+  'declaration.refused.fleet.missing': 'Je wagenpark heeft zijn beveiligingsverklaring niet ondertekend: er wordt niets nieuws aangenomen totdat dat is gebeurd. Hij wordt ondertekend in {where}, op het startscherm',
+  'declaration.refused.fleet.lapsed': 'Je wagenpark heeft zijn beveiligingsverklaring dit jaar niet opnieuw ondertekend: er wordt niets nieuws aangenomen totdat dat is gebeurd. Hij wordt ondertekend in {where}, op het startscherm',
+  'declaration.refused.fleet.outdated': 'Je wagenpark heeft de nieuwe tekst van zijn beveiligingsverklaring niet ondertekend: er wordt niets nieuws aangenomen totdat dat is gebeurd. Hij wordt ondertekend in {where}, op het startscherm',
+  'declaration.where.driver': 'de Driver-app',
+  'declaration.where.fleet': 'de Fleet-app',
 };

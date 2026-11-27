@@ -6,6 +6,7 @@
 // exactly the checklist it must pass.
 
 import { CargoNature, NATURE_CAPABILITY, VehicleCapability } from './cargo.types';
+import { said, sayEnglish, type Said } from './notice-words/say';
 
 /** One confirmable line on a safety checklist. `key` is what the driver app sends back as confirmed; `label`
  *  is the plain-language line shown to the driver. */
@@ -142,10 +143,16 @@ export function bandsOverlap(a: TempBand, b: TempBand): boolean {
  * cannot, in words, or undefined: a range that overlaps rides together, and a load not carried cold rides with anything.
  */
 export function coldClash(aboard: TempBand[], band: TempBand | null): string | undefined {
+  const s = coldClashSaid(aboard, band);
+  return s ? sayEnglish(s) : undefined;
+}
+
+/** 2026-11-27 — the same, as a phrase: a driver told it in a notice reads it in their own language (notice-words/en/details.ts). */
+export function coldClashSaid(aboard: TempBand[], band: TempBand | null): Said | undefined {
   if (!band) return undefined;
   const other = aboard.find((a) => !bandsOverlap(a, band));
   if (!other) return undefined;
-  return `This truck already carries a load kept at ${other.minC} to ${other.maxC} °C; this one must be kept at ${band.minC} to ${band.maxC} °C. One body keeps one temperature: deliver that load first, or this one goes on another truck.`;
+  return said('dispatch.coldClash', { otherMin: other.minC, otherMax: other.maxC, min: band.minC, max: band.maxC });
 }
 
 /** The coldest and warmest a shipper may ask a load kept at, in °C — as the air export and import ask it. */

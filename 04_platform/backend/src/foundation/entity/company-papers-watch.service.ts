@@ -2,6 +2,8 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional }
 import { MailService } from '../mail/mail.service';
 import type { PresenceCapability } from '../presence/presence.types';
 import { PersistentMap } from '../store/persistent-map';
+import { said, type Said } from '../../modules/pudo/notice-words/say';
+import type { NoticeKey } from '../../modules/pudo/notice-words/catalog';
 import { EntityAdminService } from './entity-admin.service';
 import { EntityService } from './entity.service';
 import { recordKeeper } from './company-declarations.service';
@@ -71,6 +73,17 @@ const CAPABILITY_WORDS: Partial<Record<PresenceCapability, string>> = {
 /** The paper, in words somebody at the company would use for it. */
 export function paperWords(source: 'licence' | 'insurance', kind: string): string {
   return (source === 'licence' ? LICENCE_WORDS[kind] : INSURANCE_WORDS[kind]) ?? (source === 'licence' ? 'Licence' : 'Insurance policy');
+}
+
+/** 2026-11-27 — the same, as a phrase, for the email: written in the reader's language. */
+export function paperSaid(source: 'licence' | 'insurance', kind: string): Said {
+  const known = (source === 'licence' ? LICENCE_WORDS : INSURANCE_WORDS)[kind] !== undefined;
+  return said(`mail.paper.${source}.${known ? kind : 'other'}` as NoticeKey);
+}
+
+/** What switches off when it lapses, as phrases. */
+export function stopsSaid(supports: string[]): Said[] {
+  return supports.filter((c) => CAPABILITY_WORDS[c as PresenceCapability]).map((c) => said(`mail.stops.${c}` as NoticeKey));
 }
 
 /** What switches off when it lapses, in words. Empty: nothing does by itself. */
@@ -184,12 +197,12 @@ export class CompanyPapersWatch implements OnApplicationBootstrap, OnModuleDestr
           {
             company: paper.name,
             ...(paper.jurisdiction ? { country: paper.jurisdiction } : {}),
-            paper: paperWords(paper.source, paper.kind),
+            paper: paperSaid(paper.source, paper.kind),
             reference: paper.reference,
             expiresOn: paper.expiresAt,
             daysLeft: Math.max(0, paper.daysLeft),
             lapsed: paper.lapsed,
-            stops: running ? stopsWords(paper.supports) : [],
+            stops: running ? stopsSaid(paper.supports) : [],
             where: paper.source,
             own,
           },

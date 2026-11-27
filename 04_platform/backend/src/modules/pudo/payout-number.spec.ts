@@ -9,6 +9,8 @@ import { PayoutNumberService } from './payout-number.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { ReaderLanguageService } from './reader-language.service';
+import { MAIL_TEMPLATES, writeMail, type MailParams } from '../../foundation/mail/mail.templates';
+import type { MailAddress } from '../../foundation/mail/mail.types';
 import { NOTICE_TRANSLATIONS } from './notice-words/catalog';
 
 /**
@@ -227,7 +229,8 @@ describe('a bank account kept only with the sign-in asked again', () => {
     const bells: Array<{ owner: string; kind: string; title: string; link?: string }> = [];
     const notices = { notify: async (owner: string, p: { kind: string; title: string; link?: string }) => void bells.push({ owner, kind: p.kind, title: p.title, link: p.link }) };
     const mails: Array<{ address: string; headline: string }> = [];
-    const mail = { send: async (_k: string, to: { address: string }, p: { headline: string }) => (mails.push({ address: to.address, headline: p.headline }), true) };
+    // 2026-11-27 — the email as its reader reads it: its heading, in the language its address carries.
+    const mail = { send: async (_k: string, to: MailAddress, p: MailParams['account-safety']) => (mails.push({ address: to.address, headline: (writeMail(MAIL_TEMPLATES['account-safety'], p, { lang: to.lang }).blocks[0] as { text: string }).text }), true) };
     // 2026-11-27 — the language each reader reads their app in, for the email.
     const readers = new ReaderLanguageService();
     const svc = new PayoutNumberService(payouts, drivers, managers, mdps, sms, agents as never, partners as never, new FieldEncryption(), persons as never, accounts as never, notices as never, mail as never, readers);

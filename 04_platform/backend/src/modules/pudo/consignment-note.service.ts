@@ -34,6 +34,7 @@ import { ShipperCodesService } from './shipper-codes.service';
 import { noteFingerprint } from './note-archive.types';
 import { retentionFor, retentionWords } from './retention';
 import { exceptionsInWords } from './receiving';
+import { said, type Said } from './notice-words/say';
 import { TelemetryService } from './telemetry.service';
 import { RO_SIGNAL_LOST_MIN, type TransportTelemetrySession } from './telemetry.types';
 
@@ -602,8 +603,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       destination: f.destLabel,
       deliveredAt: f.deliveredAt ?? new Date().toISOString(),
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
-      ...(f.proofOfDelivery?.exceptions?.length ? { reservations: exceptionsInWords(f.proofOfDelivery.exceptions) } : {}),
-      carrier: (note.successive?.[0] ?? note.carrier)?.name ?? 'the carrier',
+      ...(f.proofOfDelivery?.exceptions?.length ? { reservations: foundSaid(f.proofOfDelivery.exceptions) } : {}),
+      carrier: (note.successive?.[0] ?? note.carrier)?.name ?? said('mail.freight-delivered.theCarrier'),
       ...((note.successive?.[0] ?? note.carrier)?.driverName ? { driver: (note.successive?.[0] ?? note.carrier)!.driverName } : {}),
       ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
       noteNumber: note.number,
@@ -784,6 +785,12 @@ export function agentConfirmation(person: string | undefined, agent: NoteParty |
 function withoutSeals(p: LoadPassageView): LoadPassageView {
   const { seals, ...rest } = p;
   return seals ? rest : p;
+}
+
+/** What the receiver found, as phrases: the same words as `exceptionsInWords` (receiving.ts), joined by ", " — the email says them in the reader's language. */
+function foundSaid(list: ReadonlyArray<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number }>): Said {
+  const each = list.map((e) => said(`inbound.found.${e.kind}` as const, { n: e.count }));
+  return each.slice(1).reduce((head, next) => said('inbound.found.join', { head, next }), each[0]);
 }
 
 function countryName(code: string | undefined): string | undefined {

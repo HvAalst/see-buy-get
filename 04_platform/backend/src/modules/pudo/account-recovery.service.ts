@@ -18,7 +18,7 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import type { Person, PhoneChange } from './person.types';
 import { noticeOf, said, sayEnglish, type Said } from './notice-words/say';
-import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
+import { ReaderLanguageService, addresseeOf, screenLanguage, type ScreenLanguage } from './reader-language.service';
 
 /** Wrong tries at undoing a number change with the old number, or at the ID on a recovery, before that way is shut. */
 export const MAX_RECOVERY_MISSES = 5;
@@ -130,7 +130,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
    * Send a code to an address somebody says is theirs — to CONFIRM it. Returns the code so a sandbox can show it;
    * the controller decides whether anybody but the inbox sees it.
    */
-  sendConfirmCode(email: string): { code: string; review?: true } {
+  sendConfirmCode(email: string, screen?: ScreenLanguage): { code: string; review?: true } {
     // The owner's stand-in code for an address named on the server, while no mail can leave: its own, mailed nowhere.
     const standIn = standInCode(email, Boolean(this.mail?.connection().sends));
     if (standIn) return { code: this.emailCodes.request(email, Date.now(), { standIn }).code };
@@ -139,7 +139,8 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
       return { code: this.emailCodes.request(email, Date.now(), { review: true }).code, review: true };
     }
     const { code, minutes } = this.emailCodes.request(email);
-    void this.mail?.send('email-code', { address: normalizeEmail(email) }, { code, minutes, why: 'confirm' });
+    // 2026-11-27 — in the language of the screen that asked: the address is not anybody's yet, so nothing else says it.
+    void this.mail?.send('email-code', { address: normalizeEmail(email), ...screenLanguage(screen) }, { code, minutes, why: 'confirm' });
     return { code };
   }
 
@@ -147,13 +148,13 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
    * Send a code to the address ON AN ACCOUNT — to recover it, or to undo a number change. Says nothing about
    * whether there is such an account: an address nobody holds is answered exactly as one somebody does.
    */
-  sendAccountCode(email: string, why: 'recover' | 'undo'): { code?: string } {
+  sendAccountCode(email: string, why: 'recover' | 'undo', screen?: ScreenLanguage): { code?: string } {
     const person = this.persons.findByEmail(email);
     if (!person) return {};
     const standIn = standInCode(email, Boolean(this.mail?.connection().sends));
     if (standIn) return { code: this.emailCodes.request(email, Date.now(), { standIn }).code };
     const { code, minutes } = this.emailCodes.request(email);
-    void this.mail?.send('email-code', { address: normalizeEmail(email) }, { code, minutes, why });
+    void this.mail?.send('email-code', { address: normalizeEmail(email), ...screenLanguage(screen) }, { code, minutes, why });
     return { code };
   }
 
@@ -169,8 +170,9 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     if (old && old !== normalizeEmail(email)) {
       void this.mail?.send(
         'account-safety',
-        { address: old },
-        safetyMailOf(this.readers, personDid, { headline: said('accountSafety.emailChanged.title'), what: said('accountSafety.emailChanged.what', { email: person.emailMasked }), next: said('accountSafety.emailChanged.next') }, new Date().toISOString()),
+        // The old address is no longer theirs, so whose it was is said: the email is in their language all the same.
+        addresseeOf(this.readers, personDid, old),
+        { headline: said('accountSafety.emailChanged.title'), what: said('accountSafety.emailChanged.what', { email: person.emailMasked }), next: said('accountSafety.emailChanged.next'), when: new Date().toISOString() },
       );
     }
     return person;
@@ -420,7 +422,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   /** The email, in the language the person reads their app in where all of it is written there (else English). */
   private tellByMail(person: Person, w: SafetyWords): void {
     const address = this.persons.emailOf(person);
-    if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, person.personDid, w, new Date().toISOString(), w.until));
+    if (address) void this.mail?.send('account-safety', addresseeOf(this.readers, person.personDid, address), { headline: w.headline, what: w.what, next: w.next, when: new Date().toISOString(), ...(w.until ? { until: w.until } : {}) });
   }
 
   /** A fleet's office is told when one of its drivers' sign-in number changes — it is the fleet's name on their loads. */

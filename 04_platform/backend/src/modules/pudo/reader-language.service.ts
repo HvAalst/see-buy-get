@@ -1,20 +1,26 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { formatWhen, type MailParams } from '../../foundation/mail/mail.templates';
-import { at, said, sayAllIn, sayEnglish, showIn, type NoticeLang, type Said } from './notice-words/say';
+import { MailService } from '../../foundation/mail/mail.service';
+import type { MailAddress } from '../../foundation/mail/mail.types';
+import { noticeLangOf, type NoticeLang } from './notice-words/say';
 import { WordReviewService } from './word-review.service';
+import { PersonService } from './person.service';
+import { AccountService } from './account.service';
+import type { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { STAFF_KEY_PREFIX } from '../../foundation/auth/setup-key';
+import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
 
 /**
- * 2026-11-27 — THE LANGUAGE A PERSON READS IN, KEPT FOR WHAT REACHES THEM AWAY FROM THE APP (the owner: "fix as recommended":
- * the emails beside notices in the person's language).
+ * 2026-11-27 — THE LANGUAGE A PERSON READS IN, KEPT FOR WHAT REACHES THEM AWAY FROM THE APP (the owner: "fix as recommended",
+ * then "fix everything except those waiting for a lawyer").
  *
  * A notice on the bell is said in the language the app asks in, at the moment it is read. An email is written when it is sent,
  * with no app asking, so the language a person last read their app in is kept here — with the country whose review of it the
- * app reads — and an email beside a notice is written in it. Only a language a notice can be said in; English needs no record
- * of its own, and a person who never chose another is written to in English as before.
+ * app reads — and their emails are written in it (MailService asks by address, or a caller says whose address it is). Only a
+ * language a notice can be said in; a person who never chose another is written to in English as before.
  *
- * Kept from the bell (the inbox, read on every app's first screen and again when the language changes) and from a device
- * turning notifications on. Written only when it changes. Gone with the account (account closing forgets it).
+ * Kept from every call a signed-in person's app makes (ReaderLanguageInterceptor): the language is on each of them. Written
+ * only when it changes. Gone with the account (account closing forgets it).
  */
 export interface ReaderLanguage {
   lang: NoticeLang;
@@ -23,11 +29,67 @@ export interface ReaderLanguage {
   at: string;
 }
 
+/** 2026-11-26 — the language an app speaks, on every call it makes (frontend/src/lib/sbg/client.ts). */
+export const LANG_HEADER = 'x-sbg-lang';
+/** 2026-11-27 — the country whose review of that language it reads its words in. */
+export const WORDS_COUNTRY_HEADER = 'x-sbg-words-country';
+
+/** What a call says of itself: its headers. */
+export type AskedIn = { headers?: Record<string, string | string[] | undefined> };
+
+/** The language a call asks in, where notices are written in it. */
+export function langOf(req: AskedIn | undefined): NoticeLang | undefined {
+  return noticeLangOf(req?.headers?.[LANG_HEADER]);
+}
+
+/** The country whose review of its language the app reads its words in: two capital letters, or nothing. */
+export function wordsCountryOf(req: AskedIn | undefined): string | undefined {
+  const raw = req?.headers?.[WORDS_COUNTRY_HEADER];
+  const code = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : undefined;
+}
+
+/** 2026-11-27 — the language of the screen that asked for something by email (a code): the app's, and whose review of it. */
+export interface ScreenLanguage {
+  lang?: NoticeLang;
+  wordsCountry?: string;
+}
+
+/** What a call says of the screen it comes from. */
+export function screenOf(req: AskedIn | undefined): ScreenLanguage {
+  return { lang: langOf(req), wordsCountry: wordsCountryOf(req) };
+}
+
+/** The address's language from a screen that said one; nothing where it said none (the address is then looked up). */
+export function screenLanguage(screen: ScreenLanguage | undefined): Pick<MailAddress, 'lang' | 'wordsCountry'> {
+  return screen?.lang ? { lang: screen.lang, ...(screen.wordsCountry ? { wordsCountry: screen.wordsCountry } : {}) } : {};
+}
+
+/**
+ * The person behind a sign-in, whose language it is: a business's or a partner's member, not the company; a member of our staff
+ * by their own staff sign-in (2026-11-27: their emails too) — never the shared operator key or the setup key, which name nobody.
+ */
+export function personOf(actor: IntrospectionResult | undefined): string | undefined {
+  if (actor?.role === 'operator') return actor.revocationKey?.startsWith(STAFF_KEY_PREFIX) ? actor.revocationKey : undefined;
+  return actor?.personDid ?? (actor?.role === 'business' || actor?.role === 'partner' ? undefined : actor?.did);
+}
+
 @Injectable()
-export class ReaderLanguageService {
+export class ReaderLanguageService implements OnModuleInit {
   private readonly langs = new PersistentMap<string, ReaderLanguage>('reader-languages');
 
-  constructor(@Optional() private readonly reviews?: WordReviewService) {}
+  constructor(
+    @Optional() private readonly reviews?: WordReviewService,
+    @Optional() private readonly mail?: MailService,
+    @Optional() private readonly persons?: PersonService,
+    @Optional() private readonly accounts?: AccountService,
+    @Optional() private readonly staff?: OperatorAccountService,
+  ) {}
+
+  /** The mail is told who reads an address: every email is written in its reader's language (MailService.readerOf). */
+  onModuleInit(): void {
+    this.mail?.useReaders({ languageOf: (address) => this.ofAddress(address), wordsOf: (lang, country) => this.reviews?.noticeWordsOf(lang, country) });
+  }
 
   /** The language a person's app speaks now, and whose review of it — kept where it changed. */
   heard(did: string | undefined, lang: NoticeLang | undefined, wordsCountry?: string, now: number = Date.now()): void {
@@ -49,74 +111,41 @@ export class ReaderLanguageService {
   }
 
   /**
-   * THE SECURITY EMAIL TO A PERSON (account-safety): what happened, what it means and what to do, with the email's own words
-   * around them — all in the language they read their app in where every phrase of it is written there, else all in English.
+   * Who reads an address, by the account it is the email of: a person's recovery email, else the account a shop, a hub or a
+   * store signs in with. Nothing kept: nothing (the email is English).
    */
-  safetyMail(did: string | undefined, parts: { headline: Said; what: Said; next: Said }, when: string, until?: string): MailParams['account-safety'] {
-    const frame = {
-      subject: said('mail.safety.subject', { headline: parts.headline }),
-      when: said('mail.safety.when'),
-      until: said('mail.safety.until'),
-      whatToDo: said('mail.safety.whatToDo'),
-      help: said('mail.safety.help'),
-      reason: said('mail.safety.reason'),
-      noReply: said('mail.footer.noReply'),
-      helpLead: said('mail.footer.helpLead'),
-      helpLink: said('mail.footer.helpLink'),
-    };
-    const { lang, texts } = this.sayFor(did, { ...parts, ...frame });
-    const base = { headline: texts.headline, what: texts.what, next: texts.next, when, ...(until ? { until } : {}) };
-    if (!lang) return base;
-    const shown = (iso: string) => showIn(lang, at(formatWhen(iso), iso));
-    return {
-      ...base,
-      lang,
-      words: {
-        subject: texts.subject,
-        when: texts.when,
-        until: texts.until,
-        whatToDo: texts.whatToDo,
-        help: texts.help,
-        reason: texts.reason,
-        whenShown: shown(when),
-        ...(until ? { untilShown: shown(until) } : {}),
-        noReply: texts.noReply,
-        helpLead: texts.helpLead,
-        helpLink: texts.helpLink,
-      },
-    };
+  ofAddress(address: string): ReaderLanguage | undefined {
+    const person = safely(() => this.persons?.findByEmail(address));
+    const kept = person ? this.of(person.personDid) : undefined;
+    if (kept) return kept;
+    for (const did of safely(() => this.accounts?.didsOfEmail(address)) ?? []) {
+      const theirs = this.of(did);
+      if (theirs) return theirs;
+    }
+    // A member of our staff, by their staff sign-in.
+    return this.of(safely(() => this.staff?.staffKeyOfEmail(address)));
   }
 
   /**
-   * Phrases for an email to a person: in the language they read their app in — with their country's own words for them —
-   * where every one of them is written there; otherwise all of them in English, never half and half. `lang` is set only
-   * where it is not English, so the email's own words follow it.
+   * An email's address as its reader's: with the language that person reads their app in, where it is kept — for an address
+   * the caller knows is theirs but that may no longer be found as theirs (the recovery email they just replaced).
    */
-  sayFor<K extends string>(did: string | undefined, parts: Record<K, Said>): { lang?: NoticeLang; texts: Record<K, string> } {
+  addressee(did: string | undefined, address: string): MailAddress {
     const reader = this.of(did);
-    if (reader && reader.lang !== 'en') {
-      const texts = sayAllIn(reader.lang, parts, this.reviews?.noticeWordsOf(reader.lang, reader.wordsCountry));
-      if (texts) return { lang: reader.lang, texts };
-    }
-    return sayEnglishFor(parts);
+    // Said even where it is English: the address may be another account's too, and this email is this person's.
+    return reader ? { address, lang: reader.lang, ...(reader.wordsCountry ? { wordsCountry: reader.wordsCountry } : {}) } : { address };
   }
 }
 
-/** The security email to a person, where a service may have no record of languages (hand-built in a test): then in English. */
-export function safetyMailOf(
-  readers: ReaderLanguageService | undefined,
-  did: string | undefined,
-  parts: { headline: Said; what: Said; next: Said },
-  when: string,
-  until?: string,
-): MailParams['account-safety'] {
-  if (readers) return readers.safetyMail(did, parts, when, until);
-  return { ...sayEnglishFor(parts).texts, when, ...(until ? { until } : {}) };
+/** The same, where a service may have no record of languages (hand-built in a test): then the address as it is. */
+export function addresseeOf(readers: ReaderLanguageService | undefined, did: string | undefined, address: string): MailAddress {
+  return readers ? readers.addressee(did, address) : { address };
 }
 
-/** The same, where no record is kept (a hand-built service in a test): every email in English. */
-export function sayEnglishFor<K extends string>(parts: Record<K, Said>): { lang?: NoticeLang; texts: Record<K, string> } {
-  const texts = {} as Record<K, string>;
-  for (const k of Object.keys(parts) as K[]) texts[k] = sayEnglish(parts[k]);
-  return { texts };
+function safely<T>(f: () => T): T | undefined {
+  try {
+    return f();
+  } catch {
+    return undefined;
+  }
 }

@@ -3,6 +3,8 @@ import { MollieController } from './mollie.controller';
 import { PartnerChecksService } from './partner-checks.service';
 import { PartnerLedgerService } from './partner-ledger.service';
 import { PartnerMemberService } from './partner-member.service';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
+import type { SayValue } from './notice-words/say';
 
 /*
  * 2026-11-26 — THE COUNTERS' MOLLIE ACCOUNT, GUARDED (the owner: "Go ahead"; the weakness: any member of a partner could connect or
@@ -24,7 +26,8 @@ describe('every member is told when the counters’ Mollie account changes', () 
   it('by email, who did it and whose account — only members who joined and are still in', async () => {
     const mollie = aMollie();
     const mails: Array<{ address: string; headline: string; what: string }> = [];
-    const mail = { send: async (_k: string, to: { address: string }, p: { headline: string; what: string }) => (mails.push({ address: to.address, headline: p.headline, what: p.what }), true) };
+    // 2026-11-27 — the email's words are phrases now (each member reads it in their language): checked in English.
+    const mail = { send: async (_k: string, to: { address: string }, p: { headline: SayValue; what: SayValue }) => (mails.push({ address: to.address, headline: ENGLISH_MAIL_WORDS.text(p.headline), what: ENGLISH_MAIL_WORDS.text(p.what) }), true) };
     const persons = { onNumberLeft: () => undefined, findByDid: (did: string) => ({ personDid: did }), emailOf: (p: { personDid: string }) => `${p.personDid.split(':').pop()}@example.test` };
     const entities = { get: () => partner };
     const svc = new PartnerMemberService(entities as never, persons as never, {} as never, mollie as never, mail as never);

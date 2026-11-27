@@ -27,6 +27,8 @@ import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { PersonRole } from './person.types';
 import { actorRoleForAccount } from './roles.map';
+import { said, type Said } from './notice-words/say';
+import { screenLanguage, type ScreenLanguage } from './reader-language.service';
 
 export type AccountRole = 'pudo' | 'driver' | 'mdp' | 'vendor';
 
@@ -101,6 +103,8 @@ export const DEVICE_BOUND_ROLES: readonly AccountRole[] = ['pudo', 'mdp', 'vendo
 const PHONE_DIDS: readonly string[] = ['pudo', 'pudo-driver', 'pudo-fleet'];
 /** What a bound account is called in what it is told. */
 const PARTY: Record<AccountRole, string> = { pudo: 'shop', mdp: 'hub', vendor: 'store', driver: 'account' };
+/** The same words as phrases, for the email that says them in its reader's language (yes-it-is-me). */
+const PARTY_SAID: Record<AccountRole, Said> = { pudo: said('mail.party.shop'), mdp: said('mail.party.hub'), vendor: said('mail.party.store'), driver: said('mail.party.account') };
 const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
 const DEVICE_CODE_TRIES = 5;
 const DEVICE_CODE_COOLDOWN_MS = 60 * 1000;
@@ -359,6 +363,12 @@ export class AccountService implements OnApplicationBootstrap {
   emailForDid(did: string): string | undefined {
     for (const a of this.accounts.values()) if (a.did === did) return a.email;
     return undefined;
+  }
+
+  /** 2026-11-27 — every account that signs in with this address (one per kind): whose language an email to it is written in. */
+  didsOfEmail(email: string): string[] {
+    const wanted = email.trim().toLowerCase();
+    return [...this.accounts.values()].filter((a) => a.email.trim().toLowerCase() === wanted).map((a) => a.did);
   }
 
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
@@ -907,7 +917,7 @@ export class AccountService implements OnApplicationBootstrap {
     const token = randomBytes(24).toString('base64url');
     account.linkPending = { token, askedAt: new Date(now).toISOString(), ...(name ? { name } : {}) };
     const first = this.accounts.get(account.email);
-    void this.mail?.send('yes-it-is-me', { address: account.email }, { email: account.email, name, kind: PARTY[account.role], other: first ? PARTY[first.role] : 'account', url: `${appUrl('home')}#link=${token}` });
+    void this.mail?.send('yes-it-is-me', { address: account.email }, { email: account.email, name, kind: PARTY_SAID[account.role], other: first ? PARTY_SAID[first.role] : said('mail.party.account'), url: `${appUrl('home')}#link=${token}` });
   }
 
   /**
@@ -1010,14 +1020,15 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Issue a password-reset token (returned for the sandbox — would be emailed in production). */
-  forgot(email: string, role?: AccountRole): { sent: boolean; resetToken?: string } {
+  forgot(email: string, role?: AccountRole, screen?: ScreenLanguage): { sent: boolean; resetToken?: string } {
     // 2026-11-03 — of the kind the app is for, where one address signs in to several.
     const account = this.find(email, role);
     if (!account) return { sent: false }; // do not reveal which emails exist
     account.resetToken = newResetCode();
     account.resetExpires = Date.now() + RESET_TTL_MS;
     this.accounts.set(storeKeyOf(account), account); // persist the reset token
-    void this.mail?.send('password-reset', { address: account.email }, { email: account.email, code: account.resetToken!, minutes: RESET_TTL_MS / 60_000, app: ACCOUNT_APP[account.role] });
+    // 2026-11-27 — in the language of the screen that asked for it.
+    void this.mail?.send('password-reset', { address: account.email, ...screenLanguage(screen) }, { email: account.email, code: account.resetToken!, minutes: RESET_TTL_MS / 60_000, app: ACCOUNT_APP[account.role] });
     return { sent: true, resetToken: account.resetToken };
   }
 

@@ -120,6 +120,7 @@ describe('account recovery', () => {
     notifications = moduleRef.get(NotificationService);
     outbox = moduleRef.get(OutboxMailSender);
     readers = moduleRef.get(ReaderLanguageService);
+    readers.onModuleInit(); // the mail is told who reads an address (no lifecycle hooks run here)
     reviews = moduleRef.get(WordReviewService);
     recovery.onModuleInit(); // compile() runs no lifecycle hooks: the PIN-lock email is subscribed here
   });

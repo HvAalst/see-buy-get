@@ -105,7 +105,7 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.warn(`api_rule notice failed for ${owner.kind} ${owner.id}: ${(err as Error).message}`);
     }
-    for (const to of company.addresses) void this.mail?.send('api-rule-change', to, { company: company.name, rule: r.id, summary: r.summary, version: r.version, enforcedFrom: r.enforcedFrom, stage, app: owner.kind });
+    for (const to of company.addresses) void this.mail?.send('api-rule-change', to, { company: company.name, rule: r.id, summary: ruleSummary(r), version: r.version, enforcedFrom: r.enforcedFrom, stage, app: owner.kind });
     return true;
   }
 

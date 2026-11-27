@@ -4,6 +4,8 @@ import type { AccountService } from './account.service';
 import type { NotificationService } from './notification.service';
 import type { VendorService } from './vendor.service';
 import { StoreActivityService } from './store-activity.service';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
+import type { SayValue } from './notice-words/say';
 
 /*
  * 2026-11-15 — THE OWNER TOLD AT ONCE (the owner: "good one, build the notice"): when a developer makes a live key, or
@@ -78,7 +80,9 @@ describe('the store owner emailed of a developer’s live secret key — and of 
   it('a developer’s live secret key: one email to the owner, naming the developer and the key by its last characters', () => {
     const { mails, activity } = setup();
     activity.note('ven_1', developer, { act: 'key_made', kind: 'secret', mode: 'live', hint: 'x9z8', label: 'Checkout' });
-    expect(mails).toEqual([expect.objectContaining({ template: 'store-live-key', to: 'owner@duka.example', params: expect.objectContaining({ store: 'Duka Bora', developer: 'Brian Studio', key: 'secret key …x9z8 “Checkout”', link: expect.stringMatching(/\?go=connect$/) }) })]);
+    expect(mails).toEqual([expect.objectContaining({ template: 'store-live-key', to: 'owner@duka.example', params: expect.objectContaining({ store: 'Duka Bora', developer: 'Brian Studio', link: expect.stringMatching(/\?go=connect$/) }) })]);
+    // 2026-11-27 — the key named as a phrase (the owner reads it in their language); its English as before.
+    expect(ENGLISH_MAIL_WORDS.text((mails[0] as unknown as { params: { key: SayValue } }).params.key)).toBe('secret key …x9z8 “Checkout”');
   });
 
   it('a live publishable key, a test key, the update address, a revoked key, the owner’s own live key: no email', () => {

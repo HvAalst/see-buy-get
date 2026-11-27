@@ -4,6 +4,7 @@ import type { MailService } from '../../foundation/mail/mail.service';
 import { MAIL_TEMPLATES } from '../../foundation/mail/mail.templates';
 import { renderDocument } from '../../foundation/mail/mail.blocks';
 import { TrailAnchorService } from './trail-anchor.service';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
 
 /**
  * Round 40 — THE TRAIL ANCHORED OUTSIDE OUR DATABASE (the user: "Daily to an auditor"): the chain's head mailed once a day to
@@ -142,7 +143,7 @@ describe('the trail, anchored outside our database', () => {
   it('writes its three emails in words an auditor can keep', () => {
     for (const id of ['trail-head', 'trail-auditor-named', 'trail-auditor-changed'] as const) {
       const t = MAIL_TEMPLATES[id];
-      const doc = (t.build as (p: unknown) => Parameters<typeof renderDocument>[0])(t.sample);
+      const doc = (t.build as (p: unknown, w: typeof ENGLISH_MAIL_WORDS) => Parameters<typeof renderDocument>[0])(t.sample, ENGLISH_MAIL_WORDS);
       expect(doc.subject.length).toBeGreaterThan(10);
       expect(doc.reason).toMatch(/two members of SeeBuyGet staff|received the SeeBuyGet trail/);
     }

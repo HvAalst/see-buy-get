@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { RenderedMail } from './mail.blocks';
 import type { MailTemplateId } from './mail.templates';
 import { MailBounceConnection } from './mail-bounces.service';
+import type { NoticeWords } from '../../modules/pudo/notice-words/say';
 
 /**
  * MAIL — the seam between "an email should go" and the service that delivers it.
@@ -25,6 +26,22 @@ import { MailBounceConnection } from './mail-bounces.service';
 export interface MailAddress {
   address: string;
   name?: string;
+  /**
+   * 2026-11-27 — the language the person reads their app in, where the caller knows it (an address that is no longer theirs,
+   * a code asked from a screen). Else it is looked up by the address (MailReaders).
+   */
+  lang?: string;
+  /** And the country whose review of that language their app reads its words in. */
+  wordsCountry?: string;
+}
+
+/**
+ * 2026-11-27 — WHO READS AN ADDRESS, as the parts of the system that know people say it (reader-language.service.ts): the
+ * language they read their app in, and a country's own words for the phrases of it. Nothing known: English.
+ */
+export interface MailReaders {
+  languageOf(address: string): { lang: string; wordsCountry?: string } | undefined;
+  wordsOf(lang: string, wordsCountry?: string): NoticeWords | undefined;
 }
 
 export interface OutgoingMail extends RenderedMail {

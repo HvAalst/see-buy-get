@@ -4,6 +4,8 @@ import type { MailService } from '../../foundation/mail/mail.service';
 import { sameSigner } from '../../foundation/entity/same-person';
 import type { PayoutService } from '../../foundation/payouts/payout.service';
 import { MORNING_RUN_SIGNER, MorningPayoutRun } from './morning-payout.run';
+import { ENGLISH_MAIL_WORDS } from '../../foundation/mail/mail.kit';
+import type { SayValue } from './notice-words/say';
 
 /**
  * THE MORNING PAYOUT RUN (the user, 2026-10-27: "Morning run, one approves"): raised by the system at 06:00 on each company's
@@ -55,7 +57,9 @@ describe('the morning payout run', () => {
     const run = new MorningPayoutRun({ sisters: () => [{ entityId: 'ent_ke_mr3', jurisdiction: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES' }] } as unknown as EntityService, { runFor } as unknown as PayoutService, staff, mail);
     run.tick(at('2026-10-28T03:05:00Z'));
     expect(sent.map((s) => s.to)).toEqual(['amina@sbg.example', 'baraka@sbg.example']);
-    expect(sent[0].params).toEqual({ company: 'SeeBuyGet Kenya', day: '2026-10-28', count: 2, total: 'KES 1,550.50', skipped: 1 });
+    expect(sent[0].params).toMatchObject({ company: 'SeeBuyGet Kenya', day: '2026-10-28', count: 2, skipped: 1 });
+    // 2026-11-27 — a sum written the reader's way; its English as before.
+    expect(ENGLISH_MAIL_WORDS.text((sent[0].params as { total: SayValue }).total)).toBe('KES 1,550.50');
     expect((mail.send as jest.Mock).mock.calls[0][0]).toBe('payout-run-waiting');
     // The next morning, nothing to pay: nobody is emailed.
     runFor.mockImplementationOnce(() => ({ day: 'y', raised: [], skipped: [] }));

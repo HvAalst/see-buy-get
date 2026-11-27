@@ -29,7 +29,7 @@ import type { NoticeKey } from './notice-words/catalog';
 import { COLLECTED_AT_SHOP_REASON, THE_COURIER } from './notice-words/system-words';
 import { GeoPoint } from './pudo.types';
 import { loadLink, runLink, type NotificationKind } from './notification.types';
-import { at, day, money, noticeOf, said } from './notice-words/say';
+import { at, day, money, noticeOf, number, said } from './notice-words/say';
 import type { Said, SayValue } from './notice-words/say';
 /** 2026-11-24 — a UIT or UTN running out, as FiscalCodeSweeper publishes it (DispatchService.fiscalCodesToTell). */
 type FiscalCodeExpiring = ReturnType<DispatchService['fiscalCodesToTell']>[number];
@@ -2170,7 +2170,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!b || !c) return;
       const shop = this.shopName(p.destAgentDid) ?? said('dispatch2.customs.theirShop');
       const ours = b.due ? money(`${b.due.total.toFixed(2)} ${b.due.currency}`, b.due.total, b.due.currency) : undefined;
-      const owe = c.amount != null ? (c.currency ? money(`${c.amount.toFixed(2)} ${c.currency}`, c.amount, c.currency) : `${c.amount.toFixed(2)} ${c.currency ?? ''}`.trim()) : '';
+      const owe = c.amount != null ? (c.currency ? money(`${c.amount.toFixed(2)} ${c.currency}`, c.amount, c.currency) : number(c.amount.toFixed(2), c.amount, 2)) : '';
       const payBy = day(c.payBy ? c.payBy.slice(0, 10) : '', c.payBy ? c.payBy.slice(0, 10) : '');
       const payee = c.payee ? said('dispatch2.customs.toPayee', { payee: c.payee }) : said('dispatch2.customs.toAgent');
       const receiver = accountFor(this.parcels.receiverOf(p), this.persons);
@@ -3146,7 +3146,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // Its most raised (2026-10-27): news, said as such — its own notice, so a phone that showed the first alerts again
       // rather than quietly replacing it, and with the new most a driver weighs their price against.
       const raisedEn = payload.raisedTo != null ? `${payload.currency ? `${payload.currency} ` : ''}${payload.raisedTo.toLocaleString('en')}` : undefined;
-      const raised = raisedEn !== undefined && payload.raisedTo != null ? (payload.currency ? money(raisedEn, payload.raisedTo, payload.currency) : raisedEn) : undefined;
+      const raised = raisedEn !== undefined && payload.raisedTo != null ? (payload.currency ? money(raisedEn, payload.raisedTo, payload.currency) : number(raisedEn, payload.raisedTo)) : undefined;
       await Promise.all(
         nearby.map((d) =>
           this.notifications.notify(d.driverDid, {

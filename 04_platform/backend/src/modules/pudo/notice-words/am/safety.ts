@@ -39,4 +39,14 @@ export const AM_SAFETY: Record<keyof typeof EN_SAFETY, string> = {
   'mail.footer.noReply': 'እባክዎ አይመልሱ — ይህ አድራሻ አይነበብም።',
   'mail.footer.helpLead': 'ለመግባት እና ለመለያዎ እገዛ፦',
   'mail.footer.helpLink': 'የ SeeBuyGet እገዛ',
+
+  'mail.app.agent': 'Shop መተግበሪያ',
+  'mail.app.mdp': 'Hub መተግበሪያ',
+  'mail.app.fleet': 'Fleet መተግበሪያ',
+  'mail.app.driver': 'Driver መተግበሪያ',
+  'mail.app.vendor': 'Store መተግበሪያ',
+  'mail.app.send': 'Send መተግበሪያ',
+  'mail.app.console': 'የኦፕሬተር ኮንሶል',
+  'mail.app.home': 'SeeBuyGet',
+  'mail.app.business': 'Business መተግበሪያ',
 };

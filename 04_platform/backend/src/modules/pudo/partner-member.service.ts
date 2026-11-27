@@ -17,7 +17,7 @@ import { isFor, waitsAt, type Addressed } from './addressed-to';
 import { PartnerLedgerView } from './partner-ledger.service';
 import { PersonService } from './person.service';
 import { noticeOf, said } from './notice-words/say';
-import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
+import { ReaderLanguageService, addresseeOf } from './reader-language.service';
 
 /**
  * 2026-11-20 — A PARTNER'S OWN PEOPLE (the payments plan, 3c; the owner: "console for staff and partner app with live view";
@@ -164,7 +164,7 @@ export class PartnerMemberService {
         address = undefined;
       }
       // 2026-11-27 — in the language this member reads their app in, where all of it is written there.
-      if (address) void this.mail?.send('account-safety', { address }, safetyMailOf(this.readers, m.personDid, { headline: headlineSaid, what: whatSaid, next: nextSaid }, c.at)).catch(() => false);
+      if (address) void this.mail?.send('account-safety', addresseeOf(this.readers, m.personDid, address), { headline: headlineSaid, what: whatSaid, next: nextSaid, when: c.at }).catch(() => false);
     }
   }
 

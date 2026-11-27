@@ -51,4 +51,16 @@ export const AM_DETAILS: Record<keyof typeof EN_DETAILS, string> = {
   'apiVersionNotice.rule.summary.declaration-each-line': 'የደህንነት መግለጫ እያንዳንዱ መስመሩ ምልክት ተደርጎበት ይፈረማል (confirmed፦ የእያንዳንዱ መስመር ቁጥር፣ ከ0 ጀምሮ)።',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-codes': 'በሮማኒያ የተረከበ ወይም የደረሰ ጭነት የRO e-Transport UIT ኮድ ይይዛል፤ በቡልጋሪያ ደግሞ ከፍተኛ የግብር ስጋት ላላቸው ዕቃዎች UTN ይይዛል፤ ወይም አያስፈልግም የሚለውን የላኪውን ቃልና ምክንያቱን (fiscalCodes)።',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-indemnity': 'የUIT ወይም UTN ኮድ ያለው ጭነት፣ ወይም ኮድ ያለመኖሩ ምክንያት ያለው ጭነት፣ ትክክል መሆናቸውን የላኪውን ማረጋገጫ ይይዛል (fiscalCodes.indemnity: true)።',
+
+  'dispatch.roadRefusal.none': 'ይህ ቦርሳ ወደ ሌላ አገር ይሄዳል፤ እዚያ የሚሄድ የመንገድ መስመር የለም፦ እስካሁን ማንም አይሸከመውም',
+  'dispatch.roadRefusal.otherFleet': 'ይህ ቦርሳ ከ{from} ወደ {to} በሚሄደው መስመር ላይ ይሄዳል፦ የሚሸከሙት የ{fleet} አሽከርካሪዎች ብቻ ናቸው',
+  'dispatch.coldClash': 'ይህ የጭነት መኪና ከ{otherMin} እስከ {otherMax} °C የሚቀመጥ ጭነት አስቀድሞ ይዟል፤ ይህኛው ከ{min} እስከ {max} °C መቀመጥ አለበት። አንድ የጭነት ሳጥን አንድ ሙቀት ብቻ ይይዛል፦ መጀመሪያ ያንን ጭነት ያድርሱ፣ አለዚያ ይህ በሌላ የጭነት መኪና ይሄዳል',
+  'declaration.refused.you.missing': 'የደህንነት መግለጫዎን አልፈረሙም፦ እስኪፈርሙ ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.refused.you.lapsed': 'የደህንነት መግለጫዎን በዚህ ዓመት እንደገና አልፈረሙም፦ እስኪፈርሙ ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.refused.you.outdated': 'የደህንነት መግለጫዎን አዲስ ቃል አልፈረሙም፦ እስኪፈርሙ ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.refused.fleet.missing': 'ፍሊትዎ የደህንነት መግለጫውን አልፈረመም፦ እስኪፈርም ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.refused.fleet.lapsed': 'ፍሊትዎ የደህንነት መግለጫውን በዚህ ዓመት እንደገና አልፈረመም፦ እስኪፈርም ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.refused.fleet.outdated': 'ፍሊትዎ የደህንነት መግለጫውን አዲስ ቃል አልፈረመም፦ እስኪፈርም ድረስ አዲስ ምንም አይወሰድም። የሚፈረመው በ{where} ውስጥ፣ በመነሻ ገጹ ላይ ነው',
+  'declaration.where.driver': 'Driver መተግበሪያ',
+  'declaration.where.fleet': 'Fleet መተግበሪያ',
 };

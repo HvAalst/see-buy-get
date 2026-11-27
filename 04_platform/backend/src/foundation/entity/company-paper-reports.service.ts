@@ -6,6 +6,8 @@ import { GlosError } from '../http/glos-error';
 import { MailService } from '../mail/mail.service';
 import { decodeDocument } from '../media/decode-document';
 import { PersistentMap } from '../store/persistent-map';
+import { said, type SayValue } from '../../modules/pudo/notice-words/say';
+import type { NoticeKey } from '../../modules/pudo/notice-words/catalog';
 import { COMPANY_PAPER_KINDS, CompanyDeclarationService, recordKeeper } from './company-declarations.service';
 import { CompanyDocumentService } from './company-documents.service';
 import { EntityAdminService } from './entity-admin.service';
@@ -210,7 +212,7 @@ export class CompanyPaperReportService {
     // The company is told the first time a paper is questioned — what was said, never by whom. A second person saying
     // the same of the same paper adds to what staff read; it is not a second email.
     const told = first
-      ? await this.tell(entity.entityId, 'company-paper-reported', { company: entity.name, paper: document.title, said: REPORT_CATEGORY_WORDS[input.category as ReportCategory], note: note.slice(0, 1000), answerBy: c.answerBy.slice(0, 10) }, now)
+      ? await this.tell(entity.entityId, 'company-paper-reported', { company: entity.name, paper: document.title, said: said(`mail.report.${input.category}` as NoticeKey), note: note.slice(0, 1000), answerBy: c.answerBy.slice(0, 10) }, now)
       : 0;
     return { caseId: c.caseId, reportId, answerBy: c.answerBy, told };
   }
@@ -275,11 +277,11 @@ export class CompanyPaperReportService {
     // neither can be undone. Whether the paper still counts can change in between — the company may have replaced it.
     this.requireStillCounts(c);
     const by = `${c.proposal.by} and ${staff.name}`;
-    const { effect } = this.declarations.strike(c.entityId, c.documentId, by, c.proposal.reason, now);
+    const { effect, effectSaid } = this.declarations.strike(c.entityId, c.documentId, by, c.proposal.reason, now);
     c.state = 'struck';
     c.decision = { outcome: 'struck', reason: c.proposal.reason, by, at: new Date(now).toISOString(), effect };
     this.cases.set(c.caseId, c);
-    await this.tellDecision(c, now);
+    await this.tellDecision(c, now, effectSaid);
     return this.view(c, 'staff', staff.key);
   }
 
@@ -343,9 +345,9 @@ export class CompanyPaperReportService {
     return told;
   }
 
-  private tellDecision(c: PaperCase, now: number): Promise<number> {
+  private tellDecision(c: PaperCase, now: number, effectSaid?: SayValue): Promise<number> {
     const entity = this.entities.get(c.entityId);
     const document = this.documents.get(c.entityId, c.documentId);
-    return this.tell(c.entityId, 'company-paper-decided', { company: entity.name, paper: document.title, outcome: c.decision!.outcome, reason: c.decision!.reason, effect: c.decision!.effect ?? '' }, now);
+    return this.tell(c.entityId, 'company-paper-decided', { company: entity.name, paper: document.title, outcome: c.decision!.outcome, reason: c.decision!.reason, effect: effectSaid ?? c.decision!.effect ?? '' }, now);
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable, Optional, OnModuleInit } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { money, noticeOf, said } from './notice-words/say';
+import { money, noticeOf, number, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { FundingService } from '../../foundation/funding/funding.service';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -112,7 +112,7 @@ export class FundingPayerRegistrar implements OnModuleInit {
    */
   private tellShop(did: string, amount: number, currency: string | undefined, direction: 'in' | 'back'): void {
     const text = `${currency ?? ''} ${amount.toFixed(2)}`.trim();
-    const sum = currency ? money(text, amount, currency) : text;
+    const sum = currency ? money(text, amount, currency) : number(text, amount, 2);
     const payload =
       direction === 'in'
         ? noticeOf(said('fundingPayers.shopIn.title'), said('fundingPayers.shopIn.body', { amount: sum }))
@@ -146,7 +146,7 @@ export class FundingPayerRegistrar implements OnModuleInit {
     if (!did) return;
     // 2026-11-27 — a sum in the store's own currency, written the reader's way where it is known (the English as before).
     const cur = this.vendors.currencyOf(this.vendors.get(vendorId));
-    const sum = cur ? money(c.gross.toFixed(2), c.gross, cur) : c.gross.toFixed(2);
+    const sum = cur ? money(c.gross.toFixed(2), c.gross, cur) : number(c.gross.toFixed(2), c.gross, 2);
     const payload =
       event === 'balance_topped_up'
         ? noticeOf(said('fundingPayers.storeIn.title'), said('fundingPayers.storeIn.body', { amount: sum }))

@@ -4,6 +4,8 @@ import { randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { MailService } from '../mail/mail.service';
 import { PersistentMap } from '../store/persistent-map';
+import { day, said, type Said, type SayValue } from '../../modules/pudo/notice-words/say';
+import type { NoticeKey } from '../../modules/pudo/notice-words/catalog';
 import { CompanyDocument, CompanyDocumentService, type DocumentKind } from './company-documents.service';
 import { lapsesAt, normaliseRecordPatch, type CompanyRecord } from './company-record.types';
 import { adminKey, EntityAdminService } from './entity-admin.service';
@@ -85,6 +87,25 @@ export function itemWords(section: PaperBoundSection, item: Item | undefined): s
   if (section === 'insurance') return `${String(item.kind).replace(/_/g, ' ')} policy ${item.policyNumber} with ${item.insurer}, good until ${item.expiresAt}`;
   if (section === 'bankAccounts') return `${item.bankName} account ${item.accountNumber} (${item.currency}, ${item.accountName})`;
   return `${item.name}, ${item.role} — signs ${item.signing === 'none' ? 'nothing' : item.signing}`;
+}
+
+/**
+ * 2026-11-27 — the same words as phrases, for the emails: written in the reader's language. Built from the item itself, so a
+ * record kept before this reads the same. A day stays as it was written ("2026-12-10") in English.
+ */
+const KIND_SAID = new Set(['courier', 'postal', 'transport_operator', 'customs_broker', 'money_handling', 'goods_in_transit', 'claims_provision', 'public_liability', 'motor_fleet', 'other']);
+const dayOf = (v: unknown): SayValue => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? day(String(v), String(v)) : String(v));
+const kindOf = (v: unknown): SayValue => (KIND_SAID.has(String(v)) ? said(`mail.record.kind.${String(v)}` as NoticeKey) : String(v).replace(/_/g, ' '));
+export function itemSaid(section: PaperBoundSection, item: Item | undefined): SayValue {
+  if (!item) return '—';
+  if (section === 'licences') return said('mail.record.licence', { kind: kindOf(item.kind), number: String(item.number), day: dayOf(item.expiresAt) });
+  if (section === 'insurance') return said('mail.record.insurance', { kind: kindOf(item.kind), number: String(item.policyNumber), insurer: String(item.insurer), day: dayOf(item.expiresAt) });
+  if (section === 'bankAccounts') return said('mail.record.bank', { bank: String(item.bankName), number: String(item.accountNumber), currency: String(item.currency), name: String(item.accountName) });
+  const signing = item.signing === 'none' || item.signing === 'jointly' ? item.signing : 'alone';
+  return said(`mail.record.rep.${signing}` as NoticeKey, { name: String(item.name), role: String(item.role) });
+}
+export function sectionSaid(section: PaperBoundSection): Said {
+  return said(`mail.record.section.${section}` as NoticeKey);
 }
 
 export class CompanyDeclaration {
@@ -245,7 +266,7 @@ export class CompanyDeclarationService {
    *     is nothing to put back, so that licence counts as run out from today.
    * Returns what was done, in words, for the people who are told. `by` is both members of staff.
    */
-  strike(entityId: string, documentId: string, by: string, reason: string, now: number = Date.now()): { effect: string; document: CompanyDocument } {
+  strike(entityId: string, documentId: string, by: string, reason: string, now: number = Date.now()): { effect: string; effectSaid: SayValue; document: CompanyDocument } {
     const entity = this.entities.get(entityId);
     const { document } = this.documents.strike(entityId, documentId, by, reason, now);
     const record = this.entities.recordOf(entityId);
@@ -256,12 +277,16 @@ export class CompanyDeclarationService {
       const field = REFERENCE_FIELD[section];
       const items = record[section] as unknown as Item[];
       const at = items.findIndex((i) => same(i[field], declaration.now));
-      if (at < 0) return { effect: `${entity.name}’s record no longer carried what this paper was for.`, document };
+      if (at < 0) return { effect: `${entity.name}’s record no longer carried what this paper was for.`, effectSaid: said('mail.record.effect.gone', { company: entity.name }), document };
       const before = declaration.before;
       const next = before ? items.map((i, n) => (n === at ? before : i)) : items.filter((_, n) => n !== at);
       this.entities.updateRecord(entityId, { [section]: next }, by, { from: declaration.nowWords, to: before ? `struck — back as it was: ${declaration.wasWords}` : 'struck — taken off the record' });
       this.declarations.set(declaration.declarationId, { ...declaration, struckAt: new Date(now).toISOString() });
-      return { effect: before ? `The record is back as it was: ${declaration.wasWords}.` : `Taken off the record: ${declaration.nowWords}.`, document };
+      return {
+        effect: before ? `The record is back as it was: ${declaration.wasWords}.` : `Taken off the record: ${declaration.nowWords}.`,
+        effectSaid: before ? said('mail.record.effect.back', { was: itemSaid(section, before) }) : said('mail.record.effect.removed', { now: itemSaid(section, declaration.after) }),
+        document,
+      };
     }
 
     const section = document.kind === 'licence' ? 'licences' : document.kind === 'insurance_policy' ? 'insurance' : undefined;
@@ -274,10 +299,10 @@ export class CompanyDeclarationService {
         // Good THROUGH its date, so the day before today: from today it has run out, and what it permits is off.
         const cut = { ...item, expiresAt: new Date(now - 86_400_000).toISOString().slice(0, 10) };
         this.entities.updateRecord(entityId, { [section]: items.map((i, n) => (n === at ? cut : i)) }, by, { from: itemWords(section, item), to: 'struck — counts as run out from today' });
-        return { effect: `It counts as run out from today: ${itemWords(section, item)}.`, document };
+        return { effect: `It counts as run out from today: ${itemWords(section, item)}.`, effectSaid: said('mail.record.effect.runOut', { item: itemSaid(section, item) }), document };
       }
     }
-    return { effect: 'The paper no longer counts. Nothing else on the record rested on it.', document };
+    return { effect: 'The paper no longer counts. Nothing else on the record rested on it.', effectSaid: said('mail.record.effect.nothing'), document };
   }
 
   private keep(d: { entity: Entity; section: PaperBoundSection; change: CompanyDeclaration['change']; before?: Item; after?: Item; documentId?: string; by: string; now: number }): CompanyDeclaration {
@@ -312,7 +337,7 @@ export class CompanyDeclarationService {
       const ok = await this.mail.send(
         'company-record-changed',
         { address: admin.email, name: admin.name },
-        { company: entity.name, by: declaration.by, part: SECTION_WORDS[declaration.section], change: declaration.change, was: declaration.wasWords, now: declaration.nowWords, paper: Boolean(declaration.documentId) },
+        { company: entity.name, by: declaration.by, part: sectionSaid(declaration.section), change: declaration.change, was: itemSaid(declaration.section, declaration.before), now: declaration.after ? itemSaid(declaration.section, declaration.after) : said('mail.record.takenOff'), paper: Boolean(declaration.documentId) },
         now,
       );
       if (ok) told += 1;

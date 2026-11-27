@@ -51,4 +51,16 @@ export const SW_DETAILS: Record<keyof typeof EN_DETAILS, string> = {
   'apiVersionNotice.rule.summary.declaration-each-line': 'Tamko la usalama husainiwa huku kila mstari wake ukiwa umetiwa alama (confirmed: nambari ya kila mstari, kuanzia 0).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-codes': 'Mzigo uliochukuliwa au kukabidhiwa Romania hubeba msimbo wa UIT wa RO e-Transport, na Bulgaria UTN ya bidhaa zenye hatari kubwa ya kodi, au neno la mtumaji kwamba hakuna kinachohitajika na sababu (fiscalCodes).',
   'apiVersionNotice.rule.summary.ro-bg-fiscal-indemnity': 'Mzigo wenye msimbo wa UIT au UTN, au sababu ya kutokuwa nao, hubeba uthibitisho wa mtumaji kwamba ni sahihi (fiscalCodes.indemnity: true).',
+
+  'dispatch.roadRefusal.none': 'Mfuko huu unaenda nchi nyingine, na hakuna njia ya barabara huko iliyo wazi: bado hakuna anayeubeba',
+  'dispatch.roadRefusal.otherFleet': 'Mfuko huu unaenda kwenye njia kutoka {from} hadi {to}: ni madereva wa {fleet} tu wanaoubeba',
+  'dispatch.coldClash': 'Lori hili tayari lina mzigo unaohifadhiwa kwa {otherMin} hadi {otherMax} °C; huu lazima uhifadhiwe kwa {min} hadi {max} °C. Mwili mmoja hutunza joto moja: toa mzigo huo kwanza, au huu uende kwenye lori lingine.',
+  'declaration.refused.you.missing': 'Hujasaini tamko lako la usalama: hakuna kinachochukuliwa kipya hadi uwe umelisaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.refused.you.lapsed': 'Hujasaini tena tamko lako la usalama mwaka huu: hakuna kinachochukuliwa kipya hadi uwe umelisaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.refused.you.outdated': 'Hujasaini maneno mapya ya tamko lako la usalama: hakuna kinachochukuliwa kipya hadi uwe umeyasaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.refused.fleet.missing': 'Kundi lako la magari halijasaini tamko lake la usalama: hakuna kinachochukuliwa kipya hadi lisaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.refused.fleet.lapsed': 'Kundi lako la magari halijasaini tena tamko lake la usalama mwaka huu: hakuna kinachochukuliwa kipya hadi lisaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.refused.fleet.outdated': 'Kundi lako la magari halijasaini maneno mapya ya tamko lake la usalama: hakuna kinachochukuliwa kipya hadi lisaini. Linasainiwa katika {where}, kwenye skrini ya mwanzo',
+  'declaration.where.driver': 'programu ya Driver',
+  'declaration.where.fleet': 'programu ya Fleet',
 };

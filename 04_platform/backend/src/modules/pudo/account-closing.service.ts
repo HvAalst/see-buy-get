@@ -17,7 +17,7 @@ import { PayoutNumberService } from './payout-number.service';
 import { BusinessService } from './business.service';
 import { PartnerMemberService } from './partner-member.service';
 import { noticeOf, said } from './notice-words/say';
-import { ReaderLanguageService, safetyMailOf } from './reader-language.service';
+import { ReaderLanguageService, addresseeOf } from './reader-language.service';
 
 /** Four years without a sign-in, and the owner is told the account can be closed (the user, 2026-10-22). */
 export const INACTIVE_MONTHS = 48;
@@ -218,7 +218,7 @@ export class AccountClosingService implements OnApplicationBootstrap, OnModuleDe
     if (address) {
       await this.mail
         // 2026-11-27 — in the language the person read their app in, where all of it is written there.
-        ?.send('account-safety', { address }, safetyMailOf(this.readers, personDid, { headline: said('accountSafety.closed.title'), what: said('accountSafety.closed.what'), next: said('accountSafety.closed.next') }, new Date(now).toISOString()))
+        ?.send('account-safety', addresseeOf(this.readers, personDid, address), { headline: said('accountSafety.closed.title'), what: said('accountSafety.closed.what'), next: said('accountSafety.closed.next'), when: new Date(now).toISOString() })
         .catch(() => false);
     }
 
