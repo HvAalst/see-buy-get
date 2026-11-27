@@ -418,6 +418,8 @@ export const words: Record<string, string> = {
   "common.weight.inG": "Тегло в грамове",
   "common.weight.atLeast": "Най-малко 10 g — по-леко писмо отчетете като 10 g.",
   "common.cancel": "Отказ",
+  "common.receiverLanguage": "Техният език",
+  "common.receiverLanguageHint": "Имейлите до тях се пишат на този език.",
   "common.hubDown.reason.power": "Няма ток",
   "common.hubDown.reason.flood": "Наводнение или прекъснат път до него",
   "common.hubDown.reason.security": "Опасно да се отвори",

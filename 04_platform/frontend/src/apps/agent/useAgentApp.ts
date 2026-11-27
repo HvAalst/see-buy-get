@@ -75,6 +75,7 @@ import type {
   OfferRow,
   AbroadRoute,
 } from './types';
+import { defaultReaderLanguage } from '../../shared/readerLanguage';
 
 export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight' | 'tamper';
 
@@ -1961,7 +1962,7 @@ export function useAgentApp() {
         // CMR boxes 2 and 9 (2026-10-29) — who receives it, and dangerous goods by their UN number.
         ...(f.consigneeName.trim() ? { consignee: { name: f.consigneeName.trim() } } : {}),
         // 2026-11-15 — the receiver's email: the delivery code goes to them, checked against the name above.
-        ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim(), ...(f.consigneeName.trim() ? { receiverName: f.consigneeName.trim() } : {}) } : {}),
+        ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim(), receiverLanguage: f.receiverLanguage || defaultReaderLanguage(), ...(f.consigneeName.trim() ? { receiverName: f.consigneeName.trim() } : {}) } : {}),
         ...(isDangerousNature(f.natureCode) && dangerousGoodsValue(f) ? { dangerousGoods: dangerousGoodsValue(f) } : {}),
         // CL1 — sent only when the clerk was told. No term means the sender claims, as before.
         incoterm: incotermValue(f.incoterm),

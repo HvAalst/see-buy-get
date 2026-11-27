@@ -418,6 +418,8 @@ export const words: Record<string, string> = {
   "common.weight.inG": "Uzito kwa gramu",
   "common.weight.atLeast": "Angalau g 10 — pima barua nyepesi zaidi kama g 10.",
   "common.cancel": "Ghairi",
+  "common.receiverLanguage": "Lugha yao",
+  "common.receiverLanguageHint": "Barua pepe kwao zinaandikwa kwa lugha hii.",
   "common.hubDown.reason.power": "Hakuna umeme",
   "common.hubDown.reason.flood": "Mafuriko, au barabara ya kufika imekatika",
   "common.hubDown.reason.security": "Si salama kufungua",

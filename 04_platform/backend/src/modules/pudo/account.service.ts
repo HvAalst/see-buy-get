@@ -28,6 +28,7 @@ import { PersonService } from './person.service';
 import { PersonRole } from './person.types';
 import { actorRoleForAccount } from './roles.map';
 import { said, type Said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 import { screenLanguage, type ScreenLanguage } from './reader-language.service';
 
 export type AccountRole = 'pudo' | 'driver' | 'mdp' | 'vendor';
@@ -226,8 +227,8 @@ export class AccountService implements OnApplicationBootstrap {
 
   /** Round 40 — a phone verified by its code moments ago: what a store gives at sign-up, before the store is made. */
   assertVerifiedPhone(phone: string | undefined): string {
-    if (!phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required: a new phone or browser is confirmed by a code to it', { field: 'ownerPhone' });
-    if (!this.otp.isVerified(phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first', { field: 'ownerPhone' });
+    if (!phone?.trim()) throw refused('PHONE_REQUIRED', said('refuse.account.phoneRequiredOwner'), { field: 'ownerPhone' });
+    if (!this.otp.isVerified(phone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.account.phoneNotVerified'), { field: 'ownerPhone' });
     return phone.trim();
   }
 
@@ -244,10 +245,10 @@ export class AccountService implements OnApplicationBootstrap {
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
   signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken; device?: string; linkPending?: boolean } {
     const email = (input.email || '').trim().toLowerCase();
-    if (!email.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
+    if (!email.includes('@')) throw refused('EMAIL_INVALID', said('refuse.account.emailInvalid'));
     assertPassword(input.password, [email, welcomeName(input.role, input.profile)]);
-    if (!input.phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required');
-    if (!this.otp.isVerified(input.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
+    if (!input.phone?.trim()) throw refused('PHONE_REQUIRED', said('refuse.account.phoneRequired'));
+    if (!this.otp.isVerified(input.phone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.account.phoneNotVerified'));
     /*
      * A REFUSAL BECAUSE THE DETAILS ARE ALREADY REGISTERED is counted against this phone's verification. It
      * names what matched, because a person who registered before needs to know which of their details did —
@@ -298,19 +299,19 @@ export class AccountService implements OnApplicationBootstrap {
    */
   signUpDriver(personDid: string, phone: string, profile: Record<string, unknown>): { did: string; entityStatus?: string } {
     const person = this.persons.requireByDid(personDid);
-    if (!person.pinHash) throw new GlosError('INVALID_STATE', 'Choose your PIN first: it is how you open the Driver app');
+    if (!person.pinHash) throw refused('INVALID_STATE', said('refuse.account.pinFirst'));
     if (!phone?.trim() || hashPhone(phone) !== person.phoneHash) {
-      throw new GlosError('FORBIDDEN', 'Sign up with the phone number you signed in with', { field: 'phone' });
+      throw refused('FORBIDDEN', said('refuse.account.signUpPhone'), { field: 'phone' });
     }
     const now = Date.now();
     const tries = (this.driverRefusals.get(personDid) ?? []).filter((at) => now - at < DAY_MS);
     if (tries.length >= MAX_DRIVER_REFUSALS_PER_DAY) {
-      throw new GlosError('RATE_LIMITED', 'Too many sign-ups refused today. Check your details and try again tomorrow, or write to us from the help.');
+      throw refused('RATE_LIMITED', said('refuse.account.signUpsRefused'));
     }
     // The two photographs a driver who needs a licence check took while signing up: refused before anything is made.
     const sent = profile.kyc as { idCopyRef?: string; licenceCopyRef?: string } | undefined;
-    const said = (profile.driver ?? {}) as { licenceClasses?: unknown };
-    const classes = Array.isArray(said.licenceClasses) ? (said.licenceClasses as string[]) : [];
+    const driverSaid = (profile.driver ?? {}) as { licenceClasses?: unknown };
+    const classes = Array.isArray(driverSaid.licenceClasses) ? (driverSaid.licenceClasses as string[]) : [];
     const papers = sent && this.drivers.registryFor(classes as never) === 'heavy' ? this.drivers.assertSignupPapers(personDid, sent) : undefined;
     let provisioned: { did: string; entityStatus?: string };
     try {
@@ -395,7 +396,7 @@ export class AccountService implements OnApplicationBootstrap {
       this.askYesItIsMe(account, account.linkPending.name ?? '', now);
       this.accounts.set(storeKeyOf(account), account);
     }
-    throw new GlosError('LINK_PENDING', `This email signs in to another SeeBuyGet account too. Click “Yes, it is me” in the email ${again ? 'we have just sent again' : 'we sent'} to ${account.email}, then sign in here.`, { email: account.email, sentAgain: again });
+    throw refused('LINK_PENDING', said(again ? 'refuse.account.linkPendingAgain' : 'refuse.account.linkPending', { email: account.email }), { email: account.email, sentAgain: again });
   }
 
   /**
@@ -418,10 +419,10 @@ export class AccountService implements OnApplicationBootstrap {
     if (opts.unlock) {
       const grant = this.unlocks.take(opts.unlock);
       if (!account || !grant || !opts.device || grant.owner !== account.accountId || grant.address !== hashEmail(key) || grant.deviceHash !== deviceHashOf(opts.device) || (opts.role && account.role !== opts.role)) {
-        throw new GlosError('UNLOCK_FAILED', 'That unlock has run out, or was used already. Unlock again, or use the password.');
+        throw refused('UNLOCK_FAILED', said('refuse.account.unlockRanOut'));
       }
       if (this.devices.passkeyOf(account.accountId, opts.device)?.id !== grant.credentialId) {
-        throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use the password.');
+        throw refused('UNLOCK_OFF', said('refuse.account.unlockOff'));
       }
       this.tries.forget(key);
       return account;
@@ -474,7 +475,7 @@ export class AccountService implements OnApplicationBootstrap {
    * sandbox code does; nothing is texted there.
    */
   private async deviceUnknown(account: Account, now: number): Promise<GlosError> {
-    const party = PARTY[account.role];
+    const party = PARTY_SAID[account.role];
     const phone = this.codePhoneOf(account);
     if (!phone) {
       /*
@@ -483,7 +484,7 @@ export class AccountService implements OnApplicationBootstrap {
        */
       const challenge = `dp_${randomBytes(12).toString('hex')}`;
       this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code: '', sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0, needsPhone: true });
-      return new GlosError('DEVICE_NOT_KNOWN', `This ${party} has no phone number yet. Give it one: a code goes to it now, and from then on a new phone or browser is confirmed by a code to that number.`, { challenge, needsPhone: true });
+      return refused('DEVICE_NOT_KNOWN', said('refuse.account.deviceNoPhone', { party }), { challenge, needsPhone: true });
     }
     const ending = phone.replace(/\D/g, '').slice(-3);
     // 2026-11-16 — which way the code went, and the apps it may be asked again by (the owner: "the same choice").
@@ -495,8 +496,8 @@ export class AccountService implements OnApplicationBootstrap {
       const texts = this.sms?.sends() ?? false;
       // The owner's stand-in code: the number's own, as if texted (foundation/runtime/standin-code.ts).
       const standIn = standInCode(phone, texts);
-      if (!standIn && !texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet. Link it with a phone the ${party} already uses instead.`, this.pairOnly(account, now));
-      if (!standIn && texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country. Link this phone with a phone the ${party} already uses instead.`, this.pairOnly(account, now));
+      if (!standIn && !texts && !isSandbox()) return refused('SMS_NOT_SENT', said('refuse.account.smsNotSentPair', { party }), this.pairOnly(account, now));
+      if (!standIn && texts && !this.sms?.mayGoTo(phone)) return refused('PHONE_NOT_SERVED', said('refuse.account.notServedPair', { party }), this.pairOnly(account, now));
       challenge = `dc_${randomBytes(12).toString('hex')}`;
       code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
       this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
@@ -504,10 +505,10 @@ export class AccountService implements OnApplicationBootstrap {
         if (!standIn) via = await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch (err) {
         this.deviceCodes.delete(challenge);
-        return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`), this.pairOnly(account, now));
+        return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${PARTY[account.role]}’s number could not be texted. Try again in a minute.`), this.pairOnly(account, now));
       }
     }
-    return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this ${party} before. A code went to the ${party}’s number ending ${ending}: type it here.`, {
+    return refused('DEVICE_NOT_KNOWN', said('refuse.account.deviceNewHere', { party, ending }), {
       challenge,
       sentTo: `•••${ending}`,
       ...(via ? { via } : {}),
@@ -534,7 +535,7 @@ export class AccountService implements OnApplicationBootstrap {
   startPairing(challenge: string, now: number = Date.now()): { pairCode: string; expiresIn: number; phones: number } {
     const asked = this.deviceCodes.get(challenge);
     const account = asked && asked.expires > now ? this.accounts.get(asked.key ?? asked.email) : undefined;
-    if (!asked || !account) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    if (!asked || !account) throw refused('OTP_INVALID', said('refuse.account.signInRanOut'));
     asked.pair = { code: newPairCode(), expires: now + PAIR_TTL_MS, approved: false };
     asked.expires = Math.max(asked.expires, asked.pair.expires);
     return { pairCode: asked.pair.code, expiresIn: PAIR_TTL_MS / 1000, phones: this.devices.list(account.accountId, undefined, now).length };
@@ -543,10 +544,10 @@ export class AccountService implements OnApplicationBootstrap {
   /** On one of the account's own phones, signed in: the code the new phone shows, scanned or typed — and that phone is linked. */
   approvePairing(did: string, typed: string, device: string | undefined, now: number = Date.now()): { linked: true } {
     const account = this.boundAccountOf(did);
-    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `Link a new phone from one the ${PARTY[account.role]} already uses: this one is not, yet.`);
+    if (!this.devices.knows(account.accountId, device, now)) throw refused('DEVICE_NOT_KNOWN', said('refuse.account.linkFromKnown', { party: PARTY_SAID[account.role] }));
     const code = pairCodeOf(typed);
     const found = code.length === 8 ? [...this.deviceCodes.values()].find((c) => c.pair?.code === code && (c.key ?? c.email) === storeKeyOf(account) && c.pair.expires >= now) : undefined;
-    if (!found?.pair) throw new GlosError('NOT_FOUND', `No new phone shows this code for this ${PARTY[account.role]}. Check the code, or show a new one on the new phone.`);
+    if (!found?.pair) throw refused('NOT_FOUND', said('refuse.account.pairCodeNotShown', { party: PARTY_SAID[account.role] }));
     found.pair.approved = true;
     return { linked: true };
   }
@@ -554,14 +555,14 @@ export class AccountService implements OnApplicationBootstrap {
   /** The new phone asking after its pairing: waiting, run out — or linked, and signed in, once. */
   pairingStatus(challenge: string, now: number = Date.now()): { linked: false; expiresIn: number } | (AccountSignIn & { linked: true }) {
     const asked = this.deviceCodes.get(challenge);
-    if (!asked?.pair) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    if (!asked?.pair) throw refused('OTP_INVALID', said('refuse.account.signInRanOut'));
     if (!asked.pair.approved) {
-      if (asked.pair.expires < now) throw new GlosError('OTP_INVALID', 'The code ran out before a phone of the account scanned it. Show a new one.');
+      if (asked.pair.expires < now) throw refused('OTP_INVALID', said('refuse.account.pairCodeRanOut'));
       return { linked: false, expiresIn: Math.ceil((asked.pair.expires - now) / 1000) };
     }
     this.deviceCodes.delete(challenge);
     const account = this.accounts.get(asked.key ?? asked.email);
-    if (!account) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    if (!account) throw refused('OTP_INVALID', said('refuse.account.signInRanOut'));
     const device = this.devices.add(account.accountId, now);
     return { linked: true, accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
   }
@@ -572,14 +573,14 @@ export class AccountService implements OnApplicationBootstrap {
    */
   async addDevicePhone(challenge: string, phone: string, now: number = Date.now(), via?: CodeWay): Promise<{ challenge: string; sentTo: string; code?: string; via?: CodeWay; ways?: AppRouteId[] }> {
     const asked = this.deviceCodes.get(challenge);
-    if (!asked || !asked.needsPhone || asked.expires < now) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
+    if (!asked || !asked.needsPhone || asked.expires < now) throw refused('OTP_INVALID', said('refuse.account.signInExpired'));
     const number = phone?.trim() ?? '';
-    if (!isPlausiblePhone(number)) throw new GlosError('VALIDATION_FAILED', 'A phone number, with its country code: +254 712 345678', { field: 'phone' });
-    if (asked.code && now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw new GlosError('RATE_LIMITED', 'A code was sent a moment ago: wait a minute before asking again');
+    if (!isPlausiblePhone(number)) throw refused('VALIDATION_FAILED', said('refuse.account.phoneWithCountry'), { field: 'phone' });
+    if (asked.code && now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw refused('RATE_LIMITED', said('refuse.account.codeJustSent'));
     const texts = this.sms?.sends() ?? false;
     const standIn = standInCode(number, texts);
-    if (!standIn && !texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet.');
-    if (!standIn && texts && !this.sms?.mayGoTo(number)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
+    if (!standIn && !texts && !isSandbox()) throw refused('SMS_NOT_SENT', said('refuse.account.codesNotTexted'));
+    if (!standIn && texts && !this.sms?.mayGoTo(number)) throw refused('PHONE_NOT_SERVED', said('refuse.account.numbersNotTexted'));
     const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
     let used: CodeWay | undefined;
     try {
@@ -599,17 +600,17 @@ export class AccountService implements OnApplicationBootstrap {
    */
   async deviceCodeAgain(challenge: string, via: CodeWay, now: number = Date.now()): Promise<{ challenge: string; sentTo: string; via: CodeWay; code?: string }> {
     const asked = this.deviceCodes.get(challenge);
-    if (!asked || asked.pairOnly || !asked.code || asked.expires < now) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
-    if (now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw new GlosError('RATE_LIMITED', 'A code was sent a moment ago: wait a minute before asking again');
+    if (!asked || asked.pairOnly || !asked.code || asked.expires < now) throw refused('OTP_INVALID', said('refuse.account.signInExpired'));
+    if (now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw refused('RATE_LIMITED', said('refuse.account.codeJustSent'));
     const account = this.accounts.get(asked.key ?? asked.email);
     const phone = asked.phone ?? (account ? this.codePhoneOf(account) : undefined);
-    if (!phone) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
+    if (!phone) throw refused('OTP_INVALID', said('refuse.account.signInExpired'));
     const ending = phone.replace(/\D/g, '').slice(-3);
     const texts = this.sms?.sends() ?? false;
     let used: CodeWay = 'sms';
     if (!standInCode(phone, texts)) {
-      if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be sent from this server yet.');
-      if (texts && !this.sms?.mayGoTo(phone)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not sent to numbers in that country.');
+      if (!texts && !isSandbox()) throw refused('SMS_NOT_SENT', said('refuse.account.codesNotSent'));
+      if (texts && !this.sms?.mayGoTo(phone)) throw refused('PHONE_NOT_SERVED', said('refuse.account.numbersNotSent'));
       try {
         used = (await this.sms?.sendCode(phone, asked.code, DEVICE_CODE_TTL_MS / 60_000, now, via)) ?? 'sms';
       } catch (err) {
@@ -625,23 +626,23 @@ export class AccountService implements OnApplicationBootstrap {
     const asked = this.deviceCodes.get(challenge);
     if (!asked || asked.expires < now) {
       this.deviceCodes.delete(challenge);
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.account.codeWrong'));
     }
     // No number given yet, so no code was sent: nothing to check, and the sign-in still waits for its number.
-    if (asked.needsPhone && !asked.phone) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    if (asked.needsPhone && !asked.phone) throw refused('OTP_INVALID', said('refuse.account.codeWrong'));
     // 2026-11-03 — nor a challenge that only pairs: it carries no code, and an empty one must open nothing.
-    if (asked.pairOnly || !asked.code) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    if (asked.pairOnly || !asked.code) throw refused('OTP_INVALID', said('refuse.account.codeWrong'));
     if (!safeEqualText(asked.code, String(code ?? '').trim())) {
       asked.attempts += 1;
       if (asked.attempts >= DEVICE_CODE_TRIES) {
         this.deviceCodes.delete(challenge);
-        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Sign in again for a new one.');
+        throw refused('OTP_LOCKED', said('refuse.account.codeLocked'));
       }
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.account.codeWrong'));
     }
     this.deviceCodes.delete(challenge);
     const account = this.accounts.get(asked.key ?? asked.email);
-    if (!account) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    if (!account) throw refused('OTP_INVALID', said('refuse.account.codeWrong'));
     // 2026-11-16 — the code was typed in: the route that texted it got it there (D4).
     const textedTo = asked.phone ?? this.codePhoneOf(account);
     if (textedTo) this.sms?.codeEntered?.(textedTo, now);
@@ -674,10 +675,10 @@ export class AccountService implements OnApplicationBootstrap {
    */
   handOver(did: string, role: AccountRole, device: string | undefined, targetDevice?: string, now: number = Date.now()): { code: string; expiresIn: number } {
     const account = this.boundAccountOf(did);
-    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
+    if (!this.devices.knows(account.accountId, device, now)) throw refused('DEVICE_NOT_KNOWN', said('refuse.account.deviceNotYours', { party: PARTY_SAID[account.role] }));
     const target = account.linkPending ? undefined : this.find(account.email, role);
     if (!target || target.accountId === account.accountId || target.linkPending || !this.isBound(target)) {
-      throw new GlosError('NOT_FOUND', `No ${PARTY[role] ?? 'account'} signs in with this email yet — or its owner has not tapped “Yes, it is me” for it.`);
+      throw refused('NOT_FOUND', said('refuse.account.noAccountSignsIn', { party: PARTY_SAID[role] ?? said('mail.party.account') }));
     }
     for (const [code, held] of this.handovers) if (held.expires < now) this.handovers.delete(code);
     const code = `ho_${randomBytes(24).toString('base64url')}`;
@@ -696,7 +697,7 @@ export class AccountService implements OnApplicationBootstrap {
    */
   carryOut(did: string, device: string | undefined, name: string | undefined, now: number = Date.now()): { code: string; expiresIn: number } {
     const account = this.boundAccountOf(did);
-    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
+    if (!this.devices.knows(account.accountId, device, now)) throw refused('DEVICE_NOT_KNOWN', said('refuse.account.deviceNotYours', { party: PARTY_SAID[account.role] }));
     for (const [code, held] of this.carries) if (held.expires < now) this.carries.delete(code);
     const code = `jc_${randomBytes(24).toString('base64url')}`;
     const phone = this.codePhoneOf(account);
@@ -744,7 +745,7 @@ export class AccountService implements OnApplicationBootstrap {
   takeCarry(code: string, now: number = Date.now()): { email?: string; phone?: string; name?: string; country?: string; phoneChecked: boolean; hasPin: boolean } {
     const held = this.carries.get(code);
     this.carries.delete(code);
-    if (!held || held.expires < now) throw new GlosError('OTP_INVALID', 'These details ran out or were used. Start the sign-up again from the app you are signed in to.');
+    if (!held || held.expires < now) throw refused('OTP_INVALID', said('refuse.account.detailsRanOut'));
     if (held.phone) this.otp.vouch(held.phone);
     const { expires: _expires, ...details } = held;
     // Whether the number already opens with a PIN: the sign-up then asks for that PIN, never a new one in its place.
@@ -775,7 +776,7 @@ export class AccountService implements OnApplicationBootstrap {
     const held = this.handovers.get(code);
     this.handovers.delete(code);
     const account = held && held.expires >= now ? this.accounts.get(held.key) : undefined;
-    if (!account || account.linkPending) throw new GlosError('OTP_INVALID', 'This hand-over ran out or was used. Open the app again from your picture menu.');
+    if (!account || account.linkPending) throw refused('OTP_INVALID', said('refuse.account.handOverRanOut'));
     const device = held?.device && this.devices.knows(account.accountId, held.device, now) ? held.device : this.devices.add(account.accountId, now);
     this.devices.used(account.accountId, device, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
@@ -795,7 +796,7 @@ export class AccountService implements OnApplicationBootstrap {
   forgetOtherDevices(did: string, password: string, device: string, now: number = Date.now()): AccountSignIn & { forgotten: number; kept: boolean } {
     const account = this.boundAccountOf(did);
     this.passwordRight(account.email, password, { role: account.role });
-    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
+    if (!this.devices.knows(account.accountId, device, now)) throw refused('DEVICE_NOT_KNOWN', said('refuse.account.deviceNotYours', { party: PARTY_SAID[account.role] }));
     const forgotten = this.devices.forgetAll(account.accountId, device);
     this.auth.revokeAll(account.did);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), forgotten, kept: true };
@@ -809,7 +810,7 @@ export class AccountService implements OnApplicationBootstrap {
 
   private boundAccountOf(did: string): Account {
     const account = [...this.accounts.values()].find((a) => a.did === did);
-    if (!account || !this.isBound(account)) throw new GlosError('NOT_FOUND', 'No account of this kind signs in here');
+    if (!account || !this.isBound(account)) throw refused('NOT_FOUND', said('refuse.account.noAccountKind'));
     return account;
   }
 
@@ -856,7 +857,7 @@ export class AccountService implements OnApplicationBootstrap {
    */
   checkNewAccount(email: string | undefined, password: string | undefined, name?: string, role: AccountRole = 'vendor'): string {
     const address = (email || '').trim().toLowerCase();
-    if (!address.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
+    if (!address.includes('@')) throw refused('EMAIL_INVALID', said('refuse.account.emailInvalid'));
     assertPassword(password, [address, name]);
     this.secondKind(address, role);
     return address;
@@ -876,13 +877,13 @@ export class AccountService implements OnApplicationBootstrap {
   /** 2026-11-09 — asked before anything is made: refused where the hub owner's email already signs in to that kind. */
   assertKindBeside(fromDid: string, role: AccountRole): void {
     const from = [...this.accounts.values()].find((a) => a.did === fromDid && !a.linkPending);
-    if (from && this.find(from.email, role)) throw new GlosError('DUPLICATE', `${from.email} already signs in to a SeeBuyGet ${PARTY[role]}. The counter needs a Shop app sign-in of its own: ask SeeBuyGet to move that shop to another email first.`, { field: 'email', kind: PARTY[role] });
+    if (from && this.find(from.email, role)) throw refused('DUPLICATE', said('refuse.account.duplicateCounter', { email: from.email, party: PARTY_SAID[role] }), { field: 'email', kind: PARTY[role] });
   }
 
   openKindBeside(fromDid: string, role: AccountRole, did: string, now: number = Date.now()): { email: string } | undefined {
     const from = [...this.accounts.values()].find((a) => a.did === fromDid && !a.linkPending);
     if (!from) return undefined;
-    if (this.find(from.email, role)) throw new GlosError('DUPLICATE', `${from.email} already signs in to a SeeBuyGet ${PARTY[role]}. The counter needs a Shop app sign-in of its own: ask SeeBuyGet to move that shop to another email first.`, { field: 'email', kind: PARTY[role] });
+    if (this.find(from.email, role)) throw refused('DUPLICATE', said('refuse.account.duplicateCounter', { email: from.email, party: PARTY_SAID[role] }), { field: 'email', kind: PARTY[role] });
     const account: Account = {
       accountId: `acc_${randomBytes(8).toString('hex')}`,
       email: from.email,
@@ -907,7 +908,7 @@ export class AccountService implements OnApplicationBootstrap {
   private secondKind(email: string, role: AccountRole): boolean {
     const first = this.accounts.get(email);
     if (first?.role === role || this.accounts.has(`${email}#${role}`)) {
-      throw new GlosError('DUPLICATE', `This email already signs in to a SeeBuyGet ${PARTY[role]}. Sign in to it, or use another email.`, { field: 'email', register: 'account', kind: PARTY[role] });
+      throw refused('DUPLICATE', said('refuse.account.duplicateEmail', { party: PARTY_SAID[role] }), { field: 'email', register: 'account', kind: PARTY[role] });
     }
     return Boolean(first);
   }
@@ -927,7 +928,7 @@ export class AccountService implements OnApplicationBootstrap {
   confirmLink(token: string, now: number = Date.now()): { email: string; kind: string; role: AccountRole } {
     for (const account of this.accounts.values()) {
       if (!account.linkPending || account.linkPending.token !== token) continue;
-      if (now - Date.parse(account.linkPending.askedAt) > LINK_TTL_MS) throw new GlosError('LINK_EXPIRED', 'This link is more than a week old. Sign in with the email and password you chose, and a new one is sent.');
+      if (now - Date.parse(account.linkPending.askedAt) > LINK_TTL_MS) throw refused('LINK_EXPIRED', said('refuse.account.linkExpired'));
       const name = account.linkPending.name;
       account.linkPending = undefined;
       account.linkedAt = new Date(now).toISOString();
@@ -937,7 +938,7 @@ export class AccountService implements OnApplicationBootstrap {
       void this.mail?.send('welcome', { address: account.email }, { name: name || account.email, email: account.email, role: WELCOME_ROLE[account.role as keyof typeof WELCOME_ROLE] ?? 'store' });
       return { email: account.email, kind: PARTY[account.role], role: account.role };
     }
-    throw new GlosError('NOT_FOUND', 'This link has been used already, or is not one of ours.');
+    throw refused('NOT_FOUND', said('refuse.account.linkUsed'));
   }
 
   /**
@@ -955,7 +956,7 @@ export class AccountService implements OnApplicationBootstrap {
   setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string; phoneVerified?: boolean }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string; linkPending?: boolean } {
     const email = this.checkNewAccount(input.email, input.password, input.name);
     const second = Boolean(this.accounts.get(email));
-    if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
+    if (this.emailForDid(input.did)) throw refused('CONFLICT', said('refuse.account.storeHasAccount'));
     const salt = randomBytes(16).toString('hex');
     const account: Account = {
       accountId: `acc_${randomBytes(8).toString('hex')}`,
@@ -1047,10 +1048,10 @@ export class AccountService implements OnApplicationBootstrap {
     // It hands back a sign-in, so for a bound account it is a door like any other: only on a phone the shop confirmed.
     // Asked AFTER the password, as the sign-in asks it — before, a shop's address answered differently from anybody's.
     if (this.isBound(account) && !this.devices.knows(account.accountId, device)) {
-      throw new GlosError('DEVICE_NOT_KNOWN', `Change the password from a phone or browser the ${PARTY[account.role]} has signed in on.`);
+      throw refused('DEVICE_NOT_KNOWN', said('refuse.account.changePasswordFrom', { party: PARTY_SAID[account.role] }));
     }
     assertPassword(next, [account.email]);
-    if (this.verify(next, account)) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
+    if (this.verify(next, account)) throw refused('VALIDATION_FAILED', said('refuse.account.passwordDifferent'));
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(next, account.salt);
     account.passwordChangedAt = new Date().toISOString();
@@ -1066,7 +1067,7 @@ export class AccountService implements OnApplicationBootstrap {
   reset(token: string, password: string): { ok: boolean } {
     const code = readResetCode(token);
     const account = code ? [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === code) : undefined;
-    if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw new GlosError('WINDOW_EXPIRED', 'Invalid or expired reset token');
+    if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw refused('WINDOW_EXPIRED', said('refuse.account.resetExpired'));
     // The same rules as wherever a password is chosen. (The code is not used up by a refusal: the person types
     // another password and carries on.)
     assertPassword(password, [account.email]);
@@ -1136,7 +1137,7 @@ export class AccountService implements OnApplicationBootstrap {
    * holds the account. The sign-in's count and lock; a wrong one is PASSWORD_WRONG (403), never a sign-out.
    */
   confirmPassword(did: string, password: string): void {
-    if (!this.passwordOpens(did, password)) throw new GlosError('PASSWORD_WRONG', 'That is not the password');
+    if (!this.passwordOpens(did, password)) throw refused('PASSWORD_WRONG', said('refuse.account.passwordWrong'));
   }
 
   /** Turn it on, on one of the account's own phones. The caller checked the password and the phone's answer. */
@@ -1184,7 +1185,7 @@ export class AccountService implements OnApplicationBootstrap {
       void this.mail?.send('password-locked', { address: account.email }, { email: account.email, app: ACCOUNT_APP[account.role], when: new Date().toISOString(), until: new Date(locked.until).toISOString(), recovery: 'self-reset' });
     }
     if (locked) throw error;
-    throw new GlosError('UNLOCK_FAILED', 'The fingerprint or face unlock did not check out. Try again, or use the password.');
+    throw refused('UNLOCK_FAILED', said('refuse.account.unlockDidNotCheck'));
   }
 
   /** It unlocked: the phone's counter as it now stands, and the day. */
@@ -1207,7 +1208,7 @@ export class AccountService implements OnApplicationBootstrap {
 
   private provision(role: AccountRole, profile: Record<string, unknown>): { did: string; entityStatus?: string; tenant?: string } {
     // A store is registered at its own door (vendors), which makes its account in the same act (`setUpStore`).
-    if (role === 'vendor') throw new GlosError('VALIDATION_FAILED', 'A store is registered from the Store app, not here');
+    if (role === 'vendor') throw refused('VALIDATION_FAILED', said('refuse.account.storeFromApp'));
     if (role === 'pudo') {
       const agent = this.agents.register((profile.agent ?? {}) as never);
       if (profile.kyc) this.agents.submitKyc(agent.did, profile.kyc as never);
@@ -1223,7 +1224,7 @@ export class AccountService implements OnApplicationBootstrap {
        * offers a place to one already registered, who says yes from their own app.
        */
       if (profile.fleetCode) {
-        throw new GlosError('FORBIDDEN', 'A fleet adds its own drivers. Sign up on your own, then give the fleet office the phone number you sign in with — they offer you a place and you say yes in the app.', { field: 'fleetCode' });
+        throw refused('FORBIDDEN', said('refuse.account.fleetAdds'), { field: 'fleetCode' });
       }
       // `managerDid` is SET to nothing, never left out: the form is a client's object, and a fleet named inside it
       // would otherwise ride straight through to the register — the same signing-in, without even the code.
@@ -1256,7 +1257,7 @@ export class AccountService implements OnApplicationBootstrap {
       if (profile.vehicle) {
         const wanted = profile.vehicle as { vehicleClass?: string };
         if (wanted.vehicleClass && !driver.licence.classes.includes(wanted.vehicleClass as never)) {
-          throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${wanted.vehicleClass}. Add it to what you can drive, or register a vehicle you are cleared for`);
+          throw refused('CANNOT_COUPLE', said('refuse.account.notCleared', { vehicleClass: wanted.vehicleClass }));
         }
         // Theirs, and nobody else's: no fleet (whatever the form says), and the courier recorded as the one who drives it.
         const vehicle = this.vehicles.register({ ...(profile.vehicle as object), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driver.did, country: driver.jurisdiction } as never);
@@ -1270,7 +1271,7 @@ export class AccountService implements OnApplicationBootstrap {
       const mdp = this.mdps.register((profile.mdp ?? {}) as never, 'joining');
       return { did: mdp.did, entityStatus: mdp.vetting?.state }; // the real DID now (was the mdp_<hex> id — a type lie)
     }
-    throw new GlosError('UNKNOWN_ROLE', `Unknown account role: ${role}`);
+    throw refused('UNKNOWN_ROLE', said('refuse.account.unknownRole', { role }));
   }
 
   private hash(password: string, salt: string): string {

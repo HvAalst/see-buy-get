@@ -1,5 +1,5 @@
 import { Injectable, Optional, OnModuleInit } from '@nestjs/common';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
 import { money, noticeOf, number, said } from './notice-words/say';
 import { NotificationService } from './notification.service';
 import { FundingService } from '../../foundation/funding/funding.service';
@@ -50,7 +50,7 @@ export class FundingPayerRegistrar implements OnModuleInit {
       resolve: (did) => {
         const agent = this.agents.get(did);
         if (agent.status === 'DRAFT' || agent.status === 'KYC_PENDING') {
-          throw new GlosError('KYC_INCOMPLETE', 'This shop is not approved yet — it cannot hold a balance');
+          throw refused('KYC_INCOMPLETE', said('refuse.fundingPayers.shopNotApproved'));
         }
         return { ...this.money(this.agents.entityIdOf(agent)), label: agent.shopName };
       },

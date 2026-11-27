@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { PartnerLedgerService, type PartnerOwedLine, type PartnerWork, type ShopWork } from './partner-ledger.service';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -93,7 +94,7 @@ export interface AgentLedgerSummary {
  */
 export function agentLedgerSummaryOf(rows: PudoLedgerEntry[], currency: string = NETWORK_CURRENCY): AgentLedgerSummary {
   const moneys = [...new Set(rows.map(agentLedgerCurrencyOf))];
-  if (moneys.length > 1) throw new GlosError('CONFLICT', `These lines are in more than one money (${moneys.join(', ')}), and are not added together — look at them one money at a time`);
+  if (moneys.length > 1) throw refused('CONFLICT', said('refuse.walletGate.moreThanOneMoney', { moneys: moneys.join(', ') }));
   let inSum = 0;
   let outSum = 0;
   for (const e of rows) {
@@ -263,13 +264,13 @@ export class WalletGateService {
    * than the custody, and nothing says why.
    */
   topUp(did: string, amount: number, bankRef = 'cash', fee = 0): PudoLedgerEntry {
-    if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up amount must be positive');
+    if (amount <= 0) throw refused('AMOUNT_INVALID', said('refuse.walletGate.topUpPositive'));
     const cost = Math.min(Math.max(Number.isFinite(fee) ? Math.round(fee * 100) / 100 : 0, 0), amount);
     // KYC gate. This used to ride on "the m1 wallet exists", which was provisioned at approval — an
     // implicit coupling that stopped meaning anything once the balance moved into the books. Say it.
     const status = this.agents.get(did).status;
     if (status === 'DRAFT' || status === 'KYC_PENDING') {
-      throw new GlosError('KYC_INCOMPLETE', 'This shop is not approved yet — it cannot hold a balance');
+      throw refused('KYC_INCOMPLETE', said('refuse.walletGate.shopNotApproved'));
     }
     // Trade credit is settled FIRST, out of the money coming in — a shop that scanned on credit clears
     // its debt before it builds a float again. Only what is left over becomes spendable balance.
@@ -347,7 +348,7 @@ export class WalletGateService {
     // `amount` is the GROSS. The credit line is measured against it too: what a shop owes us is the whole
     // charge, and a tax we have already booked as payable is exactly as real a debt as the rest.
     if (balance - amount < -creditLimitOf(this.agents.amountsOf(did)) - 1e-9) {
-      throw new GlosError('WALLET_INSUFFICIENT', `Trade credit is used up (${TRADE_CREDIT_PARCELS} parcels) — top up to keep scanning`);
+      throw refused('WALLET_INSUFFICIENT', said('refuse.walletGate.tradeCreditUsed', { parcels: TRADE_CREDIT_PARCELS }));
     }
   }
 

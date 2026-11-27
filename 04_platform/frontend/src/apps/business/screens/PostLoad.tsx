@@ -44,6 +44,7 @@ import {
 } from '../postLoad';
 import { SentFor } from './SentFor';
 import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
+import { ReaderLanguageOptions, defaultReaderLanguage } from '../../../shared/readerLanguage';
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
@@ -682,6 +683,15 @@ export function PostLoad({
               <span class="cfield__label">{t('business.loads.f.receiverEmail')}</span>
               <input class="cinput" type="email" inputMode="email" maxLength={120} value={form.receiverEmail} onInput={(e) => set({ receiverEmail: (e.target as HTMLInputElement).value })} />
             </label>
+            {form.receiverEmail.trim() ? (
+              <label class="cfield">
+                <span class="cfield__label">{t('common.receiverLanguage')}</span>
+                <select class="cinput" value={form.receiverLanguage || defaultReaderLanguage()} onChange={(e) => set({ receiverLanguage: (e.target as HTMLSelectElement).value })}>
+                  <ReaderLanguageOptions />
+                </select>
+                <span class="chint">{t('common.receiverLanguageHint')}</span>
+              </label>
+            ) : null}
           </div>
         </>
       ) : null}

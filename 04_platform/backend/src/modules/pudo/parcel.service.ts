@@ -642,6 +642,7 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { CARRIER_PAYS_LINE } from './parcel-label';
 import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
+import { noticeLangOf } from './notice-words/say';
 
 /**
  * 2026-11-06 — LATE, OR ON TIME, against the time it was promised (never moved): late once that time has passed, or where
@@ -2514,7 +2515,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; receiverName?: string; emailCode?: boolean; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf']; noGoodsWithOwnRules?: boolean }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; buyerLang?: string; receiverName?: string; emailCode?: boolean; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf']; noGoodsWithOwnRules?: boolean }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -2639,6 +2640,7 @@ export class ParcelService implements OnApplicationBootstrap {
       receiverPhoneHash: hashPhone(input.buyerMobile) || undefined,
       ...testMark,
       buyerEmail: input.buyerEmail,
+      ...(input.buyerEmail && noticeLangOf(input.buyerLang) ? { buyerLang: noticeLangOf(input.buyerLang) } : {}),
       ...(input.receiverName?.trim() ? { receiverName: input.receiverName.trim().slice(0, 80) } : {}),
       ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       paymentMode: 'prepaid',

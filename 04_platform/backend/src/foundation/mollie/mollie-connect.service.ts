@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { GlosError } from '../http/glos-error';
+import { refused } from '../../modules/pudo/notice-words/refuse';
+import { said } from '../../modules/pudo/notice-words/say';
 import { isSandbox } from '../runtime/sandbox';
 import { PersistentMap } from '../store/persistent-map';
 import { customsUnionOf } from '../countries/customs-union';
@@ -110,7 +112,7 @@ export class MollieConnectService {
   connect(payee: MolliePayee, now: number = Date.now()): MollieConnectStarted {
     const p = this.requirePayee(payee);
     const via = this.via();
-    if (!via) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
+    if (!via) throw refused('INVALID_STATE', said('refuse.mollie.notSetUp'));
     if (via === 'test_key') {
       const c: MollieConnection = { payeeId: p.payeeId, via, testmode: true, connectedAt: new Date(now).toISOString(), connectedBy: p.by };
       this.connections.set(p.payeeId, c);
@@ -156,10 +158,10 @@ export class MollieConnectService {
 
   /** Mollie's sign-in for the partner, back to the Partner app; with our test key, connected at once (test money). */
   connectPartner(entityId: string, country: string | undefined, by: string, now: number = Date.now()): MollieConnectStarted {
-    if (customsUnionOf(country) !== 'EU') throw new GlosError('FORBIDDEN', 'Counter payments go into a Mollie account in the European Union only');
-    if (!by?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who connects it: it is kept by name');
+    if (customsUnionOf(country) !== 'EU') throw refused('FORBIDDEN', said('refuse.mollie.euOnly'));
+    if (!by?.trim()) throw refused('FIELD_REQUIRED', said('refuse.mollie.whoConnects'));
     const via = this.via();
-    if (!via) throw new GlosError('INVALID_STATE', 'Mollie is not set up on this server yet');
+    if (!via) throw refused('INVALID_STATE', said('refuse.mollie.notSetUp'));
     if (via === 'test_key') {
       const c: MollieConnection = { payeeId: entityId, via, testmode: true, connectedAt: new Date(now).toISOString(), connectedBy: by.trim() };
       this.connections.set(entityId, c);
@@ -247,16 +249,16 @@ export class MollieConnectService {
    */
   async tokenFor(payeeId: string, now: number = Date.now()): Promise<{ bearer: string; via: MollieVia; testmode: boolean; profileId?: string }> {
     const c = this.connections.get(payeeId);
-    if (!c) throw new GlosError('INVALID_STATE', 'No Mollie account is connected: connect it in Settings first');
+    if (!c) throw refused('INVALID_STATE', said('refuse.mollie.noneConnected'));
     if (c.via === 'test_key') {
-      if (!this.cfg.testKey) throw new GlosError('INVALID_STATE', 'Mollie’s test key is not set up on this server any more');
+      if (!this.cfg.testKey) throw refused('INVALID_STATE', said('refuse.mollie.testKeyGone'));
       return { bearer: this.cfg.testKey, via: 'test_key', testmode: true };
     }
-    if (c.lostAt) throw new GlosError('INVALID_STATE', 'Mollie took back the access to this account: connect it again in Settings');
+    if (c.lostAt) throw refused('INVALID_STATE', said('refuse.mollie.tookBackAccess'));
     if (c.accessToken && c.accessExpiresAt && Date.parse(c.accessExpiresAt) - now > RENEW_BEFORE_MS) {
       return { bearer: this.open(c.accessToken), via: 'oauth', testmode: c.testmode, profileId: c.profileId };
     }
-    if (!c.refreshToken) throw new GlosError('INVALID_STATE', 'Connect Mollie again in Settings');
+    if (!c.refreshToken) throw refused('INVALID_STATE', said('refuse.mollie.connectAgain'));
     try {
       const t = await this.client.refresh(this.open(c.refreshToken));
       const next: MollieConnection = { ...c, accessToken: this.seal(t.accessToken), ...(t.refreshToken ? { refreshToken: this.seal(t.refreshToken) } : {}), accessExpiresAt: new Date(now + t.expiresIn * 1000).toISOString() };
@@ -265,9 +267,9 @@ export class MollieConnectService {
     } catch (err) {
       if (err instanceof MollieError && (err.code === 'invalid_grant' || err.status === 401)) {
         this.connections.set(payeeId, { ...c, lostAt: new Date(now).toISOString() });
-        throw new GlosError('INVALID_STATE', 'Mollie took back the access to this account: connect it again in Settings');
+        throw refused('INVALID_STATE', said('refuse.mollie.tookBackAccess'));
       }
-      throw err instanceof GlosError ? err : new GlosError('PROVIDER_UNAVAILABLE', 'Mollie did not answer: try again in a moment');
+      throw err instanceof GlosError ? err : refused('PROVIDER_UNAVAILABLE', said('refuse.mollie.didNotAnswer'));
     }
   }
 
@@ -294,7 +296,7 @@ export class MollieConnectService {
 
   private requirePayee(payee: MolliePayee): { payeeId: string; country: string; by: string; back: 'driver' | 'fleet' } {
     if ('notPayee' in payee) throw new GlosError('FORBIDDEN', payee.notPayee);
-    if (directPayWayOf(payee.country) !== 'mollie') throw new GlosError('FORBIDDEN', 'Payments by Mollie are for carriers in the Netherlands');
+    if (directPayWayOf(payee.country) !== 'mollie') throw refused('FORBIDDEN', said('refuse.mollie.netherlandsOnly'));
     return payee;
   }
 

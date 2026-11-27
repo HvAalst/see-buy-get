@@ -3,6 +3,7 @@ import type { SbgClient } from '../../lib/sbg';
 import type { MessageKey } from '../../shared/i18n';
 import type { NowWith } from '../../shared/nowWith';
 import { EMPTY_WORK, workBlocker, workBody, type LoadWorkForm, type LoadWorkView } from '../../shared/loadWork';
+import { defaultReaderLanguage } from '../../shared/readerLanguage';
 
 /**
  * 2026-11-13 — A PERSON POSTS A LOAD (unusual loads, U5; part 3a): something too big for a shop, posted for drivers to name a
@@ -26,6 +27,8 @@ export interface PersonLoadForm {
   receiverName: string;
   receiverPhone: string;
   receiverEmail: string;
+  /** 2026-11-27 — the language they read; empty: the sender's own (shared/readerLanguage.tsx). */
+  receiverLanguage?: string;
   /** 2026-11-24 — when they pay, where the country lets them choose (route plan part 9): '' is the country's own way. */
   payWay: '' | LoadPayWay;
 }
@@ -69,7 +72,7 @@ export function personLoadBody(f: PersonLoadForm) {
     ...(f.note.trim() ? { instructions: f.note.trim() } : {}),
     // 2026-11-15 — who receives it (plan R2): on their number they see it and its code in the Send app; else by email.
     ...(f.receiverPhone.trim() ? { buyerMobile: f.receiverPhone.trim() } : {}),
-    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim() } : {}),
+    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim(), receiverLanguage: f.receiverLanguage || defaultReaderLanguage() } : {}),
     ...(f.receiverName.trim() ? { receiverName: f.receiverName.trim() } : {}),
     ...(work ? { work } : {}),
   };

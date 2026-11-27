@@ -400,6 +400,7 @@ export class BusinessParcelService {
       buyerMobile: receiver,
       // 2026-11-15 — the receiver's email and name, and this parcel's choice to email the code (plan R3).
       ...(input.receiverEmail?.trim() ? { buyerEmail: input.receiverEmail.trim() } : {}),
+      ...(input.receiverLanguage ? { buyerLang: input.receiverLanguage } : {}),
       ...(input.receiverName?.trim() ? { receiverName: input.receiverName.trim() } : {}),
       ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       dimensionsCm: { l: dims.l, w: dims.w, h: dims.h },

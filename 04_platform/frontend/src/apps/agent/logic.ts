@@ -444,6 +444,8 @@ export interface AcceptForm {
   consigneeName: string;
   /** 2026-11-15 — the receiver's email: their delivery code is emailed once a driver has it (the owner: "yes"). */
   receiverEmail: string;
+  /** 2026-11-27 — the language they read; empty: the clerk's own. */
+  receiverLanguage?: string;
   dgUn: string;
   dgName: string;
   dgClass: string;

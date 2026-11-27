@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { GlosError } from '../http/glos-error';
+import { refused } from '../../modules/pudo/notice-words/refuse';
+import { said } from '../../modules/pudo/notice-words/say';
 import { PersistentMap } from '../store/persistent-map';
 import { BooksService } from '../books/books.service';
 import { ACCOUNT_CODES } from '../books/books.types';
@@ -178,9 +179,9 @@ export class PayoutService {
    */
   submit(payoutId: string, now: number = Date.now(), by?: Signer): Payout {
     const payout = this.require(payoutId);
-    if (payout.status !== 'requested') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a requested payout can be submitted`);
+    if (payout.status !== 'requested') throw refused('INVALID_STATE', said('refuse.payout.submitRequested', { status: payout.status }));
     if (by && payout.requestedBy && sameSigner(payout.requestedBy, by)) {
-      throw new GlosError('CONFLICT', 'A second member of staff approves a payout — not the one who raised it');
+      throw refused('CONFLICT', said('refuse.payout.secondApproves'));
     }
     this.assertSameDestination(payout, now);
     const rail = this.railFor(payout);
@@ -249,7 +250,7 @@ export class PayoutService {
   settleByHand(payoutId: string, providerRef?: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.railRef && !providerRef?.trim()) {
-      throw new GlosError('FIELD_REQUIRED', 'Give the M-Pesa receipt (the transaction ID on the M-Pesa portal): this payout was sent through M-Pesa', { field: 'providerRef' });
+      throw refused('FIELD_REQUIRED', said('refuse.payout.giveReceipt'), { field: 'providerRef' });
     }
     return this.settle(payoutId, providerRef?.trim() || undefined, now);
   }
@@ -262,7 +263,7 @@ export class PayoutService {
   failByHand(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status === 'submitted' && payout.railRef && !payout.railNote && now - Date.parse(payout.submittedAt ?? payout.requestedAt) < DAY_MS) {
-      throw new GlosError('CONFLICT', 'M-Pesa has not answered this payment yet: its answer settles or fails it. If none comes, it can be marked failed after a day, once the M-Pesa portal shows it was not paid.');
+      throw refused('CONFLICT', said('refuse.payout.mpesaNotAnswered'));
     }
     return this.fail(payoutId, reason, now);
   }
@@ -276,7 +277,7 @@ export class PayoutService {
   settle(payoutId: string, providerRef?: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status === 'settled') return payout; // a rail that confirms twice has not paid twice
-    if (payout.status !== 'submitted') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a submitted payout can settle`);
+    if (payout.status !== 'submitted') throw refused('INVALID_STATE', said('refuse.payout.settleSubmitted', { status: payout.status }));
     // The payable it was raised against: a provider's earnings, or what a person is owed back.
     const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
@@ -300,7 +301,7 @@ export class PayoutService {
   fail(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status !== 'requested' && payout.status !== 'submitted') {
-      throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only one still on its way can fail`);
+      throw refused('INVALID_STATE', said('refuse.payout.failOnItsWay', { status: payout.status }));
     }
     payout.status = 'failed';
     payout.failedAt = new Date(now).toISOString();
@@ -317,7 +318,7 @@ export class PayoutService {
    */
   reverse(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
-    if (payout.status !== 'settled') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a settled payout can be reversed`);
+    if (payout.status !== 'settled') throw refused('INVALID_STATE', said('refuse.payout.reverseSettled', { status: payout.status }));
     const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
       entityId: payout.entityId,
@@ -371,10 +372,10 @@ export class PayoutService {
   private assertSameDestination(payout: Payout, now: number): void {
     if (!payout.destination || !this.destinations.length) return;
     const current = this.destinationOf(payout.payeeDid, payout.way ?? 'mpesa', now);
-    if (!current) throw new GlosError('CONFLICT', 'Not sent: nobody keeps a number for this payee any more');
-    if (isRefusal(current)) throw new GlosError('CONFLICT', `Not sent: ${current.reason}`);
+    if (!current) throw refused('CONFLICT', said('refuse.payout.nobodyKeepsNumber'));
+    if (isRefusal(current)) throw refused('CONFLICT', said('refuse.payout.notSentReason', { reason: current.reason }));
     if (current.numberId !== payout.destination.numberId) {
-      throw new GlosError('CONFLICT', 'The payout number changed after this payout was raised. Mark it failed; the next run raises it to the new number.');
+      throw refused('CONFLICT', said('refuse.payout.numberChanged'));
     }
   }
 
@@ -383,14 +384,14 @@ export class PayoutService {
     if (payout.way !== 'mpesa') return this.rail;
     if (this.mpesa) return this.mpesa;
     if (isSandbox()) return this.rail;
-    throw new GlosError('INVALID_STATE', 'M-Pesa payouts are not set up on this server, so nothing was sent. See mpesa_rail.md.');
+    throw refused('INVALID_STATE', said('refuse.payout.mpesaNotSetUp'));
   }
 
   /** The payee's whole number, for a live M-Pesa rail only — read now, from the number the payout was raised to. */
   private numberFor(payout: Payout, rail: PayoutRail): string | undefined {
     if (rail !== this.mpesa || !this.mpesa) return undefined;
     const msisdn = payout.destination ? this.destinations.map((d) => d.full(payout.payeeDid, payout.destination!.numberId)).find(Boolean) : undefined;
-    if (!msisdn) throw new GlosError('CONFLICT', 'Not sent: this payout has no payout number of the payee’s to go to. Mark it failed; the next run raises it again.');
+    if (!msisdn) throw refused('CONFLICT', said('refuse.payout.noNumberToGoTo'));
     return msisdn;
   }
 
@@ -429,7 +430,7 @@ export class PayoutService {
 
   private require(payoutId: string): Payout {
     const payout = this.payouts.get(payoutId);
-    if (!payout) throw new GlosError('NOT_FOUND', `Payout not found: ${payoutId}`);
+    if (!payout) throw refused('NOT_FOUND', said('refuse.payout.notFound', { id: payoutId }));
     return payout;
   }
 }

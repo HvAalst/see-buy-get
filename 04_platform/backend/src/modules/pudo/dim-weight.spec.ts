@@ -434,6 +434,18 @@ describe('dimensional weight', () => {
       const stored = parcels.get(minted.parcel.parcelId);
       expect(ParcelService.transportFactorOf(stored)).toBe(SIZE_TRANSPORT_FACTOR.M);
     });
+
+    // 2026-11-27 — the language the buyer reads, as the store says it: kept with their email, so the emails to them are in it.
+    it('keeps the language the buyer reads beside their email — and none without an email', () => {
+      const { from, to, store } = route();
+      const mint = (extra: Record<string, unknown>) =>
+        parcels.get(
+          (controller.createInbound({ vendorId: store.vendorId, originPudoDid: from.did, destPudoDid: to.did, buyerMobile: `+25470090${String(Math.floor(Math.random() * 9000) + 1000)}`, size: 'M', routeMode: 'locked', contentPhotoRef: photoOf(store.vendorId), ...extra } as never, { role: 'genesis', did: store.did } as never) as unknown as { parcel: { parcelId: string } }).parcel.parcelId,
+        );
+      expect(mint({ buyerEmail: 'amina@example.com', buyerLanguage: 'sw' }).buyerLang).toBe('sw');
+      expect(mint({ buyerLanguage: 'sw' }).buyerLang).toBeUndefined();
+      expect(mint({ buyerEmail: 'amina@example.com' }).buyerLang).toBeUndefined();
+    });
   });
 
 

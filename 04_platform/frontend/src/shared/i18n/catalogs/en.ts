@@ -505,6 +505,9 @@ export const en = {
   'common.weight.inG': 'Weight in grams',
   'common.weight.atLeast': 'At least 10 g — weigh a lighter letter as 10 g.',
   'common.cancel': 'Cancel',
+  // 2026-11-27 — the language a receiver with no account of ours is written to in (shared/readerLanguage.tsx).
+  'common.receiverLanguage': 'Their language',
+  'common.receiverLanguageHint': 'The emails to them are written in it.',
   // 2026-11-11 — why a hub is down (ISO 28000 gap 12), as the Hub app and the console say it.
   'common.hubDown.reason.power': 'No power',
   'common.hubDown.reason.flood': 'Flooding, or the road to it cut',

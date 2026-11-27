@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { ERROR_CODES, GlosErrorCode, codeForStatus, isRetryable } from './error-codes';
 import { GlosError, ProblemParams } from './glos-error';
+import { noticeLangOf, sayIn, type NoticeLang, type NoticeWords, type Said } from '../../modules/pudo/notice-words/say';
 
 /** The RFC 9457 problem+json body every failure renders to. */
 interface Problem {
@@ -50,6 +51,8 @@ export class ProblemFilter implements ExceptionFilter {
       detail = payload?.detail ?? exception.message;
       params = exception.params;
       retryable = exception.retryable;
+      // 2026-11-27 — a refusal made as a phrase is said in the language the app asks in, where all of it is written there.
+      if (exception.said) detail = refusalIn(req, exception.said) ?? detail;
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();
@@ -90,6 +93,24 @@ export class ProblemFilter implements ExceptionFilter {
 
     res.status(status).json(problem);
   }
+}
+
+/**
+ * 2026-11-27 — A COUNTRY'S OWN WORDS FOR A REFUSAL: told by the part of the system that keeps the review of the phrases
+ * (reader-language.service.ts). Without it, version 1 as written.
+ */
+let refusalWords: ((lang: NoticeLang, wordsCountry: string | undefined) => NoticeWords | undefined) | undefined;
+export function useRefusalWords(words: typeof refusalWords): void {
+  refusalWords = words;
+}
+
+/** A refusal's words in the language the call asks in (its x-sbg-lang header); undefined for English, or where not all written. */
+function refusalIn(req: Request | undefined, s: Said): string | undefined {
+  const lang = noticeLangOf(req?.headers?.['x-sbg-lang']);
+  if (!lang || lang === 'en') return undefined;
+  const raw = req?.headers?.['x-sbg-words-country'];
+  const country = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim().toUpperCase();
+  return sayIn(lang, s, refusalWords?.(lang, /^[A-Z]{2}$/.test(country) ? country : undefined));
 }
 
 /** An http-errors refusal meant for the caller (body-parser, raw-body): a 4xx with `expose` set by whoever made it. */

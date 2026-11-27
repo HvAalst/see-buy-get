@@ -1423,6 +1423,8 @@ export class Parcel {
   vendorId?: string;
   externalOrderId?: string;
   buyerEmail?: string; // legacy order-notification channel; since S22 the collection token is delivered IN-APP
+  /** 2026-11-27 — the language the buyer reads, where the store or the sender said it: their emails are written in it. */
+  buyerLang?: string;
   // to the receiver's authenticated twin (never SMS'd/emailed as the secret) — see ConsumerParcelView.collectToken.
   // 2026-11-15 — …unless the store chose to email it (plan R3): then only with the buyer's name, which the counter checks.
   receiverName?: string;

@@ -102,6 +102,11 @@ export function paperDayShown(expiresAt: string): SayValue {
 /** Where on a load a finding was made, by its stage. */
 const WHERE_SAID: Record<string, NoticeKey> = { pickup: 'dispatch.loadHeld.where.pickup', road: 'dispatch.loadHeld.where.road', delivery: 'dispatch.loadHeld.where.delivery' };
 
+/** 2026-11-27 — the language a buyer reads, where the store or the sender said it: their emails are written in it. */
+function langOfBuyer(parcel: { buyerLang?: string }): { lang?: string } {
+  return parcel.buyerLang ? { lang: parcel.buyerLang } : {};
+}
+
 /** A delivery window as the plan says it ("08:00–12:00", "before 14:00", "from 09:30"): the words around the times as phrases. */
 export function windowSaid(w: string): SayValue {
   const before = /^before (\d{2}:\d{2})$/.exec(w);
@@ -2033,7 +2038,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       } catch {
         /* a store that cannot be read is still a store — the email just names it generically */
       }
-      await this.mail.send('order-on-its-way', { address: parcel.buyerEmail }, {
+      await this.mail.send('order-on-its-way', { address: parcel.buyerEmail, ...langOfBuyer(parcel) }, {
         store,
         ...(parcel.externalOrderId ? { orderRef: parcel.externalOrderId } : {}),
         shop: this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the shop you chose',
@@ -2105,7 +2110,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
       if (!this.mail || !f.receiverEmail) return;
       this.dispatch.markCodeEmailed(freightId);
-      await this.mail.send('load-delivery-code', { address: f.receiverEmail }, {
+      await this.mail.send('load-delivery-code', { address: f.receiverEmail, ...(f.receiverLang ? { lang: f.receiverLang } : {}) }, {
         code: f.deliveryCode,
         load: `${f.code} · ${f.description}`,
         from: f.postedByName ?? 'The sender',
@@ -2231,7 +2236,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         }
         const code = (parcel.emailCode ?? storeSays) && parcel.receiverName && parcel.collectionCode ? parcel.collectionCode : undefined;
         if (code) this.parcels.markCodeEmailed(parcel.parcelId);
-        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail }, {
+        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail, ...langOfBuyer(parcel) }, {
           ...(code ? { code, name: parcel.receiverName } : {}),
           shop: shop?.shopName ?? parcel.destZone ?? 'your pickup point',
           ...(shop?.physicalAddress || shop?.landmark ? { address: shop.physicalAddress ?? shop.landmark } : {}),
@@ -2797,7 +2802,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (this.mail && !quietFor && parcel.codeEmailedAt && parcel.buyerEmail && parcel.receiverName && parcel.collectionCode && (parcel.status === 'Ready_For_Pickup' || parcel.status === 'Unclaimed')) {
         const shop = this.shop(parcel.destAgentDid);
         this.parcels.markCodeEmailed(parcel.parcelId);
-        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail }, {
+        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail, ...langOfBuyer(parcel) }, {
           shop: shop?.shopName ?? parcel.destZone ?? 'your pickup point',
           ...(shop?.physicalAddress || shop?.landmark ? { address: shop.physicalAddress ?? shop.landmark } : {}),
           collectBy: new Date(Date.parse(parcel.readyAt ?? new Date().toISOString()) + UNCOLLECTED_H * 3_600_000).toISOString(),

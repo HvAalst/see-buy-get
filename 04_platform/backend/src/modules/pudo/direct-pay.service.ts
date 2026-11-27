@@ -4,6 +4,8 @@ import { actingTenant } from '../../foundation/auth/acting';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said, type Said } from './notice-words/say';
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
 import { MollieError } from '../../foundation/mollie/mollie-client';
@@ -74,7 +76,7 @@ export class DirectPayService {
     const f = this.dispatch.requireFreightPublic(freightId);
     this.assertMayAsk(f, actor);
     const can = this.viewOf(f, actor, now);
-    if (!can.available) throw new GlosError('INVALID_STATE', refusalOf(can.why));
+    if (!can.available) throw refused('INVALID_STATE', refusalOf(can.why));
     const open = this.latestFor(f.freightId);
     if (open && !DIRECT_PAY_FINAL.includes(open.status) && (!open.expiresAt || Date.parse(open.expiresAt) > now)) return can;
     const { payeeId } = this.payeeOf(f);
@@ -102,7 +104,7 @@ export class DirectPayService {
       throw asOurs(err);
     }
     const paymentId = String(made.id ?? '');
-    if (!paymentId.startsWith('tr_')) throw new GlosError('PROVIDER_UNAVAILABLE', 'Mollie did not give back a payment');
+    if (!paymentId.startsWith('tr_')) throw refused('PROVIDER_UNAVAILABLE', said('refuse.directPay.noPaymentGiven'));
     const p: DirectPayment = {
       paymentId,
       ref,
@@ -224,7 +226,7 @@ export class DirectPayService {
   /** Who is paid for the load: a courier itself, a fleet driver's fleet — and where that carrier is. */
   private payeeOf(f: Freight): { payeeId: string; country: string; fleet: boolean } {
     const driverDid = f.claimedBy;
-    if (!driverDid) throw new GlosError('INVALID_STATE', 'No driver has taken this load yet');
+    if (!driverDid) throw refused('INVALID_STATE', said('refuse.directPay.noDriverYet'));
     const driver = this.drivers.get(driverDid);
     if (driver.managerDid) {
       const fleet = this.managers.get(driver.managerDid);
@@ -240,7 +242,7 @@ export class DirectPayService {
       const driver = this.drivers.get(f.claimedBy);
       if (driver.managerDid && driver.managerDid === actingTenant(actor)) return;
     }
-    throw new GlosError('FORBIDDEN', 'This load is not on you');
+    throw refused('FORBIDDEN', said('refuse.directPay.notOnYou'));
   }
 
   private latestFor(freightId: string): DirectPayment | undefined {
@@ -263,22 +265,22 @@ function qrSvgOf(url: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img">${qrSvgGroup(url, 0, 0, 240, 'M')}</svg>`;
 }
 
-function refusalOf(why?: DirectPayView['why']): string {
+function refusalOf(why?: DirectPayView['why']): Said {
   switch (why) {
     case 'not_direct':
-      return 'SeeBuyGet pays the carrier for this load: there is nothing for the shipper to pay here';
+      return said('refuse.directPay.notDirect');
     case 'paid':
-      return 'This load is paid already';
+      return said('refuse.directPay.paid');
     case 'no_price':
-      return 'No price is agreed for this load yet';
+      return said('refuse.directPay.noPrice');
     case 'not_eur':
-      return 'Mollie takes payments in euros here, and this load’s price is not in euros';
+      return said('refuse.directPay.notEur');
     case 'not_connected':
-      return 'Connect Mollie in Settings first';
+      return said('refuse.directPay.notConnected');
     case 'office_connects':
-      return 'The company you drive for connects Mollie first';
+      return said('refuse.directPay.officeConnects');
     default:
-      return 'Payments by Mollie are for carriers in the Netherlands';
+      return said('refuse.mollie.netherlandsOnly');
   }
 }
 
@@ -286,8 +288,8 @@ function refusalOf(why?: DirectPayView['why']): string {
 function asOurs(err: unknown): GlosError {
   if (err instanceof GlosError) return err;
   if (err instanceof MollieError) {
-    if (err.status === 401 || err.status === 403) return new GlosError('INVALID_STATE', 'Mollie refused this account: connect Mollie again in Settings');
-    if (err.status === 422 || err.status === 400) return new GlosError('INVALID_INPUT', `Mollie did not take the payment: ${err.detail || err.title}`);
+    if (err.status === 401 || err.status === 403) return refused('INVALID_STATE', said('refuse.directPay.mollieRefusedAccount'));
+    if (err.status === 422 || err.status === 400) return refused('INVALID_INPUT', said('refuse.directPay.mollieDidNotTake', { why: err.detail || err.title }));
   }
-  return new GlosError('PROVIDER_UNAVAILABLE', 'Mollie did not answer: try again in a moment');
+  return refused('PROVIDER_UNAVAILABLE', said('refuse.mollie.didNotAnswer'));
 }

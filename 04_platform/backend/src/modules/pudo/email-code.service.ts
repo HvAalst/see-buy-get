@@ -1,6 +1,7 @@
 import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { randomInt, timingSafeEqual } from 'crypto';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { MailService } from '../../foundation/mail/mail.service';
 import { REVIEW_CODE } from '../../foundation/runtime/review-code';
 import { PersonService } from './person.service';
@@ -63,7 +64,7 @@ export class EmailCodeService {
   /** Make a code for this address. The caller mails it — or, `review`, it is 000000 and mailed nowhere (the caller decides). */
   request(email: string, now: number = Date.now(), opts: { review?: boolean; standIn?: string } = {}): { code: string; minutes: number } {
     const e = normalizeEmail(email);
-    if (!isPlausibleEmail(e)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
+    if (!isPlausibleEmail(e)) throw refused('VALIDATION_FAILED', said('refuse.emailCode.emailInvalid'), { field: 'email' });
     this.assertWithinRate(e, now);
     /*
      * THE SAME CODE WHILE THE ONE SENT IS STILL GOOD (the owner, 2026-11-01: "when I have to switch apps, from chrome on
@@ -92,15 +93,15 @@ export class EmailCodeService {
     const entry = this.codes.get(e);
     if (!entry || entry.expires < now || this.reviewVoid(e, entry.review)) {
       this.codes.delete(e);
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.emailCode.wrongOrExpired'));
     }
     if (!safeEqual(entry.code, (code || '').trim())) {
       entry.attempts += 1;
       if (entry.attempts >= MAX_ATTEMPTS) {
         this.codes.delete(e);
-        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Ask for a new one.');
+        throw refused('OTP_LOCKED', said('refuse.emailCode.locked'));
       }
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.emailCode.wrongOrExpired'));
     }
     this.codes.delete(e);
     this.verified.set(e, now + VERIFIED_TTL_MS);
@@ -141,9 +142,9 @@ export class EmailCodeService {
     }
     if (now - rate.lastAt < RESEND_COOLDOWN_MS) {
       const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - rate.lastAt)) / 1000);
-      throw new GlosError('RATE_LIMITED', `Wait ${wait}s before asking for another code`);
+      throw refused('RATE_LIMITED', said('refuse.emailCode.wait', { wait }));
     }
-    if (rate.count >= MAX_PER_DAY) throw new GlosError('RATE_LIMITED', 'Too many codes requested for this address today');
+    if (rate.count >= MAX_PER_DAY) throw refused('RATE_LIMITED', said('refuse.emailCode.tooManyToday'));
     rate.lastAt = now;
     rate.count += 1;
   }

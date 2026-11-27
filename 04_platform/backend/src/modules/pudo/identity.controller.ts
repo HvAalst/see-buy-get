@@ -15,7 +15,8 @@ import { Public } from '../../foundation/auth/public.decorator';
 import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -112,10 +113,10 @@ export class IdentityController {
     const known = verified && dto.pin !== undefined ? this.persons.findByPhone(dto.phone) : undefined;
     const needsEmail = verified && dto.pin !== undefined && !known?.emailVerifiedAt;
     if (needsEmail) {
-      if (!dto.email?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give an email address: it is how you get back in if your number is ever lost, and where we warn you', { field: 'email' });
+      if (!dto.email?.trim()) throw refused('FIELD_REQUIRED', said('refuse.identity.giveEmail'), { field: 'email' });
       this.persons.assertEmailFree(dto.email, known?.personDid);
       if (!this.emailCodes.isVerified(dto.email)) {
-        if (!dto.emailCode?.trim()) throw new GlosError('EMAIL_NOT_VERIFIED', 'Type the code we sent to that email address', { field: 'emailCode' });
+        if (!dto.emailCode?.trim()) throw refused('EMAIL_NOT_VERIFIED', said('refuse.identity.typeEmailCode'), { field: 'emailCode' });
         this.emailCodes.verify(dto.email, dto.emailCode);
       }
     }
@@ -133,14 +134,14 @@ export class IdentityController {
     const resetElsewhere = verified && dto.pin !== undefined && Boolean(known?.pinHash) && Boolean(known?.emailVerifiedAt) && !this.persons.knowsDevice(known?.personDid, dto.device);
     if (resetElsewhere) {
       if (!dto.email?.trim()) {
-        throw new GlosError('FIELD_REQUIRED', 'This phone or browser is new to your account. To replace your PIN here, also type the recovery email on your account: we send it a code', { field: 'email', why: 'pin-reset' });
+        throw refused('FIELD_REQUIRED', said('refuse.identity.newPhoneNeedsEmail'), { field: 'email', why: 'pin-reset' });
       }
       if (!this.emailCodes.isVerified(dto.email)) {
-        if (!dto.emailCode?.trim()) throw new GlosError('EMAIL_NOT_VERIFIED', 'Type the code we sent to that email address', { field: 'emailCode', why: 'pin-reset' });
+        if (!dto.emailCode?.trim()) throw refused('EMAIL_NOT_VERIFIED', said('refuse.identity.typeEmailCode'), { field: 'emailCode', why: 'pin-reset' });
         this.emailCodes.verify(dto.email, dto.emailCode);
       }
       if (this.persons.findByEmail(dto.email)?.personDid !== known?.personDid) {
-        throw new GlosError('FORBIDDEN', 'That is not the recovery email on this account. Use the address you gave when you chose your PIN — or “Trouble signing in?”', { field: 'email', why: 'pin-reset' });
+        throw refused('FORBIDDEN', said('refuse.identity.notRecoveryEmail'), { field: 'email', why: 'pin-reset' });
       }
     }
     const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin, dto.device);
@@ -197,7 +198,7 @@ export class IdentityController {
   undoNumber(@Body() dto: UndoNumberDto) {
     if (dto.email?.trim()) this.recovery.undoWithEmail(dto.email, dto.code ?? '');
     else if (dto.phone?.trim() && dto.pin?.trim()) this.recovery.undoWithOldNumber(dto.phone, dto.pin);
-    else throw new GlosError('FIELD_REQUIRED', 'Give the old number and its PIN, or the account’s email and the code we sent it');
+    else throw refused('FIELD_REQUIRED', said('refuse.identity.giveOldNumber'));
     return { undone: true };
   }
 
@@ -225,7 +226,7 @@ export class IdentityController {
   @RateLimit(20, 15 * 60)
   @Post('device')
   confirmDevice(@Body() dto: ConfirmDeviceDto) {
-    if (!this.otp.isVerified(dto.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
+    if (!this.otp.isVerified(dto.phone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.identity.verifyPhoneFirst'));
     const device = this.persons.trustDevice(dto.phone);
     this.otp.consume(dto.phone);
     return { device };
@@ -275,7 +276,7 @@ export class IdentityController {
   @Post('pin')
   setPin(@Body() dto: SetPinDto, @Actor() actor: IntrospectionResult) {
     // The same rule as the door: no PIN without a confirmed recovery email behind it.
-    if (!this.persons.requireByDid(actor.did!).emailVerifiedAt) throw new GlosError('FIELD_REQUIRED', 'Add your email address first: it is how you get back in if your number is ever lost', { field: 'email' });
+    if (!this.persons.requireByDid(actor.did!).emailVerifiedAt) throw refused('FIELD_REQUIRED', said('refuse.identity.addEmailFirst'), { field: 'email' });
     this.persons.setPin(actor.did!, dto.pin);
     return { ok: true };
   }
@@ -322,7 +323,7 @@ export class IdentityController {
     if (dto.role === 'fleet_manager') {
       const link = person.roles.find((r) => r.role === 'fleet_manager' && r.status === 'active');
       if (link && !this.fleets.isActive(link.entityDid)) {
-        throw new GlosError('AUTH_NOT_ACTIVE', 'Your fleet is not active yet: SeeBuyGet checks its papers and records its bond first');
+        throw refused('AUTH_NOT_ACTIVE', said('refuse.identity.fleetNotActive'));
       }
     }
     return this.persons.mintForRole(person, dto.role);
@@ -358,12 +359,12 @@ export class IdentityController {
   @Post('parcels')
   createParcel(@Body() dto: ConsumerSendDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    if (!isPlausiblePhone(dto.receiverMobile)) throw new GlosError('PHONE_INVALID', 'Enter a valid receiver phone number — it is how they get their parcel');
+    if (!isPlausiblePhone(dto.receiverMobile)) throw refused('PHONE_INVALID', said('refuse.identity.receiverPhoneInvalid'));
     // 2026-11-05 — the one shop for drop-off and collection is a same-shop parcel (it was refused): one stop, priced below.
     const dims: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
     const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm: dims });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the parcel network — ask at a PUDO shop about dedicated freight (personal freight booking is coming)`);
+      throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.identity.cargoTooLarge', { cargoClass }));
     }
     const size = classifySize({ ...dto.dimensionsCm, kg: dto.weightKg });
     // ITEM 9 — a person sending from the app types real centimetres, so the transport is priced on what
@@ -378,7 +379,7 @@ export class IdentityController {
     // figure a person can be asked for, and tax is part of what they are asked for — gating on the net
     // would agree a price and collect a different one, which is the exact failure this gate exists to stop.
     if (dto.expectedTotal != null && Math.abs(dto.expectedTotal - quote.locked.gross) > 0.001) {
-      throw new GlosError('PRICE_CHANGED', `The price is now ${quote.locked.gross.toFixed(2)} — please review it before sending`, { newTotal: quote.locked.gross });
+      throw refused('PRICE_CHANGED', said('refuse.identity.priceChanged', { price: quote.locked.gross.toFixed(2) }), { newTotal: quote.locked.gross });
     }
     const { parcel, code } = this.parcels.createConsumerSend({
       senderPersonDid: person.personDid,
@@ -424,7 +425,7 @@ export class IdentityController {
   @Get('parcels/:id/pay')
   bookingPay(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<BookingPayView> {
     const person = this.persons.requireByDid(actor.did!);
-    if (!this.parcels.sentBy(id, person) || !this.bookings) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!this.parcels.sentBy(id, person) || !this.bookings) throw refused('NOT_FOUND', said('refuse.identity.noSuchParcel'));
     return this.bookings.look(id);
   }
 
@@ -445,7 +446,7 @@ export class IdentityController {
   @Post('parcels/:id/pay')
   payBooking(@Param('id') id: string, @Actor() actor: IntrospectionResult): Promise<BookingPayView> {
     const person = this.persons.requireByDid(actor.did!);
-    if (!this.parcels.sentBy(id, person) || !this.bookings) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!this.parcels.sentBy(id, person) || !this.bookings) throw refused('NOT_FOUND', said('refuse.identity.noSuchParcel'));
     return this.bookings.ask(id, person.personDid);
   }
 
@@ -505,8 +506,8 @@ export class IdentityController {
 
   private doorsOrRefuse(actor: IntrospectionResult): PersonDoorService {
     // Their own act, and their own money: staff ask for nothing in a person's name (they read the parcel under Find a parcel).
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A person asks for their own door, from their own app. Staff read the parcel under Find a parcel');
-    if (!this.doors) throw new GlosError('INVALID_STATE', 'Bringing it to your door is not open here');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.identity.ownDoor'));
+    if (!this.doors) throw refused('INVALID_STATE', said('refuse.identity.doorNotOpen'));
     return this.doors;
   }
 
@@ -536,7 +537,7 @@ export class IdentityController {
   choosePickupShop(@Param('id') id: string, @Body() dto: PickupShopChoiceDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     this.parcels.requireReceiver(id, person);
-    if (!this.shopChoices) throw new GlosError('INVALID_STATE', 'Choosing another shop is not running in this deployment');
+    if (!this.shopChoices) throw refused('INVALID_STATE', said('refuse.identity.shopChoiceNotRunning'));
     this.shopChoices.choose(id, dto.shopDid);
     return { parcel: this.parcels.consumerParcel(id, person) };
   }
@@ -567,7 +568,7 @@ export class IdentityController {
   @ApiQuery({ name: 'to', required: true, description: 'The id of the shop it would be dropped off at instead' })
   movePreview(@Param('id') id: string, @Query('to') to: string, @Actor() actor: IntrospectionResult): MoveView {
     const person = this.persons.requireByDid(actor.did!);
-    if (!this.parcels.sentBy(id, person) || !this.moves) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!this.parcels.sentBy(id, person) || !this.moves) throw refused('NOT_FOUND', said('refuse.identity.noSuchParcel'));
     return this.moves.preview(id, (to ?? '').trim());
   }
 
@@ -576,7 +577,7 @@ export class IdentityController {
   @Post('parcels/:id/move')
   move(@Param('id') id: string, @Body() dto: MoveDropOffDto, @Actor() actor: IntrospectionResult): MovedView {
     const person = this.persons.requireByDid(actor.did!);
-    if (!this.parcels.sentBy(id, person) || !this.moves) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!this.parcels.sentBy(id, person) || !this.moves) throw refused('NOT_FOUND', said('refuse.identity.noSuchParcel'));
     return this.moves.move(id, dto.to.trim(), dto.expectedTotal, person.personDid);
   }
 
@@ -612,7 +613,7 @@ export class IdentityController {
    */
   private refuseWhileUndoable(personDid: string, what: string): void {
     const until = this.persons.undoOpenUntil(personDid);
-    if (until) throw new GlosError('INVALID_STATE', `Your account’s phone number was changed less than a day ago, and that can still be undone. You can ${what} once it no longer can.`, { until });
+    if (until) throw refused('INVALID_STATE', said('refuse.identity.undoStillOpen', { what }), { until });
   }
 
   /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */
@@ -645,7 +646,7 @@ export class IdentityController {
   /** The person who invites: the one behind the sign-in — a consumer's own DID, any other app's signed-in person. */
   private inviter(actor: IntrospectionResult) {
     const did = actor?.personDid ?? (actor?.role === 'consumer' ? actor.did : undefined);
-    if (!did) throw new GlosError('FORBIDDEN', 'An invite is a person’s, and this sign-in has no person behind it: sign in with your phone and PIN to invite somebody');
+    if (!did) throw refused('FORBIDDEN', said('refuse.identity.inviteNeedsPerson'));
     return this.persons.requireByDid(did);
   }
 

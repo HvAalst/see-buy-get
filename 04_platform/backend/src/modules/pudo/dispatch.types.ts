@@ -1122,6 +1122,8 @@ export class Freight {
   @ApiPropertyOptional() deliveredWithCode?: boolean;
   /** 2026-11-15 — who receives it, where the poster named them (plan R2): given the code in the Send app, or by email. */
   @ApiPropertyOptional() receiverEmail?: string;
+  /** 2026-11-27 — the language the receiver reads, as the sender chose it: the emails to them are written in it. */
+  @ApiPropertyOptional() receiverLang?: string;
   @ApiPropertyOptional() receiverName?: string;
   /** …the code went by email: the driver also checks the receiver's name before handing it over. */
   @ApiPropertyOptional() codeEmailedAt?: string;

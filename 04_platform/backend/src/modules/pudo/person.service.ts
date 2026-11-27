@@ -1,7 +1,8 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { checkAddress, formatAddress, type AddressParts } from '../../foundation/countries/address-format';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said, type Said } from './notice-words/say';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { AuthService } from '../../foundation/auth/auth.service';
@@ -30,7 +31,6 @@ export const MAX_PIN_ATTEMPTS = 5;
  */
 export const PIN_LENGTH = 5;
 const PIN_RE = new RegExp(`^\\d{${PIN_LENGTH}}$`);
-const PIN_LOCKED_SENTENCE = 'Too many wrong PINs. Verify your phone by code to sign in.';
 
 /**
  * THE PINS SOMEBODY WHO KNOWS YOU TRIES FIRST.
@@ -64,7 +64,7 @@ export const NUMBER_UNDO_MS = 24 * 60 * 60 * 1000;
  */
 export const OLD_NUMBER_KEPT_MS = 7 * 24 * 60 * 60 * 1000;
 const KEPT_DAYS = OLD_NUMBER_KEPT_MS / (24 * 60 * 60 * 1000);
-const KEPT_FOR_ANOTHER = `That number was moved off another account less than ${KEPT_DAYS} days ago. It can be used again after that.`;
+const keptForAnother = (): Said => said('refuse.person.keptForAnother', { days: KEPT_DAYS });
 
 /** "a…@example.com" — enough for its owner to recognise, not enough for anybody else to use. */
 function maskEmail(email: string): string {
@@ -161,7 +161,7 @@ export class PersonService {
 
   requireByDid(personDid: string): Person {
     const person = this.findByDid(personDid);
-    if (!person) throw new GlosError('NOT_FOUND', 'No such person');
+    if (!person) throw refused('NOT_FOUND', said('refuse.person.notFound'));
     return person;
   }
 
@@ -174,13 +174,13 @@ export class PersonService {
    * what makes retroactive role/parcel linking work.
    */
   ensurePerson(phone: string): Person {
-    if (!isPlausiblePhone(phone)) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number');
+    if (!isPlausiblePhone(phone)) throw refused('PHONE_INVALID', said('refuse.person.phoneInvalid'));
     const phoneHash = hashPhone(phone);
     const existing = this.persons.get(phoneHash);
     if (existing) return existing;
     // A number an account moved off in the last week is still that account's: to move back to in the first day, and
     // for what is sent to it in all seven.
-    if (this.keptFor(phoneHash)) throw new GlosError('INVALID_STATE', KEPT_FOR_ANOTHER, { field: 'phone' });
+    if (this.keptFor(phoneHash)) throw refused('INVALID_STATE', keptForAnother(), { field: 'phone' });
 
     const personDid = this.dids.generate(`person:${phoneHash}`, { role: 'person' }).id;
     const person: Person = { personDid, phoneHash, roles: [], createdAt: new Date().toISOString() };
@@ -197,7 +197,7 @@ export class PersonService {
   attachRole(phone: string, role: PersonRole, entityDid: string, tenant?: string, status: RoleLink['status'] = 'active'): Person {
     // Guard BEFORE creating the person: a non-consumer role must name a real entity, or we would leave an
     // orphan person carrying a link to nothing (which would only fail later, at switch time).
-    if (role !== 'consumer' && !entityDid) throw new GlosError('FIELD_REQUIRED', 'A role entity id is required');
+    if (role !== 'consumer' && !entityDid) throw refused('FIELD_REQUIRED', said('refuse.person.roleEntityRequired'));
     const person = this.ensurePerson(phone);
     const linkedDid = role === 'consumer' ? person.personDid : entityDid;
     const existing = person.roles.find((r) => r.role === role && r.entityDid === linkedDid);
@@ -258,12 +258,12 @@ export class PersonService {
     if (input.displayName !== undefined || input.address !== undefined) {
       const name = input.displayName?.trim();
       if (input.displayName !== undefined) {
-        if (!name) throw new GlosError('FIELD_REQUIRED', 'A display name cannot be empty');
-        if (name.length > 80) throw new GlosError('INVALID_INPUT', 'That name is too long');
+        if (!name) throw refused('FIELD_REQUIRED', said('refuse.person.nameEmpty'));
+        if (name.length > 80) throw refused('INVALID_INPUT', said('refuse.person.nameTooLong'));
       }
       const address = input.address?.trim();
       // One line typed: 240 at most. One made from a country's parts may be longer, each part being held to 120 already.
-      if (address !== undefined && address.length > (parts ? 1200 : 240)) throw new GlosError('INVALID_INPUT', 'That address is too long');
+      if (address !== undefined && address.length > (parts ? 1200 : 240)) throw refused('INVALID_INPUT', said('refuse.person.addressTooLong'));
 
       // The vault store is in-memory while person.vaultRef is persisted, so after a restart a stale ref
       // must re-seed rather than throw NotFoundException out of update() — see profile() for the read side.
@@ -286,12 +286,12 @@ export class PersonService {
         const ref = this.media.get(next);
         // 2026-11-12 — OR UPLOADED BY THE ACCOUNT THEY ACT AS NOW (the owner: "in the driver app I can't upload a profile
         // picture"): an app uploads under the driver's or the shop's own id, never the person's — the token ties the two.
-        if (!ref || (ref.ownerDid !== personDid && (!actingAs || ref.ownerDid !== actingAs))) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
+        if (!ref || (ref.ownerDid !== personDid && (!actingAs || ref.ownerDid !== actingAs))) throw refused('FORBIDDEN', said('refuse.person.imageNotYours'));
         // It must be an image uploaded AS an avatar. Re-kinding an evidence photo (a PoD/dispute the person
         // owns) to {type:'person'}/'account-doc' would strip it out of its retention bin AND detach it from
         // its parcel, so a later holdParcelForDispute()/anchorParcelTerminal() no longer protects it — and a
         // subsequent avatar replace would purgeByOwner() it, hard-deleting locked evidence mid-case. Refuse.
-        if (ref.kind !== 'avatar') throw new GlosError('INVALID_INPUT', 'That image was not uploaded as a profile photo');
+        if (ref.kind !== 'avatar') throw refused('INVALID_INPUT', said('refuse.person.imageNotAvatar'));
         this.media.link(next, { type: 'person', id: personDid }, 'avatar');
         // The person's, from now: replaced later from any of their apps, its bytes are purged as theirs.
         if (ref.ownerDid !== personDid) this.media.adoptAvatar(next, personDid);
@@ -344,7 +344,7 @@ export class PersonService {
    * happy path). Returns a consumer actor token.
    */
   enroll(phone: string, otpVerified: boolean, pin?: string, deviceKey?: string): { person: Person; isNew: boolean; token: AccessToken; device: string } {
-    if (!otpVerified) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
+    if (!otpVerified) throw refused('PHONE_NOT_VERIFIED', said('refuse.person.phoneNotVerified'));
     const before = this.findByPhone(phone);
     const isNew = !before;
     const hadPin = Boolean(before?.pinHash);
@@ -400,7 +400,7 @@ export class PersonService {
   trustDevice(phone: string): string {
     const person = this.findByPhone(phone);
     // Said to somebody who has just typed a code sent to this very number: it tells them about their own phone.
-    if (!person) throw new GlosError('NOT_FOUND', 'No account signs in with this number yet');
+    if (!person) throw refused('NOT_FOUND', said('refuse.person.noAccountForNumber'));
     const device = this.devices.add(person.personDid);
     if (person.pinHash) this.tellSignIn(GlosEvent.Pudo.PersonDeviceConfirmed, person, {});
     return device;
@@ -453,9 +453,9 @@ export class PersonService {
    * nothing and knows nobody, so a door can ask it before anything else (`identity/enroll` does, ahead of the email).
    */
   assertPin(pin: string): void {
-    if (!PIN_RE.test(pin || '')) throw new GlosError('PIN_INVALID', `PIN must be exactly ${PIN_LENGTH} digits`, { length: PIN_LENGTH });
+    if (!PIN_RE.test(pin || '')) throw refused('PIN_INVALID', said('refuse.person.pinLength', { length: PIN_LENGTH }), { length: PIN_LENGTH });
     if (isGuessablePin(pin)) {
-      throw new GlosError('PIN_GUESSABLE', 'Choose a PIN that is harder to guess: not mostly one digit, not a run like 12345 or 13579, and not a pattern like 12312', { reason: 'guessable' });
+      throw refused('PIN_GUESSABLE', said('refuse.person.pinGuessable'), { reason: 'guessable' });
     }
   }
 
@@ -504,12 +504,12 @@ export class PersonService {
      * A 403 of its own, because every app's answer to it is one thing: send the code.
      */
     if (!this.devices.knows(person?.personDid, device)) {
-      throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser has not signed in to this account before. Confirm the number by the code we send to it, then use your PIN here');
+      throw refused('DEVICE_NOT_KNOWN', said('refuse.person.deviceNotKnown'));
     }
     // Do not reveal whether the phone is registered — same error either way.
-    if (!person || !person.pinHash || !person.pinSalt) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
+    if (!person || !person.pinHash || !person.pinSalt) throw refused('AUTH_FAILED', said('refuse.person.wrongPhoneOrPin'));
     const unlocked = unlock ? this.redeemUnlock(person, device as string, unlock) : undefined;
-    if (!unlocked) this.checkPin(person, pin ?? '', 'AUTH_FAILED', 'Wrong phone or PIN');
+    if (!unlocked) this.checkPin(person, pin ?? '', 'AUTH_FAILED', said('refuse.person.wrongPhoneOrPin'));
     // The right PIN, on this device, today: what its owner is shown, and what its ninety days are counted from.
     this.devices.used(person.personDid, device);
     // Opened by a fingerprint or face: the token says so, and a shop's counter will not take it (shop-staff.controller.ts).
@@ -525,13 +525,13 @@ export class PersonService {
    * replaced. The right one resets the wrong-PIN count, as the right PIN does.
    */
   private redeemUnlock(person: Person, device: string, ticket: string): UnlockGrant {
-    if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+    if (pinLocked(person)) throw refused('PIN_LOCKED', said('refuse.person.pinLocked'));
     const grant = this.unlocks.take(ticket);
     if (!grant || grant.owner !== person.personDid || grant.address !== person.phoneHash || grant.deviceHash !== deviceHashOf(device)) {
-      throw new GlosError('UNLOCK_FAILED', 'That unlock has run out, or was used already. Unlock again, or use your PIN.');
+      throw refused('UNLOCK_FAILED', said('refuse.person.unlockUsedUp'));
     }
     if (this.devices.passkeyOf(person.personDid, device)?.id !== grant.credentialId) {
-      throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use your PIN.');
+      throw refused('UNLOCK_OFF', said('refuse.person.unlockOff'));
     }
     if (person.pinAttempts || person.pinLockedUntil) {
       person.pinAttempts = 0;
@@ -631,7 +631,7 @@ export class PersonService {
    */
   failedUnlock(person: Person): never {
     this.countWrong(person);
-    throw new GlosError('UNLOCK_FAILED', 'The fingerprint or face unlock did not check out. Try again, or use your PIN.');
+    throw refused('UNLOCK_FAILED', said('refuse.person.unlockNotChecked'));
   }
 
   /**
@@ -642,8 +642,8 @@ export class PersonService {
    */
   confirmPin(personDid: string, pin: string): void {
     const person = this.requireByDid(personDid);
-    if (!person.pinHash || !person.pinSalt) throw new GlosError('PIN_INVALID', 'You have no PIN yet. Sign out, then choose “First time, or forgot your PIN?”');
-    this.checkPin(person, pin, 'PIN_WRONG', 'That is not your PIN');
+    if (!person.pinHash || !person.pinSalt) throw refused('PIN_INVALID', said('refuse.person.noPinYet'));
+    this.checkPin(person, pin, 'PIN_WRONG', said('refuse.person.notYourPin'));
   }
 
   /**
@@ -654,11 +654,11 @@ export class PersonService {
    * PIN_WRONG (403): their session is fine, and an app that reads a 401 as 'your sign-in ended' would otherwise
    * sign a driver out for a mistyped digit — which the change-PIN screen did.
    */
-  private checkPin(person: Person, pin: string, code: 'AUTH_FAILED' | 'PIN_WRONG', wrong: string): void {
-    if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+  private checkPin(person: Person, pin: string, code: 'AUTH_FAILED' | 'PIN_WRONG', wrong: Said): void {
+    if (pinLocked(person)) throw refused('PIN_LOCKED', said('refuse.person.pinLocked'));
     if (!this.verifyPin(pin, person)) {
       this.countWrong(person);
-      throw new GlosError(code, wrong);
+      throw refused(code, wrong);
     }
     // The right PIN, and when: what is read when somebody tells staff this account's PIN is lost.
     person.pinAttempts = 0;
@@ -678,7 +678,7 @@ export class PersonService {
     this.save(person);
     if (lockedNow) {
       this.tellLocked(person);
-      throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+      throw refused('PIN_LOCKED', said('refuse.person.pinLocked'));
     }
   }
 
@@ -705,8 +705,8 @@ export class PersonService {
    */
   changePinForPerson(personDid: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
     const person = this.requireByDid(personDid);
-    this.checkPin(person, currentPin, 'PIN_WRONG', 'That is not your current PIN');
-    if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
+    this.checkPin(person, currentPin, 'PIN_WRONG', said('refuse.person.notYourCurrentPin'));
+    if (currentPin === newPin) throw refused('PIN_INVALID', said('refuse.person.pinSame'));
     this.setPin(person.personDid, newPin);
     this.auth.revokeAll(person.personDid);
     const updated = this.requireByDid(person.personDid);
@@ -715,7 +715,7 @@ export class PersonService {
 
   changePin(phone: string, currentPin: string, newPin: string, device?: string): { person: Person; token: AccessToken } {
     const { person } = this.loginWithPin(phone, currentPin, device);
-    if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
+    if (currentPin === newPin) throw refused('PIN_INVALID', said('refuse.person.pinSame'));
     this.setPin(person.personDid, newPin);
     this.auth.revokeAll(person.personDid);
     const updated = this.requireByDid(person.personDid);
@@ -731,9 +731,9 @@ export class PersonService {
 
   /** Refuse an address another account already holds — asked BEFORE anything is created, so a refusal costs nothing. */
   assertEmailFree(email: string, forPersonDid?: string): void {
-    if (!isPlausibleEmail(email)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
+    if (!isPlausibleEmail(email)) throw refused('VALIDATION_FAILED', said('refuse.person.emailInvalid'), { field: 'email' });
     const holder = this.byEmail.get(hashEmail(email));
-    if (holder && holder !== forPersonDid) throw new GlosError('DUPLICATE', 'That email address is already used by another account', { field: 'email', register: 'person' });
+    if (holder && holder !== forPersonDid) throw refused('DUPLICATE', said('refuse.person.emailTaken'), { field: 'email', register: 'person' });
   }
 
   /**
@@ -850,14 +850,14 @@ export class PersonService {
    * prints come back in `freed` for the caller to release.
    */
   movePhone(personDid: string, newPhone: string, how: PhoneChange['how'], now: number = Date.now()): { person: Person; fromHash: string; freed: PhoneChange['held'] } {
-    if (!isPlausiblePhone(newPhone)) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number', { field: 'phone' });
+    if (!isPlausiblePhone(newPhone)) throw refused('PHONE_INVALID', said('refuse.person.phoneInvalid'), { field: 'phone' });
     const person = this.requireByDid(personDid);
     const toHash = hashPhone(newPhone);
-    if (toHash === person.phoneHash) throw new GlosError('INVALID_STATE', 'That is the number you already sign in with', { field: 'phone' });
-    if (this.persons.get(toHash)) throw new GlosError('DUPLICATE', 'That number already has an account', { field: 'phone', register: 'person' });
-    if (this.keptFor(toHash, now)) throw new GlosError('INVALID_STATE', KEPT_FOR_ANOTHER, { field: 'phone' });
+    if (toHash === person.phoneHash) throw refused('INVALID_STATE', said('refuse.person.phoneSame'), { field: 'phone' });
+    if (this.persons.get(toHash)) throw refused('DUPLICATE', said('refuse.person.phoneTaken'), { field: 'phone', register: 'person' });
+    if (this.keptFor(toHash, now)) throw refused('INVALID_STATE', keptForAnother(), { field: 'phone' });
     if (person.phoneChange && Date.parse(person.phoneChange.undoUntil) > now) {
-      throw new GlosError('INVALID_STATE', 'Your number was changed less than a day ago. Undo that change, or wait until it can no longer be undone.');
+      throw refused('INVALID_STATE', said('refuse.person.changedRecently'));
     }
     const fromHash = person.phoneHash;
     // First, and before anything of the person's changes: a keeper that fails here has stopped a move that had not begun.
@@ -914,7 +914,7 @@ export class PersonService {
   undoMove(personDid: string, now: number = Date.now()): Person {
     const person = this.requireByDid(personDid);
     const change = person.phoneChange;
-    if (!change || Date.parse(change.undoUntil) <= now) throw new GlosError('INVALID_STATE', 'There is no number change to undo — the 24 hours have passed');
+    if (!change || Date.parse(change.undoUntil) <= now) throw refused('INVALID_STATE', said('refuse.person.noChangeToUndo'));
     this.persons.delete(person.phoneHash);
     // Whoever had the account in between confirmed devices of their own: none of them survives the undo.
     this.devices.forgetAll(person.personDid);
@@ -964,10 +964,10 @@ export class PersonService {
   blockOldNumber(personDid: string, now: number = Date.now()): PhoneChange['held'] {
     const person = this.requireByDid(personDid);
     const undo = this.undoOpenUntil(personDid, now);
-    if (undo) throw new GlosError('INVALID_STATE', 'Your number change can still be undone, so the old number is kept for that. You can block it once the 24 hours have passed.', { until: undo });
+    if (undo) throw refused('INVALID_STATE', said('refuse.person.undoStillOpen'), { until: undo });
     this.closeUndo(person, now);
     const old = person.oldNumber;
-    if (!old) throw new GlosError('INVALID_STATE', 'This account has no old number any more');
+    if (!old) throw refused('INVALID_STATE', said('refuse.person.noOldNumber'));
     person.oldNumber = undefined;
     this.save(person);
     return old.held;
@@ -1013,7 +1013,7 @@ export class PersonService {
    */
   mintForRole(person: Person, role: PersonRole): { role: PersonRole; entityDid: string; token: AccessToken } {
     const link = person.roles.find((r) => r.role === role && r.status === 'active');
-    if (!link) throw new GlosError('ROLE_NOT_HELD', `You do not hold an active ${role} role`);
+    if (!link) throw refused('ROLE_NOT_HELD', said('refuse.person.roleNotHeld', { role }));
     // ONE PHONE AT A TIME for a driver, exactly as at the driver app's own door (see driverSignIn).
     if (role === 'driver') this.auth.revokeAll(link.entityDid);
     const token = role === 'consumer'

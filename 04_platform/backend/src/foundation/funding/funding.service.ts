@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { GlosError } from '../http/glos-error';
+import { refused } from '../../modules/pudo/notice-words/refuse';
+import { said } from '../../modules/pudo/notice-words/say';
 import { PersistentMap } from '../store/persistent-map';
 import { FUNDING_OPEN, FUNDING_RAIL, Funding, FundingPayer, FundingPayerKind, FundingPurpose, FundingRail, FundingStatus, HeldPayment, RailCheckAnswer, RailPayment, UnmatchedPayment } from './funding.types';
 
@@ -74,7 +75,7 @@ export class FundingService {
     now: number = Date.now(),
   ): Promise<Funding> {
     const amount = Math.round((Number.isFinite(input.amount) ? input.amount : 0) * 100) / 100;
-    if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Ask for an amount greater than zero');
+    if (amount <= 0) throw refused('AMOUNT_INVALID', said('refuse.funding.amountAboveZero'));
     const purpose: FundingPurpose = input.purpose ?? 'float';
     const payer = this.payerFor(input.payerKind);
     // Refuses where we hold no money in their country, BEFORE a reference exists: an intent that could
@@ -201,7 +202,7 @@ export class FundingService {
   refuseHeld(heldId: string, reason: string, by: string, now: number = Date.now()): HeldPayment {
     const record = this.requireOpenHeld(heldId);
     const why = reason.trim();
-    if (why.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say why it is refused — the shop will ask');
+    if (why.length < 3) throw refused('FIELD_REQUIRED', said('refuse.funding.sayWhyRefused'));
     record.outcome = 'refused';
     record.decidedAt = new Date(now).toISOString();
     record.decidedBy = by;
@@ -217,8 +218,8 @@ export class FundingService {
 
   private requireOpenHeld(heldId: string): HeldPayment {
     const record = this.held.get(heldId);
-    if (!record) throw new GlosError('NOT_FOUND', `No held payment found: ${heldId}`);
-    if (record.outcome) throw new GlosError('INVALID_STATE', `That payment was already ${record.outcome} on ${record.decidedAt}`);
+    if (!record) throw refused('NOT_FOUND', said('refuse.funding.noHeldPayment', { id: heldId }));
+    if (record.outcome) throw refused('INVALID_STATE', said('refuse.funding.alreadyDecided', { outcome: record.outcome, at: record.decidedAt }));
     return record;
   }
 
@@ -314,7 +315,7 @@ export class FundingService {
   /** The payer said no, or the rail did. Nothing moved, so nothing is unwound. */
   fail(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'awaiting') throw new GlosError('INVALID_STATE', `This request is ${funding.status} — only one still waiting can fail`);
+    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.failWaiting', { status: funding.status }));
     funding.status = 'failed';
     funding.failedAt = new Date(now).toISOString();
     funding.failureReason = reason;
@@ -346,7 +347,7 @@ export class FundingService {
   /** Nobody ever paid it. A list full of stale "waiting" rows reads as money on its way, and it is not. */
   expire(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'awaiting') throw new GlosError('INVALID_STATE', `This request is ${funding.status} — only one still waiting can be closed`);
+    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.closeWaiting', { status: funding.status }));
     funding.status = 'expired';
     funding.expiredAt = new Date(now).toISOString();
     funding.failureReason = reason;
@@ -363,7 +364,7 @@ export class FundingService {
    */
   reverse(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'confirmed') throw new GlosError('INVALID_STATE', `This payment is ${funding.status} — only a confirmed one can be reversed`);
+    if (funding.status !== 'confirmed') throw refused('INVALID_STATE', said('refuse.funding.reverseConfirmed', { status: funding.status }));
     const payer = this.payerFor(funding.payerKind);
     const { entryId } = payer.reverse(funding.payerDid, {
       purpose: funding.purpose,
@@ -428,15 +429,15 @@ export class FundingService {
    */
   apply(unmatchedId: string, to: { payerKind: FundingPayerKind; payerDid: string }, by: string, now: number = Date.now()): { funding: Funding; unmatchedId: string } {
     const record = this.unmatched.get(unmatchedId);
-    if (!record) throw new GlosError('NOT_FOUND', `No unattributed payment found: ${unmatchedId}`);
-    if (record.appliedAt) throw new GlosError('INVALID_STATE', `That payment was already applied on ${record.appliedAt} — it arrived once and can only be credited once`);
+    if (!record) throw refused('NOT_FOUND', said('refuse.funding.noUnattributed', { id: unmatchedId }));
+    if (record.appliedAt) throw refused('INVALID_STATE', said('refuse.funding.alreadyApplied', { at: record.appliedAt }));
 
     const payer = this.payerFor(to.payerKind);
     // Refuses a payer with no account to credit, exactly as opening a request does.
     const { entityId, currency, label } = payer.resolve(to.payerDid);
     if (record.currency && record.currency.toUpperCase() !== currency.toUpperCase()) {
       // The same rule `confirm` holds: we do not convert on somebody's behalf at a rate they never saw.
-      throw new GlosError('AMOUNT_INVALID', `That payment is in ${record.currency} and ${label} is settled in ${currency} — applying it here would invent an exchange rate`);
+      throw refused('AMOUNT_INVALID', said('refuse.funding.currencyMismatch', { paid: record.currency, label, currency }));
     }
 
     const { entryId } = payer.credit(to.payerDid, { purpose: 'float', gross: record.amount, fee: 0, reference: record.providerRef, fundingId: unmatchedId });
@@ -546,7 +547,7 @@ export class FundingService {
     // A wiring failure, not a caller's mistake: nothing registered this kind at boot. It surfaces as an
     // error rather than a silent no-op, because the silent version would leave money confirmed by a rail
     // and credited to nobody.
-    if (!payer) throw new GlosError('INTERNAL', `Nothing knows how to take money from a ${kind}`);
+    if (!payer) throw refused('INTERNAL', said('refuse.funding.noPayerFor', { kind }));
     return payer;
   }
 
@@ -557,7 +558,7 @@ export class FundingService {
 
   private require(fundingId: string): Funding {
     const funding = this.fundings.get(fundingId);
-    if (!funding) throw new GlosError('NOT_FOUND', `Funding request not found: ${fundingId}`);
+    if (!funding) throw refused('NOT_FOUND', said('refuse.funding.requestNotFound', { id: fundingId }));
     return funding;
   }
 }

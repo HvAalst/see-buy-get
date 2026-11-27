@@ -8,6 +8,7 @@ import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { STAFF_KEY_PREFIX } from '../../foundation/auth/setup-key';
+import { useRefusalWords } from '../../foundation/http/problem.filter';
 import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
 
 /**
@@ -89,6 +90,8 @@ export class ReaderLanguageService implements OnModuleInit {
   /** The mail is told who reads an address: every email is written in its reader's language (MailService.readerOf). */
   onModuleInit(): void {
     this.mail?.useReaders({ languageOf: (address) => this.ofAddress(address), wordsOf: (lang, country) => this.reviews?.noticeWordsOf(lang, country) });
+    // 2026-11-27 — and a refusal is said with the caller's country's own words for it (ProblemFilter).
+    useRefusalWords((lang, country) => this.reviews?.noticeWordsOf(lang, country));
   }
 
   /** The language a person's app speaks now, and whose review of it — kept where it changed. */

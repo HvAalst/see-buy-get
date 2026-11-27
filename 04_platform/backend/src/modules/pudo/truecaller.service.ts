@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { CodeRouteService } from '../../foundation/sms/code-route.service';
 import type { TruecallerStart, TruecallerState, TruecallerStatus } from '../../foundation/sms/code-routes.types';
 import { readTruecallerCallback, truecallerEndpoint, truecallerLink, truecallerNumbers } from '../../foundation/sms/truecaller';
@@ -49,10 +50,10 @@ export class TruecallerService {
   /** The secret request number and the link, for a number Truecaller is offered for. */
   start(typed: string, lang: string, now: number = Date.now()): TruecallerStart {
     const phone = this.otp.phoneFor(typed);
-    if (!this.routes.offers(phone, 'truecaller')) throw new GlosError('INVALID_STATE', 'Truecaller is not offered for numbers in that country: a code is sent instead');
+    if (!this.routes.offers(phone, 'truecaller')) throw refused('INVALID_STATE', said('refuse.truecaller.notOffered'));
     this.prune(now);
     const going = [...this.sessions.values()].find((s) => s.phone === phone && now - s.at < AGAIN_AFTER_MS && s.state !== 'confirmed');
-    if (going) throw new GlosError('RATE_LIMITED', 'Truecaller was opened a moment ago: finish there, or wait a few seconds');
+    if (going) throw refused('RATE_LIMITED', said('refuse.truecaller.openedJustNow'));
     const nonce = randomBytes(18).toString('base64url');
     this.sessions.set(nonce, { phone, at: now, state: 'waiting' });
     let site = '';

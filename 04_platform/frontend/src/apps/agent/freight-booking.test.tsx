@@ -92,6 +92,8 @@ describe('booking a walk-up as freight, one part per screen', () => {
       "actions.setAccept({ work })",
       // 2026-11-15 — and the receiver's email: the delivery code goes to them (the owner: "yes").
       "actions.setAccept({ receiverEmail: e.currentTarget.value })",
+      // 2026-11-27 — and the language the receiver reads: the emails to them are written in it.
+      "actions.setAccept({ receiverLanguage: e.currentTarget.value })",
       // 2026-11-22 — and the sender's word on what goes to a shop in another EU country, once the server asked it (BG-2).
       "actions.setAccept({ noGoodsWithOwnRules })",
       // 2026-11-23 — and the UIT or UTN for a shop in Romania or Bulgaria, once the server asked it.

@@ -131,6 +131,8 @@ export interface PublicQuote {
 export interface MintInput {
   /** 2026-11-15 — plan R3. */
   buyerEmail?: string;
+  /** 2026-11-27 — the language the buyer reads: their emails are written in it. */
+  buyerLanguage?: string;
   buyerName?: string;
   emailCode?: boolean;
   from?: QuoteEndpoint;
@@ -450,6 +452,7 @@ export class ShippingApiService {
       buyerMobile: input.buyerMobile.trim(),
       // 2026-11-15 — the buyer's email and name, and this shipment's choice to email the code (plan R3).
       ...(input.buyerEmail?.trim() ? { buyerEmail: input.buyerEmail.trim() } : {}),
+      ...(input.buyerLanguage ? { buyerLang: input.buyerLanguage } : {}),
       ...(input.buyerName?.trim() ? { receiverName: input.buyerName.trim() } : {}),
       ...(input.emailCode !== undefined ? { emailCode: input.emailCode } : {}),
       size: quoted.parcel.size,

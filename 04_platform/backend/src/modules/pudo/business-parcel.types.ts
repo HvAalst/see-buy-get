@@ -1,5 +1,9 @@
 import { OwnBusinessRate } from './business-rate.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { NOTICE_LANGS } from './notice-words/say';
+
+/** 2026-11-27 — the languages a receiver's emails can be written in. */
+const RECEIVER_LANGS = [...NOTICE_LANGS];
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { HUMAN_OFF_PLAN_REASONS, type HumanOffPlanReason } from './route-plan.types';
@@ -47,6 +51,8 @@ export class BusinessParcelDto {
   @IsString() @MaxLength(30) receiverMobile!: string;
   /** 2026-11-15 — the receiver's email and name: the collection code is emailed to them where the business chose it (plan R3). */
   @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  /** 2026-11-27 — the language the receiver reads: their emails are written in it (en, sw, nl, am, bg). */
+  @ApiPropertyOptional({ enum: RECEIVER_LANGS, description: 'The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.' }) @IsOptional() @IsIn(RECEIVER_LANGS) receiverLanguage?: string;
   @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
   @IsOptional() @IsBoolean() emailCode?: boolean;
   /** Measured, so it is priced on what it is rather than on a size band. */

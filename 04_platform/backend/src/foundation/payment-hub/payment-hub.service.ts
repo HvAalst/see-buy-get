@@ -3,7 +3,8 @@ import { randomBytes } from 'crypto';
 import { EntityService } from '../entity/entity.service';
 import { EventBus } from '../events/event-bus.service';
 import { GlosEvent } from '../events/glos-events';
-import { GlosError } from '../http/glos-error';
+import { refused } from '../../modules/pudo/notice-words/refuse';
+import { said } from '../../modules/pudo/notice-words/say';
 import { hashPhone } from '../identity/phone';
 import { currencyForJurisdiction } from '../money/currency';
 import { PersistentMap } from '../store/persistent-map';
@@ -144,13 +145,13 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   async setKey(ownerEntityId: string, input: { key: string; test: boolean }, by: { name: string; key: string }, now: number = Date.now()): Promise<HubAccountRecord> {
     const entity = this.entities.get(ownerEntityId);
     const provider = payoutProviderFor(entity.jurisdiction);
-    if (!provider || !this.providers.has(provider)) throw new GlosError('INVALID_STATE', `No payout provider is connected for ${entity.jurisdiction} yet: its hands are paid on test money`);
-    if (!by?.name?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who enters the key: it is kept by name');
+    if (!provider || !this.providers.has(provider)) throw refused('INVALID_STATE', said('refuse.paymentHub.noProvider', { jurisdiction: entity.jurisdiction }));
+    if (!by?.name?.trim()) throw refused('FIELD_REQUIRED', said('refuse.paymentHub.whoEntersKey'));
     const key = (input.key ?? '').trim();
-    if (!/^\S{16,400}$/.test(key)) throw new GlosError('VALIDATION_FAILED', 'Paste the whole key, with no spaces', { field: 'key' });
+    if (!/^\S{16,400}$/.test(key)) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.pasteWholeKey'), { field: 'key' });
     const currency = this.account(ownerEntityId).currency;
     const held = await this.providers.get(provider)?.balance({ accountId: ownerEntityId, currency, keys: { apiKey: key }, live: !input.test }, now).catch(() => undefined);
-    if (!held) throw new GlosError('VALIDATION_FAILED', `That key did not open an account in ${currency}: check it is a ${input.test ? 'test (sandbox)' : 'live'} key, made without request signing, for an account that holds ${currency}`, { field: 'key' });
+    if (!held) throw refused('VALIDATION_FAILED', said(input.test ? 'refuse.paymentHub.keyNotOpenTest' : 'refuse.paymentHub.keyNotOpenLive', { currency }), { field: 'key' });
     const before = this.accounts.get(ownerEntityId) ?? { ownerEntityId };
     const rec: HubAccountRecord = {
       ...before,
@@ -173,12 +174,12 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   switchLive(ownerEntityId: string, by: { name: string; key: string }, now: number = Date.now()): HubAccountRecord {
     this.entities.get(ownerEntityId);
     const rec = this.accounts.get(ownerEntityId);
-    if (!rec?.keySealed) throw new GlosError('INVALID_STATE', 'No key is kept for this account yet');
-    if (rec.keyTest) throw new GlosError('INVALID_STATE', 'The key kept is a test key: it pays test money, and is never switched live');
-    if (rec.liveBy) throw new GlosError('INVALID_STATE', `Switched on already, by ${rec.liveBy}`);
+    if (!rec?.keySealed) throw refused('INVALID_STATE', said('refuse.paymentHub.noKeyKept'));
+    if (rec.keyTest) throw refused('INVALID_STATE', said('refuse.paymentHub.keyIsTest'));
+    if (rec.liveBy) throw refused('INVALID_STATE', said('refuse.paymentHub.switchedAlready', { by: rec.liveBy }));
     const who = by?.name?.trim() ?? '';
-    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who switches it on: it is kept by name');
-    if (by.key === rec.keyByKey || who.toLowerCase() === (rec.keyBy ?? '').toLowerCase()) throw new GlosError('FORBIDDEN', 'A second person switches it on: not the one who entered the key');
+    if (!who) throw refused('FIELD_REQUIRED', said('refuse.paymentHub.whoSwitchesOn'));
+    if (by.key === rec.keyByKey || who.toLowerCase() === (rec.keyBy ?? '').toLowerCase()) throw refused('FORBIDDEN', said('refuse.paymentHub.secondPersonSwitches'));
     const next: HubAccountRecord = { ...rec, liveBy: who, liveAt: new Date(now).toISOString() };
     this.accounts.set(ownerEntityId, next);
     this.logger.log(`the payout key for ${ownerEntityId} was switched live by ${who}`);
@@ -220,20 +221,20 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    */
   async collect(ownerEntityId: string, req: { reference: string; amount: number; payerPhone?: string; description: string; askedBy?: string; siteId?: string }, now: number = Date.now()): Promise<HubPayment> {
     const amount = round2(req.amount);
-    if (!(amount > 0)) throw new GlosError('VALIDATION_FAILED', 'A payment is for more than nothing');
+    if (!(amount > 0)) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.paymentMoreThanNothing'));
     const a = this.account(ownerEntityId);
     // 2026-11-26 — a provider that asks by a page (a QR code) asks no phone at all; one that rings a phone needs the whole number.
     const byQr = PROVIDER_ASKS_BY[a.provider] === 'qr';
     const digits = byQr ? '' : (req.payerPhone ?? '').replace(/\D/g, '');
-    if (!byQr && digits.length < 9) throw new GlosError('VALIDATION_FAILED', 'Give the whole phone number the payment is asked of');
+    if (!byQr && digits.length < 9) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.wholePhonePayment'));
     const phoneHash = byQr ? undefined : hashPhone(req.payerPhone as string);
     const earlier = this.latest(ownerEntityId, req.reference, 'in');
-    if (earlier?.state === 'paid') throw new GlosError('INVALID_STATE', `${req.reference} is paid already`);
+    if (earlier?.state === 'paid') throw refused('INVALID_STATE', said('refuse.paymentHub.paidAlready', { reference: req.reference }));
     if (earlier?.state === 'asked') {
       // The same page again for the same amount: a second press at a counter shows the code it already shows.
       if (earlier.byQr && byQr && earlier.amount === amount) return earlier;
       if (!earlier.byQr && earlier.phoneHash === phoneHash && earlier.amount === amount) return earlier;
-      throw new GlosError('INVALID_STATE', earlier.byQr ? `A payment for ${req.reference} is still open on its page: let it be paid or lapse first` : `A payment prompt for ${req.reference} is still waiting on the phone ending ${earlier.phoneEnds}: let it be answered or lapse first`);
+      throw refused('INVALID_STATE', earlier.byQr ? said('refuse.paymentHub.stillOpenOnPage', { reference: req.reference }) : said('refuse.paymentHub.stillWaitingOnPhone', { reference: req.reference, ends: earlier.phoneEnds }));
     }
     const payment: HubPayment = {
       paymentId: `hp_${randomBytes(9).toString('base64url')}`,
@@ -268,7 +269,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   /** A try of the account by our staff: a payment prompt to a phone, on test money — the loop seen working end to end. */
   async tryPayment(ownerEntityId: string, input: { phone?: string; amount: number }, by: string, now: number = Date.now()): Promise<HubPaymentView> {
     const a = this.account(ownerEntityId);
-    if (a.live) throw new GlosError('FORBIDDEN', 'A try is for test money: this account moves real money');
+    if (a.live) throw refused('FORBIDDEN', said('refuse.paymentHub.tryIsTestMoney'));
     const p = await this.collect(ownerEntityId, { reference: `try_${randomBytes(6).toString('base64url')}`, amount: input.amount, payerPhone: input.phone, description: 'A try of the payment account', askedBy: by }, now);
     return viewOf(p);
   }
@@ -276,7 +277,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
   /** Where a waiting prompt stands, asked of its provider; one waiting too long has lapsed. Settled once, never changed after. */
   async settle(paymentId: string, now: number = Date.now(), opts: { heard?: boolean } = {}): Promise<HubPayment> {
     const p = this.payments.get(paymentId);
-    if (!p) throw new GlosError('NOT_FOUND', `No payment ${paymentId}`);
+    if (!p) throw refused('NOT_FOUND', said('refuse.paymentHub.noPayment', { paymentId }));
     if (p.state !== 'asked') return p;
     // 2026-11-26 — a page Mollie tells us about (its notice: `heard`) is not asked again and again by every counter reading it.
     if (p.byQr && p.providerRef && !opts.heard && now - (this.lastHeard.get(paymentId) ?? -Infinity) < QR_SETTLE_AGAIN_MS) return p;
@@ -321,8 +322,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    */
   setFee(ownerEntityId: string, pct: number, by: string, now: number = Date.now()): HubAccountRecord {
     this.entities.get(ownerEntityId);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 50) throw new GlosError('VALIDATION_FAILED', 'Our fee is a percentage from 0 to 50');
-    if (!by?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who sets the fee: it is kept by name');
+    if (!Number.isFinite(pct) || pct < 0 || pct > 50) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.feeRange'));
+    if (!by?.trim()) throw refused('FIELD_REQUIRED', said('refuse.paymentHub.whoSetsFee'));
     const rec: HubAccountRecord = { ...(this.accounts.get(ownerEntityId) ?? { ownerEntityId }), feePct: round2(pct), feeSetBy: by.trim(), feeSetAt: new Date(now).toISOString() };
     this.accounts.set(ownerEntityId, rec);
     return rec;
@@ -342,8 +343,8 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    */
   use(paymentId: string, parcelId: string): HubPayment {
     const p = this.payments.get(paymentId);
-    if (!p) throw new GlosError('NOT_FOUND', `No payment ${paymentId}`);
-    if (p.usedFor && p.usedFor !== parcelId) throw new GlosError('INVALID_STATE', `That payment was for ${p.usedFor} already`);
+    if (!p) throw refused('NOT_FOUND', said('refuse.paymentHub.noPayment', { paymentId }));
+    if (p.usedFor && p.usedFor !== parcelId) throw refused('INVALID_STATE', said('refuse.paymentHub.usedForAlready', { usedFor: p.usedFor }));
     const next = { ...p, usedFor: parcelId };
     this.payments.set(paymentId, next);
     return next;
@@ -355,7 +356,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    */
   async refund(paymentId: string, description: string, now: number = Date.now()): Promise<HubPayment> {
     const paid = this.payments.get(paymentId);
-    if (!paid || paid.kind !== 'in' || paid.state !== 'paid') throw new GlosError('INVALID_STATE', 'Only a payment that was paid is given back');
+    if (!paid || paid.kind !== 'in' || paid.state !== 'paid') throw refused('INVALID_STATE', said('refuse.paymentHub.onlyPaidGivenBack'));
     const earlier = [...this.payments.values()].find((x) => x.kind === 'refund' && x.refundOf === paymentId && x.state !== 'failed');
     if (earlier) return earlier;
     const a = this.openedFor(paid);
@@ -396,14 +397,14 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
    */
   async payout(ownerEntityId: string, req: { reference: string; amount: number; payeePhone?: string; payeeAccount?: PayeeAccount; description: string }, now: number = Date.now()): Promise<HubPayment> {
     const amount = round2(req.amount);
-    if (!(amount > 0)) throw new GlosError('VALIDATION_FAILED', 'A payout is for more than nothing');
+    if (!(amount > 0)) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.payoutMoreThanNothing'));
     const a = this.account(ownerEntityId, 'out');
     const toBank = Boolean(req.payeeAccount);
-    if (toBank === Boolean(req.payeePhone)) throw new GlosError('VALIDATION_FAILED', 'A payout goes to a phone or to a bank account: one of the two');
-    if (a.provider !== 'stand-in' && PROVIDER_PAYS_TO[a.provider] !== (toBank ? 'bank' : 'phone')) throw new GlosError('VALIDATION_FAILED', `This account pays to a ${PROVIDER_PAYS_TO[a.provider] === 'bank' ? 'bank account' : 'phone'}`);
+    if (toBank === Boolean(req.payeePhone)) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.payoutPhoneOrBank'));
+    if (a.provider !== 'stand-in' && PROVIDER_PAYS_TO[a.provider] !== (toBank ? 'bank' : 'phone')) throw refused('VALIDATION_FAILED', said(PROVIDER_PAYS_TO[a.provider] === 'bank' ? 'refuse.paymentHub.paysToBank' : 'refuse.paymentHub.paysToPhone'));
     const digits = toBank ? (req.payeeAccount?.account ?? '').replace(/[^0-9A-Za-z]/g, '') : (req.payeePhone ?? '').replace(/\D/g, '');
-    if (!toBank && digits.length < 9) throw new GlosError('VALIDATION_FAILED', 'Give the whole phone number the payout goes to');
-    if (toBank && (digits.length < 15 || !req.payeeAccount?.holder?.trim())) throw new GlosError('VALIDATION_FAILED', 'Give the whole bank account the payout goes to, and its holder');
+    if (!toBank && digits.length < 9) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.wholePhonePayout'));
+    if (toBank && (digits.length < 15 || !req.payeeAccount?.holder?.trim())) throw refused('VALIDATION_FAILED', said('refuse.paymentHub.wholeBankAccount'));
     const out: HubPayment = {
       paymentId: `hp_${randomBytes(9).toString('base64url')}`,
       kind: 'out',
@@ -632,7 +633,7 @@ export class PaymentHubService implements OnApplicationBootstrap, OnModuleDestro
 
   private provider(id: HubProviderId): HubProvider {
     const p = this.providers.get(id);
-    if (!p) throw new GlosError('INVALID_STATE', `${id} is not ready in the payment hub yet`);
+    if (!p) throw refused('INVALID_STATE', said('refuse.paymentHub.notReady', { id }));
     return p;
   }
 }

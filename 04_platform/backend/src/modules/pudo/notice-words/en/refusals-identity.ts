@@ -1,0 +1,63 @@
+/**
+ * 2026-11-27 — refusals of signing up and in, fingerprint or face unlocking, and moving an account to a new number, as phrases: the app is told them in its language (notice-words/refuse.ts).
+ * English, word for word as each was thrown; the other languages beside it (../<lang>/refusals-identity.ts).
+ */
+export const EN_REFUSALS_IDENTITY = {
+  // identity.controller.ts
+  'refuse.identity.giveEmail': 'Give an email address: it is how you get back in if your number is ever lost, and where we warn you',
+  'refuse.identity.typeEmailCode': 'Type the code we sent to that email address',
+  'refuse.identity.newPhoneNeedsEmail': 'This phone or browser is new to your account. To replace your PIN here, also type the recovery email on your account: we send it a code',
+  'refuse.identity.notRecoveryEmail': 'That is not the recovery email on this account. Use the address you gave when you chose your PIN — or “Trouble signing in?”',
+  'refuse.identity.giveOldNumber': 'Give the old number and its PIN, or the account’s email and the code we sent it',
+  'refuse.identity.verifyPhoneFirst': 'Verify your phone number first',
+  'refuse.identity.addEmailFirst': 'Add your email address first: it is how you get back in if your number is ever lost',
+  'refuse.identity.fleetNotActive': 'Your fleet is not active yet: SeeBuyGet checks its papers and records its bond first',
+  'refuse.identity.receiverPhoneInvalid': 'Enter a valid receiver phone number — it is how they get their parcel',
+  'refuse.identity.cargoTooLarge': 'Cargo class {cargoClass} is too large for the parcel network — ask at a PUDO shop about dedicated freight (personal freight booking is coming)',
+  'refuse.identity.priceChanged': 'The price is now {price} — please review it before sending',
+  'refuse.identity.noSuchParcel': 'No such parcel',
+  'refuse.identity.ownDoor': 'A person asks for their own door, from their own app. Staff read the parcel under Find a parcel',
+  'refuse.identity.doorNotOpen': 'Bringing it to your door is not open here',
+  'refuse.identity.shopChoiceNotRunning': 'Choosing another shop is not running in this deployment',
+  'refuse.identity.undoStillOpen': 'Your account’s phone number was changed less than a day ago, and that can still be undone. You can {what} once it no longer can.',
+  'refuse.identity.inviteNeedsPerson': 'An invite is a person’s, and this sign-in has no person behind it: sign in with your phone and PIN to invite somebody',
+
+  // passkey.service.ts
+  'refuse.passkey.answerNotChecked': 'The phone’s answer did not check out, so nothing was turned on. Try again.',
+  'refuse.passkey.notVerifiedByPhone': 'The phone did not check your fingerprint or face, so nothing was turned on. Try again.',
+  'refuse.passkey.pinDeviceNewLong': 'Your PIN does not work on this phone or browser yet, so a fingerprint or face cannot stand in for it here. Sign in here with your PIN first.',
+  'refuse.passkey.pinDeviceNew': 'Your PIN does not work on this phone or browser yet. Sign in here with your PIN first.',
+  'refuse.passkey.tookTooLongOrOtherPhone': 'That took too long, or it was asked on another phone. Start again.',
+  'refuse.passkey.forgottenPin': 'This phone or browser was forgotten meanwhile. Sign in here with your PIN first.',
+  'refuse.passkey.phoneNotSignedInBefore': 'This phone or browser has not signed in to this account before. Confirm the number by the code we send to it, then use your PIN here',
+  'refuse.passkey.wrongPhoneOrPin': 'Wrong phone or PIN',
+  'refuse.passkey.pinLocked': 'Too many wrong PINs. Verify your phone by code to sign in.',
+  'refuse.passkey.unlockOffPin': 'Unlocking with fingerprint or face is off on this phone or browser. Use your PIN.',
+  'refuse.passkey.unlockLateIPin': 'That took too long. Unlock again, or use your PIN.',
+  'refuse.passkey.accountDeviceNewLong': 'This phone or browser is not one of the account’s own yet, so a fingerprint or face cannot stand in for its password here. Sign in here with the password first.',
+  'refuse.passkey.accountDeviceNew': 'This phone or browser is not one of the account’s own yet. Sign in here with the password first.',
+  'refuse.passkey.forgottenPassword': 'This phone or browser was forgotten meanwhile. Sign in here with the password first.',
+  'refuse.passkey.unlockOffPassword': 'Unlocking with fingerprint or face is off on this phone or browser. Use the password.',
+  'refuse.passkey.unlockLatePassword': 'That took too long. Unlock again, or use the password.',
+  'refuse.passkey.counterPhone': 'A colleague has opened their own session at the counter on this phone, so a fingerprint or face cannot stand in for the password here: whoever can unlock the phone could then sign in as the account. It works on a phone that only you sign in on.',
+
+  // account-move.service.ts
+  'refuse.accountMove.oldPhoneInvalid': 'Enter the phone number the account is on',
+  'refuse.accountMove.newPhoneInvalid': 'Enter the new phone number',
+  'refuse.accountMove.sameNumber': 'That is the same number. An account is moved to a different one.',
+  'refuse.accountMove.verifyNewNumber': 'Verify the new number first — we send it a code',
+  'refuse.accountMove.newNumberHasAccount': 'The new number already has an account of its own, so another account cannot be moved onto it. Sign in with it, or use a number that has none.',
+  'refuse.accountMove.askedTooOften': 'This account has been asked about too many times today. Speak to SeeBuyGet staff with the reference you were given, or try again tomorrow.',
+  'refuse.accountMove.noRequestWithReference': 'No request has that reference. Check it against what you wrote down.',
+  'refuse.accountMove.alreadyChecked': 'This has already been checked. A second member of staff approves it.',
+  'refuse.accountMove.requestOver': 'This request is over.',
+  'refuse.accountMove.oldNumberNoAccount': 'The old number names no account, so there is nothing to move. Refuse the request, with a reason the person can act on.',
+  'refuse.accountMove.sayWhatChecked': 'Say what you checked and how — the second member of staff approves on the strength of it',
+  'refuse.accountMove.notCheckedYet': 'Nobody has checked who is asking yet. One member of staff checks; a second approves.',
+  'refuse.accountMove.secondStaffApproves': 'A second member of staff has to approve — not the one who checked',
+  'refuse.accountMove.accountGone': 'The account this named is no longer there',
+  'refuse.accountMove.newNumberGone': 'The new number is no longer on this request',
+  'refuse.accountMove.sayWhy': 'Say why — it is what the person who asked will read',
+  'refuse.accountMove.pinUsed': 'This account’s PIN was used after the request was made — and the person asking said they had lost it. The request has been stopped. If it really is them, they can sign in and move the number themselves.',
+  'refuse.accountMove.noSuchRequest': 'No such request',
+} as const;

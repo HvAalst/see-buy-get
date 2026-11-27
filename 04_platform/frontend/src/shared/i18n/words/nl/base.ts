@@ -418,6 +418,8 @@ export const words: Record<string, string> = {
   "common.weight.inG": "Gewicht in gram",
   "common.weight.atLeast": "Minstens 10 g — weeg een lichtere brief als 10 g.",
   "common.cancel": "Annuleren",
+  "common.receiverLanguage": "Hun taal",
+  "common.receiverLanguageHint": "De e-mails aan hen worden in deze taal geschreven.",
   "common.hubDown.reason.power": "Geen stroom",
   "common.hubDown.reason.flood": "Overstroming, of de weg ernaartoe afgesloten",
   "common.hubDown.reason.security": "Niet veilig om te openen",

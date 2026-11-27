@@ -48499,6 +48499,17 @@
       "BusinessParcelDto": {
         "type": "object",
         "properties": {
+          "receiverLanguage": {
+            "type": "string",
+            "description": "The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.",
+            "enum": [
+              "en",
+              "sw",
+              "nl",
+              "am",
+              "bg"
+            ]
+          },
           "natureCode": {
             "type": "string",
             "enum": [
@@ -70843,6 +70854,9 @@
           "buyerEmail": {
             "type": "string"
           },
+          "buyerLang": {
+            "type": "string"
+          },
           "receiverName": {
             "type": "string"
           },
@@ -71702,6 +71716,17 @@
       "BookFreightDto": {
         "type": "object",
         "properties": {
+          "receiverLanguage": {
+            "type": "string",
+            "description": "The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.",
+            "enum": [
+              "en",
+              "sw",
+              "nl",
+              "am",
+              "bg"
+            ]
+          },
           "incoterm": {
             "type": "string",
             "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
@@ -73360,6 +73385,17 @@
       "InboundOrderDto": {
         "type": "object",
         "properties": {
+          "buyerLanguage": {
+            "type": "string",
+            "description": "2026-11-27 — the language the buyer reads: their emails are written in it (en, sw, nl, am, bg).",
+            "enum": [
+              "en",
+              "sw",
+              "nl",
+              "am",
+              "bg"
+            ]
+          },
           "incoterm": {
             "type": "string",
             "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
@@ -76969,6 +77005,10 @@
             "type": "string",
             "description": "2026-11-15 — who receives it, where the poster named them (plan R2): given the code in the Send app, or by email."
           },
+          "receiverLang": {
+            "type": "string",
+            "description": "2026-11-27 — the language the receiver reads, as the sender chose it: the emails to them are written in it."
+          },
           "receiverName": {
             "type": "string"
           },
@@ -80198,6 +80238,17 @@
               "FOB",
               "CFR",
               "CIF"
+            ]
+          },
+          "receiverLanguage": {
+            "type": "string",
+            "description": "The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.",
+            "enum": [
+              "en",
+              "sw",
+              "nl",
+              "am",
+              "bg"
             ]
           },
           "packaging": {
@@ -87656,6 +87707,17 @@
       "MintShipmentDto": {
         "type": "object",
         "properties": {
+          "buyerLanguage": {
+            "type": "string",
+            "description": "The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.",
+            "enum": [
+              "en",
+              "sw",
+              "nl",
+              "am",
+              "bg"
+            ]
+          },
           "quoteId": {
             "type": "string",
             "description": "A price held earlier. Give this OR the four fields below — never both."

@@ -8,7 +8,6 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { FundingService } from '../../foundation/funding/funding.service';
 import type { FundingPurpose } from '../../foundation/funding/funding.types';
 import { maskMsisdn, normaliseMsisdn } from '../../foundation/funding/mpesa-funding-rail.adapter';
-import { GlosError } from '../../foundation/http/glos-error';
 import { isPlausiblePhone } from '../../foundation/identity/phone';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -19,6 +18,7 @@ import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { NotificationService } from './notification.service';
 import { money, noticeOf, said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 import type { LoadPayment, LoadPaymentView, LoadRefund, LoadRoute } from './person-load-pay.types';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -111,20 +111,20 @@ export class PersonLoadPayService implements OnModuleInit {
    */
   async pay(personDid: string, freightId: string, input: { proposalId: string; phone?: string }, now: number = Date.now()): Promise<LoadPaymentView> {
     const f = this.dispatch.requireFreightPublic(freightId);
-    if (f.postedByDid !== personDid) throw new GlosError('FORBIDDEN', 'That load is not yours');
-    if (!f.escrow || !f.sellerEntityId) throw new GlosError('INVALID_STATE', 'You pay the driver of this load directly: accept the price instead');
-    if (!(f.status === 'available' || f.status === 'scheduled')) throw new GlosError('INVALID_STATE', `The load is ${f.status}`);
+    if (f.postedByDid !== personDid) throw refused('FORBIDDEN', said('refuse.loadPay.notYours'));
+    if (!f.escrow || !f.sellerEntityId) throw refused('INVALID_STATE', said('refuse.loadPay.payDriverDirectly'));
+    if (!(f.status === 'available' || f.status === 'scheduled')) throw refused('INVALID_STATE', said('refuse.loadPay.loadIs', { status: f.status }));
     const waiting = this.latest(freightId);
-    if (waiting?.state === 'awaiting') throw new GlosError('INVALID_STATE', 'A payment for this load is already waiting: pay it, or wait until its time runs out');
+    if (waiting?.state === 'awaiting') throw refused('INVALID_STATE', said('refuse.loadPay.alreadyWaiting'));
     const proposal = this.dispatch.requireProposalPublic(input.proposalId);
-    if (proposal.freightId !== freightId || proposal.status !== 'open') throw new GlosError('INVALID_STATE', 'That price is no longer open');
+    if (proposal.freightId !== freightId || proposal.status !== 'open') throw refused('INVALID_STATE', said('refuse.loadPay.priceNotOpen'));
     const price = proposal.counterTaken && proposal.counter ? proposal.counter.price : proposal.price;
     const entity = this.entities.get(f.sellerEntityId);
     const currency = entity.currency ?? f.postedCurrency ?? '';
     // 2026-11-24 — the payment hub chooses the way by the country's money (the owner): a number only where its rail rings one.
     const ringsPhone = this.funding.needsPhone(currency);
     const phone = ringsPhone ? (input.phone ?? '').trim() : '';
-    if (ringsPhone && !isPlausiblePhone(phone)) throw new GlosError('INVALID_INPUT', 'Give the number M-Pesa should ask, with its country code', { field: 'phone' });
+    if (ringsPhone && !isPlausiblePhone(phone)) throw refused('INVALID_INPUT', said('refuse.loadPay.givePhone'), { field: 'phone' });
     const gross = this.dispatch.chargeFor(freightId, price);
     const amount = WHOLE_UNITS.has(currency.toUpperCase()) ? Math.ceil(gross - 1e-9) : round2(gross);
     const until = new Date(now + LOAD_PAY_WINDOW_MIN * 60_000).toISOString();
@@ -169,7 +169,7 @@ export class PersonLoadPayService implements OnModuleInit {
   /** The person says it arrived — the driver may then deliver without the code (their receiver lost it). */
   arrived(personDid: string, freightId: string, now: number = Date.now()): { confirmedAt: string } {
     const f = this.dispatch.requireFreightPublic(freightId);
-    if (f.postedByDid !== personDid) throw new GlosError('FORBIDDEN', 'That load is not yours');
+    if (f.postedByDid !== personDid) throw refused('FORBIDDEN', said('refuse.loadPay.notYours'));
     return { confirmedAt: this.dispatch.posterSaysArrived(freightId, now, personDid) };
   }
 
@@ -178,7 +178,7 @@ export class PersonLoadPayService implements OnModuleInit {
   /** Which company collects, for the payment the rail is about to ask for. */
   resolvePayer(personDid: string): { entityId: string; currency: string; label: string } {
     const p = [...this.payments.values()].filter((x) => x.personDid === personDid && x.state === 'awaiting').sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))[0];
-    if (!p) throw new GlosError('NOT_FOUND', 'No load payment is waiting for this person');
+    if (!p) throw refused('NOT_FOUND', said('refuse.loadPay.noneWaiting'));
     return { entityId: p.entityId, currency: p.currency, label: `load ${p.loadCode}` };
   }
 

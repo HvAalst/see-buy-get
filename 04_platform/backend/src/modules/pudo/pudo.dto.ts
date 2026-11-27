@@ -21,6 +21,10 @@ import { FISCAL_EXEMPTIONS } from './fiscal-codes';
 import { HandoverPositionDto } from './handover-position';
 import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
+import { NOTICE_LANGS } from './notice-words/say';
+
+/** 2026-11-27 — the languages a receiver's emails can be written in. */
+const RECEIVER_LANGS = [...NOTICE_LANGS];
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag, STORE_REPLIES, STORE_REPLY_MAX } from './merchant-rating.service';
 import { TRUCK_SUBTYPES, VEHICLE_ENERGIES, type VehicleEnergy } from './fleet.config';
@@ -1260,6 +1264,8 @@ export class MintShipmentDto {
   @IsString() buyerMobile!: string;
   /** 2026-11-15 — the buyer's email and name, and whether the collection code is emailed to them (plan R3; the store's own setting when left out). */
   @IsOptional() @IsEmail() @MaxLength(120) buyerEmail?: string;
+  /** 2026-11-27 — the language the receiver reads: their emails are written in it (en, sw, nl, am, bg). */
+  @ApiPropertyOptional({ enum: RECEIVER_LANGS, description: 'The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.' }) @IsOptional() @IsIn(RECEIVER_LANGS) buyerLanguage?: string;
   @IsOptional() @IsString() @MaxLength(80) buyerName?: string;
   @IsOptional() @IsBoolean() emailCode?: boolean;
   /** A photo of the contents — the baseline a damage claim is judged against. Upload it first. */
@@ -1442,6 +1448,8 @@ export class InboundOrderDto {
   @IsOptional() @IsString() @MaxLength(80) buyerName?: string;
   @IsOptional() @IsBoolean() emailCode?: boolean;
   @IsOptional() @IsString() buyerEmail?: string;
+  /** 2026-11-27 — the language the buyer reads: their emails are written in it (en, sw, nl, am, bg). */
+  @ApiPropertyOptional({ enum: RECEIVER_LANGS }) @IsOptional() @IsIn(RECEIVER_LANGS) buyerLanguage?: string;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
   @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
   @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;
@@ -3175,6 +3183,8 @@ export class RegisterFreightDto {
   @IsOptional() @IsString() buyerMobile?: string;
   /** 2026-11-15 — who receives it (plan R2): with the Send app on buyerMobile they see it and its code there; otherwise the code is emailed. */
   @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  /** 2026-11-27 — the language the receiver reads: their emails are written in it (en, sw, nl, am, bg). */
+  @ApiPropertyOptional({ enum: RECEIVER_LANGS, description: 'The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.' }) @IsOptional() @IsIn(RECEIVER_LANGS) receiverLanguage?: string;
   @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
   /** FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window. */
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
@@ -3301,6 +3311,8 @@ export class BookFreightDto {
   @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
   /** 2026-11-15 — who receives it: the delivery code is emailed to them once a driver has it, and the driver checks the name. */
   @IsOptional() @IsEmail() @MaxLength(120) receiverEmail?: string;
+  /** 2026-11-27 — the language the receiver reads: their emails are written in it (en, sw, nl, am, bg). */
+  @ApiPropertyOptional({ enum: RECEIVER_LANGS, description: 'The language the receiver reads (en, sw, nl, am, bg): the emails to them are written in it. Left out: English, unless they have an account of their own.' }) @IsOptional() @IsIn(RECEIVER_LANGS) receiverLanguage?: string;
   @IsOptional() @IsString() @MaxLength(80) receiverName?: string;
   /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
   @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;

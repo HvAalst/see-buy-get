@@ -10,7 +10,8 @@ import {
   type PublicKeyCredentialRequestOptionsJSON,
   type RegistrationResponseJSON,
 } from '@simplewebauthn/server';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { hashEmail, hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
 import { AccountService } from './account.service';
@@ -35,8 +36,7 @@ export interface PasskeyHere {
   counter?: string;
 }
 
-/** Said where an account's fingerprint is refused on a phone its colleagues sign in on. */
-const COUNTER_PHONE = 'A colleague has opened their own session at the counter on this phone, so a fingerprint or face cannot stand in for the password here: whoever can unlock the phone could then sign in as the account. It works on a phone that only you sign in on.';
+/** Said where an account's fingerprint is refused on a phone its colleagues sign in on: the phrase refuse.passkey.counterPhone. */
 
 /** A challenge as the library takes it: the bytes. Given a string, it would send the string's own bytes, re-encoded. */
 const bytesOf = (challenge: string) => Uint8Array.from(Buffer.from(challenge, 'base64url'));
@@ -114,9 +114,9 @@ export class PasskeyService {
     try {
       verified = await verifyRegistrationResponse({ response, expectedChallenge: challengeOf(response) as string, expectedOrigin: rp.origins, expectedRPID: rp.rpID, requireUserVerification: true, supportedAlgorithmIDs: PASSKEY_ALGORITHMS });
     } catch {
-      throw new GlosError('INVALID_STATE', 'The phone’s answer did not check out, so nothing was turned on. Try again.');
+      throw refused('INVALID_STATE', said('refuse.passkey.answerNotChecked'));
     }
-    if (!verified.verified || !verified.registrationInfo.userVerified) throw new GlosError('INVALID_STATE', 'The phone did not check your fingerprint or face, so nothing was turned on. Try again.');
+    if (!verified.verified || !verified.registrationInfo.userVerified) throw refused('INVALID_STATE', said('refuse.passkey.notVerifiedByPhone'));
     const { credential } = verified.registrationInfo;
     return {
       id: credential.id,
@@ -170,7 +170,7 @@ export class PasskeyService {
    */
   async turnOnOptions(personDid: string, keys: string[] | undefined, pin: string): Promise<{ options: PublicKeyCredentialCreationOptionsJSON; which: number }> {
     const { which, key, passkey } = this.persons.passkeyHere(personDid, keys);
-    if (!key) throw new GlosError('DEVICE_NOT_KNOWN', 'Your PIN does not work on this phone or browser yet, so a fingerprint or face cannot stand in for it here. Sign in here with your PIN first.');
+    if (!key) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.pinDeviceNewLong'));
     this.persons.confirmPin(personDid, pin);
     const challenge = this.challenges.issue({ purpose: 'register', holder: 'person', owner: personDid, deviceHash: deviceHashOf(key) });
     return { options: await this.registrationOptions(`passkey-user:${personDid}`, challenge, passkey), which };
@@ -183,12 +183,12 @@ export class PasskeyService {
    */
   async turnOn(personDid: string, keys: string[] | undefined, response: RegistrationResponseJSON): Promise<PasskeyHere> {
     const { which, key } = this.persons.passkeyHere(personDid, keys);
-    if (!key) throw new GlosError('DEVICE_NOT_KNOWN', 'Your PIN does not work on this phone or browser yet. Sign in here with your PIN first.');
+    if (!key) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.pinDeviceNew'));
     if (!answers(this.challenges.take(challengeOf(response)), { purpose: 'register', holder: 'person', owner: personDid, deviceHash: deviceHashOf(key) })) {
-      throw new GlosError('INVALID_STATE', 'That took too long, or it was asked on another phone. Start again.');
+      throw refused('INVALID_STATE', said('refuse.passkey.tookTooLongOrOtherPhone'));
     }
     const passkey = await this.registered(response);
-    if (!this.persons.setPasskey(personDid, key, passkey)) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser was forgotten meanwhile. Sign in here with your PIN first.');
+    if (!this.persons.setPasskey(personDid, key, passkey)) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.forgottenPin'));
     return { on: true, which, id: passkey.id, addedAt: passkey.addedAt };
   }
 
@@ -223,14 +223,14 @@ export class PasskeyService {
   async unlock(phone: string, device: string | undefined, response: AuthenticationResponseJSON): Promise<{ unlock: string; expiresIn: number }> {
     const person = this.persons.findByPhone(phone);
     if (!person || !device || !this.persons.knowsDevice(person.personDid, device)) {
-      throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser has not signed in to this account before. Confirm the number by the code we send to it, then use your PIN here');
+      throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.phoneNotSignedInBefore'));
     }
-    if (!person.pinHash) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
-    if (this.persons.isPinLocked(person)) throw new GlosError('PIN_LOCKED', 'Too many wrong PINs. Verify your phone by code to sign in.');
+    if (!person.pinHash) throw refused('AUTH_FAILED', said('refuse.passkey.wrongPhoneOrPin'));
+    if (this.persons.isPinLocked(person)) throw refused('PIN_LOCKED', said('refuse.passkey.pinLocked'));
     const passkey = this.persons.passkeyOf(person.personDid, device);
-    if (!passkey || response?.id !== passkey.id) throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use your PIN.');
+    if (!passkey || response?.id !== passkey.id) throw refused('UNLOCK_OFF', said('refuse.passkey.unlockOffPin'));
     if (!answers(this.challenges.take(challengeOf(response)), { purpose: 'unlock', holder: 'person', address: person.phoneHash, deviceHash: deviceHashOf(device) })) {
-      throw new GlosError('UNLOCK_FAILED', 'That took too long. Unlock again, or use your PIN.');
+      throw refused('UNLOCK_FAILED', said('refuse.passkey.unlockLateIPin'));
     }
     const counter = await this.signed(response, passkey);
     if (counter === undefined) return this.persons.failedUnlock(person);
@@ -256,9 +256,9 @@ export class PasskeyService {
    */
   async accountTurnOnOptions(did: string, device: string | undefined, password: string): Promise<{ options: PublicKeyCredentialCreationOptionsJSON; which: number }> {
     const { known, passkey, accountId, counterAt } = this.accounts.passkeyHere(did, device);
-    if (!known || !device) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the account’s own yet, so a fingerprint or face cannot stand in for its password here. Sign in here with the password first.');
+    if (!known || !device) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.accountDeviceNewLong'));
     // A phone colleagues sign in on is never one for the account's fingerprint — refused before the password is looked at.
-    if (counterAt) throw new GlosError('FORBIDDEN', COUNTER_PHONE, { why: 'counter', since: counterAt });
+    if (counterAt) throw refused('FORBIDDEN', said('refuse.passkey.counterPhone'), { why: 'counter', since: counterAt });
     this.accounts.confirmPassword(did, password);
     const challenge = this.challenges.issue({ purpose: 'register', holder: 'account', owner: accountId, deviceHash: deviceHashOf(device) });
     return { options: await this.registrationOptions(`passkey-account:${accountId}`, challenge, passkey), which: 0 };
@@ -267,14 +267,14 @@ export class PasskeyService {
   /** …step two: the phone's answer, for this account on this phone. Kept on the phone's own record. */
   async accountTurnOn(did: string, device: string | undefined, response: RegistrationResponseJSON): Promise<PasskeyHere> {
     const { known, accountId, counterAt } = this.accounts.passkeyHere(did, device);
-    if (!known || !device) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the account’s own yet. Sign in here with the password first.');
+    if (!known || !device) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.accountDeviceNew'));
     // …and asked again here: a colleague may have opened a session on it between the two steps.
-    if (counterAt) throw new GlosError('FORBIDDEN', COUNTER_PHONE, { why: 'counter', since: counterAt });
+    if (counterAt) throw refused('FORBIDDEN', said('refuse.passkey.counterPhone'), { why: 'counter', since: counterAt });
     if (!answers(this.challenges.take(challengeOf(response)), { purpose: 'register', holder: 'account', owner: accountId, deviceHash: deviceHashOf(device) })) {
-      throw new GlosError('INVALID_STATE', 'That took too long, or it was asked on another phone. Start again.');
+      throw refused('INVALID_STATE', said('refuse.passkey.tookTooLongOrOtherPhone'));
     }
     const passkey = await this.registered(response);
-    if (!this.accounts.setPasskey(did, device, passkey)) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser was forgotten meanwhile. Sign in here with the password first.');
+    if (!this.accounts.setPasskey(did, device, passkey)) throw refused('DEVICE_NOT_KNOWN', said('refuse.passkey.forgottenPassword'));
     return { on: true, which: 0, id: passkey.id, addedAt: passkey.addedAt };
   }
 
@@ -305,9 +305,9 @@ export class PasskeyService {
   async accountUnlock(email: string, device: string | undefined, response: AuthenticationResponseJSON): Promise<{ unlock: string; expiresIn: number }> {
     this.accounts.assertNotLocked(email);
     const target = this.accounts.unlockTarget(email, device);
-    if (!target || !device || response?.id !== target.passkey.id) throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use the password.');
+    if (!target || !device || response?.id !== target.passkey.id) throw refused('UNLOCK_OFF', said('refuse.passkey.unlockOffPassword'));
     if (!answers(this.challenges.take(challengeOf(response)), { purpose: 'unlock', holder: 'account', address: hashEmail((email || '').trim().toLowerCase()), deviceHash: deviceHashOf(device) })) {
-      throw new GlosError('UNLOCK_FAILED', 'That took too long. Unlock again, or use the password.');
+      throw refused('UNLOCK_FAILED', said('refuse.passkey.unlockLatePassword'));
     }
     const counter = await this.signed(response, target.passkey);
     if (counter === undefined) return this.accounts.failedUnlock(email);

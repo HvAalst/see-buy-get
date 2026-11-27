@@ -29,6 +29,7 @@ import { PersonService } from './person.service';
 import { AccountService } from './account.service';
 import { NotificationService } from './notification.service';
 import { at, noticeOf, said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 import { ReaderLanguageService, addresseeOf } from './reader-language.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -39,6 +40,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Said to staff, who pass every role check: a payee's payout number is its own. */
 export const STAFF_SET_NO_PAYOUT_NUMBER = 'A payee sets its own payout number, signed in as itself. Staff see it masked on each payout, and change none.';
+
+/** What the view says of an account that is not paid out by itself; a refusal says the same in a phrase. */
+const NOT_PAYEE_FLEET = 'Your fleet is paid for your work: its office sets where.';
 
 interface Payee {
   payeeId: string;
@@ -129,18 +133,18 @@ export class PayoutNumberService implements OnModuleInit {
     const payee = this.requirePayee(actor);
     const way = this.wayOf(payee.country);
     if (way === 'by_hand') {
-      throw new GlosError('INVALID_STATE', `In ${catalogueEntry(payee.country)?.name ?? payee.country} payouts are made by hand: there is no payout number to set.`);
+      throw refused('INVALID_STATE', said('refuse.payoutNumber.byHand', { country: catalogueEntry(payee.country)?.name ?? payee.country }));
     }
-    if (this.paysTo(payee.country) === 'bank') throw new GlosError('INVALID_STATE', `In ${catalogueEntry(payee.country)?.name ?? payee.country} you are paid to your bank account: set that instead of a number.`);
+    if (this.paysTo(payee.country) === 'bank') throw refused('INVALID_STATE', said('refuse.payoutNumber.paidToBank', { country: catalogueEntry(payee.country)?.name ?? payee.country }));
     const msisdn = way === 'mpesa' ? normaliseMsisdn(phone) : this.numberIn(payee.country, phone);
-    if (!msisdn && way === 'mpesa') throw new GlosError('PHONE_INVALID', 'Not a Kenyan mobile number M-Pesa can pay. Write it as 07XX XXX XXX or 01XX XXX XXX.', { field: 'phone' });
-    if (!msisdn) throw new GlosError('PHONE_INVALID', `Not a mobile number in ${catalogueEntry(payee.country)?.name ?? payee.country}: write it with its country code, ${catalogueEntry(payee.country)?.dialCode ?? '+'}…`, { field: 'phone' });
-    if (this.numbers.get(payee.payeeId)?.msisdn === msisdn) throw new GlosError('INVALID_STATE', 'That is already your payout number.');
+    if (!msisdn && way === 'mpesa') throw refused('PHONE_INVALID', said('refuse.payoutNumber.notKenyan'), { field: 'phone' });
+    if (!msisdn) throw refused('PHONE_INVALID', said('refuse.payoutNumber.notMobileIn', { country: catalogueEntry(payee.country)?.name ?? payee.country, dial: catalogueEntry(payee.country)?.dialCode ?? '+' }), { field: 'phone' });
+    if (this.numbers.get(payee.payeeId)?.msisdn === msisdn) throw refused('INVALID_STATE', said('refuse.payoutNumber.alreadyNumber'));
     const to = `+${msisdn}`;
     const texts = this.sms?.sends() ?? false;
     const standIn = standInCode(to, texts);
-    if (!standIn && !texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet, so a payout number cannot be confirmed.');
-    if (!standIn && texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
+    if (!standIn && !texts && !isSandbox()) throw refused('SMS_NOT_SENT', said('refuse.payoutNumber.cannotText'));
+    if (!standIn && texts && !this.sms?.mayGoTo(to)) throw refused('PHONE_NOT_SERVED', said('refuse.payoutNumber.notTextedThere'));
     this.assertWithinRate(payee.payeeId, now);
     const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
     const minutes = CODE_TTL_MS / 60_000;
@@ -166,15 +170,15 @@ export class PayoutNumberService implements OnModuleInit {
     const asked = this.pending.get(payee.payeeId);
     if (!asked || asked.expires < now) {
       this.pending.delete(payee.payeeId);
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.payoutNumber.codeWrong'));
     }
     if (!safeEqual(asked.code, String(code ?? '').trim())) {
       asked.attempts += 1;
       if (asked.attempts >= MAX_ATTEMPTS) {
         this.pending.delete(payee.payeeId);
-        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Ask for a new one.');
+        throw refused('OTP_LOCKED', said('refuse.payoutNumber.codesLocked'));
       }
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.payoutNumber.codeWrong'));
     }
     this.pending.delete(payee.payeeId);
     // 2026-11-16 — the code was typed in: the route that texted it got it there (D4).
@@ -220,16 +224,16 @@ export class PayoutNumberService implements OnModuleInit {
   setBank(actor: IntrospectionResult | undefined, input: { account: string; holder: string; bic?: string; pin?: string; password?: string }, now: number = Date.now()): PayoutNumberSaved {
     const payee = this.requirePayee(actor);
     const name = catalogueEntry(payee.country)?.name ?? payee.country;
-    if (this.paysTo(payee.country) !== 'bank') throw new GlosError('INVALID_STATE', `In ${name} payouts do not go to a bank account.`);
+    if (this.paysTo(payee.country) !== 'bank') throw refused('INVALID_STATE', said('refuse.payoutNumber.noBankHere', { country: name }));
     const account = normaliseIban(input.account);
     const problem = ibanProblem(account);
-    if (problem) throw new GlosError('VALIDATION_FAILED', IBAN_WORDS[problem], { field: 'account' });
+    if (problem) throw refused('VALIDATION_FAILED', said(IBAN_WORDS[problem]), { field: 'account' });
     const holder = (input.holder ?? '').trim().replace(/\s+/g, ' ');
-    if (!/^[\p{L}\p{M}0-9 .,'’&()/-]{2,70}$/u.test(holder)) throw new GlosError('VALIDATION_FAILED', 'Write the account holder’s name as the bank has it', { field: 'holder' });
+    if (!/^[\p{L}\p{M}0-9 .,'’&()/-]{2,70}$/u.test(holder)) throw refused('VALIDATION_FAILED', said('refuse.payoutNumber.holderName'), { field: 'holder' });
     const bic = input.bic?.trim() ? input.bic.toUpperCase().replace(/\s/g, '') : undefined;
-    if (bic && !isBic(bic)) throw new GlosError('VALIDATION_FAILED', 'Not a BIC: eight or eleven letters and digits, as the bank writes it', { field: 'bic' });
+    if (bic && !isBic(bic)) throw refused('VALIDATION_FAILED', said('refuse.payoutNumber.notBic'), { field: 'bic' });
     const before = this.banks.get(payee.payeeId);
-    if (before && this.openBank(before)?.account === account) throw new GlosError('INVALID_STATE', 'That is already your payout account.');
+    if (before && this.openBank(before)?.account === account) throw refused('INVALID_STATE', said('refuse.payoutNumber.alreadyAccount'));
     this.proveSignIn(actor, input);
     const at = new Date(now).toISOString();
     const masked = maskIban(account);
@@ -256,16 +260,16 @@ export class PayoutNumberService implements OnModuleInit {
     const byPassword = actor?.role === 'agent' || actor?.role === 'mdp';
     const pin = input.pin?.trim();
     if (pin && actor?.personDid) {
-      if (!this.persons) throw new GlosError('INVALID_STATE', 'Your PIN cannot be checked on this server, so the account cannot be saved.');
+      if (!this.persons) throw refused('INVALID_STATE', said('refuse.payoutNumber.pinNotChecked'));
       this.persons.confirmPin(actor.personDid, pin);
       return;
     }
     if (input.password && byPassword && actor?.did) {
-      if (!this.accounts) throw new GlosError('INVALID_STATE', 'The password cannot be checked on this server, so the account cannot be saved.');
+      if (!this.accounts) throw refused('INVALID_STATE', said('refuse.payoutNumber.passwordNotChecked'));
       this.accounts.confirmPassword(actor.did, input.password);
       return;
     }
-    throw new GlosError('FIELD_REQUIRED', byPassword ? 'Enter the password you sign in with to save the account' : 'Enter your PIN to save the account', { field: byPassword ? 'password' : 'pin' });
+    throw refused('FIELD_REQUIRED', said(byPassword ? 'refuse.payoutNumber.enterPassword' : 'refuse.payoutNumber.enterPin'), { field: byPassword ? 'password' : 'pin' });
   }
 
   /** A changed bank account, told in the bell (opening it in Settings) and by email where there is an address. Never a text. */
@@ -372,22 +376,22 @@ export class PayoutNumberService implements OnModuleInit {
    */
   private payeeOf(actor: IntrospectionResult | undefined): Payee | { notPayee: string; country: string } {
     const role = actor?.role;
-    if (role === 'operator') throw new GlosError('FORBIDDEN', STAFF_SET_NO_PAYOUT_NUMBER);
+    if (role === 'operator') throw refused('FORBIDDEN', said('refuse.payoutNumber.staffSetNone'));
     if (role === 'driver' && actor?.did) {
       const driver = this.drivers.get(actor.did);
       const country = driver.jurisdiction ?? NETWORK_JURISDICTION;
-      if (driver.managerDid) return { notPayee: 'Your fleet is paid for your work: its office sets where.', country };
+      if (driver.managerDid) return { notPayee: NOT_PAYEE_FLEET, country };
       return { payeeId: driver.did, country };
     }
     if (role === 'fleet_manager') {
       const fleetDid = actingTenant(actor);
-      if (!fleetDid) throw new GlosError('FORBIDDEN', 'Sign in as the fleet’s office');
+      if (!fleetDid) throw refused('FORBIDDEN', said('refuse.payoutNumber.signInAsFleet'));
       const fleet = this.managers.get(fleetDid);
       return { payeeId: fleet.did, country: fleet.jurisdiction ?? NETWORK_JURISDICTION };
     }
     if (role === 'mdp' && actor?.did) {
       const hub = this.mdps.list().find((m) => m.did === actor.did);
-      if (!hub) throw new GlosError('NOT_FOUND', 'No hub is signed in');
+      if (!hub) throw refused('NOT_FOUND', said('refuse.payoutNumber.noHub'));
       return { payeeId: hub.mdpId, country: this.mdps.countryOf(hub) };
     }
     // 2026-11-20 — a shop where a partner contracts is paid by the partner, to its own number (4c); elsewhere, into its float.
@@ -402,7 +406,7 @@ export class PayoutNumberService implements OnModuleInit {
 
   private requirePayee(actor: IntrospectionResult | undefined): Payee {
     const who = this.payeeOf(actor);
-    if ('notPayee' in who) throw new GlosError('FORBIDDEN', who.notPayee);
+    if ('notPayee' in who) throw refused('FORBIDDEN', said(who.notPayee === NOT_PAYEE_FLEET ? 'refuse.payoutNumber.fleetPaid' : 'refuse.payoutNumber.shopFloat'));
     return who;
   }
 
@@ -418,9 +422,9 @@ export class PayoutNumberService implements OnModuleInit {
     }
     if (now - rate.lastAt < RESEND_COOLDOWN_MS) {
       const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - rate.lastAt)) / 1000);
-      throw new GlosError('RATE_LIMITED', `Wait ${wait}s before asking for another code`);
+      throw refused('RATE_LIMITED', said('refuse.payoutNumber.waitForCode', { wait }));
     }
-    if (rate.count >= MAX_PER_DAY) throw new GlosError('RATE_LIMITED', 'Too many codes asked for today');
+    if (rate.count >= MAX_PER_DAY) throw refused('RATE_LIMITED', said('refuse.payoutNumber.tooManyCodes'));
     rate.lastAt = now;
     rate.count += 1;
   }
@@ -436,12 +440,12 @@ export class PayoutNumberService implements OnModuleInit {
 }
 
 /** Why an IBAN was refused, said to the payee typing it. */
-const IBAN_WORDS: Record<'not_iban' | 'not_sepa' | 'length' | 'check', string> = {
-  not_iban: 'Not a bank account number (IBAN): it starts with two letters of its country, then two digits.',
-  not_sepa: 'Payouts go to a bank account in the SEPA area (the European Union and its neighbours).',
-  length: 'That bank account number is too short or too long for its country: check every character.',
-  check: 'That bank account number does not add up: one character is likely mistyped.',
-};
+const IBAN_WORDS = {
+  not_iban: 'refuse.payoutNumber.ibanNotIban',
+  not_sepa: 'refuse.payoutNumber.ibanNotSepa',
+  length: 'refuse.payoutNumber.ibanLength',
+  check: 'refuse.payoutNumber.ibanCheck',
+} as const;
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);

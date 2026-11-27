@@ -1,5 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import { ERROR_CODES, GlosErrorCode, isRetryable } from './error-codes';
+import type { Said } from '../../modules/pudo/notice-words/say';
 
 /** Structured, machine-actionable parameters for a failure (e.g. `{ resource: 'parcel', id }`). */
 export type ProblemParams = Record<string, unknown>;
@@ -18,8 +19,13 @@ export class GlosError extends HttpException {
   readonly code: GlosErrorCode;
   readonly params?: ProblemParams;
   readonly retryable: boolean;
+  /**
+   * 2026-11-27 — THE REFUSAL AS A PHRASE (the owner: "continue the weak spots"): its detail is this phrase's English, and the
+   * caller is told it in the language its app asks in (ProblemFilter; notice-words/refuse.ts makes one).
+   */
+  readonly said?: Said;
 
-  constructor(code: GlosErrorCode, detail?: string, params?: ProblemParams, opts?: { status?: number; retryable?: boolean }) {
+  constructor(code: GlosErrorCode, detail?: string, params?: ProblemParams, opts?: { status?: number; retryable?: boolean; said?: Said }) {
     const spec = ERROR_CODES[code];
     const status = opts?.status ?? spec.status;
     const message = detail ?? spec.title;
@@ -27,5 +33,6 @@ export class GlosError extends HttpException {
     this.code = code;
     this.params = params;
     this.retryable = opts?.retryable ?? isRetryable(code);
+    if (opts?.said) this.said = opts.said;
   }
 }

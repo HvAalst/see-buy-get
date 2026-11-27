@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said, type Said } from './notice-words/say';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -175,7 +177,7 @@ export class BookingPayService implements OnModuleInit, OnApplicationBootstrap, 
   async ask(parcelId: string, personDid: string, now: number = Date.now()): Promise<BookingPayView> {
     const parcel = this.parcels.get(parcelId);
     const offer = this.offerOf(parcel);
-    if (!offer.offered) throw new GlosError('INVALID_STATE', refusalOf(offer.why));
+    if (!offer.offered) throw refused('INVALID_STATE', refusalOf(offer.why));
     const open = this.latestFor(parcelId);
     if (open && !BOOKING_PAY_FINAL.includes(open.status) && (!open.expiresAt || Date.parse(open.expiresAt) > now)) return this.view(parcelId);
     const token = this.mollie.ownToken()!;
@@ -199,7 +201,7 @@ export class BookingPayService implements OnModuleInit, OnApplicationBootstrap, 
       throw asOurs(err);
     }
     const paymentId = String(made.id ?? '');
-    if (!paymentId.startsWith('tr_')) throw new GlosError('PROVIDER_UNAVAILABLE', 'Mollie did not give back a payment');
+    if (!paymentId.startsWith('tr_')) throw refused('PROVIDER_UNAVAILABLE', said('refuse.bookingPay.noPaymentGiven'));
     const checkout = (made._links as { checkout?: { href?: string } } | undefined)?.checkout?.href;
     const p: BookingPayment = {
       paymentId,
@@ -338,25 +340,25 @@ function statusOf(s: unknown): BookingPayStatus | undefined {
   return STATUSES.includes(s as BookingPayStatus) ? (s as BookingPayStatus) : undefined;
 }
 
-function refusalOf(why: BookingPayWhyNot | undefined): string {
+function refusalOf(why: BookingPayWhyNot | undefined): Said {
   switch (why) {
     case 'paid':
-      return 'This booking is paid already: print its label';
+      return said('refuse.bookingPay.paid');
     case 'handed_in':
-      return 'This parcel was handed in already';
+      return said('refuse.bookingPay.handedIn');
     case 'not_here':
-      return 'Paying online is not offered in this country yet: pay at the shop';
+      return said('refuse.bookingPay.notHere');
     case 'not_eur':
-      return 'Paying online is in euros only: pay at the shop';
+      return said('refuse.bookingPay.notEur');
     case 'no_account':
-      return 'Paying online is not set up yet: pay at the shop';
+      return said('refuse.bookingPay.noAccount');
     default:
-      return 'Only a booking made in the Send app is paid online';
+      return said('refuse.bookingPay.sendAppOnly');
   }
 }
 
 function asOurs(err: unknown): GlosError {
   if (err instanceof GlosError) return err;
-  if (err instanceof MollieError) return new GlosError('PROVIDER_UNAVAILABLE', `Mollie did not answer as expected: ${err.message}`);
-  return new GlosError('PROVIDER_UNAVAILABLE', 'Mollie could not be reached: try again in a moment');
+  if (err instanceof MollieError) return refused('PROVIDER_UNAVAILABLE', said('refuse.bookingPay.didNotAnswerAsExpected', { why: err.message }));
+  return refused('PROVIDER_UNAVAILABLE', said('refuse.bookingPay.couldNotBeReached'));
 }

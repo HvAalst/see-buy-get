@@ -393,7 +393,7 @@ describe('a person posts a load, over the wire', () => {
   /* ---------------- 2026-11-15: the load names who receives it — the code reaches them, not by hand (plan R2) -- */
 
   /** A Kenyan load naming its receiver, a driver's price accepted and paid: the code is made. */
-  async function aPaidLoadFor(receiver: { buyerMobile?: string; receiverEmail?: string; receiverName?: string }) {
+  async function aPaidLoadFor(receiver: { buyerMobile?: string; receiverEmail?: string; receiverName?: string; receiverLanguage?: string }) {
     const person = await aPerson();
     const load = (await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Parklands', destLocation: thika, destLabel: 'Thika', contactPhone: `+2547${digits()}9`, ...receiver })).expect(201)).body;
     const at = (path: string) => `/v1/sbg/dispatch/freight/${load.freightId}/${path}`;
@@ -431,6 +431,18 @@ describe('a person posts a load, over the wire', () => {
    * their bell, once, with where it went and not the code; the load says so; they name another address — never staff,
    * never a stranger — and the code is emailed there. An address that came back before is told at once.
    */
+  it('16a · the receiver is written to in the language the sender chose for them (2026-11-27)', async () => {
+    const email = `receiver-${digits()}@example.com`;
+    const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Achieng Otieno', receiverLanguage: 'sw' });
+    const mail = app.get(OutboxMailSender).recent(email).find((m) => m.template === 'load-delivery-code');
+    expect(mail?.html).toContain('<html lang="sw">');
+    expect(mail?.text).toContain(l.code);
+    expect(mail?.text).not.toContain('Please do not reply');
+    // A language no email is written in is refused, by name.
+    const person = await aPerson();
+    await post(person, fridge({ pickupLocation: nairobi, pickupLabel: 'Parklands', destLocation: thika, destLabel: 'Thika', contactPhone: `+2547${digits()}9`, receiverEmail: email, receiverLanguage: 'fr' })).expect(400);
+  });
+
   it('16b · the code email came back: the poster is told once, names another address, and the code goes there', async () => {
     const email = `typo-${digits()}@example.com`;
     const l = await aPaidLoadFor({ buyerMobile: `+2547${digits()}8`, receiverEmail: email, receiverName: 'Achieng Otieno' });

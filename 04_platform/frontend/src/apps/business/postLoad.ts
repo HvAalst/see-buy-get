@@ -3,6 +3,7 @@ import type { NewLoad } from './api';
 import { euPassage } from '../../shared/eu';
 import { EMPTY_WORK, cleanWorkForm, workBlocker, workBody, type LoadWorkForm } from '../../shared/loadWork';
 import { isColdNature, isDangerousNature, loadGaps, nextDay, type LoadForm } from './logic';
+import { defaultReaderLanguage } from '../../shared/readerLanguage';
 
 /*
  * 2026-11-03 — POSTING A LOAD, ONE STEP AT A TIME (the owner: "the 'post a new load' is a pretty large page. It is in my
@@ -51,6 +52,8 @@ export type PostForm = LoadForm & {
   /** 2026-11-15 — who receives it: their delivery code reaches them in the Send app on this number, or by email. */
   receiverPhone: string;
   receiverEmail: string;
+  /** 2026-11-27 — the language they read; empty: the sender's own. */
+  receiverLanguage?: string;
   receiverName: string;
   deliveryWindow: string;
   pickupOn: string;
@@ -315,7 +318,7 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
     ...(form.contactPhone.trim() ? { contactPhone: form.contactPhone.trim() } : {}),
     // 2026-11-15 — who receives it: a delivery code once a driver has it, given to them (the owner: "yes").
     ...(form.receiverPhone.trim() ? { buyerMobile: form.receiverPhone.trim() } : {}),
-    ...(form.receiverEmail.trim() ? { receiverEmail: form.receiverEmail.trim() } : {}),
+    ...(form.receiverEmail.trim() ? { receiverEmail: form.receiverEmail.trim(), receiverLanguage: form.receiverLanguage || defaultReaderLanguage() } : {}),
     ...(form.receiverName.trim() ? { receiverName: form.receiverName.trim() } : {}),
     ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
     ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),

@@ -1,6 +1,7 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { euPassage } from '../../shared/eu';
+import { defaultReaderLanguage } from '../../shared/readerLanguage';
 
 /**
  * A BUSINESS'S PARCELS (backend business-parcel.service.ts; the user, 2026-10-29: "Billed to the business"; "A prepaid
@@ -317,6 +318,8 @@ export interface ParcelForm {
   most: string;
   /** 2026-11-15 — the receiver's email and name, for the emailed code (plan R3). */
   receiverEmail: string;
+  /** 2026-11-27 — the language they read; empty: the sender's own. */
+  receiverLanguage?: string;
   receiverName: string;
   /** 2026-11-23 — to another EU country on its road route: the business's word on what it holds (step 3b). */
   noGoodsWithOwnRules: boolean;
@@ -364,7 +367,7 @@ export function sendBody(f: ParcelForm, expectedTotal: number | undefined, withi
     // Delivered to one of its own places, at most what it allows a driver for the last leg — or collected at a shop.
     ...(f.destDid.startsWith(TO_PLACE) ? { toOwnPlace: { siteId: f.destDid.slice(TO_PLACE.length), maxSpend: Number(f.most.replace(',', '.')) } } : { destPudoDid: f.destDid }),
     receiverMobile: f.receiver.trim(),
-    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim() } : {}),
+    ...(f.receiverEmail.trim() ? { receiverEmail: f.receiverEmail.trim(), receiverLanguage: f.receiverLanguage || defaultReaderLanguage() } : {}),
     ...(f.receiverName.trim() ? { receiverName: f.receiverName.trim() } : {}),
     dimensionsCm: { l: s.l, w: s.w, h: s.h },
     weightKg: s.kg,

@@ -418,6 +418,8 @@ export const words: Record<string, string> = {
   "common.weight.inG": "ክብደት በግራም",
   "common.weight.atLeast": "ቢያንስ 10 g — ከዚያ የቀለለ ደብዳቤን እንደ 10 g ይመዝኑት።",
   "common.cancel": "ይቅር",
+  "common.receiverLanguage": "የእነሱ ቋንቋ",
+  "common.receiverLanguageHint": "ለእነሱ የሚላኩ ኢሜይሎች በዚህ ቋንቋ ይጻፋሉ።",
   "common.hubDown.reason.power": "መብራት የለም",
   "common.hubDown.reason.flood": "ጎርፍ፣ ወይም ወደዚያ የሚወስደው መንገድ ተቋርጧል",
   "common.hubDown.reason.security": "ለመክፈት አስተማማኝ አይደለም",

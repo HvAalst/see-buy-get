@@ -14,6 +14,7 @@ import { fiscalBody, fiscalCodesAsked, fiscalReady, type FiscalCountry, type Fis
 import { arrivedWho, nowWithLine, nowWithSince } from '../../../shared/nowWith';
 import { ArrivedConfirm } from '../../../shared/ArrivedConfirm';
 import { CodeMailBounced } from '../../../shared/CodeMailBounced';
+import { ReaderLanguageOptions, defaultReaderLanguage } from '../../../shared/readerLanguage';
 
 /**
  * 2026-11-13 — POST A LOAD (unusual loads, U5; part 3a): something too big for a shop — what it is, about how heavy, where from
@@ -175,6 +176,17 @@ export function LoadPostScreen({ state, actions, client }: { state: SendState; a
           </label>
           <input id="load-rcv-email" class="input" type="email" inputMode="email" maxLength={120} autoComplete="off" value={form.receiverEmail} onInput={(e) => set({ receiverEmail: e.currentTarget.value })} />
         </div>
+        {form.receiverEmail.trim() ? (
+          <div class="field">
+            <label class="field__label" for="load-rcv-lang">
+              {t('common.receiverLanguage')}
+            </label>
+            <select id="load-rcv-lang" class="input" value={form.receiverLanguage || defaultReaderLanguage()} onChange={(e) => set({ receiverLanguage: e.currentTarget.value })}>
+              <ReaderLanguageOptions />
+            </select>
+            <p class="hint">{t('common.receiverLanguageHint')}</p>
+          </div>
+        ) : null}
       </Card>
       {payChoice ?? <p class="card__note">{t('send.load.howPay')}</p>}
       {word ? <GoodsWord passage={word} said={said} onChange={setSaid} /> : null}

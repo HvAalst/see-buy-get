@@ -10,6 +10,7 @@ import { LoadWorkFields } from '../../../shared/load-work/LoadWorkFields';
 import { GoodsWord } from '../../../shared/ui/GoodsWord';
 import { FiscalCodes } from '../../../shared/ui/FiscalCodes';
 import { fiscalReady } from '../../../shared/fiscal-codes';
+import { ReaderLanguageOptions, defaultReaderLanguage } from '../../../shared/readerLanguage';
 
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
@@ -247,6 +248,17 @@ export function FreightBooking({ state, actions, onTakeIn, start, now }: { state
               </label>
               <input id="freight-receiver-email" class="input" type="email" inputMode="email" maxLength={120} value={f.receiverEmail} onInput={(e) => actions.setAccept({ receiverEmail: e.currentTarget.value })} autocomplete="off" />
               <p class="hint">{t('agent.accept.receiverEmailHint')}</p>
+              {f.receiverEmail.trim() ? (
+                <>
+                  <label class="field__label" for="freight-receiver-lang">
+                    {t('common.receiverLanguage')}
+                  </label>
+                  <select id="freight-receiver-lang" class="input" value={f.receiverLanguage || defaultReaderLanguage()} onChange={(e) => actions.setAccept({ receiverLanguage: e.currentTarget.value })}>
+                    <ReaderLanguageOptions />
+                  </select>
+                  <p class="hint">{t('common.receiverLanguageHint')}</p>
+                </>
+              ) : null}
             </div>
           </Card>
           {/* FP7 — CMR box 13, taken down at the counter. The contact is a FIELD, not a line in the note: the driver

@@ -4232,6 +4232,7 @@ export class SbgController {
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
       // 2026-11-15 — who receives it: the code emailed to them once a driver has it (the number above is the sender's).
       ...(dto.receiverEmail?.trim() ? { receiverEmail: dto.receiverEmail, codeForReceiver: true, codeByEmailOnly: true } : {}),
+      ...(dto.receiverEmail?.trim() && dto.receiverLanguage ? { receiverLanguage: dto.receiverLanguage } : {}),
       ...(dto.receiverName?.trim() ? { receiverName: dto.receiverName } : {}),
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,
@@ -5732,6 +5733,7 @@ export class SbgController {
       destAgentDid: destPudoDid,
       buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile ?? '',
       buyerEmail: dto.buyerEmail ?? handoff?.buyerEmail,
+      ...(dto.buyerLanguage ? { buyerLang: dto.buyerLanguage } : {}),
       // 2026-11-15 — the buyer's name, and this order's choice to email them the code (plan R3).
       ...(dto.buyerName?.trim() ? { receiverName: dto.buyerName.trim() } : {}),
       ...(dto.emailCode !== undefined ? { emailCode: dto.emailCode } : {}),

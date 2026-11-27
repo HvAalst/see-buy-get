@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said, type Said } from './notice-words/say';
 import { randomInt, timingSafeEqual } from 'crypto';
 import { normalizePhone } from '../../foundation/identity/phone';
 import { REVIEW_CODE } from '../../foundation/runtime/review-code';
@@ -7,7 +8,7 @@ import { SmsService } from '../../foundation/sms/sms.service';
 import { PersonService } from './person.service';
 
 /** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
-const tooManyRequests = (message: string) => new GlosError('RATE_LIMITED', message);
+const tooManyRequests = (s: Said) => refused('RATE_LIMITED', s);
 
 /** How long a code works, in minutes. The text that carries it says so. */
 export const OTP_TTL_MINUTES = 10;
@@ -83,7 +84,7 @@ export class OtpService {
   /** The number a code would go to, as E.164 — or the refusal a number that cannot be one gets. Nothing is counted. */
   phoneFor(phone: string): string {
     const p = this.norm(phone);
-    if (p.replace(/\D/g, '').length < 9) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number');
+    if (p.replace(/\D/g, '').length < 9) throw refused('PHONE_INVALID', said('refuse.otp.phoneInvalid'));
     return p;
   }
 
@@ -130,16 +131,16 @@ export class OtpService {
     const entry = this.codes.get(p);
     if (!entry || entry.expires < Date.now()) {
       this.codes.delete(p);
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.otp.wrongOrExpired'));
     }
 
     if (!OtpService.safeEqual(entry.code, (code || '').trim())) {
       entry.attempts += 1;
       if (entry.attempts >= MAX_ATTEMPTS) {
         this.codes.delete(p); // burn it — a 6-digit code must not be brute-forceable
-        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Request a new one.');
+        throw refused('OTP_LOCKED', said('refuse.otp.locked'));
       }
-      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+      throw refused('OTP_INVALID', said('refuse.otp.wrongOrExpired'));
     }
 
     this.codes.delete(p);
@@ -218,10 +219,10 @@ export class OtpService {
     }
     if (now - rate.lastRequestAt < RESEND_COOLDOWN_MS) {
       const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - rate.lastRequestAt)) / 1000);
-      throw tooManyRequests(`Wait ${wait}s before asking for another code`);
+      throw tooManyRequests(said('refuse.otp.wait', { wait }));
     }
     if (rate.count >= MAX_PER_DAY) {
-      throw tooManyRequests('Too many codes requested for this number today');
+      throw tooManyRequests(said('refuse.otp.tooManyToday'));
     }
     rate.lastRequestAt = now;
     rate.count += 1;

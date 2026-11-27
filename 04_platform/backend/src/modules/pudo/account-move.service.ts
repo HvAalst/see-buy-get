@@ -3,7 +3,7 @@ import { randomBytes, randomInt } from 'crypto';
 import { COUNTRY_CATALOGUE } from '../../foundation/countries/catalogue';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AccountRecoveryService } from './account-recovery.service';
@@ -103,15 +103,15 @@ export class AccountMoveService {
    * is nothing behind it is for staff to see, never for a stranger to learn by asking.
    */
   ask(input: { oldPhone: string; newPhone: string; nationalId?: string; note?: string }, now: number = Date.now()): MoveAsked {
-    if (!isPlausiblePhone(input.oldPhone ?? '')) throw new GlosError('PHONE_INVALID', 'Enter the phone number the account is on', { field: 'oldPhone' });
-    if (!isPlausiblePhone(input.newPhone ?? '')) throw new GlosError('PHONE_INVALID', 'Enter the new phone number', { field: 'newPhone' });
+    if (!isPlausiblePhone(input.oldPhone ?? '')) throw refused('PHONE_INVALID', said('refuse.accountMove.oldPhoneInvalid'), { field: 'oldPhone' });
+    if (!isPlausiblePhone(input.newPhone ?? '')) throw refused('PHONE_INVALID', said('refuse.accountMove.newPhoneInvalid'), { field: 'newPhone' });
     const oldPhoneHash = hashPhone(input.oldPhone);
     const newPhoneHash = hashPhone(input.newPhone);
-    if (oldPhoneHash === newPhoneHash) throw new GlosError('INVALID_STATE', 'That is the same number. An account is moved to a different one.', { field: 'newPhone' });
-    if (!this.otp.isVerified(input.newPhone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify the new number first — we send it a code', { field: 'newPhone' });
+    if (oldPhoneHash === newPhoneHash) throw refused('INVALID_STATE', said('refuse.accountMove.sameNumber'), { field: 'newPhone' });
+    if (!this.otp.isVerified(input.newPhone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.accountMove.verifyNewNumber'), { field: 'newPhone' });
     // Said of the NEW number only, and only to somebody who has just proved they hold it.
     if (this.persons.findByPhone(input.newPhone)) {
-      throw new GlosError('DUPLICATE', 'The new number already has an account of its own, so another account cannot be moved onto it. Sign in with it, or use a number that has none.', { field: 'newPhone' });
+      throw refused('DUPLICATE', said('refuse.accountMove.newNumberHasAccount'), { field: 'newPhone' });
     }
 
     const country = countryOfPhone(input.oldPhone);
@@ -123,7 +123,7 @@ export class AccountMoveService {
       return { reference: same.reference, lapsesAt: same.lapsesAt, ...(support ? { support } : {}) };
     }
     const today = this.all(now).filter((m) => m.oldPhoneHash === oldPhoneHash && Date.parse(m.askedAt) > now - DAY_MS).length;
-    if (today >= MOVE_ASKS_PER_DAY) throw new GlosError('RATE_LIMITED', 'This account has been asked about too many times today. Speak to SeeBuyGet staff with the reference you were given, or try again tomorrow.');
+    if (today >= MOVE_ASKS_PER_DAY) throw refused('RATE_LIMITED', said('refuse.accountMove.askedTooOften'));
 
     const person = this.persons.findByPhone(input.oldPhone);
     const move: StoredMove = {
@@ -162,7 +162,7 @@ export class AccountMoveService {
   status(reference: string, now: number = Date.now()): MoveStatus {
     const wanted = normalizeReference(reference);
     const move = this.all(now).find((m) => normalizeReference(m.reference) === wanted);
-    if (!move) throw new GlosError('NOT_FOUND', 'No request has that reference. Check it against what you wrote down.');
+    if (!move) throw refused('NOT_FOUND', said('refuse.accountMove.noRequestWithReference'));
     const support = this.supportFor(move.country);
     return {
       state: move.state,
@@ -212,13 +212,13 @@ export class AccountMoveService {
    */
   check(moveId: string, staff: StaffMember, what: string, now: number = Date.now()): MoveRow {
     const move = this.require(moveId, now);
-    if (move.state !== 'asked') throw new GlosError('INVALID_STATE', move.state === 'checked' ? 'This has already been checked. A second member of staff approves it.' : 'This request is over.');
-    if (!move.personDid) throw new GlosError('INVALID_STATE', 'The old number names no account, so there is nothing to move. Refuse the request, with a reason the person can act on.');
-    const said = what?.trim();
-    if (!said) throw new GlosError('FIELD_REQUIRED', 'Say what you checked and how — the second member of staff approves on the strength of it', { field: 'what' });
+    if (move.state !== 'asked') throw refused('INVALID_STATE', said(move.state === 'checked' ? 'refuse.accountMove.alreadyChecked' : 'refuse.accountMove.requestOver'));
+    if (!move.personDid) throw refused('INVALID_STATE', said('refuse.accountMove.oldNumberNoAccount'));
+    const checkedWhat = what?.trim();
+    if (!checkedWhat) throw refused('FIELD_REQUIRED', said('refuse.accountMove.sayWhatChecked'), { field: 'what' });
     this.stopIfPinUsed(move, now);
     move.state = 'checked';
-    move.checked = { by: staff.name, byKey: staff.key, at: new Date(now).toISOString(), what: said.slice(0, 500) };
+    move.checked = { by: staff.name, byKey: staff.key, at: new Date(now).toISOString(), what: checkedWhat.slice(0, 500) };
     this.moves.set(move.moveId, move);
     return this.row(move, staff, true);
   }
@@ -232,13 +232,13 @@ export class AccountMoveService {
    */
   approve(moveId: string, staff: StaffMember, now: number = Date.now()): MoveRow {
     const move = this.require(moveId, now);
-    if (move.state !== 'checked') throw new GlosError('INVALID_STATE', move.state === 'asked' ? 'Nobody has checked who is asking yet. One member of staff checks; a second approves.' : 'This request is over.');
-    if (move.checked?.byKey === staff.key) throw new GlosError('CONFLICT', 'A second member of staff has to approve — not the one who checked');
-    if (!move.personDid || !this.persons.findByDid(move.personDid)) throw new GlosError('INVALID_STATE', 'The account this named is no longer there');
+    if (move.state !== 'checked') throw refused('INVALID_STATE', said(move.state === 'asked' ? 'refuse.accountMove.notCheckedYet' : 'refuse.accountMove.requestOver'));
+    if (move.checked?.byKey === staff.key) throw refused('CONFLICT', said('refuse.accountMove.secondStaffApproves'));
+    if (!move.personDid || !this.persons.findByDid(move.personDid)) throw refused('INVALID_STATE', said('refuse.accountMove.accountGone'));
     this.stopIfPinUsed(move, now);
 
     const held = this.vault.reveal(move.newVaultRef, { purpose: 'account-move', requesterDid: `staff:${staff.key}` });
-    if (typeof held.phone !== 'string' || !held.phone) throw new GlosError('INVALID_STATE', 'The new number is no longer on this request');
+    if (typeof held.phone !== 'string' || !held.phone) throw refused('INVALID_STATE', said('refuse.accountMove.newNumberGone'));
     // The ordinary move: every register that holds the number, every session ended, the holder told, 24 hours to undo.
     this.recovery.moveByStaff(move.personDid, held.phone, now);
     this.end(move, 'moved', now, { decided: { by: staff.name, at: new Date(now).toISOString() } });
@@ -248,9 +248,9 @@ export class AccountMoveService {
   /** A member of staff refuses — either of them, at either step — with a reason the person who asked can act on. */
   refuse(moveId: string, staff: StaffMember, reason: string, now: number = Date.now()): MoveRow {
     const move = this.require(moveId, now);
-    if (!OPEN.includes(move.state)) throw new GlosError('INVALID_STATE', 'This request is over.');
+    if (!OPEN.includes(move.state)) throw refused('INVALID_STATE', said('refuse.accountMove.requestOver'));
     const why = reason?.trim();
-    if (!why) throw new GlosError('FIELD_REQUIRED', 'Say why — it is what the person who asked will read', { field: 'reason' });
+    if (!why) throw refused('FIELD_REQUIRED', said('refuse.accountMove.sayWhy'), { field: 'reason' });
     this.end(move, 'refused', now, { decided: { by: staff.name, at: new Date(now).toISOString(), reason: why.slice(0, 500) } });
     const person = move.personDid ? this.persons.findByDid(move.personDid) : undefined;
     if (person) {
@@ -275,7 +275,7 @@ export class AccountMoveService {
     const since = person ? pinUsedSince(person, move.askedAt) : undefined;
     if (!since) return;
     this.end(move, 'stopped', now, { stoppedBy: 'pin' });
-    throw new GlosError('CONFLICT', 'This account’s PIN was used after the request was made — and the person asking said they had lost it. The request has been stopped. If it really is them, they can sign in and move the number themselves.', { state: 'stopped' });
+    throw refused('CONFLICT', said('refuse.accountMove.pinUsed'), { state: 'stopped' });
   }
 
   /** A request ends: its state is final, and the new number it carried is blanked. */
@@ -300,7 +300,7 @@ export class AccountMoveService {
 
   private require(moveId: string, now: number): StoredMove {
     const move = this.all(now).find((m) => m.moveId === moveId);
-    if (!move) throw new GlosError('NOT_FOUND', 'No such request');
+    if (!move) throw refused('NOT_FOUND', said('refuse.accountMove.noSuchRequest'));
     return move;
   }
 

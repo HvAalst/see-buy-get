@@ -1,6 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { standInCode } from '../../foundation/runtime/standin-code';
-import { GlosError } from '../../foundation/http/glos-error';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -18,6 +17,7 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import type { Person, PhoneChange } from './person.types';
 import { noticeOf, said, sayEnglish, type Said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 import { ReaderLanguageService, addresseeOf, screenLanguage, type ScreenLanguage } from './reader-language.service';
 
 /** Wrong tries at undoing a number change with the old number, or at the ID on a recovery, before that way is shut. */
@@ -186,7 +186,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
    */
   changeNumber(personDid: string, pin: string, newPhone: string, now: number = Date.now()): Person {
     this.persons.confirmPin(personDid, pin);
-    if (!this.otp.isVerified(newPhone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify the new number first — we send it a code');
+    if (!this.otp.isVerified(newPhone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.recovery.verifyNewNumber'));
     const person = this.move(personDid, newPhone, 'self', now);
     this.otp.consume(newPhone);
     return person;
@@ -202,9 +202,9 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     if (!this.emailCodes.isVerified(email, now)) this.emailCodes.verify(email, input.code ?? '', now);
     const person = this.persons.findByEmail(email);
     // The code was right, so this address is real to whoever holds the inbox — but it may be no account's.
-    if (!person) throw new GlosError('NOT_FOUND', 'No account uses that email address');
+    if (!person) throw refused('NOT_FOUND', said('refuse.recovery.noAccountForEmail'));
     this.checkNationalId(person, email, input.nationalId);
-    if (!this.otp.isVerified(input.newPhone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify the new number first — we send it a code');
+    if (!this.otp.isVerified(input.newPhone)) throw refused('PHONE_NOT_VERIFIED', said('refuse.recovery.verifyNewNumber'));
 
     const moved = this.move(person.personDid, input.newPhone, 'email', now);
     this.persons.setPin(moved.personDid, input.pin);
@@ -233,12 +233,12 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   undoWithOldNumber(oldPhone: string, pin: string, now: number = Date.now()): Person {
     const person = this.persons.movedFrom(hashPhone(oldPhone), now);
     // The same answer whether or not that number was ever moved: this door tells a stranger nothing.
-    const refused = () => new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
-    if (!person) throw refused();
-    if ((person.phoneChange?.undoAttempts ?? 0) >= MAX_RECOVERY_MISSES) throw new GlosError('PIN_LOCKED', 'Too many wrong tries. Undo it with the code we send to your email instead.');
+    const wrongPhoneOrPin = () => refused('AUTH_FAILED', said('refuse.recovery.wrongPhoneOrPin'));
+    if (!person) throw wrongPhoneOrPin();
+    if ((person.phoneChange?.undoAttempts ?? 0) >= MAX_RECOVERY_MISSES) throw refused('PIN_LOCKED', said('refuse.recovery.tooManyUndoTries'));
     if (!this.persons.originalPinMatches(person, pin)) {
       this.persons.noteUndoMiss(person);
-      throw refused();
+      throw wrongPhoneOrPin();
     }
     return this.undo(person, now);
   }
@@ -248,7 +248,7 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     const address = normalizeEmail(email);
     if (!this.emailCodes.isVerified(address, now)) this.emailCodes.verify(address, code, now);
     const person = this.persons.findByEmail(address);
-    if (!person?.phoneChange || Date.parse(person.phoneChange.undoUntil) <= now) throw new GlosError('INVALID_STATE', 'There is no number change to undo on that account — the 24 hours may have passed');
+    if (!person?.phoneChange || Date.parse(person.phoneChange.undoUntil) <= now) throw refused('INVALID_STATE', said('refuse.recovery.noChangeToUndo'));
     this.emailCodes.consume(address);
     return this.undo(person, now);
   }
@@ -383,14 +383,14 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
     const drivers = person.roles.filter((r) => r.role === 'driver' && r.status === 'active').map((r) => r.entityDid);
     const shops = person.roles.filter((r) => r.role === 'agent' && r.status === 'active').map((r) => r.entityDid);
     if (!drivers.length && !shops.length) return;
-    if ((this.idMisses.get(email) ?? 0) >= MAX_RECOVERY_MISSES) throw new GlosError('RATE_LIMITED', 'Too many wrong tries for this account today. Try again tomorrow, or ask SeeBuyGet staff.');
+    if ((this.idMisses.get(email) ?? 0) >= MAX_RECOVERY_MISSES) throw refused('RATE_LIMITED', said('refuse.recovery.tooManyIdTries'));
     const id = nationalId?.trim();
     const ok = Boolean(id) && (drivers.some((did) => this.drivers.holdsNationalId(did, id)) || shops.some((did) => this.agents.holdsNationalId(did, id)));
     if (ok) return;
     this.idMisses.set(email, (this.idMisses.get(email) ?? 0) + 1);
-    if (!id) throw new GlosError('FIELD_REQUIRED', 'Type the national ID number you registered with', { field: 'nationalId' });
+    if (!id) throw refused('FIELD_REQUIRED', said('refuse.recovery.nationalIdRequired'), { field: 'nationalId' });
     // A 403, never a 401: every app reads a 401 as a wrong PIN or a dead sign-in, and this is neither.
-    throw new GlosError('FORBIDDEN', 'That national ID number is not the one on this account', { field: 'nationalId' });
+    throw refused('FORBIDDEN', said('refuse.recovery.nationalIdWrong'), { field: 'nationalId' });
   }
 
   /** The register prints an old number still held are given up with it. */
