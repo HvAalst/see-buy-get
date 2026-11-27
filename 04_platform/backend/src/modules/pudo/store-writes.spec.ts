@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { NOTICE_EN } from './notice-words/catalog';
 
 /**
  * EVERY ROUTE THAT CHANGES A STORE IS THE STORE'S ALONE — the user, 2026-10-12: "better that staff does not have
@@ -30,8 +31,18 @@ const EXEMPT: Record<string, string> = {
 };
 
 /** The words a gate refuses staff with: for a change, and for a read. */
-const WRITE_RULE = /actor\?\.role === 'operator'\) throw new GlosError\('FORBIDDEN', 'A store makes its own changes/;
-const READ_RULE = /actor\?\.role === 'operator'\) throw new GlosError\('FORBIDDEN', 'A store’s own records are the store’s/;
+/**
+ * The refusal that keeps staff off, by its words: written out, or (2026-11-27) said as a phrase of the catalogue whose English
+ * says them — so the app is told it in its language, and this guard still knows it.
+ */
+const ruleSaying = (start: string): RegExp => {
+  const keys = Object.entries(NOTICE_EN as Record<string, string>)
+    .filter(([, en]) => en.startsWith(start))
+    .map(([key]) => key.replace(/\./g, '\\.'));
+  return new RegExp(`actor\\?\\.role === 'operator'\\) throw (?:new GlosError\\('FORBIDDEN', '${start}|refused\\('FORBIDDEN', said\\('(?:${keys.join('|') || 'no phrase says it'})'\\))`);
+};
+const WRITE_RULE = ruleSaying('A store makes its own changes');
+const READ_RULE = ruleSaying('A store’s own records are the store’s');
 
 /** The body with comments removed, so a gate named in a comment does not count as a gate. */
 const code = (body: string) => body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -174,7 +185,9 @@ describe('who may read a store’s own records', () => {
 
   it('refuses staff by the rule, saying where theirs is — not as a wrong id', () => {
     const gate = SOURCE.slice(SOURCE.indexOf('private assertVendorReads('), SOURCE.indexOf('private assertVendorSelf('));
-    expect(gate).toMatch(/actor\?\.role === 'operator'\) throw new GlosError\('FORBIDDEN', 'A store’s own records are the store’s/);
-    expect(gate).toMatch(/Staff read a store under Stores, and a parcel under Find a parcel/);
+    expect(gate).toMatch(READ_RULE);
+    // Its words, as the app is told them (2026-11-27: a phrase of the catalogue, said in the app's language).
+    const key = /actor\?\.role === 'operator'\) throw refused\('FORBIDDEN', said\('([\w.-]+)'\)/.exec(gate)?.[1];
+    expect((NOTICE_EN as Record<string, string>)[key ?? ''] ?? gate).toMatch(/Staff read a store under Stores, and a parcel under Find a parcel/);
   });
 });

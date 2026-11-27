@@ -4,6 +4,9 @@ import { buildSiteTools, siteToolsView, type SiteToolsInput } from './site-tools
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { day as dayFigure, said, type Said } from './notice-words/say';
+import type { NoticeKey } from './notice-words/catalog';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { RegistrationPrints, type IdentityFields, type PrintField } from '../../foundation/identity/registration-prints';
@@ -74,15 +77,17 @@ interface RegisterAgentInput {
 const APPROVED: readonly AgentStatus[] = ['APPROVED_UNFUNDED', 'ACTIVE', 'LOCKED'];
 
 /** Round 40 — what the counter is told when no new parcel can start here, and the one thing that ends it. */
-export function licenceStopWords(l: ShopLicenceStanding): string {
-  return `No new parcel can be started at this shop: its trading licence ran to ${l.expiresAt ? licenceDay(l.expiresAt) : 'a day that has passed'} and the ${LICENCE_GRACE_DAYS} days' grace are over. Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Send the renewed licence from the home screen: new parcels start again once it is recorded.`;
+export function licenceStopSaid(l: ShopLicenceStanding): Said {
+  return l.expiresAt
+    ? said('refuse.agent.licenceStoppedOn', { day: dayFigure(licenceDay(l.expiresAt), l.expiresAt), grace: LICENCE_GRACE_DAYS })
+    : said('refuse.agent.licenceStoppedPassed', { grace: LICENCE_GRACE_DAYS });
 }
 
 /** The same sentences as before, with the field they name carried beside them for the app to act on. */
-const SHOP_HELD: Record<Exclude<PrintField, 'licence'>, string> = {
-  nationalId: 'An agent with this national ID already exists',
-  phone: 'An agent with this mobile already exists',
-  device: 'This device is already registered to another agent',
+const SHOP_HELD: Record<Exclude<PrintField, 'licence'>, NoticeKey> = {
+  nationalId: 'refuse.agent.heldNationalId',
+  phone: 'refuse.agent.heldPhone',
+  device: 'refuse.agent.heldDevice',
 };
 
 /**
@@ -208,7 +213,7 @@ export class AgentService {
     // money runs through a sister of ours is a SECOND question with its own answer.
     const country = requireCountryCode(input.country);
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
-    if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a shop cannot register there`);
+    if (!this.presence.can(country, 'signUp')) throw refused('FORBIDDEN', said('refuse.agent.signUpClosedShop', { country }));
     // 2026-11-13 — test mode: only a listed number signs a shop up there.
     this.presence.requireTester(country, input.mobile, 'signing a shop up');
     // Undefined where we are matching only. Every money path asks for it by name and refuses there;
@@ -216,14 +221,14 @@ export class AgentService {
     const entity = this.entities.forJurisdiction(country);
 
     // Location: a map pin AND/OR a physical address — at least one. Geocode the address if no pin.
-    if (!input.location && !input.physicalAddress?.trim()) throw new GlosError('ADDRESS_REQUIRED', 'Provide a map pin (location) and/or a physical address');
+    if (!input.location && !input.physicalAddress?.trim()) throw refused('ADDRESS_REQUIRED', said('refuse.agent.addressRequired'));
     // A map pin is exact; otherwise resolve the address against the geocoder (real coords for a known
     // place, deterministic fallback for anything it can't place).
     const location = input.location ?? this.geocoder.geocode(input.physicalAddress!).location;
 
     // Eligibility filter (18.1) — block ineligible applicants up front.
     const unmet = this.unmetRequirements(input);
-    if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet PUDO agent requirements: ${unmet.join('; ')}`);
+    if (unmet.length) throw refused('REQUIREMENTS_NOT_MET', said('refuse.agent.requirementsNotMet', { unmet: unmet.join('; ') }));
 
     // Dedup check (18.5 DRAFT) — one national ID, one mobile, one device across the network.
     const identity: IdentityFields = [
@@ -232,7 +237,7 @@ export class AgentService {
       ['device', input.deviceImei],
     ];
     const held = this.prints.taken(identity);
-    if (held) throw new GlosError('DUPLICATE', SHOP_HELD[held as Exclude<PrintField, 'licence'>], { field: held, register: 'shop' });
+    if (held) throw refused('DUPLICATE', said(SHOP_HELD[held as Exclude<PrintField, 'licence'>]), { field: held, register: 'shop' });
 
     const did = this.dids.generate(`pudo:${input.mobile}`, { role: 'pudo-agent' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.fullName, governmentId: input.nationalId, phone: input.mobile }, { region: 'local' });
@@ -287,12 +292,12 @@ export class AgentService {
     by: string,
     now: number = Date.now(),
   ): Agent {
-    if (!this.presence.can(hub.country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${hub.country} yet, so a counter cannot open there`);
-    if (!(input.pricePerParcel >= 0)) throw new GlosError('AMOUNT_INVALID', 'Say what your counter charges for a parcel: it cannot be below nothing');
+    if (!this.presence.can(hub.country, 'signUp')) throw refused('FORBIDDEN', said('refuse.agent.signUpClosedCounter', { country: hub.country }));
+    if (!(input.pricePerParcel >= 0)) throw refused('AMOUNT_INVALID', said('refuse.agent.counterPriceBelowNothing'));
     // A counter is a shop: its shelf and its hours are held to a shop's least. The rest of a shop's checks were the hub's.
     const requirements: AgentRequirements = { androidVersion: MIN_ANDROID_VERSION, reliablePower: true, tradingLicence: `hub ${hub.mdpId}`, criminalRecordClear: true };
     const unmet = this.unmetRequirements({ shelf: input.shelf, openingHours: input.openingHours, requirements });
-    if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Your counter needs: ${unmet.join('; ')}`);
+    if (unmet.length) throw refused('REQUIREMENTS_NOT_MET', said('refuse.agent.counterNeeds', { unmet: unmet.join('; ') }));
     const entity = this.entities.forJurisdiction(hub.country);
     const did = this.dids.generate(`pudo:hub:${hub.mdpId}`, { role: 'pudo-agent' }).id;
     const { vaultRef } = this.vault.store({ fullName: hub.name }, { region: 'local' });
@@ -349,9 +354,9 @@ export class AgentService {
   /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING (18.5). */
   submitKyc(did: string, documents: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }): Agent {
     const agent = this.require(did);
-    if (agent.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected DRAFT`);
+    if (agent.status !== 'DRAFT') throw refused('INVALID_STATE', said('refuse.agent.notDraft', { status: agent.status }));
     if (!documents.idCopyRef || !documents.tradingLicenceRef || !(documents.shopPhotoRefs?.length > 0)) {
-      throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy, a trading licence, and at least one shop photo');
+      throw refused('KYC_INCOMPLETE', said('refuse.agent.kycRequires'));
     }
     agent.kyc = { idCopyRef: documents.idCopyRef, tradingLicenceRef: documents.tradingLicenceRef, shopPhotoRefs: documents.shopPhotoRefs, submittedAt: new Date().toISOString() } as KycDocuments;
     return this.transition(agent, 'KYC_PENDING');
@@ -376,10 +381,10 @@ export class AgentService {
    */
   decideKyc(did: string, approve: boolean, by?: string, reason?: string, licenceExpiresAt?: string, now: number = Date.now()): Agent {
     const agent = this.require(did);
-    if (agent.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected KYC_PENDING`);
+    if (agent.status !== 'KYC_PENDING') throw refused('INVALID_STATE', said('refuse.agent.notKycPending', { status: agent.status }));
     if (!approve) {
       const why = reason?.trim();
-      if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the applicant is shown it');
+      if (!why) throw refused('REASON_REQUIRED', said('refuse.agent.rejectionNeedsWhy'));
       agent.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
       // The owner's ID photo goes with the decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); they send their papers again.
       this.media.dropCheckedPaper(agent.kyc?.idCopyRef);
@@ -395,9 +400,9 @@ export class AgentService {
     // Approved: the old refusal stops being the news. Kept nowhere, because a shop that got in does not
     // carry a note saying it once did not.
     agent.kycRejection = undefined;
-    if (!agent.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
+    if (!agent.kyc) throw refused('KYC_INCOMPLETE', said('refuse.agent.approveKycMissing'));
     const unmet = this.unmetRequirements(agent);
-    if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
+    if (unmet.length) throw refused('APPROVAL_BLOCKED', said('refuse.agent.approveBlocked', { unmet: unmet.join('; ') }));
     agent.licence = { expiresAt, ...(agent.kyc.tradingLicenceRef ? { copyRef: agent.kyc.tradingLicenceRef } : {}), ...(by ? { recordedBy: by } : {}), recordedAt: new Date(now).toISOString() };
     this.wallet.provision(did, { jurisdiction: 'US' });
     this.core.upsert({ did, vaultRef: agent.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: agent.zone, by } });
@@ -537,7 +542,7 @@ export class AgentService {
   setAvailability(did: string, open: boolean): Agent {
     const agent = this.require(did);
     // 2026-11-09 — a hub's counter whose hub sorts only: opened again from the Hub app, never from the counter.
-    if (open && agent.counterStopped) throw new GlosError('INVALID_STATE', `This is ${agent.shopName}’s counter, and the hub sorts only now: its owner chooses “Sort and hand out” in the Hub app to open it again`);
+    if (open && agent.counterStopped) throw refused('INVALID_STATE', said('refuse.agent.counterSortsOnly', { shop: agent.shopName }));
     const was = agent.openState;
     agent.openState = open ? 'open' : 'closed';
     // 2026-11-09 — when it closed, kept: opening again gives the time it was closed back to the buyers of its shelf (Q2).
@@ -586,7 +591,7 @@ export class AgentService {
   /** Reconfigure the shelf grid (rows × columns). */
   setShelf(did: string, shelf: ShelfConfig): Agent {
     const agent = this.require(did);
-    if (shelf.rows < 1 || shelf.cols < 1) throw new GlosError('INVALID_INPUT', 'Shelf needs at least one row and column');
+    if (shelf.rows < 1 || shelf.cols < 1) throw refused('INVALID_INPUT', said('refuse.agent.shelfNeedsRowCol'));
     agent.shelf = shelf;
     return agent;
   }
@@ -613,10 +618,10 @@ export class AgentService {
   setBagBays(did: string, bays: number, closedRoom?: number): Agent {
     const agent = this.require(did);
     if (!Number.isFinite(bays) || bays < 1 || bays > MAX_BAG_BAYS) {
-      throw new GlosError('INVALID_INPUT', `Bag space must be between 1 and ${MAX_BAG_BAYS} bags`);
+      throw refused('INVALID_INPUT', said('refuse.agent.bagSpaceRange', { max: MAX_BAG_BAYS }));
     }
     if (closedRoom !== undefined && (!Number.isFinite(closedRoom) || closedRoom < 0 || closedRoom > MAX_CLOSED_BAG_ROOM)) {
-      throw new GlosError('INVALID_INPUT', `Room for closed bags must be between 0 and ${MAX_CLOSED_BAG_ROOM}`, { field: 'closedRoom' });
+      throw refused('INVALID_INPUT', said('refuse.agent.closedRoomRange', { max: MAX_CLOSED_BAG_ROOM }), { field: 'closedRoom' });
     }
     agent.bagBays = Math.floor(bays);
     if (closedRoom !== undefined) agent.closedBagRoom = Math.floor(closedRoom);
@@ -662,8 +667,8 @@ export class AgentService {
     const next = (mediaId ?? '').trim() || undefined;
     if (next) {
       const ref = this.media.get(next);
-      if (!ref || ref.ownerDid !== did) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
-      if (ref.kind !== 'avatar') throw new GlosError('INVALID_INPUT', 'That image was not uploaded as a shop photo');
+      if (!ref || ref.ownerDid !== did) throw refused('FORBIDDEN', said('refuse.agent.imageNotYours'));
+      if (ref.kind !== 'avatar') throw refused('INVALID_INPUT', said('refuse.agent.imageNotShopPhoto'));
       this.media.link(next, { type: 'agent', id: did }, 'avatar');
     }
     if (agent.shopfrontMediaId && agent.shopfrontMediaId !== next) {
@@ -717,7 +722,7 @@ export class AgentService {
    * already sold keep the fee they were sold at. Written at once — it is money.
    */
   setPrice(did: string, pricePerParcel: number): Agent {
-    if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
+    if (pricePerParcel < 0) throw refused('AMOUNT_INVALID', said('refuse.agent.priceNegative'));
     const agent = this.require(did);
     agent.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
     this.agents.set(did, agent);
@@ -739,7 +744,7 @@ export class AgentService {
 
   /** Refuse, before anything moves, a number another registration in this register already holds. */
   assertPhoneFree(did: string, newPhone: string): void {
-    if (this.prints.taken([['phone', newPhone]], did)) throw new GlosError('DUPLICATE', 'An agent with this mobile already exists', { field: 'phone', register: 'shop' });
+    if (this.prints.taken([['phone', newPhone]], did)) throw refused('DUPLICATE', said('refuse.agent.heldPhone'), { field: 'phone', register: 'shop' });
   }
 
   /**
@@ -853,8 +858,8 @@ export class AgentService {
   takeNationalId(did: string, nationalId: string): void {
     const agent = this.require(did);
     const number = nationalId?.trim();
-    if (!number) throw new GlosError('FIELD_REQUIRED', 'Enter the number on the ID card', { field: 'nationalId' });
-    if (this.prints.taken([['nationalId', number]], did)) throw new GlosError('DUPLICATE', 'An agent with this national ID already exists', { field: 'nationalId', register: 'shop' });
+    if (!number) throw refused('FIELD_REQUIRED', said('refuse.agent.idNumberRequired'), { field: 'nationalId' });
+    if (this.prints.taken([['nationalId', number]], did)) throw refused('DUPLICATE', said('refuse.agent.heldNationalId'), { field: 'nationalId', register: 'shop' });
     this.prints.claim([['nationalId', number]], did);
     if (agent.vaultRef && this.vault.exists(agent.vaultRef)) {
       const pii = this.vault.reveal(agent.vaultRef, { purpose: 'id-dispute', requesterDid: did });
@@ -896,9 +901,9 @@ export class AgentService {
   assertNamedAtMint(did: string | undefined, now: number = Date.now()): void {
     const agent = did ? this.agents.get(did) : undefined;
     // A lapsed licence (round 40) is said in the same words: why is the shopkeeper's own business.
-    if (agent?.idHold || (agent && licenceStopped(agent, now))) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_held', shop: agent.did });
+    if (agent?.idHold || (agent && licenceStopped(agent, now))) throw refused('FORBIDDEN', said('refuse.agent.shopNotTaking', { shop: agent.shopName }), { reason: 'shop_held', shop: agent.did });
     // Muted by its owner: said in the same words — that, too, is the shopkeeper's own business.
-    if (agent && this.isResting(agent.did)) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_resting', shop: agent.did });
+    if (agent && this.isResting(agent.did)) throw refused('FORBIDDEN', said('refuse.agent.shopNotTaking', { shop: agent.shopName }), { reason: 'shop_resting', shop: agent.did });
   }
 
   /**
@@ -910,13 +915,13 @@ export class AgentService {
     const agent = this.agents.get(did);
     const hold = agent?.idHold;
     if (hold) {
-      throw new GlosError('FORBIDDEN', `No new parcel can be started at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Put the number of your own ID card on record, in Settings, to start new ones again.`, { reason: 'id_held', reference: hold.reference });
+      throw refused('FORBIDDEN', said('refuse.agent.idWentToSomebodyElse', { reference: hold.reference }), { reason: 'id_held', reference: hold.reference });
     }
     // Muted by its owner: no new parcel starts here until they unmute — what is booked and on the shelf goes on.
-    if (this.isResting(did)) throw new GlosError('FORBIDDEN', 'No new parcel can be started at this shop: its owner muted the account. Parcels already booked to be handed in here, and everything on the shelf, go on as usual. The owner can unmute it in Settings.', { reason: 'shop_resting' });
+    if (this.isResting(did)) throw refused('FORBIDDEN', said('refuse.agent.shopMuted'), { reason: 'shop_resting' });
     // Round 40 — the trading licence lapsed and the grace is over.
     const licence = agent ? shopLicenceStanding(agent, now) : undefined;
-    if (licence?.state === 'stopped') throw new GlosError('LICENCE_LAPSED', licenceStopWords(licence), { reason: 'licence_lapsed', expiresAt: licence.expiresAt, stopsOn: licence.stopsOn });
+    if (licence?.state === 'stopped') throw refused('LICENCE_LAPSED', licenceStopSaid(licence), { reason: 'licence_lapsed', expiresAt: licence.expiresAt, stopsOn: licence.stopsOn });
   }
 
   /* --- Round 40: the trading licence, its date, and its renewal --- */
@@ -939,15 +944,15 @@ export class AgentService {
    */
   sendLicenceRenewal(did: string, input: { copyRef: string; expiresAt: string }, now: number = Date.now()): Agent {
     const agent = this.require(did);
-    if (!APPROVED.includes(agent.status)) throw new GlosError('INVALID_STATE', 'A shop that is not approved yet sends its licence with its other papers');
+    if (!APPROVED.includes(agent.status)) throw refused('INVALID_STATE', said('refuse.agent.licenceSendWithPapers'));
     const expiresAt = requireLicenceDate(input.expiresAt, now, 'expiresAt');
     // The licence already on record is not a renewed one — and refusing it would delete the record's own photograph.
     if (input.copyRef && (input.copyRef === agent.licence?.copyRef || input.copyRef === agent.kyc?.tradingLicenceRef)) {
-      throw new GlosError('PHOTO_REQUIRED', 'That is the licence already on record — take a photograph of the renewed one', { field: 'copyRef' });
+      throw refused('PHOTO_REQUIRED', said('refuse.agent.licenceAlreadyOnRecord'), { field: 'copyRef' });
     }
     // Only the shop's OWN fresh photograph: adopt() refuses another's media and anything attached elsewhere.
     if (!this.media.adopt(input.copyRef, did, { type: 'agent', id: did }, 'kyc_licence')) {
-      throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again', { field: 'copyRef' });
+      throw refused('PHOTO_REQUIRED', said('refuse.agent.photoNotAttached'), { field: 'copyRef' });
     }
     // A second send replaces the first: nothing rests on a photograph nobody accepted.
     const earlier = agent.licenceRenewal?.copyRef;
@@ -966,7 +971,7 @@ export class AgentService {
    */
   recordLicence(did: string, expiresAt: string, by?: string, now: number = Date.now()): Agent {
     const agent = this.require(did);
-    if (!APPROVED.includes(agent.status)) throw new GlosError('INVALID_STATE', 'The licence of a shop not yet approved is noted when it is approved');
+    if (!APPROVED.includes(agent.status)) throw refused('INVALID_STATE', said('refuse.agent.licenceNotedOnApproval'));
     const day = requireLicenceDate(expiresAt, now, 'expiresAt');
     const sent = agent.licenceRenewal;
     const previous = agent.licence?.copyRef ?? agent.kyc?.tradingLicenceRef;
@@ -988,9 +993,9 @@ export class AgentService {
   refuseLicenceRenewal(did: string, reason: string, by?: string, now: number = Date.now()): Agent {
     const agent = this.require(did);
     const sent = agent.licenceRenewal;
-    if (!sent) throw new GlosError('INVALID_STATE', 'No renewed licence has been sent to refuse');
+    if (!sent) throw refused('INVALID_STATE', said('refuse.agent.noRenewedToRefuse'));
     const why = reason?.trim();
-    if (!why) throw new GlosError('REASON_REQUIRED', 'Say why: the shop is shown it, and sends another');
+    if (!why) throw refused('REASON_REQUIRED', said('refuse.agent.sayWhyShop'));
     this.media.purgeByOwner(sent.copyRef, did);
     delete agent.licenceRenewal;
     agent.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };
@@ -1001,7 +1006,7 @@ export class AgentService {
 
   private require(did: string): Agent {
     const agent = this.agents.get(did);
-    if (!agent) throw new GlosError('NOT_FOUND', `PUDO agent not found: ${did}`);
+    if (!agent) throw refused('NOT_FOUND', said('refuse.agent.notFound', { did }));
     return agent;
   }
 }

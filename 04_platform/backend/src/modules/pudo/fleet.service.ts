@@ -3,6 +3,8 @@ import { Injectable, Optional } from '@nestjs/common';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { RiskRegisterService } from './risk-register.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -202,13 +204,13 @@ export class FleetService {
     // at six in the morning; "cannot be coupled" is not.
     if (!this.drivers.canOperate(driverDid)) {
       const why = this.drivers.offRoadReasons(driverDid);
-      throw new GlosError('CANNOT_COUPLE', why.length ? `Driver cannot start a shift: ${why.join('; ')}` : `Driver is ${driver.status} — cannot be coupled`);
+      throw refused('CANNOT_COUPLE', why.length ? said('refuse.fleet.driverCannotStart', { why: why.join('; ') }) : said('refuse.fleet.driverStatusNotCoupled', { status: driver.status }));
     }
     if (!this.vehicles.isUsable(vehicleId)) {
       const why = this.vehicles.offRoadReasons(vehicleId);
-      throw new GlosError('CANNOT_COUPLE', why.length ? `Vehicle ${vehicle.plate} is off the road: ${why.join('; ')}` : `Vehicle is ${vehicle.status} — cannot be coupled`);
+      throw refused('CANNOT_COUPLE', why.length ? said('refuse.fleet.vehicleOffRoad', { plate: vehicle.plate, why: why.join('; ') }) : said('refuse.fleet.vehicleStatusNotCoupled', { status: vehicle.status }));
     }
-    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
+    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw refused('CANNOT_COUPLE', said('refuse.fleet.driverNotCleared', { kind: vehicle.vehicleClass }));
     /*
      * WHOSE VEHICLE IT IS decides who may drive it.
      *
@@ -218,20 +220,20 @@ export class FleetService {
      * scan its stickers. A fleet's vehicle is for that fleet's drivers; a courier's own van is for that courier.
      */
     if (vehicle.managerDid && vehicle.managerDid !== driver.managerDid) {
-      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} is not one of your fleet's vehicles — only its own fleet's drivers can start a shift on it`);
+      throw refused('CANNOT_COUPLE', said('refuse.fleet.notYourFleetVehicle', { plate: vehicle.plate }));
     }
     if (vehicle.ownerDriverDid && vehicle.ownerDriverDid !== driverDid) {
-      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} is another courier's own vehicle — only they can start a shift on it`);
+      throw refused('CANNOT_COUPLE', said('refuse.fleet.anotherCouriersVehicle', { plate: vehicle.plate }));
     }
-    if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
-    if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
+    if (this.activeForDriver(driverDid)) throw refused('ALREADY_COUPLED', said('refuse.fleet.driverAlreadyCoupled'));
+    if (this.activeForVehicle(vehicleId)) throw refused('ALREADY_COUPLED', said('refuse.fleet.vehicleAlreadyCoupled'));
     if (corridorId) this.corridors.requireUsableBy(corridorId, driver.managerDid);
     // FP8 — rest after a working day, before the next one starts. A short coupling owes none.
     const rest = this.restHoursSince(driverDid);
     if (rest != null && rest < MIN_REST_HOURS) {
       // Somebody turned away for rest has said, by trying, that they are waiting to start: they are told when they can.
       this.askRestNotice(driverDid);
-      throw new GlosError('HOURS_EXCEEDED', `Rest first: ${rest.toFixed(1)} h since the last shift ended, ${MIN_REST_HOURS} h needed before the next. We will tell you when you can start.`);
+      throw refused('HOURS_EXCEEDED', said('refuse.fleet.restFirst', { rested: rest.toFixed(1), needed: MIN_REST_HOURS }));
     }
     // On shift again: whatever they were waiting to hear, they no longer are.
     this.restAsks.delete(driverDid);
@@ -266,9 +268,9 @@ export class FleetService {
     const driver = this.drivers.get(driverDid);
     const vehicle = this.vehicles.get(vehicleId);
     if (!driver.managerDid || vehicle.managerDid !== driver.managerDid) {
-      throw new GlosError('CANNOT_COUPLE', `${vehicle.plate} and ${driver.displayName} are not in the same fleet`);
+      throw refused('CANNOT_COUPLE', said('refuse.fleet.notSameFleet', { plate: vehicle.plate, driver: driver.displayName }));
     }
-    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `${driver.displayName} is not licence-cleared for a ${vehicle.vehicleClass}`);
+    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw refused('CANNOT_COUPLE', said('refuse.fleet.nameNotCleared', { driver: driver.displayName, kind: vehicle.vehicleClass }));
     this.rememberVehicle(driverDid, vehicleId);
     void this.events.publish(GlosEvent.Pudo.DriverVehicleSuggested, { driverDid, vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass }, { source: 'pudo' }).catch(() => undefined);
     return { driverDid, vehicleId, plate: vehicle.plate };
@@ -280,7 +282,7 @@ export class FleetService {
    */
   startSession(driverDid: string, vehicleScan: string, leg?: LegInput): Assignment {
     const vehicle = this.vehicles.byQr(vehicleScan);
-    if (!vehicle) throw new GlosError('NOT_FOUND', 'Unknown vehicle QR — scan the sticker on the dashboard');
+    if (!vehicle) throw refused('NOT_FOUND', said('refuse.fleet.unknownQr'));
     return this.couple(driverDid, vehicle.vehicleId, undefined, leg);
   }
 
@@ -364,7 +366,7 @@ export class FleetService {
    */
   declareLeg(driverDid: string, leg: LegInput): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'Start a shift before saying where you are going');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.shiftBeforeGoing'));
     const declared = this.normalizeLeg(leg);
     active.work = declared;
     this.rememberLeg(driverDid, declared);
@@ -377,9 +379,9 @@ export class FleetService {
    */
   declareArea(driverDid: string, radiusKm: number): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'Start a shift before saying where you are working');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.shiftBeforeWorking'));
     if (!Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > MAX_WORK_RADIUS_KM) {
-      throw new GlosError('INVALID_INPUT', `Pick a distance between 1 and ${MAX_WORK_RADIUS_KM} km`);
+      throw refused('INVALID_INPUT', said('refuse.fleet.pickDistance', { max: MAX_WORK_RADIUS_KM }));
     }
     active.work = { kind: 'area', radiusKm: Math.round(radiusKm), declaredAt: new Date().toISOString() };
     return active;
@@ -418,7 +420,7 @@ export class FleetService {
    */
   setDerivedLeg(driverDid: string, on: boolean): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.notOnShift'));
     active.derivedLegOff = !on;
     if (!on && active.work?.kind === 'leg' && active.work.source === 'derived') active.work = undefined;
     return active;
@@ -440,9 +442,9 @@ export class FleetService {
    */
   snooze(driverDid: string, minutes?: number): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.notOnShift'));
     if (minutes != null && (!Number.isFinite(minutes) || minutes <= 0 || minutes > MAX_SNOOZE_MIN)) {
-      throw new GlosError('INVALID_INPUT', `Snooze for up to ${MAX_SNOOZE_MIN} minutes, or until you resume`);
+      throw refused('INVALID_INPUT', said('refuse.fleet.snoozeRange', { max: MAX_SNOOZE_MIN }));
     }
     // No duration = the far end of this shift. It cannot outlive the coupling either way (uncouple drops it).
     active.snoozedUntil = new Date(Date.now() + (minutes ?? MAX_SNOOZE_MIN) * 60_000).toISOString();
@@ -452,7 +454,7 @@ export class FleetService {
   /** Take work again, now. Always available — a snooze must never be a state you cannot leave. */
   resume(driverDid: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.notOnShift'));
     active.snoozedUntil = undefined;
     return active;
   }
@@ -479,10 +481,10 @@ export class FleetService {
   private normalizeLeg(leg: LegInput): DeclaredLeg {
     const fromLabel = leg?.fromLabel?.trim();
     const toLabel = leg?.toLabel?.trim();
-    if (!fromLabel || !toLabel) throw new GlosError('FIELD_REQUIRED', 'A leg needs a start and an end, both named');
+    if (!fromLabel || !toLabel) throw refused('FIELD_REQUIRED', said('refuse.fleet.legNeedsEnds'));
     for (const p of [leg.from, leg.to]) {
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) {
-        throw new GlosError('INVALID_INPUT', 'A leg needs a point for each end — name it and place it on the map');
+        throw refused('INVALID_INPUT', said('refuse.fleet.legNeedsPoint'));
       }
     }
     // 'declared' unless a caller overrides it — the safe default, because a road nobody marked is a road
@@ -567,7 +569,7 @@ export class FleetService {
    */
   askRestNotice(driverDid: string, now: number = Date.now()): { restUntil: string; tellWhenRested: true } {
     const until = this.restUntil(driverDid, now);
-    if (!until) throw new GlosError('INVALID_STATE', this.activeForDriver(driverDid) ? 'You are on shift: there is no rest to wait for' : 'You are not resting: you can start a shift now');
+    if (!until) throw refused('INVALID_STATE', said(this.activeForDriver(driverDid) ? 'refuse.fleet.onShiftNoRest' : 'refuse.fleet.notResting'));
     if (this.restAsks.get(driverDid)?.until !== until) this.restAsks.set(driverDid, { askedAt: new Date(now).toISOString(), until });
     return { restUntil: until, tellWhenRested: true };
   }
@@ -639,7 +641,7 @@ export class FleetService {
    */
   uncouple(driverDid: string, observedAt?: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.driverNotCoupled'));
     const ended = handedAt(observedAt, Date.now(), [active.startedAt, active.lastLocatedAt]);
     active.status = 'ended';
     active.endedAt = ended.at;
@@ -708,7 +710,7 @@ export class FleetService {
   /** Set / change the corridor the active coupling serves. */
   assignCorridor(driverDid: string, corridorId: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
+    if (!active) throw refused('NOT_COUPLED', said('refuse.fleet.driverNotCoupled'));
     // A fleet's own line carries only that fleet's drivers, and a proposal carries nobody yet.
     this.corridors.requireUsableBy(corridorId, this.drivers.get(driverDid).managerDid);
     active.corridorId = corridorId;
@@ -742,15 +744,15 @@ export class FleetService {
    * the new one when the badge is opened again.
    */
   badgeShown(shown: string): string {
-    const said = (shown ?? '').trim().toUpperCase();
-    if (this.drivers.byBadge(said)) {
-      throw new GlosError('DRIVER_PASS_NEEDED', 'A driver’s badge number on its own hands over nothing. Ask the driver to open “Show my badge” in their app, and scan that, or type the code under it.');
+    const typed = (shown ?? '').trim().toUpperCase();
+    if (this.drivers.byBadge(typed)) {
+      throw refused('DRIVER_PASS_NEEDED', said('refuse.fleet.passNeeded'));
     }
-    const cut = said.lastIndexOf('-');
-    const badge = cut > 0 ? said.slice(0, cut) : '';
-    const code = said.slice(cut + 1);
+    const cut = typed.lastIndexOf('-');
+    const badge = cut > 0 ? typed.slice(0, cut) : '';
+    const code = typed.slice(cut + 1);
     const driver = badge ? this.drivers.byBadge(badge) : undefined;
-    if (!driver || !/^\d{6}$/.test(code)) return said;
+    if (!driver || !/^\d{6}$/.test(code)) return typed;
     const active = this.activeForDriver(driver.did);
     const kept = active ? this.handoverCodes.get(active.assignmentId) : undefined;
     if (active && kept && timingSafeEqual(Buffer.from(kept), Buffer.from(code))) {
@@ -764,12 +766,7 @@ export class FleetService {
         this.wrongCodes.delete(active.assignmentId);
       } else this.wrongCodes.set(active.assignmentId, wrong);
     }
-    throw new GlosError(
-      'DRIVER_PASS_WRONG',
-      active
-        ? 'That is not the code on the driver’s phone for this shift. Ask them to open “Show my badge” again, and scan it from there.'
-        : 'That driver is not on shift. A counter hands parcels to a driver whose shift has started.',
-    );
+    throw refused('DRIVER_PASS_WRONG', said(active ? 'refuse.fleet.passWrong' : 'refuse.fleet.driverNotOnShift'));
   }
 
   /** This shift's code, made the first time it is asked for. */
@@ -825,21 +822,21 @@ export class FleetService {
    * by the country's rule — refused saying why and what would allow it.
    */
   hitchable(driverDid: string, vehicleId: string, input: { trailerId?: string; hire?: TrailerInput }, now: number = Date.now()): HitchedTrailer {
-    if (!this.trailers) throw new GlosError('NOT_FOUND', 'Trailers are not kept on this server');
+    if (!this.trailers) throw refused('NOT_FOUND', said('refuse.fleet.trailersNotKept'));
     const driver = this.drivers.get(driverDid);
     let spec: TrailerSpec;
     let trailerId: string | undefined;
     if (input.trailerId) {
       const t = this.trailers.get(input.trailerId);
-      if (!this.trailers.ownedBy(t, { driverDid, managerDid: driver.managerDid })) throw new GlosError('FORBIDDEN', `${t.plate} is not yours or your fleet's to hitch`);
+      if (!this.trailers.ownedBy(t, { driverDid, managerDid: driver.managerDid })) throw refused('FORBIDDEN', said('refuse.fleet.trailerNotYours', { plate: t.plate }));
       const elsewhere = [...this.assignments.values()].find((a) => a.status === 'active' && a.driverDid !== driverDid && a.trailer?.trailerId === t.trailerId);
-      if (elsewhere) throw new GlosError('ALREADY_COUPLED', `${t.plate} is hitched on another shift`);
+      if (elsewhere) throw refused('ALREADY_COUPLED', said('refuse.fleet.trailerElsewhere', { plate: t.plate }));
       spec = { plate: t.plate, maxKg: t.maxKg, emptyKg: t.emptyKg, braked: t.braked, closed: t.closed, ...(t.volumeM3 != null ? { volumeM3: t.volumeM3 } : {}), ramp: t.ramp };
       trailerId = t.trailerId;
     } else if (input.hire) {
       spec = this.trailers.spec(input.hire);
     } else {
-      throw new GlosError('FIELD_REQUIRED', 'Say which trailer: one you keep, or one hired for the day', { field: 'trailerId' });
+      throw refused('FIELD_REQUIRED', said('refuse.fleet.sayWhichTrailer'), { field: 'trailerId' });
     }
     const country = this.drivers.countryOfWork(driverDid);
     const refusal = towingRefusal({ country, countryName: catalogueEntry(country)?.name ?? country, kinds: driver.licence?.towing ?? [], vehicle: this.vehicles.get(vehicleId), trailer: spec });
@@ -851,7 +848,7 @@ export class FleetService {
   /** 2026-11-13 — hitch a trailer to the vehicle of this shift (D2): checked first, then on the shift until unhitched or it ends. */
   hitch(driverDid: string, input: { trailerId?: string; hire?: TrailerInput }, now: number = Date.now()): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new GlosError('INVALID_STATE', 'Start your shift first: a trailer is hitched to the vehicle you are driving');
+    if (!active) throw refused('INVALID_STATE', said('refuse.fleet.shiftFirstTrailer'));
     const trailer = this.hitchable(driverDid, active.vehicleId, input, now);
     active.trailer = trailer;
     this.assignments.set(active.assignmentId, active);
@@ -861,7 +858,7 @@ export class FleetService {
   /** 2026-11-13 — the trailer off (D2): what the shift takes is the vehicle's alone again. */
   unhitch(driverDid: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active?.trailer) throw new GlosError('INVALID_STATE', 'No trailer is hitched on your shift');
+    if (!active?.trailer) throw refused('INVALID_STATE', said('refuse.fleet.noTrailerHitched'));
     delete active.trailer;
     this.assignments.set(active.assignmentId, active);
     return active;
@@ -892,7 +889,7 @@ export class FleetService {
 
   get(assignmentId: string): Assignment {
     const a = this.assignments.get(assignmentId);
-    if (!a) throw new GlosError('NOT_FOUND', `Assignment not found: ${assignmentId}`);
+    if (!a) throw refused('NOT_FOUND', said('refuse.fleet.assignmentNotFound', { id: assignmentId }));
     return a;
   }
 }

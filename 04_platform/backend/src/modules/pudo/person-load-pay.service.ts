@@ -20,6 +20,7 @@ import { NotificationService } from './notification.service';
 import { money, noticeOf, said } from './notice-words/say';
 import { refused } from './notice-words/refuse';
 import type { LoadPayment, LoadPaymentView, LoadRefund, LoadRoute } from './person-load-pay.types';
+import { codeSaid } from './notice-words/codes';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 /** Moneys paid in whole units: what is asked is rounded up, and what was not used goes back. */
@@ -113,7 +114,7 @@ export class PersonLoadPayService implements OnModuleInit {
     const f = this.dispatch.requireFreightPublic(freightId);
     if (f.postedByDid !== personDid) throw refused('FORBIDDEN', said('refuse.loadPay.notYours'));
     if (!f.escrow || !f.sellerEntityId) throw refused('INVALID_STATE', said('refuse.loadPay.payDriverDirectly'));
-    if (!(f.status === 'available' || f.status === 'scheduled')) throw refused('INVALID_STATE', said('refuse.loadPay.loadIs', { status: f.status }));
+    if (!(f.status === 'available' || f.status === 'scheduled')) throw refused('INVALID_STATE', said('refuse.loadPay.loadIs', { status: codeSaid('freight', f.status) }));
     const waiting = this.latest(freightId);
     if (waiting?.state === 'awaiting') throw refused('INVALID_STATE', said('refuse.loadPay.alreadyWaiting'));
     const proposal = this.dispatch.requireProposalPublic(input.proposalId);

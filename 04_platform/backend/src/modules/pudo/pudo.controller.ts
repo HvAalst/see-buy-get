@@ -242,7 +242,8 @@ import { HubListView, HubRowDto, HubRowNewDto } from './hub-list.types';
 import { RoadMapLinkDto, RoadMapMinKmDto, RoadMapRoleDto, RoadMapView } from './road-map.types';
 import type { PriceCardTerms, PriceCardsView, ZonePrice } from './price-card.types';
 import type { ZoneSetupView, ZoneShapesView } from './zone-map.types';
-import { countryName as countryShown } from './notice-words/say';
+import { countryName as countryShown, said, type Said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 import { screenOf, type AskedIn } from './reader-language.service';
 
 interface ModuleInfo {
@@ -457,7 +458,7 @@ export class SbgController {
 
   /** The manifests, where this module holds them. A method, not a getter: the route audits walk every member. */
   private manifests(): VehicleManifestService {
-    if (!this.manifestsSvc) throw new GlosError('INVALID_STATE', 'Manifests are not available here');
+    if (!this.manifestsSvc) throw refused('INVALID_STATE', said('refuse.controller.manifestsAreNotAvailableHere'));
     return this.manifestsSvc;
   }
 
@@ -565,17 +566,17 @@ export class SbgController {
       return { sent: true };
     }
     if (!texts && !isSandbox()) {
-      if (!reviewCodeOn()) throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+      if (!reviewCodeOn()) throw refused('SMS_NOT_SENT', said('refuse.controller.codeNotSent'));
       /*
        * THE REVIEW CODE (foundation/runtime/review-code.ts): nothing can be texted, so a number nobody holds is confirmed
        * with 000000, shown on the screen that asked. A number that already has an account gets none: a code to a number
        * is how its person signs in, and a code everybody knows would sign anybody in as them.
        */
-      if (this.persons.findByPhone(to)) throw new GlosError('SMS_NOT_SENT', REVIEW_CODE_HELD);
+      if (this.persons.findByPhone(to)) throw refused('SMS_NOT_SENT', said('refuse.controller.reviewCodeHeld'));
       const issued = this.otp.request(dto.phone, { review: true });
       return { sent: false, review: true, code: issued.code };
     }
-    if (texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'We cannot send a code to a number in that country yet.', { field: 'phone' });
+    if (texts && !this.sms?.mayGoTo(to)) throw refused('PHONE_NOT_SERVED', said('refuse.controller.weCannotSendACodeTo'), { field: 'phone' });
     const issued = this.otp.request(dto.phone);
     // 2026-11-16 — the way it went, said back: a code that went by an app the person chose before is looked for there.
     let via: CodeWay = 'sms';
@@ -586,7 +587,7 @@ export class SbgController {
     } catch (err) {
       this.otp.notSent(dto.phone);
       // The one failure that is the person's: the provider cannot text that number. Everything else is ours.
-      if (err instanceof SmsSendError && err.kind === 'rejected') throw new GlosError('PHONE_INVALID', 'We cannot send a text to that number. Check it, or use a mobile number.', { field: 'phone' });
+      if (err instanceof SmsSendError && err.kind === 'rejected') throw refused('PHONE_INVALID', said('refuse.controller.weCannotSendATextTo'), { field: 'phone' });
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, CODE_NOT_SENT), ...(err instanceof SmsSendError && err.kind === 'paused' ? [{ reason: 'paused' }] : []));
     }
     return isSandbox() ? { ...issued, via } : { sent: issued.sent, via };
@@ -620,7 +621,7 @@ export class SbgController {
     const to = this.otp.phoneFor(dto.phone);
     const testing = this.presence.testingWithout(to);
     if (testing) this.presence.requireTester(testing, to, 'signing in with Truecaller');
-    if (this.sms?.sends() && !this.sms.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'We cannot confirm a number in that country yet.', { field: 'phone' });
+    if (this.sms?.sends() && !this.sms.mayGoTo(to)) throw refused('PHONE_NOT_SERVED', said('refuse.controller.weCannotConfirmANumberIn'), { field: 'phone' });
     return this.truecallerConfirm().start(dto.phone, dto.lang ?? 'en');
   }
 
@@ -728,12 +729,12 @@ export class SbgController {
   }
 
   private truecallerConfirm(): TruecallerService {
-    if (!this.truecallerService) throw new GlosError('INVALID_STATE', 'Confirming a number by Truecaller is not open here: a code is sent instead');
+    if (!this.truecallerService) throw refused('INVALID_STATE', said('refuse.controller.confirmingANumberByTruecallerIs'));
     return this.truecallerService;
   }
 
   private passkeyDoor(): PasskeyService {
-    if (!this.passkeys) throw new GlosError('INVALID_STATE', 'Unlocking with fingerprint or face is not open here. Use the password.');
+    if (!this.passkeys) throw refused('INVALID_STATE', said('refuse.controller.unlockingWithFingerprintOrFaceIs'));
     return this.passkeys;
   }
 
@@ -889,13 +890,13 @@ export class SbgController {
   submitKyc(@Param('did') did: string, @Body() dto: SubmitKycDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
     const shop = this.agents.get(did);
-    if (shop.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Agent is ${shop.status}, expected DRAFT`);
+    if (shop.status !== 'DRAFT') throw refused('INVALID_STATE', said('refuse.controller.agentIsExpectedDraft', { status: shop.status }));
     // EACH PAPER IS A PICTURE THIS SHOP UPLOADED. A name with no file behind it was taken as a paper — the seeder sent
     // three — and staff were then asked to approve a shop on pictures nobody could open. Somebody else's picture is not
     // this shop's paper either. It also makes the sending the shop's own act: staff cannot supply what they then check.
     const papers: Array<[string, 'kyc_id' | 'kyc_licence' | 'shop']> = [[dto.idCopyRef, 'kyc_id'], [dto.tradingLicenceRef, 'kyc_licence'], ...dto.shopPhotoRefs.map((ref): [string, 'shop'] => [ref, 'shop'])];
     for (const [ref, kind] of papers) {
-      if (!this.media.adopt(ref, did, { type: 'agent', id: did }, kind)) throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached — take the photograph again');
+      if (!this.media.adopt(ref, did, { type: 'agent', id: did }, kind)) throw refused('PHOTO_REQUIRED', said('refuse.controller.thatPictureCouldNotBeAttached'));
     }
     return this.agents.submitKyc(did, dto);
   }
@@ -915,7 +916,7 @@ export class SbgController {
   @Roles('agent')
   @Post('agents/:did/licence-renewal')
   sendShopLicence(@Param('did') did: string, @Body() dto: ShopLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
-    this.assertAgentSelf(did, actor, 'Only the shop sends its own licence, from its own sign-in');
+    this.assertAgentSelf(did, actor, said('refuse.controller.onlyTheShopSendsItsOwn'));
     const a = this.agents.sendLicenceRenewal(did, { copyRef: dto.copyRef, expiresAt: dto.expiresAt });
     return { did, licenceStanding: this.agents.licenceStandingOf(did), ...(a.licenceRenewal ? { licenceRenewal: a.licenceRenewal } : {}) };
   }
@@ -995,7 +996,7 @@ export class SbgController {
   @Get('countries/:code')
   country(@Param('code') code: string) {
     const entry = catalogueEntry(code);
-    if (!entry) throw new GlosError('NOT_FOUND', `No such country: ${code}`);
+    if (!entry) throw refused('NOT_FOUND', said('refuse.controller.noSuchCountry', { code }));
     return this.countryRow(entry.code, entry.name);
   }
 
@@ -1142,7 +1143,7 @@ export class SbgController {
 
   private namedActor(actor: IntrospectionResult, typed?: string): string {
     if (!isSandbox() && !actor?.actorName) {
-      throw new GlosError('FORBIDDEN', 'A decision that needs two people needs a named sign-in — the shared operator key cannot say who is at the keyboard');
+      throw refused('FORBIDDEN', said('refuse.controller.aDecisionThatNeedsTwoPeople'));
     }
     return auditActor(actor, typed);
   }
@@ -1160,11 +1161,11 @@ export class SbgController {
     // Whether they are still a member, and may act at all, BusinessMemberGuard has already asked.
     if (actor?.role === 'entity_admin' || actor?.role === 'business') {
       const own = actingTenant(actor);
-      if (!own) throw new GlosError('FORBIDDEN', 'This sign-in carries no company');
-      if (typed && typed !== own) throw new GlosError('FORBIDDEN', 'You act for one company, and it is not that one');
+      if (!own) throw refused('FORBIDDEN', said('refuse.controller.thisSignInCarriesNoCompany'));
+      if (typed && typed !== own) throw refused('FORBIDDEN', said('refuse.controller.youActForOneCompanyAnd'));
       return own;
     }
-    if (!typed) throw new GlosError('FIELD_REQUIRED', 'Name the company you are acting for');
+    if (!typed) throw refused('FIELD_REQUIRED', said('refuse.controller.nameTheCompanyYouAreActing'));
     return this.entities.get(typed).entityId;
   }
 
@@ -1173,7 +1174,7 @@ export class SbgController {
     if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
     // A business reaches itself. It has no parent and is nobody's: the company structure's reach does not apply.
     if (actor?.role === 'business' && actor.tenant === entityId) return;
-    throw new GlosError('NOT_FOUND', `No such company: ${entityId}`);
+    throw refused('NOT_FOUND', said('refuse.controller.noSuchCompany', { entityId }));
   }
 
   /* ------------------------------------------------- how established we are -- */
@@ -1207,12 +1208,12 @@ export class SbgController {
    */
   private requirePriceableSwitchOn(jurisdiction: string, level: string): void {
     const country = catalogueEntry(jurisdiction);
-    if (!country) throw new GlosError('INVALID_INPUT', `${jurisdiction.toUpperCase()} is not a country in the catalogue`);
+    if (!country) throw refused('INVALID_INPUT', said('refuse.controller.notACountryInCatalogue', { country: jurisdiction.toUpperCase() }));
     // Switching ON is the change that lets goods move — not one that only takes sign-ups (COMING, 2026-10-25), which
     // prices nothing and so needs no exchange rate yet.
     const switchingOn = !this.presence.can(country.code, 'takeIn') && Boolean(LEVEL_DEFAULTS[level as PresenceLevel]?.takeIn);
     if (switchingOn && !this.fx.point(country.currency)) {
-      throw new GlosError('INVALID_STATE', `There is no exchange rate for ${country.currency} yet — put one on the rate book before switching ${country.name} on`);
+      throw refused('INVALID_STATE', said('refuse.controller.noExchangeRateYet', { currency: country.currency, country: country.name }));
     }
   }
 
@@ -1454,7 +1455,7 @@ export class SbgController {
     const readiness = this.readiness.readinessOf(company.entityId);
     if (!readiness.ready) {
       const missing = readiness.items.filter((i) => !i.met).map((i) => i.label);
-      throw new GlosError('INVALID_STATE', `${company.name} is not ready to be switched on. Still missing: ${missing.join('; ')}`);
+      throw refused('INVALID_STATE', said('refuse.controller.companyNotReadyToSwitchOn', { name: company.name, missing: missing.join('; ') }));
     }
     return company;
   }
@@ -1519,15 +1520,15 @@ export class SbgController {
     const { by, ...patch } = dto;
     if (recordKeeper(entity) === 'staff') {
       if (actor?.role !== 'operator') {
-        throw new GlosError('FORBIDDEN', `${entity.name} is not switched on yet. Until it is, SeeBuyGet staff enter its record; put your papers on record, and they are verified before the country is switched on`);
+        throw refused('FORBIDDEN', said('refuse.controller.entityNotSwitchedOnStaffEnter', { name: entity.name }));
       }
       return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor, by));
     }
     if (actor?.role === 'operator') {
-      throw new GlosError('FORBIDDEN', `${entity.name} is switched on and keeps its own record: its administrators change it. Staff act on a report of one of its papers, and two of you decide`);
+      throw refused('FORBIDDEN', said('refuse.controller.entitySwitchedOnKeepsRecord', { name: entity.name }));
     }
     if (PAPER_BOUND_SECTIONS.some((section) => (patch as Record<string, unknown>)[section] !== undefined)) {
-      throw new GlosError('VALIDATION_FAILED', 'A licence, an insurance policy, a bank account and who may sign change one at a time, each with the paper behind it');
+      throw refused('VALIDATION_FAILED', said('refuse.controller.aLicenceAnInsurancePolicyA'));
     }
     return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor));
   }
@@ -1543,9 +1544,9 @@ export class SbgController {
     // SAID HERE, NOT LEFT TO @Roles: the guard lets a staff token through every labelled route ("operator satisfies
     // everything"), and this is the one act staff must not be able to do — it is a company's licence date, changed alone.
     if (actor?.role !== 'entity_admin') {
-      throw new GlosError('FORBIDDEN', 'A company’s own administrator makes this change, with the paper. Staff act on a report of one of its papers, and two of you decide');
+      throw refused('FORBIDDEN', said('refuse.controller.aCompanySOwnAdministratorMakes'));
     }
-    if (!this.declarations) throw new GlosError('INVALID_STATE', 'A company’s own changes are not available here');
+    if (!this.declarations) throw refused('INVALID_STATE', said('refuse.controller.aCompanySOwnChangesAre'));
     const { declaration, document, told } = await this.declarations.declare({
       entityId,
       section: dto.section,
@@ -1568,7 +1569,7 @@ export class SbgController {
     const entity = this.entities.get(entityId);
     const own = recordKeeper(entity) === 'company' && (COMPANY_PAPER_KINDS as readonly string[]).includes(dto.kind);
     if (own && actor?.role === 'operator') {
-      throw new GlosError('FORBIDDEN', `${entity.name} is switched on and keeps its own papers: one of its administrators puts this on record`);
+      throw refused('FORBIDDEN', said('refuse.controller.entitySwitchedOnKeepsPapers', { name: entity.name }));
     }
     return this.companyDocuments.upload({
       entityId,
@@ -1816,7 +1817,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/rail')
   holdImportRail(@Param('importId') importId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The railway’s note is the importer’s or its agent’s to keep: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theRailwaySNoteIsThe'));
     return this.imports.holdRail(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1827,10 +1828,10 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/by-rail')
   importByRail(@Param('importId') importId: string, @Body() dto: ImportByRailDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The rail leg is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theRailLegIsTheImporter'));
     const acting = this.actingCompany(actor);
     const site = this.sites.require(acting, dto.terminalSiteId);
-    if (site.kind !== 'port' && site.kind !== 'clearance') throw new GlosError('VALIDATION_FAILED', 'Choose the rail terminal from your port places or places of clearance', { field: 'terminalSiteId' });
+    if (site.kind !== 'port' && site.kind !== 'clearance') throw refused('VALIDATION_FAILED', said('refuse.controller.chooseTheRailTerminalFromYour'), { field: 'terminalSiteId' });
     return this.imports.setByRail(importId, acting, { terminal: { label: site.name, location: site.location }, ...(dto.expectedAt ? { expectedAt: dto.expectedAt } : {}), ...(dto.freeDays != null ? { freeDays: dto.freeDays } : {}) }, this.namedActor(actor));
   }
 
@@ -1838,7 +1839,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/by-rail/left-port')
   importRailLeftPort(@Param('importId') importId: string, @Body() dto: RailArrivalDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'When the train left is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.whenTheTrainLeftIsThe'));
     return this.imports.recordRailDeparture(importId, this.actingCompany(actor), dto.at, this.namedActor(actor));
   }
 
@@ -1846,7 +1847,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/by-rail/arrived')
   importRailArrived(@Param('importId') importId: string, @Body() dto: RailArrivalDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The arrival is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theArrivalIsTheImporterS'));
     return this.imports.recordRailArrival(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1854,7 +1855,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/air')
   importAir(@Param('importId') importId: string, @Body() dto: ImportAirDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The air waybill is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theAirWaybillIsTheImporter'));
     const acting = this.actingCompany(actor);
     // Live animals (2026-10-30): the place the veterinary officer named, from the acting company's own places.
     const place = dto.animals?.quarantineSiteId ? this.sites.require(acting, dto.animals.quarantineSiteId) : undefined;
@@ -1865,7 +1866,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/air/release')
   importAirRelease(@Param('importId') importId: string, @Body() dto: ImportAirStepDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The release is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theReleaseIsTheImporterS'));
     return this.imports.recordAirStep(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1873,7 +1874,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/air/slot')
   importAirSlot(@Param('importId') importId: string, @Body() dto: TerminalSlotChangeDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The slot is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theSlotIsTheImporterS'));
     return this.imports.setAirSlot(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1881,7 +1882,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/air/collect-anyway')
   importAirCollectAnyway(@Param('importId') importId: string, @Body() dto: ImportAirAnywayDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the importer decides to send a truck before the cargo is released');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.onlyTheImporterDecidesToSend'));
     return this.imports.collectAirAnyway(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1889,7 +1890,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/by-rail/collect-anyway')
   importRailCollectAnyway(@Param('importId') importId: string, @Body() dto: RailCollectAnywayDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the importer decides to send a truck before the box is there');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.onlyTheImporterDecidesToSend2'));
     return this.imports.collectAnyway(importId, this.actingCompany(actor), dto.reason, this.namedActor(actor));
   }
 
@@ -1897,7 +1898,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/fbl')
   holdImportFbl(@Param('importId') importId: string, @Body() dto: FblDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The bill is the importer’s or its agent’s to keep: staff read it, and write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.theBillIsTheImporterS'));
     return this.imports.holdFbl(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -1905,7 +1906,7 @@ export class SbgController {
   @Roles('entity_admin', 'business')
   @Post('imports/:importId/fbl/verified')
   importFblVerified(@Param('importId') importId: string, @Body() dto: FblVerifiedDto, @Actor() actor: IntrospectionResult): ImportDetail {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'What FIATA’s page showed is the holder’s to record: staff write nothing in their name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.whatFiataSPageShowedIs'));
     return this.imports.verifyFbl(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
@@ -2310,7 +2311,7 @@ export class SbgController {
   @Post('entities/:entityId/contact')
   setContactCard(@Param('entityId') entityId: string, @Body() dto: ContactCardDto, @Actor() actor: IntrospectionResult): ContactCardView {
     const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
-    if (own !== entityId) throw new GlosError('FORBIDDEN', 'A company’s own entry is its own');
+    if (own !== entityId) throw refused('FORBIDDEN', said('refuse.controller.aCompanySOwnEntryIs'));
     const card = this.contacts.set(
       own,
       { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, deskPhone: dto.deskPhone, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo, visitHoursByDay: dto.visitHoursByDay, closedDates: dto.closedDates, visitorsPerHour: dto.visitorsPerHour },
@@ -2326,7 +2327,7 @@ export class SbgController {
     const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
     // The whole card, the desk number too: this is the screen that edits it.
     const card = this.contacts.own(own);
-    if (!card) throw new GlosError('NOT_FOUND', 'That company has written no entry yet');
+    if (!card) throw refused('NOT_FOUND', said('refuse.controller.thatCompanyHasWrittenNoEntry'));
     return { ...card, basis: CONTACT_BASIS } as never;
   }
 
@@ -2413,7 +2414,7 @@ export class SbgController {
   private requireDepotKeeper(actor: IntrospectionResult, entityId: string): string {
     if (actor?.role === 'operator') return this.entities.get(entityId).entityId;
     const own = this.actingCompany(actor, entityId);
-    if (own !== entityId) throw new GlosError('FORBIDDEN', 'A yard’s register is its own');
+    if (own !== entityId) throw refused('FORBIDDEN', said('refuse.controller.aYardSRegisterIsIts'));
     return own;
   }
 
@@ -2498,7 +2499,7 @@ export class SbgController {
   @Post('entities/:entityId/sites/:siteId/loading')
   setSiteLoading(@Param('entityId') entityId: string, @Param('siteId') siteId: string, @Body() dto: SiteLoadingDto, @Actor() actor: IntrospectionResult): Site {
     // Staff pass every role check; this one names them. The company keeps its own record.
-    if (actor?.role !== 'business') throw new GlosError('FORBIDDEN', 'A company keeps its own loading hours: staff read them and change none');
+    if (actor?.role !== 'business') throw refused('FORBIDDEN', said('refuse.controller.aCompanyKeepsItsOwnLoading'));
     return this.sites.setLoading(this.actingCompany(actor, entityId), siteId, { ...(dto.hours !== undefined ? { hours: dto.hours } : {}), ...(dto.bays !== undefined ? { bays: dto.bays } : {}) }, this.namedActor(actor));
   }
 
@@ -2509,7 +2510,7 @@ export class SbgController {
   @Roles('business')
   @Post('entities/:entityId/sites/:siteId/gln')
   setSiteGln(@Param('entityId') entityId: string, @Param('siteId') siteId: string, @Body() dto: SiteGlnDto, @Actor() actor: IntrospectionResult): Site {
-    if (actor?.role !== 'business') throw new GlosError('FORBIDDEN', 'A company keeps its own places’ GLNs: staff read them and change none');
+    if (actor?.role !== 'business') throw refused('FORBIDDEN', said('refuse.controller.aCompanyKeepsItsOwnPlaces'));
     return this.sites.setGln(this.actingCompany(actor, entityId), siteId, dto.gln, this.namedActor(actor));
   }
 
@@ -2534,11 +2535,11 @@ export class SbgController {
     const to = dto.destSiteId ? this.sites.require(acting, dto.destSiteId) : undefined;
     // Inland by rail (2026-10-29), the box is collected where the train brings it: no port to choose.
     const pickupLocation = from?.location ?? dto.pickupLocation ?? this.imports.railTerminalOf(importId)?.location;
-    if (!pickupLocation) throw new GlosError('FIELD_REQUIRED', 'Say which port it is collected from');
+    if (!pickupLocation) throw refused('FIELD_REQUIRED', said('refuse.controller.sayWhichPortItIsCollected'));
     // Live animals by air go to the place the veterinary officer named (2026-10-30): no destination to choose.
     const vetPlace = this.imports.animalsDestinationOf(importId);
     const destLabel = to ? (to.address ?? to.name) : (dto.destLabel ?? vetPlace?.label);
-    if (!destLabel) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');
+    if (!destLabel) throw refused('FIELD_REQUIRED', said('refuse.controller.sayWhereTheContainerIsGoing'));
     return this.imports.mintRoadLeg(
       importId,
       acting,
@@ -2737,7 +2738,7 @@ export class SbgController {
   @Post('operators')
   createOperator(@Body() dto: EntityAdminDto, @Actor() actor: IntrospectionResult) {
     if (staffIdOf(actor?.revocationKey)) {
-      throw new GlosError('FORBIDDEN', 'Ask for the account instead, and a second member of staff approves it. Nobody on staff makes another sign-in alone.');
+      throw refused('FORBIDDEN', said('refuse.controller.askForTheAccountInsteadAnd'));
     }
     return this.operatorAccounts.create({ email: dto.email, name: dto.name }, auditActor(actor));
   }
@@ -2902,13 +2903,13 @@ export class SbgController {
 
   /** Staff sign-in is fenced to the networks a deployment names (`GLOS_STAFF_NETWORKS`); open everywhere when it names none. */
   private assertStaffNetwork(ip: string | undefined): void {
-    if (!staffNetworkAllows(ip)) throw new GlosError('FORBIDDEN', 'Staff sign-in is open only from the networks SeeBuyGet staff work on');
+    if (!staffNetworkAllows(ip)) throw refused('FORBIDDEN', said('refuse.controller.staffSignInIsOpenOnly'));
   }
 
   /** The member of staff behind this token. The shared setup key is nobody in particular, so it cannot act as one. */
   private staffSelf(actor: IntrospectionResult | undefined): { operatorId: string; name: string } {
     const operatorId = staffIdOf(actor?.revocationKey);
-    if (!operatorId) throw new GlosError('FORBIDDEN', 'Sign in with your own staff account — the setup key cannot tell two people apart');
+    if (!operatorId) throw refused('FORBIDDEN', said('refuse.controller.signInWithYourOwnStaff'));
     return { operatorId, name: auditActor(actor) };
   }
 
@@ -2936,7 +2937,7 @@ export class SbgController {
   @Get('entities/admins/me')
   entityAdminMe(@Actor() actor: IntrospectionResult) {
     // Said here, not left to @Roles: a staff token passes every labelled route, and staff are not a company's administrator.
-    if (actor?.role !== 'entity_admin' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only a company’s own administrator is signed in as one');
+    if (actor?.role !== 'entity_admin' || !actor.tenant) throw refused('FORBIDDEN', said('refuse.controller.onlyACompanySOwnAdministrator'));
     return { name: actor.actorName ?? '', entityId: actor.tenant };
   }
 
@@ -3089,7 +3090,7 @@ export class SbgController {
     // award owed to a sender who paid at a counter. Until both exist every reported problem ends in the damage claim
     // report (the user, 2026-10-12: "I wonder whether that is our jurisdiction"). Taking cover AWAY is always allowed.
     if ((dto.freeLimit ?? 0) > 0 || (dto.premiumPct ?? 0) > 0) {
-      throw new GlosError('INVALID_STATE', 'A company cannot state cover yet. Stating it means the company pays claims from its own books, and that is not open: an award would be one member of staff’s decision, and nothing pays a sender who paid at a counter. Until then every reported problem ends in a damage claim report, which the claimant takes to their own insurer.');
+      throw refused('INVALID_STATE', said('refuse.controller.aCompanyCannotStateCoverYet'));
     }
     return this.entities.setInsurance(entityId, dto, auditActor(actor));
   }
@@ -3169,7 +3170,7 @@ export class SbgController {
   entityZoneShapes(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('version') version?: string): ZoneShapesView {
     this.requireReach(actor, entityId);
     const v = version != null && version !== '' ? Number(version) : undefined;
-    if (v != null && !(Number.isInteger(v) && v > 0)) throw new GlosError('VALIDATION_FAILED', 'A map version is a whole number', { field: 'version' });
+    if (v != null && !(Number.isInteger(v) && v > 0)) throw refused('VALIDATION_FAILED', said('refuse.controller.aMapVersionIsAWhole'), { field: 'version' });
     return this.zonesOf().shapes(entityId, v);
   }
 
@@ -3216,7 +3217,7 @@ export class SbgController {
   }
 
   private catchmentsOf(): CatchmentService {
-    if (!this.catchments) throw new GlosError('INVALID_STATE', 'Catchments are not available here');
+    if (!this.catchments) throw refused('INVALID_STATE', said('refuse.controller.catchmentsAreNotAvailableHere'));
     return this.catchments;
   }
 
@@ -3315,7 +3316,7 @@ export class SbgController {
   }
 
   private hubListOf(): HubListService {
-    if (!this.hubList) throw new GlosError('INVALID_STATE', 'The hub list is not available here');
+    if (!this.hubList) throw refused('INVALID_STATE', said('refuse.controller.theHubListIsNotAvailable'));
     return this.hubList;
   }
 
@@ -3328,12 +3329,12 @@ export class SbgController {
   }
 
   private hubDensityOf(): HubDensityService {
-    if (!this.hubDensity) throw new GlosError('INVALID_STATE', 'Where hubs are needed is not available here');
+    if (!this.hubDensity) throw refused('INVALID_STATE', said('refuse.controller.whereHubsAreNeededIsNot'));
     return this.hubDensity;
   }
 
   private roadMapsOf(): RoadMapService {
-    if (!this.roadMaps) throw new GlosError('INVALID_STATE', 'The road map of hubs is not available here');
+    if (!this.roadMaps) throw refused('INVALID_STATE', said('refuse.controller.theRoadMapOfHubsIs'));
     return this.roadMaps;
   }
 
@@ -3348,7 +3349,7 @@ export class SbgController {
   @Get('entities/:entityId/price-cards/report')
   entityPriceReport(@Param('entityId') entityId: string, @Query('week') week: string | undefined, @Actor() actor: IntrospectionResult): PriceReportView {
     this.requireReach(actor, entityId);
-    if (!this.priceReports) throw new GlosError('NOT_FOUND', 'The price report is not available on this server');
+    if (!this.priceReports) throw refused('NOT_FOUND', said('refuse.controller.thePriceReportIsNotAvailable'));
     return this.priceReports.weekOf(entityId, week);
   }
 
@@ -3715,7 +3716,7 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Put('agents/:did/tools')
   setShopTools(@Param('did') did: string, @Body() dto: SiteToolsDto, @Actor() actor: IntrospectionResult): SiteToolsView {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A shop says its own tools, signed in as the shop: what it has at its counter is its word. Staff change nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aShopSaysItsOwnTools'));
     this.assertAgentActs(did, actor);
     return this.agents.setTools(did, dto as unknown as SiteToolsInput, auditActor(actor));
   }
@@ -3848,7 +3849,7 @@ export class SbgController {
   @AtTheCounter()
   counterPriceRow(@Param('did') did: string, @Actor() actor: IntrospectionResult): CounterPriceRow {
     this.assertAgentOwner(did, actor);
-    if (!this.counterPrices) throw new GlosError('NOT_FOUND', 'Counter prices are not available on this server');
+    if (!this.counterPrices) throw refused('NOT_FOUND', said('refuse.controller.counterPricesAreNotAvailableOn'));
     return this.counterPrices.rowFor(did);
   }
 
@@ -4002,8 +4003,8 @@ export class SbgController {
   proposeLine(@Body() dto: ProposeLineDto, @Actor() actor: IntrospectionResult) {
     const managerDid = actingTenant(actor);
     const manager = managerDid ? this.managers.list().find((m) => m.did === managerDid) : undefined;
-    if (!manager) throw new GlosError('FORBIDDEN', 'Only a fleet can propose a line of its own');
-    if (manager.status !== 'ACTIVE') throw new GlosError('FORBIDDEN', `${manager.companyName} is not active on the network, so it cannot propose a line yet`);
+    if (!manager) throw refused('FORBIDDEN', said('refuse.controller.onlyAFleetCanProposeA'));
+    if (manager.status !== 'ACTIVE') throw refused('FORBIDDEN', said('refuse.controller.fleetNotActiveCannotProposeLine', { name: manager.companyName }));
     return this.corridors.proposeLine({ ...dto, managerDid: manager.did, company: manager.companyName });
   }
 
@@ -4072,7 +4073,7 @@ export class SbgController {
   @Post('parcels/phone-payment')
   @AtTheCounter()
   askPhonePayment(@Body() dto: PhonePaymentDto, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A payment is asked at the shop’s own counter, signed in as the shop. Staff ask nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aPaymentIsAskedAtThe'));
     return this.parcels.askPhonePayment(actingDid(actor, dto.agentDid), dto.parcelId, dto.phone);
   }
 
@@ -4081,7 +4082,7 @@ export class SbgController {
   @Get('parcels/phone-payment/:paymentId')
   @AtTheCounter()
   phonePayment(@Param('paymentId') paymentId: string, @Actor() actor: IntrospectionResult): Promise<HubPaymentView> {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A payment is read at the shop’s own counter, signed in as the shop');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aPaymentIsReadAtThe'));
     return this.parcels.phonePaymentState(actingDid(actor), paymentId);
   }
 
@@ -4174,7 +4175,7 @@ export class SbgController {
   bookFreight(@Body() dto: BookFreightDto, @Actor() actor: IntrospectionResult) {
     const agentDid = actingDid(actor, dto.agentDid);
     const origin = this.agents.get(agentDid); // 404 if the acting id is not an agent
-    if (dto.destPudoDid === agentDid) throw new GlosError('INVALID_INPUT', 'A shipment cannot be sent to the shop booking it — pick a different destination.');
+    if (dto.destPudoDid === agentDid) throw refused('INVALID_INPUT', said('refuse.controller.aShipmentCannotBeSentTo'));
     const dest = this.agents.get(dto.destPudoDid); // 404 on an unknown destination
     // Freight moves wherever the network operates: asked at the counter, of both ends, is only whether goods may be
     // taken in there. Where no sister stands the haul settles off-platform between shipper and carrier (the
@@ -4185,7 +4186,7 @@ export class SbgController {
     // Freight is the DEDICATED (P4+) lane only. A bus-sized load must be taken in as a normal parcel, not booked
     // as a truck haul — reject it so the counter can't turn an ordinary parcel into an (unpaid) freight job.
     if (!this.cargo.dedicatedRequired(cargoClass)) {
-      throw new GlosError('INVALID_INPUT', `A ${cargoClass} load fits the parcel network — take it in as a normal parcel, not freight.`);
+      throw refused('INVALID_INPUT', said('refuse.controller.loadFitsParcelNetwork', { kind: cargoClass }));
     }
     // Dangerous goods come with their UN number from the counter too (the gaps check, 2026-10-29).
     const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
@@ -4333,7 +4334,7 @@ export class SbgController {
     const staff = actor?.role === 'operator';
     const shop = staff ? agent : actor?.role === 'agent' ? actor.did : undefined;
     const hub = actor?.role === 'mdp' && actor.did ? this.mdps.list().find((m) => m.did === actor.did)?.mdpId : undefined;
-    if (!staff && !shop && !hub) throw new GlosError('FORBIDDEN', 'The parcel list is a shop’s or a hub’s own');
+    if (!staff && !shop && !hub) throw refused('FORBIDDEN', said('refuse.controller.theParcelListIsAShop'));
     const wanted = (status ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -4364,7 +4365,7 @@ export class SbgController {
     const p = this.parcels.get(id);
     if (p.originAgentDid === shop || p.destAgentDid === shop) return this.monitor.parcelTimeline(id);
     if (p.status === 'On_Bus') return { parcelId: p.parcelId, status: p.status, size: p.size, origin: p.originZone, destination: p.destZone };
-    throw new GlosError('NOT_FOUND', 'No parcel of this shop has that number');
+    throw refused('NOT_FOUND', said('refuse.controller.noParcelOfThisShopHas'));
   }
 
   /** The planned route for a parcel (origin PUDO → MDP(s) → dest PUDO), once a destination is known. */
@@ -4374,7 +4375,7 @@ export class SbgController {
     const parcel = this.parcels.get(id);
     // Read by the store that shipped it (its screen after minting). A parcel no store shipped has no store to ask.
     if (actor?.role !== 'operator') {
-      if (!parcel.vendorId) throw new GlosError('FORBIDDEN', 'This parcel was not shipped by your store');
+      if (!parcel.vendorId) throw refused('FORBIDDEN', said('refuse.controller.thisParcelWasNotShippedBy'));
       this.assertVendorOwner(parcel.vendorId, actor);
     }
     if (!parcel.destAgentDid) return { planned: false, reason: 'No destination PUDO nominated yet (set at accept or arrival).' };
@@ -4444,7 +4445,7 @@ export class SbgController {
     const { email, password, agreement: _agreement, ...store } = dto;
     // A store may bring its own signing secret (its shop system may already have one). It is a machine's credential,
     // and for a store with no account yet it still opens the console: so it is long, or it is ours — never "1234".
-    if (dto.secret !== undefined && dto.secret.length < 24) throw new GlosError('VALIDATION_FAILED', 'A signing secret you choose yourself needs at least 24 characters. Leave it out and one is made for you', { field: 'secret' });
+    if (dto.secret !== undefined && dto.secret.length < 24) throw refused('VALIDATION_FAILED', said('refuse.controller.aSigningSecretYouChooseYourself'), { field: 'secret' });
     const withAccount = email !== undefined || password !== undefined;
     // The account is checked BEFORE the store is made: an email somebody already holds must not leave a store behind it.
     if (withAccount) this.accounts.checkNewAccount(email, password, dto.name);
@@ -4478,7 +4479,7 @@ export class SbgController {
     // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
     const account = await this.accounts.storeLogin(dto.email, dto.password, dto.device, Date.now(), dto.unlock);
     const vendor = this.vendors.byDid(account.did);
-    if (!vendor) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    if (!vendor) throw refused('AUTH_FAILED', said('refuse.controller.wrongEmailOrPassword'));
     return { ...VendorService.publicView(vendor), email: account.email, hasAccount: true, token: account.token };
   }
 
@@ -4493,7 +4494,7 @@ export class SbgController {
   @Post('vendors/:id/account')
   setUpVendorAccount(@Param('id') id: string, @Body() dto: StoreAccountDto, @Actor() actor: IntrospectionResult) {
     const vendor = this.vendors.get(id);
-    if (!actor?.did || actor.did !== vendor.did || actor.role === 'operator') throw new GlosError('FORBIDDEN', 'A store sets up its own account, signed in as that store');
+    if (!actor?.did || actor.did !== vendor.did || actor.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aStoreSetsUpItsOwn'));
     const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: dto.email, password: dto.password });
     return { vendorId: vendor.vendorId, email: account.email, hasAccount: true, token: account.token, ...(account.linkPending ? { linkPending: true } : {}) };
   }
@@ -4511,7 +4512,7 @@ export class SbgController {
     const vendor = this.vendors.login(dto.vendorId, dto.secret);
     // ONCE A STORE HAS AN ACCOUNT, ITS SECRET SIGNS NOBODY IN. Said only to somebody who holds the right secret, so
     // it tells a stranger nothing; and it is what makes the secret a machine's again rather than a second password.
-    if (this.accounts.emailForDid(vendor.did)) throw new GlosError('FORBIDDEN', 'This store has an account: sign in with its email and password. The signing secret is for your own systems');
+    if (this.accounts.emailForDid(vendor.did)) throw refused('FORBIDDEN', said('refuse.controller.thisStoreHasAnAccountSign'));
     return { ...VendorService.publicView(vendor), hasAccount: false, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
@@ -4533,13 +4534,13 @@ export class SbgController {
     // A WRONG PROOF HERE IS A 403 OF ITS OWN, never a 401: the store is signed in, and every app reads a 401 as
     // "your sign-in ended" — one mistyped password would sign it out.
     if (this.accounts.emailForDid(store.did)) {
-      if (!this.accounts.passwordOpens(store.did, dto.password)) throw new GlosError('PASSWORD_WRONG', 'That is not this store’s password');
+      if (!this.accounts.passwordOpens(store.did, dto.password)) throw refused('PASSWORD_WRONG', said('refuse.controller.thatIsNotThisStoreS'));
       vendor = this.vendors.replaceSecret(id);
     } else {
       try {
         vendor = this.vendors.rotateSecret(id, dto.secret ?? '');
       } catch (err) {
-        if (err instanceof GlosError && err.code === 'AUTH_FAILED') throw new GlosError('SECRET_WRONG', 'That is not this store’s current secret');
+        if (err instanceof GlosError && err.code === 'AUTH_FAILED') throw refused('SECRET_WRONG', said('refuse.controller.thatIsNotThisStoreS2'));
         throw err;
       }
     }
@@ -4652,7 +4653,7 @@ export class SbgController {
   @Post('vendors/:id/gs1/disputes')
   openVendorGs1Dispute(@Param('id') id: string, @Body() dto: OpenGs1DisputeDto, @Actor() actor: IntrospectionResult): Gs1DisputeView {
     this.assertVendorSelf(id, actor);
-    if (dto.forClientId) throw new GlosError('INVALID_INPUT', 'A store claims a prefix for itself: it keeps no clients’ records', { field: 'forClientId' });
+    if (dto.forClientId) throw refused('INVALID_INPUT', said('refuse.controller.aStoreClaimsAPrefixFor'), { field: 'forClientId' });
     return this.requireGs1Disputes().open(this.storeParty(id), { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit, licenceRef: dto.licenceRef, note: dto.note });
   }
 
@@ -4688,12 +4689,12 @@ export class SbgController {
   }
 
   private requireShipperCodes(): ShipperCodesService {
-    if (!this.shipperCodes) throw new GlosError('INVALID_STATE', 'GS1 codes are not available here');
+    if (!this.shipperCodes) throw refused('INVALID_STATE', said('refuse.controller.gs1CodesAreNotAvailableHere'));
     return this.shipperCodes;
   }
 
   private requireGs1Disputes(): Gs1DisputeService {
-    if (!this.gs1Disputes) throw new GlosError('INVALID_STATE', 'GS1 disputes are not available here');
+    if (!this.gs1Disputes) throw refused('INVALID_STATE', said('refuse.controller.gs1DisputesAreNotAvailableHere'));
     return this.gs1Disputes;
   }
 
@@ -4709,7 +4710,7 @@ export class SbgController {
     if (isStoreDeveloper(actor)) {
       const theirs = new Set(['callbackUrl', 'callbackCarriesCode']);
       const other = Object.entries(dto).find(([k, v]) => v !== undefined && !theirs.has(k));
-      if (other) throw new GlosError('FORBIDDEN', 'A developer sets where the order updates go. The owner changes the rest of the store');
+      if (other) throw refused('FORBIDDEN', said('refuse.controller.aDeveloperSetsWhereTheOrder'));
     }
     // 2026-11-15 — where updates go, and whether the code rides in them, written down when they change, with who.
     const was = this.vendors.get(id);
@@ -4735,7 +4736,7 @@ export class SbgController {
   private assertVendorOwner(id: string, actor: IntrospectionResult): void {
     const vendor = this.vendors.get(id); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== vendor.did)) {
-      throw new GlosError('FORBIDDEN', 'This store is not yours to view');
+      throw refused('FORBIDDEN', said('refuse.controller.thisStoreIsNotYoursTo'));
     }
   }
 
@@ -4751,8 +4752,8 @@ export class SbgController {
    */
   private assertVendorReads(id: string, actor: IntrospectionResult): void {
     const vendor = this.vendors.get(id); // 404 if unknown
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store’s own records are the store’s: its buyers, its collection codes, its messages to its systems. Staff read a store under Stores, and a parcel under Find a parcel');
-    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to view');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aStoreSOwnRecordsAre'));
+    if (!actor?.did || actor.did !== vendor.did) throw refused('FORBIDDEN', said('refuse.controller.thisStoreIsNotYoursTo'));
   }
 
   /**
@@ -4770,8 +4771,8 @@ export class SbgController {
    */
   private assertVendorSelf(id: string, actor: IntrospectionResult): void {
     const vendor = this.vendors.get(id); // 404 if unknown
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name');
-    if (!actor?.did || actor.did !== vendor.did) throw new GlosError('FORBIDDEN', 'This store is not yours to change');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aStoreMakesItsOwnChanges'));
+    if (!actor?.did || actor.did !== vendor.did) throw refused('FORBIDDEN', said('refuse.controller.thisStoreIsNotYoursTo2'));
   }
 
   /** OWNER GATE for a shop's own data (R4). 404 on an unknown shop; 403 unless the caller IS that shop — a
@@ -4780,7 +4781,7 @@ export class SbgController {
   private assertAgentOwner(did: string, actor: IntrospectionResult): void {
     this.agents.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
-      throw new GlosError('FORBIDDEN', 'This shop is not yours to view');
+      throw refused('FORBIDDEN', said('refuse.controller.thisShopIsNotYoursTo'));
     }
   }
 
@@ -4790,15 +4791,15 @@ export class SbgController {
    * shop, reprice it, move its pin, or credit its float.
    */
   /** Round 40 — the shop ONLY, from its own sign-in: not staff standing in for it — the checker never supplies the thing checked. */
-  private assertAgentSelf(did: string, actor: IntrospectionResult, refusal: string): void {
+  private assertAgentSelf(did: string, actor: IntrospectionResult, refusal: Said): void {
     this.agents.get(did); // 404 if unknown
-    if (actor?.role !== 'agent' || actor.did !== did) throw new GlosError('FORBIDDEN', refusal);
+    if (actor?.role !== 'agent' || actor.did !== did) throw refused('FORBIDDEN', refusal);
   }
 
   private assertAgentActs(did: string, actor: IntrospectionResult): void {
     this.agents.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
-      throw new GlosError('FORBIDDEN', 'Only the shop can do this, from its own sign-in');
+      throw refused('FORBIDDEN', said('refuse.controller.onlyTheShopCanDoThis'));
     }
   }
 
@@ -4807,7 +4808,7 @@ export class SbgController {
   private assertDriverOwner(did: string, actor: IntrospectionResult): void {
     this.drivers.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
-      throw new GlosError('FORBIDDEN', 'These jobs are not yours to view');
+      throw refused('FORBIDDEN', said('refuse.controller.theseJobsAreNotYoursTo'));
     }
   }
 
@@ -5091,7 +5092,7 @@ export class SbgController {
   @ApiQuery({ name: 'consumer', required: false, description: 'true — a person pays it: rounded to the country’s cash step, where it has one' })
   @Get('quote')
   quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string, @Query('fragile') fragile?: string, @Query('near') near?: string, @Query('consumer') consumer?: string) {
-    if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
+    if (!origin || !dest) throw refused('FIELD_REQUIRED', said('refuse.controller.originAndDestAreRequired'));
     const m = this.measuredFrom(l, w, h, kg);
     // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
     // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
@@ -5143,7 +5144,7 @@ export class SbgController {
     const list = (origin && dests) ? dests.split(',').map((d) => [origin, d] as const)
       : (dest && origins) ? origins.split(',').map((o) => [o, dest] as const)
         : null;
-    if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
+    if (!list) throw refused('FIELD_REQUIRED', said('refuse.controller.provideOriginDestsOrDestOrigins'));
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
       try { this.agents.assertNamedAtMint(o); this.agents.assertNamedAtMint(d); return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor, this.carriersFrom(kg, fragile))) }; }
@@ -5246,7 +5247,7 @@ export class SbgController {
   @Roles('agent', 'operator')
   @Patch('agents/:did/pricing')
   setAgentPrice(@Param('did') did: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A shop sets its own fee, signed in as the shop: it is the least it is paid. Staff change nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aShopSetsItsOwnFee'));
     this.assertAgentActs(did, actor);
     return this.agents.setPrice(did, dto.price);
   }
@@ -5255,7 +5256,7 @@ export class SbgController {
   @Roles('mdp', 'operator')
   @Patch('mdps/:id/pricing')
   setMdpPrice(@Param('id') id: string, @Body() dto: HubPriceDto, @Actor() actor: IntrospectionResult) {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A hub sets its own fee, signed in as the hub: it is what the hub is paid. Staff change nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aHubSetsItsOwnFee'));
     this.assertMdpActs(id, actor);
     // 2026-11-12 — and its fee for a whole bag passed on unopened (Hubs on the Road, D5), where it says one.
     return this.mdps.setPrice(id, dto.price, dto.passOnFee);
@@ -5270,7 +5271,7 @@ export class SbgController {
   private assertMdpActs(mdpId: string, actor: IntrospectionResult): void {
     const mdp = this.mdps.require(mdpId); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== mdp.did)) {
-      throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+      throw refused('FORBIDDEN', said('refuse.controller.onlyTheHubCanDoThis'));
     }
   }
 
@@ -5285,7 +5286,7 @@ export class SbgController {
     const v = this.vehicles.get(id); // 404 if unknown
     const fleet = actor?.role === 'fleet_manager' && Boolean(v.managerDid) && actingTenant(actor) === v.managerDid;
     const driver = actor?.role === 'driver' && Boolean(actor?.did) && (v.ownerDriverDid === actor.did || this.fleet.activeForVehicle(id)?.driverDid === actor.did);
-    if (actor?.role !== 'operator' && !fleet && !driver) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, the driver who owns it, or the driver on shift with it, says what it takes');
+    if (actor?.role !== 'operator' && !fleet && !driver) throw refused('FORBIDDEN', said('refuse.controller.onlyTheFleetThatOwnsThis'));
     const role = actor?.role === 'operator' ? 'staff' : fleet ? 'fleet' : 'driver';
     return this.vehicles.setLoadSpace(
       id,
@@ -5305,7 +5306,7 @@ export class SbgController {
     const v = this.vehicles.get(id); // 404 if unknown
     const fleet = actor?.role === 'fleet_manager' && Boolean(v.managerDid) && actingTenant(actor) === v.managerDid;
     const driver = actor?.role === 'driver' && Boolean(actor?.did) && !v.managerDid && v.ownerDriverDid === actor.did;
-    if (actor?.role !== 'operator' && !fleet && !driver) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, or the driver who owns it, says what equipment it carries');
+    if (actor?.role !== 'operator' && !fleet && !driver) throw refused('FORBIDDEN', said('refuse.controller.onlyTheFleetThatOwnsThis2'));
     return this.vehicles.setEquipment(id, dto.equipment, { name: auditActor(actor), role: actor?.role === 'operator' ? 'staff' : fleet ? 'fleet' : 'driver' });
   }
 
@@ -5320,7 +5321,7 @@ export class SbgController {
     const v = this.vehicles.get(id); // 404 if unknown
     const fleet = this.isFleetOffice(actor, v.managerDid);
     const driver = actor?.role === 'driver' && Boolean(actor?.did) && !v.managerDid && v.ownerDriverDid === actor.did;
-    if (!fleet && !driver) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, or the driver who owns it, corrects its plate');
+    if (!fleet && !driver) throw refused('FORBIDDEN', said('refuse.controller.onlyTheFleetThatOwnsThis3'));
     const done = this.vehicles.correctPlate(id, dto.plate, { name: auditActor(actor), role: fleet ? 'fleet' : 'driver' });
     this.departures.plateCorrected(id, done.plate);
     return { vehicleId: done.vehicleId, plate: done.plate, plateHistory: done.plateHistory ?? [] };
@@ -5337,7 +5338,7 @@ export class SbgController {
     // The fleet's MANAGER, not any token the fleet issued: a driver's token carries the fleet as its tenant too.
     const owner = actor?.role === 'fleet_manager' && Boolean(v.managerDid) && actingTenant(actor) === v.managerDid;
     const onIt = Boolean(actor?.did) && this.fleet.activeForVehicle(id)?.driverDid === actor.did;
-    if (actor?.role !== 'operator' && !owner && !onIt) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, or the driver on shift with it, sets its rate');
+    if (actor?.role !== 'operator' && !owner && !onIt) throw refused('FORBIDDEN', said('refuse.controller.onlyTheFleetThatOwnsThis4'));
     return this.vehicles.setPrice(id, dto.price, dto.withTrailer);
   }
 
@@ -5412,7 +5413,7 @@ export class SbgController {
   @Post('parcels/:id/settle')
   settleParcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const vendorId = this.parcels.get(id).vendorId;
-    if (!vendorId) throw new GlosError('FORBIDDEN', 'Only the minting store may settle a shipment');
+    if (!vendorId) throw refused('FORBIDDEN', said('refuse.controller.onlyTheMintingStoreMaySettle'));
     this.assertVendorSelf(vendorId, actor);
     return this.parcels.settleUnpaid(id);
   }
@@ -5481,7 +5482,7 @@ export class SbgController {
   zoneAtPoint(@Query('lat') lat?: string, @Query('lng') lng?: string): { country?: string; zone?: { code: string; name: string; groupName: string; version: number; flags?: string[] } } {
     const point = { lat: Number(lat), lng: Number(lng) };
     if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) {
-      throw new GlosError('VALIDATION_FAILED', 'Give a place as lat and lng', { field: 'lat' });
+      throw refused('VALIDATION_FAILED', said('refuse.controller.giveAPlaceAsLatAnd'), { field: 'lat' });
     }
     const found = this.zones?.zoneAnywhere(point);
     return found ? { country: found.country, zone: { code: found.zone.code, name: found.zone.name, groupName: found.zone.groupName, version: found.zone.version, ...(found.zone.flags?.length ? { flags: found.zone.flags } : {}) } } : {};
@@ -5494,9 +5495,9 @@ export class SbgController {
   @ApiQuery({ name: 'country', required: false, description: 'ISO-3166 alpha-2 codes, comma-separated — where to look' })
   @Get('geocode')
   async geocode(@Query('q') q?: string, @Query('country') country?: string) {
-    if (!q || !q.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter an address or a place to look up');
+    if (!q || !q.trim()) throw refused('FIELD_REQUIRED', said('refuse.controller.enterAnAddressOrAPlace'));
     const found = await (this.places ?? new AddressSearchService(this.geocoder)).search(q, (country ?? '').split(','));
-    if (!found) throw new GlosError('NOT_FOUND', 'No place found for that. Try a street and a town, or put a pin on the map');
+    if (!found) throw refused('NOT_FOUND', said('refuse.controller.noPlaceFoundForThatTry'));
     return found;
   }
 
@@ -5516,7 +5517,7 @@ export class SbgController {
   @Header('Cache-Control', 'public, max-age=300')
   @Get('network/pulse')
   networkPulse() {
-    if (!this.pulse) throw new GlosError('NOT_FOUND', 'The network figures are not available on this server');
+    if (!this.pulse) throw refused('NOT_FOUND', said('refuse.controller.theNetworkFiguresAreNotAvailable'));
     return this.pulse.pulse();
   }
 
@@ -5525,7 +5526,7 @@ export class SbgController {
   @Header('Cache-Control', 'public, max-age=300')
   @Get('network/towns')
   networkTowns() {
-    if (!this.pulse) throw new GlosError('NOT_FOUND', 'The town pages are not available on this server');
+    if (!this.pulse) throw refused('NOT_FOUND', said('refuse.controller.theTownPagesAreNotAvailable'));
     return { items: this.pulse.towns() };
   }
 
@@ -5537,7 +5538,7 @@ export class SbgController {
   @Header('Cache-Control', 'public, max-age=300')
   @Get('network/prices')
   networkPrices() {
-    if (!this.townPrices) throw new GlosError('NOT_FOUND', 'The town prices are not available on this server');
+    if (!this.townPrices) throw refused('NOT_FOUND', said('refuse.controller.theTownPricesAreNotAvailable'));
     return { items: this.townPrices.prices() };
   }
 
@@ -5623,9 +5624,9 @@ export class SbgController {
     const handoff = dto.checkoutId ? this.vendors.checkout(dto.checkoutId) : undefined;
     // A checkout handoff is itself store-owned: binding another store's handoff would pull its buyer
     // contact into this store's parcel AND consume it out of the victim's incoming-orders inbox.
-    if (handoff && handoff.vendorId !== dto.vendorId) throw new GlosError('FORBIDDEN', 'This checkout belongs to a different store');
+    if (handoff && handoff.vendorId !== dto.vendorId) throw refused('FORBIDDEN', said('refuse.controller.thisCheckoutBelongsToADifferent'));
     const destPudoDid = dto.destPudoDid ?? handoff?.destAgentDid;
-    if (!destPudoDid) throw new GlosError('FIELD_REQUIRED', 'A destination PUDO is required');
+    if (!destPudoDid) throw refused('FIELD_REQUIRED', said('refuse.controller.aDestinationPudoIsRequired'));
     // Derive the size, then quote the route from the open-data participant rates.
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg: dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'] }) : (dto.size ?? 'M');
     // S32: a heavy/oversized order (cargo class P4+) is DEDICATED FREIGHT — it can never enter the shelf/tote
@@ -5636,7 +5637,7 @@ export class SbgController {
     const dimsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
     const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      if (dto.handInMdpId) throw new GlosError('CARGO_REQUIRES_DEDICATED', `This order is ${cargoClass}: it goes as a load of its own, from a drop-off shop — not handed in at a hub as a parcel`);
+      if (dto.handInMdpId) throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.controller.orderGoesAsLoadOfItsOwn', { kind: cargoClass }));
       const origin = this.agents.get(dto.originPudoDid ?? '');
       const dest = this.agents.get(destPudoDid);
       for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'takeIn'); // freight moves wherever goods may be taken in; a store no sister settles is not billed at claim
@@ -5689,8 +5690,8 @@ export class SbgController {
     const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg: weightKg }) : undefined;
     // READING B — or handed in at a hub, in bulk, by the store itself: the journey starts at the hub, which works it from
     // there; there is no road before it to charge, and no shop. One origin only.
-    if (dto.handInMdpId && dto.originPudoDid) throw new GlosError('INVALID_INPUT', 'Hand it in at a shop or at a hub, not both', { field: 'handInMdpId' });
-    if (dto.handInMdpId && !this.hubArrivals) throw new GlosError('INVALID_STATE', 'Parcels are not taken in at hubs here');
+    if (dto.handInMdpId && dto.originPudoDid) throw refused('INVALID_INPUT', said('refuse.controller.handItInAtAShop'), { field: 'handInMdpId' });
+    if (dto.handInMdpId && !this.hubArrivals) throw refused('INVALID_STATE', said('refuse.controller.parcelsAreNotTakenInAt'));
     const hub = dto.handInMdpId ? this.hubArrivals!.requireTakingBulk(dto.handInMdpId) : undefined;
     const hubFrom = hub ? this.routing.hubEnd(hub.mdpId) : undefined;
     const dock = dto.originPudoDid || hub ? undefined : this.vendors.requireCollection(dto.vendorId);
@@ -5709,9 +5710,9 @@ export class SbgController {
     // (The hub branch above is the third way a store's parcel starts; see HubArrivalService.)
     // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
     // before the parcel exists; one staying inside a country needs none and is told so.
-    if (dto.invoice && !quote.crossesBorder) throw new GlosError('INVALID_INPUT', 'This shipment does not cross a border, so it needs no commercial invoice', { field: 'invoice' });
+    if (dto.invoice && !quote.crossesBorder) throw refused('INVALID_INPUT', said('refuse.controller.thisShipmentDoesNotCrossA'), { field: 'invoice' });
     if (quote.crossesBorder && !dto.invoice) {
-      throw new GlosError('CUSTOMS_INCOMPLETE', 'This shipment crosses a border, so it needs its commercial invoice: each item with its value, weight and country of origin, and the buyer it goes to', { missing: ['invoice'], crossings: quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
+      throw refused('CUSTOMS_INCOMPLETE', said('refuse.controller.thisShipmentCrossesABorderSo'), { missing: ['invoice'], crossings: quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
     }
     const papersContext = quote.crossesBorder
       ? {
@@ -5798,7 +5799,7 @@ export class SbgController {
   intakePreview(@Param('id') id: string, @Actor() actor: IntrospectionResult, @Query('weighedKg') weighedKg?: string) {
     const parcel = this.parcels.get(id);
     if (actor?.role !== 'operator' && parcel.originAgentDid !== actor?.did) {
-      throw new GlosError('WRONG_PUDO', 'This parcel is booked for drop-off at another shop');
+      throw refused('WRONG_PUDO', said('refuse.controller.thisParcelIsBookedForDrop'));
     }
     const kind = parcel.vendorId ? 'vendor_order' : parcel.senderMobile === 'app' ? 'peer_send' : 'walk_up';
     // A vendor order is intakeable only once the store has actually PAID (intakeInbound hard-requires
@@ -5807,7 +5808,7 @@ export class SbgController {
     const counter = parcel.originAgentDid ? this.agents.get(parcel.originAgentDid) : undefined;
     const weighs = Boolean(counter && scaleCounts(counter.tools, this.agents.countryOf(counter), Date.now()));
     const kg = weighedKg != null && weighedKg !== '' ? Number(weighedKg) : undefined;
-    if (kg != null && !(Number.isFinite(kg) && kg > 0 && kg <= 1000)) throw new GlosError('VALIDATION_FAILED', 'A weight is a number of kg above nothing', { field: 'weighedKg' });
+    if (kg != null && !(Number.isFinite(kg) && kg > 0 && kg <= 1000)) throw refused('VALIDATION_FAILED', said('refuse.controller.aWeightIsANumberOf'), { field: 'weighedKg' });
     const weighedAt = kind === 'peer_send' && intakeReady && parcel.originAgentDid ? this.weighedAtCounter(parcel, parcel.originAgentDid, kg) : undefined;
     return {
       parcelId: parcel.parcelId,
@@ -5955,7 +5956,7 @@ export class SbgController {
     // The shops it passed through: where it was taken in, where it was collected. (A parcel born on a store's dock has no first.)
     const handledBy = [parcel.originAgentDid, parcel.destAgentDid].filter((did): did is string => Boolean(did));
     if (actor?.role !== 'operator' && !handledBy.includes(actor?.did ?? '')) {
-      throw new GlosError('FORBIDDEN', 'A rating is recorded by a shop that handled this parcel');
+      throw refused('FORBIDDEN', said('refuse.controller.aRatingIsRecordedByA'));
     }
     return this.ratings.rate({ parcelId: id, stars: dto.stars, raterMobile: dto.raterMobile });
   }
@@ -5991,7 +5992,7 @@ export class SbgController {
     if (actor?.role === 'operator') return;
     const badge = driver.badgeId;
     const served = Boolean(badge) && this.parcels.list({}).some((p) => p.driverBadgeId === badge && (p.originAgentDid === agentDid || p.destAgentDid === agentDid));
-    if (!served) throw new GlosError('FORBIDDEN', 'You can only rate a driver you have handed parcels to or received a bag from');
+    if (!served) throw refused('FORBIDDEN', said('refuse.controller.youCanOnlyRateADriver'));
   }
 
   /**
@@ -6047,7 +6048,7 @@ export class SbgController {
     if (mdp) {
       return { did: mdp.did, kind: 'mdp' as const, name: mdp.name, scorecard: this.monitor.mdpScorecard(mdp.mdpId) };
     }
-    throw new GlosError('NOT_FOUND', 'No rated provider with that id');
+    throw refused('NOT_FOUND', said('refuse.controller.noRatedProviderWithThatId'));
   }
 
   /* ---- the directory: one public page per participant, addressed by a handle ---- */
@@ -6084,7 +6085,7 @@ export class SbgController {
     const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id && !d.managerDid && !d.removedFrom) : undefined;
 
     const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name ?? driver?.displayName;
-    if (!name) throw new GlosError('NOT_FOUND', 'No such profile');
+    if (!name) throw refused('NOT_FOUND', said('refuse.controller.noSuchProfile'));
     const country = shop ? this.agents.countryOf(shop) : hub ? this.mdps.countryOf(hub) : (fleet?.jurisdiction ?? company?.jurisdiction ?? driver?.jurisdiction);
     // Only claim a standing where we know WHICH country to claim it in — resolve() answers 'observed' for
     // an unknown jurisdiction, which is right for the ladder and reads as a falsehood on a public page.
@@ -6347,7 +6348,7 @@ export class SbgController {
   @Post('market/surge-rules')
   setSurgeRule(@Body() dto: SurgeRuleDto, @Actor() actor: IntrospectionResult) {
     const cell = dto.cell ?? (dto.location ? this.market.cellFor(dto.location) : undefined);
-    if (!cell) throw new GlosError('FIELD_REQUIRED', 'Provide a cell key or a location (lat/lng) for the surge rule');
+    if (!cell) throw refused('FIELD_REQUIRED', said('refuse.controller.provideACellKeyOrA'));
     return this.market.setSurgeRule({ cell, factor: dto.factor, reason: dto.reason, by: auditActor(actor, dto.by), expiresAt: dto.expiresAt });
   }
 
@@ -6407,7 +6408,7 @@ export class SbgController {
   listTotes(@Actor() actor: IntrospectionResult, @Query('location') location?: string, @Query('status') status?: string) {
     // Any sign-in could read every bag on the network, with what is in each.
     if (actor?.role !== 'operator') {
-      if (!location) throw new GlosError('FORBIDDEN', 'Name your own hub: the whole bag pool is read by network staff');
+      if (!location) throw refused('FORBIDDEN', said('refuse.controller.nameYourOwnHubTheWhole'));
       this.assertMdpActs(location, actor);
     }
     return this.totes.list({ locationId: location, status: status as never });
@@ -6474,11 +6475,11 @@ export class SbgController {
   loadBag(@Param('code') code: string, @Body() dto: LoadBagDto, @Actor() actor: IntrospectionResult) {
     if (actor?.role === 'driver') {
       const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
-      if (!own) throw new GlosError('FORBIDDEN', 'Only a driver with a badge can take a bag');
-      if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw new GlosError('FORBIDDEN', 'A driver takes a bag onto their own badge');
+      if (!own) throw refused('FORBIDDEN', said('refuse.controller.onlyADriverWithABadge'));
+      if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw refused('FORBIDDEN', said('refuse.controller.aDriverTakesABagOnto'));
       return this.mdps.loadBag(code, own, dto.observedAt, { driverDid: actor.did!, name: actor.actorName || this.drivers.get(actor.did!).displayName, reading: dto.take, ...phoneAtHandover(actor, dto.position) });
     }
-    if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
+    if (!dto.driverBadgeId?.trim()) throw refused('FIELD_REQUIRED', said('refuse.controller.scanTheBadgeOnTheDriver'));
     return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId), dto.observedAt);
   }
 
@@ -6641,7 +6642,7 @@ export class SbgController {
     const { person } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device, dto.unlock);
     const holds = person.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active');
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
-    if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
+    if (!holds) throw refused('AUTH_FAILED', said('refuse.controller.thatAccountCannotManageThisFleet'));
     // Carries the PERSON: every manager of this fleet shares its DID, and a PIN change must end only this person's sessions.
     // And their NAME, where they have given one: a plan accepted, a contract recorded, a load put on a driver are
     // then signed by the person, not by the company every manager of it shares.
@@ -6745,7 +6746,7 @@ export class SbgController {
   /** The fleet itself (its token's tenant), or network staff. Anyone else is told the fleet is not theirs. */
   private assertFleetSelf(did: string, actor: IntrospectionResult): void {
     this.managers.get(did); // 404 if unknown
-    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, did)) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, did)) throw refused('FORBIDDEN', said('refuse.controller.thisFleetIsNotYours'));
   }
 
   /**
@@ -6795,7 +6796,7 @@ export class SbgController {
   fleetAssign(@Param('did') did: string, @Body() dto: FleetAssignDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
     const driver = this.drivers.get(dto.driverDid);
-    if (driver.managerDid !== did) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
+    if (driver.managerDid !== did) throw refused('FORBIDDEN', said('refuse.controller.driverNotInFleet'));
     const name = actor?.actorName ?? this.managers.get(did).companyName;
     return this.dispatch.assign(dto.freightId, dto.driverDid, { managerDid: did, name });
   }
@@ -6815,7 +6816,7 @@ export class SbgController {
 
   /** Moving a driver between fleets — present in the running app; absent only in specs that build this controller by hand. */
   private mover(): FleetMoveService {
-    if (!this.fleetMove) throw new GlosError('INVALID_STATE', 'Moving between fleets is not running in this deployment');
+    if (!this.fleetMove) throw refused('INVALID_STATE', said('refuse.controller.movingBetweenFleetsIsNotRunning'));
     return this.fleetMove;
   }
 
@@ -6842,7 +6843,7 @@ export class SbgController {
   managerSubmitKyc(@Param('did') did: string, @Body() dto: ManagerKycDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
     const fleet = this.managers.get(did);
-    if (fleet.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Manager is ${fleet.status}, expected DRAFT`);
+    if (fleet.status !== 'DRAFT') throw refused('INVALID_STATE', said('refuse.controller.managerIsExpectedDraft', { status: fleet.status }));
     // EACH PAPER IS A PICTURE ITS SENDER UPLOADED, as a shop's are: a name with no file behind it was taken as a paper
     // (the seeder sent four), and whoever approved the fleet was approving pictures nobody could open.
     const staff = actor?.role === 'operator';
@@ -6854,7 +6855,7 @@ export class SbgController {
       [dto.proofOfAddressRef, 'kyc_address'],
     ];
     for (const [ref, kind] of papers) {
-      if (!this.media.adopt(ref, sender, { type: 'fleet', id: did }, kind)) throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached — take the photograph again');
+      if (!this.media.adopt(ref, sender, { type: 'fleet', id: did }, kind)) throw refused('PHOTO_REQUIRED', said('refuse.controller.thatPictureCouldNotBeAttached'));
     }
     // A member of staff putting them on record is named, and held to it: somebody else approves (see decideKyc).
     return this.managers.submitKyc(did, dto, staff ? staffOf(actor) : undefined);
@@ -6865,7 +6866,7 @@ export class SbgController {
   @Post('fleet/managers/:did/kyc-decision')
   managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto, @Actor() actor: IntrospectionResult) {
     const who = staffOf(actor, dto.by);
-    if (!dto.approve && !dto.reason?.trim()) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: whoever puts the papers on record again reads it');
+    if (!dto.approve && !dto.reason?.trim()) throw refused('REASON_REQUIRED', said('refuse.controller.aRefusalMustSayWhyWhoever'));
     const m = this.managers.decideKyc(did, dto.approve, who.name, dto.reason, who);
     // A fleet that signed itself up has no app until it is active: the email is where it reads the answer, and the reason.
     this.tellSignedUpFleet(m, dto.approve ? 'approved' : 'refused', dto.approve ? undefined : dto.reason?.trim());
@@ -6903,7 +6904,7 @@ export class SbgController {
     // A fleet's office registers into ITS OWN fleet, whatever fleet is typed; staff name the fleet (or none: an
     // independent courier's). It took any valid token and the typed fleet: any account could add vehicles to any fleet.
     const managerDid = actor?.role === 'operator' ? dto.managerDid : actingTenant(actor);
-    if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'A vehicle is registered by its fleet’s office');
+    if (actor?.role !== 'operator' && !managerDid) throw refused('FORBIDDEN', said('refuse.controller.aVehicleIsRegisteredByIts'));
     this.vehicles.askEnergy(dto.vehicleClass, dto.energy);
     // 2026-11-21 — a plate no other vehicle in use carries (a bought one: its owner is asked first, PlateClaimService).
     this.vehicles.requirePlateFree(dto.plate);
@@ -6973,7 +6974,7 @@ export class SbgController {
   /** The vehicle's owning fleet, or an operator. A vehicle with no fleet (an independent courier's) is operator-only. */
   private assertVehicleOwner(vehicleId: string, actor: IntrospectionResult): void {
     const v = this.vehicles.get(vehicleId); // 404 if unknown
-    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, v.managerDid)) throw new GlosError('FORBIDDEN', 'This vehicle is not yours');
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, v.managerDid)) throw refused('FORBIDDEN', said('refuse.controller.thisVehicleIsNotYours'));
   }
 
   /**
@@ -6998,7 +6999,7 @@ export class SbgController {
   private assertDriverReader(did: string, actor: IntrospectionResult): FleetDriver {
     const driver = this.drivers.get(did); // 404 if unknown
     if (actor?.role === 'operator' || (actor?.did && actor.did === did) || this.isFleetOffice(actor, driver.managerDid)) return driver;
-    throw new GlosError('FORBIDDEN', 'A driver’s record is theirs, their fleet office’s and the network’s to read');
+    throw refused('FORBIDDEN', said('refuse.controller.aDriverSRecordIsTheirs'));
   }
 
   /**
@@ -7013,7 +7014,7 @@ export class SbgController {
   private assertDriverActs(did: string, actor: IntrospectionResult): FleetDriver {
     const driver = this.drivers.get(did); // 404 if unknown
     if (actor?.role === 'operator' || (actor?.did && actor.did === did)) return driver;
-    throw new GlosError('FORBIDDEN', 'Only the driver can do this, from their own sign-in');
+    throw refused('FORBIDDEN', said('refuse.controller.onlyTheDriverCanDoThis'));
   }
 
   // --- fleet: drivers (own ID, staged onboarding) ---
@@ -7033,7 +7034,7 @@ export class SbgController {
     if (actor?.role !== 'operator') {
       // The office, not a colleague: a fleet DRIVER's token names the fleet as its tenant too (see isFleetOffice).
       const own = actingTenant(actor);
-      if (!this.isFleetOffice(actor, own) || (dto.managerDid && dto.managerDid !== own)) throw new GlosError('FORBIDDEN', 'You can add drivers to your own fleet only');
+      if (!this.isFleetOffice(actor, own) || (dto.managerDid && dto.managerDid !== own)) throw refused('FORBIDDEN', said('refuse.controller.youCanAddDriversToYour'));
       dto.managerDid = own;
     }
     const driver = this.drivers.register(dto as never);
@@ -7071,7 +7072,7 @@ export class SbgController {
           return []; // a link to a driver record that no longer exists names nobody
         }
       });
-    if (!held.length) throw new GlosError('ROLE_NOT_HELD', 'This phone is not registered to a driver. Ask your fleet to check the number they registered.');
+    if (!held.length) throw refused('ROLE_NOT_HELD', said('refuse.controller.thisPhoneIsNotRegisteredTo'));
     const { link, driver } = held[held.length - 1]; // the most recent registration, when a phone drove for several
     this.auth.revokeAll(driver.did); // one phone at a time: every earlier session of this driver ends here
     const token = this.auth.mintActorToken({ role: 'driver', did: driver.did, tenant: link.tenant, revocationKey: person.personDid, personDid: person.personDid });
@@ -7097,7 +7098,7 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/fleet-offers/:offerId/accept')
   acceptFleetOffer(@Param('did') did: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult): FleetMoveView {
-    this.assertDriverSelf(did, actor, 'Only the driver can say yes to a place in a fleet, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCanSayYes'));
     const { driver, companyName } = this.offersOf().accept(offerId, did);
     // Every session this driver held has just ended — each carried the old fleet. The phone that said yes is handed
     // a new one, as the new fleet's driver, on the same person.
@@ -7112,7 +7113,7 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/leave-fleet')
   leaveFleet(@Param('did') did: string, @Actor() actor: IntrospectionResult): FleetLeaveView {
-    this.assertDriverSelf(did, actor, 'Only the driver can leave a fleet, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCanLeaveA'));
     const { companyName, runs } = this.mover().leave(did);
     // Every session this driver held has just ended — each carried the fleet. The phone that asked is handed a new
     // one that names no fleet, on the same person, so they are not thrown out of the app by their own decision.
@@ -7128,7 +7129,7 @@ export class SbgController {
   @Roles('driver')
   @Get('drivers/:did/ride-alone')
   rideAloneTerms(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver reads what riding for themselves would take, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverReadsWhatRiding'));
     return this.mover().rideAloneTerms(did);
   }
 
@@ -7141,7 +7142,7 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/ride-alone')
   rideAlone(@Param('did') did: string, @Body() dto: RideAloneDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver can choose to ride for themselves, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCanChooseTo'));
     const { driver, vehicle, companyName, asked } = this.mover().rideAlone(did, { country: dto.country, vehicleClass: dto.vehicleClass as never, plate: dto.plate, truckSubtype: dto.truckSubtype as never, energy: dto.energy, idCopyRef: dto.idCopyRef, licenceCopyRef: dto.licenceCopyRef });
     // An ask, waiting for staff: what was asked, and nothing else about them has changed.
     if (asked) return { did, asked: { country: asked.country, vehicleClass: asked.vehicleClass, plate: asked.plate, askedAt: asked.askedAt }, ...(companyName ? { companyName } : {}) };
@@ -7156,7 +7157,7 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/own-vehicles')
   addOwnVehicle(@Param('did') did: string, @Body() dto: OwnVehicleDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver adds a vehicle of their own, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverAddsAVehicle'));
     const v = this.mover().addOwnVehicle(did, { vehicleClass: dto.vehicleClass as never, plate: dto.plate, truckSubtype: dto.truckSubtype as never, energy: dto.energy });
     return { vehicle: { vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass } };
   }
@@ -7165,7 +7166,7 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/own-vehicles/:vehicleId/retire')
   retireOwnVehicle(@Param('did') did: string, @Param('vehicleId') vehicleId: string, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver takes a vehicle of their own off their list, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverTakesAVehicle'));
     const v = this.mover().retireOwnVehicle(did, vehicleId);
     return { vehicleId: v.vehicleId, plate: v.plate, retired: true as const };
   }
@@ -7174,19 +7175,19 @@ export class SbgController {
   @Roles('driver')
   @Post('drivers/:did/fleet-offers/:offerId/decline')
   declineFleetOffer(@Param('did') did: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult): { declined: true } {
-    this.assertDriverSelf(did, actor, 'Only the driver can answer an offer, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCanAnswerAn'));
     this.offersOf().decline(offerId, did);
     return { declined: true };
   }
 
   /** What the driver alone decides, from their own sign-in — the token's role AND subject, nothing standing in. */
-  private assertDriverSelf(did: string, actor: IntrospectionResult, refusal: string): void {
+  private assertDriverSelf(did: string, actor: IntrospectionResult, refusal: Said): void {
     this.drivers.get(did); // 404 if unknown
-    if (actor?.role !== 'driver' || actor.did !== did) throw new GlosError('FORBIDDEN', refusal);
+    if (actor?.role !== 'driver' || actor.did !== did) throw refused('FORBIDDEN', refusal);
   }
 
   private offersOf(): FleetOfferService {
-    if (!this.fleetOffers) throw new GlosError('INVALID_STATE', 'Fleet offers are not running in this deployment');
+    if (!this.fleetOffers) throw refused('INVALID_STATE', said('refuse.controller.fleetOffersAreNotRunningIn'));
     return this.fleetOffers;
   }
 
@@ -7253,7 +7254,7 @@ export class SbgController {
      * vetting flags, vault references. The list is an office's working tool, and it now asks for one.
      */
     if (actor?.role !== 'operator' && !(actor?.role === 'fleet_manager' && actingTenant(actor))) {
-      throw new GlosError('FORBIDDEN', 'The driver list belongs to a fleet office and the network');
+      throw refused('FORBIDDEN', said('refuse.controller.theDriverListBelongsToA'));
     }
     return this.drivers
       .list({ managerDid: actingTenant(actor) })
@@ -7281,7 +7282,7 @@ export class SbgController {
   @Roles('operator')
   @Get('fleet/papers')
   papersReport() {
-    if (!this.papers) throw new GlosError('INVALID_STATE', 'The papers check is not running in this deployment');
+    if (!this.papers) throw refused('INVALID_STATE', said('refuse.controller.thePapersCheckIsNotRunning'));
     return this.papers.networkReport();
   }
 
@@ -7289,7 +7290,7 @@ export class SbgController {
   @Roles('operator')
   @Post('fleet/papers/sweep')
   async papersSweep() {
-    if (!this.papers) throw new GlosError('INVALID_STATE', 'The papers check is not running in this deployment');
+    if (!this.papers) throw refused('INVALID_STATE', said('refuse.controller.thePapersCheckIsNotRunning'));
     const did = await this.papers.sweep();
     return { ...did, at: this.papers.lastRun?.at ?? new Date().toISOString() };
   }
@@ -7315,7 +7316,7 @@ export class SbgController {
   @Post('fleet/managers/:did/papers/send')
   sendCarrierPaper(@Param('did') did: string, @Body() dto: SendCarrierPaperDto, @Actor() actor: IntrospectionResult) {
     this.managers.get(did);
-    if (!this.isFleetOffice(actor, did)) throw new GlosError('FORBIDDEN', 'Only the fleet’s own office can send its papers');
+    if (!this.isFleetOffice(actor, did)) throw refused('FORBIDDEN', said('refuse.controller.onlyTheFleetSOwnOffice'));
     this.managers.sendPaper(did, dto, { ownerDid: actingDid(actor), by: auditActor(actor) });
     return this.carrierPapers(did, actor);
   }
@@ -7401,7 +7402,7 @@ export class SbgController {
   recordDriverPassport(@Param('did') did: string, @Body() dto: DriverPassportDto, @Actor() actor: IntrospectionResult): { did: string; passport: DriverPassport } {
     const driver = this.drivers.get(did);
     if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
-      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A passport is recorded by your fleet office or the network, never by the driver it belongs to' : 'This driver is not in your fleet');
+      throw refused('FORBIDDEN', said(actor?.did === did ? 'refuse.controller.passportByOffice' : 'refuse.controller.driverNotInFleet'));
     }
     const kept = this.drivers.recordPassport(did, dto, Date.now(), auditActor(actor, dto.by));
     return { did, passport: kept.passport! };
@@ -7412,7 +7413,7 @@ export class SbgController {
   renewDriverLicence(@Param('did') did: string, @Body() dto: RenewLicenceDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did);
     if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
-      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A licence is recorded by your fleet office or the network, never by the driver it belongs to' : 'This driver is not in your fleet');
+      throw refused('FORBIDDEN', said(actor?.did === did ? 'refuse.controller.licenceByOffice' : 'refuse.controller.driverNotInFleet'));
     }
     const renewed = this.drivers.renewLicence(did, { number: dto.number, expiresAt: dto.expiresAt }, Date.now(), auditActor(actor, dto.by));
     return { ...renewed, papers: driverPapers(renewed), offRoad: lapsedOf(driverPapers(renewed)).map(offRoadLine) };
@@ -7426,7 +7427,7 @@ export class SbgController {
   @Roles('driver')
   @Post('fleet/drivers/:did/licence-renewal')
   sendLicenceRenewal(@Param('did') did: string, @Body() dto: SendLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
-    if (!actor?.did || actor.did !== did) throw new GlosError('FORBIDDEN', 'Only the driver can send their own licence');
+    if (!actor?.did || actor.did !== did) throw refused('FORBIDDEN', said('refuse.controller.onlyTheDriverCanSendTheir'));
     const sent = this.drivers.sendLicenceRenewal(did, { copyRef: dto.copyRef, expiresAt: dto.expiresAt, number: dto.number });
     return { ...sent, papers: driverPapers(sent), offRoad: lapsedOf(driverPapers(sent)).map(offRoadLine) };
   }
@@ -7441,10 +7442,10 @@ export class SbgController {
   refuseLicenceRenewal(@Param('did') did: string, @Body() dto: RefuseLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did);
     if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
-      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A card is read by your fleet office or the network, never by the driver who sent it' : 'This driver is not in your fleet');
+      throw refused('FORBIDDEN', said(actor?.did === did ? 'refuse.controller.cardReadByOffice' : 'refuse.controller.driverNotInFleet'));
     }
-    const refused = this.drivers.refuseLicenceRenewal(did, dto.reason, auditActor(actor, dto.by));
-    return { ...refused, papers: driverPapers(refused), offRoad: lapsedOf(driverPapers(refused)).map(offRoadLine) };
+    const driverNow = this.drivers.refuseLicenceRenewal(did, dto.reason, auditActor(actor, dto.by));
+    return { ...driverNow, papers: driverPapers(driverNow), offRoad: lapsedOf(driverPapers(driverNow)).map(offRoadLine) };
   }
 
   /**
@@ -7470,7 +7471,7 @@ export class SbgController {
     @Query('variant') variant?: string,
   ): StreamableFile {
     const driver = this.drivers.get(did);
-    if (!this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
+    if (!this.isFleetOffice(actor, driver.managerDid)) throw refused('FORBIDDEN', said('refuse.controller.driverNotInFleet'));
     const id = this.drivers.licenceCardOf(did, mediaId);
     const { bytes, contentType } = this.media.blob(id, variant === 'thumb' ? 'thumb' : 'full');
     return new StreamableFile(bytes, { type: contentType });
@@ -7498,7 +7499,7 @@ export class SbgController {
   @Post('dispatch/freight/:id/hand-back')
   handBackFreight(@Param('id') id: string, @Body() dto: HandBackDto, @Actor() actor: IntrospectionResult) {
     const f = this.dispatch.requireFreightPublic(id);
-    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== f.claimedBy)) throw new GlosError('FORBIDDEN', 'This load is not on you');
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== f.claimedBy)) throw refused('FORBIDDEN', said('refuse.controller.thisLoadIsNotOnYou'));
     const out = this.dispatch.handBack(id, f.claimedBy ?? actor.did!, dto.reason);
     return { freightId: out.freightId, code: out.code, status: out.status };
   }
@@ -7525,11 +7526,11 @@ export class SbgController {
 
   /** Who may speak of a matched load's payment: the driver it is on, or the office of the fleet it was taken FOR. Never staff. */
   private paidDirectBy(id: string, actor: IntrospectionResult): 'driver' | 'office' {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the driver it is on, or their fleet’s office, says they were paid');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.onlyTheDriverItIsOn'));
     const f = this.dispatch.requireFreightPublic(id);
     // The carrier of record, fixed at the claim, whoever the driver drives for now.
     const by = actor?.did && actor.did === f.claimedBy ? 'driver' : this.isFleetOffice(actor, this.dispatch.carrierOf(f)) ? 'office' : undefined;
-    if (!by) throw new GlosError('FORBIDDEN', 'This load is not on you');
+    if (!by) throw refused('FORBIDDEN', said('refuse.controller.thisLoadIsNotOnYou'));
     return by;
   }
 
@@ -7696,7 +7697,7 @@ export class SbgController {
   @Get('departures/mine')
   myDepartureBookings(@Actor() actor: IntrospectionResult) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInAsThePartyWhose'));
     return { items: this.departures.forShipper(who) };
   }
 
@@ -7712,7 +7713,7 @@ export class SbgController {
   @Post('departures/:departureId/book')
   bookDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto, @Actor() actor: IntrospectionResult) {
     const shipperDid = actingDid(actor);
-    if (!shipperDid) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
+    if (!shipperDid) throw refused('FORBIDDEN', said('refuse.controller.signInAsThePartyWhose'));
     // B2 — a business books as itself; the person who did it is kept by name.
     const { forClientId, ...load } = dto;
     const { booking } = this.departures.book(departureId, { shipperDid, ...load, ...(actor?.role === 'business' && actor.actorName ? { bookedByName: actor.actorName } : {}), ...(forClientId ? this.loadPosting!.onBehalfOf(actor, forClientId) : {}) });
@@ -7729,7 +7730,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInFirst'));
     return this.departures.cancelBooking(departureId, bookingId, who, { reason: dto?.reason, note: dto?.note });
   }
 
@@ -7753,7 +7754,7 @@ export class SbgController {
     this.assertFleetSelf(did, actor);
     const driver = this.drivers.get(dto.driverDid);
     // Their own driver, or the roster becomes a way to put another fleet's courier on the hook for a wait.
-    if (driver.managerDid !== did) throw new GlosError('FORBIDDEN', 'That driver does not drive for you');
+    if (driver.managerDid !== did) throw refused('FORBIDDEN', said('refuse.controller.thatDriverDoesNotDriveFor'));
     return this.departures.assignDriver(departureId, did, { did: driver.did, name: driver.displayName });
   }
 
@@ -7772,7 +7773,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInFirst'));
     return this.departures.deliver(departureId, bookingId, who, dto).booking;
   }
 
@@ -7791,7 +7792,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInFirst'));
     return this.departures.secured(departureId, bookingId, who, dto).booking;
   }
 
@@ -7837,7 +7838,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these were');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInAsThePartyWhose2'));
     return this.departures.openClaim(departureId, bookingId, who, dto).booking;
   }
 
@@ -7885,7 +7886,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInFirst'));
     return this.departures.arrive(departureId, bookingId, dto.where, who).record;
   }
 
@@ -7898,7 +7899,7 @@ export class SbgController {
     @Actor() actor: IntrospectionResult,
   ) {
     const who = actingDid(actor);
-    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    if (!who) throw refused('FORBIDDEN', said('refuse.controller.signInFirst'));
     return this.departures.freeToGo(departureId, bookingId, dto.where, who).record;
   }
 
@@ -7931,7 +7932,7 @@ export class SbgController {
   @Roles('driver')
   @Post('fleet/drivers/:did/id-photo')
   sendIdPhoto(@Param('did') did: string, @Body() dto: IdPhotoDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the rider sends a photo of their own ID, from their own sign-in');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheRiderSendsAPhoto'));
     const d = this.drivers.sendIdPhoto(did, dto.photoRef);
     return { did, idCheck: d.idCheck };
   }
@@ -7980,7 +7981,7 @@ export class SbgController {
   @Post('fleet/drivers/:did/vehicle-for-today')
   suggestVehicle(@Param('did') did: string, @Body() dto: SuggestVehicleDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did); // 404 if unknown
-    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) throw refused('FORBIDDEN', said('refuse.controller.thatDriverIsNotInYour'));
     return this.fleet.suggestVehicle(did, dto.vehicleId);
   }
 
@@ -8000,7 +8001,7 @@ export class SbgController {
     if (actor?.role === 'operator' || actor?.did === did) return;
     const driver = this.drivers.get(did);
     // The office, not a colleague: a fleet driver's token names the fleet too (see isFleetOffice).
-    if (!this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    if (!this.isFleetOffice(actor, driver.managerDid)) throw refused('FORBIDDEN', said('refuse.controller.thatDriverIsNotInYour'));
   }
 
   /**
@@ -8017,20 +8018,20 @@ export class SbgController {
   startSession(@Param('did') did: string, @Body() dto: StartSessionDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
     if (actor?.role !== 'operator') {
-      if (!actor?.personDid) throw new GlosError('FORBIDDEN', 'Sign in with your phone and PIN to start a shift');
-      if (!dto.pin?.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter your PIN to start the shift', { field: 'pin' });
+      if (!actor?.personDid) throw refused('FORBIDDEN', said('refuse.controller.signInWithYourPhoneAnd'));
+      if (!dto.pin?.trim()) throw refused('FIELD_REQUIRED', said('refuse.controller.enterYourPinToStartThe'), { field: 'pin' });
       this.persons.confirmPin(actor.personDid, dto.pin.trim());
     }
     // Naming a vehicle they have driven before is the same act as scanning it — the coupling rules (licence,
     // usable vehicle, nobody else on it) are what actually protect this, and they run either way.
-    if (!dto.vehicleId?.trim() && !dto.vehicleQr?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the vehicle QR, or pick one you have driven before');
+    if (!dto.vehicleId?.trim() && !dto.vehicleQr?.trim()) throw refused('FIELD_REQUIRED', said('refuse.controller.scanTheVehicleQrOrPick'));
     // The odometer, read as the shift starts: a reading that cannot be kept is refused BEFORE the shift starts.
     const vehicleId = dto.vehicleId?.trim() || this.vehicles.byQr(dto.vehicleQr!)?.vehicleId;
     // The daily check a fleet asks for comes first: no check today, no shift — with its own code, so the app opens it.
     const unchecked = vehicleId && this.care?.checkBlocker(vehicleId);
     if (unchecked) throw new GlosError('VEHICLE_CHECK_NEEDED', unchecked);
     // A reading is the driver's word about the vehicle: staff standing in give none (the user, 2026-10-16).
-    if (dto.odometerKm !== undefined && actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Staff standing in give no odometer reading: the driver does, from their own phone', { field: 'odometerKm' });
+    if (dto.odometerKm !== undefined && actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.staffStandingInGiveNoOdometer'), { field: 'odometerKm' });
     if (dto.odometerKm !== undefined && vehicleId && this.care) this.care.checkReading(vehicleId, dto.odometerKm);
     const shift = dto.vehicleId?.trim() ? this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg) : this.fleet.startSession(did, dto.vehicleQr!, dto.leg);
     if (dto.odometerKm !== undefined && this.care) this.care.recordReading(shift.vehicleId, dto.odometerKm, { by: this.drivers.get(did).displayName, byDid: did, source: 'shift_start' });
@@ -8131,7 +8132,7 @@ export class SbgController {
   @Post('fleet/drivers/:did/ahead')
   takeOnAhead(@Param('did') did: string, @Body() dto: TakeOnAheadDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor); // their vehicle's room, nobody else's
-    if (!this.pickupAhead) throw new GlosError('NOT_FOUND', 'Taking parcels on ahead is not available here');
+    if (!this.pickupAhead) throw refused('NOT_FOUND', said('refuse.controller.takingParcelsOnAheadIsNot'));
     return this.pickupAhead.takeOn(did, dto.agentDid, dto.hopKey);
   }
 
@@ -8140,7 +8141,7 @@ export class SbgController {
   @Post('fleet/drivers/:did/ahead/:promiseId/let-go')
   letGoAhead(@Param('did') did: string, @Param('promiseId') promiseId: string, @Actor() actor: IntrospectionResult) {
     this.assertDriverActs(did, actor);
-    if (!this.pickupAhead) throw new GlosError('NOT_FOUND', 'Taking parcels on ahead is not available here');
+    if (!this.pickupAhead) throw refused('NOT_FOUND', said('refuse.controller.takingParcelsOnAheadIsNot'));
     return this.pickupAhead.letGo(did, promiseId);
   }
 
@@ -8176,7 +8177,7 @@ export class SbgController {
   @Roles('driver')
   @Post('fleet/drivers/:did/cover')
   sendDriverCover(@Param('did') did: string, @Body() dto: SendDriverCoverDto, @Actor() actor: IntrospectionResult) {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the driver sends their own policy, from their own sign-in');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.onlyTheDriverSendsTheirOwn'));
     this.assertDriverActs(did, actor); // and nobody else's sign-in
     return { cover: this.drivers.sendCover(did, dto).cover };
   }
@@ -8200,7 +8201,7 @@ export class SbgController {
   @Post('fleet/drivers/:did/carrier-place')
   setCarrierPlace(@Param('did') did: string, @Body() dto: CarrierPlaceDto, @Actor() actor: IntrospectionResult) {
     // The carrier's own to give: staff pass every role check, so they are refused by name — they write nothing in its name.
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A carrier gives its own address, from its own sign-in: staff do not write it in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.aCarrierGivesItsOwnAddress'));
     this.assertDriverActs(did, actor); // and never the office's: only the driver, riding for themselves
     return { carrierPlace: this.drivers.setCarrierPlace(did, dto).carrierPlace };
   }
@@ -8212,7 +8213,7 @@ export class SbgController {
   @Roles('driver')
   @Put('fleet/drivers/:did/helpers')
   setDriverHelpers(@Param('did') did: string, @Body() dto: DriverHelpersDto, @Actor() actor: IntrospectionResult): { helpers: number } {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Who works with a driver is their own word, from their own sign-in');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.whoWorksWithADriverIs'));
     this.assertDriverActs(did, actor);
     return { helpers: this.drivers.setHelpers(did, dto.helpers).helpers ?? 0 };
   }
@@ -8270,7 +8271,7 @@ export class SbgController {
     const all = this.fleet.list({ status: status as never });
     if (actor?.role === 'operator') return all;
     const fleet = actingTenant(actor);
-    if (!fleet) throw new GlosError('FORBIDDEN', 'The shift list belongs to a fleet office and the network');
+    if (!fleet) throw refused('FORBIDDEN', said('refuse.controller.theShiftListBelongsToA'));
     const own = new Set(this.drivers.list({ managerDid: fleet }).map((d) => d.did));
     return all.filter((a) => own.has(a.driverDid));
   }
@@ -8320,7 +8321,7 @@ export class SbgController {
   @Get('dispatch/freight/pay-ways')
   loadPayWays(@Query('lat') lat: string, @Query('lng') lng: string) {
     const at = { lat: Number(lat), lng: Number(lng) };
-    if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng) || Math.abs(at.lat) > 90 || Math.abs(at.lng) > 180) throw new GlosError('VALIDATION_FAILED', 'Give the pickup’s pin', { field: 'lat' });
+    if (!Number.isFinite(at.lat) || !Number.isFinite(at.lng) || Math.abs(at.lat) > 90 || Math.abs(at.lng) > 180) throw refused('VALIDATION_FAILED', said('refuse.controller.giveThePickupSPin'), { field: 'lat' });
     const country = countryNear(at);
     if (!country) return { ways: ['direct'] };
     return { country, ways: this.loadPosting!.payWaysIn(country) };
@@ -8407,7 +8408,7 @@ export class SbgController {
    * account was one more vote; staff's own act here is CLEARING, below, with a reason that is kept.
    */
   private driverOnTheRoad(actor: IntrospectionResult): string {
-    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'Only a driver says what is on the road, from their own sign-in');
+    if (actor?.role !== 'driver' || !actor.did) throw refused('FORBIDDEN', said('refuse.controller.onlyADriverSaysWhatIs'));
     return actor.did;
   }
 
@@ -8497,7 +8498,7 @@ export class SbgController {
     // Twelve months back by default — the period the question is actually asked in ("yearly km of flatbed").
     const since = q.since ? Date.parse(q.since) : until - 365 * 24 * 3_600_000;
     if (!Number.isFinite(since) || !Number.isFinite(until) || since > until) {
-      throw new GlosError('INVALID_INPUT', 'The period must start before it ends');
+      throw refused('INVALID_INPUT', said('refuse.controller.thePeriodMustStartBeforeIt'));
     }
     const from = q.lat != null && q.lng != null ? { lat: Number(q.lat), lng: Number(q.lng) } : undefined;
     return this.dispatch.marketSeries({ from, radiusKm: q.radiusKm, since, until });
@@ -8527,7 +8528,7 @@ export class SbgController {
     const until = q.until ? Date.parse(q.until) : Date.now();
     const since = q.since ? Date.parse(q.since) : until - 365 * 24 * 3_600_000;
     if (!Number.isFinite(since) || !Number.isFinite(until) || since > until) {
-      throw new GlosError('INVALID_INPUT', 'The period must start before it ends');
+      throw refused('INVALID_INPUT', said('refuse.controller.thePeriodMustStartBeforeIt'));
     }
     this.handleDirectory.ensure();
     const found = this.dispatch.laneCarriage({ from: q.from, to: q.to, since, until });
@@ -8615,7 +8616,7 @@ export class SbgController {
   acceptFreightProposal(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
     // 2026-11-13 — a load paid first is accepted by paying for it (part 3b): the load is committed when the money is in.
-    if (this.dispatch.requireFreightPublic(this.dispatch.requireProposalPublic(id).freightId).escrow) throw new GlosError('INVALID_STATE', 'Accept it by paying for it: the load is the driver\u2019s once it is paid');
+    if (this.dispatch.requireFreightPublic(this.dispatch.requireProposalPublic(id).freightId).escrow) throw refused('INVALID_STATE', said('refuse.controller.acceptItByPayingForIt'));
     return this.dispatch.acceptProposal(id);
   }
 
@@ -8639,7 +8640,7 @@ export class SbgController {
   @RateLimit(10, 15 * 60)
   @Post('dispatch/freight/:id/pay')
   payForLoad(@Param('id') id: string, @Body() dto: LoadPayDto, @Actor() actor: IntrospectionResult): Promise<LoadPaymentView> {
-    if (!this.loadPay || actor?.role !== 'consumer' || !actor.did) throw new GlosError('FORBIDDEN', 'A person pays for their own load, from their own sign-in');
+    if (!this.loadPay || actor?.role !== 'consumer' || !actor.did) throw refused('FORBIDDEN', said('refuse.controller.aPersonPaysForTheirOwn'));
     return this.loadPay.pay(actor.did, id, { proposalId: dto.proposalId, phone: dto.phone });
   }
 
@@ -8648,7 +8649,7 @@ export class SbgController {
   @Get('dispatch/freight/:id/payment')
   loadPayment(@Param('id') id: string, @Actor() actor: IntrospectionResult): LoadPaymentView {
     const view = actor?.did ? this.loadPay?.viewFor(actor.did, id) : undefined;
-    if (!view) throw new GlosError('NOT_FOUND', 'No payment for that load');
+    if (!view) throw refused('NOT_FOUND', said('refuse.controller.noPaymentForThatLoad'));
     return view;
   }
 
@@ -8659,10 +8660,10 @@ export class SbgController {
   @SignedIn()
   @Post('dispatch/freight/:id/arrived')
   loadArrived(@Param('id') id: string, @Body() dto: LoadArrivedDto, @Actor() actor: IntrospectionResult): { confirmedAt: string } {
-    if (actor?.role === 'operator' || !actor?.did) throw new GlosError('FORBIDDEN', 'Whoever sent it says it arrived: staff decide nothing in the sender’s name');
+    if (actor?.role === 'operator' || !actor?.did) throw refused('FORBIDDEN', said('refuse.controller.whoeverSentItSaysItArrived'));
     // 2026-11-15 — a driver on the phone is not the receiver: the sender says they spoke to the receiver themselves (the owner:
     // "as recommended"). Refused before anything is checked or written.
-    if (!dto?.spokeToReceiver) throw new GlosError('FIELD_REQUIRED', 'Say it arrived only once you have spoken to the person receiving it yourself, not only to the driver', { field: 'spokeToReceiver' });
+    if (!dto?.spokeToReceiver) throw refused('FIELD_REQUIRED', said('refuse.controller.sayItArrivedOnlyOnceYou'), { field: 'spokeToReceiver' });
     if (actor.role === 'consumer' && this.loadPay && this.dispatch.requireFreightPublic(id).escrow) return this.loadPay.arrived(actor.did, id);
     const { did } = this.assertFreightSender(id, actor);
     return { confirmedAt: this.dispatch.posterSaysArrived(id, Date.now(), did) };
@@ -8677,7 +8678,7 @@ export class SbgController {
   @RateLimit(10, 60 * 60)
   @Post('dispatch/freight/:id/receiver-email')
   loadReceiverEmail(@Param('id') id: string, @Body() dto: LoadReceiverEmailDto, @Actor() actor: IntrospectionResult): Freight {
-    if (actor?.role === 'operator' || !actor?.did) throw new GlosError('FORBIDDEN', 'Whoever sent it names where its code goes: staff decide nothing in the sender’s name');
+    if (actor?.role === 'operator' || !actor?.did) throw refused('FORBIDDEN', said('refuse.controller.whoeverSentItNamesWhereIts'));
     this.assertFreightSender(id, actor);
     return this.dispatch.newReceiverEmail(id, dto.email);
   }
@@ -8686,7 +8687,7 @@ export class SbgController {
   @Roles('driver')
   @Post('dispatch/proposals/:id/take-counter')
   takeFreightCounter(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'Only the driver who named the price takes the price back');
+    if (actor?.role !== 'driver' || !actor.did) throw refused('FORBIDDEN', said('refuse.controller.onlyTheDriverWhoNamedThe'));
     return this.dispatch.takeCounter(id, actor.did);
   }
 
@@ -8725,7 +8726,7 @@ export class SbgController {
   @Roles('driver')
   @Post('dispatch/freight/:id/problem-answer')
   answerHeldProblem(@Param('id') id: string, @Body() dto: HoldAnswerDto, @Actor() actor: IntrospectionResult): HeldPay {
-    if (actor?.role !== 'driver' || !actor.did) throw new GlosError('FORBIDDEN', 'The driver who carried it answers, from their own sign-in');
+    if (actor?.role !== 'driver' || !actor.did) throw refused('FORBIDDEN', said('refuse.controller.theDriverWhoCarriedItAnswers'));
     return this.dispatch.answerHeldProblem(id, actor.did, { words: dto.words, ...(dto.photoRefs ? { photoRefs: dto.photoRefs } : {}) });
   }
 
@@ -8766,7 +8767,7 @@ export class SbgController {
     // A store's diverted order records its STORE ID as shipper while the store signs in as its DID — compared
     // raw, no store could ever answer a price on its own freight. Found building the store's conversations.
     const ownerDid = !f.postedByDid && owner && this.vendors.has(owner) ? this.vendors.get(owner).did : owner;
-    if (!ownerDid || !actor?.did || actor.did !== ownerDid) throw new GlosError('FORBIDDEN', 'Only the shipper who posted this load can answer the prices offered on it');
+    if (!ownerDid || !actor?.did || actor.did !== ownerDid) throw refused('FORBIDDEN', said('refuse.controller.onlyTheShipperWhoPostedThis'));
   }
 
   /**
@@ -8831,16 +8832,16 @@ export class SbgController {
     // A freight records its buyer as the number they gave — and, once one is certain, the account that number was —
     // and never as a party, so that is the only honest way to recognise the receiver.
     if (!f.buyerPhoneHash) {
-      throw new GlosError(
+      throw refused(
         'NOT_THE_CLAIMANT',
-        standing.why + ', and this load records no receiver we can identify. A claim here is settled between the sender and the receiver directly.',
+        said('refuse.controller.claimNoReceiverWeKnow', { why: standing.why }),
       );
     }
     const mine = actor?.did ? this.accounts.phoneHashForDid(actor.did) : undefined;
     // By the account where the order belongs to one: a sign-in that moved to a new number is still the receiver, and
     // whoever has the old number now is not.
     if (!mine || !isFor(this.dispatch.buyerOf(f), { phoneHash: mine, personDid: this.persons.findByHash(mine)?.personDid })) {
-      throw new GlosError('NOT_THE_CLAIMANT', standing.why + '. Sign in as the receiver of these goods to claim for them.');
+      throw refused('NOT_THE_CLAIMANT', said('refuse.controller.claimSignInAsReceiver', { why: standing.why }));
     }
     return { did: actor.did!, why: standing.why };
   }
@@ -8852,7 +8853,7 @@ export class SbgController {
     const store = did ? this.vendors.byDid(did) : undefined;
     // 2026-11-15 — and the person who paid for it first (a load to their own door): they report a problem in the hold.
     const mine = Boolean(did) && (f.postedByDid === did || f.shipperDid === did || (store != null && f.shipperDid === store.vendorId) || this.dispatch.isPrepaidPayer(f, did!));
-    if (!mine || !did) throw new GlosError('NOT_FOUND', 'Freight not found');
+    if (!mine || !did) throw refused('NOT_FOUND', said('refuse.controller.freightNotFound'));
     return { did, role: 'shipper' };
   }
 
@@ -8871,7 +8872,7 @@ export class SbgController {
   @SignedIn()
   @Post('dispatch/freight/:id/refusal')
   decideFreightRefusal(@Param('id') id: string, @Body() dto: DecideRefusalDto, @Actor() actor: IntrospectionResult): RefusalDecidedView {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'What happens to refused goods is the sender’s to decide, signed in as the sender. Staff decide nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.whatHappensToRefusedGoodsIs'));
     const { did } = this.assertFreightSender(id, actor);
     const f = this.dispatch.decideRefusal(id, did, { choice: dto.choice, destLabel: dto.destLabel, destLocation: dto.destLocation, contactName: dto.contactName, contactPhone: dto.contactPhone });
     return { freightId: f.freightId, code: f.code, status: f.status, refusal: f.refusal! };
@@ -8884,7 +8885,7 @@ export class SbgController {
   @SignedIn()
   @Post('dispatch/freight/:id/not-paid-direct/answer')
   answerNotPaidFreight(@Param('id') id: string, @Body() dto: AnswerNotPaidDto, @Actor() actor: IntrospectionResult) {
-    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Whether a load was paid is the shipper’s to answer, signed in as the shipper. Staff answer nothing in its name');
+    if (actor?.role === 'operator') throw refused('FORBIDDEN', said('refuse.controller.whetherALoadWasPaidIs'));
     this.assertFreightSender(id, actor);
     const f = this.dispatch.answerNotPaidDirect(id, { reference: dto.reference, byName: actor?.actorName });
     return { freightId: f.freightId, code: f.code, paidDirectAnswer: f.paidDirectAnswer };
@@ -9370,9 +9371,9 @@ export class SbgController {
   @Get('fleet/drivers/:did/telematics/positions')
   telematicsPositions(@Param('did') did: string, @Query('sessionId') sessionId: string | undefined, @Actor() actor: IntrospectionResult) {
     if (actor.role === 'fleet_manager') {
-      if (this.drivers.get(did).managerDid !== actor.tenant) throw new GlosError('NOT_FOUND', 'Driver not found');
+      if (this.drivers.get(did).managerDid !== actor.tenant) throw refused('NOT_FOUND', said('refuse.controller.driverNotFound'));
     } else this.assertDriverActs(did, actor);
-    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    if (!this.telemetry) throw refused('INVALID_STATE', said('refuse.controller.theGpsWatchIsNotAvailable'));
     return this.telemetry.positions(did, sessionId || undefined);
   }
 
@@ -9381,7 +9382,7 @@ export class SbgController {
   @Get('fleet/managers/:did/telematics')
   fleetTelematics(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    if (!this.telemetry) throw refused('INVALID_STATE', said('refuse.controller.theGpsWatchIsNotAvailable'));
     return { provider: this.telemetry.providerOf(did) };
   }
 
@@ -9389,7 +9390,7 @@ export class SbgController {
   @Put('fleet/managers/:did/telematics')
   setFleetTelematics(@Param('did') did: string, @Body() dto: TelematicsProviderDto, @Actor() actor: IntrospectionResult) {
     this.assertFleetSelf(did, actor);
-    if (!this.telemetry) throw new GlosError('INVALID_STATE', 'The GPS watch is not available here');
+    if (!this.telemetry) throw refused('INVALID_STATE', said('refuse.controller.theGpsWatchIsNotAvailable'));
     return { provider: this.telemetry.setProvider(did, dto.provider) };
   }
 
@@ -9414,7 +9415,7 @@ export class SbgController {
     const managerDid = this.officeOf(actor, managerQuery);
     // "No fleet" is the network's whole picture — every shift, every position, every load on the road — and it was
     // handed to any sign-in that had no fleet: a shop, a store, a courier on their own. A fleet's own drivers got theirs.
-    if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'The dashboard belongs to a fleet office and the network');
+    if (actor?.role !== 'operator' && !managerDid) throw refused('FORBIDDEN', said('refuse.controller.theDashboardBelongsToAFleet'));
     const overview = this.fleet.overview(managerDid);
     const driverDids = managerDid ? new Set(this.drivers.list().filter((d) => d.managerDid === managerDid).map((d) => d.did)) : undefined;
     const cargo = this.dispatch.activeCargo(driverDids);
@@ -9453,7 +9454,7 @@ export class SbgController {
   @Roles('driver')
   @Get('fleet/drivers/:did/bags/:code/shops-near')
   bagShopsNear(@Param('did') did: string, @Param('code') code: string, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver carrying the bag finds a shop for it');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCarryingTheBag'));
     return this.shopChoicesOf().near(code, did);
   }
 
@@ -9461,7 +9462,7 @@ export class SbgController {
   @Roles('driver')
   @Post('fleet/drivers/:did/bags/:code/shop-choice')
   bagShopChoice(@Param('did') did: string, @Param('code') code: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver carrying the bag picks the shops for it');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverCarryingTheBag2'));
     return this.shopChoicesOf().ask(code, did, dto.shopDids, { shut: dto.shut === true });
   }
 
@@ -9469,7 +9470,7 @@ export class SbgController {
   @Roles('driver')
   @Get('fleet/drivers/:did/parcels/:parcelId/shops-near')
   parcelShopsNear(@Param('did') did: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver holding the parcel finds a shop for it');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverHoldingTheParcel'));
     return this.shopChoicesOf().nearParcel(parcelId, did);
   }
 
@@ -9477,12 +9478,12 @@ export class SbgController {
   @Roles('driver')
   @Post('fleet/drivers/:did/parcels/:parcelId/shop-choice')
   parcelShopChoice(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: ShopChoiceAskDto, @Actor() actor: IntrospectionResult) {
-    this.assertDriverSelf(did, actor, 'Only the driver holding the parcel picks the shops for it');
+    this.assertDriverSelf(did, actor, said('refuse.controller.onlyTheDriverHoldingTheParcel2'));
     return this.shopChoicesOf().askParcel(parcelId, did, dto.shopDids, { shut: dto.shut === true });
   }
 
   private cardsOf(): PriceCardService {
-    if (!this.priceCards) throw new GlosError('INVALID_STATE', 'Price cards are not available here');
+    if (!this.priceCards) throw refused('INVALID_STATE', said('refuse.controller.priceCardsAreNotAvailableHere'));
     return this.priceCards;
   }
 
@@ -9490,17 +9491,17 @@ export class SbgController {
   /** The fleet a fleet manager's token acts for. */
   private fleetOf(actor: IntrospectionResult): string {
     const managerDid = actingTenant(actor);
-    if (!managerDid) throw new GlosError('FORBIDDEN', 'Sign in as the fleet');
+    if (!managerDid) throw refused('FORBIDDEN', said('refuse.controller.signInAsTheFleet'));
     return managerDid;
   }
 
   private tripsOf(): SavedTripService {
-    if (!this.savedTrips) throw new GlosError('NOT_FOUND', 'Saved trips are not available on this server');
+    if (!this.savedTrips) throw refused('NOT_FOUND', said('refuse.controller.savedTripsAreNotAvailableOn'));
     return this.savedTrips;
   }
 
   private ratesOf(): BusinessRateService {
-    if (!this.businessRates) throw new GlosError('NOT_FOUND', 'Senders’ rates are not available on this server');
+    if (!this.businessRates) throw refused('NOT_FOUND', said('refuse.controller.sendersRatesAreNotAvailableOn'));
     return this.businessRates;
   }
 
@@ -9510,17 +9511,17 @@ export class SbgController {
 
   private versionOf(version: string): number {
     const v = Number(version);
-    if (!Number.isInteger(v) || v < 1) throw new GlosError('VALIDATION_FAILED', 'A card version is a whole number', { field: 'version' });
+    if (!Number.isInteger(v) || v < 1) throw refused('VALIDATION_FAILED', said('refuse.controller.aCardVersionIsAWhole'), { field: 'version' });
     return v;
   }
 
   private zonesOf(): ZoneMapService {
-    if (!this.zones) throw new GlosError('INVALID_STATE', 'Zones are not available here');
+    if (!this.zones) throw refused('INVALID_STATE', said('refuse.controller.zonesAreNotAvailableHere'));
     return this.zones;
   }
 
   private shopChoicesOf(): ShopChoiceService {
-    if (!this.shopChoices) throw new GlosError('INVALID_STATE', 'Finding another shop is not running in this deployment');
+    if (!this.shopChoices) throw refused('INVALID_STATE', said('refuse.controller.findingAnotherShopIsNotRunning'));
     return this.shopChoices;
   }
 

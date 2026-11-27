@@ -20,6 +20,13 @@ import { EN_REFUSALS_IDENTITY } from './en/refusals-identity';
 import { EN_REFUSALS_PAYOUTS } from './en/refusals-payouts';
 import { EN_REFUSALS_ACCOUNTS } from './en/refusals-accounts';
 import { EN_REFUSALS_PAYMENTS } from './en/refusals-payments';
+import { EN_CODES } from './en/codes';
+import { EN_FORM } from './en/form';
+import { EN_REFUSALS_DISPATCH } from './en/refusals-dispatch';
+import { EN_REFUSALS_PARCELS } from './en/refusals-parcels';
+import { EN_REFUSALS_PEOPLE } from './en/refusals-people';
+import { EN_REFUSALS_CONTROLLER } from './en/refusals-controller';
+import { EN_REFUSALS_HUBS } from './en/refusals-hubs';
 import { SW_BELL } from './sw/bell';
 import { SW_DISPATCHER_A } from './sw/dispatcher-a';
 import { SW_DISPATCHER_B } from './sw/dispatcher-b';
@@ -38,6 +45,13 @@ import { SW_REFUSALS_IDENTITY } from './sw/refusals-identity';
 import { SW_REFUSALS_PAYOUTS } from './sw/refusals-payouts';
 import { SW_REFUSALS_ACCOUNTS } from './sw/refusals-accounts';
 import { SW_REFUSALS_PAYMENTS } from './sw/refusals-payments';
+import { SW_CODES } from './sw/codes';
+import { SW_FORM } from './sw/form';
+import { SW_REFUSALS_DISPATCH } from './sw/refusals-dispatch';
+import { SW_REFUSALS_PARCELS } from './sw/refusals-parcels';
+import { SW_REFUSALS_PEOPLE } from './sw/refusals-people';
+import { SW_REFUSALS_CONTROLLER } from './sw/refusals-controller';
+import { SW_REFUSALS_HUBS } from './sw/refusals-hubs';
 import { NL_BELL } from './nl/bell';
 import { NL_DISPATCHER_A } from './nl/dispatcher-a';
 import { NL_DISPATCHER_B } from './nl/dispatcher-b';
@@ -56,6 +70,13 @@ import { NL_REFUSALS_IDENTITY } from './nl/refusals-identity';
 import { NL_REFUSALS_PAYOUTS } from './nl/refusals-payouts';
 import { NL_REFUSALS_ACCOUNTS } from './nl/refusals-accounts';
 import { NL_REFUSALS_PAYMENTS } from './nl/refusals-payments';
+import { NL_CODES } from './nl/codes';
+import { NL_FORM } from './nl/form';
+import { NL_REFUSALS_DISPATCH } from './nl/refusals-dispatch';
+import { NL_REFUSALS_PARCELS } from './nl/refusals-parcels';
+import { NL_REFUSALS_PEOPLE } from './nl/refusals-people';
+import { NL_REFUSALS_CONTROLLER } from './nl/refusals-controller';
+import { NL_REFUSALS_HUBS } from './nl/refusals-hubs';
 import { AM_BELL } from './am/bell';
 import { AM_DISPATCHER_A } from './am/dispatcher-a';
 import { AM_DISPATCHER_B } from './am/dispatcher-b';
@@ -74,6 +95,13 @@ import { AM_REFUSALS_IDENTITY } from './am/refusals-identity';
 import { AM_REFUSALS_PAYOUTS } from './am/refusals-payouts';
 import { AM_REFUSALS_ACCOUNTS } from './am/refusals-accounts';
 import { AM_REFUSALS_PAYMENTS } from './am/refusals-payments';
+import { AM_CODES } from './am/codes';
+import { AM_FORM } from './am/form';
+import { AM_REFUSALS_DISPATCH } from './am/refusals-dispatch';
+import { AM_REFUSALS_PARCELS } from './am/refusals-parcels';
+import { AM_REFUSALS_PEOPLE } from './am/refusals-people';
+import { AM_REFUSALS_CONTROLLER } from './am/refusals-controller';
+import { AM_REFUSALS_HUBS } from './am/refusals-hubs';
 import { BG_BELL } from './bg/bell';
 import { BG_DISPATCHER_A } from './bg/dispatcher-a';
 import { BG_DISPATCHER_B } from './bg/dispatcher-b';
@@ -92,6 +120,13 @@ import { BG_REFUSALS_IDENTITY } from './bg/refusals-identity';
 import { BG_REFUSALS_PAYOUTS } from './bg/refusals-payouts';
 import { BG_REFUSALS_ACCOUNTS } from './bg/refusals-accounts';
 import { BG_REFUSALS_PAYMENTS } from './bg/refusals-payments';
+import { BG_CODES } from './bg/codes';
+import { BG_FORM } from './bg/form';
+import { BG_REFUSALS_DISPATCH } from './bg/refusals-dispatch';
+import { BG_REFUSALS_PARCELS } from './bg/refusals-parcels';
+import { BG_REFUSALS_PEOPLE } from './bg/refusals-people';
+import { BG_REFUSALS_CONTROLLER } from './bg/refusals-controller';
+import { BG_REFUSALS_HUBS } from './bg/refusals-hubs';
 
 /** Each part's English, by its file: a key is in one part only. */
 export const NOTICE_AREAS = {
@@ -113,6 +148,13 @@ export const NOTICE_AREAS = {
   'refusals-payouts': EN_REFUSALS_PAYOUTS,
   'refusals-accounts': EN_REFUSALS_ACCOUNTS,
   'refusals-payments': EN_REFUSALS_PAYMENTS,
+  'codes': EN_CODES,
+  'form': EN_FORM,
+  'refusals-dispatch': EN_REFUSALS_DISPATCH,
+  'refusals-parcels': EN_REFUSALS_PARCELS,
+  'refusals-people': EN_REFUSALS_PEOPLE,
+  'refusals-controller': EN_REFUSALS_CONTROLLER,
+  'refusals-hubs': EN_REFUSALS_HUBS,
 } as const;
 
 export const NOTICE_EN = {
@@ -134,6 +176,13 @@ export const NOTICE_EN = {
   ...EN_REFUSALS_PAYOUTS,
   ...EN_REFUSALS_ACCOUNTS,
   ...EN_REFUSALS_PAYMENTS,
+  ...EN_CODES,
+  ...EN_FORM,
+  ...EN_REFUSALS_DISPATCH,
+  ...EN_REFUSALS_PARCELS,
+  ...EN_REFUSALS_PEOPLE,
+  ...EN_REFUSALS_CONTROLLER,
+  ...EN_REFUSALS_HUBS,
 } as const;
 
 export type NoticeKey = keyof typeof NOTICE_EN;
@@ -159,6 +208,13 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'refusals-payouts': SW_REFUSALS_PAYOUTS,
     'refusals-accounts': SW_REFUSALS_ACCOUNTS,
     'refusals-payments': SW_REFUSALS_PAYMENTS,
+    'codes': SW_CODES,
+    'form': SW_FORM,
+    'refusals-dispatch': SW_REFUSALS_DISPATCH,
+    'refusals-parcels': SW_REFUSALS_PARCELS,
+    'refusals-people': SW_REFUSALS_PEOPLE,
+    'refusals-controller': SW_REFUSALS_CONTROLLER,
+    'refusals-hubs': SW_REFUSALS_HUBS,
   },
   nl: {
     'bell': NL_BELL,
@@ -179,6 +235,13 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'refusals-payouts': NL_REFUSALS_PAYOUTS,
     'refusals-accounts': NL_REFUSALS_ACCOUNTS,
     'refusals-payments': NL_REFUSALS_PAYMENTS,
+    'codes': NL_CODES,
+    'form': NL_FORM,
+    'refusals-dispatch': NL_REFUSALS_DISPATCH,
+    'refusals-parcels': NL_REFUSALS_PARCELS,
+    'refusals-people': NL_REFUSALS_PEOPLE,
+    'refusals-controller': NL_REFUSALS_CONTROLLER,
+    'refusals-hubs': NL_REFUSALS_HUBS,
   },
   am: {
     'bell': AM_BELL,
@@ -199,6 +262,13 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'refusals-payouts': AM_REFUSALS_PAYOUTS,
     'refusals-accounts': AM_REFUSALS_ACCOUNTS,
     'refusals-payments': AM_REFUSALS_PAYMENTS,
+    'codes': AM_CODES,
+    'form': AM_FORM,
+    'refusals-dispatch': AM_REFUSALS_DISPATCH,
+    'refusals-parcels': AM_REFUSALS_PARCELS,
+    'refusals-people': AM_REFUSALS_PEOPLE,
+    'refusals-controller': AM_REFUSALS_CONTROLLER,
+    'refusals-hubs': AM_REFUSALS_HUBS,
   },
   bg: {
     'bell': BG_BELL,
@@ -219,6 +289,13 @@ export const NOTICE_TRANSLATION_AREAS: Record<'sw' | 'nl' | 'am' | 'bg', Record<
     'refusals-payouts': BG_REFUSALS_PAYOUTS,
     'refusals-accounts': BG_REFUSALS_ACCOUNTS,
     'refusals-payments': BG_REFUSALS_PAYMENTS,
+    'codes': BG_CODES,
+    'form': BG_FORM,
+    'refusals-dispatch': BG_REFUSALS_DISPATCH,
+    'refusals-parcels': BG_REFUSALS_PARCELS,
+    'refusals-people': BG_REFUSALS_PEOPLE,
+    'refusals-controller': BG_REFUSALS_CONTROLLER,
+    'refusals-hubs': BG_REFUSALS_HUBS,
   },
 };
 

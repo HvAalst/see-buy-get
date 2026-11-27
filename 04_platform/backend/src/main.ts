@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
+import { GlosValidationPipe } from './foundation/http/validation.pipe';
 import { AppModule } from './app.module';
 import { applyBodyLimits } from './body-limits';
 import { isSandbox } from './foundation/runtime/sandbox';
@@ -55,7 +56,8 @@ async function bootstrap() {
   applyBodyLimits(app);
 
   // Global input validation — every DTO is validated at the edge.
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // 2026-11-27 — Nest's own refusal of a form, with a plain sentence beside it for an app asking in another language.
+  app.useGlobalPipes(new GlosValidationPipe({ whitelist: true, transform: true }));
 
   // All SeeBuyGet APIs are versioned under /v1 (APIG-010, APIG-015).
   app.setGlobalPrefix('v1');

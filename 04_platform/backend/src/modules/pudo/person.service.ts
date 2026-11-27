@@ -19,6 +19,7 @@ import { DEVICE_UNUSED_DAYS, DeviceBook, DeviceSeen, KnownDevice } from './perso
 import { DevicePasskey, UNLOCK_TTL_MS, UnlockGrant, UnlockTickets, deviceHashOf } from './passkeys';
 import type { CarKeyFound, DeviceCarKey } from './car-keys';
 import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
+import { codeSaid } from './notice-words/codes';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
 export const MAX_PIN_ATTEMPTS = 5;
@@ -1013,7 +1014,7 @@ export class PersonService {
    */
   mintForRole(person: Person, role: PersonRole): { role: PersonRole; entityDid: string; token: AccessToken } {
     const link = person.roles.find((r) => r.role === role && r.status === 'active');
-    if (!link) throw refused('ROLE_NOT_HELD', said('refuse.person.roleNotHeld', { role }));
+    if (!link) throw refused('ROLE_NOT_HELD', said('refuse.person.roleNotHeld', { role: codeSaid('role', role) }));
     // ONE PHONE AT A TIME for a driver, exactly as at the driver app's own door (see driverSignIn).
     if (role === 'driver') this.auth.revokeAll(link.entityDid);
     const token = role === 'consumer'

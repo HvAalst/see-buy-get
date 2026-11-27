@@ -6,6 +6,9 @@ import { MAX_HELPERS } from './load-work';
 import { hashPhone } from '../../foundation/identity/phone';
 import { TOWING_KINDS, type TowingKind } from './trailer-rules';
 import { GlosError } from '../../foundation/http/glos-error';
+import { refused } from './notice-words/refuse';
+import { said } from './notice-words/say';
+import type { NoticeKey } from './notice-words/catalog';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
 import { PartnerLedgerService } from './partner-ledger.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -44,13 +47,13 @@ interface RegisterDriverInput {
  * What a driver is told when their details are already held — the same sentences as before, now with the
  * field they name carried beside them, so an app can say what to do next rather than parse English.
  */
-const DRIVER_HELD: Record<Exclude<PrintField, 'device'>, string> = {
-  nationalId: 'A driver with this national ID already exists',
-  phone: 'A driver with this mobile already exists',
-  licence: 'A driver with this licence number already exists',
+const DRIVER_HELD: Record<Exclude<PrintField, 'device'>, NoticeKey> = {
+  nationalId: 'refuse.driver.heldNationalId',
+  phone: 'refuse.driver.heldPhone',
+  licence: 'refuse.driver.heldLicence',
 };
 const driverHeld = (field: PrintField): GlosError =>
-  new GlosError('DUPLICATE', DRIVER_HELD[field as Exclude<PrintField, 'device'>], { field, register: 'driver' });
+  refused('DUPLICATE', said(DRIVER_HELD[field as Exclude<PrintField, 'device'>]), { field, register: 'driver' });
 
 /**
  * BETWEEN FLEETS: a fleet took them off and nobody has taken them on. No `managerDid` used to mean "an independent
@@ -172,8 +175,8 @@ export class DriverService {
   setTowing(did: string, kinds: string[]): FleetDriver {
     const driver = this.require(did);
     const known = [...new Set(kinds)].filter((k): k is TowingKind => (TOWING_KINDS as readonly string[]).includes(k));
-    if (known.length !== new Set(kinds).size) throw new GlosError('INVALID_INPUT', `A licence covers towing as ${TOWING_KINDS.join(', ')}`, { field: 'kinds' });
-    if (!driver.licence) throw new GlosError('INVALID_STATE', 'Your driving licence is not on record yet');
+    if (known.length !== new Set(kinds).size) throw refused('INVALID_INPUT', said('refuse.driver.towingKinds', { kinds: TOWING_KINDS.join(', ') }), { field: 'kinds' });
+    if (!driver.licence) throw refused('INVALID_STATE', said('refuse.driver.licenceNotOnRecord'));
     driver.licence.towing = known;
     this.drivers.set(did, driver);
     return driver;
@@ -297,8 +300,8 @@ export class DriverService {
   }
 
   register(input: RegisterDriverInput): FleetDriver {
-    if (!input.licenceClasses?.length) throw new GlosError('FIELD_REQUIRED', 'Select at least one vehicle class the driver can operate');
-    for (const c of input.licenceClasses) if (!VEHICLE_SPEC[c]) throw new GlosError('INVALID_VEHICLE_CLASS', `Unknown vehicle class: ${c}`);
+    if (!input.licenceClasses?.length) throw refused('FIELD_REQUIRED', said('refuse.driver.selectClass'));
+    for (const c of input.licenceClasses) if (!VEHICLE_SPEC[c]) throw refused('INVALID_VEHICLE_CLASS', said('refuse.driver.unknownClass', { class: c }));
     if (input.managerDid) this.managers.requireActive(input.managerDid);
     const registry = this.registryFor(input.licenceClasses);
     // An INDEPENDENT courier is contracted where they legally reside — bicycle or truck, it makes no difference.
@@ -307,7 +310,7 @@ export class DriverService {
     const independent = !input.managerDid;
     const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
-    if (jurisdiction && !this.presence.can(jurisdiction, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${jurisdiction} yet, so a courier cannot register there`);
+    if (jurisdiction && !this.presence.can(jurisdiction, 'signUp')) throw refused('FORBIDDEN', said('refuse.driver.signUpClosedCourier', { country: jurisdiction }));
     // 2026-11-13 — test mode: only a listed number signs a driver up — a fleet's driver where their fleet stands.
     let testCountry: string | undefined = jurisdiction;
     if (input.managerDid) {
@@ -321,9 +324,9 @@ export class DriverService {
 
     // Heavy registry requires a real licence (number + expiry, not already expired).
     if (registry === 'heavy') {
-      if (!input.licenceNumber?.trim()) throw new GlosError('LICENCE_REQUIRED', 'A driving licence number is required for this vehicle class');
-      if (!input.licenceExpiresAt) throw new GlosError('LICENCE_REQUIRED', 'A licence expiry date is required for this vehicle class');
-      if (this.isExpired(input.licenceExpiresAt)) throw new GlosError('LICENCE_EXPIRED', 'The driving licence has expired');
+      if (!input.licenceNumber?.trim()) throw refused('LICENCE_REQUIRED', said('refuse.driver.licenceNumberRequired'));
+      if (!input.licenceExpiresAt) throw refused('LICENCE_REQUIRED', said('refuse.driver.licenceExpiryRequired'));
+      if (this.isExpired(input.licenceExpiresAt)) throw refused('LICENCE_EXPIRED', said('refuse.driver.licenceExpired'));
     }
 
     /*
@@ -335,9 +338,9 @@ export class DriverService {
      * the person with a 500 and the word "Something went wrong". A missing name is not an internal error;
      * it is a question nobody was asked, and the answer has to name the field.
      */
-    if (!input.fullName?.trim()) throw new GlosError('FIELD_REQUIRED', 'A driver needs their full name');
-    if (!input.nationalId?.trim()) throw new GlosError('FIELD_REQUIRED', 'A national ID number is required to register a driver');
-    if (!input.mobile?.trim()) throw new GlosError('FIELD_REQUIRED', 'A mobile number is required — it is how this driver signs in');
+    if (!input.fullName?.trim()) throw refused('FIELD_REQUIRED', said('refuse.driver.nameRequired'));
+    if (!input.nationalId?.trim()) throw refused('FIELD_REQUIRED', said('refuse.driver.nationalIdRequired'));
+    if (!input.mobile?.trim()) throw refused('FIELD_REQUIRED', said('refuse.driver.mobileRequired'));
 
     // Dedup — one national ID, one mobile, one licence number across the network.
     const identity: IdentityFields = [
@@ -385,9 +388,9 @@ export class DriverService {
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
   submitKyc(did: string, documents: { idCopyRef: string; licenceCopyRef: string; photoRef?: string }): FleetDriver {
     const driver = this.require(did);
-    if (driver.registry !== 'heavy') throw new GlosError('INVALID_STATE', 'A bicycle rider does not send papers: nothing on a bicycle needs a licence');
-    if (driver.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected DRAFT`);
-    if (!documents.idCopyRef || !documents.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy and a licence copy');
+    if (driver.registry !== 'heavy') throw refused('INVALID_STATE', said('refuse.driver.bicycleNoPapers'));
+    if (driver.status !== 'DRAFT') throw refused('INVALID_STATE', said('refuse.driver.notDraft', { status: driver.status }));
+    if (!documents.idCopyRef || !documents.licenceCopyRef) throw refused('KYC_INCOMPLETE', said('refuse.driver.kycRequires'));
     // The portrait rides along when there is one, and is absent without complaint when there is not —
     // see DriverPortrait for why the face is not a gate and the documents are.
     if (documents.photoRef) driver.portrait = { photoRef: documents.photoRef, addedAt: new Date().toISOString() };
@@ -408,10 +411,10 @@ export class DriverService {
     // The record check, recorded by the staff member doing the vetting. One-way on purpose: this clears a
     // driver, it never un-clears one, and taking somebody off the road is `suspend` with its own trail.
     if (criminalRecordClear) driver.criminalRecordClear = true;
-    if (driver.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected KYC_PENDING`);
+    if (driver.status !== 'KYC_PENDING') throw refused('INVALID_STATE', said('refuse.driver.notKycPending', { status: driver.status }));
     if (!approve) {
       const why = reason?.trim();
-      if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the driver is shown it');
+      if (!why) throw refused('REASON_REQUIRED', said('refuse.driver.rejectionNeedsWhy'));
       driver.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
       // The photographs go with the decision: nothing was recorded from them, and they send new ones.
       this.dropCheckedPapers(driver.kyc?.idCopyRef, driver.kyc?.licenceCopyRef);
@@ -423,9 +426,9 @@ export class DriverService {
       return driver;
     }
     driver.kycRejection = undefined;
-    if (!driver.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
-    if (!driver.criminalRecordClear) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: criminal-record check not cleared');
-    if (this.isExpired(driver.licence.expiresAt)) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: the driving licence has expired');
+    if (!driver.kyc) throw refused('KYC_INCOMPLETE', said('refuse.driver.approveKycMissing'));
+    if (!driver.criminalRecordClear) throw refused('APPROVAL_BLOCKED', said('refuse.driver.approveCriminalRecord'));
+    if (this.isExpired(driver.licence.expiresAt)) throw refused('APPROVAL_BLOCKED', said('refuse.driver.approveLicenceExpired'));
     this.core.upsert({ did, vaultRef: driver.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-driver'], metadata: { by } });
     this.activate(driver, by ?? 'vetting');
     // Approved: what was checked stays (the licence's number, classes and expiry are on `driver.licence`) and the two
@@ -446,10 +449,10 @@ export class DriverService {
   assertSignupPapers(ownerDid: string, papers: { idCopyRef?: string; licenceCopyRef?: string }): { idCopyRef: string; licenceCopyRef: string } {
     const idCopyRef = papers.idCopyRef?.trim() ?? '';
     const licenceCopyRef = papers.licenceCopyRef?.trim() ?? '';
-    if (!idCopyRef || !licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Send a photograph of your ID card and one of your driving licence');
-    if (idCopyRef === licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Your ID card and your licence are two photographs, not one');
+    if (!idCopyRef || !licenceCopyRef) throw refused('KYC_INCOMPLETE', said('refuse.driver.sendPhotos'));
+    if (idCopyRef === licenceCopyRef) throw refused('KYC_INCOMPLETE', said('refuse.driver.twoPhotos'));
     if (!this.media || ![idCopyRef, licenceCopyRef].every((ref) => this.media!.mayAdopt(ref, ownerDid))) {
-      throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached: take the photograph again');
+      throw refused('PHOTO_REQUIRED', said('refuse.driver.pictureNotAttached'));
     }
     return { idCopyRef, licenceCopyRef };
   }
@@ -483,7 +486,7 @@ export class DriverService {
    */
   recordPassport(did: string, input: { name: string; number: string; country: string; expiresAt: string }, now: number = Date.now(), by?: string): FleetDriver {
     const driver = this.require(did);
-    if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('INVALID_INPUT', 'That passport has run out: record the one in date', { field: 'expiresAt' });
+    if (paperLapsesAt(input.expiresAt) <= now) throw refused('INVALID_INPUT', said('refuse.driver.passportRunOut'), { field: 'expiresAt' });
     driver.passport = { name: input.name.trim(), number: input.number.trim().toUpperCase(), country: input.country.toUpperCase(), expiresAt: input.expiresAt, recordedAt: new Date(now).toISOString(), ...(by ? { by } : {}) };
     this.drivers.set(did, driver);
     return driver;
@@ -491,7 +494,7 @@ export class DriverService {
 
   renewLicence(did: string, input: { number?: string; expiresAt: string }, now: number = Date.now(), by?: string): FleetDriver {
     const driver = this.require(did);
-    if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'The expiry date given has already passed — a renewed licence runs into the future');
+    if (paperLapsesAt(input.expiresAt) <= now) throw refused('LICENCE_EXPIRED', said('refuse.driver.expiryGivenPassed'));
     const number = input.number?.trim();
     if (number && number !== driver.licence.number) {
       if (this.prints.taken([['licence', number]], did)) throw driverHeld('licence');
@@ -539,13 +542,13 @@ export class DriverService {
    */
   sendLicenceRenewal(did: string, input: { copyRef: string; expiresAt: string; number?: string }, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended driver cannot send papers');
-    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'That date has already passed — a renewed licence runs into the future');
-    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so a licence cannot be sent');
+    if (driver.status === 'SUSPENDED') throw refused('INVALID_STATE', said('refuse.driver.suspendedNoPapers'));
+    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw refused('LICENCE_EXPIRED', said('refuse.driver.datePassedRenewed'));
+    if (!this.media) throw refused('INVALID_STATE', said('refuse.driver.photosNotKeptLicence'));
     // Only the courier's OWN fresh photograph: adopt() refuses another actor's media and anything already
     // attached elsewhere, so this cannot relabel somebody else's picture as a licence.
     if (!this.media.adopt(input.copyRef, did, { type: 'driver', id: did }, 'kyc_licence')) {
-      throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again');
+      throw refused('PHOTO_REQUIRED', said('refuse.driver.photoNotAttached'));
     }
     // A second send replaces the first. The earlier photograph was never accepted, so nothing rests on it.
     const earlier = driver.licenceRenewal?.copyRef;
@@ -570,7 +573,7 @@ export class DriverService {
   licenceCardOf(did: string, mediaId: string): string {
     const driver = this.require(did);
     const readable = [driver.licenceRenewal?.copyRef, driver.licence.copyRef].filter(Boolean);
-    if (!mediaId || !readable.includes(mediaId)) throw new GlosError('NOT_FOUND', 'No such photograph');
+    if (!mediaId || !readable.includes(mediaId)) throw refused('NOT_FOUND', said('refuse.driver.noSuchPhoto'));
     return mediaId;
   }
 
@@ -588,7 +591,7 @@ export class DriverService {
    */
   contactFor(did: string, requesterDid: string): { held: boolean; fullName?: string; phone?: string } {
     const driver = this.require(did);
-    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'This driver is in a fleet — reach them through the fleet office');
+    if (driver.managerDid) throw refused('FORBIDDEN', said('refuse.driver.inFleetReach'));
     if (!driver.vaultRef || !this.vault.exists(driver.vaultRef)) return { held: false };
     const pii = this.vault.reveal(driver.vaultRef, { purpose: 'papers-renewal', requesterDid });
     return { held: true, ...(pii.fullName ? { fullName: pii.fullName } : {}), ...(pii.phone ? { phone: pii.phone } : {}) };
@@ -604,9 +607,9 @@ export class DriverService {
   refuseLicenceRenewal(did: string, reason: string, by?: string, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
     const pending = driver.licenceRenewal;
-    if (!pending) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
+    if (!pending) throw refused('INVALID_STATE', said('refuse.driver.nothingToRefuse'));
     const why = reason?.trim();
-    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
+    if (!why) throw refused('REASON_REQUIRED', said('refuse.driver.refusalNeedsWhy'));
     this.dropCheckedPapers(pending.copyRef);
     driver.licenceRenewal = undefined;
     driver.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };
@@ -705,7 +708,7 @@ export class DriverService {
    */
   leaveFleet(did: string, removal: FleetRemoval): FleetDriver {
     const driver = this.require(did);
-    if (driver.managerDid !== removal.fleetDid) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    if (driver.managerDid !== removal.fleetDid) throw refused('FORBIDDEN', said('refuse.driver.notInYourFleet'));
     delete driver.managerDid;
     delete driver.jurisdiction;
     delete driver.entityId;
@@ -741,7 +744,7 @@ export class DriverService {
   rideAlone(did: string, jurisdiction: string): FleetDriver {
     const driver = this.require(did);
     const code = jurisdiction.toUpperCase();
-    if (!this.presence.can(code, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${code} yet, so a courier cannot register there`);
+    if (!this.presence.can(code, 'takeIn')) throw refused('FORBIDDEN', said('refuse.driver.networkNotIn', { country: code }));
     const company = this.entities.forJurisdiction(code);
     driver.jurisdiction = code;
     if (company) driver.entityId = company.entityId;
@@ -861,8 +864,8 @@ export class DriverService {
   takeNationalId(did: string, nationalId: string): void {
     const driver = this.require(did);
     const number = nationalId?.trim();
-    if (!number) throw new GlosError('FIELD_REQUIRED', 'Enter the number on the ID card', { field: 'nationalId' });
-    if (this.prints.taken([['nationalId', number]], did)) throw new GlosError('DUPLICATE', 'A driver with this national ID already exists', { field: 'nationalId', register: 'driver' });
+    if (!number) throw refused('FIELD_REQUIRED', said('refuse.driver.idNumberRequired'), { field: 'nationalId' });
+    if (this.prints.taken([['nationalId', number]], did)) throw refused('DUPLICATE', said('refuse.driver.heldNationalId'), { field: 'nationalId', register: 'driver' });
     this.prints.claim([['nationalId', number]], did);
     if (driver.vaultRef && this.vault.exists(driver.vaultRef)) {
       const pii = this.vault.reveal(driver.vaultRef, { purpose: 'id-dispute', requesterDid: did });
@@ -909,12 +912,12 @@ export class DriverService {
    */
   askToRideAlone(did: string, ask: Omit<CourierAsk, 'askedAt'>, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so papers cannot be sent');
-    if (!ask.idCopyRef || !ask.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Send a photograph of your ID card and one of your driving licence');
-    if (ask.idCopyRef === ask.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Your ID card and your licence are two photographs, not one');
+    if (!this.media) throw refused('INVALID_STATE', said('refuse.driver.photosNotKeptPapers'));
+    if (!ask.idCopyRef || !ask.licenceCopyRef) throw refused('KYC_INCOMPLETE', said('refuse.driver.sendPhotos'));
+    if (ask.idCopyRef === ask.licenceCopyRef) throw refused('KYC_INCOMPLETE', said('refuse.driver.twoPhotos'));
     const link = { type: 'driver' as const, id: did };
     if (!this.media.adopt(ask.idCopyRef, did, link, 'kyc_id') || !this.media.adopt(ask.licenceCopyRef, did, link, 'kyc_licence')) {
-      throw new GlosError('PHOTO_REQUIRED', 'A photograph could not be attached — take it again');
+      throw refused('PHOTO_REQUIRED', said('refuse.driver.aPhotoNotAttached'));
     }
     driver.courierAsk = { ...ask, askedAt: new Date(now).toISOString() };
     delete driver.courierAskRefusal;
@@ -929,10 +932,10 @@ export class DriverService {
    */
   sendIdPhoto(did: string, photoRef: string, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.registry !== 'light' || driver.managerDid) throw new GlosError('INVALID_STATE', 'A photo of your ID is asked of a bicycle rider in no fleet: your papers were seen when you joined');
-    if (!idUnseen(driver)) throw new GlosError('INVALID_STATE', 'Your ID has been seen already');
-    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so an ID photo cannot be sent');
-    if (!photoRef || !this.media.adopt(photoRef, did, { type: 'driver', id: did }, 'kyc_id')) throw new GlosError('PHOTO_REQUIRED', 'The photograph could not be attached — take it again');
+    if (driver.registry !== 'light' || driver.managerDid) throw refused('INVALID_STATE', said('refuse.driver.idPhotoBicycleOnly'));
+    if (!idUnseen(driver)) throw refused('INVALID_STATE', said('refuse.driver.idSeenAlready'));
+    if (!this.media) throw refused('INVALID_STATE', said('refuse.driver.photosNotKeptId'));
+    if (!photoRef || !this.media.adopt(photoRef, did, { type: 'driver', id: did }, 'kyc_id')) throw refused('PHOTO_REQUIRED', said('refuse.driver.thePhotoNotAttached'));
     driver.idCheck = { photoRef, sentAt: new Date(now).toISOString() };
     delete driver.idCheckRefusal;
     this.drivers.set(did, driver);
@@ -950,7 +953,7 @@ export class DriverService {
    */
   decideIdPhoto(did: string, seen: boolean, by?: string, reason?: string, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (!driver.idCheck || driver.idCheck.seenAt) throw new GlosError('INVALID_STATE', 'There is no photo of their ID waiting to be seen');
+    if (!driver.idCheck || driver.idCheck.seenAt) throw refused('INVALID_STATE', said('refuse.driver.noIdPhotoWaiting'));
     const at = new Date(now).toISOString();
     if (seen) {
       // Seen: when and by whom is kept; the photograph is not (the owner, 2026-10-30).
@@ -958,7 +961,7 @@ export class DriverService {
       driver.idCheck = { sentAt: driver.idCheck.sentAt, seenAt: at, ...(by ? { seenBy: by } : {}), photoDeletedAt: at };
     } else {
       const why = reason?.trim();
-      if (!why) throw new GlosError('REASON_REQUIRED', 'Say why it is not their ID: they are shown it, and send another');
+      if (!why) throw refused('REASON_REQUIRED', said('refuse.driver.sayWhyNotTheirId'));
       this.dropCheckedPapers(driver.idCheck.photoRef);
       delete driver.idCheck;
       driver.idCheckRefusal = { reason: why, at, ...(by ? { by } : {}) };
@@ -1013,10 +1016,10 @@ export class DriverService {
    */
   setCarrierPlace(did: string, input: { address?: string; station?: { lat: number; lng: number; label?: string } }, now = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'A fleet’s driver carries for the fleet: the fleet’s depot is the carrier’s address on the notes');
+    if (driver.managerDid) throw refused('FORBIDDEN', said('refuse.driver.fleetDepotAddress'));
     const address = input.address?.trim().slice(0, 300);
     const station = input.station && Number.isFinite(input.station.lat) && Number.isFinite(input.station.lng) ? { lat: Math.round(input.station.lat * 1e5) / 1e5, lng: Math.round(input.station.lng * 1e5) / 1e5, ...(input.station.label?.trim() ? { label: input.station.label.trim().slice(0, 120) } : {}) } : undefined;
-    if (!address && !station) throw new GlosError('FIELD_REQUIRED', 'Give your business address, or pin the station you work from', { field: 'address' });
+    if (!address && !station) throw refused('FIELD_REQUIRED', said('refuse.driver.businessAddress'), { field: 'address' });
     driver.carrierPlace = { ...(address ? { address } : {}), ...(station ? { station } : {}), at: new Date(now).toISOString() };
     return driver;
   }
@@ -1028,11 +1031,11 @@ export class DriverService {
    */
   sendCover(did: string, input: { copyRef: string; expiresAt: string; reference?: string }, now = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'A fleet’s driver is covered by the fleet’s insurance: the fleet’s office sends its policy from the Fleet app');
-    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended driver cannot send papers');
-    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('VALIDATION_FAILED', 'That date has already passed — a policy you send runs into the future', { field: 'expiresAt' });
-    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so a policy cannot be sent');
-    if (!this.media.adopt(input.copyRef, did, { type: 'driver', id: did }, 'kyc_insurance')) throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again');
+    if (driver.managerDid) throw refused('FORBIDDEN', said('refuse.driver.fleetInsurance'));
+    if (driver.status === 'SUSPENDED') throw refused('INVALID_STATE', said('refuse.driver.suspendedNoPapers'));
+    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw refused('VALIDATION_FAILED', said('refuse.driver.policyDatePassed'), { field: 'expiresAt' });
+    if (!this.media) throw refused('INVALID_STATE', said('refuse.driver.photosNotKeptPolicy'));
+    if (!this.media.adopt(input.copyRef, did, { type: 'driver', id: did }, 'kyc_insurance')) throw refused('PHOTO_REQUIRED', said('refuse.driver.photoNotAttached'));
     const earlier = driver.cover?.sent?.copyRef;
     if (earlier && earlier !== input.copyRef) this.media.purgeByOwner(earlier, did);
     const reference = input.reference?.trim().slice(0, 120);
@@ -1049,10 +1052,10 @@ export class DriverService {
   recordCover(did: string, input: { expiresAt: string; policy?: string; covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string }, by: string, now = Date.now()): FleetDriver {
     const driver = this.require(did);
     const sent = driver.cover?.sent;
-    if (!sent) throw new GlosError('INVALID_STATE', 'No policy has been sent to read: cover counts only when it is read off the policy the driver sent');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresAt) || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('VALIDATION_FAILED', 'The expiry read off the policy is a day still to come, written YYYY-MM-DD', { field: 'expiresAt' });
+    if (!sent) throw refused('INVALID_STATE', said('refuse.driver.noPolicyToRead'));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresAt) || paperLapsesAt(input.expiresAt) <= now) throw refused('VALIDATION_FAILED', said('refuse.driver.policyExpiryRead'), { field: 'expiresAt' });
     const currency = input.currency?.trim().toUpperCase();
-    if (input.limit != null && (!(input.limit > 0) || !isKnownCurrency(currency))) throw new GlosError('VALIDATION_FAILED', 'A cover limit is an amount above nothing, in a currency some country uses — like KES or USD', { field: 'limit' });
+    if (input.limit != null && (!(input.limit > 0) || !isKnownCurrency(currency))) throw refused('VALIDATION_FAILED', said('refuse.driver.coverLimit'), { field: 'limit' });
     const previous = driver.cover?.copyRef;
     if (previous && previous !== sent.copyRef) this.media?.retireAccountDoc(previous, new Date(now));
     const policy = (input.policy ?? sent.reference)?.trim().slice(0, 120);
@@ -1073,9 +1076,9 @@ export class DriverService {
   refuseCover(did: string, reason: string, by?: string, now = Date.now()): FleetDriver {
     const driver = this.require(did);
     const sent = driver.cover?.sent;
-    if (!sent) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
+    if (!sent) throw refused('INVALID_STATE', said('refuse.driver.nothingToRefuse'));
     const why = reason?.trim();
-    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
+    if (!why) throw refused('REASON_REQUIRED', said('refuse.driver.refusalNeedsWhy'));
     this.media?.purgeByOwner(sent.copyRef, did);
     const { sent: _gone, ...kept } = driver.cover!;
     driver.cover = { ...kept, refused: { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) } };
@@ -1094,7 +1097,7 @@ export class DriverService {
   setNudgeMinEarn(did: string, amount?: number): FleetDriver {
     const driver = this.require(did);
     if (amount != null && (!Number.isFinite(amount) || amount < 0 || amount > MAX_NUDGE_MIN_EARN)) {
-      throw new GlosError('INVALID_INPUT', `A minimum must be between 0 and ${MAX_NUDGE_MIN_EARN}`);
+      throw refused('INVALID_INPUT', said('refuse.driver.minimumRange', { max: MAX_NUDGE_MIN_EARN }));
     }
     // Zero and undefined are ONE state — no floor — rather than "a floor of nothing", which every load
     // clears anyway and which would leave two ways of saying the same thing.
@@ -1105,7 +1108,7 @@ export class DriverService {
   /** 2026-11-13 — the helpers who work with this driver, 0 to 2 (unusual loads, U1). Zero is "works alone". */
   setHelpers(did: string, helpers: number): FleetDriver {
     const driver = this.require(did);
-    if (!Number.isInteger(helpers) || helpers < 0 || helpers > MAX_HELPERS) throw new GlosError('INVALID_INPUT', `Say how many helpers work with you: none, one or two`, { field: 'helpers' });
+    if (!Number.isInteger(helpers) || helpers < 0 || helpers > MAX_HELPERS) throw refused('INVALID_INPUT', said('refuse.driver.helpersSay'), { field: 'helpers' });
     if (helpers) driver.helpers = helpers;
     else delete driver.helpers;
     this.drivers.set(did, driver);
@@ -1134,7 +1137,7 @@ export class DriverService {
 
   private require(did: string): FleetDriver {
     const driver = this.drivers.get(did);
-    if (!driver) throw new GlosError('NOT_FOUND', `Driver not found: ${did}`);
+    if (!driver) throw refused('NOT_FOUND', said('refuse.driver.notFound', { did }));
     return driver;
   }
 }

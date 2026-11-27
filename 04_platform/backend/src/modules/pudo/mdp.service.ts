@@ -45,7 +45,8 @@ import { clockAt, clocksOfCountry } from './fleet-clock';
 import { NotificationService } from './notification.service';
 import { HubDrop, HubFloorBook, spaceProblem, THROUGH_DAYS, THROUGH_DAYS_FULL, withDay, type HubDay } from './hub-space';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS } from './pudo.config';
-import { at as momentAt, money, noticeOf, said, type Said } from './notice-words/say';
+import { at as momentAt, countryName, money, noticeOf, said, type Said } from './notice-words/say';
+import { refused } from './notice-words/refuse';
 
 /** The words for why a hub is down, as phrases (the same English as HUB_DOWN_WORDS). */
 function downWhySaid(reason: HubDownReason): Said {
@@ -271,7 +272,7 @@ export class MdpService {
    * from its papers before it works. Asked of every caller, so that no new way in can skip it by leaving it out.
    */
   register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number; bagPlaces?: number; sortPerDay?: number; inviteCode?: string }, vouched: { approvedBy: string } | 'joining'): Mdp {
-    if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
+    if (!input.zones?.length) throw refused('ZONES_REQUIRED', said('refuse.mdp.zonesRequired'));
     // 2026-11-02 — its space, asked at sign-up ("About your hub"): both numbers, or neither — a hub that says neither is asked
     // on its start screen. The sign-up's profile is the form's own object, so the numbers are checked here, not by a DTO.
     const saysSpace = input.bagPlaces != null || input.sortPerDay != null;
@@ -281,7 +282,7 @@ export class MdpService {
     // no sister behind it — it sorts and records custody, and nothing of ours is booked for the work.
     const country = requireCountryCode(input.country);
     // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
-    if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a hub cannot register there`);
+    if (!this.presence.can(country, 'signUp')) throw refused('FORBIDDEN', said('refuse.mdp.signUpsClosed', { country }));
     // 2026-11-13 — test mode: only a listed number signs a hub up.
     this.presence.requireTester(country, input.contactPhone, 'signing a hub up');
     const entity = this.entities.forJurisdiction(country);
@@ -334,7 +335,7 @@ export class MdpService {
     // COMING (2026-10-25): approved ahead of the day its country opens — the floor opens on that day.
     const country = this.countryOf(mdp);
     if (this.notOpenYet(mdp)) {
-      throw new GlosError('COUNTRY_NOT_OPEN', `SeeBuyGet is not open in ${catalogueEntry(country)?.name ?? country} yet: ${mdp.name} works from the day it opens`, { country });
+      throw refused('COUNTRY_NOT_OPEN', said('refuse.mdp.countryNotOpen', { country: countryName(catalogueEntry(country)?.name ?? country, country), hub: mdp.name }), { country });
     }
     return mdp;
   }
@@ -347,8 +348,8 @@ export class MdpService {
 
   private notApproved(mdp: Mdp): GlosError {
     const state = mdp.vetting?.state ?? 'draft';
-    const why = state === 'pending' ? 'its papers are with SeeBuyGet' : mdp.vetting?.refusal ? 'its papers were not accepted: send them again' : 'it has not sent its papers yet';
-    return new GlosError('HUB_NOT_APPROVED', `${mdp.name} is not approved yet — ${why}. A hub works once SeeBuyGet has seen its papers.`, { state });
+    const why = state === 'pending' ? said('refuse.mdp.whyPending') : mdp.vetting?.refusal ? said('refuse.mdp.whyNotAccepted') : said('refuse.mdp.whyNotSent');
+    return refused('HUB_NOT_APPROVED', said('refuse.mdp.notApproved', { hub: mdp.name, why }), { state });
   }
 
   /**
@@ -359,7 +360,7 @@ export class MdpService {
   submitPapers(mdpId: string, papers: { idCopyRef: string; licenceRef: string; photoRefs: string[] }, now: Date = new Date()): Mdp {
     const mdp = this.require(mdpId);
     this.assertCanSend(mdp);
-    if (!papers.idCopyRef || !papers.licenceRef || !papers.photoRefs?.length) throw new GlosError('KYC_INCOMPLETE', 'Send a copy of an ID, the trading licence and a photograph of the hub');
+    if (!papers.idCopyRef || !papers.licenceRef || !papers.photoRefs?.length) throw refused('KYC_INCOMPLETE', said('refuse.mdp.kycIncomplete'));
     const sent: HubPapers = { idCopyRef: papers.idCopyRef, licenceRef: papers.licenceRef, photoRefs: [...papers.photoRefs], submittedAt: now.toISOString() };
     mdp.vetting = { ...(mdp.vetting ?? { state: 'draft' }), state: 'pending', papers: sent };
     this.mdps.set(mdp.mdpId, mdp);
@@ -369,8 +370,8 @@ export class MdpService {
   /** Refused unless the hub is still to send its papers: asked before the photographs are taken in. */
   assertCanSend(mdp: Mdp): void {
     const state = mdp.vetting?.state ?? 'draft';
-    if (state === 'pending') throw new GlosError('INVALID_STATE', 'Your papers are with SeeBuyGet already');
-    if (state === 'approved') throw new GlosError('INVALID_STATE', 'This hub is approved: there are no papers to send');
+    if (state === 'pending') throw refused('INVALID_STATE', said('refuse.mdp.papersPending'));
+    if (state === 'approved') throw refused('INVALID_STATE', said('refuse.mdp.papersApproved'));
   }
 
   /**
@@ -379,7 +380,7 @@ export class MdpService {
    */
   decidePapers(mdpId: string, approve: boolean, by: string, reason?: string, now: Date = new Date()): Mdp {
     const mdp = this.require(mdpId);
-    if (mdp.vetting?.state !== 'pending') throw new GlosError('INVALID_STATE', `${mdp.name} has no papers waiting for a decision`);
+    if (mdp.vetting?.state !== 'pending') throw refused('INVALID_STATE', said('refuse.mdp.noPapersWaiting', { hub: mdp.name }));
     const at = now.toISOString();
     // The responsible person's ID photo goes with the decision, either way (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); the licence and the photos of
     // the premises are the hub's record and are kept.
@@ -390,7 +391,7 @@ export class MdpService {
       this.core.upsert({ did: mdp.did, tier: 2, status: 'active', capabilities: ['pudo-mdp'], metadata: { zones: mdp.zones, by } });
     } else {
       const why = reason?.trim();
-      if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal says why: the hub is shown it');
+      if (!why) throw refused('REASON_REQUIRED', said('refuse.mdp.refusalSaysWhy'));
       mdp.vetting = { state: 'draft', refusal: { reason: why, at, by } };
     }
     this.mdps.set(mdp.mdpId, mdp);
@@ -416,7 +417,7 @@ export class MdpService {
    * at. Written at once — it is money.
    */
   setPrice(mdpId: string, pricePerParcel: number, passOnFee?: number, now: number = Date.now()): Mdp {
-    if (pricePerParcel < 0 || (passOnFee !== undefined && passOnFee < 0)) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
+    if (pricePerParcel < 0 || (passOnFee !== undefined && passOnFee < 0)) throw refused('AMOUNT_INVALID', said('refuse.mdp.priceNegative'));
     const mdp = this.require(mdpId);
     // 2026-11-12 — THE OWNER'S D3 (and D5): a hub sets its own sort and pass-on fees "up to a multiple of its country's list
     // figure (starting at 1.5 times); above that needs staff approval". A fee within the ceiling is its own at once; one above it
@@ -476,8 +477,8 @@ export class MdpService {
   decideFees(mdpId: string, approve: boolean, by: string, reason?: string, now: number = Date.now()): Mdp {
     const mdp = this.require(mdpId);
     const asked = mdp.feeAsked;
-    if (!asked) throw new GlosError('INVALID_STATE', `${mdp.name} has not asked for fees above the ceiling`);
-    if (!approve && !reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why: the hub is shown it', { field: 'reason' });
+    if (!asked) throw refused('INVALID_STATE', said('refuse.mdp.noFeeAsk', { hub: mdp.name }));
+    if (!approve && !reason?.trim()) throw refused('FIELD_REQUIRED', said('refuse.mdp.sayWhy'), { field: 'reason' });
     if (approve) {
       if (asked.pricePerParcel !== undefined) mdp.pricePerParcel = asked.pricePerParcel;
       if (asked.passOnFee !== undefined) mdp.passOnFee = asked.passOnFee;
@@ -986,7 +987,7 @@ export class MdpService {
 
   require(mdpId: string): Mdp {
     const mdp = this.mdps.get(mdpId);
-    if (!mdp) throw new GlosError('NOT_FOUND', `MDP not found: ${mdpId}`);
+    if (!mdp) throw refused('NOT_FOUND', said('refuse.mdp.notFound', { mdpId }));
     return mdp;
   }
 
@@ -1031,7 +1032,7 @@ export class MdpService {
   openShopBag(agentDid: string, destZone: string): Tote {
     this.refuseCounterBag(agentDid);
     this.agents.get(agentDid); // 404 for an unknown shop
-    if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
+    if (!destZone?.trim()) throw refused('FIELD_REQUIRED', said('refuse.mdp.bagNeedsDestination'));
     // 2026-11-05 — a route through a hub: the bag plan's next hop is the hub's id. Addressed to it as a hub's bag is
     // (assignTote: an approved hub only), and called by its name — its id was the label a driver and a tracking page read.
     const hub = this.mdps.get(destZone.trim());
@@ -1039,7 +1040,7 @@ export class MdpService {
     // 2026-11-06 — or the shop a direct route runs to (the bag plan's group, by the parcels' plans): called by its name, and
     // received there (deliverBag takes a bag addressed to that shop). Never to this shop itself: a parcel collected here stays.
     const shop = hub ? undefined : this.agents.find(destZone.trim());
-    if (shop?.did === agentDid) throw new GlosError('INVALID_INPUT', 'A bag goes to another place: a parcel collected at this shop stays on its shelf here', { field: 'destZone' });
+    if (shop?.did === agentDid) throw refused('INVALID_INPUT', said('refuse.mdp.bagToAnotherPlace'), { field: 'destZone' });
     // A bag is a physical object standing on a floor, and floors run out. The shelf has always been sized by
     // the shop; this is the same declaration for the other pile in the room. Counted as what is STANDING
     // there — filling, sealed and waiting, or claimed by a driver who has not arrived — because all three
@@ -1098,11 +1099,11 @@ export class MdpService {
     // Said as it is: its open bags fill the places, or closed bags the corner has no room for stand in them.
     const why =
       room.onFloor === 0
-        ? `This shop has room for ${room.places} bag(s) open at once and ${room.open} are open — close one first, or raise your bag space under Set up shelves`
+        ? said('refuse.mdp.stagingFullOpen', { places: room.places, open: room.open })
         : room.corner === 0
-          ? `This shop has room for ${room.places} bag(s) and ${room.open + room.onFloor} are on the floor — hand one to a driver, or under Set up shelves say how many closed bags you can keep in a corner`
-          : `This shop has room for ${room.places} bag(s) on its floor, and its corner for closed bags is full (${room.corner}): ${room.onFloor} more closed bag(s) stand where you work — hand one to a driver, or say you have more room under Set up shelves`;
-    throw new GlosError('STAGING_FULL', why, { capacity: room.places, used: room.open + room.onFloor, open: room.open, closed: room.closed, corner: room.corner });
+          ? said('refuse.mdp.stagingFullFloor', { places: room.places, floor: room.open + room.onFloor })
+          : said('refuse.mdp.stagingFullCorner', { places: room.places, corner: room.corner, onFloor: room.onFloor });
+    throw refused('STAGING_FULL', why, { capacity: room.places, used: room.open + room.onFloor, open: room.open, closed: room.closed, corner: room.corner });
   }
 
   /**
@@ -1136,22 +1137,22 @@ export class MdpService {
    * Without it a parcel for one city rides to another in a sealed bag, and nothing notices: the seal gate
    * only checks that everything EXPECTED is in the bag, never that everything in the bag BELONGS.
    */
-  fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string, said?: OffPlanSaid): { tote: Tote; fillPct: number } {
+  fillShopBag(code: string, agentDid: string, parcelId: string, observedAt?: string, reason?: OffPlanSaid): { tote: Tote; fillPct: number } {
     this.refuseCounterBag(agentDid);
     const bag = this.totes.requireByCode(code);
-    if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
-    if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it is closed`);
+    if (bag.locationId !== agentDid) throw refused('WRONG_PUDO', said('refuse.mdp.bagNotOpenedHere', { code }));
+    if (bag.status !== 'filling') throw refused('INVALID_STATE', said('refuse.mdp.bagIsClosed', { code, status: bag.status }));
 
     const parcel = this.parcels.get(parcelId);
     if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
-      throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
+      throw refused('INVALID_STATE', said('refuse.mdp.parcelNotWaiting', { parcelId }));
     }
     // 2026-11-06 — a parcel with a plan is asked its way by fillTote (refused, or put in with a reason said); one without,
     // here as before.
     if (!this.routeKeeper?.nextStop(parcel) && !this.belongsInShopBag(parcel, bag)) {
-      throw new GlosError(
+      throw refused(
         'WRONG_DESTINATION',
-        `${parcelId} is going to ${parcel.destZone}, but this bag goes to ${bag.destinationLabel}`,
+        said('refuse.mdp.wrongDestination', { parcelId, dest: parcel.destZone, bagDest: bag.destinationLabel }),
         { parcelId, parcelDest: parcel.destZone, bagDest: bag.destinationLabel },
       );
     }
@@ -1160,13 +1161,13 @@ export class MdpService {
     // both claim it. Checked across every bag at this shop, not off parcel.toteId, which can be stale.
     const holder = this.totes.list({ locationId: agentDid }).find((t) => t.parcels.includes(parcelId));
     if (holder) {
-      throw new GlosError('ALREADY_IN_BAG', `Parcel ${parcelId} is already in bag ${holder.code}`, {
+      throw refused('ALREADY_IN_BAG', said('refuse.mdp.alreadyInBag', { parcelId, bag: holder.code }), {
         parcelId,
         bagCode: holder.code,
         sameBag: holder.code === code,
       });
     }
-    return this.fillTote(code, parcelId, observedAt, said, agentDid);
+    return this.fillTote(code, parcelId, observedAt, reason, agentDid);
   }
 
   /**
@@ -1190,12 +1191,12 @@ export class MdpService {
    */
   sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string; observedAt?: string; closure?: { seal?: string; photoRef?: string }; by?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
     const bag = this.totes.requireByCode(code);
-    if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
+    if (bag.locationId !== agentDid) throw refused('WRONG_PUDO', said('refuse.mdp.bagNotOpenedHere', { code }));
     // Closed once. A second seal would re-run the gate against parcels dropped off AFTER the bag was shut
     // and short-ship them for missing a bus they were never on.
-    if (bag.sealedAt) throw new GlosError('INVALID_STATE', `Bag ${code} is already closed`);
+    if (bag.sealedAt) throw refused('INVALID_STATE', said('refuse.mdp.bagAlreadyClosed', { code }));
     if (bag.status !== 'filling' && bag.status !== 'available') {
-      throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it can no longer be closed`);
+      throw refused('INVALID_STATE', said('refuse.mdp.bagCannotClose', { code, status: bag.status }));
     }
 
     const inBag = new Set(bag.parcels);
@@ -1211,9 +1212,9 @@ export class MdpService {
     const missed = expected.filter((id) => !inBag.has(id));
 
     if (missed.length && !input.acknowledgeShortShip) {
-      throw new GlosError(
+      throw refused(
         'INCOMPLETE_MANIFEST',
-        `${missed.length} parcel(s) for ${bag.destinationLabel} are still on the shelf — bag them, or leave them on purpose.`,
+        said('refuse.mdp.incompleteManifest', { n: missed.length, dest: bag.destinationLabel }),
         { missed, expected, code },
       );
     }
@@ -1250,11 +1251,11 @@ export class MdpService {
     const bag = this.totes.requireByCode(code);
     const hub = place.mdpId ? this.working(place.mdpId) : undefined;
     const placeId = hub ? hub.mdpId : place.shopDid;
-    if (!placeId || bag.locationId !== placeId) throw new GlosError('WRONG_PUDO', `Bag ${code} is not here`);
-    if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is the shop's own bag: close it with “Close the bag”, where the shop's check runs`);
-    if (bag.status !== 'filling' && bag.status !== 'available' && bag.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}: there is nothing here to close`);
+    if (!placeId || bag.locationId !== placeId) throw refused('WRONG_PUDO', said('refuse.mdp.bagNotHere', { code }));
+    if (bag.sealRequired) throw refused('INVALID_STATE', said('refuse.mdp.shopsOwnBag', { code }));
+    if (bag.status !== 'filling' && bag.status !== 'available' && bag.status !== 'claimed') throw refused('INVALID_STATE', said('refuse.mdp.bagNothingToClose', { code, status: bag.status }));
     const HELD = bag.held;
-    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (HELD) throw refused('UNIT_HELD', said('refuse.mdp.bagHeld', { code, finding: FINDING_WORDS[HELD.finding], where: HELD.where }), { exceptionId: HELD.exceptionId });
     const placeName = hub ? hub.name : this.agents.get(placeId).shopName;
     const ownerDid = hub ? hub.did : placeId;
     // Round 39 — a bag leaves a hub rated high only on a coded seal: asked before anything is written.
@@ -1284,9 +1285,9 @@ export class MdpService {
 
   takeBag(code: string, driverDid: string, name: string | undefined, reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, observedAt?: string, position?: HandoverPositionDto): { code: string; taken: true } {
     const bag = this.totes.requireByCode(code);
-    if (bag.status !== 'in_transit' || bag.carriedBy !== driverDid) throw new GlosError('NOT_FOUND', 'No bag you carry has that code');
+    if (bag.status !== 'in_transit' || bag.carriedBy !== driverDid) throw refused('NOT_FOUND', said('refuse.mdp.noBagCarried'));
     const HELD = bag.held;
-    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (HELD) throw refused('UNIT_HELD', said('refuse.mdp.bagHeld', { code, finding: FINDING_WORDS[HELD.finding], where: HELD.where }), { exceptionId: HELD.exceptionId });
     // Read once it is on the vehicle: no place to measure from, only where the phone was.
     const keep = this.closures.checkTake(bag, { did: driverDid, name: name?.trim() || 'the driver', place: 'the driver' }, driverDid, reading, position ? { position } : undefined);
     keep(handedAt(observedAt, Date.now(), [bag.availableAt, bag.sealedAt]));
@@ -1296,7 +1297,7 @@ export class MdpService {
   // --- bag flow ---
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
-  fillTote(code: string, parcelId: string, observedAt?: string, said?: OffPlanSaid, by?: string): { tote: Tote; fillPct: number } {
+  fillTote(code: string, parcelId: string, observedAt?: string, reason?: OffPlanSaid, by?: string): { tote: Tote; fillPct: number } {
     this.workingWhereBagIs(this.totes.requireByCode(code).locationId); // a bag at a hub that may not work takes nothing
     const parcel = this.parcels.get(parcelId);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
@@ -1306,16 +1307,16 @@ export class MdpService {
     // loadBag can trust it later. sortParcel auto-routes around this; here the bag is explicit, so we throw.
     const bag = this.totes.requireByCode(code);
     if (!this.bagAccepts(parcel.natureCode ?? 'GEN', bag.parcels)) {
-      throw new GlosError('CARGO_INCOMPATIBLE', `Parcel ${parcelId} cannot share bag ${code} — its cargo is incompatible with the bag's contents`);
+      throw refused('CARGO_INCOMPATIBLE', said('refuse.mdp.cannotShareBag', { parcelId, code }));
     }
     // 2026-11-06 — ITS NEXT STOP BY ITS PLAN (movement unification): into a bag going elsewhere only with the reason said.
     const offPlan = this.offPlanInto(parcel, bag);
-    if (offPlan && !said) {
-      throw new GlosError('OFF_PLAN', `${parcelId} goes to ${offPlan.label} next by its plan, not ${bag.destinationLabel ?? bag.destinationNodeId}. Put it in the bag for ${offPlan.label} — or say why it goes this way.`, { parcelId, planned: offPlan.id, plannedLabel: offPlan.label, bag: code });
+    if (offPlan && !reason) {
+      throw refused('OFF_PLAN', said('refuse.mdp.offPlan', { parcelId, label: offPlan.label, bagDest: bag.destinationLabel ?? bag.destinationNodeId }), { parcelId, planned: offPlan.id, plannedLabel: offPlan.label, bag: code });
     }
     // Bagged when it was bagged (round 23): never before the parcel's own last step — it was not here to bag before then.
     const tote = this.totes.add(code, parcelId, parcel.size, this.parcels.stepOf(parcelId, observedAt));
-    if (offPlan && said) this.routeKeeper!.leave(parcel, bag.destinationNodeId!, by ?? bag.locationId, said);
+    if (offPlan && reason) this.routeKeeper!.leave(parcel, bag.destinationNodeId!, by ?? bag.locationId, reason);
     this.parcels.get(parcelId).toteId = tote.toteId; // connect parcel ↔ bag (still where it was)
     // 2026-11-05 — in a bag now, off the shelf slot it waited on at its shop: the slot is free for the next one.
     this.parcels.leftShelf(parcelId);
@@ -1332,16 +1333,16 @@ export class MdpService {
     for (const id of pending.parcels) this.parcels.refuseIfHeld(this.parcels.get(id));
     // Round 36 — a bag leaves closed (its coded seal on, or photographed closed), and never while it is held.
     const HELD = pending.held;
-    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (HELD) throw refused('UNIT_HELD', said('refuse.mdp.bagHeld', { code, finding: FINDING_WORDS[HELD.finding], where: HELD.where }), { exceptionId: HELD.exceptionId });
     // 2026-11-02 — held for room at the hub it goes to: it stays where it is (the owner: "they wait at the shop or hub they
     // are at"), handed to no driver across a counter either, until it goes on by itself.
     const WAITS = pending.waitsForRoom;
-    if (WAITS) throw new GlosError('BAG_WAITS_FOR_ROOM', `Bag ${code} waits for room at ${WAITS.hubName}: keep it here. It is offered to drivers again by itself when there is room, and you are told.`, { hubId: WAITS.hubId });
+    if (WAITS) throw refused('BAG_WAITS_FOR_ROOM', said('refuse.mdp.bagWaitsForRoom', { code, hub: WAITS.hubName }), { hubId: WAITS.hubId });
     // Round 39 — nothing new onto a rider whose security declaration (or whose fleet's) is not in force: said before the bag's
     // own state, because no closing of the bag makes it signed.
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
-    if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
+    if (!pending.closureId) throw refused('BAG_NOT_CLOSED', said('refuse.mdp.bagNotClosed', { code }));
     // 2026-11-24 — parcels handed over at this hub from another country leave it only on a coded seal (slice 4).
     if (this.mdps.has(pending.locationId)) this.transfers?.assertLoad(pending.locationId, pending, this.closures.current(pending));
     // Round 39 — a corridor or a hub rated high: a bag goes onto it only on a coded seal, and nothing at night.
@@ -1356,7 +1357,7 @@ export class MdpService {
     // Round 38 — a new independent rider carries no more than their company's cap: the bag counts every parcel in it.
     if (fleet) this.parcels.assertRiderWithinCap(fleet.driverDid, pending.parcels.length);
     // A claimed bag may only be loaded by the driver who claimed it.
-    if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
+    if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw refused('BAG_RESERVED', said('refuse.mdp.bagReserved', { code }));
     // S31: this is the tote/MDP mixing point — the second place cargo rides a vehicle. A bag loads ATOMICALLY
     // (one scan moves every parcel), so unlike handover it cannot short-ship one parcel — it accepts or refuses
     // the WHOLE bag. Two gates: (1) an internal-compatibility BACKSTOP (defence in depth — sortParcel/fillTote
@@ -1370,7 +1371,7 @@ export class MdpService {
       for (let i = 0; i < pending.parcels.length; i++) {
         for (let j = i + 1; j < pending.parcels.length; j++) {
           if (!this.cargo.canShareVehicle(this.natureOf(pending.parcels[i]), this.natureOf(pending.parcels[j]))) {
-            throw new GlosError('CARGO_INCOMPATIBLE', `Bag ${code} mixes incompatible cargo — re-sort it before loading`);
+            throw refused('CARGO_INCOMPATIBLE', said('refuse.mdp.bagMixesCargo', { code }));
           }
         }
       }
@@ -1380,17 +1381,17 @@ export class MdpService {
       for (const id of pending.parcels) {
         const p = this.parcels.get(id);
         kg += p.weightKg;
-        if (p.weightKg > fleet.maxParcelKg) throw new GlosError('CAPACITY_EXCEEDED', `Parcel ${id} (${p.weightKg}kg) exceeds the ${fleet.maxParcelKg}kg limit of this ${fleet.vehicle.vehicleClass}`);
-        if (p.fragile && !fleet.allowsFragile) throw new GlosError('FRAGILE_NOT_ALLOWED', `A ${fleet.vehicle.vehicleClass} cannot carry fragile parcels (${id})`);
+        if (p.weightKg > fleet.maxParcelKg) throw refused('CAPACITY_EXCEEDED', said('refuse.mdp.parcelOverLimit', { id, weight: p.weightKg, limit: fleet.maxParcelKg, vehicle: fleet.vehicle.vehicleClass }));
+        if (p.fragile && !fleet.allowsFragile) throw refused('FRAGILE_NOT_ALLOWED', said('refuse.mdp.noFragile', { vehicle: fleet.vehicle.vehicleClass, id }));
       }
       // Every capability the bag's cargo needs must be present on the vehicle, else the whole bag is refused.
       for (const cap of this.toteRequiredCapabilities(pending)) {
-        if (!fleet.vehicle[cap]) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `A ${fleet.vehicle.vehicleClass} lacks ${cap} that bag ${code}'s cargo requires`);
+        if (!fleet.vehicle[cap]) throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.mdp.vehicleLacks', { vehicle: fleet.vehicle.vehicleClass, capability: cap, code }));
       }
       // 2026-11-03 — a bag of chilled parcels, beside a load aboard kept at a temperature the two cannot share one body at.
       const cold = this.coldOf?.(fleet.driverDid, pending.code);
-      if (cold) throw new GlosError('CARGO_INCOMPATIBLE', `Bag ${code}: ${cold}`);
-      if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
+      if (cold) throw refused('CARGO_INCOMPATIBLE', said('refuse.mdp.bagCold', { code, cold }));
+      if (kg > fleet.capacityKg) throw refused('CAPACITY_EXCEEDED', said('refuse.mdp.bagOverCapacity', { code, kg, vehicle: fleet.vehicle.vehicleClass, capacity: fleet.capacityKg }));
       // …and against what is aboard already: a counter loading by the driver's pass loads onto a vehicle that may be half
       // full, and a bag weighed against an empty one could overload it. A bag this driver already holds is counted in what
       // they hold, so it is given back before it is weighed.
@@ -1398,7 +1399,7 @@ export class MdpService {
       const heldKg = pending.claimedBy === fleet.driverDid || pending.carriedBy === fleet.driverDid ? pending.weightKg : 0;
       if (left !== undefined && kg > left + heldKg) {
         const aboard = Math.round((fleet.capacityKg - left - heldKg) * 100) / 100;
-        throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying ${aboard} kg of its ${fleet.capacityKg} kg: bag ${code} (${kg} kg) does not fit — drop something before loading it`);
+        throw refused('CAPACITY_EXCEEDED', said('refuse.mdp.bagDoesNotFit', { vehicle: fleet.vehicle.vehicleClass, aboard, capacity: fleet.capacityKg, code, kg }));
       }
     }
     // And room in the hold for one more BAG. This is the moment the bag physically goes in, so it is the last
@@ -1412,7 +1413,7 @@ export class MdpService {
       const capacity = toteCapacityOf(fleet.vehicle);
       const alreadyMine = pending.claimedBy === fleet.driverDid || pending.carriedBy === fleet.driverDid;
       if (!alreadyMine && held >= capacity) {
-        throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying all ${capacity} bag(s) it holds — drop one before loading bag ${code}`);
+        throw refused('CAPACITY_EXCEEDED', said('refuse.mdp.holdFull', { vehicle: fleet.vehicle.vehicleClass, capacity, code }));
       }
     }
     // Round 37 — a driver loading it themselves takes it on its seal: read, photographed, as it was closed. Checked last,
@@ -1454,11 +1455,11 @@ export class MdpService {
   dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now(), transfer?: HubTransferInput): { mdpId: string; emptied: string[]; offPlan?: Array<{ parcelId: string; planned: string }>; passedOn?: { code: string; next: string; final: string }; transferId?: string; reseal?: boolean } {
     const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
-    if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
+    if (!before.parcels.length) throw refused('BAG_EMPTY', said('refuse.mdp.bagAlreadyEmpty', { code }));
     for (const id of before.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
     // Round 36 — received on its seal: a photograph as it arrived, the number read off it, as it was closed. Before it opens.
     const HELD = before.held;
-    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (HELD) throw refused('UNIT_HELD', said('refuse.mdp.bagHeld', { code, finding: FINDING_WORDS[HELD.finding], where: HELD.where }), { exceptionId: HELD.exceptionId });
     const keepReceipt = this.closures.checkReceipt(before, { did: mdp.did, name: byName?.trim() || mdp.name, place: mdp.name }, mdp.did, receipt);
     // 2026-11-24 — A BAG FROM ANOTHER COUNTRY (corridor compliance, slice 4; the owner: "Cross-border only"): handed over by name
     // on both sides, the driver's pass and the person receiving it, and what is wrong with it said there and then. Asked
@@ -1544,19 +1545,19 @@ export class MdpService {
   deliverBag(agentDid: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string): { code: string; agentDid: string; delivered: string[]; shelved: Array<{ parcelId: string; slot: string }>; driverDid?: string } {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
-    if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
+    if (!tote.parcels.length) throw refused('BAG_EMPTY', said('refuse.mdp.bagEmpty', { code }));
     for (const id of tote.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
     const driverDid = tote.claimedBy; // REP2 — the driver who carried the bag here, captured before empty() clears it
     // 2026-11-06 — addressed to a shop that was closed, it may be handed in at one of its driver's picks (ShopChoiceService).
     const redirected = Boolean(tote.destinationNodeId && tote.destinationNodeId !== agentDid && this.shopChoice?.may(code, agentDid));
-    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid && !redirected) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
+    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid && !redirected) throw refused('BAG_MISADDRESSED', said('refuse.mdp.bagMisaddressed', { code, dest: tote.destinationLabel || tote.destinationNodeId, shop: agent.shopName }));
     if (!this.parcels.shelfTakes(agentDid, tote.parcels)) {
-      const holds = tote.parcels.length === 1 ? '1 parcel' : `${tote.parcels.length} parcels`;
-      throw new GlosError('SHELF_FULL', `Bag ${code} holds ${holds} and your shelf has no room for all of them. Hand over parcels that are waiting, or add a row under “Set up shelves”, then scan the bag again`, { parcels: tote.parcels.length });
+      const holds = said('hubArrival.parcels', { n: tote.parcels.length });
+      throw refused('SHELF_FULL', said('refuse.mdp.shelfFull', { code, holds }), { parcels: tote.parcels.length });
     }
     // Round 36 — received on its seal: a photograph as it arrived, the number read off it, as it was closed. Before it opens.
     const HELD = tote.held;
-    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    if (HELD) throw refused('UNIT_HELD', said('refuse.mdp.bagHeld', { code, finding: FINDING_WORDS[HELD.finding], where: HELD.where }), { exceptionId: HELD.exceptionId });
     const keepReceipt = this.closures.checkReceipt(tote, { did: agentDid, name: byName?.trim() || agent.shopName, place: agent.shopName }, agentDid, receipt);
     keepReceipt({ at: new Date().toISOString() });
     // Everything that could refuse it has: the bag, and its parcels, this shop's now.
@@ -1612,24 +1613,24 @@ export class MdpService {
     // nothing is sorted under the old one.
     // …or going to its store's own door as a load: set aside, for the driver who took that load.
     if (parcel.status === 'Returned' && parcel.returnLoad && parcel.atMdpId === mdpId) {
-      const where = parcel.vendorId ? `was called off by its store: it goes to the store's door` : `goes to its sender's own door, paid for`;
-      throw new GlosError('SET_ASIDE', `${parcelId} ${where} as load ${parcel.returnLoad.code}. Set it aside, and hand it only to the driver who comes for it — scan their pass at the counter.`, { parcelId, loadCode: parcel.returnLoad.code });
+      const where = parcel.vendorId ? said('refuse.mdp.setAsideStore') : said('refuse.mdp.setAsideSender');
+      throw refused('SET_ASIDE', said('refuse.mdp.setAside', { parcelId, where, loadCode: parcel.returnLoad.code }), { parcelId, loadCode: parcel.returnLoad.code });
     }
     // A person's goods, held while their sender pays for a load to their door (2026-10-27): not sorted before the time runs out.
     if (parcel.doorHold && Date.parse(parcel.doorHold.until) > Date.now() && parcel.atMdpId === mdpId) {
-      throw new GlosError('SET_ASIDE', `${parcelId} waits for its sender to pay for a load to their door, until ${parcel.doorHold.until.slice(11, 16)} UTC. Set it aside: if they have not paid by then, sort it as its label says.`, { parcelId });
+      throw refused('SET_ASIDE', said('refuse.mdp.setAsideDoorHold', { parcelId, until: parcel.doorHold.until.slice(11, 16) }), { parcelId });
     }
     if (parcel.status === 'Returned' && parcel.returnParcelId) {
       const back = this.parcels.get(parcel.returnParcelId);
       if (back.status === 'At_MDP' && back.atMdpId === mdpId) {
         // A store's parcel called off by the store, or a person's withdrawn by staff (2026-10-27): either way, a new label.
-        throw new GlosError('NEW_LABEL', `${parcelId} was ${parcel.vendorId ? 'called off by its store' : 'withdrawn'}: it goes back as ${back.parcelId}. Print its new label, put it over the old one, then scan ${back.parcelId}.`, { parcelId, returnParcelId: back.parcelId });
+        throw refused('NEW_LABEL', said('refuse.mdp.newLabel', { parcelId, how: said(parcel.vendorId ? 'refuse.mdp.calledOffByStore' : 'refuse.mdp.withdrawn'), back: back.parcelId }), { parcelId, returnParcelId: back.parcelId });
       }
     }
-    if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
+    if (parcel.status !== 'At_MDP') throw refused('INVALID_STATE', said('refuse.mdp.parcelNotAtHub', { status: parcel.status }));
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
     this.parcels.refuseIfForCarrier(parcel, mdpId); // 2026-11-18 — abroad from here: to the route's carrier, not into a bag
-    if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
+    if (!parcel.destAgentDid) throw refused('INVALID_STATE', said('refuse.mdp.noDestinationShop'));
 
     // 2026-11-06 — ITS NEXT STOP BY ITS PLAN, where that can still be used (movement unification). Where it cannot — a hub
     // no longer to be used, or a plan that does not have it here — the hub chooses as it always did (2026-11-02: onward, of
@@ -1720,7 +1721,7 @@ export class MdpService {
   /** 2026-11-09 — a hub's own counter fills no bags: its parcels cross to the hub's floor by hand, and are sorted there. */
   private refuseCounterBag(agentDid: string): void {
     const counter = this.agents.list().find((a) => a.did === agentDid);
-    if (counter?.hubCounterOf) throw new GlosError('INVALID_STATE', `This is ${counter.shopName}’s counter: hand its parcels to the hub’s floor — they are sorted there, and no bag is needed between the counter and the floor`);
+    if (counter?.hubCounterOf) throw refused('INVALID_STATE', said('refuse.mdp.hubCounter', { shop: counter.shopName }));
   }
 
   /** 2026-11-09 — "Sort and hand out": its counter, kept on the hub; stopped when it sorts only again. */
@@ -1745,10 +1746,10 @@ export class MdpService {
   markDown(mdpId: string, input: { reason: HubDownReason; note?: string; until?: string }, by: { name: string; role: 'hub' | 'staff' }, now: number = Date.now()): { hub: Mdp; redirected: string[]; waiting: string[] } {
     const hub = this.require(mdpId);
     if (!this.isApproved(hub)) throw this.notApproved(hub);
-    if (!(HUB_DOWN_REASONS as readonly string[]).includes(input.reason)) throw new GlosError('INVALID_INPUT', 'Say why the hub is down', { field: 'reason' });
+    if (!(HUB_DOWN_REASONS as readonly string[]).includes(input.reason)) throw refused('INVALID_INPUT', said('refuse.mdp.sayWhyDown'), { field: 'reason' });
     // 2026-11-11 — the owner: "Reopening time should be a mandatory field when closing a hub": a best guess where it is not
     // known — the hub is asked every day, and confirms on the last.
-    if (!input.until) throw new GlosError('FIELD_REQUIRED', 'Say when the hub opens again — your best guess: you are asked every day, and confirm on the last', { field: 'until' });
+    if (!input.until) throw refused('FIELD_REQUIRED', said('refuse.mdp.sayWhenOpens'), { field: 'until' });
     const until = this.reopeningAt(input.until, now);
     const note = input.note?.trim().slice(0, 200);
     hub.down = { since: new Date(now).toISOString(), until: new Date(until).toISOString(), reason: input.reason, ...(note ? { note } : {}), by: by.name, byRole: by.role, askedAt: new Date(now).toISOString() };
@@ -1805,7 +1806,7 @@ export class MdpService {
   /** 2026-11-11 — open again: bags are sent to it as before, and the bags held for room go on by themselves. */
   markUp(mdpId: string, by: string, now: number = Date.now()): Mdp {
     const hub = this.require(mdpId);
-    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down`);
+    if (!hub.down) throw refused('INVALID_STATE', said('refuse.mdp.notMarkedDown', { hub: hub.name }));
     delete hub.down;
     this.mdps.set(mdpId, hub);
     this.letWaitingGo(now);
@@ -1829,8 +1830,8 @@ export class MdpService {
   /** A reopening time said: to come, and no more than HUB_DOWN_MAX_DAYS away. */
   private reopeningAt(text: string, now: number): number {
     const until = Date.parse(text);
-    if (!Number.isFinite(until) || until <= now) throw new GlosError('INVALID_INPUT', 'When it opens again is still to come', { field: 'until' });
-    if (until > now + HUB_DOWN_MAX_DAYS * 86_400_000) throw new GlosError('INVALID_INPUT', `A hub is said to be down for ${HUB_DOWN_MAX_DAYS} days at most: say it again when that runs out`, { field: 'until' });
+    if (!Number.isFinite(until) || until <= now) throw refused('INVALID_INPUT', said('refuse.mdp.opensInPast'), { field: 'until' });
+    if (until > now + HUB_DOWN_MAX_DAYS * 86_400_000) throw refused('INVALID_INPUT', said('refuse.mdp.downTooLong', { days: HUB_DOWN_MAX_DAYS }), { field: 'until' });
     return until;
   }
 
@@ -1878,7 +1879,7 @@ export class MdpService {
    */
   confirmReopening(mdpId: string, input: { until?: string }, by: string, now: number = Date.now()): Mdp {
     const hub = this.require(mdpId);
-    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down`);
+    if (!hub.down) throw refused('INVALID_STATE', said('refuse.mdp.notMarkedDown', { hub: hub.name }));
     if (input.until) {
       hub.down = { ...hub.down, until: new Date(this.reopeningAt(input.until, now)).toISOString(), confirmedAt: new Date(now).toISOString() };
       delete hub.down.unconfirmedToldAt;
@@ -1888,7 +1889,7 @@ export class MdpService {
     if (hub.down.until && Date.parse(hub.down.until) <= now) return this.markUp(mdpId, by, now);
     if (!confirmOpen(hub.down, now)) {
       const from = new Date(Date.parse(hub.down.until!) - HUB_DOWN_CONFIRM_WINDOW_H * 3_600_000).toISOString();
-      throw new GlosError('INVALID_STATE', `Confirm it opens in the last day before it: from ${from.slice(0, 16).replace('T', ' ')} UTC. You are asked then.`, { field: 'until' });
+      throw refused('INVALID_STATE', said('refuse.mdp.confirmLastDay', { from: from.slice(0, 16).replace('T', ' ') }), { field: 'until' });
     }
     hub.down = { ...hub.down, confirmedAt: new Date(now).toISOString() };
     this.mdps.set(mdpId, hub);
@@ -1901,7 +1902,7 @@ export class MdpService {
    */
   setCollectable(mdpId: string, collectable: boolean, by: { name: string; role: 'hub' | 'staff' }, now: number = Date.now()): Mdp {
     const hub = this.require(mdpId);
-    if (!hub.down) throw new GlosError('INVALID_STATE', `${hub.name} is not marked down: its bags go as on any day`);
+    if (!hub.down) throw refused('INVALID_STATE', said('refuse.mdp.notMarkedDownBagsGo', { hub: hub.name }));
     if (collectable) hub.down = { ...hub.down, collectable: { since: new Date(now).toISOString(), by: by.name, byRole: by.role } };
     else {
       hub.down = { ...hub.down };
@@ -2011,7 +2012,7 @@ export class MdpService {
       return { type: 'pudo', id: dest.did, label: dest.shopName, zone: destZone };
     }
     const onward = this.mdpForZone(destZone, now);
-    if (!onward) throw new GlosError('INVALID_STATE', `No MDP serves destination zone ${destZone}`);
+    if (!onward) throw refused('INVALID_STATE', said('refuse.mdp.noHubServes', { zone: destZone }));
     return this.towards(mdp, onward, destZone, now);
   }
 

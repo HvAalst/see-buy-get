@@ -11,6 +11,7 @@ import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus, RailOutcome }
 import { isSandbox } from '../runtime/sandbox';
 import { MPESA_PAYOUT_RAIL, type B2cResult, type MpesaPayoutRail } from './mpesa-payout-rail.adapter';
 import { isRefusal, payoutWayOf, type PayoutDestination, type PayoutDestinationRefusal, type PayoutDestinations, type PayoutWay } from './payout-ways';
+import { codeSaid } from '../../modules/pudo/notice-words/codes';
 
 /**
  * Why a payee may NOT be paid out right now — or null when they may.
@@ -179,7 +180,7 @@ export class PayoutService {
    */
   submit(payoutId: string, now: number = Date.now(), by?: Signer): Payout {
     const payout = this.require(payoutId);
-    if (payout.status !== 'requested') throw refused('INVALID_STATE', said('refuse.payout.submitRequested', { status: payout.status }));
+    if (payout.status !== 'requested') throw refused('INVALID_STATE', said('refuse.payout.submitRequested', { status: codeSaid('payout', payout.status) }));
     if (by && payout.requestedBy && sameSigner(payout.requestedBy, by)) {
       throw refused('CONFLICT', said('refuse.payout.secondApproves'));
     }
@@ -277,7 +278,7 @@ export class PayoutService {
   settle(payoutId: string, providerRef?: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status === 'settled') return payout; // a rail that confirms twice has not paid twice
-    if (payout.status !== 'submitted') throw refused('INVALID_STATE', said('refuse.payout.settleSubmitted', { status: payout.status }));
+    if (payout.status !== 'submitted') throw refused('INVALID_STATE', said('refuse.payout.settleSubmitted', { status: codeSaid('payout', payout.status) }));
     // The payable it was raised against: a provider's earnings, or what a person is owed back.
     const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
@@ -301,7 +302,7 @@ export class PayoutService {
   fail(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status !== 'requested' && payout.status !== 'submitted') {
-      throw refused('INVALID_STATE', said('refuse.payout.failOnItsWay', { status: payout.status }));
+      throw refused('INVALID_STATE', said('refuse.payout.failOnItsWay', { status: codeSaid('payout', payout.status) }));
     }
     payout.status = 'failed';
     payout.failedAt = new Date(now).toISOString();
@@ -318,7 +319,7 @@ export class PayoutService {
    */
   reverse(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
-    if (payout.status !== 'settled') throw refused('INVALID_STATE', said('refuse.payout.reverseSettled', { status: payout.status }));
+    if (payout.status !== 'settled') throw refused('INVALID_STATE', said('refuse.payout.reverseSettled', { status: codeSaid('payout', payout.status) }));
     const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
       entityId: payout.entityId,

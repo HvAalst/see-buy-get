@@ -63,7 +63,9 @@ import { Vehicle } from './fleet.types';
 import { bringsOf, cannotDo, cleanWork, extrasOf, marksOf, workViewOf } from './load-work';
 import { HOLD_DECIDE_HOURS, HOLD_HELP_PATH, HOLD_HOURS, HOLD_OUTCOMES, HOLD_REMIND_HOURS, STEP_WORDS, readProtocol, type HeldPay, type HoldDecision, type HoldOutcome, type ProtocolReading } from './pay-hold.types';
 import type { HoldQueueRow } from './pay-hold-queue.types';
-import { countryName, money as moneyShown, noticeLangOf, noticeOf, number as numberShown, said, sayEnglish, type Said, type SayValue } from './notice-words/say';
+import { countryName, day as dayShown, money as moneyShown, noticeLangOf, noticeOf, number as numberShown, said, sayEnglish, type Said, type SayValue } from './notice-words/say';
+import { refused } from './notice-words/refuse';
+import { codeSaid } from './notice-words/codes';
 import { declarationRefusalSaid } from './security-declaration.service';
 import type { NoticeKey } from './notice-words/catalog';
 import type { NowWithView } from './now-with.types';
@@ -162,11 +164,11 @@ function instructionsOf(input: { text?: string; contactName?: string; contactPho
 /** Dangerous goods as the sender declared them, written the one way: "UN1263", the class and group as given. */
 function dangerousOf(d: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string } {
   const digits = /(\d{4})/.exec(d.unNumber)?.[1];
-  if (!digits) throw new GlosError('VALIDATION_FAILED', 'A UN number is UN and four digits, like UN1263', { field: 'dangerousGoods.unNumber' });
+  if (!digits) throw refused('VALIDATION_FAILED', said('refuse.dispatch.aUnNumberIsUn'), { field: 'dangerousGoods.unNumber' });
   const name = d.properShippingName?.trim();
   const klass = d.hazardClass?.trim();
-  if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the dangerous goods’ proper shipping name, as on their safety data sheet', { field: 'dangerousGoods.properShippingName' });
-  if (!klass) throw new GlosError('FIELD_REQUIRED', 'Give the dangerous goods’ class, as on their safety data sheet', { field: 'dangerousGoods.hazardClass' });
+  if (!name) throw refused('FIELD_REQUIRED', said('refuse.dispatch.giveTheDangerousGoodsProper'), { field: 'dangerousGoods.properShippingName' });
+  if (!klass) throw refused('FIELD_REQUIRED', said('refuse.dispatch.giveTheDangerousGoodsClass'), { field: 'dangerousGoods.hazardClass' });
   return { unNumber: `UN${digits}`, properShippingName: name.slice(0, 200), hazardClass: klass.slice(0, 8), ...(d.packingGroup ? { packingGroup: d.packingGroup } : {}) };
 }
 
@@ -651,7 +653,7 @@ export class DispatchService {
     // and publishes in one act. Releasing it from here would put a bag on the marketplace with parcels for
     // it still sitting on the shelf, unrecorded — the exact hole the gate exists to close.
     const bag = this.totes.requireByCode(code);
-    if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is a shop bag — close it at the counter to send it`);
+    if (bag.sealRequired) throw refused('INVALID_STATE', said('refuse.dispatch.bagIsAShopBag', { code }));
     const t = this.totes.markAvailable(code);
     // 2026-11-02 — offered where the hub it goes to has room; held where it stands, its holder told, where none has.
     this.mdps.offerBag(t.code, 'manual');
@@ -662,7 +664,7 @@ export class DispatchService {
     // 2026-11-13 — what it takes to move it, checked before anything is worked out (unusual loads, U1–U3).
     const work = cleanWork(input.work);
     // How many packages: a whole number, or not said at all — never a fraction of a box.
-    if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
+    if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw refused('INVALID_INPUT', said('refuse.dispatch.theNumberOfPackagesIs'));
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
     // numbered or announced.
     if (!checkOnly) this.freightSeq += 1;
@@ -672,20 +674,20 @@ export class DispatchService {
     let scheduledPickupAt: string | undefined;
     if (input.scheduledPickupAt != null) {
       const t = new Date(input.scheduledPickupAt).getTime();
-      if (Number.isNaN(t)) throw new GlosError('INVALID_INPUT', 'scheduledPickupAt is not a valid date/time');
+      if (Number.isNaN(t)) throw refused('INVALID_INPUT', said('refuse.dispatch.scheduledpickupatIsNotAValid'));
       if (t > now) scheduledPickupAt = new Date(t).toISOString();
     }
     const scheduled = scheduledPickupAt != null;
     // P1 — an order under a standing contract is that fleet's, on no market, for a day it must arrive by.
     const contract = input.contract;
-    if (contract && !input.deliverOn) throw new GlosError('FIELD_REQUIRED', 'An order under a contract says which day it must arrive', { field: 'deliverOn' });
+    if (contract && !input.deliverOn) throw refused('FIELD_REQUIRED', said('refuse.dispatch.anOrderUnderAContract'), { field: 'deliverOn' });
     // A value declared (CMR Art. 6(2)(d)) is in a money some country uses, or it is not declared at all.
     for (const [field, v] of [['declaredValue', input.declaredValue], ['specialInterest', input.specialInterest]] as const) {
-      if (v && (!(v.amount > 0) || !isKnownCurrency(v.currency))) throw new GlosError('VALIDATION_FAILED', 'A declared amount is above nothing, in a currency some country uses — like KES or USD', { field });
+      if (v && (!(v.amount > 0) || !isKnownCurrency(v.currency))) throw refused('VALIDATION_FAILED', said('refuse.dispatch.aDeclaredAmountIsAbove'), { field });
     }
     // Cover asked of an order under a contract: the fleet it goes to must have it, or the order would wait for nobody.
     if (contract && input.coverRequired && !this.managers?.coverOf(contract.fleetDid, now)) {
-      throw new GlosError('FORBIDDEN', `${contract.fleetName} has no insurance cover SeeBuyGet has checked that is still running. Order it without asking for cover, or from a carrier that has it.`, { field: 'coverRequired' });
+      throw refused('FORBIDDEN', said('refuse.dispatch.hasNoInsuranceCoverSeebuyget', { fleetName: contract.fleetName }), { field: 'coverRequired' });
     }
     // The shipper's early-claim choice (default: allow — a scarce truck can commit ahead of the date).
     const allowEarlyClaim = input.allowEarlyClaim ?? true;
@@ -991,7 +993,7 @@ export class DispatchService {
   suggest(driverDid: string, route: RoutePlan, now: number = Date.now(), minEarn?: number): Offer[] {
     if (this.fleet.overHours(driverDid, now)) return []; // FP8 — nothing is offered to a driver who may not take it
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.coupleTheDriverToA'));
     if (!this.fleet.acceptingWork(driverDid, now)) return []; // snoozed: the screen says so, and says how to undo it
     this.publishReady(now);
     this.publishReadyFreight(now); // any scheduled freight that has come due joins the marketplace now
@@ -1118,7 +1120,7 @@ export class DispatchService {
   suggestNearby(driverDid: string, from: GeoPoint, radiusKm: number, now: number = Date.now(), minEarn?: number): Offer[] {
     if (this.fleet.overHours(driverDid, now)) return []; // FP8
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.coupleTheDriverToA'));
     if (!this.fleet.acceptingWork(driverDid, now)) return [];
     this.publishReady(now);
     this.publishReadyFreight(now);
@@ -1419,26 +1421,26 @@ export class DispatchService {
   /** Redeem a decline capability. Burned on use, and refused once it (or its offer) has lapsed. */
   declineByToken(token: string, now: number = Date.now()): Offer {
     const held = this.declineTokens.get(token);
-    if (!held) throw new GlosError('NOT_FOUND', 'That link has already been used, or has expired');
+    if (!held) throw refused('NOT_FOUND', said('refuse.dispatch.thatLinkHasAlreadyBeen'));
     this.declineTokens.delete(token); // one shot, whatever happens next
-    if (held.expiresAt <= now) throw new GlosError('WINDOW_EXPIRED', 'That offer has already lapsed');
+    if (held.expiresAt <= now) throw refused('WINDOW_EXPIRED', said('refuse.dispatch.thatOfferHasAlreadyLapsed'));
     return this.ignore(held.offerId);
   }
 
   /** Driver accepts an offer → reserves the load (and its weight) for this driver. */
   claim(offerId: string, now: number = Date.now()): Offer {
     const offer = this.requireOffer(offerId);
-    if (offer.status === 'expired' || new Date(offer.expiresAt).getTime() <= now) { offer.status = 'expired'; throw new GlosError('WINDOW_EXPIRED', 'Offer has lapsed (auto-ignored)'); }
-    if (offer.status !== 'pending') throw new GlosError('INVALID_STATE', `Offer is ${offer.status}`);
+    if (offer.status === 'expired' || new Date(offer.expiresAt).getTime() <= now) { offer.status = 'expired'; throw refused('WINDOW_EXPIRED', said('refuse.dispatch.offerHasLapsedAutoIgnored')); }
+    if (offer.status !== 'pending') throw refused('INVALID_STATE', said('refuse.dispatch.offerIs', { status: offer.status }));
     const vehicle = this.fleet.vehicleForDriver(offer.driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Driver is no longer coupled to a vehicle');
-    if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'Not enough remaining capacity for this load');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.driverIsNoLongerCoupled'));
+    if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.notEnoughRemainingCapacityFor'));
     // …and room in the hold for one more BAG. Kilos are not the binding constraint on a line-haul: a driver
     // claiming from a coffee table could reserve twenty bags of letters against a weight limit they never
     // reach, and arrive at a bus whose boot holds twelve.
     if (offer.kind === 'tote') {
       const at = this.totes.byCodeMaybe(offer.ref)?.locationId;
-      if (at && this.atHubDown(at)) throw new GlosError('INVALID_STATE', `${this.mdps.find(at)?.name ?? 'Its hub'} is down: its bags wait there until it opens again`);
+      if (at && this.atHubDown(at)) throw refused('INVALID_STATE', said('refuse.dispatch.hubIsDown', { hub: this.mdps.find(at)?.name ?? 'Its hub' }));
     }
     // 2026-11-23 — a bag for another EU country: only the road route fleet's drivers carry it (step 3c), asked again here.
     if (offer.kind === 'tote') {
@@ -1446,7 +1448,7 @@ export class DispatchService {
       if (road) throw new GlosError('FORBIDDEN', road);
     }
     if (offer.kind === 'tote' && this.remainingTotes(offer.driverDid) < 1) {
-      throw new GlosError('CAPACITY_EXCEEDED', `Your ${vehicle.vehicleClass} is carrying all ${this.toteCapacityOf(vehicle)} bag(s) it holds — deliver one before taking another`);
+      throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.yourVehicleCarriesAllBags', { vehicleClass: vehicle.vehicleClass, capacity: this.toteCapacityOf(vehicle) }));
     }
     // S31/S32: re-check the load's required capabilities AND equipment against the driver's CURRENT vehicle —
     // coupling is re-assignable, so what held when the offer was made (suggest → vehicleCanCarry) may not hold
@@ -1459,7 +1461,7 @@ export class DispatchService {
       (need.bulk && !vehicle.carriesBulk) ||
       (need.fragile && !vehicle.allowsFragile)
     ) {
-      throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
+      throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.yourCurrentVehicleLacksA'));
     }
     if (offer.kind === 'freight') {
       const cannot = this.workRefusal(offer.driverDid, this.requireFreight(offer.ref), vehicle);
@@ -1483,7 +1485,7 @@ export class DispatchService {
       // marking it is that the price is not settled, so an instant claim would take it at a number nobody
       // agreed to. Refused BEFORE any mutation, and the driver is told what to do instead.
       if (commitModeOf(f) === 'negotiate') {
-        throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — send the shipper your price instead of claiming it');
+        throw refused('NEGOTIATION_REQUIRED', said('refuse.dispatch.thisLoadIsPostedFor'));
       }
       // FB0a — carry the offer's deadhead/loaded SPLIT into the lock, not just its sum. This breakdown is the
       // durable one (it is stamped onto the freight and is what any later market series reads), so re-deriving
@@ -1539,19 +1541,19 @@ export class DispatchService {
     // P1 — an order under a contract goes on a truck by ONE hand: the office of the fleet it was ordered from. A claim,
     // an offer or an accepted price are other doors onto this same lock, and none of them carries an office.
     if (f.status === 'ordered') {
-      if (!office || this.carrierOfOrder(f) !== office) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet carrying it puts it on a truck');
+      if (!office || this.carrierOfOrder(f) !== office) throw refused('FORBIDDEN', said('refuse.dispatch.thisIsAnOrderUnder'));
     } else if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) {
       // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
-      throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+      throw refused('INVALID_STATE', said('refuse.dispatch.freightIs', { status: codeSaid('freight', f.status) }));
     }
     // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
     // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
-    if (belowFloor(this.ratings.driverRating(driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
+    if (belowFloor(this.ratings.driverRating(driverDid))) throw refused('REPUTATION_BELOW_FLOOR', said('refuse.dispatch.yourRatingIsBelowThe'));
     // FP8 — over the shift limit: what is aboard is delivered, nothing new is taken. The board marks it, the offers
     // stop, and this — the one commit — refuses it, so an office cannot put a load on a driver the board would not.
     if (this.fleet.overHours(driverDid, now)) {
       const h = this.fleet.hoursFor(driverDid, now);
-      throw new GlosError('HOURS_EXCEEDED', `On duty ${h.onDuty} h — over the ${h.limit} h limit. End the shift and rest before taking another load`);
+      throw refused('HOURS_EXCEEDED', said('refuse.dispatch.onDutyHOverThe', { onDuty: h.onDuty, limit: h.limit }));
     }
     // Round 39 — no load is taken on without the security declaration of whoever answers for the driver: their fleet's,
     // or their own when they ride for themselves. Every door onto a load comes through here.
@@ -1587,7 +1589,7 @@ export class DispatchService {
     // board has already marked the row "the shipper has ruled out your body type", is just honouring what the
     // driver was told. The mirror-at-claim rule (S31): what filters a load must also refuse it.
     if (vehicle.truckSubtype && excludedByShipper(vehicle.truckSubtype, f.excludedBodies)) {
-      throw new GlosError('BODY_EXCLUDED', 'The shipper has ruled out your body type for this load — it is their choice, not a limit of your vehicle');
+      throw refused('BODY_EXCLUDED', said('refuse.dispatch.theShipperHasRuledOut'));
     }
     // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
     // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
@@ -1609,7 +1611,7 @@ export class DispatchService {
     // FB0c — it binds a NEGOTIATED price just as hard: agreeing above the budget would commit a haul nobody
     // has the money for. The proposal stays open, so the shipper can raise the cap and accept it then.
     if (f.maxSpend != null && this.shipperBill(earning, f).gross > f.maxSpend) {
-      throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
+      throw refused('BUDGET_EXCEEDED', said('refuse.dispatch.thisLoadSPriceNow'));
     }
     f.status = 'claimed';
     f.claimedBy = driverDid;
@@ -1963,19 +1965,19 @@ export class DispatchService {
 
   propose(input: { freightId: string; driverDid: string; from: GeoPoint; price: number; note?: string }, now: number = Date.now()): FreightProposal {
     const f = this.requireFreight(input.freightId);
-    if (commitModeOf(f) !== 'negotiate') throw new GlosError('INVALID_STATE', 'This load is taken at the offered price — claim it instead of proposing one');
-    if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
-    if (!Number.isFinite(input.price) || input.price <= 0) throw new GlosError('INVALID_INPUT', 'Name a price above zero');
+    if (commitModeOf(f) !== 'negotiate') throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsTakenAt'));
+    if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw refused('INVALID_STATE', said('refuse.dispatch.freightIs', { status: codeSaid('freight', f.status) }));
+    if (!Number.isFinite(input.price) || input.price <= 0) throw refused('INVALID_INPUT', said('refuse.dispatch.nameAPriceAboveZero'));
     // Gate the driver the same way the board does, so a proposal cannot be made by someone who could never be
     // accepted — a shipper reading bids they are not allowed to take is worse than an empty list.
     const vehicle = this.fleet.vehicleForDriver(input.driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple to a vehicle before offering to carry a load');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.coupleToAVehicleBefore'));
     // The same capacity and capability checks acceptance makes, asked at the door. Found in the browser pass:
     // a driver on a bike offered a price on 600 kg, and the shop only learned it could never be taken when it
     // pressed Accept. An offer that can never be accepted is refused to the person who could fix it — the
     // driver — rather than delivered to the person who cannot. Accept still re-checks: coupling can change.
     if (f.weightKg > this.remainingCapacity(input.driverDid)) {
-      throw new GlosError('CAPACITY_EXCEEDED', 'Your vehicle has no room for this load, so the poster could never accept an offer from it');
+      throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.yourVehicleHasNoRoom'));
     }
     const need = this.loadRequirements('freight', f.freightId);
     if (
@@ -1984,7 +1986,7 @@ export class DispatchService {
       (need.bulk && !vehicle.carriesBulk) ||
       (need.fragile && !vehicle.allowsFragile)
     ) {
-      throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your vehicle lacks something this load needs, so the poster could never accept an offer from it');
+      throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.yourVehicleLacksSomethingThis'));
     }
     // 2026-11-13 — and the work it names: what an end leaves for the driver to bring (unusual loads, U1).
     const cannot = this.workRefusal(input.driverDid, f, vehicle);
@@ -1993,7 +1995,7 @@ export class DispatchService {
     const cold = this.coldRefusal(input.driverDid, 'freight', f.freightId);
     if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
     this.requireBorderAllows(vehicle, input.driverDid, 'freight', f.freightId);
-    if (belowFloor(this.ratings.driverRating(input.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers.');
+    if (belowFloor(this.ratings.driverRating(input.driverDid))) throw refused('REPUTATION_BELOW_FLOOR', said('refuse.dispatch.yourRatingIsBelowThe2'));
 
     // One live proposal per driver per load: a driver changing their mind REPLACES their number rather than
     // stacking a second one, so a poster never has to guess which of two bids from the same person is current.
@@ -2148,10 +2150,10 @@ export class DispatchService {
    */
   answerReservations(freightId: string, byDid: string, input: { agreed: boolean; note?: string }, byName: string, now = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.reservations) throw new GlosError('INVALID_STATE', 'The carrier wrote no reservations when it took the goods over');
-    if (f.reservations.answer) throw new GlosError('INVALID_STATE', `You already ${f.reservations.answer.agreed ? 'agreed to' : 'disputed'} these reservations`);
+    if (!f.reservations) throw refused('INVALID_STATE', said('refuse.dispatch.theCarrierWroteNoReservations'));
+    if (f.reservations.answer) throw refused('INVALID_STATE', said(f.reservations.answer.agreed ? 'refuse.dispatch.youAlreadyAgreedReservations' : 'refuse.dispatch.youAlreadyDisputedReservations'));
     const note = input.note?.trim().slice(0, 500);
-    if (!input.agreed && (!note || note.length < 3)) throw new GlosError('FIELD_REQUIRED', 'Say why you dispute them: it goes on the consignment note beside the reservations', { field: 'note' });
+    if (!input.agreed && (!note || note.length < 3)) throw refused('FIELD_REQUIRED', said('refuse.dispatch.sayWhyYouDisputeThem'), { field: 'note' });
     f.reservations = { ...f.reservations, answer: { agreed: input.agreed, ...(note ? { note } : {}), by: byName.trim().slice(0, 80) || byDid, at: new Date(now).toISOString() } };
     this.freights.set(f.freightId, f);
     return f;
@@ -2163,9 +2165,9 @@ export class DispatchService {
    */
   setFiscalCodes(freightId: string, byDid: string, byName: string, input: FiscalCodesInput, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (!['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(f.status)) throw new GlosError('INVALID_STATE', `Freight is ${f.status}: its codes are no longer read`);
+    if (!['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(f.status)) throw refused('INVALID_STATE', said('refuse.dispatch.freightIsItsCodesAre', { status: codeSaid('freight', f.status) }));
     const next = fiscalCodesFor(input, { pickupCountry: f.pickupCountry, destCountry: f.destCountry, weightKg: f.weightKg }, { now, by: byName }, false);
-    if (!next.length) throw new GlosError('FIELD_REQUIRED', 'Give the code of Romania or Bulgaria, where this load is taken over or delivered', { field: 'fiscalCodes' });
+    if (!next.length) throw refused('FIELD_REQUIRED', said('refuse.dispatch.giveTheCodeOfRomania'), { field: 'fiscalCodes' });
     // 2026-11-24 — a new code is certified again, as the first was.
     const indemnity = fiscalIndemnityFor(input, next, { now, by: byName });
     const replaced = (f.fiscalCodes ?? []).filter((c) => next.some((n) => n.country === c.country));
@@ -2215,11 +2217,11 @@ export class DispatchService {
       else delete f.instructions;
     } else if (f.status === 'in_transit') {
       const text = input.text?.trim();
-      if (!text) throw new GlosError('FIELD_REQUIRED', 'The goods are on the road — an instruction now is added to what the driver was told, so say what it is');
+      if (!text) throw refused('FIELD_REQUIRED', said('refuse.dispatch.theGoodsAreOnThe'));
       f.instructionAmendments = [...(f.instructionAmendments ?? []), { text, at, by: byDid }];
       amended = true;
     } else {
-      throw new GlosError('INVALID_STATE', `Freight is ${f.status} — there is nobody left to instruct`);
+      throw refused('INVALID_STATE', said('refuse.dispatch.freightIsThereIsNobody', { status: codeSaid('freight', f.status) }));
     }
     this.freights.set(f.freightId, f);
     if (f.claimedBy) {
@@ -2342,8 +2344,8 @@ export class DispatchService {
    */
   withdrawUploadedOrder(fleetDid: string, freightId: string, reason: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
-    if (f.postedByDid !== fleetDid) throw new GlosError('FORBIDDEN', 'The shipper placed this order — it is theirs to withdraw');
+    if (f.contract?.fleetDid !== fleetDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (f.postedByDid !== fleetDid) throw refused('FORBIDDEN', said('refuse.dispatch.theShipperPlacedThisOrder'));
     return this.cancelFreight(freightId, { did: fleetDid, role: 'shipper' }, reason, now);
   }
 
@@ -2354,10 +2356,10 @@ export class DispatchService {
    */
   pinOrderDestination(fleetDid: string, freightId: string, location: GeoPoint): Freight {
     const f = this.requireFreight(freightId);
-    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
-    if (f.postedByDid !== fleetDid) throw new GlosError('FORBIDDEN', 'The shipper placed this order — where it goes is theirs to say');
-    if (f.status !== 'ordered' && f.status !== 'claimed') throw new GlosError('INVALID_STATE', `This order is ${f.status} — where it went is on record`);
-    if (!Number.isFinite(location?.lat) || !Number.isFinite(location?.lng) || Math.abs(location.lat) > 90 || Math.abs(location.lng) > 180) throw new GlosError('INVALID_INPUT', 'A point is a latitude and a longitude');
+    if (f.contract?.fleetDid !== fleetDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (f.postedByDid !== fleetDid) throw refused('FORBIDDEN', said('refuse.dispatch.theShipperPlacedThisOrder2'));
+    if (f.status !== 'ordered' && f.status !== 'claimed') throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsWhereIt', { status: codeSaid('freight', f.status) }));
+    if (!Number.isFinite(location?.lat) || !Number.isFinite(location?.lng) || Math.abs(location.lat) > 90 || Math.abs(location.lng) > 180) throw refused('INVALID_INPUT', said('refuse.dispatch.aPointIsALatitude'));
     f.destLocation = { lat: location.lat, lng: location.lng };
     this.freights.set(f.freightId, f);
     void this.events.publish(GlosEvent.Pudo.OrderChanged, { freightId: f.freightId, code: f.code }, { source: 'pudo' }).catch(() => undefined);
@@ -2634,21 +2636,21 @@ export class DispatchService {
    */
   assertCanTakeLoads(freightIds: string[], driverDid: string, alsoKg = 0, bagCodes: string[] = []): void {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.thatDriverIsNotOn'));
     const loads = freightIds.map((id) => this.requireFreight(id));
     const kg = Math.round((loads.reduce((n, f) => n + f.weightKg, 0) + alsoKg) * 100) / 100;
     const room = this.remainingCapacity(driverDid);
-    if (kg > room) throw new GlosError('CAPACITY_EXCEEDED', `${vehicle.plate} has room for ${room.toLocaleString('en-GB')} kg — the loads weigh ${kg.toLocaleString('en-GB')} kg`);
+    if (kg > room) throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.plateHasRoomFor', { plate: vehicle.plate, room: numberShown(room.toLocaleString('en-GB'), room), kg: numberShown(kg.toLocaleString('en-GB'), kg) }));
     const cannot = loads.find((f) => !this.vehicleCanCarryFreight(vehicle, f.freightId));
-    if (cannot) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${vehicle.plate} cannot carry ${cannot.code}: it lacks what that load needs`);
+    if (cannot) throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.cannotCarryItLacksWhat', { plate: vehicle.plate, code: cannot.code }));
     // 2026-11-03 — what is kept cold, beside the cold loads already on the truck taking it over: one body, one temperature.
     // (What comes off the broken vehicle rode together there already.)
     for (const [kind, ref, code] of [...loads.map((f) => ['freight', f.freightId, f.code] as const), ...bagCodes.map((c) => ['tote', c, `bag ${c}`] as const)]) {
       // 2026-11-23 — a bag on a road route goes on only in a vehicle of the route's fleet (step 3c).
       const road = this.roadRefusal(driverDid, { kind, ref });
-      if (road) throw new GlosError('FORBIDDEN', `${vehicle.plate} cannot take ${code}: ${road}`);
+      if (road) throw refused('FORBIDDEN', said('refuse.dispatch.cannotTake', { plate: vehicle.plate, code, road }));
       const cold = this.coldRefusal(driverDid, kind, ref);
-      if (cold) throw new GlosError('CARGO_INCOMPATIBLE', `${vehicle.plate} cannot take ${code}: ${cold}`);
+      if (cold) throw refused('CARGO_INCOMPATIBLE', said('refuse.dispatch.cannotTake2', { plate: vehicle.plate, code, cold }));
     }
   }
 
@@ -2660,7 +2662,7 @@ export class DispatchService {
    */
   moveLoads(freightIds: string[], toDriverDid: string, reload: { fromPlate: string; toDriverName: string; breakdownId: string; proof: 'pass' | 'office'; by: string; location?: { lat: number; lng: number } }, now: number = Date.now()): void {
     const vehicle = this.fleet.vehicleForDriver(toDriverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.thatDriverIsNotOn'));
     for (const id of freightIds) {
       const f = this.requireFreight(id);
       const entry: FreightReload = {
@@ -2751,16 +2753,16 @@ export class DispatchService {
    */
   splitOrder(fleetDid: string, freightId: string, loadsKg: number[], by: string, now: number = Date.now()): Freight[] {
     const f = this.freights.get(freightId);
-    if (!f || f.contract?.fleetDid !== fleetDid || f.rejoinedInto) throw new GlosError('NOT_FOUND', 'No such order');
-    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', `This order is ${f.status} — it can no longer be split`);
-    if (f.handOn) throw new GlosError('INVALID_STATE', 'This order has been handed on — it is split by the fleet that has it in its own hands');
-    if (f.indivisible) throw new GlosError('INVALID_STATE', 'These goods are one piece — they cannot go in several loads');
+    if (!f || f.contract?.fleetDid !== fleetDid || f.rejoinedInto) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (f.status !== 'ordered') throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsItCan', { status: codeSaid('freight', f.status) }));
+    if (f.handOn) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderHasBeenHanded'));
+    if (f.indivisible) throw refused('INVALID_STATE', said('refuse.dispatch.theseGoodsAreOnePiece'));
     const kgs = (Array.isArray(loadsKg) ? loadsKg : []).map((k) => Math.round(Number(k) * 100) / 100);
-    if (kgs.length < 2) throw new GlosError('INVALID_INPUT', 'Split it into at least two loads', { field: 'loadsKg' });
-    if (kgs.some((k) => !Number.isFinite(k) || k < 1)) throw new GlosError('INVALID_INPUT', 'Every load weighs at least a kilo', { field: 'loadsKg' });
-    if (Math.abs(kgs.reduce((s, k) => s + k, 0) - f.weightKg) > 0.5) throw new GlosError('INVALID_INPUT', `The loads must add up to what is being split: ${f.weightKg} kg`, { field: 'loadsKg' });
+    if (kgs.length < 2) throw refused('INVALID_INPUT', said('refuse.dispatch.splitItIntoAtLeast'), { field: 'loadsKg' });
+    if (kgs.some((k) => !Number.isFinite(k) || k < 1)) throw refused('INVALID_INPUT', said('refuse.dispatch.everyLoadWeighsAtLeast'), { field: 'loadsKg' });
+    if (Math.abs(kgs.reduce((s, k) => s + k, 0) - f.weightKg) > 0.5) throw refused('INVALID_INPUT', said('refuse.dispatch.theLoadsMustAddUp', { weightKg: f.weightKg }), { field: 'loadsKg' });
     const before = this.loadsOf(freightId);
-    if (before.length - 1 + kgs.length > MAX_ORDER_LOADS) throw new GlosError('INVALID_INPUT', `An order goes in ${MAX_ORDER_LOADS} loads at most`, { field: 'loadsKg' });
+    if (before.length - 1 + kgs.length > MAX_ORDER_LOADS) throw refused('INVALID_INPUT', said('refuse.dispatch.anOrderGoesInLoads', { MAX_ORDER_LOADS }), { field: 'loadsKg' });
     const root = before[0];
     const orderKg = root.partOf?.orderKg ?? root.weightKg;
     const at = new Date(now).toISOString();
@@ -2796,10 +2798,10 @@ export class DispatchService {
   rejoinOrder(fleetDid: string, freightId: string, by: string, now: number = Date.now()): Freight {
     const loads = this.loadsOf(freightId);
     const root = loads[0];
-    if (!root || root.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
-    if (loads.length < 2 || !root.partOf) throw new GlosError('INVALID_STATE', 'This order is in one load already');
+    if (!root || root.contract?.fleetDid !== fleetDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (loads.length < 2 || !root.partOf) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsInOne'));
     const moved = loads.find((x) => x.status !== 'ordered' || x.handOn);
-    if (moved) throw new GlosError('INVALID_STATE', `Load ${moved.partOf?.no} (${moved.code}) is ${moved.handOn ? 'handed on' : moved.status} — the order can no longer be put back together`);
+    if (moved) throw refused('INVALID_STATE', said(moved.handOn ? 'refuse.dispatch.loadIsHandedOnNoRejoin' : 'refuse.dispatch.loadIsStatusNoRejoin', { no: moved.partOf?.no, code: moved.code, status: moved.status }));
     const at = new Date(now).toISOString();
     for (const x of loads.slice(1)) {
       x.status = 'cancelled';
@@ -2856,8 +2858,8 @@ export class DispatchService {
   /** An order this fleet was ordered from, that it may still hand on: not on a truck, not already a partner's. */
   private ownOrderToHandOn(fleetDid: string, freightId: string): Freight {
     const f = this.requireFreight(freightId);
-    if (f.contract?.fleetDid !== fleetDid) throw new GlosError('NOT_FOUND', 'No such order');
-    if (f.handOn?.state === 'partner') throw new GlosError('INVALID_STATE', `${f.handOn.partner?.fleetName ?? 'A partner'} has taken this order — it is theirs to carry`);
+    if (f.contract?.fleetDid !== fleetDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (f.handOn?.state === 'partner') throw refused('INVALID_STATE', said('refuse.dispatch.partnerHasTakenOrder', { partner: f.handOn.partner?.fleetName ?? 'A partner' }));
     return f;
   }
 
@@ -2867,8 +2869,8 @@ export class DispatchService {
    */
   offerToPartners(fleetDid: string, freightId: string, partners: Array<{ fleetDid: string; fleetName: string }>, by: string, now: number = Date.now()): Freight {
     const f = this.ownOrderToHandOn(fleetDid, freightId);
-    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', f.status === 'available' ? 'This order is on the open board — take it back first' : `This order is ${f.status} — it can no longer be offered`);
-    if (partners.length === 0) throw new GlosError('INVALID_STATE', 'You have no partner fleet to offer it to — name one first');
+    if (f.status !== 'ordered') throw refused('INVALID_STATE', said(f.status === 'available' ? 'refuse.dispatch.orderOnOpenBoardTakeBack' : 'refuse.dispatch.orderStatusNoLongerOffered', { status: f.status }));
+    if (partners.length === 0) throw refused('INVALID_STATE', said('refuse.dispatch.youHaveNoPartnerFleet'));
     f.handOn = { state: 'offered', at: new Date(now).toISOString(), by, offeredTo: partners.map((p) => ({ fleetDid: p.fleetDid, fleetName: p.fleetName })) };
     delete f.planned;
     this.freights.set(f.freightId, f);
@@ -2907,12 +2909,12 @@ export class DispatchService {
    */
   passOnOffer(holderDid: string, freightId: string, partners: Array<{ fleetDid: string; fleetName: string }>, by: string, now: number = Date.now()): Freight {
     const f = this.freights.get(freightId);
-    if (!f || f.handOn?.state !== 'partner' || f.handOn.partner?.fleetDid !== holderDid) throw new GlosError('NOT_FOUND', 'No such order');
-    if (f.handOn.via) throw new GlosError('INVALID_STATE', `${f.handOn.via.fleetName} passed this order on to you — carry it or give it back; it goes no further`);
-    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', `This order is ${f.status} — it can no longer be passed on`);
-    if (f.handOn.onward) throw new GlosError('INVALID_STATE', 'This order is already on offer to your partners');
+    if (!f || f.handOn?.state !== 'partner' || f.handOn.partner?.fleetDid !== holderDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
+    if (f.handOn.via) throw refused('INVALID_STATE', said('refuse.dispatch.passedThisOrderOnTo', { fleetName: f.handOn.via.fleetName }));
+    if (f.status !== 'ordered') throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsItCan2', { status: codeSaid('freight', f.status) }));
+    if (f.handOn.onward) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsAlreadyOn'));
     const to = partners.filter((p) => p.fleetDid !== holderDid && p.fleetDid !== f.contract!.fleetDid);
-    if (to.length === 0) throw new GlosError('INVALID_STATE', 'You have no partner fleet of your own to pass it on to');
+    if (to.length === 0) throw refused('INVALID_STATE', said('refuse.dispatch.youHaveNoPartnerFleet2'));
     f.handOn = { ...f.handOn, onward: { at: new Date(now).toISOString(), by, offeredTo: to.map((p) => ({ fleetDid: p.fleetDid, fleetName: p.fleetName })) } };
     delete f.planned;
     this.freights.set(f.freightId, f);
@@ -2932,7 +2934,7 @@ export class DispatchService {
     // The partner that took it, taking back its own offer to pass it on: the order is its to carry again.
     const held = this.freights.get(freightId);
     if (held?.handOn?.state === 'partner' && held.handOn.partner?.fleetDid === fleetDid) {
-      if (!held.handOn.onward) throw new GlosError('INVALID_STATE', 'This order is not on offer');
+      if (!held.handOn.onward) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsNotOn'));
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { onward: _taken, ...rest } = held.handOn;
       held.handOn = rest;
@@ -2940,7 +2942,7 @@ export class DispatchService {
       return held;
     }
     const f = this.ownOrderToHandOn(fleetDid, freightId);
-    if (f.handOn?.state !== 'offered') throw new GlosError('INVALID_STATE', 'This order is not on offer');
+    if (f.handOn?.state !== 'offered') throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsNotOn'));
     delete f.handOn;
     this.freights.set(f.freightId, f);
     return f;
@@ -2956,7 +2958,7 @@ export class DispatchService {
     const f = this.freights.get(freightId);
     const onward = f?.handOn?.state === 'partner' ? f.handOn.onward : undefined;
     const mine = (f?.handOn?.state === 'offered' ? f.handOn.offeredTo : onward?.offeredTo)?.find((p) => p.fleetDid === partnerDid);
-    if (!f || !mine || f.status !== 'ordered') throw new GlosError('NOT_FOUND', 'No such offer — it may have been taken, or taken back');
+    if (!f || !mine || f.status !== 'ordered') throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOfferItMay'));
     if (onward) {
       // AN ORDER BEING PASSED ON. Taking it is the moment the goods go one fleet further than the fleet their
       // shipper chose — so the offering fleet's leave is asked HERE, not only when the offer was made: it may have
@@ -2965,7 +2967,7 @@ export class DispatchService {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { onward: _open, ...held } = f.handOn!;
       if (take) {
-        if (!mayPassOn(f.contract!.fleetDid, holder.fleetDid)) throw new GlosError('INVALID_STATE', `${f.contract!.fleetName} does not let ${holder.fleetName} pass its orders on — this offer has lapsed`);
+        if (!mayPassOn(f.contract!.fleetDid, holder.fleetDid)) throw refused('INVALID_STATE', said('refuse.dispatch.fleetDoesNotLetPassOn', { fleetName: f.contract!.fleetName, holder: holder.fleetName }));
         f.handOn = { state: 'partner', at: held.at, by: held.by, partner: mine, via: holder, takenAt: new Date(now).toISOString(), takenBy: by };
         delete f.planned;
       } else {
@@ -2992,12 +2994,12 @@ export class DispatchService {
    */
   handBackToPartner(partnerDid: string, freightId: string, reason: string, now: number = Date.now()): Freight {
     const f = this.freights.get(freightId);
-    if (!f || f.handOn?.state !== 'partner' || f.handOn.partner?.fleetDid !== partnerDid) throw new GlosError('NOT_FOUND', 'No such order');
+    if (!f || f.handOn?.state !== 'partner' || f.handOn.partner?.fleetDid !== partnerDid) throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrder'));
     const why = (reason ?? '').trim();
-    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why you are giving it back');
-    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', `This order is ${f.status} — it is on a truck, and is carried`);
+    if (why.length < 3) throw refused('REASON_REQUIRED', said('refuse.dispatch.sayWhyYouAreGiving'));
+    if (f.status !== 'ordered') throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsItIs', { status: codeSaid('freight', f.status) }));
     // Fleets it is still on offer to would be left answering an offer that had quietly ceased to exist.
-    if (f.handOn.onward) throw new GlosError('INVALID_STATE', 'This order is on offer to your own partners — take that offer back before giving it back');
+    if (f.handOn.onward) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsOnOffer'));
     // Back to whoever it came from: the partner that passed it on, when there was one, else the fleet it was ordered from.
     const via = f.handOn.via;
     f.handedBack = [...(f.handedBack ?? []), { fleetName: f.handOn.partner.fleetName, reason: why.slice(0, 280), at: new Date(now).toISOString(), ...(via ? { toFleetDid: via.fleetDid } : {}) }];
@@ -3015,7 +3017,7 @@ export class DispatchService {
    */
   releaseToBoard(fleetDid: string, freightId: string, by: string, now: number = Date.now()): Freight {
     const f = this.ownOrderToHandOn(fleetDid, freightId);
-    if (f.status !== 'ordered') throw new GlosError('INVALID_STATE', f.status === 'available' ? 'This order is already on the open board' : `This order is ${f.status} — it can no longer be released`);
+    if (f.status !== 'ordered') throw refused('INVALID_STATE', said(f.status === 'available' ? 'refuse.dispatch.orderAlreadyOnOpenBoard' : 'refuse.dispatch.orderStatusNoLongerReleased', { status: f.status }));
     f.status = 'available';
     f.handOn = { state: 'board', at: new Date(now).toISOString(), by };
     delete f.planned;
@@ -3029,8 +3031,8 @@ export class DispatchService {
   /** Take an order back off the open board, while nobody has taken it. Offers already on drivers' phones lapse. */
   takeBackFromBoard(fleetDid: string, freightId: string): Freight {
     const f = this.requireFreight(freightId);
-    if (f.contract?.fleetDid !== fleetDid || f.handOn?.state !== 'board') throw new GlosError('NOT_FOUND', 'No such order on the board');
-    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A carrier has it — this order is ${f.status}`);
+    if (f.contract?.fleetDid !== fleetDid || f.handOn?.state !== 'board') throw refused('NOT_FOUND', said('refuse.dispatch.noSuchOrderOnThe'));
+    if (f.status !== 'available') throw refused('INVALID_STATE', said('refuse.dispatch.aCarrierHasItThis', { status: codeSaid('freight', f.status) }));
     f.status = 'ordered';
     delete f.handOn;
     this.freights.set(f.freightId, f);
@@ -3056,9 +3058,9 @@ export class DispatchService {
    */
   rateFreight(freightId: string, byDid: string, input: { stars: number; issues?: DriverIssue[] }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (f.status !== 'delivered') throw new GlosError('INVALID_STATE', `Freight is ${f.status} — a load is rated once it has been delivered`);
-    if (!f.claimedBy) throw new GlosError('INVALID_STATE', 'No carrier is recorded on this load');
-    if (f.deliveredAt && now - new Date(f.deliveredAt).getTime() > FREIGHT_RATING_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A load is rated within ${FREIGHT_RATING_WINDOW_DAYS} days of delivery`);
+    if (f.status !== 'delivered') throw refused('INVALID_STATE', said('refuse.dispatch.freightIsALoadIs', { status: codeSaid('freight', f.status) }));
+    if (!f.claimedBy) throw refused('INVALID_STATE', said('refuse.dispatch.noCarrierIsRecordedOn'));
+    if (f.deliveredAt && now - new Date(f.deliveredAt).getTime() > FREIGHT_RATING_WINDOW_DAYS * 86_400_000) throw refused('WINDOW_EXPIRED', said('refuse.dispatch.aLoadIsRatedWithin', { FREIGHT_RATING_WINDOW_DAYS }));
     const { rating } = this.ratings.rateFreight({ freightId: f.freightId, driverDid: f.claimedBy, byDid, stars: input.stars, issues: input.issues });
     f.rating = { stars: rating.stars, issues: rating.issues, at: rating.at, by: byDid };
     this.freights.set(f.freightId, f);
@@ -3081,8 +3083,8 @@ export class DispatchService {
   /** A driver pulls their own price back — before a poster acts on a number they no longer mean. */
   withdrawProposal(proposalId: string, driverDid: string, now: number = Date.now()): FreightProposal {
     const p = this.requireProposal(proposalId);
-    if (p.driverDid !== driverDid) throw new GlosError('FORBIDDEN', 'That proposal is not yours');
-    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    if (p.driverDid !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thatProposalIsNotYours'));
+    if (p.status !== 'open') throw refused('INVALID_STATE', said('refuse.dispatch.proposalIs', { status: p.status }));
     p.status = 'withdrawn';
     p.decidedAt = new Date(now).toISOString();
     this.proposals.set(p.proposalId, p);
@@ -3092,7 +3094,7 @@ export class DispatchService {
   /** The poster says no to one price without closing the negotiation — the load and the others stay open. */
   declineProposal(proposalId: string, now: number = Date.now()): FreightProposal {
     const p = this.requireProposal(proposalId);
-    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    if (p.status !== 'open') throw refused('INVALID_STATE', said('refuse.dispatch.proposalIs', { status: p.status }));
     p.status = 'declined';
     p.decidedAt = new Date(now).toISOString();
     this.proposals.set(p.proposalId, p);
@@ -3124,12 +3126,12 @@ export class DispatchService {
    */
   counterProposal(proposalId: string, input: { price: number; note?: string; by?: string }, now: number = Date.now()): FreightProposal {
     const p = this.requireProposal(proposalId);
-    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    if (p.status !== 'open') throw refused('INVALID_STATE', said('refuse.dispatch.proposalIs', { status: p.status }));
     const f = this.requireFreight(p.freightId);
-    if (!Number.isFinite(input.price) || input.price <= 0) throw new GlosError('INVALID_INPUT', 'Name a price above zero');
+    if (!Number.isFinite(input.price) || input.price <= 0) throw refused('INVALID_INPUT', said('refuse.dispatch.nameAPriceAboveZero'));
     const price = Math.round(input.price * 100) / 100;
-    if (price === p.price) throw new GlosError('INVALID_INPUT', 'That is the driver’s own price: accept it instead');
-    if (f.maxSpend != null && this.shipperBill(price, f).gross > f.maxSpend) throw new GlosError('BUDGET_EXCEEDED', 'That price comes to more than the budget on this load');
+    if (price === p.price) throw refused('INVALID_INPUT', said('refuse.dispatch.thatIsTheDriverS'));
+    if (f.maxSpend != null && this.shipperBill(price, f).gross > f.maxSpend) throw refused('BUDGET_EXCEEDED', said('refuse.dispatch.thatPriceComesToMore'));
     const note = input.note?.trim().slice(0, 280);
     p.counter = { price, ...(note ? { note } : {}), at: new Date(now).toISOString(), ...(input.by ? { by: input.by } : {}) };
     this.proposals.set(p.proposalId, p);
@@ -3143,9 +3145,9 @@ export class DispatchService {
   /** 2026-11-13 — the driver takes the poster's price back: the load is committed at it, as an accepted price is (U4). */
   takeCounter(proposalId: string, driverDid: string, now: number = Date.now()): { proposal: FreightProposal; freight: Freight } {
     const p = this.requireProposal(proposalId);
-    if (p.driverDid !== driverDid) throw new GlosError('FORBIDDEN', 'That price is not yours');
-    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
-    if (!p.counter) throw new GlosError('INVALID_STATE', 'The poster has not answered with a price of its own');
+    if (p.driverDid !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thatPriceIsNotYours'));
+    if (p.status !== 'open') throw refused('INVALID_STATE', said('refuse.dispatch.proposalIs', { status: p.status }));
+    if (!p.counter) throw refused('INVALID_STATE', said('refuse.dispatch.thePosterHasNotAnswered'));
     // 2026-11-13 — a load paid first: taking the price back makes it the person's to pay, and the load is committed when it is.
     const f = this.requireFreight(p.freightId);
     if (f.escrow) {
@@ -3161,11 +3163,11 @@ export class DispatchService {
 
   acceptProposal(proposalId: string, now: number = Date.now(), agreedPrice?: number): { proposal: FreightProposal; freight: Freight } {
     const p = this.requireProposal(proposalId);
-    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    if (p.status !== 'open') throw refused('INVALID_STATE', said('refuse.dispatch.proposalIs', { status: p.status }));
     const f = this.requireFreight(p.freightId);
     const vehicle = this.fleet.vehicleForDriver(p.driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is no longer coupled to a vehicle');
-    if (f.weightKg > this.remainingCapacity(p.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'That driver no longer has capacity for this load');
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.thatDriverIsNoLonger'));
+    if (f.weightKg > this.remainingCapacity(p.driverDid)) throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.thatDriverNoLongerHas'));
     // S31/S32 — the same capability/equipment re-check the counter claim does. Coupling is re-assignable, so
     // what held when the price was named may not hold now.
     const need = this.loadRequirements('freight', f.freightId);
@@ -3175,9 +3177,9 @@ export class DispatchService {
       (need.bulk && !vehicle.carriesBulk) ||
       (need.fragile && !vehicle.allowsFragile)
     ) {
-      throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's current vehicle lacks a capability or equipment this load requires");
+      throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.thatDriverSCurrentVehicle'));
     }
-    if (this.workRefusal(p.driverDid, f, vehicle)) throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'That driver can no longer do what this load needs: the helpers or the equipment it takes, or the length of their load space');
+    if (this.workRefusal(p.driverDid, f, vehicle)) throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.thatDriverCanNoLonger'));
     this.requireBorderAllows(vehicle, p.driverDid, 'freight', f.freightId);
 
     // The commit runs first: if it throws (budget, status, rating) nothing is marked accepted and the
@@ -3221,17 +3223,17 @@ export class DispatchService {
   assign(freightId: string, driverDid: string, by: { managerDid: string; name?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     // P1 — whose order it is comes before anything about the truck: another fleet learns nothing about whether it fits.
-    if (f.status === 'ordered' && this.carrierOfOrder(f) !== by.managerDid) throw new GlosError('FORBIDDEN', 'This is an order under a contract — only the fleet carrying it puts it on a truck');
-    if (f.status === 'ordered' && (f.handOn?.state === 'offered' || f.handOn?.onward)) throw new GlosError('INVALID_STATE', 'This order is on offer to your partners — take the offer back before putting it on a truck');
+    if (f.status === 'ordered' && this.carrierOfOrder(f) !== by.managerDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisIsAnOrderUnder'));
+    if (f.status === 'ordered' && (f.handOn?.state === 'offered' || f.handOn?.onward)) throw refused('INVALID_STATE', said('refuse.dispatch.thisOrderIsOnOffer2'));
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — a load goes on a vehicle, and they have none yet');
-    if (commitModeOf(f) === 'negotiate') throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — the driver can send the shipper a price from their board; it cannot be assigned at a counter rate');
-    if (f.weightKg > this.remainingCapacity(driverDid)) throw new GlosError('CAPACITY_EXCEEDED', "That driver's vehicle has no room left for this load");
+    if (!vehicle) throw refused('NOT_COUPLED', said('refuse.dispatch.thatDriverIsNotOn2'));
+    if (commitModeOf(f) === 'negotiate') throw refused('NEGOTIATION_REQUIRED', said('refuse.dispatch.thisLoadIsPostedFor2'));
+    if (f.weightKg > this.remainingCapacity(driverDid)) throw refused('CAPACITY_EXCEEDED', said('refuse.dispatch.thatDriverSVehicleHas'));
     // 2026-11-01 — too big for the load space the fleet declared: said as that, not as a missing capability.
     const tooBig = volumeRefusal(f.volumeM3, vehicle);
     if (tooBig) throw new GlosError('CAPACITY_EXCEEDED', tooBig);
     if (!this.vehicleCanCarryFreight(vehicle, f.freightId)) {
-      throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's vehicle lacks a capability or equipment this load requires");
+      throw refused('VEHICLE_MISSING_CAPABILITY', said('refuse.dispatch.thatDriverSVehicleLacks'));
     }
     this.requireBorderAllows(vehicle, driverDid, 'freight', f.freightId);
     const at = this.fleet.activeForDriver(driverDid)?.location;
@@ -3270,7 +3272,7 @@ export class DispatchService {
 
   private requireProposal(proposalId: string): FreightProposal {
     const p = this.proposals.get(proposalId);
-    if (!p) throw new GlosError('NOT_FOUND', 'Proposal not found');
+    if (!p) throw refused('NOT_FOUND', said('refuse.dispatch.proposalNotFound'));
     return p;
   }
 
@@ -3579,18 +3581,18 @@ export class DispatchService {
    *  a claimed freight is that driver's obligation, not a free-for-all. */
   pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string; inspection?: InspectionInput[]; countedPieces?: number; position?: HandoverPositionDto }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
-    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
+    if (driverDid && f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisFreightWasClaimedBy'));
+    if (f.status !== 'claimed') throw refused('INVALID_STATE', said('refuse.dispatch.freightIsExpectedClaimed', { status: codeSaid('freight', f.status) }));
     // A store's parcel waiting at a hub (2026-10-27): the hub hands it over first, by the driver's pass — the box is the hub's
     // to hand on, and it hands it to nobody but the driver who took this load.
-    if (f.bringsBack && !f.bringsBack.handedAt) throw new GlosError('SET_ASIDE', `Parcel ${f.bringsBack.parcelId} waits at ${f.bringsBack.hubName}: show your pass at its counter, and they hand it to you first`, { parcelId: f.bringsBack.parcelId });
+    if (f.bringsBack && !f.bringsBack.handedAt) throw refused('SET_ASIDE', said('refuse.dispatch.parcelWaitsAtShowYour', { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName }), { parcelId: f.bringsBack.parcelId });
     // A business's parcel waiting at a shop for its door (2026-10-29): the same, at the shop's counter.
-    if (f.deliversParcel && !f.deliversParcel.handedAt) throw new GlosError('SET_ASIDE', `Parcel ${f.deliversParcel.parcelId} waits at ${f.deliversParcel.shopName}: show your pass at its counter, and they hand it to you first`, { parcelId: f.deliversParcel.parcelId });
+    if (f.deliversParcel && !f.deliversParcel.handedAt) throw refused('SET_ASIDE', said('refuse.dispatch.parcelWaitsAtShowYour2', { parcelId: f.deliversParcel.parcelId, shopName: f.deliversParcel.shopName }), { parcelId: f.deliversParcel.parcelId });
     // Round 35 — held under the tamper protocol: not taken over until operations releases it.
     this.refuseIfHeld(f);
     // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
     // isn't ready yet. It becomes pickable on/after the booked pickup date.
-    if (f.scheduledPickupAt && now < new Date(f.scheduledPickupAt).getTime()) throw new GlosError('INVALID_STATE', `Pickup is booked for ${f.scheduledPickupAt} — it can't be collected before then`);
+    if (f.scheduledPickupAt && now < new Date(f.scheduledPickupAt).getTime()) throw refused('INVALID_STATE', said('refuse.dispatch.pickupIsBookedForIt', { scheduledPickupAt: f.scheduledPickupAt }));
     // No papers, no loading: a load a business posted that crosses a border waits for its commercial invoice (the user,
     // 2026-10-18). Asked before anything is written, so the load stays claimed and the driver is told why.
     const noInvoice = this.invoices?.pickupRefusal(f, this.postedByBusiness(f));
@@ -3613,12 +3615,12 @@ export class DispatchService {
     // leaves the freight untouched (still 'claimed').
     const required = requiredLoadKeys({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) });
     const missing = missingKeys(required, check?.confirmed);
-    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pickup — ${missing.length} item(s) left`);
+    if (missing.length) throw refused('SAFETY_CHECK_INCOMPLETE', said('refuse.dispatch.completeTheLoadSafetyChecklist', { length: missing.length }));
     const securementPhotoId = check?.securementPhotoId;
-    if (!securementPhotoId) throw new GlosError('SECUREMENT_PHOTO_REQUIRED', 'Attach a photo of the secured load before pickup');
+    if (!securementPhotoId) throw refused('SECUREMENT_PHOTO_REQUIRED', said('refuse.dispatch.attachAPhotoOfThe'));
     // 2026-11-01 — collected from an airline's cargo terminal: the pieces counted, before the goods leave the shed.
     if (f.airTerminal?.side === 'collection' && !(Number.isInteger(check?.countedPieces) && (check?.countedPieces ?? -1) >= 0)) {
-      throw new GlosError('FIELD_REQUIRED', `Count the pieces ${f.airTerminal.handler} hands you before you leave the shed: air waybill ${f.airTerminal.awb} says ${f.airTerminal.pieces}`, { field: 'countedPieces' });
+      throw refused('FIELD_REQUIRED', said('refuse.dispatch.countThePiecesHandsYou', { handler: f.airTerminal.handler, awb: f.airTerminal.awb, pieces: f.airTerminal.pieces }), { field: 'countedPieces' });
     }
     // Round 31 — the driver's own photo of this load: refused before the goods are taken over, not dropped after.
     this.media.requireHeld(securementPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'securementPhotoId');
@@ -3633,7 +3635,7 @@ export class DispatchService {
     // Seven looks, not one picture sent seven times: each upload has its own id, so the pictures themselves are compared.
     if (inspection) {
       const prints = [securementPhotoId, ...inspection.map((p) => p.photoRef)].map((ref) => this.media.get(ref)?.sha256 ?? ref);
-      if (new Set(prints).size !== prints.length) throw new GlosError('INSPECTION_INCOMPLETE', 'Each point is photographed on its own: the same picture was sent twice.', { field: 'inspection' });
+      if (new Set(prints).size !== prints.length) throw refused('INSPECTION_INCOMPLETE', said('refuse.dispatch.eachPointIsPhotographedOn'), { field: 'inspection' });
     }
     // Round 22 — dated when the driver took the goods over, by the phone, within limits — never before the claim; when
     // it reached us is kept beside it where the two differ (a pickup kept on the phone with no signal).
@@ -3687,54 +3689,54 @@ export class DispatchService {
   }
   deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string; terminalReceipt?: string; position?: HandoverPositionDto; deliveryCode?: string; nameChecked?: boolean; paidSeen?: boolean }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
-    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    if (driverDid && f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisFreightWasClaimedBy'));
+    if (f.status !== 'in_transit') throw refused('INVALID_STATE', said('refuse.dispatch.freightIsExpectedInTransit', { status: codeSaid('freight', f.status) }));
     // 2026-11-13 — A LOAD PAID FIRST is delivered with the code the sender gave whoever receives it, or after the sender said it
     // arrived: the driver is paid on it, so it is never only the driver's word (part 3b). Five wrong codes stop the tries.
     if (f.deliveryCode && !f.posterConfirmedAt) {
-      if ((f.deliveryCodeTries ?? 0) >= 5) throw new GlosError('FORBIDDEN', 'Too many wrong codes: the sender says it arrived in their app, and you deliver it then');
+      if ((f.deliveryCodeTries ?? 0) >= 5) throw refused('FORBIDDEN', said('refuse.dispatch.tooManyWrongCodesThe'));
       // 2026-11-15 — the code went by email: whoever holds the email holds the code, so the driver checks the name too (R2).
       // Before a try is counted: nothing is written for a refusal.
       if (f.codeEmailedAt && f.receiverName && !check?.nameChecked) {
-        throw new GlosError('FIELD_REQUIRED', `The code was emailed: check the person receiving it is ${f.receiverName}, then tick it`, { field: 'nameChecked' });
+        throw refused('FIELD_REQUIRED', said('refuse.dispatch.theCodeWasEmailedCheck', { receiverName: f.receiverName }), { field: 'nameChecked' });
       }
       if ((check?.deliveryCode ?? '').trim() !== f.deliveryCode) {
         f.deliveryCodeTries = (f.deliveryCodeTries ?? 0) + 1;
         this.freights.set(f.freightId, f);
-        throw new GlosError('OTP_INVALID', 'That is not the delivery code: ask whoever receives it for the code the sender gave them', { field: 'deliveryCode' });
+        throw refused('OTP_INVALID', said('refuse.dispatch.thatIsNotTheDelivery'), { field: 'deliveryCode' });
       }
       f.deliveredWithCode = true;
     }
     // Round 35 — held under the tamper protocol: not handed to the receiver until operations releases it.
     this.refuseIfHeld(f);
     // Held by an authority on the road, as the driver said: delivered once they have said it was let go.
-    if (this.heldByAuthority(f)) throw new GlosError('INVALID_STATE', 'It is held by an authority, as you said: say it was let go before you deliver it');
+    if (this.heldByAuthority(f)) throw refused('INVALID_STATE', said('refuse.dispatch.itIsHeldByAn'));
     // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered. D9 — goods
     // found damaged at the handover are not asked to be called intact: what was found goes on the note instead.
     const damagedFound = Boolean(check?.exceptions?.some((x) => x.kind === 'damaged' && x.count > 0));
     const missing = missingKeys(requiredUnloadKeys({ damaged: damagedFound }), check?.confirmed);
-    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
+    if (missing.length) throw refused('SAFETY_CHECK_INCOMPLETE', said('refuse.dispatch.completeTheUnloadChecklistBefore', { length: missing.length }));
     // FP3 — proof of delivery. "Delivered" without a receiver's name and a photo of the goods as put down is the
     // driver's word against the sender's; with them it is box 24 of the consignment note. Both are required,
     // like the securement photo at pickup — it is the driver this protects first.
     const receiverName = check?.receiverName?.trim() ?? '';
-    if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load delivered');
+    if (receiverName.length < 2) throw refused('RECEIVER_REQUIRED', said('refuse.dispatch.recordWhoReceivedTheGoods'));
     // 2026-11-01 — handed in at an airline's cargo terminal: the handler's receipt, or it is only the driver's word that the
     // goods are in the shed before the latest acceptance time.
     const terminalReceipt = check?.terminalReceipt?.trim();
     if (f.airTerminal?.side === 'acceptance' && !(terminalReceipt && terminalReceipt.length >= 3)) {
-      throw new GlosError('FIELD_REQUIRED', `Give the receipt ${f.airTerminal.handler} gave for air waybill ${f.airTerminal.awb} — its acceptance or warehouse receipt number`, { field: 'terminalReceipt' });
+      throw refused('FIELD_REQUIRED', said('refuse.dispatch.giveTheReceiptGaveFor', { handler: f.airTerminal.handler, awb: f.airTerminal.awb }), { field: 'terminalReceipt' });
     }
     if (f.airTerminal?.side === 'acceptance' && terminalReceipt) f.terminalReceipt = terminalReceipt.slice(0, 60);
     const podPhotoId = check?.podPhotoId;
-    if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
+    if (!podPhotoId) throw refused('DELIVERY_PHOTO_REQUIRED', said('refuse.dispatch.attachAPhotoOfThe2'));
     this.media.requireHeld(podPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'podPhotoId'); // round 31
     // D9 — what the receiver found not as the note says: read whole, and refused, before anything is written.
     const exceptions = this.receivingExceptionsOf(f, check?.exceptions, driverDid);
     // Round 35 — seals not as the note says: operations is told before the receiver takes the goods, so it is reported
     // first (with its photograph), and the load is held until operations releases it.
     if (check?.sealsAtDelivery === 'not_as_on_the_note' && !this.tamper?.reportedAt(f.freightId, 'delivery')) {
-      throw new GlosError('TAMPER_REPORT_FIRST', 'The seals are not as the note says: report it first, with a photograph. Operations is told before the receiver takes the goods.', { field: 'sealsAtDelivery' });
+      throw refused('TAMPER_REPORT_FIRST', said('refuse.dispatch.theSealsAreNotAs'), { field: 'sealsAtDelivery' });
     }
     // Round 15 — a load that has had a seal: the receiver looks at the door with the driver.
     const keepAtDoor = this.seals?.checkAtDelivery(f, driverDid ?? '', check?.sealsAtDelivery);
@@ -3803,30 +3805,30 @@ export class DispatchService {
    */
   private receivingExceptionsOf(f: Freight, lines: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }> | undefined, driverDid: string | undefined): ReceivingException[] {
     if (!lines?.length) return [];
-    const said = new Map<ReceivingExceptionKind, ReceivingException>();
+    const seen = new Map<ReceivingExceptionKind, ReceivingException>();
     for (const line of lines) {
       const kind = line.kind as ReceivingExceptionKind;
-      if (!RECEIVING_EXCEPTIONS.includes(kind)) throw new GlosError('INVALID_INPUT', 'Say what was not as the note says: short, over, damaged, wrong or refused', { field: 'exceptions' });
-      if (said.has(kind)) throw new GlosError('INVALID_INPUT', `Say “${kind}” once, with how many packages`, { field: 'exceptions' });
-      if (!Number.isInteger(line.count) || line.count < 1) throw new GlosError('INVALID_INPUT', `Count the packages ${kind}: one or more`, { field: 'exceptions' });
+      if (!RECEIVING_EXCEPTIONS.includes(kind)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayWhatWasNotAs'), { field: 'exceptions' });
+      if (seen.has(kind)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayOnceWithHowMany', { kind }), { field: 'exceptions' });
+      if (!Number.isInteger(line.count) || line.count < 1) throw refused('INVALID_INPUT', said('refuse.dispatch.countThePackagesOneOr', { kind }), { field: 'exceptions' });
       const photos = [...new Set((line.photoRefs ?? []).filter((r) => typeof r === 'string' && r.length > 0))];
-      if (kind === 'damaged' && !photos.length) throw new GlosError('PHOTO_REQUIRED', 'Take a photo of what is damaged: it goes on the note with the count', { field: 'exceptions' });
+      if (kind === 'damaged' && !photos.length) throw refused('PHOTO_REQUIRED', said('refuse.dispatch.takeAPhotoOfWhat'), { field: 'exceptions' });
       for (const ref of photos) this.media.requireHeld(ref, driverDid, { type: 'freight', id: f.freightId }, 'exceptions');
-      said.set(kind, { kind, count: line.count, ...(photos.length ? { photoRefs: photos } : {}) });
+      seen.set(kind, { kind, count: line.count, ...(photos.length ? { photoRefs: photos } : {}) });
     }
-    const count = (k: ReceivingExceptionKind) => said.get(k)?.count ?? 0;
+    const count = (k: ReceivingExceptionKind) => seen.get(k)?.count ?? 0;
     if (f.packages) {
-      if (count('short') >= f.packages) throw new GlosError('INVALID_INPUT', `The note says ${f.packages} packages. If none of them came, nothing was handed over: say so at the door instead of delivering`, { field: 'exceptions' });
+      if (count('short') >= f.packages) throw refused('INVALID_INPUT', said('refuse.dispatch.theNoteSaysPackagesIf', { packages: f.packages }), { field: 'exceptions' });
       const came = f.packages - count('short') + count('over');
       for (const k of ['damaged', 'wrong'] as const) {
-        if (count(k) > came) throw new GlosError('INVALID_INPUT', `${count(k)} ${k}, and ${came} came: count only what came`, { field: 'exceptions' });
+        if (count(k) > came) throw refused('INVALID_INPUT', said('refuse.dispatch.countKindAndCame', { count: count(k), kind: k, came }), { field: 'exceptions' });
       }
       // A PART refused (2026-10-27): what came less what was refused is what was handed over — and something must be.
-      if (count('refused') >= came) throw new GlosError('INVALID_INPUT', `${count('refused')} refused, and ${came} came. If the receiver refused them all, nothing was handed over: say so at the door instead of delivering`, { field: 'exceptions' });
+      if (count('refused') >= came) throw refused('INVALID_INPUT', said('refuse.dispatch.countRefusedAndCame', { count: count('refused'), came }), { field: 'exceptions' });
     } else if (count('refused')) {
-      throw new GlosError('INVALID_INPUT', 'The note counts no packages, so a part cannot be refused by count. If the receiver refused it all, say so at the door instead of delivering', { field: 'exceptions' });
+      throw refused('INVALID_INPUT', said('refuse.dispatch.theNoteCountsNoPackages'), { field: 'exceptions' });
     }
-    return RECEIVING_EXCEPTIONS.flatMap((k) => (said.has(k) ? [said.get(k)!] : []));
+    return RECEIVING_EXCEPTIONS.flatMap((k) => (seen.has(k) ? [seen.get(k)!] : []));
   }
 
   /**
@@ -3837,10 +3839,10 @@ export class DispatchService {
    */
   failDelivery(freightId: string, driverDid: string | undefined, input: { outcome: DeliveryFailure; note?: string; position?: HandoverPositionDto }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
-    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
-    if (!DELIVERY_FAILURES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what happened at the door: absent, refused, unreachable, or no delivery code');
-    if (input.outcome === 'no_code' && !(f.deliveryCode && !f.posterConfirmedAt)) throw new GlosError('INVALID_INPUT', 'This load needs no delivery code: say what else happened at the door');
+    if (driverDid && f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisFreightWasClaimedBy'));
+    if (f.status !== 'in_transit') throw refused('INVALID_STATE', said('refuse.dispatch.freightIsExpectedInTransit', { status: codeSaid('freight', f.status) }));
+    if (!DELIVERY_FAILURES.includes(input.outcome)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayWhatHappenedAtThe'));
+    if (input.outcome === 'no_code' && !(f.deliveryCode && !f.posterConfirmedAt)) throw refused('INVALID_INPUT', said('refuse.dispatch.thisLoadNeedsNoDelivery'));
     const note = input.note?.trim();
     const at = new Date(now).toISOString();
     // 2026-11-10 — the door the driver stood at: where their phone was, and how far from the place of delivery.
@@ -3872,21 +3874,21 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     // Refused whole, the goods still on the road; or a PART refused at the handover of a load delivered (2026-10-27).
     const part = f.status === 'delivered' ? f.refusal?.part : undefined;
-    if (!f.refusal || (f.status !== 'in_transit' && !part)) throw new GlosError('INVALID_STATE', 'Nothing was refused on this load: there is nothing to decide');
-    if (f.refusal.decision) throw new GlosError('INVALID_STATE', 'What happens to these goods was decided already');
-    if (!REFUSAL_CHOICES.includes(input.choice)) throw new GlosError('INVALID_INPUT', 'Say whether the goods go back, go to another place, or are given up', { field: 'choice' });
+    if (!f.refusal || (f.status !== 'in_transit' && !part)) throw refused('INVALID_STATE', said('refuse.dispatch.nothingWasRefusedOnThis'));
+    if (f.refusal.decision) throw refused('INVALID_STATE', said('refuse.dispatch.whatHappensToTheseGoods'));
+    if (!REFUSAL_CHOICES.includes(input.choice)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayWhetherTheGoodsGo'), { field: 'choice' });
     // Where they go, and who carries them — refused before anything is written.
     let dest: { label: string; location: GeoPoint } | undefined;
     if (input.choice === 'back') dest = { label: f.pickupLabel, location: { lat: f.pickupLocation.lat, lng: f.pickupLocation.lng } };
     else if (input.choice === 'elsewhere') {
       const label = input.destLabel?.trim() ?? '';
-      if (label.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say where the goods go, in words a driver can find', { field: 'destLabel' });
+      if (label.length < 3) throw refused('FIELD_REQUIRED', said('refuse.dispatch.sayWhereTheGoodsGo'), { field: 'destLabel' });
       const p = input.destLocation;
-      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng) || Math.abs(p.lat) > 90 || Math.abs(p.lng) > 180) throw new GlosError('FIELD_REQUIRED', 'Show where the goods go on the map', { field: 'destLocation' });
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng) || Math.abs(p.lat) > 90 || Math.abs(p.lng) > 180) throw refused('FIELD_REQUIRED', said('refuse.dispatch.showWhereTheGoodsGo'), { field: 'destLocation' });
       dest = { label: label.slice(0, 120), location: { lat: p.lat, lng: p.lng } };
     }
     const holder = f.claimedBy;
-    if (dest && !holder) throw new GlosError('INVALID_STATE', 'Nobody holds the goods to carry them on');
+    if (dest && !holder) throw refused('INVALID_STATE', said('refuse.dispatch.nobodyHoldsTheGoodsTo'));
     // The new load first: if it cannot be made, the refused one is left as it was, still waiting on the sender.
     const ret = dest ? this.carryOnAsReturn(f, dest, input, now, part) : undefined;
     const at = new Date(now).toISOString();
@@ -3924,7 +3926,7 @@ export class DispatchService {
     const holder = f.claimedBy!;
     const inIt = vehicleNow(f);
     const vehicle = this.fleet.vehicleForDriver(holder) ?? (inIt ? this.fleet.vehicleOf(inIt.vehicleId) : undefined);
-    if (!vehicle) throw new GlosError('INVALID_STATE', 'The vehicle the goods are in cannot be found');
+    if (!vehicle) throw refused('INVALID_STATE', said('refuse.dispatch.theVehicleTheGoodsAre'));
     // Where they were refused: the door it was going to. A load posted without a place on the map has no other point but
     // its pickup — the only place of it anybody marked.
     const from = f.destLocation ?? f.pickupLocation;
@@ -4016,12 +4018,12 @@ export class DispatchService {
    */
   handDeliversParcel(freightId: string, shopDid: string, badgeId: string, byName: string, now: number = Date.now()): { load: Freight; driverDid: string } {
     const f = this.requireFreight(freightId);
-    if (!f.deliversParcel || f.deliversParcel.atShopDid !== shopDid) throw new GlosError('NOT_FOUND', 'No parcel waits here for that load');
-    if (f.deliversParcel.handedAt) throw new GlosError('INVALID_STATE', `Parcel ${f.deliversParcel.parcelId} was handed to its driver already`);
-    if (f.status === 'available' || f.status === 'scheduled') throw new GlosError('INVALID_STATE', `No driver has taken load ${f.code} yet: hand it to the one who has`);
-    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Load ${f.code} is ${f.status}`);
+    if (!f.deliversParcel || f.deliversParcel.atShopDid !== shopDid) throw refused('NOT_FOUND', said('refuse.dispatch.noParcelWaitsHereFor'));
+    if (f.deliversParcel.handedAt) throw refused('INVALID_STATE', said('refuse.dispatch.parcelWasHandedToIts', { parcelId: f.deliversParcel.parcelId }));
+    if (f.status === 'available' || f.status === 'scheduled') throw refused('INVALID_STATE', said('refuse.dispatch.noDriverHasTakenLoad', { code: f.code }));
+    if (f.status !== 'claimed') throw refused('INVALID_STATE', said('refuse.dispatch.loadIs', { code: f.code, status: codeSaid('freight', f.status) }));
     const driver = this.fleet.resolveBadge(String(badgeId ?? '').trim());
-    if (!driver || driver.driverDid !== f.claimedBy) throw new GlosError('FORBIDDEN', `That pass is not the driver of load ${f.code}: hand it only to the driver who took it`);
+    if (!driver || driver.driverDid !== f.claimedBy) throw refused('FORBIDDEN', said('refuse.dispatch.thatPassIsNotThe', { code: f.code }));
     f.deliversParcel = { ...f.deliversParcel, handedAt: new Date(now).toISOString(), handedBy: byName.slice(0, 80) };
     this.freights.set(f.freightId, f);
     return { load: f, driverDid: driver.driverDid };
@@ -4045,12 +4047,12 @@ export class DispatchService {
    */
   handBringsBack(freightId: string, mdpId: string, badgeId: string, byName: string, now: number = Date.now()): { load: Freight; driverDid: string } {
     const f = this.requireFreight(freightId);
-    if (!f.bringsBack || f.bringsBack.atMdpId !== mdpId) throw new GlosError('NOT_FOUND', 'No parcel waits here for that load');
-    if (f.bringsBack.handedAt) throw new GlosError('INVALID_STATE', `Parcel ${f.bringsBack.parcelId} was handed to its driver already`);
-    if (f.status === 'available' || f.status === 'scheduled') throw new GlosError('INVALID_STATE', `No driver has taken load ${f.code} yet: hand it to the one who has`);
-    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Load ${f.code} is ${f.status}`);
+    if (!f.bringsBack || f.bringsBack.atMdpId !== mdpId) throw refused('NOT_FOUND', said('refuse.dispatch.noParcelWaitsHereFor'));
+    if (f.bringsBack.handedAt) throw refused('INVALID_STATE', said('refuse.dispatch.parcelWasHandedToIts', { parcelId: f.bringsBack.parcelId }));
+    if (f.status === 'available' || f.status === 'scheduled') throw refused('INVALID_STATE', said('refuse.dispatch.noDriverHasTakenLoad', { code: f.code }));
+    if (f.status !== 'claimed') throw refused('INVALID_STATE', said('refuse.dispatch.loadIs', { code: f.code, status: codeSaid('freight', f.status) }));
     const driver = this.fleet.resolveBadge(String(badgeId ?? '').trim());
-    if (!driver || driver.driverDid !== f.claimedBy) throw new GlosError('FORBIDDEN', `That pass is not the driver of load ${f.code}: hand it only to the driver who took it`);
+    if (!driver || driver.driverDid !== f.claimedBy) throw refused('FORBIDDEN', said('refuse.dispatch.thatPassIsNotThe', { code: f.code }));
     f.bringsBack = { ...f.bringsBack, handedAt: new Date(now).toISOString(), handedBy: byName.slice(0, 80) };
     this.freights.set(f.freightId, f);
     return { load: f, driverDid: driver.driverDid };
@@ -4064,11 +4066,11 @@ export class DispatchService {
   raiseMaxSpend(freightId: string, vendorId: string, amount: number): Freight {
     const f = this.requireFreight(freightId);
     // A store's load bringing its parcel home, or a business's taking its parcel to its own door (2026-10-29).
-    if (!(f.bringsBack || f.deliversParcel) || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
-    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Load ${f.code} was taken already: its price is fixed`);
+    if (!(f.bringsBack || f.deliversParcel) || f.shipperDid !== vendorId) throw refused('NOT_FOUND', said('refuse.dispatch.noLoadOfYoursBrings'));
+    if (f.status !== 'available') throw refused('INVALID_STATE', said('refuse.dispatch.loadWasTakenAlreadyIts', { code: f.code }));
     const most = Math.round(Number(amount) * 100) / 100;
-    if (!Number.isFinite(most) || most <= (f.maxSpend ?? 0)) throw new GlosError('INVALID_INPUT', `Say more than ${f.maxSpend ?? 0}: the most can only be raised`, { field: 'maxSpend' });
-    if (this.vendors.balanceOf(vendorId) + 1e-9 < most) throw new GlosError('WALLET_INSUFFICIENT', `Top up first: your balance does not cover ${most}`);
+    if (!Number.isFinite(most) || most <= (f.maxSpend ?? 0)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayMoreThanMostRaised', { most: f.maxSpend ?? 0 }), { field: 'maxSpend' });
+    if (this.vendors.balanceOf(vendorId) + 1e-9 < most) throw refused('WALLET_INSUFFICIENT', said('refuse.dispatch.topUpFirstYourBalance', { most }));
     f.maxSpend = most;
     this.freights.set(f.freightId, f);
     void this.events
@@ -4170,17 +4172,17 @@ export class DispatchService {
    */
   openFreightClaim(freightId: string, byDid: string, input: { kind: FreightClaimKind; description: string; photoRef?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (f.status !== 'delivered') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are still on the road — talk to the driver; a claim is made against a delivered load' : `Freight is ${f.status}, expected delivered`);
-    if (f.claim) throw new GlosError('INVALID_STATE', f.claim.state === 'open' ? 'A claim on this load is already open' : 'This load’s claim has already been decided');
-    if (!FREIGHT_CLAIM_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'Say what is wrong: damaged, part missing, not received, or not what was sent');
+    if (f.status !== 'delivered') throw refused('INVALID_STATE', said(f.status === 'in_transit' ? 'refuse.dispatch.goodsStillOnRoadClaim' : 'refuse.dispatch.freightIsExpectedDelivered', { status: f.status }));
+    if (f.claim) throw refused('INVALID_STATE', said(f.claim.state === 'open' ? 'refuse.dispatch.claimAlreadyOpen' : 'refuse.dispatch.loadClaimAlreadyDecided'));
+    if (!FREIGHT_CLAIM_KINDS.includes(input.kind)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayWhatIsWrongDamaged'));
     const description = (input.description ?? '').trim();
-    if (description.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you found — the operator deciding this has only your words and the photos');
+    if (description.length < 3) throw refused('FIELD_REQUIRED', said('refuse.dispatch.sayWhatYouFoundThe'));
     // 2026-11-15 — while the driver's pay is held, a problem you can see comes with a photo of it (the hold, H2).
     if (this.holdOpen(f) && input.kind !== 'not_received' && !input.photoRef) {
-      throw new GlosError('FIELD_REQUIRED', 'Add a photo of what you found: it is read beside the photos taken at pickup and at the door', { field: 'photoRef' });
+      throw refused('FIELD_REQUIRED', said('refuse.dispatch.addAPhotoOfWhat'), { field: 'photoRef' });
     }
     const deliveredAt = f.deliveredAt ? new Date(f.deliveredAt).getTime() : now;
-    if (now - deliveredAt > FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A claim is made within ${FREIGHT_CLAIM_WINDOW_DAYS} days of delivery`);
+    if (now - deliveredAt > FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000) throw refused('WINDOW_EXPIRED', said('refuse.dispatch.aClaimIsMadeWithin', { FREIGHT_CLAIM_WINDOW_DAYS }));
     if (input.photoRef) this.media.requireHeld(input.photoRef, byDid, { type: 'freight', id: f.freightId }); // round 31
     const at = new Date(now).toISOString();
     f.claim = { state: 'open', kind: input.kind, description: description.slice(0, 1000), ...(input.photoRef ? { photoRef: input.photoRef } : {}), raisedBy: byDid, raisedAt: at };
@@ -4319,20 +4321,20 @@ export class DispatchService {
   resolveFreightClaim(freightId: string, input: { decision: FreightClaimDecision; award?: number; note: string; by?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     const c = f.claim;
-    if (!c || c.state !== 'open') throw new GlosError('INVALID_STATE', c ? 'This claim has already been decided' : 'There is no claim on this load');
-    if (!(FREIGHT_CLAIM_DECISIONS as readonly string[]).includes(input.decision)) throw new GlosError('INVALID_INPUT', 'A decision is upheld, partly upheld or rejected');
+    if (!c || c.state !== 'open') throw refused('INVALID_STATE', said(c ? 'refuse.dispatch.claimAlreadyDecided' : 'refuse.dispatch.noClaimOnLoad'));
+    if (!(FREIGHT_CLAIM_DECISIONS as readonly string[]).includes(input.decision)) throw refused('INVALID_INPUT', said('refuse.dispatch.aDecisionIsUpheldPartly'));
     const note = (input.note ?? '').trim();
-    if (!note) throw new GlosError('FIELD_REQUIRED', 'A decision needs a reason the claimant can be shown — including a rejection');
+    if (!note) throw refused('FIELD_REQUIRED', said('refuse.dispatch.aDecisionNeedsAReason'));
     const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
     const coverable = this.claimCoverable(f);
     // AN AWARD NEEDS A COMPANY THAT PAYS. Nothing of ours pays unless the company that billed the load has stated
     // cover — a claim on such a load closes itself with the report and never reaches here; one still open from
     // before can be closed with a reason and no money. It used to allow up to a sanity bound of a million.
     const cover = this.claimCoverLimit(f);
-    if (award > 0 && !coverable) throw new GlosError('INVALID_STATE', 'Nobody was billed for this load through the network, so there is nothing to award from — uphold it with a reason that says the money is between sender and carrier, or reject it');
-    if (award > 0 && cover <= 0) throw new GlosError('INVALID_STATE', 'The company that billed this load has stated no cover, so it pays nothing from its own books and there is nothing to award. Close it with a reason and no award: the consignment note, with the claim on it, is the damage claim report.');
-    if (award > cover) throw new GlosError('INVALID_INPUT', `This load is covered to ${cover.toFixed(2)} by the company that billed it. Award up to that, or settle the excess off-platform.`);
-    if (input.decision !== 'rejected' && cover > 0 && award <= 0) throw new GlosError('INVALID_INPUT', 'Upholding a covered claim means awarding something — reject it instead of awarding nothing');
+    if (award > 0 && !coverable) throw refused('INVALID_STATE', said('refuse.dispatch.nobodyWasBilledForThis'));
+    if (award > 0 && cover <= 0) throw refused('INVALID_STATE', said('refuse.dispatch.theCompanyThatBilledThis'));
+    if (award > cover) throw refused('INVALID_INPUT', said('refuse.dispatch.loadCoveredTo', { cover: cover.toFixed(2) }));
+    if (input.decision !== 'rejected' && cover > 0 && award <= 0) throw refused('INVALID_INPUT', said('refuse.dispatch.upholdingACoveredClaimMeans'));
     let funding: { fromProvision: number; fromExpense: number } | undefined;
     let paidTo: NonNullable<Freight['claim']>['paidTo'];
     if (award > 0) {
@@ -4372,10 +4374,10 @@ export class DispatchService {
    */
   confirmPaidDirect(freightId: string, by: 'driver' | 'office' | 'mollie', now: number = Date.now(), reference?: string): Freight {
     const f = this.requireFreight(freightId);
-    if (f.settlement !== 'between_parties') throw new GlosError('INVALID_STATE', 'SeeBuyGet pays the carrier for this load — there is no payment between you and the shipper to confirm');
+    if (f.settlement !== 'between_parties') throw refused('INVALID_STATE', said('refuse.dispatch.seebuygetPaysTheCarrierFor'));
     if (f.paidDirect) return f;
     if (!(f.status === 'claimed' || f.status === 'in_transit' || f.status === 'delivered') || f.lockedPrice == null) {
-      throw new GlosError('INVALID_STATE', `This load is ${f.status}: a payment is confirmed on a load a driver has taken, at the price agreed`);
+      throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsAPayment', { status: codeSaid('freight', f.status) }));
     }
     // 2026-11-19 — by Mollie: its own id for the payment rides along, so either side can find it in Mollie.
     f.paidDirect = { at: new Date(now).toISOString(), amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, ...(reference ? { reference } : {}) };
@@ -4394,9 +4396,9 @@ export class DispatchService {
    */
   sayNotPaidDirect(freightId: string, by: 'driver' | 'office', now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (f.settlement !== 'between_parties') throw new GlosError('INVALID_STATE', 'SeeBuyGet pays the carrier for this load — there is no payment between you and the shipper to speak of');
-    if (f.paidDirect) throw new GlosError('INVALID_STATE', 'It was said paid already.');
-    if (f.status !== 'delivered' || f.lockedPrice == null) throw new GlosError('INVALID_STATE', `This load is ${f.status}: say it was not paid once it is delivered`);
+    if (f.settlement !== 'between_parties') throw refused('INVALID_STATE', said('refuse.dispatch.seebuygetPaysTheCarrierFor2'));
+    if (f.paidDirect) throw refused('INVALID_STATE', said('refuse.dispatch.itWasSaidPaidAlready'));
+    if (f.status !== 'delivered' || f.lockedPrice == null) throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsSayIt', { status: codeSaid('freight', f.status) }));
     if (f.notPaidDirect) return f;
     f.notPaidDirect = { at: new Date(now).toISOString(), by };
     this.freights.set(f.freightId, f);
@@ -4450,10 +4452,10 @@ export class DispatchService {
    */
   answerNotPaidDirect(freightId: string, input: { reference: string; byName?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.notPaidDirect || f.paidDirect) throw new GlosError('INVALID_STATE', f.paidDirect ? 'Its driver said it was paid: there is nothing to answer.' : 'Nobody said this load was not paid: there is nothing to answer.');
-    if (f.paidDirectAnswer) throw new GlosError('INVALID_STATE', `You answered on ${f.paidDirectAnswer.at.slice(0, 10)} that you paid (${f.paidDirectAnswer.reference}): one answer is kept, as one "not paid" is.`);
+    if (!f.notPaidDirect || f.paidDirect) throw refused('INVALID_STATE', said(f.paidDirect ? 'refuse.dispatch.driverSaidPaidNothingToAnswer' : 'refuse.dispatch.nobodySaidNotPaidNothingToAnswer'));
+    if (f.paidDirectAnswer) throw refused('INVALID_STATE', said('refuse.dispatch.youAnsweredOnThatYouPaid', { day: dayShown(f.paidDirectAnswer.at.slice(0, 10), f.paidDirectAnswer.at.slice(0, 10)), reference: f.paidDirectAnswer.reference }));
     const reference = String(input.reference ?? '').trim().replace(/\s+/g, ' ');
-    if (reference.length < 3) throw new GlosError('FIELD_REQUIRED', 'Give the reference the driver can check: an M-Pesa code, a bank reference, or when and to whom you handed cash', { field: 'reference' });
+    if (reference.length < 3) throw refused('FIELD_REQUIRED', said('refuse.dispatch.giveTheReferenceTheDriver'), { field: 'reference' });
     f.paidDirectAnswer = { at: new Date(now).toISOString(), reference: reference.slice(0, 80), ...(input.byName?.trim() ? { byName: input.byName.trim().slice(0, 80) } : {}) };
     this.freights.set(f.freightId, f);
     this.unpaid = undefined;
@@ -4488,9 +4490,9 @@ export class DispatchService {
   handBack(freightId: string, driverDid: string, reason: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     const why = (reason ?? '').trim();
-    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why you cannot take this load — the sender and your office are told');
-    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are on your vehicle — a load that has been taken over is delivered, or the sender is asked to turn it back' : `Freight is ${f.status}`);
-    if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This load is on another driver');
+    if (why.length < 3) throw refused('REASON_REQUIRED', said('refuse.dispatch.sayWhyYouCannotTake'));
+    if (f.status !== 'claimed') throw refused('INVALID_STATE', said(f.status === 'in_transit' ? 'refuse.dispatch.goodsOnYourVehicle' : 'refuse.dispatch.freightIs', { status: f.status }));
+    if (f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisLoadIsOnAnother'));
     const at = new Date(now).toISOString();
     this.giveBackBill(f, 'load handed back by the driver before pickup');
     const assignedBy = f.assignedBy;
@@ -4519,13 +4521,13 @@ export class DispatchService {
   cancelFreight(freightId: string, by: { did: string; role: 'shipper' | 'operator' }, reason: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     const why = (reason ?? '').trim();
-    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why the load is withdrawn');
-    if (f.status === 'cancelled') throw new GlosError('INVALID_STATE', 'This load is already cancelled');
-    if (f.status === 'delivered') throw new GlosError('INVALID_STATE', 'This load is delivered — a problem with the goods is a claim, not a cancellation');
-    if (f.status === 'in_transit') throw new GlosError('INVALID_STATE', 'The goods are already on the road — a load that has been taken over cannot be cancelled; talk to the driver');
+    if (why.length < 3) throw refused('REASON_REQUIRED', said('refuse.dispatch.sayWhyTheLoadIs'));
+    if (f.status === 'cancelled') throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsAlreadyCancelled'));
+    if (f.status === 'delivered') throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsDeliveredA'));
+    if (f.status === 'in_transit') throw refused('INVALID_STATE', said('refuse.dispatch.theGoodsAreAlreadyOn'));
     // The only way home for a store's parcel called off at a hub: withdrawn, the goods would wait there for nobody.
-    if (f.bringsBack) throw new GlosError('INVALID_STATE', `This load brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}: it is not withdrawn. If no driver takes it, the store raises the most it pays, or sends it to a shop instead`);
-    if (f.deliversParcel) throw new GlosError('INVALID_STATE', `This load takes parcel ${f.deliversParcel.parcelId} from ${f.deliversParcel.shopName} to its door: it is withdrawn by collecting the parcel at the shop with its code, or the most it pays is raised`);
+    if (f.bringsBack) throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadBringsParcelBack', { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName }));
+    if (f.deliversParcel) throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadTakesParcelFrom', { parcelId: f.deliversParcel.parcelId, shopName: f.deliversParcel.shopName }));
     return this.withdraw(f, by, why, now);
   }
 
@@ -4536,8 +4538,8 @@ export class DispatchService {
    */
   withdrawBringsBack(freightId: string, vendorId: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.bringsBack || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
-    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: it comes to your door`);
+    if (!f.bringsBack || f.shipperDid !== vendorId) throw refused('NOT_FOUND', said('refuse.dispatch.noLoadOfYoursBrings'));
+    if (f.status !== 'available') throw refused('INVALID_STATE', said('refuse.dispatch.aDriverHasTakenLoad', { code: f.code }));
     return this.withdraw(f, { did: vendorId, role: 'shipper' }, 'Sent to a shop instead', now);
   }
 
@@ -4547,8 +4549,8 @@ export class DispatchService {
    */
   withdrawPrepaid(freightId: string, why: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.bringsBack || !this.prepaid?.owns(f)) throw new GlosError('NOT_FOUND', 'No load paid for first brings that parcel');
-    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: it comes to your door`);
+    if (!f.bringsBack || !this.prepaid?.owns(f)) throw refused('NOT_FOUND', said('refuse.dispatch.noLoadPaidForFirst'));
+    if (f.status !== 'available') throw refused('INVALID_STATE', said('refuse.dispatch.aDriverHasTakenLoad', { code: f.code }));
     return this.withdraw(f, { did: 'network', role: 'operator' }, why, now);
   }
 
@@ -4559,10 +4561,10 @@ export class DispatchService {
    */
   raisePrepaidMax(freightId: string, most: number): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.bringsBack || !this.prepaid?.owns(f)) throw new GlosError('NOT_FOUND', 'No load paid for first brings that parcel');
-    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: its price is fixed`);
+    if (!f.bringsBack || !this.prepaid?.owns(f)) throw refused('NOT_FOUND', said('refuse.dispatch.noLoadPaidForFirst'));
+    if (f.status !== 'available') throw refused('INVALID_STATE', said('refuse.dispatch.aDriverHasTakenLoad2', { code: f.code }));
     const m = Math.round(Number(most) * 100) / 100;
-    if (!Number.isFinite(m) || m <= (f.maxSpend ?? 0)) throw new GlosError('INVALID_INPUT', `Say more than ${f.maxSpend ?? 0}: the most can only be raised`, { field: 'maxSpend' });
+    if (!Number.isFinite(m) || m <= (f.maxSpend ?? 0)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayMoreThanMostRaised', { most: f.maxSpend ?? 0 }), { field: 'maxSpend' });
     f.maxSpend = m;
     this.freights.set(f.freightId, f);
     void this.events
@@ -4699,9 +4701,9 @@ export class DispatchService {
    */
   newReceiverEmail(freightId: string, email: string): Freight {
     const f = this.freights.get(freightId);
-    if (!f) throw new GlosError('NOT_FOUND', 'Freight not found');
+    if (!f) throw refused('NOT_FOUND', said('refuse.dispatch.freightNotFound'));
     if (!f.deliveryCode || f.posterConfirmedAt || f.status === 'delivered' || f.status === 'cancelled') {
-      throw new GlosError('INVALID_STATE', 'Its delivery code is no longer wanted: it was delivered, said to have arrived, or called off');
+      throw refused('INVALID_STATE', said('refuse.dispatch.itsDeliveryCodeIsNo'));
     }
     f.receiverEmail = email.trim().toLowerCase();
     delete f.codeMailBouncedAt;
@@ -4715,8 +4717,8 @@ export class DispatchService {
   posterSaysArrived(freightId: string, now: number = Date.now(), by?: string): string {
     const f = this.requireFreight(freightId);
     // 2026-11-15 — any load with a delivery code, not only one paid first: the way out when the code is lost.
-    if (!f.deliveryCode) throw new GlosError('INVALID_STATE', 'This load is delivered as it always was: it has no delivery code');
-    if (!(f.status === 'claimed' || f.status === 'in_transit')) throw new GlosError('INVALID_STATE', `The load is ${f.status}`);
+    if (!f.deliveryCode) throw refused('INVALID_STATE', said('refuse.dispatch.thisLoadIsDeliveredAs'));
+    if (!(f.status === 'claimed' || f.status === 'in_transit')) throw refused('INVALID_STATE', said('refuse.dispatch.theLoadIs', { status: codeSaid('freight', f.status) }));
     if (!f.posterConfirmedAt && by) f.posterConfirmedBy = by;
     f.posterConfirmedAt = f.posterConfirmedAt ?? new Date(now).toISOString();
     this.freights.set(f.freightId, f);
@@ -4762,7 +4764,7 @@ export class DispatchService {
   /** The protocol, read for a load whose pay is held and a problem was reported. */
   readHold(freightId: string): ProtocolReading {
     const f = this.requireFreight(freightId);
-    if (!f.heldPay || !f.claim || !this.problemInHold(f)) throw new GlosError('NOT_FOUND', 'No problem reported on that load while its pay was held');
+    if (!f.heldPay || !f.claim || !this.problemInHold(f)) throw refused('NOT_FOUND', said('refuse.dispatch.noProblemReportedOnThat'));
     return readProtocol(f, { kind: f.claim.kind });
   }
 
@@ -4815,8 +4817,8 @@ export class DispatchService {
   /** Staff apply the protocol: the outcome the record says, confirmed by one person, everyone told with the step that decided. */
   applyHoldProtocol(freightId: string, by: string, now: number = Date.now()): HeldPay {
     const f = this.requireFreight(freightId);
-    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for the protocol');
-    if (f.heldPay.pendingOverride) throw new GlosError('INVALID_STATE', 'Going against the protocol waits for a second member of staff: approve it or let it stand');
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw refused('INVALID_STATE', said('refuse.dispatch.nothingOnThatLoadWaits'));
+    if (f.heldPay.pendingOverride) throw refused('INVALID_STATE', said('refuse.dispatch.goingAgainstTheProtocolWaits'));
     const reading = readProtocol(f, { kind: f.claim!.kind });
     this.decideHold(f, { step: reading.step, outcome: reading.outcome, by, at: new Date(now).toISOString() });
     return f.heldPay!;
@@ -4825,11 +4827,11 @@ export class DispatchService {
   /** Going against the record: one member of staff asks, with a reason; a different one approves. */
   proposeHoldOverride(freightId: string, input: { outcome: HoldOutcome; reason: string; by: string; byKey?: string }, now: number = Date.now()): HeldPay {
     const f = this.requireFreight(freightId);
-    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for the protocol');
-    if (!HOLD_OUTCOMES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what instead: release it to the driver, or give the carriage price back');
-    if (input.outcome === readProtocol(f, { kind: f.claim!.kind }).outcome) throw new GlosError('INVALID_STATE', 'That is what the protocol says: apply it instead');
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw refused('INVALID_STATE', said('refuse.dispatch.nothingOnThatLoadWaits'));
+    if (!HOLD_OUTCOMES.includes(input.outcome)) throw refused('INVALID_INPUT', said('refuse.dispatch.sayWhatInsteadReleaseIt'));
+    if (input.outcome === readProtocol(f, { kind: f.claim!.kind }).outcome) throw refused('INVALID_STATE', said('refuse.dispatch.thatIsWhatTheProtocol'));
     const reason = (input.reason ?? '').trim();
-    if (reason.length < 5) throw new GlosError('REASON_REQUIRED', 'Say why the record is wrong here: everyone is shown it');
+    if (reason.length < 5) throw refused('REASON_REQUIRED', said('refuse.dispatch.sayWhyTheRecordIs'));
     f.heldPay.pendingOverride = { outcome: input.outcome, reason: reason.slice(0, 500), by: input.by, ...(input.byKey ? { byKey: input.byKey } : {}), at: new Date(now).toISOString() };
     this.freights.set(f.freightId, f);
     return f.heldPay;
@@ -4838,9 +4840,9 @@ export class DispatchService {
   approveHoldOverride(freightId: string, by: string, byKey: string | undefined, now: number = Date.now()): HeldPay {
     const f = this.requireFreight(freightId);
     const pending = f.heldPay?.pendingOverride;
-    if (!this.holdOpen(f) || !pending) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for a second member of staff');
+    if (!this.holdOpen(f) || !pending) throw refused('INVALID_STATE', said('refuse.dispatch.nothingOnThatLoadWaits2'));
     const same = (byKey && pending.byKey ? byKey === pending.byKey : false) || by.trim().toLowerCase() === pending.by.trim().toLowerCase();
-    if (same) throw new GlosError('FORBIDDEN', 'A different member of staff approves going against the protocol');
+    if (same) throw refused('FORBIDDEN', said('refuse.dispatch.aDifferentMemberOfStaff'));
     const reading = readProtocol(f, { kind: f.claim!.kind });
     delete f.heldPay.pendingOverride;
     this.decideHold(f, { step: reading.step, outcome: pending.outcome, by: pending.by, at: new Date(now).toISOString(), overridden: true, reason: pending.reason, secondBy: by });
@@ -4850,11 +4852,11 @@ export class DispatchService {
   /** The driver answers the report once, while the pay is held: words and their own photos, shown beside it. */
   answerHeldProblem(freightId: string, driverDid: string, input: { words: string; photoRefs?: string[] }, now: number = Date.now()): HeldPay {
     const f = this.requireFreight(freightId);
-    if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'Only the driver who carried it answers');
-    if (!this.holdOpen(f) || !this.problemInHold(f)) throw new GlosError('INVALID_STATE', 'Nothing on that load waits for your answer');
-    if (f.heldPay.answer) throw new GlosError('INVALID_STATE', 'You answered already: once is how it works');
+    if (f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.onlyTheDriverWhoCarried'));
+    if (!this.holdOpen(f) || !this.problemInHold(f)) throw refused('INVALID_STATE', said('refuse.dispatch.nothingOnThatLoadWaits3'));
+    if (f.heldPay.answer) throw refused('INVALID_STATE', said('refuse.dispatch.youAnsweredAlreadyOnceIs'));
     const words = (input.words ?? '').trim();
-    if (words.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you know of it: what you saw at pickup and at the door', { field: 'words' });
+    if (words.length < 3) throw refused('FIELD_REQUIRED', said('refuse.dispatch.sayWhatYouKnowOf'), { field: 'words' });
     const photoRefs = [...new Set(input.photoRefs ?? [])].slice(0, 5);
     for (const ref of photoRefs) this.media.requireHeld(ref, driverDid, { type: 'freight', id: f.freightId });
     for (const ref of photoRefs) this.media.adopt(ref, driverDid, { type: 'freight', id: f.freightId }, 'dispute');
@@ -4947,11 +4949,11 @@ export class DispatchService {
    */
   recordTemp(freightId: string, celsius: number, driverDid?: string, observedAt?: string): Freight {
     const f = this.requireFreight(freightId);
-    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
-    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    if (driverDid && f.claimedBy !== driverDid) throw refused('FORBIDDEN', said('refuse.dispatch.thisFreightWasClaimedBy'));
+    if (f.status !== 'in_transit') throw refused('INVALID_STATE', said('refuse.dispatch.freightIsExpectedInTransit', { status: codeSaid('freight', f.status) }));
     const band = bandOf(f);
-    if (!band) throw new GlosError('NOT_TEMPERATURE_CONTROLLED', 'This freight is not temperature-controlled — no reading to log');
-    if (!Number.isFinite(celsius)) throw new GlosError('INVALID_INPUT', 'A numeric temperature reading is required');
+    if (!band) throw refused('NOT_TEMPERATURE_CONTROLLED', said('refuse.dispatch.thisFreightIsNotTemperature'));
+    if (!Number.isFinite(celsius)) throw refused('INVALID_INPUT', said('refuse.dispatch.aNumericTemperatureReadingIs'));
     const c = Math.round(celsius * 10) / 10;
     const breach = isTempBreach(c, band);
     const read = handedAt(observedAt, Date.now(), [f.pickedUpAt, ...(f.tempReadings ?? []).map((r) => r.at)]);
@@ -4979,7 +4981,7 @@ export class DispatchService {
     input: { kind: PassageKind; post?: string; hub?: string; location?: GeoPoint; observedAt?: string; seals?: { asTheyWere?: boolean; replaced?: Array<{ sealId: string; newNumber: string; photoRef: string; officer?: string }> } },
     now: number = Date.now(),
   ): PassageRecorded {
-    if (!this.passages) throw new GlosError('INVALID_STATE', 'Borders and hubs are not recorded in this deployment');
+    if (!this.passages) throw refused('INVALID_STATE', said('refuse.dispatch.bordersAndHubsAreNot'));
     const f = this.requireFreight(freightId);
     // Round 15 — clearing a border with seals on, the driver says what became of them; asked after every check of the
     // step and before it is kept, and kept only once the step is.
@@ -5006,7 +5008,7 @@ export class DispatchService {
    * frozen with it, the record any claim on the goods is reported from.
    */
   reportBrokenSeal(freightId: string, driverDid: string, sealId: string, input: { cause: SealBreakCause; note?: string; photoRefs: string[]; paperRef?: string; location?: GeoPoint; observedAt?: string }, now: number = Date.now()): LoadSealView {
-    if (!this.seals) throw new GlosError('INVALID_STATE', 'Seals are not recorded in this deployment');
+    if (!this.seals) throw refused('INVALID_STATE', said('refuse.dispatch.sealsAreNotRecordedIn'));
     const f = this.requireFreight(freightId);
     const broken = this.seals.reportBroken(f, driverDid, sealId, input, now);
     const view = this.seals.views(f.freightId).find((s) => s.sealId === broken.sealId)!;
@@ -5073,7 +5075,7 @@ export class DispatchService {
   /** A held load changes hands with nobody: not taken over, not handed to the receiver, until operations releases it. */
   private refuseIfHeld(f: Freight): void {
     if (!f.held) return;
-    throw new GlosError('UNIT_HELD', `This load is held: ${FINDING_WORDS[f.held.finding]} (${f.held.where}, ${f.held.since.slice(0, 10)} ${f.held.since.slice(11, 16)} UTC). Keep it closed and where it is: operations has been told and releases it.`, { exceptionId: f.held.exceptionId });
+    throw refused('UNIT_HELD', said('refuse.dispatch.loadIsHeld', { finding: FINDING_WORDS[f.held.finding], where: f.held.where, date: f.held.since.slice(0, 10), time: f.held.since.slice(11, 16) }), { exceptionId: f.held.exceptionId });
   }
 
   /** The seals of a load as its shipper and the note's other readers see them. */
@@ -5639,18 +5641,18 @@ export class DispatchService {
    * taken meanwhile, is said beside each.
    */
   takeRoadLoad(driverDid: string, codes: string[], now: number = Date.now()): { taken: string[]; refused: Array<{ code: string; why: string }> } {
-    if (!this.fleet.vehicleForDriver(driverDid)) throw new GlosError('NOT_COUPLED', 'Couple to a vehicle before taking a load');
+    if (!this.fleet.vehicleForDriver(driverDid)) throw refused('NOT_COUPLED', said('refuse.dispatch.coupleToAVehicleBefore2'));
     const mine = new Map(this.roadLoad(driverDid).routes.flatMap((r) => r.bags.map((b) => [b.code, b] as const)));
     const taken: string[] = [];
-    const refused: Array<{ code: string; why: string }> = [];
+    const notTaken: Array<{ code: string; why: string }> = [];
     for (const code of [...new Set(codes.map((c) => String(c).trim().toUpperCase()))]) {
       if (!mine.has(code)) {
-        refused.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
+        notTaken.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
         continue;
       }
       const load = this.wrapTote(code);
       if (!load) {
-        refused.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
+        notTaken.push({ code, why: 'It is not waiting for a route your fleet runs, or it was taken meanwhile' });
         continue;
       }
       try {
@@ -5658,10 +5660,10 @@ export class DispatchService {
         this.claim(offer.offerId, now);
         taken.push(code);
       } catch (e) {
-        refused.push({ code, why: e instanceof Error ? e.message : String(e) });
+        notTaken.push({ code, why: e instanceof Error ? e.message : String(e) });
       }
     }
-    return { taken, refused };
+    return { taken, refused: notTaken };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
@@ -6078,13 +6080,13 @@ export class DispatchService {
 
   private requireOffer(offerId: string): Offer {
     const o = this.offers.get(offerId);
-    if (!o) throw new GlosError('NOT_FOUND', `Offer not found: ${offerId}`);
+    if (!o) throw refused('NOT_FOUND', said('refuse.dispatch.offerNotFound', { offerId }));
     return o;
   }
 
   private requireFreight(freightId: string): Freight {
     const f = this.freights.get(freightId);
-    if (!f) throw new GlosError('NOT_FOUND', `Freight not found: ${freightId}`);
+    if (!f) throw refused('NOT_FOUND', said('refuse.dispatch.freightNotFound2', { freightId }));
     return f;
   }
 }

@@ -642,7 +642,9 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { CARRIER_PAYS_LINE } from './parcel-label';
 import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
-import { noticeLangOf } from './notice-words/say';
+import { refused } from './notice-words/refuse';
+import { codeSaid } from './notice-words/codes';
+import { noticeLangOf, said, day as dayShown, at as momentShown, countryName as countryShown } from './notice-words/say';
 
 /**
  * 2026-11-06 — LATE, OR ON TIME, against the time it was promised (never moved): late once that time has passed, or where
@@ -1314,7 +1316,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const who = readerOf(reader);
     const p = this.parcels.get(id);
     if (!p || !who.phoneHash || (!isFor(this.receiverOf(p), who) && !isFor(this.senderOf(p), who))) {
-      throw new GlosError('NOT_FOUND', 'No such parcel'); // do not confirm a parcel exists to a non-party
+      throw refused('NOT_FOUND', said('refuse.parcel.noSuchParcel')); // do not confirm a parcel exists to a non-party
     }
     return this.toConsumerView(p, who, true); // detail: carries the in-app collect token
   }
@@ -1339,7 +1341,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** The parcel a RECEIVER may act on (PoD / dispute) — receiver-scoped, or 404 (existence not confirmed). */
   private receiverParcel(id: string, who: Reader): Parcel {
     const p = this.parcels.get(id);
-    if (!p || !who.phoneHash || !isFor(this.receiverOf(p), who)) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!p || !who.phoneHash || !isFor(this.receiverOf(p), who)) throw refused('NOT_FOUND', said('refuse.parcel.noSuchParcel'));
     return p;
   }
 
@@ -1350,8 +1352,8 @@ export class ParcelService implements OnApplicationBootstrap {
   attachPod(id: string, reader: Reader | string, byDid: string, photoRef: string): ConsumerParcelView {
     const who = readerOf(reader);
     const p = this.receiverParcel(id, who);
-    if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Add a photo once the parcel is delivered');
-    if (!photoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo is required');
+    if (p.status !== 'Delivered') throw refused('INVALID_STATE', said('refuse.parcel.addAPhotoOnceTheParcel'));
+    if (!photoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.aPhotoIsRequired'));
     this.media.requireHeld(photoRef, byDid, { type: 'parcel', id: p.parcelId }); // round 31 — theirs, of this parcel alone
     p.buyerPodPhotoRef = photoRef;
     this.media.adopt(photoRef, byDid, { type: 'parcel', id: p.parcelId }, 'pod'); // shipment-proof; already terminal → anchor
@@ -1369,15 +1371,15 @@ export class ParcelService implements OnApplicationBootstrap {
   buyerDispute(id: string, reader: Reader | string, byDid: string, reason: string, photoRef: string): ConsumerParcelView {
     const who = readerOf(reader);
     const p = this.receiverParcel(id, who);
-    if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can report a problem once the parcel is delivered');
+    if (p.status !== 'Delivered') throw refused('INVALID_STATE', said('refuse.parcel.youCanReportAProblemOnce'));
     // ONE REPORT TO A PARCEL. A case that closed itself with a report leaves the parcel "delivered" again, so a second
     // report would open a second case over the first — and the report already handed to an insurer would describe a
     // problem that is no longer on the record.
-    if (p.dispute) throw new GlosError('INVALID_STATE', ALREADY_REPORTED);
-    if (!reason?.trim() || !photoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo are required to report a problem');
+    if (p.dispute) throw refused('INVALID_STATE', said('refuse.parcel.alreadyReported'));
+    if (!reason?.trim() || !photoRef) throw refused('DISPUTE_INCOMPLETE', said('refuse.parcel.aReasonAndAPhotoAre'));
     // The problem photo must be its OWN media, not the delivered-state PoD reused — else one image serves
     // two roles and its retention gets confused (S26). Force a distinct capture.
-    if (photoRef === p.buyerPodPhotoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'Take a new photo of the problem — not the delivery photo');
+    if (photoRef === p.buyerPodPhotoRef) throw refused('DISPUTE_INCOMPLETE', said('refuse.parcel.takeANewPhotoOfThe'));
     this.media.requireHeld(photoRef, byDid, { type: 'parcel', id: p.parcelId }); // round 31 — theirs, taken for this
     // The goods are already with the receiver here, so a closed case returns the parcel to Delivered —
     // which is what it factually is, whatever the outcome of the claim about its condition.
@@ -1411,7 +1413,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   vendorOrderView(vendorId: string, parcelId: string): VendorOrderDetail {
     const p = this.require(parcelId);
-    if (p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
+    if (p.vendorId !== vendorId) throw refused('NOT_FOUND', said('refuse.parcel.orderDoesNotBelongToThis'));
     return vendorOrderDetailOf(p);
   }
 
@@ -1574,7 +1576,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const agent = this.agents.get(agentDid);
     const promise = this.presence.takeInPromise(this.agents.countryOf(agent), this.payerJurisdictionOf(parcel));
     if (promise === 'none') {
-      throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${this.agents.countryOf(agent)} yet`);
+      throw refused('FORBIDDEN', said('refuse.parcel.nothingCanBeTakenInAt', { shopName: agent.shopName, country: this.agents.countryOf(agent) }));
     }
     parcel.takeInPromise = promise;
   }
@@ -1627,14 +1629,14 @@ export class ParcelService implements OnApplicationBootstrap {
     if (input.walkInQuote?.byRoad) return undefined;
     const name = (c: string) => catalogueEntry(c)?.name ?? c;
     if (!input.abroadRoute || !input.abroadQuote) {
-      throw new GlosError('CUSTOMS_INCOMPLETE', `${dest.shopName} is in another country, and no route from ${name(from)} to ${name(to)} is on: parcels cannot be sent there from this counter yet`, { fromCountry: from, toCountry: to });
+      throw refused('CUSTOMS_INCOMPLETE', said('refuse.parcel.shopNameIsInAnotherCountryAnd', { shopName: dest.shopName, fromName: name(from), toName: name(to) }), { fromCountry: from, toCountry: to });
     }
     const d = input.abroad;
-    if (!d) throw new GlosError('CUSTOMS_INCOMPLETE', `${dest.shopName} is in another country, so this parcel needs its declaration first: what it holds, what it is worth from its invoice, and its seal`, { missing: ['declaration'] });
-    if ((input.paymentMode ?? 'cash') !== 'cash') throw new GlosError('INVALID_INPUT', 'A parcel abroad is paid at this counter, in cash', { field: 'paymentMode' });
-    if (!isKnownCurrency(d.currency)) throw new GlosError('INVALID_INPUT', `${d.currency} is not a currency any country settles in: write the one on the invoice`, { field: 'abroad.currency' });
+    if (!d) throw refused('CUSTOMS_INCOMPLETE', said('refuse.parcel.shopNameIsInAnotherCountrySo', { shopName: dest.shopName }), { missing: ['declaration'] });
+    if ((input.paymentMode ?? 'cash') !== 'cash') throw refused('INVALID_INPUT', said('refuse.parcel.aParcelAbroadIsPaidAt'), { field: 'paymentMode' });
+    if (!isKnownCurrency(d.currency)) throw refused('INVALID_INPUT', said('refuse.parcel.currencyIsNotACurrencyAny', { currency: d.currency }), { field: 'abroad.currency' });
     if (new Set([input.dropoffPhotoRef, d.invoicePhotoRef, d.contentsPhotoRef]).size !== 3) {
-      throw new GlosError('PHOTO_REQUIRED', 'The parcel, its invoice and what is inside are three photos: take each of them', { field: 'abroad.invoicePhotoRef' });
+      throw refused('PHOTO_REQUIRED', said('refuse.parcel.theParcelItsInvoiceAndWhat'), { field: 'abroad.invoicePhotoRef' });
     }
     this.media.requireHeld(d.invoicePhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'abroad.invoicePhotoRef');
     this.media.requireHeld(d.contentsPhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'abroad.contentsPhotoRef');
@@ -1673,14 +1675,14 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   accept(input: AcceptInput): Parcel {
-    if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
-    if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
+    if (this.parcels.has(input.parcelId)) throw refused('PARCEL_EXISTS', said('refuse.parcel.parcelParcelIdAlreadyExists', { parcelId: input.parcelId }));
+    if (!input.dropoffPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.aDropOffPhotoIsMandatory'));
     // Round 31 — the shop's own photo, of this parcel and nothing else: refused before anything is written.
     this.media.requireHeld(input.dropoffPhotoRef, input.agentDid, { type: 'parcel', id: input.parcelId }, 'dropoffPhotoRef');
     // 2026-11-05 — SAME-SHOP COLLECTION: a parcel collected at the shop taking it in (it was refused). It needs its price,
     // which the route works out — one stop, the shop's fee once, no transport — and is handed in by the controller.
     const sameShop = Boolean(input.destPudoDid) && input.destPudoDid === input.agentDid;
-    if (sameShop && !input.sameShopQuote) throw new GlosError('INVALID_STATE', 'A parcel collected where it is handed in is priced from its route — none was given');
+    if (sameShop && !input.sameShopQuote) throw refused('INVALID_STATE', said('refuse.parcel.aParcelCollectedWhereItIs'));
     // 2026-11-08 — the price the counter showed is the one collected: a card's price that moved since is refused, before
     // anything is written, so the counter can say the new one. Not a take-in kept with no signal (step 3b): it happened, the
     // cash changed hands then, and it is priced at the card in force at that moment — a refusal now would only stop the
@@ -1688,7 +1690,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const priced = (sameShop ? input.sameShopQuote : (input.abroadQuote ?? input.walkInQuote))?.locked.gross;
     const late = whenSeen(input.observedAt).receivedAt != null;
     if (!late && input.expectedTotal != null && priced != null && Math.abs(priced - input.expectedTotal) > 0.005) {
-      throw new GlosError('PRICE_CHANGED', `The price is now ${priced}, not ${input.expectedTotal}: tell the sender the new price`, { expected: input.expectedTotal, now: priced });
+      throw refused('PRICE_CHANGED', said('refuse.parcel.thePriceIsNowPricedNot', { priced, expectedTotal: input.expectedTotal }), { expected: input.expectedTotal, now: priced });
     }
     const agent = this.agents.get(input.agentDid);
     // 2026-11-18 — A PARCEL ABROAD (the plan "Parcels across a border", step 2b). To a shop in another country only on a route
@@ -1699,7 +1701,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-23 — A WALK-UP ON A ROAD ROUTE (step 3b): paid here in cash, as any parcel to another country, and only with the
     // sender's word that it holds no alcohol, tobacco, medicines or weapons (BG-2). Refused before anything is written.
     if (input.walkInQuote?.byRoad) {
-      if ((input.paymentMode ?? 'cash') !== 'cash') throw new GlosError('INVALID_INPUT', 'A parcel to another country is paid at this counter, in cash', { field: 'paymentMode' });
+      if ((input.paymentMode ?? 'cash') !== 'cash') throw refused('INVALID_INPUT', said('refuse.parcel.aParcelToAnotherCountryIs'), { field: 'paymentMode' });
       requireNoGoodsWithOwnRules(input.walkInQuote.withinUnion, input.noGoodsWithOwnRules, 'noGoodsWithOwnRules', input.natureCode);
     }
     /**
@@ -1715,13 +1717,13 @@ export class ParcelService implements OnApplicationBootstrap {
     const terms = this.takeInTerms(input.agentDid);
     const promise = terms.promise;
     // A parcel abroad is ours to price and to collect for: the route needs a company of ours selling here.
-    if (abroad && promise !== 'ours') throw new GlosError('FORBIDDEN', `A parcel abroad is taken in where a company of ours sells, and none does in ${catalogueEntry(this.agents.countryOf(agent))?.name ?? this.agents.countryOf(agent)} today`);
+    if (abroad && promise !== 'ours') throw refused('FORBIDDEN', said('refuse.parcel.aParcelAbroadIsTakenIn', { country: countryShown(catalogueEntry(this.agents.countryOf(agent))?.name ?? this.agents.countryOf(agent), this.agents.countryOf(agent)) }));
     if (promise === 'none') {
       // One refusal, in words about THIS shop and THIS country — not about daughter companies, and not
       // at the far end of a money path the shopkeeper cannot see.
       // COMING (2026-10-25): the shop signed up before its country opened — said as that, and when it changes.
-      if (this.agents.notOpenYet(agent)) throw new GlosError('COUNTRY_NOT_OPEN', `SeeBuyGet is not open in ${catalogueEntry(country)?.name ?? country} yet: ${agent.shopName} takes parcels in from the day it opens`);
-      throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${country} yet`);
+      if (this.agents.notOpenYet(agent)) throw refused('COUNTRY_NOT_OPEN', said('refuse.parcel.seebuygetIsNotOpenInCountry', { country: countryShown(catalogueEntry(country)?.name ?? country, country), shopName: agent.shopName }));
+      throw refused('FORBIDDEN', said('refuse.parcel.nothingCanBeTakenInAt', { shopName: agent.shopName, country }));
     }
 
     // A walk-up is a parcel MADE here: a shop held over its national ID starts none, however it is paid for —
@@ -1749,7 +1751,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
     // 'No money, no scan' gate applies to cash parcels (they consume a platform credit).
     if (mode === 'cash' && !this.gate.canTransact(input.agentDid).ok) {
-      throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds. Top up to accept parcels.');
+      throw refused('WALLET_INSUFFICIENT', said('refuse.parcel.insufficientFundsTopUpToAccept'));
     }
     // 2026-11-20 — …and the parcel's REAL price, not one parcel at the list price: covered by the float and its credit, asked
     // before anything is written (the payments plan, P4-a). It used to be asked only as the charge was tried, after the parcel
@@ -1772,7 +1774,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+      throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.parcel.cargoClassCargoClassIsTooLarge', { cargoClass }));
     }
     // Taken in when the counter did it: a walk-up kept on the phone with no signal is not taken in when the signal came back.
     const taken = handedAt(input.observedAt, Date.now(), []);
@@ -1953,9 +1955,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // parcel the agent DID scan but the vehicle cannot carry (fragile / over-weight / full) is not a silent
     // omission the agent can fix, so it is never blocked; it is reconciled and short-shipped below instead.
     if (unscanned.length && !input.acknowledgeShortShip) {
-      throw new GlosError(
+      throw refused(
         'INCOMPLETE_MANIFEST',
-        `${unscanned.length} parcel(s) for this bus are still waiting — scan them, or short-ship on purpose.`,
+        said('refuse.parcel.busParcelsStillWaiting', { count: unscanned.length }),
         { missed: unscanned, expected, corridorId },
       );
     }
@@ -2094,12 +2096,12 @@ export class ParcelService implements OnApplicationBootstrap {
   private busFor(driverBadgeId: string) {
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     if (fleet) {
-      if (!fleet.corridorId) throw new GlosError('INVALID_STATE', 'Driver is not assigned to a corridor — assign one before handover');
+      if (!fleet.corridorId) throw refused('INVALID_STATE', said('refuse.parcel.driverIsNotAssignedToA'));
       const corridor = this.corridors.requireCorridor(fleet.corridorId);
       return { fleet, badgeId: fleet.badgeId, corridorId: corridor.corridorId, corridorDestZone: corridor.destZone, vehicleType: fleet.vehicleType };
     }
     const driver = this.corridors.driverByBadge(driverBadgeId);
-    if (!driver) throw new GlosError('INVALID_INPUT', 'Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
+    if (!driver) throw refused('INVALID_INPUT', said('refuse.parcel.unknownDriverBadgeNotARegistered'));
     const corridor = this.corridors.requireCorridor(driver.corridorId);
     return { fleet, badgeId: driver.badgeId, corridorId: corridor.corridorId, corridorDestZone: corridor.destZone, vehicleType: driver.vehicleType };
   }
@@ -2134,7 +2136,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
+    if (parcel.status !== 'On_Bus') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedOnBus', { status: codeSaid('parcel', parcel.status) }));
     const step = this.stepAt(parcel, observedAt);
     // A SLOT FIRST, and nothing else until there is one. The record was marked ready to collect and THEN asked for
     // a slot: on a full shelf the ask was refused, and the parcel stayed marked ready, in no slot, with nobody told
@@ -2189,24 +2191,24 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   private phonePaidFor(input: AcceptInput, promise: 'ours' | 'theirs' | 'none', country: string, shopName: string): NonNullable<Parcel['paidByPhone']> | undefined {
     if (promise === 'ours') {
-      if (this.presence.can(country, 'cashOnDelivery')) throw new GlosError('SHIPMENT_NOT_PAID', `At ${shopName} the sender pays in cash: take it in as a cash parcel`);
-      throw new GlosError('SHIPMENT_NOT_PAID', `${shopName} can take no payment yet, in cash or by phone: nothing is taken in until it can`);
+      if (this.presence.can(country, 'cashOnDelivery')) throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.atShopNameTheSenderPaysIn', { shopName }));
+      throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.shopNameCanTakeNoPaymentYet', { shopName }));
     }
     const partner = promise === 'theirs' ? this.partners?.partnerAt(country) : undefined;
     if (!partner) return undefined;
     // Where a partner contracts and pays, nothing is taken in unpaid — not even on a server without the payment hub.
-    if (!this.hub) throw new GlosError('INVALID_STATE', `Payment by phone is not set up on this server: nothing is taken in under ${partner.name} until it is`);
+    if (!this.hub) throw refused('INVALID_STATE', said('refuse.parcel.paymentByPhoneIsNotSet', { partnerName: partner.name }));
     const due = this.phonePriceAt(country);
-    if (!due) throw new GlosError('INVALID_STATE', `${partner.name} has not set what a parcel costs yet: nothing is taken in until it has`);
-    if (!input.paymentId) throw new GlosError('SHIPMENT_NOT_PAID', 'The sender pays by phone first: ask for the payment, then take the parcel in');
+    if (!due) throw refused('INVALID_STATE', said('refuse.parcel.partnerNameHasNotSetWhatA', { partnerName: partner.name }));
+    if (!input.paymentId) throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.theSenderPaysByPhoneFirst'));
     const p = this.hub.get(input.paymentId);
     if (!p || p.kind !== 'in' || p.ownerEntityId !== partner.entityId || p.reference !== input.parcelId || p.siteId !== input.agentDid) {
-      throw new GlosError('SHIPMENT_NOT_PAID', `No payment for ${input.parcelId} was asked at this counter: ask for it again`);
+      throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.noPaymentForParcelIdWasAsked', { parcelId: input.parcelId }));
     }
-    if (p.state === 'asked') throw new GlosError('SHIPMENT_NOT_PAID', p.byQr ? 'The payment is still open: the sender pays on the page the code opens' : `The payment is still waiting on the phone ending ${p.phoneEnds}`);
-    if (p.state !== 'paid') throw new GlosError('SHIPMENT_NOT_PAID', 'The payment did not go through: ask for it again');
-    if (p.usedFor && p.usedFor !== input.parcelId) throw new GlosError('SHIPMENT_NOT_PAID', `That payment was for ${p.usedFor}`);
-    if (p.amount + 0.005 < due.price) throw new GlosError('PRICE_CHANGED', `The payment was ${p.amount}, and a parcel costs ${due.price} now: ask for the payment again`, { expected: p.amount, now: due.price });
+    if (p.state === 'asked') throw refused('SHIPMENT_NOT_PAID', p.byQr ? said('refuse.parcel.paymentStillOpenQr') : said('refuse.parcel.paymentStillWaitingPhone', { phoneEnds: p.phoneEnds }));
+    if (p.state !== 'paid') throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.thePaymentDidNotGoThrough'));
+    if (p.usedFor && p.usedFor !== input.parcelId) throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.thatPaymentWasForUsedFor', { usedFor: p.usedFor }));
+    if (p.amount + 0.005 < due.price) throw refused('PRICE_CHANGED', said('refuse.parcel.thePaymentWasAmountAndA', { amount: p.amount, price: due.price }), { expected: p.amount, now: due.price });
     return { paymentId: p.paymentId, amount: p.amount, currency: p.currency, test: p.test, partnerEntityId: partner.entityId };
   }
 
@@ -2216,14 +2218,14 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   async askPhonePayment(agentDid: string, parcelId: string, phone: string | undefined, now: number = Date.now()): Promise<HubPaymentView> {
     const id = parcelId.trim().toUpperCase();
-    if (this.parcels.has(id)) throw new GlosError('PARCEL_EXISTS', `Parcel ${id} already exists`);
+    if (this.parcels.has(id)) throw refused('PARCEL_EXISTS', said('refuse.parcel.parcelIdAlreadyExists', { id }));
     const agent = this.agents.get(agentDid);
     const country = this.agents.countryOf(agent);
     const due = this.presence.takeInPromise(country) === 'theirs' ? this.phonePriceAt(country) : undefined;
     const partner = due ? this.partners?.partnerAt(country) : undefined;
-    if (!due || !partner || !this.hub) throw new GlosError('FORBIDDEN', `At ${agent.shopName} the sender does not pay by phone`);
+    if (!due || !partner || !this.hub) throw refused('FORBIDDEN', said('refuse.parcel.atShopNameTheSenderDoesNot', { shopName: agent.shopName }));
     // 2026-11-26 — by a QR code, no phone is asked; by a prompt, the phone is the one the prompt rings.
-    if (!due.qr && !phone?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give the phone the payment is asked of', { field: 'phone' });
+    if (!due.qr && !phone?.trim()) throw refused('FIELD_REQUIRED', said('refuse.parcel.giveThePhoneThePaymentIs'), { field: 'phone' });
     const p = await this.hub.collect(partner.entityId, { reference: id, amount: due.price, ...(due.qr ? {} : { payerPhone: phone }), description: `Parcel ${id}, taken in at ${agent.shopName}`, siteId: agentDid }, now);
     return hubViewOf(p);
   }
@@ -2231,7 +2233,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** 4b — where the counter's payment stands now, asked of its provider; the counter that asked it alone reads it. */
   async phonePaymentState(agentDid: string, paymentId: string, now: number = Date.now()): Promise<HubPaymentView> {
     const p = this.hub?.get(paymentId);
-    if (!p || p.siteId !== agentDid) throw new GlosError('NOT_FOUND', 'No payment asked at this counter has that number');
+    if (!p || p.siteId !== agentDid) throw refused('NOT_FOUND', said('refuse.parcel.noPaymentAskedAtThisCounter'));
     return hubViewOf(await this.hub!.settle(paymentId, now));
   }
 
@@ -2306,16 +2308,16 @@ export class ParcelService implements OnApplicationBootstrap {
     this.refuseIfHeld(parcel);
     // Unclaimed releases exactly like Ready_For_Pickup. The window closing changes what is OWED, never
     // whether the person standing at the counter with the right code may have their parcel.
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
     // BY THE SHOP THAT HOLDS IT, asked before the code is looked at. Any shop that knew a parcel's number could try
     // codes against it — five wrong ones lock it, and the person it belongs to is then turned away at the right
     // counter until staff reissue. (A collected order always asked this: see collect().)
-    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'This parcel is on another shop’s shelf');
-    if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    if (parcel.destAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.thisParcelIsOnAnotherShop'));
+    if (parcel.otpLockedAt) throw refused('OTP_LOCKED', said('refuse.parcel.tooManyWrongCodesAskThe'));
     // 2026-11-05 — SAME-SHOP COLLECTION IS HANDED OVER WITH A PHOTO (the owner: "code + photo of the collector"). In a
     // two-shop parcel the shop that saw the code at take-in never holds the parcel at collection; here it is the same
     // counter, so a collection it records must carry evidence the receiver can dispute. Refused before a code is counted.
-    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'Taken in here and collected here: photograph the hand-over before you release it');
+    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.takenInHereAndCollectedHere'));
     // Round 31 — a hand-over photo, when there is one, is the shop's own: refused before a code is counted.
     if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
     // A PERSON'S GOODS TURNED ROUND AT A HUB (2026-10-27): the way back is paid here, in cash, as they are collected — charged
@@ -2326,7 +2328,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (due) {
       const float = this.gate.canTransact(agentDid);
       if (!float.moneyOk || float.balance - due.amount < -float.credit.limit - 1e-9) {
-        throw new GlosError('WALLET_INSUFFICIENT', `Top up first: ${due.amount.toFixed(2)} ${due.currency} is due on this parcel, taken in cash from the person collecting it`);
+        throw refused('WALLET_INSUFFICIENT', said('refuse.parcel.topUpFirstAmountCurrencyIs', { amount: due.amount.toFixed(2), currency: due.currency }));
       }
     }
 
@@ -2336,10 +2338,10 @@ export class ParcelService implements OnApplicationBootstrap {
         // Burn it. This is the only check standing between a stranger and someone else's parcel.
         parcel.otpLockedAt = new Date().toISOString();
         this.scan(parcel, 'Ready_For_Pickup', agentDid, 'OTP locked after repeated wrong codes');
-        throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+        throw refused('OTP_LOCKED', said('refuse.parcel.tooManyWrongCodesAskThe'));
       }
       this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
-      throw new GlosError('OTP_INVALID', 'Incorrect OTP');
+      throw refused('OTP_INVALID', said('refuse.parcel.incorrectOtp'));
     }
 
     if (due) {
@@ -2372,13 +2374,13 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Reverse logistics — void within the 5-minute window; refunds the shipping charge. */
   void(parcelId: string, agentDid: string, voidedPhotoRef: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Only the accepting PUDO can void');
+    if (parcel.originAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.onlyTheAcceptingPudoCanVoid'));
     this.refuseIfHeld(parcel);
     // 2026-11-05 — a same-shop parcel goes on its shelf at take-in, so it is undone from there, in the same five minutes.
     const shelvedHere = this.isSameShop(parcel) && parcel.status === 'Ready_For_Pickup';
-    if (parcel.status !== 'At_PUDO' && !shelvedHere) throw new GlosError('INVALID_STATE', 'Only an At_PUDO parcel can be voided');
-    if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw new GlosError('WINDOW_EXPIRED', 'Void window has expired');
-    if (!voidedPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the voided label is required');
+    if (parcel.status !== 'At_PUDO' && !shelvedHere) throw refused('INVALID_STATE', said('refuse.parcel.onlyAnAtPudoParcelCan'));
+    if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw refused('WINDOW_EXPIRED', said('refuse.parcel.voidWindowHasExpired'));
+    if (!voidedPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.aPhotoOfTheVoidedLabel'));
     this.media.requireHeld(voidedPhotoRef, agentDid, { type: 'parcel', id: parcel.parcelId }, 'voidedPhotoRef'); // round 31
 
     parcel.status = 'Voided';
@@ -2462,11 +2464,11 @@ export class ParcelService implements OnApplicationBootstrap {
       (parcel.status === 'Ready_For_Pickup' &&
         Date.now() - new Date(parcel.readyAt ?? parcel.acceptedAt).getTime() > UNCOLLECTED_H * 3_600_000);
     if (!abandoned && !['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) {
-      throw new GlosError(
+      throw refused(
         'INVALID_STATE',
         parcel.status === 'Ready_For_Pickup'
-          ? `It is waiting to be collected — it can only be called off after ${Math.round(UNCOLLECTED_H / 24)} days unclaimed`
-          : `Cannot cancel a ${parcel.status} parcel`,
+          ? said('refuse.parcel.waitingCalledOffAfterDays', { days: Math.round(UNCOLLECTED_H / 24) })
+          : said('refuse.parcel.cannotCancelStatus', { status: codeSaid('parcel', parcel.status) }),
       );
     }
     // The shelf is the scarce thing. A cancelled parcel that still counted against a shop's capacity would
@@ -2480,13 +2482,13 @@ export class ParcelService implements OnApplicationBootstrap {
     // it is turned round there, to the shop it was handed in at, at the store's cost (CallOffService). Withdrawn here, the
     // goods would sit at the hub belonging to no journey — and staff do not spend a store's money on bringing it back.
     if (parcel.status === 'At_MDP' && parcel.vendorId) {
-      throw new GlosError('INVALID_STATE', 'A store’s parcel at a hub is not withdrawn: the store calls it off, and it comes back to the shop it was handed in at, at the store’s cost');
+      throw refused('INVALID_STATE', said('refuse.parcel.aStoreSParcelAtA'));
     }
     // NOR IS A PERSON'S (the user, 2026-10-27: "Back to its shop, sender pays"): staff withdraw it and it is turned round there,
     // to the shop it was handed in at, its sender paying the way back in cash as they collect it (CallOffService.withdraw).
     // Voided here, the goods would sit at the hub belonging to no journey.
     if (parcel.status === 'At_MDP') {
-      throw new GlosError('INVALID_STATE', 'A parcel at a hub is not voided: withdrawn, it is turned round there to the shop it was handed in at — staff withdraw it under Find a parcel');
+      throw refused('INVALID_STATE', said('refuse.parcel.aParcelAtAHubIs'));
     }
     // A store's parcel called off before it has left the shop it was handed in at — or before it was handed in at all: the
     // store's money back in full (the user, 2026-10-26: "Refund and take back"). Once a hub or a driver has it, what was
@@ -2533,15 +2535,15 @@ export class ParcelService implements OnApplicationBootstrap {
     // simply has no first PUDO, which is a different fact and now recorded as one.
     const origin = input.originAgentDid ? this.agents.get(input.originAgentDid) : undefined;
     const originZone = origin?.zone ?? input.originZone;
-    if (!originZone) throw new GlosError('FIELD_REQUIRED', 'A shipment needs an origin: a drop-off PUDO, or the store collection point it leaves from');
-    if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
+    if (!originZone) throw refused('FIELD_REQUIRED', said('refuse.parcel.aShipmentNeedsAnOriginA'));
+    if (!input.contentPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.aPhotoOfTheContentsIs'));
     // Round 30 — THE PHOTO IS WITH US (the user: "A store's content photo, really kept"). A name, or an id we do not hold,
     // is no photo: a damage claim on this parcel would have no "before" to be judged against. It is the store's own and
     // this parcel's alone — refused before anything is written. A return is the same box going back, with its photo.
     // A business's parcel account (2026-10-29): the photo is the business's own, taken in the Business app or sent by its system.
     const photoOwner = vendor.business?.did ?? vendor.did;
     if (!input.photoOfParcel && !this.media.mayAdopt(input.contentPhotoRef, photoOwner)) {
-      throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Upload it first, then send its id: a photo the store took of this parcel, used for no other.', { field: 'contentPhotoRef' });
+      throw refused('PHOTO_REQUIRED', said('refuse.parcel.weDoNotHoldThatPhoto'), { field: 'contentPhotoRef' });
     }
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
@@ -2552,7 +2554,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm: input.dimensionsCm ? [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] : undefined });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+      throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.parcel.cargoClassCargoClassIsTooLarge', { cargoClass }));
     }
     // 2026-11-05 — PRE-DROP-OFF: a booking holds a place at the shop it is handed in at, so a shop with none left is refused
     // here, before anything is written, naming shops near it with room. A parcel bringing goods back is not a booking.
@@ -2754,9 +2756,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // contents list and a value — so a crossing cannot be papered. Refusing is the honest answer: the
     // alternative is minting an undeclared international shipment and letting a border post discover it.
     if (input.quote.crossesBorder) {
-      throw new GlosError(
+      throw refused(
         'CUSTOMS_INCOMPLETE',
-        'Sending to another country needs a declared contents list and value, which a counter send cannot take yet — a store can ship there today',
+        said('refuse.parcel.counterSendAbroadNeedsDeclaration'),
         { crossings: input.quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) },
       );
     }
@@ -2767,7 +2769,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+      throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.parcel.cargoClassCargoClassIsTooLarge', { cargoClass }));
     }
     // 2026-11-05 — PRE-DROP-OFF: the shop it is dropped off at holds a place for it; one with none left is refused first.
     this.assertRoomToBook(origin.did);
@@ -2842,7 +2844,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Retry the prepaid gate after a top-up: bill an unpaid parcel → issue the label + ParcelPaid on success. */
   settleUnpaid(parcelId: string): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'inbound' || !parcel.vendorId) throw new GlosError('NOT_INBOUND', 'Not a vendor shipment');
+    if (parcel.direction !== 'inbound' || !parcel.vendorId) throw refused('NOT_INBOUND', said('refuse.parcel.notAVendorShipment'));
     if (parcel.paidStatus === 'ParcelPaid') return { parcel, label: parcel.label ?? null, paid: true };
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
     // Round 29 — its SSCC is given once it is paid: refused BEFORE the bill when the store's prefix has no code left for
@@ -2880,7 +2882,7 @@ export class ParcelService implements OnApplicationBootstrap {
     sameShop?: boolean;
   } {
     const parcel = [...this.parcels.values()].find((p) => p.trackingKey === trackingKey);
-    if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel for that tracking key');
+    if (!parcel) throw refused('NOT_FOUND', said('refuse.parcel.noParcelForThatTrackingKey'));
     const dest = parcel.destAgentDid ? this.agents.list().find((a) => a.did === parcel.destAgentDid) : undefined;
     return {
       ref: parcel.parcelId,
@@ -2919,10 +2921,10 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string, observedAt?: string, weighed?: { kg: number; quote: ShipmentQuote }): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a pre-minted peer send');
-    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
-    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Drop-off only at the shop the sender chose — the price is locked to that route');
-    if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.notAPreMintedPeerSend'));
+    if (parcel.status !== 'Created') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedCreated', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.originAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.dropOffOnlyAtTheShop'));
+    if (!dropoffPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.aDropOffPhotoIsMandatory'));
     this.media.requireHeld(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoffPhotoRef'); // round 31 — before the cash is counted
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
     // 2026-11-13 — heavier than this shop's tools let it take now (they changed since the booking): refused, named (site tools, T3).
@@ -2931,7 +2933,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // Weighed heavier than the parcel network carries at all: refused, as at booking.
     const weighedSize = weighed ? classifySize({ ...(parcel.dimensionsCm ?? { l: 1, w: 1, h: 1 }), kg: weighed.kg }) : undefined;
     const weighedClass = weighed ? this.cargo.classify({ kg: weighed.kg, dimsCm: parcel.dimensionsCm ? [parcel.dimensionsCm.l, parcel.dimensionsCm.w, parcel.dimensionsCm.h] : undefined }) : undefined;
-    if (weighedClass && this.cargo.dedicatedRequired(weighedClass)) throw new GlosError('CARGO_REQUIRES_DEDICATED', `Weighed at ${weighed!.kg} kg it is cargo class ${weighedClass}, too large for the parcel network: it needs dedicated freight transport`);
+    if (weighedClass && this.cargo.dedicatedRequired(weighedClass)) throw refused('CARGO_REQUIRES_DEDICATED', said('refuse.parcel.weighedAtKgKgItIs', { kg: weighed!.kg, weighedClass }));
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
     this.assertRoomAtDropOff(parcel, agentDid); // 2026-11-05 — its place ran out, and there is no room now
@@ -2939,12 +2941,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // paid for, it is refused and the sender books again (P5-c, the owner: "the sender books again, not on the credit line"); weighed lighter or the same, the price paid stands.
     const online = parcel.paidOnline;
     if (online && weighed && weighed.quote.locked.gross > online.amount + 1e-9) {
-      throw new GlosError('INVALID_STATE', `Weighed at ${weighed.kg} kg it costs more than the ${online.amount.toFixed(2)} ${online.currency} paid online for ${parcel.weightKg} kg: the sender books again for the right weight`);
+      throw refused('INVALID_STATE', said('refuse.parcel.weighedAtKgKgItCosts', { kg: weighed.kg, amount: online.amount.toFixed(2), currency: online.currency, weightKg: parcel.weightKg }));
     }
     const due = online ? 0 : weighed ? weighed.quote.locked.gross : (parcel.shipmentCost ?? 0);
     if (!online) {
       const gate = this.gate.canTransact(agentDid);
-      if (!gate.moneyOk) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+      if (!gate.moneyOk) throw refused('WALLET_INSUFFICIENT', said('refuse.parcel.insufficientFundsToRemitThisParcel'));
       // 2026-11-21 — the cash a booking is taken in for runs on the shop's credit line, as a walk-up's does (the owner: "yes"):
       // the float and its credit cover the booking's price, asked before anything is written. It used to be the float alone.
       this.gate.requireCharge(agentDid, due);
@@ -2999,10 +3001,10 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   cancelByItsSender(parcelId: string, reader: Reader | string): Parcel {
     const parcel = this.require(parcelId);
-    if (!isFor(this.senderOf(parcel), readerOf(reader))) throw new GlosError('NOT_FOUND', 'No such parcel');
-    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Only a booking made in the Send app is called off here');
-    if (parcel.status === 'Voided') throw new GlosError('INVALID_STATE', 'It is cancelled already');
-    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `It was handed in already (${parcel.status}): the shop that took it in can call it off`);
+    if (!isFor(this.senderOf(parcel), readerOf(reader))) throw refused('NOT_FOUND', said('refuse.parcel.noSuchParcel'));
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.onlyABookingMadeInThe'));
+    if (parcel.status === 'Voided') throw refused('INVALID_STATE', said('refuse.parcel.itIsCancelledAlready'));
+    if (parcel.status !== 'Created') throw refused('INVALID_STATE', said('refuse.parcel.itWasHandedInAlreadyStatus', { status: codeSaid('parcel', parcel.status) }));
     return this.cancel(parcelId, 'sender', 'called off by its sender');
   }
 
@@ -3025,9 +3027,9 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   markPaidOnline(parcelId: string, paid: PaidOnline): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a booking made in the Send app');
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.notABookingMadeInThe'));
     if (parcel.paidOnline) return parcel;
-    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}: a booking is paid online before it is handed in`);
+    if (parcel.status !== 'Created') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusABookingIs', { status: codeSaid('parcel', parcel.status) }));
     parcel.paidOnline = { ...paid };
     parcel.paidStatus = 'ParcelPaid';
     parcel.paymentMode = 'prepaid';
@@ -3039,16 +3041,16 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Origin PUDO scans the vendor's parcel in (Created → At_PUDO). Pre-paid: labour fee, no gate. */
   intakeInbound(parcelId: string, agentDid: string, papersInPouch = false, observedAt?: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'inbound') throw new GlosError('NOT_INBOUND', 'Not an inbound parcel');
-    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
-    if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
-    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
+    if (parcel.direction !== 'inbound') throw refused('NOT_INBOUND', said('refuse.parcel.notAnInboundParcel'));
+    if (parcel.status !== 'Created') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedCreated', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.paidStatus !== 'ParcelPaid') throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.shipmentIsNotPaidTheVendor'));
+    if (parcel.originAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.intakeOnlyAtTheVendorSelected'));
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before anything is written
     this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     // ROUND 13 — A PARCEL CROSSING A BORDER GOES WITH ITS PAPERS: the store prints the commercial invoice with the label, and
     // the shop looks for the copies in the pouch before it takes the parcel in. Without them it is held at the border.
     if (parcel.customs && !papersInPouch) {
-      throw new GlosError('FIELD_REQUIRED', 'This parcel crosses a border: look for its commercial invoice — three copies in the pouch on the outside — before you take it in. No papers, ask the store to print them.', { field: 'papersInPouch' });
+      throw refused('FIELD_REQUIRED', said('refuse.parcel.thisParcelCrossesABorderLook'), { field: 'papersInPouch' });
     }
     // 2026-11-05 — a store's order handed in at the shop its buyer collects from: its shelf slot before anything is
     // written, and on the shelf at once below. Such orders were already made (nothing refused them) and sat At_PUDO for
@@ -3095,7 +3097,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   markUnclaimed(parcelId: string, at: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (parcel.status !== 'Ready_For_Pickup') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
     parcel.status = 'Unclaimed';
     parcel.unclaimedAt = new Date(at).toISOString();
     // The daily rate is fixed at the moment it starts to run: what is owed for these days does not move afterwards.
@@ -3117,7 +3119,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   reopenCollection(parcelId: string, at: number, chargeable: boolean, note: string): Parcel {
     const parcel = this.require(parcelId);
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
     parcel.status = 'Ready_For_Pickup';
     parcel.readyAt = new Date(at).toISOString();
     parcel.unclaimedAt = chargeable ? new Date(at).toISOString() : undefined;
@@ -3150,14 +3152,14 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   declareLost(parcelId: string, reason: string, now: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status === 'Lost') throw new GlosError('INVALID_STATE', 'This parcel is already declared lost');
-    if (!LOSABLE_STATUSES.has(parcel.status)) throw new GlosError('INVALID_STATE', `A parcel that is ${parcel.status} is not in the network’s hands, so it cannot be declared lost`);
+    if (parcel.status === 'Lost') throw refused('INVALID_STATE', said('refuse.parcel.thisParcelIsAlreadyDeclaredLost'));
+    if (!LOSABLE_STATUSES.has(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.aParcelThatIsStatusIs', { status: codeSaid('parcel', parcel.status) }));
     const words = String(reason ?? '').trim().slice(0, 500);
-    if (words.length < 10) throw new GlosError('FIELD_REQUIRED', 'Say where you looked and what you found: the sender reads it', { field: 'reason' });
+    if (words.length < 10) throw refused('FIELD_REQUIRED', said('refuse.parcel.sayWhereYouLookedAndWhat'), { field: 'reason' });
     const lastSeenAt = parcel.scans[parcel.scans.length - 1]?.at ?? parcel.acceptedAt;
     const canFrom = new Date(lastSeenAt).getTime() + NOT_SEEN_H * 3_600_000;
     if (now < canFrom) {
-      throw new GlosError('INVALID_STATE', `Last scanned ${lastSeenAt.slice(0, 10)}. A parcel is declared lost only after ${NOT_SEEN_H / 24} days without a scan; until then it is late, so keep looking.`, { lastSeenAt, from: new Date(canFrom).toISOString() });
+      throw refused('INVALID_STATE', said('refuse.parcel.lastScannedLastSeenAParcelIs', { lastSeen: dayShown(lastSeenAt.slice(0, 10), lastSeenAt.slice(0, 10)), days: NOT_SEEN_H / 24 }), { lastSeenAt, from: new Date(canFrom).toISOString() });
     }
     parcel.lost = { declaredAt: new Date(now).toISOString(), reason: words, fromStatus: parcel.status, lastSeenAt };
     parcel.status = 'Lost';
@@ -3170,9 +3172,9 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Found again, as staff were told: it carries on from the step it was lost at, and the sender is told. */
   foundAgain(parcelId: string, note: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Lost' || !parcel.lost) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, not lost`);
+    if (parcel.status !== 'Lost' || !parcel.lost) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusNotLost', { status: codeSaid('parcel', parcel.status) }));
     const words = String(note ?? '').trim().slice(0, 300);
-    if (words.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say where it turned up and in whose hands', { field: 'note' });
+    if (words.length < 3) throw refused('FIELD_REQUIRED', said('refuse.parcel.sayWhereItTurnedUpAnd'), { field: 'note' });
     this.markFound(parcel, words);
     return parcel;
   }
@@ -3196,10 +3198,10 @@ export class ParcelService implements OnApplicationBootstrap {
       const b = parcel.border!;
       const c = b.clearance;
       const why = c?.outcome === 'held' ? `held by customs until ${c.amount?.toFixed(2)} ${c.currency} is paid (customs reference ${c.reference})` : 'customs has not decided on it yet';
-      throw new GlosError('UNIT_HELD', `Parcel ${parcel.parcelId} is under customs control at ${b.arrival.name}: ${why}. Keep it on the customs shelf: it goes on once customs releases it, or once what it owes is paid.`, { parcelId: parcel.parcelId, customs: true });
+      throw refused('UNIT_HELD', said('refuse.parcel.parcelParcelIdIsUnderCustomsControl', { parcelId: parcel.parcelId, arrivalName: b.arrival.name, why }), { parcelId: parcel.parcelId, customs: true });
     }
     if (!parcel.held) return;
-    throw new GlosError('UNIT_HELD', `Parcel ${parcel.parcelId} is held: ${FINDING_WORDS[parcel.held.finding]} (${parcel.held.where}, ${parcel.held.since.slice(0, 10)}). Keep it apart and do not open it further: operations has been told and releases it.`, { exceptionId: parcel.held.exceptionId, parcelId: parcel.parcelId });
+    throw refused('UNIT_HELD', said('refuse.parcel.parcelParcelIdIsHeldFindingWhere', { parcelId: parcel.parcelId, finding: FINDING_WORDS[parcel.held.finding], where: parcel.held.where, since: dayShown(parcel.held.since.slice(0, 10), parcel.held.since.slice(0, 10)) }), { exceptionId: parcel.held.exceptionId, parcelId: parcel.parcelId });
   }
 
   /**
@@ -3209,7 +3211,7 @@ export class ParcelService implements OnApplicationBootstrap {
   refuseIfForCarrier(parcel: Parcel, hubId: string): void {
     const b = parcel.border;
     if (!b || b.handed || b.departure.mdpId !== hubId) return;
-    throw new GlosError('SET_ASIDE', `${parcel.parcelId} goes abroad from here with ${b.carrier.name}: set it aside, and hand it to them under “Parcels abroad”.`, { parcelId: parcel.parcelId, abroad: true });
+    throw refused('SET_ASIDE', said('refuse.parcel.parcelIdGoesAbroadFromHereWith', { parcelId: parcel.parcelId, carrierName: b.carrier.name }), { parcelId: parcel.parcelId, abroad: true });
   }
 
   /**
@@ -3219,20 +3221,20 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   handToRouteCarrier(parcelIds: string[], hub: { mdpId: string; name: string }, reference: string, now: number = Date.now()): Parcel[] {
     const ref = String(reference ?? '').trim();
-    if (ref.length < 3) throw new GlosError('FIELD_REQUIRED', 'The carrier’s reference for them is needed: the number on its air waybill or consignment note', { field: 'reference' });
+    if (ref.length < 3) throw refused('FIELD_REQUIRED', said('refuse.parcel.theCarrierSReferenceForThem'), { field: 'reference' });
     const parcels = [...new Set(parcelIds.map((id) => String(id).trim().toUpperCase()))].map((id) => this.require(id));
-    if (!parcels.length) throw new GlosError('FIELD_REQUIRED', 'Which parcels: none was given', { field: 'parcelIds' });
+    if (!parcels.length) throw refused('FIELD_REQUIRED', said('refuse.parcel.whichParcelsNoneWasGiven'), { field: 'parcelIds' });
     for (const p of parcels) {
       this.refuseIfLost(p);
       this.refuseIfHeld(p);
       const b = p.border;
-      if (!b) throw new GlosError('INVALID_STATE', `${p.parcelId} is not booked abroad: sort it as its label says`);
-      if (b.departure.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} leaves from ${b.departure.name}, not from ${hub.name}`);
-      if (b.handed) throw new GlosError('INVALID_STATE', `${p.parcelId} was handed to ${b.carrier.name} already, under ${b.handed.reference}`);
-      if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${p.parcelId} is not on ${hub.name}’s floor (${p.status})`);
-      if (p.toteId) throw new GlosError('INVALID_STATE', `${p.parcelId} is in a bag: take it out first — it goes to the carrier as it is`);
+      if (!b) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotBookedAbroadSort', { parcelId: p.parcelId }));
+      if (b.departure.mdpId !== hub.mdpId) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdLeavesFromDepartureNameNotFrom', { parcelId: p.parcelId, departureName: b.departure.name, hubName: hub.name }));
+      if (b.handed) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasHandedToCarrierNameAlready', { parcelId: p.parcelId, carrierName: b.carrier.name, reference: b.handed.reference }));
+      if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotOnHubNameS', { parcelId: p.parcelId, hubName: hub.name, status: codeSaid('parcel', p.status) }));
+      if (p.toteId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsInABagTake', { parcelId: p.parcelId }));
     }
-    if (new Set(parcels.map((p) => p.border!.carrier.entityId)).size > 1) throw new GlosError('INVALID_INPUT', 'These parcels go with different carriers: hand each carrier its own, under its own reference', { field: 'parcelIds' });
+    if (new Set(parcels.map((p) => p.border!.carrier.entityId)).size > 1) throw refused('INVALID_INPUT', said('refuse.parcel.theseParcelsGoWithDifferentCarriers'), { field: 'parcelIds' });
     const step: Step = { at: new Date(now).toISOString() };
     for (const p of parcels) {
       const b = p.border!;
@@ -3257,10 +3259,10 @@ export class ParcelService implements OnApplicationBootstrap {
     const p = this.require(String(parcelId).trim().toUpperCase());
     this.refuseIfLost(p);
     const b = p.border;
-    if (!b) throw new GlosError('INVALID_STATE', `${p.parcelId} is not a parcel from abroad: sort it as its label says`);
-    if (b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} arrives at ${b.arrival.name}, not at ${hub.name}: set it aside`);
-    if (b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} was received here already`);
-    if (!b.handed) throw new GlosError('INVALID_STATE', `${p.parcelId} was never handed to ${b.carrier.name}: it cannot have come with them — set it aside, and tell operations`);
+    if (!b) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAParcelFrom', { parcelId: p.parcelId }));
+    if (b.arrival.mdpId !== hub.mdpId) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdArrivesAtArrivalNameNotAt', { parcelId: p.parcelId, arrivalName: b.arrival.name, hubName: hub.name }));
+    if (b.arrived) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasReceivedHereAlready', { parcelId: p.parcelId }));
+    if (!b.handed) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasNeverHandedToCarrierName', { parcelId: p.parcelId, carrierName: b.carrier.name }));
     this.refuseIfHeld(p); // a tamper hold found on the way: set apart, not received
     const step: Step = { at: new Date(now).toISOString() };
     const note = `received from ${b.carrier.name} · under customs control`;
@@ -3292,16 +3294,16 @@ export class ParcelService implements OnApplicationBootstrap {
   ): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
-    if (!b || !clearsHere(b, hub)) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
-    if (!b.arrived) throw new GlosError('INVALID_STATE', `${p.parcelId} has not been received at ${b.arrival.name} from ${b.carrier.name} yet`);
-    if (b.clearance) throw new GlosError('INVALID_STATE', `Customs’ decision on ${p.parcelId} was recorded already: ${b.clearance.outcome === 'held' ? 'held' : 'released'}, ${b.clearance.at.slice(0, 16).replace('T', ' ')}`);
+    if (!b || !clearsHere(b, hub)) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdDoesNotClearCustomsAt', { parcelId: p.parcelId, hubName: hub.name }));
+    if (!b.arrived) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdHasNotBeenReceivedAt', { parcelId: p.parcelId, arrivalName: b.arrival.name, carrierName: b.carrier.name }));
+    if (b.clearance) throw refused('INVALID_STATE', said('refuse.parcel.customsDecisionOnParcelIdWasRecorded', { parcelId: p.parcelId, outcome: b.clearance.outcome === 'held' ? 'held' : 'released', when: momentShown(b.clearance.at.slice(0, 16).replace('T', ' '), b.clearance.at) }));
     const at = new Date(now).toISOString();
     const reference = input.reference?.trim() || undefined;
     let note: string;
     if (input.outcome === 'held') {
       const amount = Math.round(Number(input.amount) * 100) / 100;
-      if (!(amount > 0)) throw new GlosError('FIELD_REQUIRED', 'What customs asks to be paid for it is needed', { field: 'amount' });
-      if (!reference || reference.length < 3) throw new GlosError('FIELD_REQUIRED', 'Customs’ reference for it is needed, as on their notice', { field: 'reference' });
+      if (!(amount > 0)) throw refused('FIELD_REQUIRED', said('refuse.parcel.whatCustomsAsksToBePaid'), { field: 'amount' });
+      if (!reference || reference.length < 3) throw refused('FIELD_REQUIRED', said('refuse.parcel.customsReferenceForItIsNeeded'), { field: 'reference' });
       const currency = currencyForJurisdiction(b.to);
       const payBy = new Date(now + BORDER_HOLD_DAYS * 86_400_000).toISOString();
       b.clearance = { outcome: 'held', at, by: hub.name, amount, currency, reference, ...(owed.payee ? { payee: owed.payee } : {}), payBy };
@@ -3329,9 +3331,9 @@ export class ParcelService implements OnApplicationBootstrap {
   confirmDutyPaid(parcelId: string, hub: { mdpId: string; name: string } | { country: string; name: string }, now: number = Date.now()): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
-    if (!b || !clearsHere(b, hub)) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
-    if (b.clearance?.outcome !== 'held') throw new GlosError('INVALID_STATE', `${p.parcelId} is not held by customs`);
-    if (b.clearance.paidAt) throw new GlosError('INVALID_STATE', `${p.parcelId} was said paid already, ${b.clearance.paidAt.slice(0, 16).replace('T', ' ')}`);
+    if (!b || !clearsHere(b, hub)) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdDoesNotClearCustomsAt', { parcelId: p.parcelId, hubName: hub.name }));
+    if (b.clearance?.outcome !== 'held') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotHeldByCustoms', { parcelId: p.parcelId }));
+    if (b.clearance.paidAt) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasSaidPaidAlreadyWhen', { parcelId: p.parcelId, when: momentShown(b.clearance.paidAt.slice(0, 16).replace('T', ' '), b.clearance.paidAt) }));
     const at = new Date(now).toISOString();
     b.clearance.paidAt = at;
     b.clearance.paidBy = hub.name;
@@ -3350,19 +3352,19 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   decideLapsed(parcelId: string, reader: Reader | string, input: { choice: 'someone_else'; receiverMobile: string } | { choice: 'give_up' }, extra?: { storage: number; handling: number }, now: number = Date.now()): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
-    if (!isFor(this.senderOf(p), readerOf(reader))) throw new GlosError('NOT_FOUND', 'No such parcel');
+    if (!isFor(this.senderOf(p), readerOf(reader))) throw refused('NOT_FOUND', said('refuse.parcel.noSuchParcel'));
     const c = p.border?.clearance;
-    if (!c || c.outcome !== 'held' || c.paidAt || c.disposedAt || !c.lapsedAt) throw new GlosError('INVALID_STATE', `${p.parcelId} is not a held parcel whose day to pay has passed`);
-    if (c.decision?.choice === 'give_up') throw new GlosError('INVALID_STATE', `${p.parcelId} was given up already`);
+    if (!c || c.outcome !== 'held' || c.paidAt || c.disposedAt || !c.lapsedAt) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAHeldParcel', { parcelId: p.parcelId }));
+    if (c.decision?.choice === 'give_up') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasGivenUpAlready', { parcelId: p.parcelId }));
     const at = new Date(now).toISOString();
     if (input.choice === 'give_up') {
       c.decision = { choice: 'give_up', at };
       this.scan(p, p.status, 'sender', 'given up by the sender · the warehouse hands it to customs to dispose of', { at });
     } else {
-      if (c.decision?.choice === 'someone_else') throw new GlosError('INVALID_STATE', `Someone else was named for ${p.parcelId} once already: it can only be given up now`);
+      if (c.decision?.choice === 'someone_else') throw refused('INVALID_STATE', said('refuse.parcel.someoneElseWasNamedForParcelId', { parcelId: p.parcelId }));
       const hash = hashPhone(input.receiverMobile);
-      if (!hash) throw new GlosError('INVALID_INPUT', 'The new receiver’s phone number, with its country code', { field: 'receiverMobile' });
-      if (hash === p.receiverPhoneHash || hash === p.senderPhoneHash) throw new GlosError('INVALID_INPUT', 'Someone else: not the receiver it was sent to, nor you', { field: 'receiverMobile' });
+      if (!hash) throw refused('INVALID_INPUT', said('refuse.parcel.theNewReceiverSPhoneNumber'), { field: 'receiverMobile' });
+      if (hash === p.receiverPhoneHash || hash === p.senderPhoneHash) throw refused('INVALID_INPUT', said('refuse.parcel.someoneElseNotTheReceiverIt'), { field: 'receiverMobile' });
       c.decision = { choice: 'someone_else', at };
       delete c.lapsedAt;
       c.payBy = new Date(now + BORDER_HOLD_DAYS * 86_400_000).toISOString();
@@ -3401,10 +3403,10 @@ export class ParcelService implements OnApplicationBootstrap {
   handToCustomsForDisposal(parcelId: string, hub: { mdpId: string; name: string }, now: number = Date.now()): Parcel {
     const p = this.require(String(parcelId).trim().toUpperCase());
     const b = p.border;
-    if (!b || b.arrival.mdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${p.parcelId} does not clear customs at ${hub.name}`);
-    if (b.clearance?.decision?.choice !== 'give_up') throw new GlosError('INVALID_STATE', `${p.parcelId} was not given up by its sender`);
-    if (b.clearance.disposedAt) throw new GlosError('INVALID_STATE', `${p.parcelId} was handed to customs already`);
-    if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${p.parcelId} is not on ${hub.name}’s floor`);
+    if (!b || b.arrival.mdpId !== hub.mdpId) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdDoesNotClearCustomsAt', { parcelId: p.parcelId, hubName: hub.name }));
+    if (b.clearance?.decision?.choice !== 'give_up') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasNotGivenUpBy', { parcelId: p.parcelId }));
+    if (b.clearance.disposedAt) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasHandedToCustomsAlready', { parcelId: p.parcelId }));
+    if (p.status !== 'At_MDP' || p.atMdpId !== hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotOnHubNameS2', { parcelId: p.parcelId, hubName: hub.name }));
     const step: Step = { at: new Date(now).toISOString() };
     const note = `given up by the sender · handed to customs at ${b.arrival.airport} to dispose of`;
     b.clearance.disposedAt = step.at;
@@ -3476,14 +3478,14 @@ export class ParcelService implements OnApplicationBootstrap {
   /** A lost parcel scanned at a counter has turned up: said plainly, and kept where it is until staff mark it found. */
   private refuseIfLost(parcel: Parcel): void {
     if (parcel.status !== 'Lost') return;
-    throw new GlosError('PARCEL_LOST', `This parcel was declared lost on ${parcel.lost?.declaredAt.slice(0, 10) ?? 'an earlier day'}. Keep it safe and tell SeeBuyGet you have it: once they mark it found, scan it again.`, { declaredAt: parcel.lost?.declaredAt });
+    throw refused('PARCEL_LOST', said('refuse.parcel.thisParcelWasDeclaredLostOn', { day: parcel.lost?.declaredAt.slice(0, 10) ?? 'an earlier day' }), { declaredAt: parcel.lost?.declaredAt });
   }
 
   closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfHeld(parcel);
     // Unclaimed is the ordinary input: a store is only asked about a return once the window has closed.
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
     parcel.status = 'Returned';
     parcel.returnParcelId = returnParcelId;
     this.scan(parcel, 'Returned', parcel.destAgentDid ?? 'network', `uncollected · returning as ${returnParcelId}`);
@@ -3496,8 +3498,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
-    if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
+    if (parcel.status !== 'On_Bus') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedOnBus', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.shelveOnlyAtTheBuyerSelected'));
     // The slot before anything is written, as in arrive(): a full shelf leaves the record exactly as it was.
     parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size); // chaos-shelf slot from the grid (binId hint ignored; small parcels may bundle)
     parcel.destAgentDid = agentDid;
@@ -3526,10 +3528,10 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = [...this.parcels.values()].find(
       (p) => (p.collectionCode === collectionCode || p.collectProxy?.code === collectionCode) && p.destAgentDid === agentDid && isCollectable(p.status),
     );
-    if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel awaiting collection for that code at this PUDO');
+    if (!parcel) throw refused('NOT_FOUND', said('refuse.parcel.noParcelAwaitingCollectionForThat'));
     // Said at the lookup, before the customer is handed anything.
     this.refuseIfHeld(parcel);
-    if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    if (parcel.otpLockedAt) throw refused('CODE_LOCKED', said('refuse.parcel.tooManyWrongCodesAskThe'));
     // What is owed comes back with the LOOKUP, not with the release. A shopkeeper who discovers a charge
     // only after the customer has the box in their hands has to ask for money back, which is the one
     // conversation across a counter that nobody wins.
@@ -3553,13 +3555,13 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
-    if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.destAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.releaseOnlyAtTheDestinationPudo'));
+    if (parcel.otpLockedAt) throw refused('CODE_LOCKED', said('refuse.parcel.tooManyWrongCodesAskThe'));
     // 2026-11-05 — SAME-SHOP COLLECTION IS HANDED OVER WITH A PHOTO (the owner: "code + photo of the collector"). In a
     // two-shop parcel the shop that saw the code at take-in never holds the parcel at collection; here it is the same
     // counter, so a collection it records must carry evidence the receiver can dispute. Refused before a code is counted.
-    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'Taken in here and collected here: photograph the hand-over before you release it');
+    if (this.isSameShop(parcel) && !deliveredPhotoRef) throw refused('PHOTO_REQUIRED', said('refuse.parcel.takenInHereAndCollectedHere'));
     if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
     const supplied = (collectionCode || '').trim();
     // EITHER code opens it: the receiver's own, or the one held by somebody they named. Nominating a
@@ -3568,17 +3570,17 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-15 — the code was emailed (plan R3): whoever holds the email holds the code, so the name on their ID is checked
     // too. Refused before a try is counted; somebody the receiver named collects with their own code, as before.
     if (parcel.codeEmailedAt && parcel.receiverName && supplied === parcel.collectionCode && !byProxy && !nameChecked) {
-      throw new GlosError('FIELD_REQUIRED', `The code was emailed: check the name on their ID is ${parcel.receiverName}, then tick it`, { field: 'nameChecked' });
+      throw refused('FIELD_REQUIRED', said('refuse.parcel.theCodeWasEmailedCheckThe', { receiverName: parcel.receiverName }), { field: 'nameChecked' });
     }
     if (parcel.collectionCode !== supplied && !byProxy) {
       parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
       if (parcel.otpAttempts >= OTP_MAX_ATTEMPTS) {
         parcel.otpLockedAt = new Date().toISOString();
         this.scan(parcel, 'Ready_For_Pickup', agentDid, 'collection code locked after repeated wrong codes');
-        throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+        throw refused('CODE_LOCKED', said('refuse.parcel.tooManyWrongCodesAskThe'));
       }
       this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
-      throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
+      throw refused('CODE_MISMATCH', said('refuse.parcel.collectionCodeDoesNotMatch'));
     }
     // Settled BEFORE the status flips, while the clock still has an end to measure to. The receiver
     // pays the shop in cash at the counter and the shop keeps it, so nothing is posted — this records
@@ -3621,8 +3623,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Handed over only at the shop it waits at');
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.destAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.handedOverOnlyAtTheShop'));
     const at = new Date(now).toISOString();
     // What the shop was owed for keeping it past its free days, paid by its business at the hand-over: the debt is gone.
     if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
@@ -3642,7 +3644,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** At its door: the driver of its load handed it over, signed for. The chain ends with whoever signed. */
   atItsDoor(parcelId: string, receivedBy: string | undefined, at: string): Parcel {
     const parcel = this.require(parcelId);
-    if (!parcel.doorLoad || parcel.status !== 'Delivered') throw new GlosError('INVALID_STATE', `${parcelId} is not on its way to a door`);
+    if (!parcel.doorLoad || parcel.status !== 'Delivered') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotOnItsWay', { parcelId }));
     if (parcel.doorLoad.atDoorAt) return parcel;
     parcel.doorLoad = { ...parcel.doorLoad, atDoorAt: at };
     this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', `at its own door${receivedBy ? `, received by ${receivedBy}` : ''}`, { at });
@@ -3696,7 +3698,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     // Including Unclaimed — a receiver who lost their code while the window lapsed is the likeliest
     // person in the network to need a reissue, and refusing them one strands the goods for good.
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
 
@@ -3791,10 +3793,10 @@ export class ParcelService implements OnApplicationBootstrap {
   dispute(parcelId: string, agentDid: string, reason: string, photoProofRef: string): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
-    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
-    if (parcel.dispute) throw new GlosError('INVALID_STATE', ALREADY_REPORTED); // one report to a parcel — see buyerDispute()
-    if (!reason?.trim() || !photoProofRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo proof are required to dispute');
+    if (!isCollectable(parcel.status)) throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedReadyFor', { status: codeSaid('parcel', parcel.status) }));
+    if (parcel.destAgentDid !== agentDid) throw refused('WRONG_PUDO', said('refuse.parcel.disputeIsRaisedAtTheDestination'));
+    if (parcel.dispute) throw refused('INVALID_STATE', said('refuse.parcel.alreadyReported')); // one report to a parcel — see buyerDispute()
+    if (!reason?.trim() || !photoProofRef) throw refused('DISPUTE_INCOMPLETE', said('refuse.parcel.aReasonAndAPhotoProof'));
     this.media.requireHeld(photoProofRef, agentDid, { type: 'parcel', id: parcel.parcelId }, 'photoProofRef'); // round 31
     // The CASE opens before the status flips, and it remembers where the parcel was: these goods are
     // still on this shop's shelf, so a rejected claim has to leave them collectable rather than
@@ -3883,8 +3885,8 @@ export class ParcelService implements OnApplicationBootstrap {
     input: { decision: DisputeDecision; award?: number; note: string; by?: string },
   ): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Disputed') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Disputed`);
-    if (!input.note?.trim()) throw new GlosError('FIELD_REQUIRED', 'A decision needs a reason the claimant can be shown — including a rejection');
+    if (parcel.status !== 'Disputed') throw refused('INVALID_STATE', said('refuse.parcel.parcelIsStatusExpectedDisputed', { status: codeSaid('parcel', parcel.status) }));
+    if (!input.note?.trim()) throw refused('FIELD_REQUIRED', said('refuse.parcel.aDecisionNeedsAReasonThe'));
     const open = parcel.dispute;
     // A dispute filed before cases existed has no record to close. Rather than refuse to adjudicate it
     // — which would leave exactly the parcels that have waited longest permanently stuck — reconstruct
@@ -3895,13 +3897,13 @@ export class ParcelService implements OnApplicationBootstrap {
 
     const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
     if (input.decision !== 'rejected' && award <= 0) {
-      throw new GlosError('INVALID_INPUT', 'Upholding a claim means awarding something — reject it instead of awarding nothing');
+      throw refused('INVALID_INPUT', said('refuse.parcel.upholdingAClaimMeansAwardingSomething'));
     }
     // WHAT THE COUNTER SAID, KEPT. Goods taken in under the carrier's promise were announced as covered by
     // nothing of ours; awarding here would pay a claim the shopkeeper told the customer we would not, from
     // books that do not exist in that country. A rejection still closes the case, with a reason shown.
     if (award > 0 && parcel.takeInPromise === 'theirs') {
-      throw new GlosError('INVALID_STATE', 'These goods were taken in under the carrier’s promise, so the carrier answers for this claim, not us. Reject it with a reason that points the claimant to the carrier.');
+      throw refused('INVALID_STATE', said('refuse.parcel.theseGoodsWereTakenInUnder'));
     }
     // AN AWARD NEEDS A COMPANY THAT PAYS. Where the company that carried this parcel has stated no cover, it pays
     // nothing from its own books (the user, 2026-10-12) — a reported problem on such a parcel closes itself with the
@@ -3909,12 +3911,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // reason, and with no money. This used to read "no cover stated" as "not decided yet" and let one member of
     // staff award anything up to a ceiling of a million.
     if (award > 0 && !paysItself(parcel)) {
-      throw new GlosError('INVALID_STATE', 'The company that carried this parcel has stated no cover, so it pays nothing from its own books and there is nothing to award. The damage claim report is the answer: close this with a reason and no award.');
+      throw refused('INVALID_STATE', said('refuse.parcel.theCompanyThatCarriedThisParcel'));
     }
     // THE COVER IS THE CAP: the limit this company states, raised by whatever the shipper declared and paid for.
     const cap = parcel.coverLimit ?? 0;
     if (award > cap) {
-      throw new GlosError('INVALID_INPUT', `This shipment is covered to ${cap.toFixed(2)}${parcel.declaredValue ? ' (declared)' : ' — the free limit, nothing was declared'}. Award up to that, or settle the excess off-platform.`);
+      throw refused('INVALID_INPUT', said(parcel.declaredValue ? 'refuse.parcel.coveredToDeclared' : 'refuse.parcel.coveredToFreeLimit', { cap: cap.toFixed(2) }));
     }
 
     let funding: { fromProvision: number; fromExpense: number } | undefined;
@@ -3934,7 +3936,7 @@ export class ParcelService implements OnApplicationBootstrap {
         // than a balance we invent for somebody who never asked us to hold their money.
         const claimant = parcel.senderPhoneHash || parcel.parcelId;
         const entityId = parcel.collectingEntityId ?? parcel.sellerEntityId;
-        if (!entityId) throw new GlosError('INVALID_STATE', 'This parcel names no sister company, so there are no books to award against');
+        if (!entityId) throw refused('INVALID_STATE', said('refuse.parcel.thisParcelNamesNoSisterCompany'));
         funding = this.gate.recordClaimPayable(entityId, parcel.parcelId, award, claimant);
         paidTo = { kind: 'off_platform', id: claimant };
       }
@@ -4142,7 +4144,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * goods turned round at a hub to go back to their sender, until they are paid first too (P4-f).
    */
   private requirePaidLabel(parcel: Parcel): void {
-    if (parcel.paidStatus === 'unpaid' && !parcel.payAtCollection) throw new GlosError('SHIPMENT_NOT_PAID', `${parcel.parcelId} is not paid yet: its label prints once it is paid`);
+    if (parcel.paidStatus === 'unpaid' && !parcel.payAtCollection) throw refused('SHIPMENT_NOT_PAID', said('refuse.parcel.parcelIdIsNotPaidYetIts', { parcelId: parcel.parcelId }));
   }
 
   /** DT — the printable label for a parcel (reprint surface): the persisted one, or — for a paid parcel that has none — made
@@ -4170,15 +4172,15 @@ export class ParcelService implements OnApplicationBootstrap {
   /** A parcel this shop took in at its counter — the only parcels whose label it prints. Another's reads as not there. */
   takenInAt(agentDid: string, parcelId: string): Parcel {
     const p = this.parcels.get(parcelId);
-    if (!p || p.originAgentDid !== agentDid) throw new GlosError('NOT_FOUND', 'No parcel taken in at this shop has that number');
+    if (!p || p.originAgentDid !== agentDid) throw refused('NOT_FOUND', said('refuse.parcel.noParcelTakenInAtThis'));
     return p;
   }
 
   /** A store's own order's label, to print again: once it is paid, when a label is issued, and for that store alone. */
   orderLabel(vendorId: string, parcelId: string): PhygitalLabel {
     const p = this.require(parcelId);
-    if (p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
-    if (!p.label) throw new GlosError('INVALID_STATE', 'A label is issued once the order is paid: pay for it, and its label prints');
+    if (p.vendorId !== vendorId) throw refused('NOT_FOUND', said('refuse.parcel.orderDoesNotBelongToThis'));
+    if (!p.label) throw refused('INVALID_STATE', said('refuse.parcel.aLabelIsIssuedOnceThe'));
     return p.label;
   }
 
@@ -4248,8 +4250,8 @@ export class ParcelService implements OnApplicationBootstrap {
   ): { calledOff: Parcel; back: Parcel } {
     const parcel = this.require(parcelId);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${input.hub.name}`);
-    if (!parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcelId} is not a store’s parcel`);
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAtHubName', { parcelId, hubName: input.hub.name }));
+    if (!parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAStoreS', { parcelId }));
     const at = new Date(now).toISOString();
     const back = this.mintBringingBack(parcel, input, at);
     // The one called off: closed, pointing at the one bringing it back, and out of any bag.
@@ -4273,7 +4275,7 @@ export class ParcelService implements OnApplicationBootstrap {
     now: number = Date.now(),
   ): { calledOff: Parcel; back: Parcel } {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not waiting at ${input.hub.name} for a load to its store's door`);
+    if (parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotWaitingAtHubName', { parcelId, hubName: input.hub.name }));
     const at = new Date(now).toISOString();
     const withdrawn = parcel.returnLoad.code;
     const back = this.mintBringingBack(parcel, input, at);
@@ -4290,7 +4292,7 @@ export class ParcelService implements OnApplicationBootstrap {
     input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; receiverMobile: string; shippingPolicy: ShippingPolicy },
     at: string,
   ): Parcel {
-    if (!parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcel.parcelId} is not a store’s parcel`);
+    if (!parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAStoreS', { parcelId: parcel.parcelId }));
     const { parcel: back, paid } = this.createInbound({
       vendorId: parcel.vendorId,
       externalOrderId: parcel.externalOrderId,
@@ -4319,7 +4321,7 @@ export class ParcelService implements OnApplicationBootstrap {
       back.status = 'Voided';
       this.scan(back, 'Voided', 'network', 'not paid: bringing it back could not be paid for');
       this.persist(back);
-      throw new GlosError('WALLET_INSUFFICIENT', `Top up first — bringing it back costs ${(back.shipmentCost ?? 0).toFixed(2)} ${parcelCurrency(back)}`);
+      throw refused('WALLET_INSUFFICIENT', said('refuse.parcel.topUpFirstBringingItBack', { amount: (back.shipmentCost ?? 0).toFixed(2), currency: parcelCurrency(back) }));
     }
     // At the hub from its first moment: the goods never went back to the store, so they were never in its hands.
     back.status = 'At_MDP';
@@ -4354,9 +4356,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcelId} is a store’s parcel: the store calls it off`);
-    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${input.hub.name}`);
-    if (parcel.returnOf) throw new GlosError('INVALID_STATE', `${parcelId} is taking goods back to their sender already`);
+    if (parcel.vendorId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsAStoreSParcel', { parcelId }));
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAtHubName', { parcelId, hubName: input.hub.name }));
+    if (parcel.returnOf) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsTakingGoodsBackTo', { parcelId }));
     const at = new Date(now).toISOString();
     const back = this.mintForSender(parcel, input, at);
     // The one withdrawn: closed, pointing at the one taking it back, and out of any bag.
@@ -4376,7 +4378,7 @@ export class ParcelService implements OnApplicationBootstrap {
   holdForDoor(parcelId: string, until: number, by: string, now: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfHeld(parcel);
-    if (parcel.vendorId || !parcel.returnOf || parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `${parcelId} is not a person's goods waiting at a hub`);
+    if (parcel.vendorId || !parcel.returnOf || parcel.status !== 'At_MDP') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAPersonS', { parcelId }));
     parcel.doorHold = { until: new Date(until).toISOString() };
     parcel.toteId = undefined;
     this.scan(parcel, 'At_MDP', by, `set aside: its sender is paying for a load to their door, until ${new Date(until).toISOString().slice(11, 16)} UTC`, { at: new Date(now).toISOString() });
@@ -4401,7 +4403,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   rerouteForSender(parcelId: string, input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; by: string }, now: number = Date.now()): { calledOff: Parcel; back: Parcel } {
     const parcel = this.require(parcelId);
-    if (parcel.vendorId || parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not waiting at ${input.hub.name} for a load to its sender's door`);
+    if (parcel.vendorId || parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotWaitingAtHubName2', { parcelId, hubName: input.hub.name }));
     const at = new Date(now).toISOString();
     const withdrawn = parcel.returnLoad.code;
     const back = this.mintForSender(parcel, input, at);
@@ -4499,7 +4501,7 @@ export class ParcelService implements OnApplicationBootstrap {
   closeAsGoingHome(parcelId: string, load: { freightId: string; code: string }, hubName: string, by: string, reason: string | undefined, now: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `${parcelId} is not at a hub`);
+    if (parcel.status !== 'At_MDP') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAtAHub', { parcelId }));
     parcel.status = 'Returned';
     parcel.returnLoad = { freightId: load.freightId, code: load.code };
     parcel.toteId = undefined;
@@ -4516,7 +4518,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** A box going to its store's door, handed on: by the hub to the load's driver, then by the driver to the store. Custody only. */
   handOnHome(parcelId: string, to: { kind: CustodyKind; id: string }, note: string, at: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Returned' || !parcel.returnLoad) throw new GlosError('INVALID_STATE', `${parcelId} is not going to a door as a load`);
+    if (parcel.status !== 'Returned' || !parcel.returnLoad) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotGoingToA', { parcelId }));
     this.handTo(parcel, to.kind, to.id, note, { at });
     this.persist(parcel);
     return parcel;
@@ -4528,8 +4530,8 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   hubLabel(mdpId: string, parcelId: string): PhygitalLabel {
     const p = this.parcels.get(parcelId);
-    if (!p || !p.returnOf || p.returnOf.atMdpId !== mdpId || p.status !== 'At_MDP' || p.atMdpId !== mdpId) throw new GlosError('NOT_FOUND', `No parcel turned round here is ${parcelId}`);
-    if (!p.label) throw new GlosError('INVALID_STATE', 'Its label is not issued yet');
+    if (!p || !p.returnOf || p.returnOf.atMdpId !== mdpId || p.status !== 'At_MDP' || p.atMdpId !== mdpId) throw refused('NOT_FOUND', said('refuse.parcel.noParcelTurnedRoundHereIs', { parcelId }));
+    if (!p.label) throw refused('INVALID_STATE', said('refuse.parcel.itsLabelIsNotIssuedYet'));
     return p.label;
   }
 
@@ -4542,10 +4544,10 @@ export class ParcelService implements OnApplicationBootstrap {
   takeInAtHub(parcelId: string, hub: { mdpId: string; name: string }, note: string, now: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfHeld(parcel);
-    if (parcel.handInMdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${parcelId} is not booked to be handed in at ${hub.name}: set it aside`);
-    if (parcel.status === 'Voided') throw new GlosError('INVALID_STATE', `${parcelId} was withdrawn by the store: set it aside, it is not to go`);
-    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `${parcelId} was taken in already (${parcel.status})`);
-    if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('INVALID_STATE', `${parcelId} is not paid for yet: set it aside, the store is told`);
+    if (parcel.handInMdpId !== hub.mdpId) throw refused('WRONG_PUDO', said('refuse.parcel.parcelIdIsNotBookedToBe', { parcelId, hubName: hub.name }));
+    if (parcel.status === 'Voided') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasWithdrawnByTheStore', { parcelId }));
+    if (parcel.status !== 'Created') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdWasTakenInAlreadyStatus', { parcelId, status: codeSaid('parcel', parcel.status) }));
+    if (parcel.paidStatus !== 'ParcelPaid') throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotPaidForYet', { parcelId }));
     const step: Step = { at: new Date(now).toISOString() };
     parcel.status = 'At_MDP';
     parcel.atMdpId = hub.mdpId;
@@ -4564,8 +4566,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'At_PUDO' || custodianOf(parcel)?.holderId !== counterDid) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${hub.name}’s counter`);
-    if (parcel.toteId) throw new GlosError('INVALID_STATE', `${parcelId} is in a bag at the counter: take it out of the bag first — between the counter and the floor nothing goes in a bag`);
+    if (parcel.status !== 'At_PUDO' || custodianOf(parcel)?.holderId !== counterDid) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotAtHubNameS', { parcelId, hubName: hub.name }));
+    if (parcel.toteId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsInABagAt', { parcelId }));
     const step: Step = { at: new Date(now).toISOString() };
     parcel.status = 'At_MDP';
     parcel.atMdpId = hub.mdpId;
@@ -4584,8 +4586,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
-    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not on ${hub.name}’s floor`);
-    if (!this.shelfTakes(counterDid, [parcelId])) throw new GlosError('SHELF_FULL', `The counter’s shelf has no room for ${parcelId}: hand over parcels waiting there, or add a row in the Shop app, then sort it again`);
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== hub.mdpId) throw refused('INVALID_STATE', said('refuse.parcel.parcelIdIsNotOnHubNameS2', { parcelId, hubName: hub.name }));
+    if (!this.shelfTakes(counterDid, [parcelId])) throw refused('SHELF_FULL', said('refuse.parcel.theCounterSShelfHasNo', { parcelId }));
     const step: Step = { at: new Date(now).toISOString() };
     parcel.status = 'On_Bus';
     this.handTo(parcel, 'hub', hub.name, 'carried across to its own counter', step);
@@ -4740,7 +4742,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const near = this.shopsWithRoom(shop, now);
     void this.events.publish(GlosEvent.Pudo.BookingTurnedAway, { agentDid, reason: shelfFull ? 'shelf' : 'cap' }, { source: 'pudo' }).catch(() => undefined);
     const others = near.length ? ` Shops near it with room: ${near.map((n) => `${n.shopName} (${n.km} km)`).join(', ')}.` : ' No shop near it has room either right now — try again later.';
-    throw new GlosError('SHOP_FULL', `${shop.shopName} has no place left for a new parcel right now.${others}`, { agentDid, alternatives: near });
+    throw refused('SHOP_FULL', said('refuse.parcel.shopNameHasNoPlaceLeftFor', { shopName: shop.shopName, others }), { agentDid, alternatives: near });
   }
 
   /** Why a shop could not hold a place for a new booking now — its shelf, or a new shop's parcel limit — or nothing. Asks only. */
@@ -4805,8 +4807,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // 2026-11-21 — paid online when booked: the price paid stands at the new shop, nothing more to pay and nothing back (P5-d, the owner:
     // "as recommended").
     const cost = parcel.paidOnline ? (parcel.shipmentCost ?? 0) : this.moveCostOf(parcel, quote);
-    const refused = this.moveRefusal(parcel, toAgentDid, cost, now);
-    if (refused) throw new GlosError(refused.code, refused.message);
+    const refusal = this.moveRefusal(parcel, toAgentDid, cost, now);
+    if (refusal) throw new GlosError(refusal.code, refusal.message);
     const from = parcel.originAgentDid!;
     const to = this.agents.get(toAgentDid);
     const was = parcel.shipmentCost ?? 0;
@@ -4816,7 +4818,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!parcel.paidOnline) this.repriceFor(parcel, quote, cost);
     if (paidStore) {
       const bill = this.vendors.billShipment(parcel.vendorId!, parcelId, cost, quote.fx?.buffer, parcel.shipmentTax ?? 0, Math.round(((parcel.shipmentProvision ?? 0) + (parcel.shipmentPremium ?? 0)) * 100) / 100, { note: 'drop-off moved' });
-      if (!bill.paid) throw new GlosError('WALLET_INSUFFICIENT', 'The balance no longer covers the new price: top up first');
+      if (!bill.paid) throw refused('WALLET_INSUFFICIENT', said('refuse.parcel.theBalanceNoLongerCoversThe'));
     }
     parcel.originAgentDid = toAgentDid;
     parcel.committedNodeDid = toAgentDid;
@@ -4895,7 +4897,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (this.shelf.available(agentDid, now) > 0) return;
     if (!this.isSameShop(parcel) && this.shopBagFor?.(agentDid, parcel)) return;
     const shop = this.agents.get(agentDid);
-    throw new GlosError('SHOP_FULL', `The place held here for this parcel has ended, and ${shop.shopName} has no room for it now. It still goes: make room — put the parcels waiting for their next stop in their bag, or hand them to a driver — then take it in.`, { agentDid, heldUntil: hold.until });
+    throw refused('SHOP_FULL', said('refuse.parcel.thePlaceHeldHereForThis', { shopName: shop.shopName }), { agentDid, heldUntil: hold.until });
   }
 
   /** 2026-11-06 — the parcel's plan, asked at every hand-over (RoutePlanService registers it: it reads routing, above this). */
@@ -5077,8 +5079,8 @@ export class ParcelService implements OnApplicationBootstrap {
   /** The sender's side, beside it — once: one answer from the party, shown as written. */
   answerWeightFound(parcelId: string, text: string, now: number = Date.now()): ParcelWeightFound {
     const parcel = this.require(parcelId);
-    if (!parcel.weightFound) throw new GlosError('INVALID_STATE', 'Nothing was found on this parcel’s weight to answer');
-    if (parcel.weightFound.answer) throw new GlosError('INVALID_STATE', 'Your side is already said, beside it');
+    if (!parcel.weightFound) throw refused('INVALID_STATE', said('refuse.parcel.nothingWasFoundOnThisParcel'));
+    if (parcel.weightFound.answer) throw refused('INVALID_STATE', said('refuse.parcel.yourSideIsAlreadySaidBeside'));
     parcel.weightFound = { ...parcel.weightFound, answer: { text, at: new Date(now).toISOString() } };
     this.persist(parcel);
     return parcel.weightFound;
@@ -5115,7 +5117,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
   private require(parcelId: string): Parcel {
     const parcel = this.parcels.get(parcelId);
-    if (!parcel) throw new GlosError('NOT_FOUND', `Parcel not found: ${parcelId}`);
+    if (!parcel) throw refused('NOT_FOUND', said('refuse.parcel.parcelNotFoundParcelId', { parcelId }));
     return parcel;
   }
 }

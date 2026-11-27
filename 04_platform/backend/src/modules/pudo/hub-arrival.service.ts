@@ -2,7 +2,6 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
-import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { clockAt, clocksOfCountry, zoneName } from './fleet-clock';
@@ -27,6 +26,7 @@ import {
   type StoreHubArrivals,
 } from './hub-arrival.types';
 import { MdpService } from './mdp.service';
+import { refused } from './notice-words/refuse';
 import { HubContactService, outsideOf } from './hub-contact.service';
 import { NotificationService } from './notification.service';
 import { day as dayShown, money as moneyShown, noticeOf, said, type Said } from './notice-words/say';
@@ -103,13 +103,13 @@ export class HubArrivalService {
     }
     const was = this.bulk.get(mdpId);
     const hours = input.hours === null ? undefined : input.hours !== undefined ? weekOf(input.hours) : was?.hours;
-    if (hours && !WEEKDAYS.some((d) => hours[d])) throw new GlosError('INVALID_INPUT', 'Give at least one day the hub receives — or say it takes no parcels in bulk', { field: 'hours' });
+    if (hours && !WEEKDAYS.some((d) => hours[d])) throw refused('INVALID_INPUT', said('refuse.hubArrival.hoursNeedDay'), { field: 'hours' });
     // Inside the hours the hub is open, where it keeps them: it cannot take parcels in at a closed door.
     const opening = this.contacts?.openingHoursOf(hub.mdpId);
     const outside = hours && opening ? outsideOf(hours, opening) : null;
-    if (outside) throw new GlosError('INVALID_INPUT', `The hub is not open then (${outside}): choose hours inside its opening hours, or open it then first`, { field: 'hours' });
+    if (outside) throw refused('INVALID_INPUT', said('refuse.hubArrival.hubNotOpenThen', { outside }), { field: 'hours' });
     const doors = input.doors === null ? undefined : (input.doors ?? was?.doors);
-    if (doors !== undefined && !(Number.isInteger(doors) && doors >= 1 && doors <= 50)) throw new GlosError('INVALID_INPUT', 'Doors are counted 1 to 50', { field: 'doors' });
+    if (doors !== undefined && !(Number.isInteger(doors) && doors >= 1 && doors <= 50)) throw refused('INVALID_INPUT', said('refuse.hubArrival.doorsRange'), { field: 'doors' });
     // What it charges to take in each kind of unit (D12): its own, in its own money. Arrivals already booked keep theirs.
     const fees = input.fees === null ? undefined : input.fees !== undefined ? feesOf(input.fees) : was?.fees;
     const next: HubBulk = { mdpId: hub.mdpId, ...(hours ? { hours } : {}), ...(doors ? { doors } : {}), ...(fees ? { fees } : {}), since: was?.since ?? new Date(now).toISOString(), by };
@@ -126,7 +126,7 @@ export class HubArrivalService {
   /** The hub, working and taking stores' parcels in bulk — or refused in words a store can act on. */
   requireTakingBulk(mdpId: string): Mdp {
     const hub = this.mdps.working(mdpId);
-    if (!this.bulk.has(mdpId)) throw new GlosError('INVALID_STATE', `${hub.name} does not take parcels in bulk: hand them in at a shop, or at a hub that does`);
+    if (!this.bulk.has(mdpId)) throw refused('INVALID_STATE', said('refuse.hubArrival.noBulk', { hub: hub.name }));
     return hub;
   }
 
@@ -166,29 +166,29 @@ export class HubArrivalService {
     this.vendors.get(vendorId);
     const hub = this.requireTakingBulk(input.mdpId);
     const ids = [...new Set(input.parcelIds.map((x) => x.trim()).filter(Boolean))];
-    if (!ids.length) throw new GlosError('INVALID_INPUT', 'Choose the parcels it carries', { field: 'parcelIds' });
+    if (!ids.length) throw refused('INVALID_INPUT', said('refuse.hubArrival.chooseParcels'), { field: 'parcelIds' });
     const onOpen = this.openParcelIds();
     for (const id of ids) {
       const p = this.storeParcel(vendorId, id);
-      if (p.handInMdpId !== hub.mdpId) throw new GlosError('INVALID_INPUT', `${id} is not booked to be handed in at ${hub.name}`, { field: 'parcelIds' });
-      if (p.status !== 'Created') throw new GlosError('INVALID_STATE', `${id} was taken in already`, { field: 'parcelIds' });
-      if (p.paidStatus !== 'ParcelPaid') throw new GlosError('INVALID_STATE', `${id} is not paid for yet`, { field: 'parcelIds' });
-      if (onOpen.has(id)) throw new GlosError('INVALID_STATE', `${id} is on another arrival already`, { field: 'parcelIds' });
+      if (p.handInMdpId !== hub.mdpId) throw refused('INVALID_INPUT', said('refuse.hubArrival.notBookedHere', { id, hub: hub.name }), { field: 'parcelIds' });
+      if (p.status !== 'Created') throw refused('INVALID_STATE', said('refuse.hubArrival.takenInAlready', { id }), { field: 'parcelIds' });
+      if (p.paidStatus !== 'ParcelPaid') throw refused('INVALID_STATE', said('refuse.hubArrival.notPaidFor', { id }), { field: 'parcelIds' });
+      if (onOpen.has(id)) throw refused('INVALID_STATE', said('refuse.hubArrival.onAnotherArrival', { id }), { field: 'parcelIds' });
     }
-    if (!Number.isInteger(input.units) || input.units < 1) throw new GlosError('INVALID_INPUT', 'Count the units it comes on: one or more', { field: 'units' });
+    if (!Number.isInteger(input.units) || input.units < 1) throw refused('INVALID_INPUT', said('refuse.hubArrival.countUnitsBooked'), { field: 'units' });
     const zone = this.clockOf(hub, now);
     const today = clockAt(now, zone ?? 'UTC').day;
-    if (input.expectedOn < today) throw new GlosError('INVALID_INPUT', `Choose today or a day ahead, on ${hub.name}'s clock`, { field: 'expectedOn' });
-    if (input.expectedOn > dayAfter(today, HUB_ARRIVAL_DAYS_AHEAD)) throw new GlosError('INVALID_INPUT', `Book it at most ${HUB_ARRIVAL_DAYS_AHEAD} days ahead`, { field: 'expectedOn' });
+    if (input.expectedOn < today) throw refused('INVALID_INPUT', said('refuse.hubArrival.chooseDayAhead', { hub: hub.name }), { field: 'expectedOn' });
+    if (input.expectedOn > dayAfter(today, HUB_ARRIVAL_DAYS_AHEAD)) throw refused('INVALID_INPUT', said('refuse.hubArrival.bookAhead', { days: HUB_ARRIVAL_DAYS_AHEAD }), { field: 'expectedOn' });
     // The days it takes parcels in bulk — or, where it set none, the days it is open.
     const hours = this.bulk.get(hub.mdpId)?.hours ?? this.contacts?.openingHoursOf(hub.mdpId);
     const receives = hours ? openOn(hours, input.expectedOn) : null;
     if (hours && !receives) {
-      throw new GlosError('INVALID_INPUT', `${hub.name} does not receive on a ${WEEKDAY_NAMES[weekdayOf(input.expectedOn)]}: choose a day it does`, { field: 'expectedOn' });
+      throw refused('INVALID_INPUT', said('refuse.hubArrival.noReceiveDay', { hub: hub.name, weekday: WEEKDAY_NAMES[weekdayOf(input.expectedOn)] }), { field: 'expectedOn' });
     }
     // Today only while it still receives: once it has closed on its own clock, nothing booked for today comes today.
     if (receives && input.expectedOn === today && clockAt(now, zone ?? 'UTC').minutes >= receives.toMin) {
-      throw new GlosError('INVALID_INPUT', `${hub.name} stopped receiving at ${hhmm(receives.toMin)} today, on its clock: choose a day ahead`, { field: 'expectedOn' });
+      throw refused('INVALID_INPUT', said('refuse.hubArrival.stoppedReceiving', { hub: hub.name, time: hhmm(receives.toMin) }), { field: 'expectedOn' });
     }
     const reference = input.reference?.trim();
     const bringer = input.bringer?.trim();
@@ -199,11 +199,11 @@ export class HubArrivalService {
     if (fee) {
       const n = fee.charged.units;
       const balance = this.vendors.balanceOf(vendorId);
-      const refused = () =>
-        new GlosError('WALLET_INSUFFICIENT', `Top up first — taking in ${unitsInWords(input.unitKind, n)} at ${hub.name} costs ${money(fee.charged.amount, fee.unit.currency)}, and your balance is ${money(balance, fee.unit.currency)}`);
-      if (balance + 1e-9 < fee.charged.amount) throw refused();
+      const refusal = () =>
+        refused('WALLET_INSUFFICIENT', said('refuse.hubArrival.topUp', { units: unitsSaid(input.unitKind, n), hub: hub.name, cost: moneyShown(money(fee.charged.amount, fee.unit.currency), fee.charged.amount, fee.unit.currency), balance: moneyShown(money(balance, fee.unit.currency), balance, fee.unit.currency) }));
+      if (balance + 1e-9 < fee.charged.amount) throw refusal();
       const bill = this.vendors.billShipment(vendorId, arrivalId, fee.charged.amount, times(fee.unit.buffer, n), times(fee.unit.tax, n), times(fee.unit.provision, n), { kind: 'hub-receiving', note: `receiving at ${hub.name}: ${unitsInWords(input.unitKind, n)}` });
-      if (!bill.paid) throw refused();
+      if (!bill.paid) throw refusal();
     }
     const arrival: HubArrival = {
       arrivalId,
@@ -227,10 +227,10 @@ export class HubArrivalService {
   /** The store withdraws an arrival the hub has not taken in: its parcels are free to book again. */
   withdraw(vendorId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
     const a = this.arrivals.get(arrivalId);
-    if (!a || a.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'No such arrival of yours');
+    if (!a || a.vendorId !== vendorId) throw refused('NOT_FOUND', said('refuse.hubArrival.noArrivalOfYours'));
     if (a.state === 'withdrawn') return this.viewOf(a, now, 'store');
-    if (a.state === 'missed') throw new GlosError('INVALID_STATE', 'The hub said it did not come: its parcels are free to book again');
-    if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'The hub has taken it in already: what it scanned is in its hands');
+    if (a.state === 'missed') throw refused('INVALID_STATE', said('refuse.hubArrival.hubSaidNotCome'));
+    if (a.state !== 'expected') throw refused('INVALID_STATE', said('refuse.hubArrival.hubTookItIn'));
     a.state = 'withdrawn';
     a.withdrawn = { at: new Date(now).toISOString(), by };
     // Nothing was taken in: what it paid for receiving goes back, all of it.
@@ -271,9 +271,9 @@ export class HubArrivalService {
   receive(mdpId: string, arrivalId: string, input: { units: number; note?: string }, by: string, now: number = Date.now()): HubArrivalView {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state === 'withdrawn' || a.state === 'missed') throw new GlosError('INVALID_STATE', closedWhy(a));
-    if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door already');
-    if (!Number.isInteger(input.units) || input.units < 1) throw new GlosError('INVALID_INPUT', 'Count the units that came: one or more', { field: 'units' });
+    if (a.state === 'withdrawn' || a.state === 'missed') throw refused('INVALID_STATE', closedWhy(a));
+    if (a.state !== 'expected') throw refused('INVALID_STATE', said('refuse.hubArrival.takenInAtDoor'));
+    if (!Number.isInteger(input.units) || input.units < 1) throw refused('INVALID_INPUT', said('refuse.hubArrival.countUnitsCame'), { field: 'units' });
     const at = new Date(now).toISOString();
     // UNITS BEYOND THE BOOKING (D12): charged to the store now, at the fee it booked at — or, where its balance cannot
     // carry them, not taken in: refused before anything is written, and the hub counts in only what was booked.
@@ -282,11 +282,11 @@ export class HubArrivalService {
       const more = input.units - booked;
       const amount = times(a.fee.unit.gross, more);
       const store = this.storeName(a.vendorId);
-      const refused = () =>
-        new GlosError('WALLET_INSUFFICIENT', `${store} booked and paid for ${unitsInWords(a.units.kind, booked)}, and cannot pay for ${more} more: take in the ${booked} it booked, and leave the rest with whoever brought them`);
-      if (this.vendors.balanceOf(a.vendorId) + 1e-9 < amount) throw refused();
+      const refusal = () =>
+        refused('WALLET_INSUFFICIENT', said('refuse.hubArrival.storeCannotPay', { store, units: unitsSaid(a.units.kind, booked), more, booked }));
+      if (this.vendors.balanceOf(a.vendorId) + 1e-9 < amount) throw refusal();
       const bill = this.vendors.billShipment(a.vendorId, a.arrivalId, amount, times(a.fee.unit.buffer, more), times(a.fee.unit.tax, more), times(a.fee.unit.provision, more), { kind: 'hub-receiving', note: `receiving at ${hub.name}: ${unitsInWords(a.units.kind, more)} more than booked` });
-      if (!bill.paid) throw refused();
+      if (!bill.paid) throw refusal();
       a.fee.extra = { units: more, amount, at };
     }
     const note = input.note?.trim();
@@ -313,10 +313,10 @@ export class HubArrivalService {
   scan(mdpId: string, arrivalId: string, code: string, by: string, now: number = Date.now()): HubArrivalScan {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state === 'expected') throw new GlosError('INVALID_STATE', 'Count what came at the door first: take it in, then scan each parcel off it');
-    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', closedWhy(a));
+    if (a.state === 'expected') throw refused('INVALID_STATE', said('refuse.hubArrival.countAtDoorFirst'));
+    if (a.state !== 'receiving') throw refused('INVALID_STATE', closedWhy(a));
     const parcelId = this.match(a, code);
-    if (!parcelId) throw new GlosError('NOT_FOUND', `${code.trim()} is not on this arrival: set it aside, and tell the store`);
+    if (!parcelId) throw refused('NOT_FOUND', said('refuse.hubArrival.notOnArrival', { code: code.trim() }));
     const parcel = this.parcels.get(parcelId);
     const destination = this.destinationOf(parcel);
     if (a.scanned.includes(parcelId)) return { arrival: this.viewOf(a, now, 'hub'), parcelId, destination, already: true };
@@ -334,7 +334,7 @@ export class HubArrivalService {
   finish(mdpId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
+    if (a.state !== 'receiving') throw refused('INVALID_STATE', a.state === 'expected' ? said('refuse.hubArrival.takeInFirst') : closedWhy(a));
     this.close(a, hub, by, now);
     return this.viewOf(a, now, 'hub');
   }
@@ -348,10 +348,10 @@ export class HubArrivalService {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
     if (a.state === 'missed') return this.viewOf(a, now, 'hub');
-    if (a.state === 'withdrawn') throw new GlosError('INVALID_STATE', closedWhy(a));
-    if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door: scan what came, then finish it');
+    if (a.state === 'withdrawn') throw refused('INVALID_STATE', closedWhy(a));
+    if (a.state !== 'expected') throw refused('INVALID_STATE', said('refuse.hubArrival.scanThenFinish'));
     const today = clockAt(now, this.clockOf(hub, now) ?? 'UTC').day;
-    if (a.expectedOn >= today) throw new GlosError('INVALID_STATE', `It is due ${a.expectedOn === today ? 'today' : `on ${a.expectedOn}`}: say it did not come once its day is over`);
+    if (a.expectedOn >= today) throw refused('INVALID_STATE', a.expectedOn === today ? said('refuse.hubArrival.dueToday') : said('refuse.hubArrival.dueOn', { day: dayShown(a.expectedOn, a.expectedOn) }));
     a.state = 'missed';
     a.missed = { at: new Date(now).toISOString(), by };
     // Nothing came, so nothing was taken in: what the store paid for receiving goes back, all of it.
@@ -371,10 +371,10 @@ export class HubArrivalService {
   emptiesBack(mdpId: string, arrivalId: string, units: number, by: string, now: number = Date.now()): HubArrivalView {
     this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (!a.received) throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
-    if (a.emptiesBack) throw new GlosError('INVALID_STATE', `Counted out already: ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with whoever brought them`);
+    if (!a.received) throw refused('INVALID_STATE', a.state === 'expected' ? said('refuse.hubArrival.takeInFirst') : closedWhy(a));
+    if (a.emptiesBack) throw refused('INVALID_STATE', said('refuse.hubArrival.countedOut', { units: unitsSaid(a.units.kind, a.emptiesBack.units) }));
     if (!Number.isInteger(units) || units < 0 || units > a.received.units) {
-      throw new GlosError('INVALID_INPUT', `Count the empties that went back: from none to the ${a.received.units} that came`, { field: 'units' });
+      throw refused('INVALID_INPUT', said('refuse.hubArrival.countEmpties', { came: a.received.units }), { field: 'units' });
     }
     a.emptiesBack = { units, at: new Date(now).toISOString(), by };
     this.arrivals.set(a.arrivalId, a);
@@ -488,7 +488,7 @@ export class HubArrivalService {
 
   private hubArrival(mdpId: string, arrivalId: string): HubArrival {
     const a = this.arrivals.get(arrivalId);
-    if (!a || a.mdpId !== mdpId) throw new GlosError('NOT_FOUND', 'No such arrival at this hub');
+    if (!a || a.mdpId !== mdpId) throw refused('NOT_FOUND', said('refuse.hubArrival.noArrivalHere'));
     return a;
   }
 
@@ -500,7 +500,7 @@ export class HubArrivalService {
     } catch {
       p = undefined;
     }
-    if (!p || p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', `No parcel ${parcelId} of yours`, { field: 'parcelIds' });
+    if (!p || p.vendorId !== vendorId) throw refused('NOT_FOUND', said('refuse.hubArrival.noParcelOfYours', { parcelId }), { field: 'parcelIds' });
     return p;
   }
 
@@ -716,10 +716,10 @@ function doneAt(a: HubArrival): string {
 }
 
 /** Why an arrival is closed to the floor, in words the hub can act on. */
-function closedWhy(a: HubArrival): string {
-  if (a.state === 'withdrawn') return 'The store withdrew it: it is not coming';
-  if (a.state === 'missed') return 'It was said not to have come: the store books its parcels on a new arrival';
-  return 'Scanning of it is finished';
+function closedWhy(a: HubArrival): Said {
+  if (a.state === 'withdrawn') return said('refuse.hubArrival.closedWithdrawn');
+  if (a.state === 'missed') return said('refuse.hubArrival.closedMissed');
+  return said('refuse.hubArrival.closedFinished');
 }
 
 /** Minutes past midnight as a clock says them: 1080 → "18:00". */
@@ -747,9 +747,9 @@ function receivingSaid(a: HubArrival): Said | '' {
 function feesOf(raw: Record<string, number | null>): Partial<Record<HubUnitKind, number>> | undefined {
   const out: Partial<Record<HubUnitKind, number>> = {};
   for (const [kind, value] of Object.entries(raw)) {
-    if (!(HUB_UNIT_KINDS as readonly string[]).includes(kind)) throw new GlosError('INVALID_INPUT', `${kind} is not a kind of unit: pallet, carton, cage or sack`, { field: 'fees' });
+    if (!(HUB_UNIT_KINDS as readonly string[]).includes(kind)) throw refused('INVALID_INPUT', said('refuse.hubArrival.notAUnitKind', { kind }), { field: 'fees' });
     if (value === null || value === 0) continue;
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000) throw new GlosError('INVALID_INPUT', 'A fee is a sum of money: 0 or more', { field: 'fees' });
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000) throw refused('INVALID_INPUT', said('refuse.hubArrival.feeIsSum'), { field: 'fees' });
     out[kind as HubUnitKind] = Math.round(value * 100) / 100;
   }
   return Object.keys(out).length ? out : undefined;

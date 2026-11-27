@@ -4,6 +4,8 @@ import { refused } from '../../modules/pudo/notice-words/refuse';
 import { said } from '../../modules/pudo/notice-words/say';
 import { PersistentMap } from '../store/persistent-map';
 import { FUNDING_OPEN, FUNDING_RAIL, Funding, FundingPayer, FundingPayerKind, FundingPurpose, FundingRail, FundingStatus, HeldPayment, RailCheckAnswer, RailPayment, UnmatchedPayment } from './funding.types';
+import { codeSaid } from '../../modules/pudo/notice-words/codes';
+import { at } from '../../modules/pudo/notice-words/say';
 
 /**
  * The reference a payer quotes, and the reason it looks the way it does.
@@ -219,7 +221,7 @@ export class FundingService {
   private requireOpenHeld(heldId: string): HeldPayment {
     const record = this.held.get(heldId);
     if (!record) throw refused('NOT_FOUND', said('refuse.funding.noHeldPayment', { id: heldId }));
-    if (record.outcome) throw refused('INVALID_STATE', said('refuse.funding.alreadyDecided', { outcome: record.outcome, at: record.decidedAt }));
+    if (record.outcome) throw refused('INVALID_STATE', said('refuse.funding.alreadyDecided', { outcome: codeSaid('fundingOutcome', record.outcome), at: record.decidedAt ? at(record.decidedAt, record.decidedAt) : record.decidedAt }));
     return record;
   }
 
@@ -315,7 +317,7 @@ export class FundingService {
   /** The payer said no, or the rail did. Nothing moved, so nothing is unwound. */
   fail(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.failWaiting', { status: funding.status }));
+    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.failWaiting', { status: codeSaid('funding', funding.status) }));
     funding.status = 'failed';
     funding.failedAt = new Date(now).toISOString();
     funding.failureReason = reason;
@@ -347,7 +349,7 @@ export class FundingService {
   /** Nobody ever paid it. A list full of stale "waiting" rows reads as money on its way, and it is not. */
   expire(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.closeWaiting', { status: funding.status }));
+    if (funding.status !== 'awaiting') throw refused('INVALID_STATE', said('refuse.funding.closeWaiting', { status: codeSaid('funding', funding.status) }));
     funding.status = 'expired';
     funding.expiredAt = new Date(now).toISOString();
     funding.failureReason = reason;
@@ -364,7 +366,7 @@ export class FundingService {
    */
   reverse(fundingId: string, reason: string, now: number = Date.now()): Funding {
     const funding = this.require(fundingId);
-    if (funding.status !== 'confirmed') throw refused('INVALID_STATE', said('refuse.funding.reverseConfirmed', { status: funding.status }));
+    if (funding.status !== 'confirmed') throw refused('INVALID_STATE', said('refuse.funding.reverseConfirmed', { status: codeSaid('funding', funding.status) }));
     const payer = this.payerFor(funding.payerKind);
     const { entryId } = payer.reverse(funding.payerDid, {
       purpose: funding.purpose,
